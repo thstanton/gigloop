@@ -1,0 +1,15 @@
+{
+  "name": "gigman",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": ["apps/*"],
+  "scripts": {
+    "dev": "concurrently -n api,web -c blue,green \"npm run dev -w apps/api\" \"npm run dev -w apps/web\"",
+    "build": "npm run build -ws --if-present",
+    "lint": "npm run lint -ws --if-present",
+    "test": "npm run test -ws --if-present"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0"
+  }
+}
