@@ -31,9 +31,9 @@ const router = createBrowserRouter([
 ]);
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <ClerkProvider publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY}>
+  <ClerkProvider publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY}>
+    <React.StrictMode>
       <RouterProvider router={router} />
-    </ClerkProvider>
-  </React.StrictMode>,
+    </React.StrictMode>
+  </ClerkProvider>,
 );
