@@ -73,3 +73,4 @@ PDF generation runs in the API process using `@react-pdf/renderer` and the resul
   - Any decisions made that weren't in the spec
   - Anything that should be reviewed before the next session
 - Do not run database migrations without confirming first
+- Commit all changes at the end of each session with a descriptive message

@@ -1,0 +1,305 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────
+
+enum BookingStatus {
+  ENQUIRY
+  CONFIRMED
+  DEPOSIT_PAID
+  COMPLETED
+  INVOICED
+  SETTLED
+}
+
+enum EventType {
+  WEDDING
+  CORPORATE
+  PRIVATE
+  RESIDENCY
+  OTHER
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+}
+
+enum DocumentType {
+  CONTRACT
+  INVOICE
+}
+
+enum SongGenre {
+  CONTEMPORARY
+  CLASSICAL
+  JAZZ
+  FILM_TV_MUSICALS
+  BOLLYWOOD
+  CHRISTMAS
+}
+
+// ─────────────────────────────────────────
+// Models
+// ─────────────────────────────────────────
+
+model UserProfile {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  businessName            String
+  address                 String?
+  email                   String?
+  phone                   String?
+  website                 String?
+  photo                   String?
+  logo                    String?
+  socials                 Json?
+  bankDetails             String?
+  vatNumber               String?
+  defaultPaymentTermsDays Int         @default(14)
+  invoiceNumberSequence   Int         @default(0)
+  portalTheme             String      @default("LIGHT")
+}
+
+model Contact {
+  id        String   @id @default(uuid())
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  name    String
+  email   String?
+  phone   String?
+  address String?
+  notes   String?
+
+  // Venue-specific fields
+  parkingInfo        String?
+  accessInfo         String?
+  equipmentAvailable String?
+
+  // Referrer-specific fields
+  website               String?
+  commissionArrangement String?
+
+  customerBookings Booking[]       @relation("BookingCustomer")
+  venueBookings    Booking[]       @relation("BookingVenue")
+  referrerBookings Booking[]       @relation("BookingReferrer")
+  invoices         Invoice[]
+  communications   Communication[]
+
+  @@index([userId])
+}
+
+model Booking {
+  id        String   @id @default(uuid())
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  status      BookingStatus @default(ENQUIRY)
+  eventType   EventType
+  date        DateTime
+  title       String?
+  fee         Decimal?      @db.Decimal(10, 2)
+  notes       String?
+  portalToken String        @unique @default(uuid())
+
+  customerId String
+  customer   Contact @relation("BookingCustomer", fields: [customerId], references: [id], onDelete: Restrict)
+
+  venueId String?
+  venue   Contact? @relation("BookingVenue", fields: [venueId], references: [id], onDelete: Restrict)
+
+  referrerId String?
+  referrer   Contact? @relation("BookingReferrer", fields: [referrerId], references: [id], onDelete: Restrict)
+
+  sets              PerformanceSet[]
+  invoices          Invoice[]
+  communications    Communication[]
+  documents         Document[]
+  musicFormConfig   MusicFormConfig?
+  musicFormResponse MusicFormResponse?
+
+  @@index([userId])
+  @@index([customerId])
+  @@index([venueId])
+  @@index([referrerId])
+}
+
+model PerformanceSet {
+  id        String   @id @default(uuid())
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  order     Int
+  duration  Int
+  startTime String?
+  label     String?
+
+  bookingId String
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([bookingId])
+}
+
+model Invoice {
+  id        String   @id @default(uuid())
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  status    InvoiceStatus @default(DRAFT)
+  issueDate DateTime      @default(now())
+  dueDate   DateTime?
+
+  bookingId String
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  billToContactId String
+  billToContact   Contact @relation(fields: [billToContactId], references: [id], onDelete: Restrict)
+
+  lineItems InvoiceLineItem[]
+  documents Document[]
+
+  @@index([userId])
+  @@index([bookingId])
+}
+
+model InvoiceLineItem {
+  id        String   @id @default(uuid())
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  description String
+  amount      Decimal @db.Decimal(10, 2)
+  order       Int     @default(0)
+
+  invoiceId String
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([invoiceId])
+}
+
+model Template {
+  id        String   @id @default(uuid())
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  name        String
+  content     Json
+  builtInType String?
+
+  communications Communication[]
+
+  @@index([userId])
+}
+
+model Communication {
+  id        String   @id @default(uuid())
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  direction String @default("OUTBOUND")
+  channel   String @default("EMAIL")
+  subject   String
+  body      String
+  sentAt    DateTime               @default(now())
+
+  bookingId String
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  contactId String
+  contact   Contact @relation(fields: [contactId], references: [id], onDelete: Restrict)
+
+  templateId String?
+  template   Template? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([bookingId])
+}
+
+model Document {
+  id        String   @id @default(uuid())
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  type       DocumentType
+  storageKey String
+
+  bookingId String
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  // null for CONTRACT documents; set for INVOICE documents
+  invoiceId String?
+  invoice   Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([bookingId])
+}
+
+model Song {
+  id        String   @id @default(uuid())
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  title  String
+  artist String?
+  genre  SongGenre
+  active Boolean   @default(true)
+  tags   String[]
+
+  @@index([userId])
+}
+
+model MusicFormConfig {
+  id        String   @id @default(uuid())
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  enabledGenres SongGenre[]
+  keyMoments    String[]
+
+  bookingId String  @unique
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model MusicFormResponse {
+  id        String   @id @default(uuid())
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  selectedSongIds String[]
+  specialRequests Json
+  notes           String?
+  submittedAt     DateTime @default(now())
+
+  bookingId String  @unique
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}

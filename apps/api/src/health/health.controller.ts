@@ -1,6 +1,7 @@
 import { Controller, Get } from '@nestjs/common';
+import { Public } from '../auth/public.decorator';
 
-// Intentionally public — excluded from AuthGuard per SPEC
+@Public()
 @Controller('health')
 export class HealthController {
   @Get()
