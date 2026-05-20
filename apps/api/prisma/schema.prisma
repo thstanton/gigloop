@@ -58,13 +58,16 @@ model UserProfile {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  displayName             String?
   businessName            String
-  address                 String?
   email                   String?
   phone                   String?
+  bio                     String?
+  logoUrl                 String?
+  brandColour             String?
+  address                 String?
   website                 String?
   photo                   String?
-  logo                    String?
   socials                 Json?
   bankDetails             String?
   vatNumber               String?
