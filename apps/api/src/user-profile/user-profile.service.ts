@@ -1,15 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { UserProfileRepository } from './user-profile.repository';
 
 @Injectable()
 export class UserProfileService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private repo: UserProfileRepository) {}
 
   findOrCreate(userId: string) {
-    return this.prisma.userProfile.upsert({
-      where: { userId },
-      update: {},
-      create: { userId, businessName: '' },
-    });
+    return this.repo.upsertByUserId(userId);
   }
 }

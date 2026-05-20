@@ -60,6 +60,15 @@ PDF generation runs in the API process using `@react-pdf/renderer` and the resul
   built-in HttpException classes
 - Domain types and DTOs are kept separate
 
+## Repository Pattern
+Every feature module uses three layers:
+- **Controller** (`*.controller.ts`) — request/response handling only; no business logic, no Prisma calls
+- **Service** (`*.service.ts`) — business logic, orchestration, validation
+- **Repository** (`*.repository.ts`) — all direct Prisma calls; no business logic
+
+The service depends on the repository; the controller depends on the service.
+All three are declared as providers in the feature module.
+
 ## Package Discipline
 - Do not install new npm packages without asking first
 - Do not add packages to solve problems that can be solved with 
