@@ -11,6 +11,8 @@ const bookingIncludes = {
   venue: true,
   referrer: true,
   sets: { orderBy: { order: 'asc' } },
+  musicFormConfig: { select: { id: true } },
+  musicFormResponse: { select: { id: true } },
 } as const;
 
 const listIncludes = {

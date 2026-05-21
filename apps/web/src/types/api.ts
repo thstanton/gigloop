@@ -137,6 +137,8 @@ export interface BookingDetail extends Omit<BookingListItem, 'customer' | 'venue
   depositReceivedAt: string | null;
   depositTrackingMode: string | null;
   portalToken: string;
+  hasMusicFormConfig: boolean;
+  hasMusicFormResponse: boolean;
 }
 
 export interface CreateSetInput {

@@ -67,11 +67,18 @@ describe('BookingsService', () => {
   });
 
   describe('findOne', () => {
-    it('returns the booking when found', async () => {
-      repo.findOne.mockResolvedValue(booking);
+    it('returns the booking with hasMusicFormConfig and hasMusicFormResponse flags', async () => {
+      repo.findOne.mockResolvedValue({ ...booking, musicFormConfig: null, musicFormResponse: null });
       const result = await service.findOne('u1', 'b1');
       expect(repo.findOne).toHaveBeenCalledWith('u1', 'b1');
-      expect(result).toBe(booking);
+      expect(result).toMatchObject({ id: 'b1', hasMusicFormConfig: false, hasMusicFormResponse: false });
+    });
+
+    it('sets hasMusicFormConfig true when config exists', async () => {
+      repo.findOne.mockResolvedValue({ ...booking, musicFormConfig: { id: 'mfc1' }, musicFormResponse: null });
+      const result = await service.findOne('u1', 'b1');
+      expect(result.hasMusicFormConfig).toBe(true);
+      expect(result.hasMusicFormResponse).toBe(false);
     });
 
     it('throws NotFoundException when repository returns null', async () => {

@@ -1,4 +1,4 @@
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ChevronLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import BookingStatusPill from '@/components/BookingStatusPill';
@@ -98,6 +98,8 @@ function DetailSkeleton() {
 export default function ContactDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const backNav = (location.state as { from?: string; label?: string } | null);
 
   const { data: contact, isLoading, isError } = useContact(id!);
 
@@ -125,11 +127,11 @@ export default function ContactDetailPage() {
     <div className="px-6 py-8 max-w-2xl">
       {/* Back */}
       <Link
-        to="/admin/contacts"
+        to={backNav?.from ?? '/admin/contacts'}
         className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground transition-colors mb-6"
       >
         <ChevronLeft size={14} />
-        Contacts
+        {backNav?.label ?? 'Contacts'}
       </Link>
 
       {/* Header */}

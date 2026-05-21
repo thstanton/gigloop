@@ -22,7 +22,12 @@ export class BookingsService {
   async findOne(userId: string, id: string) {
     const booking = await this.repo.findOne(userId, id);
     if (!booking) throw new NotFoundException('Booking not found');
-    return booking;
+    const { musicFormConfig, musicFormResponse, ...rest } = booking;
+    return {
+      ...rest,
+      hasMusicFormConfig: !!musicFormConfig,
+      hasMusicFormResponse: !!musicFormResponse,
+    };
   }
 
   create(userId: string, dto: CreateBookingDto) {

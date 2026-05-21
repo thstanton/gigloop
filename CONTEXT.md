@@ -135,20 +135,28 @@ An entry in a musician's repertoire library. Every Song has a `userId` — songs
 A closed enum categorising Songs: `Contemporary | Classical | Jazz | Film, TV and Musicals | Bollywood | Christmas`. Managed at the system level — musicians cannot add custom genres for MVP.
 
 ### BookingChecklist
-A computed, context-sensitive list of outstanding actions for a [[Booking]]. Not a stored entity — derived entirely from existing booking state. Displayed on the Booking detail page and shared as the "required actions" content in the [[DigestNotification]].
+A computed, context-sensitive list of actions for a [[Booking]]. Not a stored entity — derived entirely from existing booking state. Displayed on the Booking detail page and shared as the "required actions" content in the [[DigestNotification]].
 
 **Items (in order):** Send quote, Send contract/deposit email, Contract signed, Deposit received, Send music form invite, Song requests received, Send thank you.
 
-**Inference rules:**
-- *Send quote* — absent if a [[Communication]] with `quote` template exists
-- *Send contract/deposit email* — absent if a Communication with `contract_cover` or `contract_and_invoice_cover` template exists
-- *Contract signed* — absent if `Booking.contractSignedAt` is set
-- *Deposit received* — absent if `Booking.depositReceivedAt` is set
-- *Send music form invite* — absent if a Communication with `music_form_invite` template exists; hidden entirely if no [[MusicFormConfig]] exists on the booking
-- *Song requests received* — absent if a [[MusicFormResponse]] exists; hidden if no MusicFormConfig exists
-- *Send thank you* — absent if a Communication with `thank_you` template exists
+Each item has one of three states:
+- **Done** — completed; shown with a tick and muted text
+- **Outstanding** — not yet done and still applicable; shown with an empty circle
+- **Irrelevant** — not done but no longer applicable; hidden entirely
 
-Each item is hidden (not shown as incomplete) when not applicable to the booking. Whether an item appears in the [[DigestNotification]] is controlled by the corresponding `*ReminderDays` field on [[UserProfile]].
+| Item | Done when | Irrelevant when |
+|---|---|---|
+| Send quote | `quote` [[Communication]] exists | status ≥ CONFIRMED |
+| Send contract/deposit email | `contract_cover` or `contract_and_invoice_cover` Communication exists | `contractSignedAt` set AND (`depositReceivedAt` set OR deposit tracking resolves to NONE) |
+| Contract signed | `contractSignedAt` set | status is ENQUIRY OR status ≥ SETTLED |
+| Deposit received | `depositReceivedAt` set | deposit tracking resolves to NONE OR status is ENQUIRY |
+| Send music form invite | `music_form_invite` Communication exists | no [[MusicFormConfig]] on booking OR status is ENQUIRY |
+| Song requests received | [[MusicFormResponse]] exists | no MusicFormConfig OR no `music_form_invite` Communication exists |
+| Send thank you | `thank_you` Communication exists | today is before booking date |
+
+The checklist is hidden entirely for CANCELLED bookings.
+
+Whether an item appears in the [[DigestNotification]] is controlled by the corresponding `*ReminderDays` field on [[UserProfile]].
 
 ### DigestNotification
 A daily summary email sent to the musician via Resend. MVP scope. Contains upcoming Bookings and their outstanding [[BookingChecklist]] actions — filtered to items where today falls within the configured reminder window (e.g. `contractReminderDays = 14` means the "send contract" item appears in the digest from 14 days before the booking date).
