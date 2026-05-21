@@ -148,12 +148,16 @@ Public, portal-visible half of the musician's profile (one per userId). Safe to 
 
 **Fields:** businessName, displayName, bio, email, phone, logoUrl (R2 URL), brandColour (hex), photo (R2 URL), website, socials (JSON — platform → URL), portalTheme
 
+**`portalTheme` enum:** `LIGHT_MODERN | LIGHT_ROMANTIC | BOLD_MODERN | BOLD_ROMANTIC`. Each preset bundles a layout style (Light = clean white with contained photo; Bold = full-bleed photo hero) with a font pairing (Modern = DM Sans; Romantic = Cormorant Garamond/Lato). Default: `LIGHT_MODERN`.
+
 ### UserProfile
 Private, authenticated-only half of the musician's profile (one per userId). Never returned to portal clients.
 
-**Fields:** address, bankDetails (encrypted at rest), vatNumber, defaultPaymentTermsDays, invoiceNumberSequence, invoiceSequenceYear, depositTrackingMode
+**Fields:** address, bankDetails (encrypted at rest), vatNumber, defaultPaymentTermsDays, invoiceNumberSequence, invoiceSequenceYear, depositTrackingMode, digestEmailEnabled, songRequestFormEnabled, quoteReminderDays, contractReminderDays, depositInvoiceReminderDays, balanceInvoiceReminderDays, musicFormReminderDays, thankYouReminderDays
 
 **Invoice numbering:** format `INV-{year}-{NNN}` (e.g. `INV-2025-001`). `invoiceNumberSequence` is a per-year counter; `invoiceSequenceYear` records the year it was last reset. Both reset each January.
+
+**Digest & reminder preferences:** `digestEmailEnabled` (default true) and `songRequestFormEnabled` (default true) are global feature toggles. The `*ReminderDays` fields are nullable integers — `null` means the reminder is disabled; a positive value is days before the booking date (except `thankYouReminderDays`, which is days after). These are global defaults; per-booking overrides are deferred to P3.
 
 ## MVP Scope
 

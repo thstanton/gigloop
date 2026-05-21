@@ -98,14 +98,20 @@ The public, portal-visible half of the musician's settings (one per `userId`). S
 
 **Fields:** businessName, displayName, bio, email, phone, logoUrl (R2 URL), brandColour (hex), photo (R2 URL), website, socials (JSON — platform → URL), portalTheme.
 
-The client-facing [[Portal]] is musician-branded: displays the musician's logo, name, and chosen theme. It is not GigMan-branded. Design reference: WithJoy — photo-forward, elegant typography, premium and personal in feel, mobile-first.
+**`portalTheme` enum:** `BOLD_ROMANTIC | BOLD_MODERN | LIGHT_ROMANTIC | LIGHT_MODERN`. Each preset bundles a layout style (Bold = full-bleed photo hero; Light = clean white with contained photo) with a font pairing (Romantic = Cormorant Garamond/Lato; Modern = DM Sans). Four themes cover the full matrix.
+
+The client-facing [[Portal]] is musician-branded: displays the musician's logo, photo, name, and chosen theme. It is not GigMan-branded. Design reference: WithJoy — photo-forward, elegant typography, premium and personal in feel, mobile-first.
 
 ### UserProfile
 The private, authenticated-only half of the musician's settings (one per `userId`). Never returned to portal clients. See ADR-0002.
 
-**Fields:** address, bankDetails (encrypted at rest — see ADR-0003), vatNumber, defaultPaymentTermsDays, invoiceNumberSequence, invoiceSequenceYear, depositTrackingMode.
+**Fields:** address, bankDetails (encrypted at rest — see ADR-0003), vatNumber, defaultPaymentTermsDays, invoiceNumberSequence, invoiceSequenceYear, depositTrackingMode, digestEmailEnabled, songRequestFormEnabled, quoteReminderDays, contractReminderDays, depositInvoiceReminderDays, balanceInvoiceReminderDays, musicFormReminderDays, thankYouReminderDays.
 
 **Invoice numbering:** format `INV-{year}-{NNN}` (e.g. `INV-2025-001`). `invoiceNumberSequence` is a per-year counter; `invoiceSequenceYear` records the year it was last reset. Both reset each January. Subject to revision.
+
+**Reminder offsets:** the `*ReminderDays` fields are global defaults controlling when each [[BookingChecklist]] action appears in the [[DigestNotification]] and on the booking detail page. Positive integer = days before the booking date (except `thankYouReminderDays` which is days after). `null` means the reminder is disabled. Per-booking overrides are deferred to P3.
+
+`songRequestFormEnabled` is a global toggle — when false, the music form feature is hidden across the entire app (no [[MusicFormConfig]] creation, no [[MusicForm]] on the [[Portal]]).
 
 ### MusicFormResponse
 The client's submitted music preferences, stored on a Booking (zero-to-one). Re-submitting replaces the previous response.
@@ -128,10 +134,24 @@ An entry in a musician's repertoire library. Every Song has a `userId` — songs
 ### Genre
 A closed enum categorising Songs: `Contemporary | Classical | Jazz | Film, TV and Musicals | Bollywood | Christmas`. Managed at the system level — musicians cannot add custom genres for MVP.
 
-### DigestNotification
-A daily summary email sent to the musician via Resend. MVP scope. Contains upcoming Bookings and required actions — items that are due on or near today based on their configured relative due date.
+### BookingChecklist
+A computed, context-sensitive list of outstanding actions for a [[Booking]]. Not a stored entity — derived entirely from existing booking state. Displayed on the Booking detail page and shared as the "required actions" content in the [[DigestNotification]].
 
-**Open question — reminder architecture:** each type of action (send balance invoice, send music form invite, etc.) may carry a configurable offset from the event date (e.g. "30 days before", "90 days before"). This might be embedded directly in the relevant models (Invoice, MusicFormConfig) as a `reminderOffsetDays` field rather than a separate checklist entity. Needs more design thought before implementing.
+**Items (in order):** Send quote, Send contract/deposit email, Contract signed, Deposit received, Send music form invite, Song requests received, Send thank you.
+
+**Inference rules:**
+- *Send quote* — absent if a [[Communication]] with `quote` template exists
+- *Send contract/deposit email* — absent if a Communication with `contract_cover` or `contract_and_invoice_cover` template exists
+- *Contract signed* — absent if `Booking.contractSignedAt` is set
+- *Deposit received* — absent if `Booking.depositReceivedAt` is set
+- *Send music form invite* — absent if a Communication with `music_form_invite` template exists; hidden entirely if no [[MusicFormConfig]] exists on the booking
+- *Song requests received* — absent if a [[MusicFormResponse]] exists; hidden if no MusicFormConfig exists
+- *Send thank you* — absent if a Communication with `thank_you` template exists
+
+Each item is hidden (not shown as incomplete) when not applicable to the booking. Whether an item appears in the [[DigestNotification]] is controlled by the corresponding `*ReminderDays` field on [[UserProfile]].
+
+### DigestNotification
+A daily summary email sent to the musician via Resend. MVP scope. Contains upcoming Bookings and their outstanding [[BookingChecklist]] actions — filtered to items where today falls within the configured reminder window (e.g. `contractReminderDays = 14` means the "send contract" item appears in the digest from 14 days before the booking date).
 
 ### MusicFormConfig
 The per-booking configuration for a [[MusicForm]]. Set by the musician when sending the `music_form_invite`. Controls:
