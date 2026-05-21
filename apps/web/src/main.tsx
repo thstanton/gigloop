@@ -1,4 +1,5 @@
 import React from 'react';
+import '@/styles/globals.css';
 import ReactDOM from 'react-dom/client';
 import { ClerkProvider } from '@clerk/react';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';

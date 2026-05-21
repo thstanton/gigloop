@@ -1,0 +1,39 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Neutrals */
+    --background: 0 0% 100%;
+    --surface: 220 14% 98%;
+    --border: 220 13% 91%;
+    --border-strong: 220 13% 82%;
+    --muted: 220 9% 46%;
+    --foreground: 222 47% 11%;
+
+    /* Accent */
+    --primary: 222 89% 55%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Status — used only for status pills, never decorative */
+    --status-enquiry: 38 92% 50%;
+    --status-confirmed: 142 71% 45%;
+    --status-invoiced: 222 89% 55%;
+    --status-settled: 262 83% 58%;
+    --status-completed: 220 9% 46%;
+    --status-cancelled: 0 84% 60%;
+  }
+
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  body {
+    background-color: hsl(var(--surface));
+    color: hsl(var(--foreground));
+    font-family: 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
