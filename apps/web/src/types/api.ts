@@ -175,6 +175,62 @@ export interface UpdateBookingInput {
 }
 
 // ─────────────────────────────────────────
+// Invoices
+// ─────────────────────────────────────────
+
+export interface InvoiceLineItem {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  description: string;
+  amount: string; // Decimal serialises as string
+  order: number;
+}
+
+export interface Invoice {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  status: InvoiceStatus;
+  isDeposit: boolean;
+  issueDate: string;
+  dueDate: string | null;
+  bookingId: string;
+  billToContactId: string;
+  billToContact: Contact;
+  lineItems: InvoiceLineItem[];
+  // isOverdue is derived client-side: status === 'SENT' && dueDate && new Date(dueDate) < new Date()
+}
+
+export interface CreateInvoiceInput {
+  status?: InvoiceStatus;
+  isDeposit?: boolean;
+  issueDate?: string;
+  dueDate?: string;
+  billToContactId?: string; // defaults to booking's customerId
+  lineItems?: CreateLineItemInput[];
+}
+
+export interface UpdateInvoiceInput {
+  status?: InvoiceStatus;
+  issueDate?: string;
+  dueDate?: string | null;
+  billToContactId?: string;
+}
+
+export interface CreateLineItemInput {
+  description: string;
+  amount: number;
+  order?: number;
+}
+
+export interface UpdateLineItemInput {
+  description?: string;
+  amount?: number;
+  order?: number;
+}
+
+// ─────────────────────────────────────────
 // Songs
 // ─────────────────────────────────────────
 
