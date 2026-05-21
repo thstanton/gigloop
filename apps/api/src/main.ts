@@ -4,7 +4,6 @@ dotenv.config();
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { apiReference } from '@scalar/nestjs-api-reference';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -13,9 +12,9 @@ async function bootstrap() {
   app.enableCors({ origin: 'http://localhost:5173' });
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true,       // strip unknown properties
-      forbidNonWhitelisted: true, // reject requests with unknown properties
-      transform: true,       // instantiate DTO classes (needed for ValidateNested)
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
     }),
   );
 
@@ -36,7 +35,21 @@ async function bootstrap() {
     res.send(document);
   });
 
-  app.use('/docs', apiReference({ spec: { url: '/openapi.json' } }));
+  app.use('/docs', (_req: unknown, res: { setHeader: Function; send: Function }) => {
+    res.setHeader('Content-Type', 'text/html');
+    res.send(`<!doctype html>
+<html>
+  <head>
+    <title>GigMan API Reference</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body>
+    <script id="api-reference" data-url="/openapi.json"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+  </body>
+</html>`);
+  });
 
   await app.listen(3000);
 }
