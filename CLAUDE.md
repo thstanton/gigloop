@@ -102,3 +102,45 @@ All three are declared as providers in the feature module.
 - Do not run database migrations without confirming first
 - Run `bun run test` and verify all tests pass before committing
 - Commit all changes at the end of each session with a descriptive message
+
+## Data Fetching
+- Use TanStack Query (`useQuery`, `useMutation`) for all data fetching. Never fetch in raw `useEffect`.
+- Always gate queries with `enabled: isLoaded` (from Clerk's `useAuth()`) to avoid race conditions on page refresh where Clerk hasn't initialised yet.
+- `queryFn` calls use `apiGet`/`apiPost`/etc. from `src/lib/api.ts`.
+- Query keys are arrays: `['bookings']`, `['bookings', filter]`, `['contact', id]`, etc.
+- Filter / sort state lives in URL search params (`useSearchParams`); components read the param and pass it into the query key so TanStack Query refetches when the filter changes.
+- React Router loaders are used only for auth checks / redirects — not for data fetching.
+
+## Mobile-first UI
+
+GigMan is used on phones. Design every screen for 375px first, then enhance for larger widths.
+
+**Layout**
+- AppShell provides a fixed top bar (h-14) + fixed bottom tab bar (h-16) on mobile. Content gets `pt-14 pb-16` automatically — never add extra spacing to account for these bars inside page components.
+- On desktop (md = 768px+): sidebar replaces the bottom tab bar; top bar remains.
+- Never use a breakpoint below `md` (768px) for structural layout changes (sidebar, tab bar, etc.).
+
+**Responsive grids and rows**
+- Default to a single-column layout. Use `sm:grid-cols-2` (640px+) only for short, related pairs (e.g. first name / last name).
+- Never put more than 2 columns in a grid unless the screen is definitely wide enough.
+- For rows that combine a label + input + suffix text (e.g. "30 days before event"): stack label above input/suffix on mobile using `flex-col sm:flex-row`. Never use `w-44 flex-shrink-0` labels in a single-line row — they overflow at 375px.
+- Avoid `whitespace-nowrap` spans alongside wide inputs unless wrapped in a `flex-col` stack on mobile.
+
+**Forms**
+- Fields stack single-column by default. `sm:grid-cols-2` is the widest mobile breakpoint for field pairs.
+- Textarea rows: 2–3 on mobile is usually plenty.
+- Buttons align left, never centred, on mobile.
+
+**Navigation**
+- Primary nav (Dashboard, Bookings, Contacts, Repertoire) lives in the bottom tab bar on mobile.
+- Secondary nav (Templates, Settings) is accessed via the "More" button in the tab bar.
+- The "More" button highlights (text-primary) when the current route matches any secondary nav path.
+- Never rely on a sidebar for navigation at mobile size.
+
+## UI Rules
+- No drop shadows except on overlays
+- Borders are border-border (1px). No border-2, no ring.
+- Use the Lucide icons from lucide-react. Do not import from any other icon set.
+- Stick to the type scale. No text-sm for body — use text-base.
+- Empty states get an icon, a heading, one paragraph, and one CTA. Nothing else.
+- Forms use react-hook-form with a Zod schema. Validation messages render below the field in text-status-cancelled text-sm.

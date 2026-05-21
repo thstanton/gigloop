@@ -1,56 +1,182 @@
-import { useAuth } from '@clerk/react';
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Search, Users } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { useContacts } from '@/features/contacts/useContacts';
+import type { Contact } from '@/types/api';
 
-interface Contact {
-  id: string;
-  name: string;
-  email: string | null;
-  phone: string | null;
+// ─── Empty state ──────────────────────────────────────────────────────────────
+
+function EmptyState({ filtered }: { filtered: boolean }) {
+  const navigate = useNavigate();
+  return (
+    <div className="flex flex-col items-center justify-center py-20 gap-4">
+      <Users size={48} strokeWidth={1.25} className="text-muted opacity-40" />
+      <div className="text-center space-y-1">
+        <p className="text-sm font-medium text-foreground">
+          {filtered ? 'No contacts match your search' : 'No contacts yet'}
+        </p>
+        <p className="text-sm text-muted">
+          {filtered ? 'Try a different name or email.' : 'Add your first contact to get started.'}
+        </p>
+      </div>
+      {!filtered && (
+        <Button size="sm" onClick={() => navigate('/admin/contacts/new')}>
+          New contact
+        </Button>
+      )}
+    </div>
+  );
 }
 
+// ─── Skeleton ─────────────────────────────────────────────────────────────────
+
+function ListSkeleton() {
+  return (
+    <div className="w-full">
+      <div className="border-b border-border py-2.5 px-4 flex gap-8">
+        {['w-24', 'w-36', 'w-28'].map((w, i) => (
+          <div key={i} className={`h-3 ${w} bg-border rounded animate-pulse`} />
+        ))}
+      </div>
+      {Array.from({ length: 8 }).map((_, i) => (
+        <div key={i} className="h-12 border-b border-border px-4 flex items-center gap-8">
+          <div className="h-3 w-32 bg-border rounded animate-pulse" />
+          <div className="h-3 w-40 bg-border rounded animate-pulse" />
+          <div className="h-3 w-28 bg-border rounded animate-pulse" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Table (desktop) ──────────────────────────────────────────────────────────
+
+function ContactsTable({ contacts }: { contacts: Contact[] }) {
+  const navigate = useNavigate();
+  return (
+    <div className="w-full overflow-x-auto">
+      <table className="w-full min-w-[480px] border-collapse">
+        <thead>
+          <tr className="border-b border-border">
+            {['Name', 'Email', 'Phone'].map((h) => (
+              <th
+                key={h}
+                className="px-4 py-2.5 text-left text-xs font-medium text-muted whitespace-nowrap"
+              >
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {contacts.map((c) => (
+            <tr
+              key={c.id}
+              onClick={() => navigate(`/admin/contacts/${c.id}`)}
+              className="h-12 border-b border-border cursor-pointer hover:bg-surface transition-colors duration-100"
+            >
+              <td className="px-4">
+                <span className="text-sm font-medium text-foreground">{c.name}</span>
+              </td>
+              <td className="px-4">
+                <span className="text-sm text-muted">{c.email ?? '—'}</span>
+              </td>
+              <td className="px-4">
+                <span className="text-sm text-muted">{c.phone ?? '—'}</span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ─── Card list (mobile) ───────────────────────────────────────────────────────
+
+function ContactCardList({ contacts }: { contacts: Contact[] }) {
+  const navigate = useNavigate();
+  return (
+    <div className="divide-y divide-border">
+      {contacts.map((c) => (
+        <div
+          key={c.id}
+          onClick={() => navigate(`/admin/contacts/${c.id}`)}
+          className="py-3 flex flex-col gap-0.5 cursor-pointer active:bg-surface transition-colors duration-100"
+        >
+          <span className="text-sm font-medium text-foreground">{c.name}</span>
+          {(c.email || c.phone) && (
+            <span className="text-sm text-muted">
+              {[c.email, c.phone].filter(Boolean).join(' · ')}
+            </span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
 export default function ContactsListPage() {
-  const { getToken } = useAuth();
-  const [contacts, setContacts] = useState<Contact[] | null>(null);
-  const [error, setError] = useState(false);
+  const navigate = useNavigate();
+  const [search, setSearch] = useState('');
+  const { data = [], isLoading, isError } = useContacts();
 
-  useEffect(() => {
-    getToken().then(async (token) => {
-      try {
-        const data = await fetch('/api/contacts', {
-          headers: { Authorization: `Bearer ${token}` },
-        }).then((r) => r.json());
-        setContacts(data as Contact[]);
-      } catch {
-        setError(true);
-      }
-    });
-  }, [getToken]);
-
-  if (error) return <p>Failed to load contacts.</p>;
-  if (!contacts) return <p>Loading…</p>;
+  const filtered = search.trim()
+    ? data.filter((c) => {
+        const q = search.toLowerCase();
+        return (
+          c.name.toLowerCase().includes(q) ||
+          c.email?.toLowerCase().includes(q) ||
+          c.phone?.includes(q)
+        );
+      })
+    : data;
 
   return (
-    <div>
-      <div>
-        <h1>Contacts</h1>
-        <Link to="/admin/contacts/new">New contact</Link>
+    <div className="px-6 py-8 max-w-4xl">
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-semibold text-foreground">Contacts</h1>
+        <Button onClick={() => navigate('/admin/contacts/new')}>New contact</Button>
       </div>
 
-      {contacts.length === 0 ? (
-        <p>No contacts yet.</p>
-      ) : (
-        <ul>
-          {contacts.map((c) => (
-            <li key={c.id}>
-              <Link to={`/admin/contacts/${c.id}`}>
-                <strong>{c.name}</strong>
-                {c.email && <span> — {c.email}</span>}
-                {c.phone && <span> — {c.phone}</span>}
-              </Link>
-            </li>
-          ))}
-        </ul>
+      {/* Search */}
+      <div className="relative mb-4">
+        <Search
+          size={15}
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none"
+        />
+        <Input
+          placeholder="Search by name, email or phone…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-9"
+        />
+      </div>
+
+      {/* Content */}
+      {isLoading && <ListSkeleton />}
+
+      {!isLoading && isError && (
+        <p className="py-12 text-center text-sm text-muted">Failed to load contacts.</p>
+      )}
+
+      {!isLoading && !isError && filtered.length === 0 && (
+        <EmptyState filtered={search.trim().length > 0} />
+      )}
+
+      {!isLoading && !isError && filtered.length > 0 && (
+        <>
+          <div className="hidden md:block">
+            <ContactsTable contacts={filtered} />
+          </div>
+          <div className="md:hidden">
+            <ContactCardList contacts={filtered} />
+          </div>
+        </>
       )}
     </div>
   );

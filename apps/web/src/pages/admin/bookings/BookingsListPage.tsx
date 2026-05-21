@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import BookingsTable from '@/features/bookings/BookingsTable';
 import { useBookings } from '@/features/bookings/useBookings';
 import type { BookingStatus } from '@/types/api';
@@ -28,7 +28,7 @@ function FilterBar({
   onChange: (v: Filter) => void;
 }) {
   return (
-    <div className="flex gap-0 border-b border-border overflow-x-auto scrollbar-none">
+    <div className="flex gap-0 border-b border-border overflow-x-auto overflow-y-hidden scrollbar-none">
       {FILTERS.map(({ label, value }) => (
         <button
           key={value}
@@ -77,8 +77,14 @@ function TableSkeleton() {
 
 export default function BookingsListPage() {
   const navigate = useNavigate();
-  const [filter, setFilter] = useState<Filter>('ALL');
-  const { data, loading, error } = useBookings(filter);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const activeFilter = (searchParams.get('status') as Filter | null) ?? 'ALL';
+  const { data = [], isLoading, isError } = useBookings(activeFilter);
+
+  function handleFilterChange(value: Filter) {
+    setSearchParams(value === 'ALL' ? {} : { status: value });
+  }
 
   return (
     <div className="px-6 py-8 max-w-6xl">
@@ -90,26 +96,40 @@ export default function BookingsListPage() {
         </Button>
       </div>
 
-      {/* Filter bar */}
-      <FilterBar active={filter} onChange={setFilter} />
+      {/* Filter — tabs on desktop, select on mobile */}
+      <div className="hidden md:block">
+        <FilterBar active={activeFilter} onChange={handleFilterChange} />
+      </div>
+      <div className="md:hidden mb-4">
+        <Select value={activeFilter} onValueChange={(v) => handleFilterChange(v as Filter)}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {FILTERS.map(({ label, value }) => (
+              <SelectItem key={value} value={value}>{label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
       {/* Content */}
       <div className="mt-1">
-        {loading && <TableSkeleton />}
+        {isLoading && <TableSkeleton />}
 
-        {!loading && error && (
+        {!isLoading && isError && (
           <div className="py-12 text-center text-sm text-muted">
             Failed to load bookings.{' '}
             <button
               className="text-primary underline underline-offset-2"
-              onClick={() => setFilter((f) => f)}
+              onClick={() => setSearchParams(searchParams)}
             >
               Retry
             </button>
           </div>
         )}
 
-        {!loading && !error && (
+        {!isLoading && !isError && (
           <BookingsTable
             data={data}
             onNew={() => navigate('/admin/bookings/new')}

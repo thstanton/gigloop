@@ -1,191 +1,113 @@
-import { useAuth } from '@clerk/react';
-import { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
-
-type FormState = {
-  name: string;
-  email: string;
-  phone: string;
-  address: string;
-  notes: string;
-  parkingInfo: string;
-  accessInfo: string;
-  equipmentAvailable: string;
-  website: string;
-  commissionArrangement: string;
-};
+import { useState } from 'react';
+import { useNavigate, useParams, Link } from 'react-router-dom';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { ChevronLeft } from 'lucide-react';
+import ContactForm, {
+  toContactPayload,
+  contactToFormValues,
+} from '@/features/contacts/ContactForm';
+import type { ContactFormValues } from '@/features/contacts/ContactForm';
+import { useContact } from '@/features/contacts/useContact';
+import { apiPatch, apiDelete } from '@/lib/api';
+import { Button } from '@/components/ui/button';
+import type { Contact } from '@/types/api';
 
 export default function ContactEditPage() {
   const { id } = useParams<{ id: string }>();
-  const { getToken } = useAuth();
   const navigate = useNavigate();
-  const [form, setForm] = useState<FormState | null>(null);
-  const [status, setStatus] = useState<'idle' | 'saving' | 'error'>('idle');
+  const queryClient = useQueryClient();
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
 
-  useEffect(() => {
-    getToken().then(async (token) => {
-      const data = await fetch(`/api/contacts/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      }).then((r) => r.json()) as {
-        name: string;
-        email: string | null;
-        phone: string | null;
-        address: string | null;
-        notes: string | null;
-        parkingInfo: string | null;
-        accessInfo: string | null;
-        equipmentAvailable: string | null;
-        website: string | null;
-        commissionArrangement: string | null;
-      };
-      setForm({
-        name: data.name,
-        email: data.email ?? '',
-        phone: data.phone ?? '',
-        address: data.address ?? '',
-        notes: data.notes ?? '',
-        parkingInfo: data.parkingInfo ?? '',
-        accessInfo: data.accessInfo ?? '',
-        equipmentAvailable: data.equipmentAvailable ?? '',
-        website: data.website ?? '',
-        commissionArrangement: data.commissionArrangement ?? '',
-      });
-    });
-  }, [id, getToken]);
+  const { data: contact, isLoading } = useContact(id!);
 
-  function set(field: keyof FormState, value: string) {
-    setForm((prev) => prev && { ...prev, [field]: value });
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!form) return;
-    setStatus('saving');
-    try {
-      const token = await getToken();
-      await fetch(`/api/contacts/${id}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          name: form.name,
-          email: form.email || null,
-          phone: form.phone || null,
-          address: form.address || null,
-          notes: form.notes || null,
-          parkingInfo: form.parkingInfo || null,
-          accessInfo: form.accessInfo || null,
-          equipmentAvailable: form.equipmentAvailable || null,
-          website: form.website || null,
-          commissionArrangement: form.commissionArrangement || null,
-        }),
-      });
+  const mutation = useMutation({
+    mutationFn: (values: ContactFormValues) =>
+      apiPatch<Contact>(`/contacts/${id}`, toContactPayload(values)),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(['contact', id], (prev: Contact | undefined) =>
+        prev ? { ...prev, ...updated } : updated,
+      );
+      queryClient.invalidateQueries({ queryKey: ['contacts'] });
       navigate(`/admin/contacts/${id}`);
-    } catch {
-      setStatus('error');
-    }
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: () => apiDelete(`/contacts/${id}`),
+    onSuccess: () => {
+      queryClient.removeQueries({ queryKey: ['contact', id] });
+      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+      navigate('/admin/contacts');
+    },
+  });
+
+  if (isLoading || !contact) {
+    return (
+      <div className="px-6 py-8 max-w-2xl animate-pulse space-y-6">
+        <div className="h-4 w-24 bg-border rounded" />
+        <div className="h-7 w-32 bg-border rounded" />
+        <div className="space-y-4">
+          {[1, 2, 3].map((i) => <div key={i} className="h-10 bg-border rounded" />)}
+        </div>
+      </div>
+    );
   }
 
-  if (!form) return <p>Loading…</p>;
+  const totalBookings =
+    contact.customerBookings.length +
+    contact.venueBookings.length +
+    contact.referrerBookings.length;
 
   return (
-    <div>
-      <Link to={`/admin/contacts/${id}`}>← Back</Link>
-      <h1>Edit contact</h1>
-      <form onSubmit={handleSubmit}>
-        <div>
-          <label>Name *</label>
-          <input
-            required
-            value={form.name}
-            onChange={(e) => set('name', e.target.value)}
-          />
-        </div>
+    <div className="px-6 py-8 max-w-2xl">
+      <Link
+        to={`/admin/contacts/${id}`}
+        className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground transition-colors mb-6"
+      >
+        <ChevronLeft size={14} />
+        {contact.name}
+      </Link>
 
-        <div>
-          <label>Email</label>
-          <input
-            type="email"
-            value={form.email}
-            onChange={(e) => set('email', e.target.value)}
-          />
-        </div>
+      <h1 className="text-2xl font-semibold text-foreground mb-8">Edit contact</h1>
 
-        <div>
-          <label>Phone</label>
-          <input value={form.phone} onChange={(e) => set('phone', e.target.value)} />
-        </div>
+      <ContactForm
+        defaultValues={contactToFormValues(contact)}
+        onSubmit={(values) => mutation.mutate(values)}
+        isPending={mutation.isPending}
+        isError={mutation.isError}
+        submitLabel="Save changes"
+        onCancel={() => navigate(`/admin/contacts/${id}`)}
+      />
 
-        <div>
-          <label>Address</label>
-          <textarea
-            rows={3}
-            value={form.address}
-            onChange={(e) => set('address', e.target.value)}
-          />
-        </div>
-
-        <div>
-          <label>Notes</label>
-          <textarea
-            rows={3}
-            value={form.notes}
-            onChange={(e) => set('notes', e.target.value)}
-          />
-        </div>
-
-        <div>
-          <label>Parking info</label>
-          <textarea
-            rows={2}
-            value={form.parkingInfo}
-            onChange={(e) => set('parkingInfo', e.target.value)}
-          />
-        </div>
-
-        <div>
-          <label>Access info</label>
-          <textarea
-            rows={2}
-            value={form.accessInfo}
-            onChange={(e) => set('accessInfo', e.target.value)}
-          />
-        </div>
-
-        <div>
-          <label>Equipment available</label>
-          <textarea
-            rows={2}
-            value={form.equipmentAvailable}
-            onChange={(e) => set('equipmentAvailable', e.target.value)}
-          />
-        </div>
-
-        <div>
-          <label>Website</label>
-          <input
-            type="url"
-            value={form.website}
-            onChange={(e) => set('website', e.target.value)}
-          />
-        </div>
-
-        <div>
-          <label>Commission arrangement</label>
-          <textarea
-            rows={2}
-            value={form.commissionArrangement}
-            onChange={(e) => set('commissionArrangement', e.target.value)}
-          />
-        </div>
-
-        <button type="submit" disabled={status === 'saving'}>
-          {status === 'saving' ? 'Saving…' : 'Save changes'}
-        </button>
-        {status === 'error' && <span>Save failed.</span>}
-      </form>
+      <div className="border-t border-border mt-10 pt-8">
+        <p className="text-sm font-medium text-foreground mb-1">Delete contact</p>
+        <p className="text-sm text-muted mb-4">
+          {totalBookings > 0
+            ? `This contact has ${totalBookings} booking${totalBookings === 1 ? '' : 's'} and cannot be deleted.`
+            : 'Permanently removes this contact. This cannot be undone.'}
+        </p>
+        {deleteConfirm ? (
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-status-cancelled border-status-cancelled hover:bg-status-cancelled/8"
+            disabled={deleteMutation.isPending}
+            onClick={() => deleteMutation.mutate()}
+          >
+            {deleteMutation.isPending ? 'Deleting…' : 'Confirm delete'}
+          </Button>
+        ) : (
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-status-cancelled border-status-cancelled hover:bg-status-cancelled/8"
+            disabled={totalBookings > 0}
+            onClick={() => setDeleteConfirm(true)}
+          >
+            Delete contact
+          </Button>
+        )}
+      </div>
     </div>
   );
 }

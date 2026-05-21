@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdatePublicProfileDto } from './dto/update-public-profile.dto';
 
@@ -15,10 +16,17 @@ export class PublicProfileRepository {
   }
 
   updateByUserId(userId: string, data: UpdatePublicProfileDto) {
+    const { socials, ...rest } = data;
+    const payload = {
+      ...rest,
+      ...(socials !== undefined
+        ? { socials: socials === null ? Prisma.DbNull : socials }
+        : {}),
+    };
     return this.prisma.publicProfile.upsert({
       where: { userId },
-      update: data,
-      create: { userId, ...data },
+      update: payload,
+      create: { userId, ...payload },
     });
   }
 }

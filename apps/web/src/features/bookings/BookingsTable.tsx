@@ -37,9 +37,9 @@ function formatDate(iso: string) {
 }
 
 function formatFee(fee: string | null) {
-  if (!fee) return '—';
+  if (!fee) return null;
   const n = parseFloat(fee);
-  return isNaN(n) ? '—' : currencyFormatter.format(n);
+  return isNaN(n) ? null : currencyFormatter.format(n);
 }
 
 // ─── Column helper ───────────────────────────────────────────────────────────
@@ -97,7 +97,7 @@ const columns = [
     header: 'Fee',
     cell: ({ row }) => (
       <span className="text-sm text-foreground tabular-nums">
-        {formatFee(row.original.fee)}
+        {formatFee(row.original.fee) ?? '—'}
       </span>
     ),
   }),
@@ -126,6 +126,44 @@ function EmptyState({ onNew }: { onNew?: () => void }) {
           New booking
         </Button>
       )}
+    </div>
+  );
+}
+
+// ─── Mobile card list ─────────────────────────────────────────────────────────
+
+function BookingCardList({ data }: { data: BookingListItem[] }) {
+  const navigate = useNavigate();
+  return (
+    <div className="divide-y divide-border">
+      {data.map((booking) => {
+        const { date, day } = formatDate(booking.date);
+        const fee = formatFee(booking.fee);
+        return (
+          <div
+            key={booking.id}
+            onClick={() => navigate(`/admin/bookings/${booking.id}`)}
+            className="py-3 flex flex-col gap-1 cursor-pointer active:bg-surface transition-colors duration-100"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm font-medium text-foreground truncate">
+                {booking.customer.name}
+              </span>
+              <BookingStatusPill status={booking.status} />
+            </div>
+            {booking.title && (
+              <span className="text-xs text-muted truncate">{booking.title}</span>
+            )}
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm text-muted">{date} · {day}</span>
+              {fee && <span className="text-sm text-foreground tabular-nums">{fee}</span>}
+            </div>
+            {booking.venue && (
+              <span className="text-xs text-muted truncate">{booking.venue.name}</span>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -159,47 +197,55 @@ export default function BookingsTable({ data, onNew }: BookingsTableProps) {
   }
 
   return (
-    <div className="w-full">
-      <table className="w-full border-collapse">
-        <thead>
-          <tr className="border-b border-border">
-            {table.getFlatHeaders().map((header) => {
-              const canSort = header.column.getCanSort();
-              const sorted = header.column.getIsSorted();
-              return (
-                <th
-                  key={header.id}
-                  className={cn(
-                    'group/header px-4 py-2.5 text-left text-xs font-medium text-muted select-none whitespace-nowrap',
-                    canSort && 'cursor-pointer hover:text-foreground transition-colors',
-                  )}
-                  onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
-                >
-                  <span className="inline-flex items-center gap-1.5">
-                    {flexRender(header.column.columnDef.header, header.getContext())}
-                    {canSort && <SortIcon direction={sorted} />}
-                  </span>
-                </th>
-              );
-            })}
-          </tr>
-        </thead>
-        <tbody>
-          {table.getRowModel().rows.map((row) => (
-            <tr
-              key={row.id}
-              onClick={() => navigate(`/admin/bookings/${row.original.id}`)}
-              className="h-14 border-b border-border cursor-pointer hover:bg-surface transition-colors duration-100 group"
-            >
-              {row.getVisibleCells().map((cell) => (
-                <td key={cell.id} className="px-4">
-                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                </td>
-              ))}
+    <>
+      {/* Mobile: card list */}
+      <div className="md:hidden">
+        <BookingCardList data={data} />
+      </div>
+
+      {/* Desktop: sortable table */}
+      <div className="hidden md:block w-full overflow-x-auto">
+        <table className="w-full min-w-[580px] border-collapse">
+          <thead>
+            <tr className="border-b border-border">
+              {table.getFlatHeaders().map((header) => {
+                const canSort = header.column.getCanSort();
+                const sorted = header.column.getIsSorted();
+                return (
+                  <th
+                    key={header.id}
+                    className={cn(
+                      'group/header px-4 py-2.5 text-left text-xs font-medium text-muted select-none whitespace-nowrap',
+                      canSort && 'cursor-pointer hover:text-foreground transition-colors',
+                    )}
+                    onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
+                  >
+                    <span className="inline-flex items-center gap-1.5">
+                      {flexRender(header.column.columnDef.header, header.getContext())}
+                      {canSort && <SortIcon direction={sorted} />}
+                    </span>
+                  </th>
+                );
+              })}
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {table.getRowModel().rows.map((row) => (
+              <tr
+                key={row.id}
+                onClick={() => navigate(`/admin/bookings/${row.original.id}`)}
+                className="h-14 border-b border-border cursor-pointer hover:bg-surface transition-colors duration-100 group"
+              >
+                {row.getVisibleCells().map((cell) => (
+                  <td key={cell.id} className="px-4">
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }

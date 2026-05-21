@@ -1,136 +1,177 @@
-import { useAuth } from '@clerk/react';
-import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { ChevronLeft } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import BookingStatusPill from '@/components/BookingStatusPill';
+import { useContact } from '@/features/contacts/useContact';
+import type { BookingRef, BookingStatus } from '@/types/api';
 
-interface Booking {
-  id: string;
-  title: string | null;
-  date: string;
-  status: string;
-  eventType: string;
+// ─── Formatters ───────────────────────────────────────────────────────────────
+
+const dateFormatter = new Intl.DateTimeFormat('en-GB', {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+});
+
+const EVENT_TYPE_LABELS: Record<string, string> = {
+  WEDDING: 'Wedding',
+  CORPORATE: 'Corporate',
+  PRIVATE: 'Private',
+  RESIDENCY: 'Residency',
+  OTHER: 'Other',
+};
+
+// ─── Info row ─────────────────────────────────────────────────────────────────
+
+function InfoRow({ label, value }: { label: string; value: string | null | undefined }) {
+  if (!value) return null;
+  return (
+    <div className="py-3 grid grid-cols-[140px_1fr] gap-4 border-b border-border last:border-0">
+      <span className="text-sm text-muted">{label}</span>
+      <span className="text-sm text-foreground whitespace-pre-wrap">{value}</span>
+    </div>
+  );
 }
 
-interface Contact {
-  id: string;
-  name: string;
-  email: string | null;
-  phone: string | null;
-  address: string | null;
-  notes: string | null;
-  parkingInfo: string | null;
-  accessInfo: string | null;
-  equipmentAvailable: string | null;
-  website: string | null;
-  commissionArrangement: string | null;
-  customerBookings: Booking[];
-  venueBookings: Booking[];
-  referrerBookings: Booking[];
-}
+// ─── Bookings list ────────────────────────────────────────────────────────────
 
-type BookingWithRole = Booking & { role: string };
+type RoleBooking = BookingRef & { role: string };
 
-function mergeBookings(contact: Contact): BookingWithRole[] {
+function mergeBookings(
+  customer: BookingRef[],
+  venue: BookingRef[],
+  referrer: BookingRef[],
+): RoleBooking[] {
   return [
-    ...contact.customerBookings.map((b) => ({ ...b, role: 'Customer' })),
-    ...contact.venueBookings.map((b) => ({ ...b, role: 'Venue' })),
-    ...contact.referrerBookings.map((b) => ({ ...b, role: 'Referrer' })),
+    ...customer.map((b) => ({ ...b, role: 'Customer' })),
+    ...venue.map((b) => ({ ...b, role: 'Venue' })),
+    ...referrer.map((b) => ({ ...b, role: 'Referrer' })),
   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 }
 
+function BookingsList({ bookings }: { bookings: RoleBooking[] }) {
+  const navigate = useNavigate();
+  if (bookings.length === 0) {
+    return <p className="text-sm text-muted py-4">No bookings associated with this contact.</p>;
+  }
+  return (
+    <div className="divide-y divide-border">
+      {bookings.map((b) => (
+        <div
+          key={`${b.role}-${b.id}`}
+          onClick={() => navigate(`/admin/bookings/${b.id}`)}
+          className="py-3 flex items-center gap-3 cursor-pointer hover:bg-surface active:bg-surface transition-colors duration-100 -mx-1 px-1 rounded"
+        >
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-foreground truncate">
+              {b.title ?? EVENT_TYPE_LABELS[b.eventType] ?? b.eventType}
+            </p>
+            <p className="text-xs text-muted mt-0.5">
+              {dateFormatter.format(new Date(b.date))} · {b.role}
+            </p>
+          </div>
+          <BookingStatusPill status={b.status as BookingStatus} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Skeleton ─────────────────────────────────────────────────────────────────
+
+function DetailSkeleton() {
+  return (
+    <div className="px-6 py-8 max-w-2xl space-y-6 animate-pulse">
+      <div className="h-4 w-24 bg-border rounded" />
+      <div className="h-7 w-48 bg-border rounded" />
+      <div className="space-y-3">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="h-4 w-full bg-border rounded" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
 export default function ContactDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { getToken } = useAuth();
   const navigate = useNavigate();
-  const [contact, setContact] = useState<Contact | null>(null);
-  const [error, setError] = useState(false);
-  const [deleteStatus, setDeleteStatus] = useState<'idle' | 'deleting' | 'error'>('idle');
-  const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  useEffect(() => {
-    getToken().then(async (token) => {
-      try {
-        const data = await fetch(`/api/contacts/${id}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }).then((r) => {
-          if (!r.ok) throw new Error(String(r.status));
-          return r.json();
-        });
-        setContact(data as Contact);
-      } catch {
-        setError(true);
-      }
-    });
-  }, [id, getToken]);
+  const { data: contact, isLoading, isError } = useContact(id!);
 
-  async function handleDelete() {
-    if (!contact) return;
-    if (!confirm(`Delete ${contact.name}? This cannot be undone.`)) return;
-    setDeleteStatus('deleting');
-    setDeleteError(null);
-    try {
-      const token = await getToken();
-      const res = await fetch(`/api/contacts/${id}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.status === 409) {
-        const body = await res.json() as { message: string };
-        setDeleteError(body.message);
-        setDeleteStatus('error');
-        return;
-      }
-      if (!res.ok) throw new Error();
-      navigate('/admin/contacts');
-    } catch {
-      setDeleteError('Delete failed.');
-      setDeleteStatus('error');
-    }
+  if (isLoading) return <DetailSkeleton />;
+  if (isError || !contact) {
+    return (
+      <div className="px-6 py-8">
+        <p className="text-sm text-muted">Contact not found.</p>
+        <Link to="/admin/contacts" className="text-sm text-primary underline underline-offset-2 mt-2 block">
+          Back to contacts
+        </Link>
+      </div>
+    );
   }
 
-  if (error) return <p>Contact not found.</p>;
-  if (!contact) return <p>Loading…</p>;
+  const bookings = mergeBookings(
+    contact.customerBookings,
+    contact.venueBookings,
+    contact.referrerBookings,
+  );
 
-  const bookings = mergeBookings(contact);
+  const hasVenueDetails = contact.parkingInfo || contact.accessInfo || contact.equipmentAvailable;
 
   return (
-    <div>
-      <div>
-        <Link to="/admin/contacts">← Contacts</Link>
-        <Link to={`/admin/contacts/${id}/edit`}>Edit</Link>
-        <button onClick={handleDelete} disabled={deleteStatus === 'deleting'}>
-          {deleteStatus === 'deleting' ? 'Deleting…' : 'Delete'}
-        </button>
+    <div className="px-6 py-8 max-w-2xl">
+      {/* Back */}
+      <Link
+        to="/admin/contacts"
+        className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground transition-colors mb-6"
+      >
+        <ChevronLeft size={14} />
+        Contacts
+      </Link>
+
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4 mb-8">
+        <h1 className="text-2xl font-semibold text-foreground">{contact.name}</h1>
+        <Button variant="outline" size="sm" onClick={() => navigate(`/admin/contacts/${id}/edit`)}>
+          Edit
+        </Button>
       </div>
 
-      {deleteError && <p>{deleteError}</p>}
+      {/* Details */}
+      <div className="border-t border-border mb-8">
+        <InfoRow label="Email" value={contact.email} />
+        <InfoRow label="Phone" value={contact.phone} />
+        <InfoRow label="Website" value={contact.website} />
+        <InfoRow label="Address" value={contact.address} />
+        <InfoRow label="Notes" value={contact.notes} />
+        <InfoRow label="Commission" value={contact.commissionArrangement} />
+      </div>
 
-      <h1>{contact.name}</h1>
-
-      {contact.email && <p>Email: {contact.email}</p>}
-      {contact.phone && <p>Phone: {contact.phone}</p>}
-      {contact.address && <p>Address: {contact.address}</p>}
-      {contact.website && <p>Website: {contact.website}</p>}
-      {contact.notes && <p>Notes: {contact.notes}</p>}
-      {contact.parkingInfo && <p>Parking: {contact.parkingInfo}</p>}
-      {contact.accessInfo && <p>Access: {contact.accessInfo}</p>}
-      {contact.equipmentAvailable && <p>Equipment: {contact.equipmentAvailable}</p>}
-      {contact.commissionArrangement && <p>Commission: {contact.commissionArrangement}</p>}
-
-      <h2>Bookings</h2>
-      {bookings.length === 0 ? (
-        <p>No bookings.</p>
-      ) : (
-        <ul>
-          {bookings.map((b) => (
-            <li key={`${b.role}-${b.id}`}>
-              <Link to={`/admin/bookings/${b.id}`}>
-                {b.title ?? b.eventType} — {new Date(b.date).toLocaleDateString()} — {b.status}
-              </Link>
-              <span> ({b.role})</span>
-            </li>
-          ))}
-        </ul>
+      {/* Venue details */}
+      {hasVenueDetails && (
+        <div className="mb-8">
+          <h2 className="text-sm font-semibold text-foreground mb-1">Venue details</h2>
+          <div className="border-t border-border">
+            <InfoRow label="Parking" value={contact.parkingInfo} />
+            <InfoRow label="Access" value={contact.accessInfo} />
+            <InfoRow label="Equipment" value={contact.equipmentAvailable} />
+          </div>
+        </div>
       )}
+
+      {/* Bookings */}
+      <div>
+        <h2 className="text-sm font-semibold text-foreground mb-3">
+          Bookings
+          {bookings.length > 0 && (
+            <span className="ml-2 text-xs font-normal text-muted">({bookings.length})</span>
+          )}
+        </h2>
+        <BookingsList bookings={bookings} />
+      </div>
     </div>
   );
 }

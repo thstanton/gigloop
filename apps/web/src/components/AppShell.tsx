@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { useState } from 'react';
+import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth, useClerk, useUser } from '@clerk/react';
+import { useQuery } from '@tanstack/react-query';
+import { apiGet } from '@/lib/api';
 import {
   LayoutDashboard,
   CalendarDays,
@@ -39,26 +41,17 @@ const secondaryNav: NavItem[] = [
 // ─── Hooks ───────────────────────────────────────────────────────────────────
 
 function useBusinessName() {
-  const { getToken } = useAuth();
-  const [businessName, setBusinessName] = useState<string>('');
-
-  useEffect(() => {
-    let cancelled = false;
-    getToken().then((token) => {
-      if (!token || cancelled) return;
-      fetch('/api/user-profile/public', {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-        .then((r) => r.json())
-        .then((data: { businessName?: string }) => {
-          if (!cancelled) setBusinessName(data.businessName ?? '');
-        })
-        .catch(() => {});
-    });
-    return () => { cancelled = true; };
-  }, [getToken]);
-
-  return businessName;
+  const { isLoaded } = useAuth();
+  const { data, isPending } = useQuery({
+    queryKey: ['publicProfile'],
+    queryFn: () => apiGet<{ businessName?: string }>('/me/public'),
+    enabled: isLoaded,
+    staleTime: 5 * 60 * 1000,
+  });
+  return {
+    businessName: data?.businessName ?? '',
+    isLoading: !isLoaded || isPending,
+  };
 }
 
 // ─── Shared: sidebar nav group ───────────────────────────────────────────────
@@ -170,15 +163,9 @@ function UserAvatar({ size = 'sm' }: { size?: 'sm' | 'md' }) {
 
 // ─── Desktop: sidebar ─────────────────────────────────────────────────────────
 
-function Sidebar({ businessName }: { businessName: string }) {
+function Sidebar() {
   return (
-    <aside className="hidden lg:flex fixed inset-y-0 left-0 w-60 bg-background border-r border-border flex-col z-30">
-      <div className="h-14 flex items-center px-4 border-b border-border flex-shrink-0">
-        <span className="text-sm font-semibold text-foreground truncate">
-          {businessName || <span className="text-muted animate-pulse">Loading…</span>}
-        </span>
-      </div>
-
+    <aside className="hidden md:flex fixed top-14 left-0 bottom-0 w-60 bg-background border-r border-border flex-col z-30">
       <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-5">
         <SidebarNavGroup items={primaryNav} />
         <div>
@@ -196,22 +183,26 @@ function Sidebar({ businessName }: { businessName: string }) {
 
 // ─── Desktop: top bar ─────────────────────────────────────────────────────────
 
-function DesktopTopBar() {
+function DesktopTopBar({ businessName, isLoading }: { businessName: string; isLoading: boolean }) {
   return (
-    <header className="hidden lg:flex h-14 bg-background border-b border-border items-center px-6 flex-shrink-0">
-      {/* Page title slot — filled by pages via context */}
+    <header className="hidden md:flex fixed top-0 inset-x-0 h-14 bg-background border-b border-border items-center px-6 z-30">
+      <span className="text-sm font-semibold text-foreground">GigMan</span>
+      <div className="ml-auto">
+        {isLoading
+          ? <div className="h-3 w-28 bg-border rounded animate-pulse" />
+          : <span className="text-sm text-muted">{businessName}</span>
+        }
+      </div>
     </header>
   );
 }
 
 // ─── Mobile: top bar ─────────────────────────────────────────────────────────
 
-function MobileTopBar({ businessName }: { businessName: string }) {
+function MobileTopBar() {
   return (
-    <header className="lg:hidden fixed top-0 inset-x-0 h-14 bg-background border-b border-border flex items-center px-4 z-20">
-      <span className="text-sm font-semibold text-foreground truncate">
-        {businessName || <span className="text-muted animate-pulse">Loading…</span>}
-      </span>
+    <header className="md:hidden fixed top-0 inset-x-0 h-14 bg-background border-b border-border flex items-center px-4 z-20">
+      <span className="text-sm font-semibold text-foreground">GigMan</span>
     </header>
   );
 }
@@ -223,13 +214,15 @@ function BottomTabBar() {
   const { user } = useUser();
   const { signOut } = useClerk();
   const navigate = useNavigate();
+  const location = useLocation();
+  const moreIsActive = secondaryNav.some((item) => location.pathname.startsWith(item.to));
 
   const fullName = [user?.firstName, user?.lastName].filter(Boolean).join(' ');
   const email = user?.primaryEmailAddress?.emailAddress ?? '';
 
   return (
     <>
-      <nav className="lg:hidden fixed bottom-0 inset-x-0 h-16 bg-background border-t border-border flex z-30">
+      <nav className="md:hidden fixed bottom-0 inset-x-0 h-16 bg-background border-t border-border flex z-30">
         {primaryNav.map(({ label, to, icon: Icon }) => (
           <NavLink
             key={to}
@@ -249,7 +242,10 @@ function BottomTabBar() {
 
         <button
           onClick={() => setMoreOpen(true)}
-          className="flex-1 flex flex-col items-center justify-center gap-1 text-muted transition-colors duration-150"
+          className={cn(
+            'flex-1 flex flex-col items-center justify-center gap-1 transition-colors duration-150',
+            moreIsActive ? 'text-primary' : 'text-muted',
+          )}
         >
           <MoreHorizontal size={22} strokeWidth={1.75} />
           <span className="text-[10px] font-medium leading-none">More</span>
@@ -308,20 +304,20 @@ function BottomTabBar() {
 // ─── AppShell ────────────────────────────────────────────────────────────────
 
 export default function AppShell() {
-  const businessName = useBusinessName();
+  const { businessName, isLoading } = useBusinessName();
 
   return (
     <div className="min-h-screen bg-surface">
       {/* Desktop sidebar */}
-      <Sidebar businessName={businessName} />
+      <Sidebar />
 
       {/* Mobile top bar */}
-      <MobileTopBar businessName={businessName} />
+      <MobileTopBar />
 
       {/* Content — offset for sidebar on desktop, top bar on mobile */}
-      <div className="lg:ml-60 flex flex-col min-h-screen pt-14 lg:pt-0 pb-16 lg:pb-0">
-        <DesktopTopBar />
-        <main className="flex-1 lg:overflow-y-auto">
+      <div className="md:ml-60 flex flex-col min-h-screen pt-14 pb-16 md:pb-0">
+        <DesktopTopBar businessName={businessName} isLoading={isLoading} />
+        <main className="flex-1 md:overflow-y-auto">
           <Outlet />
         </main>
       </div>

@@ -6,7 +6,7 @@ export class UpdatePublicProfileDto {
   @IsOptional()
   @ValidateIf((_, v) => v !== null)
   @IsString()
-  displayName?: string;
+  displayName?: string | null;
 
   @ApiPropertyOptional({ example: 'Smith String Quartet' })
   @IsOptional()
@@ -17,25 +17,25 @@ export class UpdatePublicProfileDto {
   @IsOptional()
   @ValidateIf((_, v) => v !== null)
   @IsString()
-  email?: string;
+  email?: string | null;
 
   @ApiPropertyOptional({ nullable: true })
   @IsOptional()
   @ValidateIf((_, v) => v !== null)
   @IsString()
-  phone?: string;
+  phone?: string | null;
 
   @ApiPropertyOptional({ nullable: true })
   @IsOptional()
   @ValidateIf((_, v) => v !== null)
   @IsString()
-  bio?: string;
+  bio?: string | null;
 
   @ApiPropertyOptional({ nullable: true })
   @IsOptional()
   @ValidateIf((_, v) => v !== null)
   @IsUrl()
-  logoUrl?: string;
+  logoUrl?: string | null;
 
   @ApiPropertyOptional({ example: '#3B82F6' })
   @IsOptional()
@@ -46,22 +46,24 @@ export class UpdatePublicProfileDto {
   @IsOptional()
   @ValidateIf((_, v) => v !== null)
   @IsUrl()
-  photo?: string;
+  photo?: string | null;
 
   @ApiPropertyOptional({ nullable: true })
   @IsOptional()
   @ValidateIf((_, v) => v !== null)
   @IsUrl()
-  website?: string;
+  website?: string | null;
 
   @ApiPropertyOptional({ nullable: true })
   @IsOptional()
   @ValidateIf((_, v) => v !== null)
   @IsObject()
-  socials?: Record<string, string>;
+  socials?: Record<string, string> | null;
 
-  @ApiPropertyOptional({ example: 'LIGHT', enum: ['LIGHT', 'DARK'] })
+  @ApiPropertyOptional({
+    enum: ['LIGHT_MODERN', 'LIGHT_ROMANTIC', 'BOLD_MODERN', 'BOLD_ROMANTIC'],
+  })
   @IsOptional()
-  @IsIn(['LIGHT', 'DARK'])
+  @IsIn(['LIGHT_MODERN', 'LIGHT_ROMANTIC', 'BOLD_MODERN', 'BOLD_ROMANTIC'])
   portalTheme?: string;
 }

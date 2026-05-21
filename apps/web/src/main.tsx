@@ -3,6 +3,7 @@ import '@/styles/globals.css';
 import ReactDOM from 'react-dom/client';
 import { ClerkProvider } from '@clerk/react';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import HomePage from './pages/HomePage';
 import SignInPage from './pages/SignInPage';
 import SignUpPage from './pages/SignUpPage';
@@ -14,6 +15,8 @@ import ContactsListPage from './pages/admin/contacts/ContactsListPage';
 import ContactNewPage from './pages/admin/contacts/ContactNewPage';
 import ContactDetailPage from './pages/admin/contacts/ContactDetailPage';
 import ContactEditPage from './pages/admin/contacts/ContactEditPage';
+
+const queryClient = new QueryClient();
 
 const router = createBrowserRouter([
   {
@@ -45,8 +48,10 @@ const router = createBrowserRouter([
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <ClerkProvider publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY}>
-    <React.StrictMode>
-      <RouterProvider router={router} />
-    </React.StrictMode>
+    <QueryClientProvider client={queryClient}>
+      <React.StrictMode>
+        <RouterProvider router={router} />
+      </React.StrictMode>
+    </QueryClientProvider>
   </ClerkProvider>,
 );

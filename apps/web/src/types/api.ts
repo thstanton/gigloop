@@ -337,6 +337,14 @@ export interface UserProfile {
   invoiceNumberSequence: number;
   invoiceSequenceYear: number;
   depositTrackingMode: string;
+  digestEmailEnabled: boolean;
+  songRequestFormEnabled: boolean;
+  quoteReminderDays: number | null;
+  contractReminderDays: number | null;
+  depositInvoiceReminderDays: number | null;
+  balanceInvoiceReminderDays: number | null;
+  musicFormReminderDays: number | null;
+  thankYouReminderDays: number | null;
 }
 
 export interface PublicProfile {
@@ -362,7 +370,17 @@ export interface UpdateUserProfileInput {
   vatNumber?: string;
   defaultPaymentTermsDays?: number;
   depositTrackingMode?: string;
+  digestEmailEnabled?: boolean;
+  songRequestFormEnabled?: boolean;
+  quoteReminderDays?: number | null;
+  contractReminderDays?: number | null;
+  depositInvoiceReminderDays?: number | null;
+  balanceInvoiceReminderDays?: number | null;
+  musicFormReminderDays?: number | null;
+  thankYouReminderDays?: number | null;
 }
+
+export type PortalTheme = 'LIGHT_MODERN' | 'LIGHT_ROMANTIC' | 'BOLD_MODERN' | 'BOLD_ROMANTIC';
 
 export interface UpdatePublicProfileInput {
   businessName?: string;
@@ -375,5 +393,5 @@ export interface UpdatePublicProfileInput {
   photo?: string | null;
   website?: string | null;
   socials?: Record<string, string> | null;
-  portalTheme?: string;
+  portalTheme?: PortalTheme;
 }
