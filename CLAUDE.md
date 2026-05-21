@@ -21,11 +21,11 @@ GigMan — a CRM for musicians. Greenfield monorepo; SPEC.md is the source of tr
 Once set up, expected commands from repo root:
 
 ```bash
-npm run dev          # start both apps in dev mode
-npm run build        # build all workspaces
-npm run lint         # lint all workspaces
-npm run test         # run all tests
-npm -w apps/api run test -- --testPathPattern=<file>  # run single test file
+bun run dev          # start both apps in dev mode
+bun run build        # build all workspaces
+bun run lint         # lint all workspaces
+bun run test         # run all tests
+bun --filter @gigman/api run test -- --testPathPattern=<file>  # run single test file
 ```
 
 ## Hard Rules (from SPEC.md — never violate)
@@ -82,4 +82,5 @@ All three are declared as providers in the feature module.
   - Any decisions made that weren't in the spec
   - Anything that should be reviewed before the next session
 - Do not run database migrations without confirming first
+- Run `bun run test` and verify all tests pass before committing
 - Commit all changes at the end of each session with a descriptive message
