@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Patch, Post, Req } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { UserProfileService } from './user-profile.service';
 import { PublicProfileService } from './public-profile.service';
 import { UpdateUserProfileDto } from './dto/update-user-profile.dto';
@@ -7,6 +8,8 @@ import type { Request } from 'express';
 
 type AuthedRequest = Request & { userId: string };
 
+@ApiTags('User Profile')
+@ApiBearerAuth('clerk-jwt')
 @Controller('me')
 export class UserProfileController {
   constructor(
@@ -14,26 +17,31 @@ export class UserProfileController {
     private publicProfileService: PublicProfileService,
   ) {}
 
+  @ApiOperation({ summary: 'Get the current user profile (creates if not exists)' })
   @Get()
   getMe(@Req() req: AuthedRequest) {
     return this.userProfileService.findOrCreate(req.userId);
   }
 
+  @ApiOperation({ summary: 'Update the current user profile' })
   @Patch()
   updateMe(@Req() req: AuthedRequest, @Body() dto: UpdateUserProfileDto) {
     return this.userProfileService.update(req.userId, dto);
   }
 
+  @ApiOperation({ summary: 'Get the public profile (creates if not exists)' })
   @Get('public')
   getPublicProfile(@Req() req: AuthedRequest) {
     return this.publicProfileService.findOrCreate(req.userId);
   }
 
+  @ApiOperation({ summary: 'Update the public profile' })
   @Patch('public')
   updatePublicProfile(@Req() req: AuthedRequest, @Body() dto: UpdatePublicProfileDto) {
     return this.publicProfileService.update(req.userId, dto);
   }
 
+  @ApiOperation({ summary: 'Get a presigned upload URL for the logo' })
   @Post('logo-upload-url')
   getLogoUploadUrl(
     @Req() req: AuthedRequest,

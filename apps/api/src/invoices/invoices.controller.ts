@@ -9,6 +9,7 @@ import {
   Post,
   Req,
 } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { InvoicesService } from './invoices.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
@@ -18,10 +19,13 @@ import type { Request } from 'express';
 
 type AuthedRequest = Request & { userId: string };
 
+@ApiTags('Invoices')
+@ApiBearerAuth('clerk-jwt')
 @Controller('bookings/:bookingId/invoices')
 export class InvoicesController {
   constructor(private service: InvoicesService) {}
 
+  @ApiOperation({ summary: 'List invoices for a booking' })
   @Get()
   findAll(
     @Req() req: AuthedRequest,
@@ -30,6 +34,7 @@ export class InvoicesController {
     return this.service.findAll(req.userId, bookingId);
   }
 
+  @ApiOperation({ summary: 'Get an invoice by ID' })
   @Get(':id')
   findOne(
     @Req() req: AuthedRequest,
@@ -39,6 +44,7 @@ export class InvoicesController {
     return this.service.findOne(req.userId, bookingId, id);
   }
 
+  @ApiOperation({ summary: 'Create an invoice for a booking' })
   @Post()
   create(
     @Req() req: AuthedRequest,
@@ -48,6 +54,7 @@ export class InvoicesController {
     return this.service.create(req.userId, bookingId, dto);
   }
 
+  @ApiOperation({ summary: 'Update an invoice' })
   @Patch(':id')
   update(
     @Req() req: AuthedRequest,
@@ -58,6 +65,7 @@ export class InvoicesController {
     return this.service.update(req.userId, bookingId, id, dto);
   }
 
+  @ApiOperation({ summary: 'Delete an invoice' })
   @Delete(':id')
   @HttpCode(204)
   delete(
@@ -68,6 +76,7 @@ export class InvoicesController {
     return this.service.delete(req.userId, bookingId, id);
   }
 
+  @ApiOperation({ summary: 'Add a line item to an invoice' })
   @Post(':id/line-items')
   addLineItem(
     @Req() req: AuthedRequest,
@@ -78,6 +87,7 @@ export class InvoicesController {
     return this.service.addLineItem(req.userId, bookingId, id, dto);
   }
 
+  @ApiOperation({ summary: 'Update a line item' })
   @Patch(':id/line-items/:itemId')
   updateLineItem(
     @Req() req: AuthedRequest,
@@ -89,6 +99,7 @@ export class InvoicesController {
     return this.service.updateLineItem(req.userId, bookingId, id, itemId, dto);
   }
 
+  @ApiOperation({ summary: 'Remove a line item from an invoice' })
   @Delete(':id/line-items/:itemId')
   @HttpCode(204)
   deleteLineItem(
