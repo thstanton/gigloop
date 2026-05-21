@@ -1,0 +1,121 @@
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import BookingsTable from '@/features/bookings/BookingsTable';
+import { useBookings } from '@/features/bookings/useBookings';
+import type { BookingStatus } from '@/types/api';
+import { cn } from '@/lib/utils';
+
+// ─── Filter tabs ─────────────────────────────────────────────────────────────
+
+type Filter = BookingStatus | 'ALL';
+
+const FILTERS: { label: string; value: Filter }[] = [
+  { label: 'All',       value: 'ALL'       },
+  { label: 'Enquiry',   value: 'ENQUIRY'   },
+  { label: 'Confirmed', value: 'CONFIRMED' },
+  { label: 'Invoiced',  value: 'INVOICED'  },
+  { label: 'Settled',   value: 'SETTLED'   },
+  { label: 'Completed', value: 'COMPLETED' },
+  { label: 'Cancelled', value: 'CANCELLED' },
+];
+
+function FilterBar({
+  active,
+  onChange,
+}: {
+  active: Filter;
+  onChange: (v: Filter) => void;
+}) {
+  return (
+    <div className="flex gap-0 border-b border-border overflow-x-auto scrollbar-none">
+      {FILTERS.map(({ label, value }) => (
+        <button
+          key={value}
+          onClick={() => onChange(value)}
+          className={cn(
+            'px-3 py-2.5 text-sm whitespace-nowrap transition-colors duration-150 -mb-px border-b-2',
+            active === value
+              ? 'border-primary text-foreground font-medium'
+              : 'border-transparent text-muted hover:text-foreground',
+          )}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ─── Loading skeleton ─────────────────────────────────────────────────────────
+
+function TableSkeleton() {
+  return (
+    <div className="w-full">
+      <div className="border-b border-border py-2.5 px-4 flex gap-8">
+        {['w-20', 'w-32', 'w-28', 'w-16', 'w-16'].map((w, i) => (
+          <div key={i} className={`h-3 ${w} bg-border rounded animate-pulse`} />
+        ))}
+      </div>
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div key={i} className="h-14 border-b border-border px-4 flex items-center gap-8">
+          <div className="flex flex-col gap-1.5">
+            <div className="h-3 w-24 bg-border rounded animate-pulse" />
+            <div className="h-2.5 w-16 bg-border rounded animate-pulse opacity-60" />
+          </div>
+          <div className="h-3 w-36 bg-border rounded animate-pulse" />
+          <div className="h-3 w-28 bg-border rounded animate-pulse" />
+          <div className="h-5 w-20 bg-border rounded-full animate-pulse" />
+          <div className="h-3 w-14 bg-border rounded animate-pulse" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
+export default function BookingsListPage() {
+  const navigate = useNavigate();
+  const [filter, setFilter] = useState<Filter>('ALL');
+  const { data, loading, error } = useBookings(filter);
+
+  return (
+    <div className="px-6 py-8 max-w-6xl">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-semibold text-foreground">Bookings</h1>
+        <Button onClick={() => navigate('/admin/bookings/new')}>
+          New booking
+        </Button>
+      </div>
+
+      {/* Filter bar */}
+      <FilterBar active={filter} onChange={setFilter} />
+
+      {/* Content */}
+      <div className="mt-1">
+        {loading && <TableSkeleton />}
+
+        {!loading && error && (
+          <div className="py-12 text-center text-sm text-muted">
+            Failed to load bookings.{' '}
+            <button
+              className="text-primary underline underline-offset-2"
+              onClick={() => setFilter((f) => f)}
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {!loading && !error && (
+          <BookingsTable
+            data={data}
+            onNew={() => navigate('/admin/bookings/new')}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
