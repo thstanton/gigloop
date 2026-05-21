@@ -11,6 +11,7 @@ import AdminLayout from './layouts/AdminLayout';
 import DashboardPage from './pages/admin/DashboardPage';
 import SettingsPage from './pages/admin/SettingsPage';
 import BookingsListPage from './pages/admin/bookings/BookingsListPage';
+import BookingDetailPage from './pages/admin/bookings/BookingDetailPage';
 import ContactsListPage from './pages/admin/contacts/ContactsListPage';
 import ContactNewPage from './pages/admin/contacts/ContactNewPage';
 import ContactDetailPage from './pages/admin/contacts/ContactDetailPage';
@@ -38,6 +39,7 @@ const router = createBrowserRouter([
       { index: true, element: <DashboardPage /> },
       { path: 'settings', element: <SettingsPage /> },
       { path: 'bookings', element: <BookingsListPage /> },
+      { path: 'bookings/:id', element: <BookingDetailPage /> },
       { path: 'contacts', element: <ContactsListPage /> },
       { path: 'contacts/new', element: <ContactNewPage /> },
       { path: 'contacts/:id', element: <ContactDetailPage /> },

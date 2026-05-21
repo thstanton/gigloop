@@ -133,6 +133,10 @@ export interface BookingDetail extends Omit<BookingListItem, 'customer' | 'venue
   venue: Contact | null;
   referrer: Contact | null;
   sets: PerformanceSet[];
+  contractSignedAt: string | null;
+  depositReceivedAt: string | null;
+  depositTrackingMode: string | null;
+  portalToken: string;
 }
 
 export interface CreateSetInput {
