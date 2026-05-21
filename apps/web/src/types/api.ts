@@ -175,6 +175,37 @@ export interface UpdateBookingInput {
 }
 
 // ─────────────────────────────────────────
+// Songs
+// ─────────────────────────────────────────
+
+export interface Song {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  title: string;
+  artist: string | null;
+  genre: SongGenre;
+  active: boolean;
+  tags: string[];
+}
+
+export interface CreateSongInput {
+  title: string;
+  genre: SongGenre;
+  artist?: string;
+  active?: boolean;
+  tags?: string[];
+}
+
+export interface UpdateSongInput {
+  title?: string;
+  genre?: SongGenre;
+  artist?: string | null;
+  active?: boolean;
+  tags?: string[];
+}
+
+// ─────────────────────────────────────────
 // User profile
 // ─────────────────────────────────────────
 
