@@ -51,6 +51,13 @@ PDF generation runs in the API process using `@react-pdf/renderer` and the resul
 - If anything in the task contradicts SPEC.md, flag it rather 
   than resolving it yourself
 
+## Shared types
+`apps/web/src/types/api.ts` is the single source of frontend-facing types.
+It mirrors the API's DTOs as plain TypeScript interfaces — no `@prisma/client`
+imports, Prisma `Decimal` appears as `string`, `DateTime` as `string`.
+**Update this file whenever an API DTO changes.**
+Frontend pages import types from here rather than declaring local interfaces.
+
 ## Code Conventions
 - TypeScript strict mode in both apps
 - NestJS: one module per feature (contacts, bookings, songs, etc.)

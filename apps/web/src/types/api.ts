@@ -1,0 +1,231 @@
+// Wire-format types for all API endpoints.
+// Kept in sync with apps/api/src/**/dto — update here whenever a DTO changes.
+// Prisma-level types (Decimal, DateTime) appear here as their JSON equivalents
+// (string). Enums are plain union types — no dependency on @prisma/client.
+
+// ─────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────
+
+export type BookingStatus =
+  | 'ENQUIRY'
+  | 'CONFIRMED'
+  | 'INVOICED'
+  | 'SETTLED'
+  | 'COMPLETED'
+  | 'CANCELLED';
+
+export type EventType =
+  | 'WEDDING'
+  | 'CORPORATE'
+  | 'PRIVATE'
+  | 'RESIDENCY'
+  | 'OTHER';
+
+export type SongGenre =
+  | 'CONTEMPORARY'
+  | 'CLASSICAL'
+  | 'JAZZ'
+  | 'FILM_TV_MUSICALS'
+  | 'BOLLYWOOD'
+  | 'CHRISTMAS';
+
+export type InvoiceStatus = 'DRAFT' | 'SENT' | 'PAID';
+
+// ─────────────────────────────────────────
+// Contacts
+// ─────────────────────────────────────────
+
+export interface Contact {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+  notes: string | null;
+  parkingInfo: string | null;
+  accessInfo: string | null;
+  equipmentAvailable: string | null;
+  website: string | null;
+  commissionArrangement: string | null;
+}
+
+export interface BookingRef {
+  id: string;
+  title: string | null;
+  date: string;
+  status: BookingStatus;
+  eventType: EventType;
+}
+
+export interface ContactDetail extends Contact {
+  customerBookings: BookingRef[];
+  venueBookings: BookingRef[];
+  referrerBookings: BookingRef[];
+}
+
+export interface CreateContactInput {
+  name: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  notes?: string;
+  parkingInfo?: string;
+  accessInfo?: string;
+  equipmentAvailable?: string;
+  website?: string;
+  commissionArrangement?: string;
+}
+
+export interface UpdateContactInput {
+  name?: string;
+  email?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  notes?: string | null;
+  parkingInfo?: string | null;
+  accessInfo?: string | null;
+  equipmentAvailable?: string | null;
+  website?: string | null;
+  commissionArrangement?: string | null;
+}
+
+// ─────────────────────────────────────────
+// Bookings
+// ─────────────────────────────────────────
+
+export interface ContactSummary {
+  id: string;
+  name: string;
+  email?: string | null;
+}
+
+export interface PerformanceSet {
+  id: string;
+  order: number;
+  duration: number;
+  startTime: string | null;
+  label: string | null;
+}
+
+export interface BookingListItem {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  status: BookingStatus;
+  eventType: EventType;
+  date: string;
+  title: string | null;
+  fee: string | null; // Decimal serialises as string over JSON
+  notes: string | null;
+  customerId: string;
+  customer: ContactSummary;
+  venueId: string | null;
+  venue: ContactSummary | null;
+  referrerId: string | null;
+  referrer: ContactSummary | null;
+}
+
+export interface BookingDetail extends Omit<BookingListItem, 'customer' | 'venue' | 'referrer'> {
+  customer: Contact;
+  venue: Contact | null;
+  referrer: Contact | null;
+  sets: PerformanceSet[];
+}
+
+export interface CreateSetInput {
+  order: number;
+  duration: number;
+  startTime?: string;
+  label?: string;
+}
+
+export interface UpdateSetInput {
+  order?: number;
+  duration?: number;
+  startTime?: string | null;
+  label?: string | null;
+}
+
+export interface CreateBookingInput {
+  eventType: EventType;
+  date: string;
+  customerId: string;
+  status?: BookingStatus;
+  title?: string;
+  fee?: number;
+  notes?: string;
+  venueId?: string;
+  referrerId?: string;
+  sets?: CreateSetInput[];
+}
+
+export interface UpdateBookingInput {
+  eventType?: EventType;
+  date?: string;
+  customerId?: string;
+  status?: BookingStatus;
+  title?: string | null;
+  fee?: number | null;
+  notes?: string | null;
+  venueId?: string | null;
+  referrerId?: string | null;
+}
+
+// ─────────────────────────────────────────
+// User profile
+// ─────────────────────────────────────────
+
+export interface UserProfile {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  address: string | null;
+  bankDetails: string | null;
+  vatNumber: string | null;
+  defaultPaymentTermsDays: number;
+  invoiceNumberSequence: number;
+  invoiceSequenceYear: number;
+  depositTrackingMode: string;
+}
+
+export interface PublicProfile {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  businessName: string;
+  displayName: string | null;
+  bio: string | null;
+  email: string | null;
+  phone: string | null;
+  logoUrl: string | null;
+  brandColour: string | null;
+  photo: string | null;
+  website: string | null;
+  socials: Record<string, string> | null;
+  portalTheme: string;
+}
+
+export interface UpdateUserProfileInput {
+  address?: string;
+  bankDetails?: string | null;
+  vatNumber?: string;
+  defaultPaymentTermsDays?: number;
+  depositTrackingMode?: string;
+}
+
+export interface UpdatePublicProfileInput {
+  businessName?: string;
+  displayName?: string | null;
+  bio?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  logoUrl?: string | null;
+  brandColour?: string;
+  photo?: string | null;
+  website?: string | null;
+  socials?: Record<string, string> | null;
+  portalTheme?: string;
+}
