@@ -262,6 +262,34 @@ export interface UpdateSongInput {
 }
 
 // ─────────────────────────────────────────
+// Communications
+// ─────────────────────────────────────────
+
+export interface Communication {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  direction: 'OUTBOUND';
+  channel: 'EMAIL';
+  subject: string;
+  body: string;
+  sentAt: string;
+  bookingId: string;
+  contactId: string;
+  contact: Contact;
+  templateId: string | null;
+  template: Template | null;
+}
+
+export interface CreateCommunicationInput {
+  contactId: string;
+  subject: string;
+  body: string;
+  templateId?: string;
+  sentAt?: string;
+}
+
+// ─────────────────────────────────────────
 // Templates
 // ─────────────────────────────────────────
 

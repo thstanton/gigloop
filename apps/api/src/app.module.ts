@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from './auth/auth.module';
 import { BookingsModule } from './bookings/bookings.module';
+import { CommunicationsModule } from './communications/communications.module';
 import { ContactsModule } from './contacts/contacts.module';
 import { HealthModule } from './health/health.module';
 import { InvoicesModule } from './invoices/invoices.module';
@@ -10,6 +11,6 @@ import { TemplatesModule } from './templates/templates.module';
 import { UserProfileModule } from './user-profile/user-profile.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, HealthModule, UserProfileModule, ContactsModule, BookingsModule, SongsModule, InvoicesModule, TemplatesModule],
+  imports: [PrismaModule, AuthModule, HealthModule, UserProfileModule, ContactsModule, BookingsModule, SongsModule, InvoicesModule, TemplatesModule, CommunicationsModule],
 })
 export class AppModule {}
