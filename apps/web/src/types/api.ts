@@ -262,6 +262,39 @@ export interface UpdateSongInput {
 }
 
 // ─────────────────────────────────────────
+// Templates
+// ─────────────────────────────────────────
+
+export type BuiltInTemplateType =
+  | 'quote'
+  | 'confirmation'
+  | 'contract_cover'
+  | 'contract_and_invoice_cover'
+  | 'invoice_cover'
+  | 'music_form_invite'
+  | 'thank_you'
+  | 'contract';
+
+export interface Template {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  name: string;
+  content: Record<string, unknown>; // Tiptap JSON
+  builtInType: BuiltInTemplateType | null;
+}
+
+export interface CreateTemplateInput {
+  name: string;
+  content: Record<string, unknown>;
+}
+
+export interface UpdateTemplateInput {
+  name?: string;
+  content?: Record<string, unknown>;
+}
+
+// ─────────────────────────────────────────
 // User profile
 // ─────────────────────────────────────────
 

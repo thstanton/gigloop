@@ -6,9 +6,10 @@ import { HealthModule } from './health/health.module';
 import { InvoicesModule } from './invoices/invoices.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { SongsModule } from './songs/songs.module';
+import { TemplatesModule } from './templates/templates.module';
 import { UserProfileModule } from './user-profile/user-profile.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, HealthModule, UserProfileModule, ContactsModule, BookingsModule, SongsModule, InvoicesModule],
+  imports: [PrismaModule, AuthModule, HealthModule, UserProfileModule, ContactsModule, BookingsModule, SongsModule, InvoicesModule, TemplatesModule],
 })
 export class AppModule {}
