@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import BookingStatusPill from '@/components/BookingStatusPill';
 import { useContact } from '@/lib/hooks/useContact';
@@ -123,9 +123,19 @@ export default function ContactDetailPage() {
       {/* Header */}
       <div className="flex items-start justify-between gap-4 mb-8">
         <h1 className="text-2xl font-semibold text-foreground">{contact.name}</h1>
-        <Button variant="outline" size="sm" onClick={() => navigate(`/admin/contacts/${id}/edit`)}>
-          Edit
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate(`/admin/bookings/new`, { state: { customerId: id } })}
+          >
+            <Plus size={14} className="mr-1" />
+            New booking
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => navigate(`/admin/contacts/${id}/edit`)}>
+            Edit
+          </Button>
+        </div>
       </div>
 
       {/* Details */}
