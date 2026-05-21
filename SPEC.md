@@ -71,74 +71,113 @@ routes except portal routes and health checks.
 ### Booking
 Central entity. Represents a performance engagement (no separate "Gig" concept).
 
-**Status lifecycle:** `ENQUIRY → CONFIRMED → COMPLETED → INVOICED → SETTLED`; `CANCELLED` is a terminal state set via DELETE.
-Status transitions are free — not enforced by the API. CANCELLED bookings are excluded from all list queries; they can be retrieved by passing `status=CANCELLED` explicitly.
-
-**Future (post-MVP):** An UpdateHistory model may be added to record status transitions with timestamps throughout the booking lifecycle.
+**Status lifecycle:** `ENQUIRY → CONFIRMED → INVOICED → SETTLED → COMPLETED`; `CANCELLED` is available at any stage.
+Status transitions are not enforced by the API — a Booking can move freely between any statuses. CANCELLED bookings are excluded from all list queries; they can be retrieved by passing `status=CANCELLED` explicitly.
 
 **eventType:** `WEDDING | CORPORATE | PRIVATE | RESIDENCY | OTHER`
 
-**Key fields:** status, eventType, date, title (optional), fee (agreed headline amount), notes (optional), customerId (required FK), venueId (optional FK), referrerId (optional FK)
+**Pre-confirmation tracking:** Two nullable timestamp fields — `contractSignedAt` and `depositReceivedAt` — record when each arrived. `contractSignedAt` is always set manually. `depositReceivedAt` behaviour is controlled by `depositTrackingMode`:
+- `INVOICE` — automatically set when the deposit Invoice is marked Paid
+- `MANUAL` — set directly by the musician on the Booking
+
+Per-booking `depositTrackingMode` overrides `UserProfile.depositTrackingMode`; `null` means inherit from UserProfile. Neither triggers automatic status transitions.
+
+**Key fields:** status, eventType, date, title (optional), fee (agreed headline amount), notes (optional), portalToken (unique UUID — used by the client portal), contractSignedAt, depositReceivedAt, depositTrackingMode, customerId (required FK), venueId (optional FK), referrerId (optional FK)
 
 ### Contact
 Role-agnostic — no type field. Role is determined by which FK on a Booking references it (customer / venue / referrer). Cannot be deleted if referenced by any Booking in any role.
 
 **Fields:** name, email, phone, address, notes, parkingInfo, accessInfo, equipmentAvailable (venue extras), website, commissionArrangement (referrer extras) — all optional except name.
 
-### Song
-Per-user repertoire entry. Fields: title, artist (optional), genre (enum: `Contemporary | Classical | Jazz | Film, TV and Musicals | Bollywood | Christmas`), active (boolean), tags (string array). Seeded at onboarding via opt-in from a static catalogue — not a shared global table.
-
-### Set
-An ordered performance slot within a Booking. Forms the schedule in the contract.
+### PerformanceSet
+An ordered performance slot within a Booking. Multiple sets form the running order and constitute the performance schedule in the contract. Referenced as "Set" in user-facing contexts.
 
 **Fields:** order (integer), duration (minutes), startTime (optional), label (optional — e.g. "Ceremony")
 
 ### Invoice
 A financial document for a Booking. A Booking may have multiple Invoices (e.g. deposit + balance, or single). Addressed to a Contact (`billToContactId` — defaults to customer, overridable).
 
-**Status:** `DRAFT | SENT | PAID`. Overdue is derived (sent + past due date), not stored.
+**Status:** `DRAFT | SENT | PAID`. Overdue is derived (Sent + past due date), not stored.
 
-**Fields:** status, issueDate, dueDate (optional), billToContactId, line items
+**isDeposit:** Boolean flag (default false). At most one deposit invoice per Booking. When `isDeposit` is true and the invoice is marked Paid, `Booking.depositReceivedAt` is automatically set if `depositTrackingMode` resolves to `INVOICE`.
+
+**Sending:** Two ways to move to `SENT`: (1) **Send** — emails the invoice PDF via Resend using the `invoice_cover` template and atomically marks Sent; (2) **Mark as sent** — marks Sent without sending an email.
+
+**Fields:** status, isDeposit, issueDate, dueDate (optional), billToContactId, line items
 
 ### InvoiceLineItem
-Freeform: description (text) + amount (decimal). No fixed categories.
+Freeform: description (text) + amount (decimal) + order (integer). No fixed categories.
 
 ### Template
 Tiptap JSON content block. Decoupled from rendering — rendered as email HTML or contract PDF by the caller. Users can create custom templates.
 
-**Built-in types:** `quote | confirmation | contract_cover | invoice_cover | music_form_invite | thank_you | contract`
+**Fields:** name, content (Tiptap JSON), builtInType (optional enum — only set for system-provided templates)
 
-**Variables:** flat named substitutions pre-computed by the API (e.g. `{{customerName}}`, `{{bookingDate}}`, `{{venueName}}`, `{{bookingFee}}`, `{{setsSchedule}}`, `{{portalLink}}`, `{{invoiceTotal}}`).
+**Built-in types:** `quote | confirmation | contract_cover | contract_and_invoice_cover | invoice_cover | music_form_invite | thank_you | contract`
+- `contract_cover` — email body when sending only the contract portal link
+- `contract_and_invoice_cover` — email body when sending the contract portal link + deposit invoice PDF (the common case for new bookings)
+- `invoice_cover` — email body when sending a standalone invoice PDF
+
+**Variables:** flat named substitutions pre-computed by the API — `{{customerName}}`, `{{bookingDate}}`, `{{venueName}}`, `{{bookingFee}}`, `{{setsSchedule}}`, `{{musicianName}}`, `{{musicianEmail}}`, `{{portalLink}}`, `{{invoiceTotal}}`, `{{invoiceDueDate}}`.
 
 ### Communication
-Log entry for a communication on a Booking. Direction (`OUTBOUND` for MVP) and channel (`EMAIL`) fields keep the model open for inbound email ingestion post-MVP.
+Log entry for a communication on a Booking. For MVP: outbound emails only. Modelled generically to accommodate inbound messages (email ingestion) post-MVP without schema changes.
+
+**Fields:** direction (`OUTBOUND` — MVP only), channel (`EMAIL`), bookingId, contactId, sentAt, subject, body (rendered HTML), templateId (FK — all outbound emails in MVP are template-based)
 
 ### Document
-A generated PDF (Contract or Invoice) stored in Cloudflare R2, linked to a Booking.
+A generated PDF (Contract or Invoice) stored in Cloudflare R2, linked to a Booking. Two types: `CONTRACT` and `INVOICE`. The Contract PDF is generated from a user-editable template. The client signs it via the Portal — a drawn or typed signature is captured, embedded into a regenerated PDF, and the signed version replaces the original in R2.
+
+**Fields:** type (`CONTRACT | INVOICE`), storageKey (R2 object key), bookingId, invoiceId (null for CONTRACT documents)
+
+### Song
+Per-user repertoire entry. Fields: title, artist (optional), genre (enum: `CONTEMPORARY | CLASSICAL | JAZZ | FILM_TV_MUSICALS | BOLLYWOOD | CHRISTMAS`), active (boolean — hides without deleting), tags (string array). Seeded at onboarding via opt-in from a static catalogue — not a shared global table.
+
+### MusicFormConfig
+Per-booking configuration for the client-facing music preference form. Set by the musician when sending the `music_form_invite`. One-to-one with Booking — not all bookings have one (e.g. a hotel residency would not).
+
+**Fields:** enabledGenres (array of Song genres), keyMoments (array of label strings — e.g. "Processional", "1st Signing Register"). Defaults to the wedding set for `WEDDING` eventType, empty for others.
+
+### MusicFormResponse
+The client's submitted music preferences, stored on a Booking (zero-to-one). Re-submitting replaces the previous response.
+
+**Fields:** selectedSongIds (array of Song IDs chosen from the general list), specialRequests (JSON — array of `{ key, songId?, freeText? }`, one entry per key moment), notes (freeform), submittedAt
+
+### PublicProfile
+Public, portal-visible half of the musician's profile (one per userId). Safe to return to unauthenticated portal clients — contains no sensitive data.
+
+**Fields:** businessName, displayName, bio, email, phone, logoUrl (R2 URL), brandColour (hex), photo (R2 URL), website, socials (JSON — platform → URL), portalTheme
 
 ### UserProfile
-One per userId. Business details for invoices, contracts, and the portal.
+Private, authenticated-only half of the musician's profile (one per userId). Never returned to portal clients.
 
-**Fields:** businessName, address, email, phone, website, photo (R2 URL), logo (R2 URL), socials (JSON), bankDetails, vatNumber (optional), defaultPaymentTermsDays, invoiceNumberSequence.
+**Fields:** address, bankDetails (encrypted at rest), vatNumber, defaultPaymentTermsDays, invoiceNumberSequence, invoiceSequenceYear, depositTrackingMode
+
+**Invoice numbering:** format `INV-{year}-{NNN}` (e.g. `INV-2025-001`). `invoiceNumberSequence` is a per-year counter; `invoiceSequenceYear` records the year it was last reset. Both reset each January.
 
 ## MVP Scope
 
 ### In scope
 - Contacts (CRUD)
-- Bookings (CRUD, status management, Sets)
-- Invoices + line items (CRUD, PDF generation)
+- Bookings (CRUD, status management, PerformanceSets, pre-confirmation tracking)
+- Invoices + line items (CRUD, deposit tracking, PDF generation)
 - Contract PDF generation from user-editable Template
+- Contract signing via Portal (drawn/typed signature embedded into regenerated PDF, stored in R2)
 - Email templates (built-in + custom) with variable substitution, sent via Resend
-- Client portal (`/booking/:token`): view booking/sets, submit music preferences (MusicForm), download contract PDF — musician-branded with selectable theme
+- Communication log (outbound emails)
+- Document storage in Cloudflare R2 (contracts and invoices)
+- Client portal (`/booking/:token`): booking summary, contract signing, signed contract download, music preference form (when MusicFormConfig is present) — musician-branded with selectable theme
 - Song library (CRUD, genre/tag management, per-user)
+- Music form config (per-booking genre and key moment configuration)
 - Onboarding flow: opt-in song selection from seed catalogue
-- UserProfile / business settings
+- PublicProfile (portal branding) + UserProfile (private business settings)
 - Daily digest notification email (upcoming bookings + inferred required actions)
 
 ### Post-MVP
 - Dashboard analytics
-- Email ingestion (automated enquiry capture, possibly AI-assisted)
-- Full bidirectional comms log
+- Email ingestion (automated enquiry capture, possibly AI-assisted) — will surface the Enquiry status fully
+- Full bidirectional comms log (inbound email)
+- Post-gig checklist
 
 ## Out of Scope for MVP
 - OAuth / social login
@@ -146,3 +185,5 @@ One per userId. Business details for invoices, contracts, and the portal.
 - Email account integration
 - Sheet music upload
 - Automated reminders
+- Custom genres
+- Embeddable website enquiry form
