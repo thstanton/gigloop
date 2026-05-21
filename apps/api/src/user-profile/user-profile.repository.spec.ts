@@ -42,23 +42,23 @@ describe('UserProfileRepository', () => {
   describe('updateByUserId', () => {
     it('encrypts bankDetails before writing to DB', async () => {
       const plaintext = 'sort: 12-34-56, acc: 12345678';
-      prisma.userProfile.update.mockImplementation(async ({ data }: any) => ({
+      prisma.userProfile.upsert.mockImplementation(async ({ update }: any) => ({
         userId: 'u1',
-        bankDetails: data.bankDetails,
+        bankDetails: update.bankDetails,
       }));
 
       await repo.updateByUserId('u1', { bankDetails: plaintext });
 
-      const written = prisma.userProfile.update.mock.calls[0][0].data.bankDetails;
+      const written = prisma.userProfile.upsert.mock.calls[0][0].update.bankDetails;
       expect(written).not.toBe(plaintext);
       expect(decrypt(written)).toBe(plaintext);
     });
 
     it('returns decrypted bankDetails', async () => {
       const plaintext = 'sort: 12-34-56, acc: 12345678';
-      prisma.userProfile.update.mockImplementation(async ({ data }: any) => ({
+      prisma.userProfile.upsert.mockImplementation(async ({ update }: any) => ({
         userId: 'u1',
-        bankDetails: data.bankDetails,
+        bankDetails: update.bankDetails,
       }));
 
       const result = await repo.updateByUserId('u1', { bankDetails: plaintext });
@@ -66,16 +66,16 @@ describe('UserProfileRepository', () => {
     });
 
     it('does not encrypt when bankDetails is not in the update', async () => {
-      prisma.userProfile.update.mockResolvedValue({ userId: 'u1', bankDetails: null });
+      prisma.userProfile.upsert.mockResolvedValue({ userId: 'u1', bankDetails: null });
       await repo.updateByUserId('u1', { address: '123 Main St' });
-      const written = prisma.userProfile.update.mock.calls[0][0].data;
+      const written = prisma.userProfile.upsert.mock.calls[0][0].update;
       expect(written.bankDetails).toBeUndefined();
     });
 
     it('passes null bankDetails through without encrypting', async () => {
-      prisma.userProfile.update.mockResolvedValue({ userId: 'u1', bankDetails: null });
+      prisma.userProfile.upsert.mockResolvedValue({ userId: 'u1', bankDetails: null });
       await repo.updateByUserId('u1', { bankDetails: null });
-      const written = prisma.userProfile.update.mock.calls[0][0].data.bankDetails;
+      const written = prisma.userProfile.upsert.mock.calls[0][0].update.bankDetails;
       expect(written).toBeNull();
     });
   });
