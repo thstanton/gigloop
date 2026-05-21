@@ -1,0 +1,205 @@
+import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  createColumnHelper,
+  flexRender,
+  getCoreRowModel,
+  getSortedRowModel,
+  useReactTable,
+  type SortingState,
+} from '@tanstack/react-table';
+import { ChevronUp, ChevronDown, ChevronsUpDown, Calendar } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import BookingStatusPill from '@/components/BookingStatusPill';
+import type { BookingListItem } from '@/types/api';
+import { cn } from '@/lib/utils';
+
+// ─── Formatters ──────────────────────────────────────────────────────────────
+
+const dateFormatter = new Intl.DateTimeFormat('en-GB', {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+});
+
+const dayFormatter = new Intl.DateTimeFormat('en-GB', { weekday: 'long' });
+
+const currencyFormatter = new Intl.NumberFormat('en-GB', {
+  style: 'currency',
+  currency: 'GBP',
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0,
+});
+
+function formatDate(iso: string) {
+  const d = new Date(iso);
+  return { date: dateFormatter.format(d), day: dayFormatter.format(d) };
+}
+
+function formatFee(fee: string | null) {
+  if (!fee) return '—';
+  const n = parseFloat(fee);
+  return isNaN(n) ? '—' : currencyFormatter.format(n);
+}
+
+// ─── Column helper ───────────────────────────────────────────────────────────
+
+const col = createColumnHelper<BookingListItem>();
+
+const columns = [
+  col.accessor('date', {
+    header: 'Date',
+    sortingFn: 'datetime',
+    cell: ({ getValue }) => {
+      const { date, day } = formatDate(getValue());
+      return (
+        <span className="flex flex-col gap-0.5">
+          <span className="text-sm text-foreground">{date}</span>
+          <span className="text-xs text-muted">{day}</span>
+        </span>
+      );
+    },
+  }),
+
+  col.accessor((row) => row.title ?? row.customer.name, {
+    id: 'customer',
+    header: 'Customer',
+    cell: ({ row }) => {
+      const { customer, title } = row.original;
+      return (
+        <span className="flex flex-col gap-0.5">
+          <span className="text-sm text-foreground">{customer.name}</span>
+          {title && <span className="text-xs text-muted">{title}</span>}
+        </span>
+      );
+    },
+  }),
+
+  col.accessor((row) => row.venue?.name ?? '', {
+    id: 'venue',
+    header: 'Venue',
+    cell: ({ row }) =>
+      row.original.venue ? (
+        <span className="text-sm text-foreground">{row.original.venue.name}</span>
+      ) : (
+        <span className="text-sm text-muted">—</span>
+      ),
+  }),
+
+  col.accessor('status', {
+    header: 'Status',
+    enableSorting: false,
+    cell: ({ getValue }) => <BookingStatusPill status={getValue()} />,
+  }),
+
+  col.accessor((row) => (row.fee ? parseFloat(row.fee) : -1), {
+    id: 'fee',
+    header: 'Fee',
+    cell: ({ row }) => (
+      <span className="text-sm text-foreground tabular-nums">
+        {formatFee(row.original.fee)}
+      </span>
+    ),
+  }),
+];
+
+// ─── Sort icon ───────────────────────────────────────────────────────────────
+
+function SortIcon({ direction }: { direction: 'asc' | 'desc' | false }) {
+  if (direction === 'asc') return <ChevronUp size={13} className="text-foreground" />;
+  if (direction === 'desc') return <ChevronDown size={13} className="text-foreground" />;
+  return <ChevronsUpDown size={13} className="text-muted opacity-0 group-hover/header:opacity-100 transition-opacity" />;
+}
+
+// ─── Empty state ─────────────────────────────────────────────────────────────
+
+function EmptyState({ onNew }: { onNew?: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-20 gap-4">
+      <Calendar size={48} strokeWidth={1.25} className="text-muted opacity-40" />
+      <div className="text-center space-y-1">
+        <p className="text-sm font-medium text-foreground">No bookings yet</p>
+        <p className="text-sm text-muted">Add your first booking to get started.</p>
+      </div>
+      {onNew && (
+        <Button size="sm" onClick={onNew}>
+          New booking
+        </Button>
+      )}
+    </div>
+  );
+}
+
+// ─── BookingsTable ────────────────────────────────────────────────────────────
+
+interface BookingsTableProps {
+  data: BookingListItem[];
+  onNew?: () => void;
+}
+
+export default function BookingsTable({ data, onNew }: BookingsTableProps) {
+  const navigate = useNavigate();
+  const [sorting, setSorting] = useState<SortingState>([
+    { id: 'date', desc: false },
+  ]);
+
+  const tableData = useMemo(() => data, [data]);
+
+  const table = useReactTable({
+    data: tableData,
+    columns,
+    state: { sorting },
+    onSortingChange: setSorting,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+  });
+
+  if (data.length === 0) {
+    return <EmptyState onNew={onNew} />;
+  }
+
+  return (
+    <div className="w-full">
+      <table className="w-full border-collapse">
+        <thead>
+          <tr className="border-b border-border">
+            {table.getFlatHeaders().map((header) => {
+              const canSort = header.column.getCanSort();
+              const sorted = header.column.getIsSorted();
+              return (
+                <th
+                  key={header.id}
+                  className={cn(
+                    'group/header px-4 py-2.5 text-left text-xs font-medium text-muted select-none whitespace-nowrap',
+                    canSort && 'cursor-pointer hover:text-foreground transition-colors',
+                  )}
+                  onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
+                >
+                  <span className="inline-flex items-center gap-1.5">
+                    {flexRender(header.column.columnDef.header, header.getContext())}
+                    {canSort && <SortIcon direction={sorted} />}
+                  </span>
+                </th>
+              );
+            })}
+          </tr>
+        </thead>
+        <tbody>
+          {table.getRowModel().rows.map((row) => (
+            <tr
+              key={row.id}
+              onClick={() => navigate(`/admin/bookings/${row.original.id}`)}
+              className="h-14 border-b border-border cursor-pointer hover:bg-surface transition-colors duration-100 group"
+            >
+              {row.getVisibleCells().map((cell) => (
+                <td key={cell.id} className="px-4">
+                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
