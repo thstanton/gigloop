@@ -17,6 +17,7 @@ enum BookingStatus {
   INVOICED
   SETTLED
   COMPLETED
+  CANCELLED
 }
 
 enum EventType {

@@ -71,8 +71,10 @@ routes except portal routes and health checks.
 ### Booking
 Central entity. Represents a performance engagement (no separate "Gig" concept).
 
-**Status lifecycle:** `ENQUIRY → CONFIRMED → DEPOSIT_PAID → COMPLETED → INVOICED → SETTLED`
-Status transitions are free — not enforced by the API.
+**Status lifecycle:** `ENQUIRY → CONFIRMED → COMPLETED → INVOICED → SETTLED`; `CANCELLED` is a terminal state set via DELETE.
+Status transitions are free — not enforced by the API. CANCELLED bookings are excluded from all list queries; they can be retrieved by passing `status=CANCELLED` explicitly.
+
+**Future (post-MVP):** An UpdateHistory model may be added to record status transitions with timestamps throughout the booking lifecycle.
 
 **eventType:** `WEDDING | CORPORATE | PRIVATE | RESIDENCY | OTHER`
 
