@@ -54,11 +54,10 @@ export class MailService {
     });
     if (!booking) throw new NotFoundException('Booking not found');
 
-    const publicProfile = await this.prisma.publicProfile.upsert({
+    const publicProfile = await this.prisma.publicProfile.findUnique({
       where: { userId },
-      update: {},
-      create: { userId, businessName: '' },
     });
+    if (!publicProfile) throw new NotFoundException('Public profile not found — complete your profile before sending emails');
 
     let invoiceTotal = '';
     let invoiceDueDate = '';

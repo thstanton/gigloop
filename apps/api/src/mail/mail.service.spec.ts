@@ -12,7 +12,7 @@ jest.mock('resend', () => ({
 
 const mockPrisma = {
   booking: { findFirst: jest.fn() },
-  publicProfile: { upsert: jest.fn() },
+  publicProfile: { findUnique: jest.fn() },
   invoice: { findFirst: jest.fn() },
   template: { findFirst: jest.fn() },
 };
@@ -59,7 +59,7 @@ describe('MailService', () => {
   describe('buildContext', () => {
     beforeEach(() => {
       mockPrisma.booking.findFirst.mockResolvedValue(booking);
-      mockPrisma.publicProfile.upsert.mockResolvedValue(publicProfile);
+      mockPrisma.publicProfile.findUnique.mockResolvedValue(publicProfile);
     });
 
     it('maps booking and profile fields to context correctly', async () => {
@@ -73,7 +73,7 @@ describe('MailService', () => {
     });
 
     it('falls back to businessName when displayName is null', async () => {
-      mockPrisma.publicProfile.upsert.mockResolvedValue({ ...publicProfile, displayName: null });
+      mockPrisma.publicProfile.findUnique.mockResolvedValue({ ...publicProfile, displayName: null });
       const ctx = await service.buildContext('u1', 'b1');
       expect(ctx.musicianName).toBe('Tim Stanton Music');
     });
@@ -111,6 +111,11 @@ describe('MailService', () => {
     it('throws NotFoundException when booking is not found', async () => {
       mockPrisma.booking.findFirst.mockResolvedValue(null);
       await expect(service.buildContext('u1', 'missing')).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws NotFoundException when public profile does not exist', async () => {
+      mockPrisma.publicProfile.findUnique.mockResolvedValue(null);
+      await expect(service.buildContext('u1', 'b1')).rejects.toThrow(NotFoundException);
     });
   });
 
