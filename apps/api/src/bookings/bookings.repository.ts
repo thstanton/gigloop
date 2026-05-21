@@ -38,7 +38,7 @@ export class BookingsRepository {
 
   findOne(userId: string, id: string) {
     return this.prisma.booking.findFirst({
-      where: { id, userId, status: { not: BookingStatus.CANCELLED } },
+      where: { id, userId },
       include: bookingIncludes,
     });
   }
