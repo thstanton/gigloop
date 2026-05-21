@@ -15,9 +15,10 @@ export class PublicProfileRepository {
   }
 
   updateByUserId(userId: string, data: UpdatePublicProfileDto) {
-    return this.prisma.publicProfile.update({
+    return this.prisma.publicProfile.upsert({
       where: { userId },
-      data,
+      update: data,
+      create: { userId, ...data },
     });
   }
 }

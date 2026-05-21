@@ -21,9 +21,10 @@ export class UserProfileRepository {
     if (payload.bankDetails !== undefined && payload.bankDetails !== null) {
       payload.bankDetails = encrypt(payload.bankDetails);
     }
-    const profile = await this.prisma.userProfile.update({
+    const profile = await this.prisma.userProfile.upsert({
       where: { userId },
-      data: payload,
+      update: payload,
+      create: { userId, ...payload },
     });
     return this.decryptProfile(profile);
   }
