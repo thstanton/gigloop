@@ -1,10 +1,10 @@
-import { useAuth, useClerk } from '@clerk/react';
+import { useAuth } from '@clerk/react';
 import { useEffect } from 'react';
-import { Outlet, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
+import AppShell from '@/components/AppShell';
 
 export default function AdminLayout() {
   const { isLoaded, isSignedIn } = useAuth();
-  const { signOut } = useClerk();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -13,12 +13,5 @@ export default function AdminLayout() {
 
   if (!isLoaded || !isSignedIn) return null;
 
-  return (
-    <div>
-      <nav>
-        <button onClick={() => signOut(() => navigate('/sign-in'))}>Sign out</button>
-      </nav>
-      <Outlet />
-    </div>
-  );
+  return <AppShell />;
 }
