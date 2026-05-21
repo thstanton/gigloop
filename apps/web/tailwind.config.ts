@@ -28,12 +28,12 @@ const config: Config = {
           foreground: 'hsl(var(--primary-foreground))',
         },
         status: {
-          enquiry: 'hsl(var(--status-enquiry))',
-          confirmed: 'hsl(var(--status-confirmed))',
-          invoiced: 'hsl(var(--status-invoiced))',
-          settled: 'hsl(var(--status-settled))',
-          completed: 'hsl(var(--status-completed))',
-          cancelled: 'hsl(var(--status-cancelled))',
+          enquiry: 'hsl(var(--status-enquiry) / <alpha-value>)',
+          confirmed: 'hsl(var(--status-confirmed) / <alpha-value>)',
+          invoiced: 'hsl(var(--status-invoiced) / <alpha-value>)',
+          settled: 'hsl(var(--status-settled) / <alpha-value>)',
+          completed: 'hsl(var(--status-completed) / <alpha-value>)',
+          cancelled: 'hsl(var(--status-cancelled) / <alpha-value>)',
         },
       },
       borderColor: {
