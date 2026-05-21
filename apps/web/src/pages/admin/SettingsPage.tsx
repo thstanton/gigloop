@@ -1,7 +1,7 @@
 import { useAuth } from '@clerk/react';
 import { useEffect, useRef, useState } from 'react';
 
-interface UserProfile {
+interface PublicProfile {
   displayName: string | null;
   businessName: string;
   email: string | null;
@@ -9,9 +9,20 @@ interface UserProfile {
   bio: string | null;
   logoUrl: string | null;
   brandColour: string | null;
+  photo: string | null;
+  website: string | null;
+  portalTheme: string;
 }
 
-type FormState = {
+interface UserProfile {
+  address: string | null;
+  bankDetails: string | null;
+  vatNumber: string | null;
+  defaultPaymentTermsDays: number;
+  depositTrackingMode: string;
+}
+
+type PublicFormState = {
   displayName: string;
   businessName: string;
   email: string;
@@ -19,52 +30,79 @@ type FormState = {
   bio: string;
   logoUrl: string;
   brandColour: string;
+  website: string;
 };
 
-function toFormState(profile: UserProfile): FormState {
+type PrivateFormState = {
+  address: string;
+  bankDetails: string;
+  vatNumber: string;
+  defaultPaymentTermsDays: string;
+  depositTrackingMode: string;
+};
+
+function toPublicForm(p: PublicProfile): PublicFormState {
   return {
-    displayName: profile.displayName ?? '',
-    businessName: profile.businessName,
-    email: profile.email ?? '',
-    phone: profile.phone ?? '',
-    bio: profile.bio ?? '',
-    logoUrl: profile.logoUrl ?? '',
-    brandColour: profile.brandColour ?? '#000000',
+    displayName: p.displayName ?? '',
+    businessName: p.businessName,
+    email: p.email ?? '',
+    phone: p.phone ?? '',
+    bio: p.bio ?? '',
+    logoUrl: p.logoUrl ?? '',
+    brandColour: p.brandColour ?? '#000000',
+    website: p.website ?? '',
+  };
+}
+
+function toPrivateForm(p: UserProfile): PrivateFormState {
+  return {
+    address: p.address ?? '',
+    bankDetails: p.bankDetails ?? '',
+    vatNumber: p.vatNumber ?? '',
+    defaultPaymentTermsDays: String(p.defaultPaymentTermsDays),
+    depositTrackingMode: p.depositTrackingMode,
   };
 }
 
 export default function SettingsPage() {
   const { getToken } = useAuth();
-  const [form, setForm] = useState<FormState | null>(null);
-  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [publicForm, setPublicForm] = useState<PublicFormState | null>(null);
+  const [privateForm, setPrivateForm] = useState<PrivateFormState | null>(null);
+  const [publicStatus, setPublicStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [privateStatus, setPrivateStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'error'>('idle');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    getToken().then((token) =>
-      fetch('/api/me', { headers: { Authorization: `Bearer ${token}` } })
-        .then((r) => r.json())
-        .then((profile: UserProfile) => setForm(toFormState(profile))),
-    );
+    getToken().then(async (token) => {
+      const headers = { Authorization: `Bearer ${token}` };
+      const [pub, priv] = await Promise.all([
+        fetch('/api/me/public', { headers }).then((r) => r.json()),
+        fetch('/api/me', { headers }).then((r) => r.json()),
+      ]);
+      setPublicForm(toPublicForm(pub as PublicProfile));
+      setPrivateForm(toPrivateForm(priv as UserProfile));
+    });
   }, [getToken]);
 
-  function set(field: keyof FormState, value: string) {
-    setForm((prev) => prev && { ...prev, [field]: value });
+  function setPublic(field: keyof PublicFormState, value: string) {
+    setPublicForm((prev) => prev && { ...prev, [field]: value });
+  }
+
+  function setPrivate(field: keyof PrivateFormState, value: string) {
+    setPrivateForm((prev) => prev && { ...prev, [field]: value });
   }
 
   async function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file || !form) return;
+    if (!file || !publicForm) return;
 
     setUploadStatus('uploading');
     try {
       const token = await getToken();
       const { uploadUrl, publicUrl } = await fetch('/api/me/logo-upload-url', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ contentType: file.type }),
       }).then((r) => r.json());
 
@@ -74,108 +112,213 @@ export default function SettingsPage() {
         body: file,
       });
 
-      set('logoUrl', publicUrl);
+      setPublic('logoUrl', publicUrl);
       setUploadStatus('idle');
     } catch {
       setUploadStatus('error');
     }
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handlePublicSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form) return;
+    if (!publicForm) return;
+    setPublicStatus('saving');
+    try {
+      const token = await getToken();
+      await fetch('/api/me/public', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          displayName: publicForm.displayName || null,
+          businessName: publicForm.businessName,
+          email: publicForm.email || null,
+          phone: publicForm.phone || null,
+          bio: publicForm.bio || null,
+          logoUrl: publicForm.logoUrl || null,
+          brandColour: publicForm.brandColour,
+          website: publicForm.website || null,
+        }),
+      });
+      setPublicStatus('saved');
+      setTimeout(() => setPublicStatus('idle'), 2000);
+    } catch {
+      setPublicStatus('error');
+    }
+  }
 
-    setStatus('saving');
+  async function handlePrivateSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!privateForm) return;
+    setPrivateStatus('saving');
     try {
       const token = await getToken();
       await fetch('/api/me', {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          displayName: form.displayName || null,
-          businessName: form.businessName,
-          email: form.email || null,
-          phone: form.phone || null,
-          bio: form.bio || null,
-          logoUrl: form.logoUrl || null,
-          brandColour: form.brandColour,
+          address: privateForm.address || null,
+          bankDetails: privateForm.bankDetails || null,
+          vatNumber: privateForm.vatNumber || null,
+          defaultPaymentTermsDays: Number(privateForm.defaultPaymentTermsDays),
+          depositTrackingMode: privateForm.depositTrackingMode,
         }),
       });
-      setStatus('saved');
-      setTimeout(() => setStatus('idle'), 2000);
+      setPrivateStatus('saved');
+      setTimeout(() => setPrivateStatus('idle'), 2000);
     } catch {
-      setStatus('error');
+      setPrivateStatus('error');
     }
   }
 
-  if (!form) return <p>Loading…</p>;
+  if (!publicForm || !privateForm) return <p>Loading…</p>;
 
   return (
     <div>
       <h1>Settings</h1>
-      <form onSubmit={handleSubmit}>
-        <div>
-          <label>Display name</label>
-          <input value={form.displayName} onChange={(e) => set('displayName', e.target.value)} />
-        </div>
 
-        <div>
-          <label>Business name</label>
-          <input
-            required
-            value={form.businessName}
-            onChange={(e) => set('businessName', e.target.value)}
-          />
-        </div>
+      <section>
+        <h2>Public profile</h2>
+        <form onSubmit={handlePublicSubmit}>
+          <div>
+            <label>Display name</label>
+            <input
+              value={publicForm.displayName}
+              onChange={(e) => setPublic('displayName', e.target.value)}
+            />
+          </div>
 
-        <div>
-          <label>Email</label>
-          <input type="email" value={form.email} onChange={(e) => set('email', e.target.value)} />
-        </div>
+          <div>
+            <label>Business name</label>
+            <input
+              required
+              value={publicForm.businessName}
+              onChange={(e) => setPublic('businessName', e.target.value)}
+            />
+          </div>
 
-        <div>
-          <label>Phone</label>
-          <input value={form.phone} onChange={(e) => set('phone', e.target.value)} />
-        </div>
+          <div>
+            <label>Email</label>
+            <input
+              type="email"
+              value={publicForm.email}
+              onChange={(e) => setPublic('email', e.target.value)}
+            />
+          </div>
 
-        <div>
-          <label>Bio</label>
-          <textarea value={form.bio} onChange={(e) => set('bio', e.target.value)} rows={4} />
-        </div>
+          <div>
+            <label>Phone</label>
+            <input
+              value={publicForm.phone}
+              onChange={(e) => setPublic('phone', e.target.value)}
+            />
+          </div>
 
-        <div>
-          <label>Brand colour</label>
-          <input
-            type="color"
-            value={form.brandColour}
-            onChange={(e) => set('brandColour', e.target.value)}
-          />
-        </div>
+          <div>
+            <label>Bio</label>
+            <textarea
+              value={publicForm.bio}
+              onChange={(e) => setPublic('bio', e.target.value)}
+              rows={4}
+            />
+          </div>
 
-        <div>
-          <label>Logo</label>
-          {form.logoUrl && <img src={form.logoUrl} alt="Logo" width={80} />}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={handleLogoChange}
-            style={{ display: 'none' }}
-          />
-          <button type="button" onClick={() => fileInputRef.current?.click()}>
-            {uploadStatus === 'uploading' ? 'Uploading…' : 'Choose file'}
+          <div>
+            <label>Website</label>
+            <input
+              type="url"
+              value={publicForm.website}
+              onChange={(e) => setPublic('website', e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label>Brand colour</label>
+            <input
+              type="color"
+              value={publicForm.brandColour}
+              onChange={(e) => setPublic('brandColour', e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label>Logo</label>
+            {publicForm.logoUrl && <img src={publicForm.logoUrl} alt="Logo" width={80} />}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleLogoChange}
+              style={{ display: 'none' }}
+            />
+            <button type="button" onClick={() => fileInputRef.current?.click()}>
+              {uploadStatus === 'uploading' ? 'Uploading…' : 'Choose file'}
+            </button>
+            {uploadStatus === 'error' && <span>Upload failed</span>}
+          </div>
+
+          <button type="submit" disabled={publicStatus === 'saving'}>
+            {publicStatus === 'saving' ? 'Saving…' : publicStatus === 'saved' ? 'Saved' : 'Save'}
           </button>
-          {uploadStatus === 'error' && <span>Upload failed</span>}
-        </div>
+          {publicStatus === 'error' && <span>Save failed</span>}
+        </form>
+      </section>
 
-        <button type="submit" disabled={status === 'saving'}>
-          {status === 'saving' ? 'Saving…' : status === 'saved' ? 'Saved' : 'Save'}
-        </button>
-        {status === 'error' && <span>Save failed</span>}
-      </form>
+      <section>
+        <h2>Business details</h2>
+        <form onSubmit={handlePrivateSubmit}>
+          <div>
+            <label>Address</label>
+            <textarea
+              value={privateForm.address}
+              onChange={(e) => setPrivate('address', e.target.value)}
+              rows={3}
+            />
+          </div>
+
+          <div>
+            <label>Bank details</label>
+            <textarea
+              value={privateForm.bankDetails}
+              onChange={(e) => setPrivate('bankDetails', e.target.value)}
+              rows={3}
+            />
+          </div>
+
+          <div>
+            <label>VAT number</label>
+            <input
+              value={privateForm.vatNumber}
+              onChange={(e) => setPrivate('vatNumber', e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label>Payment terms (days)</label>
+            <input
+              type="number"
+              min={0}
+              value={privateForm.defaultPaymentTermsDays}
+              onChange={(e) => setPrivate('defaultPaymentTermsDays', e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label>Deposit tracking</label>
+            <select
+              value={privateForm.depositTrackingMode}
+              onChange={(e) => setPrivate('depositTrackingMode', e.target.value)}
+            >
+              <option value="INVOICE">Auto (when deposit invoice is marked Paid)</option>
+              <option value="MANUAL">Manual</option>
+            </select>
+          </div>
+
+          <button type="submit" disabled={privateStatus === 'saving'}>
+            {privateStatus === 'saving' ? 'Saving…' : privateStatus === 'saved' ? 'Saved' : 'Save'}
+          </button>
+          {privateStatus === 'error' && <span>Save failed</span>}
+        </form>
+      </section>
     </div>
   );
 }

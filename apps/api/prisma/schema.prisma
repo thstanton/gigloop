@@ -14,10 +14,9 @@ datasource db {
 enum BookingStatus {
   ENQUIRY
   CONFIRMED
-  DEPOSIT_PAID
-  COMPLETED
   INVOICED
   SETTLED
+  COMPLETED
 }
 
 enum EventType {
@@ -52,28 +51,40 @@ enum SongGenre {
 // Models
 // ─────────────────────────────────────────
 
+model PublicProfile {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  businessName String  @default("")
+  displayName  String?
+  bio          String?
+  email        String?
+  phone        String?
+  logoUrl      String?
+  brandColour  String?
+  photo        String?
+  website      String?
+  socials      Json?
+  portalTheme  String  @default("LIGHT")
+
+  @@index([userId])
+}
+
 model UserProfile {
   id        String   @id @default(uuid())
   userId    String   @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  displayName             String?
-  businessName            String
-  email                   String?
-  phone                   String?
-  bio                     String?
-  logoUrl                 String?
-  brandColour             String?
   address                 String?
-  website                 String?
-  photo                   String?
-  socials                 Json?
   bankDetails             String?
   vatNumber               String?
-  defaultPaymentTermsDays Int         @default(14)
-  invoiceNumberSequence   Int         @default(0)
-  portalTheme             String      @default("LIGHT")
+  defaultPaymentTermsDays Int     @default(14)
+  invoiceNumberSequence   Int     @default(0)
+  invoiceSequenceYear     Int     @default(0)
+  depositTrackingMode     String  @default("INVOICE")
 }
 
 model Contact {
@@ -117,8 +128,11 @@ model Booking {
   date        DateTime
   title       String?
   fee         Decimal?      @db.Decimal(10, 2)
-  notes       String?
-  portalToken String        @unique @default(uuid())
+  notes               String?
+  portalToken         String    @unique @default(uuid())
+  contractSignedAt    DateTime?
+  depositReceivedAt   DateTime?
+  depositTrackingMode String?
 
   customerId String
   customer   Contact @relation("BookingCustomer", fields: [customerId], references: [id], onDelete: Restrict)
@@ -167,6 +181,7 @@ model Invoice {
   updatedAt DateTime @updatedAt
 
   status    InvoiceStatus @default(DRAFT)
+  isDeposit Boolean       @default(false)
   issueDate DateTime      @default(now())
   dueDate   DateTime?
 

@@ -1,9 +1,7 @@
 export class UpdateUserProfileDto {
-  displayName?: string;
-  businessName?: string;
-  email?: string;
-  phone?: string;
-  bio?: string;
-  logoUrl?: string;
-  brandColour?: string;
+  address?: string;
+  bankDetails?: string;
+  vatNumber?: string;
+  defaultPaymentTermsDays?: number;
+  depositTrackingMode?: string;
 }
