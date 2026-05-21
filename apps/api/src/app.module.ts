@@ -5,12 +5,13 @@ import { CommunicationsModule } from './communications/communications.module';
 import { ContactsModule } from './contacts/contacts.module';
 import { HealthModule } from './health/health.module';
 import { InvoicesModule } from './invoices/invoices.module';
+import { MailModule } from './mail/mail.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { SongsModule } from './songs/songs.module';
 import { TemplatesModule } from './templates/templates.module';
 import { UserProfileModule } from './user-profile/user-profile.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, HealthModule, UserProfileModule, ContactsModule, BookingsModule, SongsModule, InvoicesModule, TemplatesModule, CommunicationsModule],
+  imports: [PrismaModule, AuthModule, HealthModule, MailModule, UserProfileModule, ContactsModule, BookingsModule, SongsModule, InvoicesModule, TemplatesModule, CommunicationsModule],
 })
 export class AppModule {}

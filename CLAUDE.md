@@ -88,9 +88,9 @@ The service depends on the repository; the controller depends on the service.
 All three are declared as providers in the feature module.
 
 ## Package Discipline
-- Do not install new npm packages without asking first
-- Do not add packages to solve problems that can be solved with 
-  what's already installed
+- Do not install new packages without asking first
+- Do not add packages to solve problems that can be solved with what's already installed
+- Use `bun add <package>` (never `npm install`) for all package installation
 
 ## Session Behaviour
 - Build only what the current session specifies
