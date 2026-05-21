@@ -2,7 +2,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import BookingsTable from '@/features/bookings/BookingsTable';
-import { useBookings } from '@/features/bookings/useBookings';
+import { useBookings } from '@/lib/hooks/useBookings';
 import type { BookingStatus } from '@/types/api';
 import { cn } from '@/lib/utils';
 

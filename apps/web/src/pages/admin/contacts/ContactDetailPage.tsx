@@ -2,24 +2,9 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ChevronLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import BookingStatusPill from '@/components/BookingStatusPill';
-import { useContact } from '@/features/contacts/useContact';
+import { useContact } from '@/lib/hooks/useContact';
+import { formatDate, EVENT_TYPE_LABELS } from '@/lib/formatters';
 import type { BookingRef, BookingStatus } from '@/types/api';
-
-// ─── Formatters ───────────────────────────────────────────────────────────────
-
-const dateFormatter = new Intl.DateTimeFormat('en-GB', {
-  day: 'numeric',
-  month: 'short',
-  year: 'numeric',
-});
-
-const EVENT_TYPE_LABELS: Record<string, string> = {
-  WEDDING: 'Wedding',
-  CORPORATE: 'Corporate',
-  PRIVATE: 'Private',
-  RESIDENCY: 'Residency',
-  OTHER: 'Other',
-};
 
 // ─── Info row ─────────────────────────────────────────────────────────────────
 
@@ -67,7 +52,7 @@ function BookingsList({ bookings }: { bookings: RoleBooking[] }) {
               {b.title ?? EVENT_TYPE_LABELS[b.eventType] ?? b.eventType}
             </p>
             <p className="text-xs text-muted mt-0.5">
-              {dateFormatter.format(new Date(b.date))} · {b.role}
+              {formatDate(b.date)} · {b.role}
             </p>
           </div>
           <BookingStatusPill status={b.status as BookingStatus} />

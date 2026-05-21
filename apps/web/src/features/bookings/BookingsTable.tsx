@@ -13,34 +13,7 @@ import { Button } from '@/components/ui/button';
 import BookingStatusPill from '@/components/BookingStatusPill';
 import type { BookingListItem } from '@/types/api';
 import { cn } from '@/lib/utils';
-
-// ─── Formatters ──────────────────────────────────────────────────────────────
-
-const dateFormatter = new Intl.DateTimeFormat('en-GB', {
-  day: 'numeric',
-  month: 'short',
-  year: 'numeric',
-});
-
-const dayFormatter = new Intl.DateTimeFormat('en-GB', { weekday: 'long' });
-
-const currencyFormatter = new Intl.NumberFormat('en-GB', {
-  style: 'currency',
-  currency: 'GBP',
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 0,
-});
-
-function formatDate(iso: string) {
-  const d = new Date(iso);
-  return { date: dateFormatter.format(d), day: dayFormatter.format(d) };
-}
-
-function formatFee(fee: string | null) {
-  if (!fee) return null;
-  const n = parseFloat(fee);
-  return isNaN(n) ? null : currencyFormatter.format(n);
-}
+import { formatDateAndDay, formatFeeWhole } from '@/lib/formatters';
 
 // ─── Column helper ───────────────────────────────────────────────────────────
 
@@ -51,7 +24,7 @@ const columns = [
     header: 'Date',
     sortingFn: 'datetime',
     cell: ({ getValue }) => {
-      const { date, day } = formatDate(getValue());
+      const { date, day } = formatDateAndDay(getValue());
       return (
         <span className="flex flex-col gap-0.5">
           <span className="text-sm text-foreground">{date}</span>
@@ -97,7 +70,7 @@ const columns = [
     header: 'Fee',
     cell: ({ row }) => (
       <span className="text-sm text-foreground tabular-nums">
-        {formatFee(row.original.fee) ?? '—'}
+        {formatFeeWhole(row.original.fee) ?? '—'}
       </span>
     ),
   }),
@@ -137,8 +110,8 @@ function BookingCardList({ data }: { data: BookingListItem[] }) {
   return (
     <div className="divide-y divide-border">
       {data.map((booking) => {
-        const { date, day } = formatDate(booking.date);
-        const fee = formatFee(booking.fee);
+        const { date, day } = formatDateAndDay(booking.date);
+        const fee = formatFeeWhole(booking.fee);
         return (
           <div
             key={booking.id}

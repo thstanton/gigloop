@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Search, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useContacts } from '@/features/contacts/useContacts';
+import { useContacts } from '@/lib/hooks/useContacts';
 import type { Contact } from '@/types/api';
 
 // ─── Empty state ──────────────────────────────────────────────────────────────

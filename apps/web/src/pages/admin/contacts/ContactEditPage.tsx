@@ -7,7 +7,7 @@ import ContactForm, {
   contactToFormValues,
 } from '@/features/contacts/ContactForm';
 import type { ContactFormValues } from '@/features/contacts/ContactForm';
-import { useContact } from '@/features/contacts/useContact';
+import { useContact } from '@/lib/hooks/useContact';
 import { apiPatch, apiDelete } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import type { Contact } from '@/types/api';

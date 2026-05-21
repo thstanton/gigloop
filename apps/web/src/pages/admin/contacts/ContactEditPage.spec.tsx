@@ -3,10 +3,10 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import ContactEditPage from './ContactEditPage';
-import { useContact } from '@/features/contacts/useContact';
+import { useContact } from '@/lib/hooks/useContact';
 import type { ContactDetail } from '@/types/api';
 
-vi.mock('@/features/contacts/useContact');
+vi.mock('@/lib/hooks/useContact');
 vi.mock('@/lib/api', () => ({
   apiPatch: vi.fn(),
   apiDelete: vi.fn(),

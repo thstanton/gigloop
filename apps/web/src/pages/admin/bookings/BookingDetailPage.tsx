@@ -3,58 +3,25 @@ import { ChevronLeft, ChevronRight, CheckCircle2, Circle, Music, FileText, Dolla
 import { Button } from '@/components/ui/button';
 import BookingStatusPill from '@/components/BookingStatusPill';
 import InvoiceStatusPill from '@/components/InvoiceStatusPill';
-import { useBooking } from '@/features/bookings/useBooking';
-import { useBookingInvoices } from '@/features/bookings/useBookingInvoices';
-import { useBookingCommunications } from '@/features/bookings/useBookingCommunications';
+import { useBooking } from '@/lib/hooks/useBooking';
+import { useBookingInvoices } from '@/lib/hooks/useBookingInvoices';
+import { useBookingCommunications } from '@/lib/hooks/useBookingCommunications';
+import {
+  formatDate,
+  formatCurrency,
+  formatFee,
+  EVENT_TYPE_LABELS,
+  statusGte,
+} from '@/lib/formatters';
 import type {
   BookingDetail,
-  BookingStatus,
   Contact,
   PerformanceSet,
   Invoice,
-  EventType,
   Communication,
 } from '@/types/api';
 
-// ─── Formatters ───────────────────────────────────────────────────────────────
-
-const dateFormatter = new Intl.DateTimeFormat('en-GB', {
-  day: 'numeric',
-  month: 'short',
-  year: 'numeric',
-});
-
-const currencyFormatter = new Intl.NumberFormat('en-GB', {
-  style: 'currency',
-  currency: 'GBP',
-});
-
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const EVENT_TYPE_LABELS: Record<EventType, string> = {
-  WEDDING:   'Wedding',
-  CORPORATE: 'Corporate',
-  PRIVATE:   'Private event',
-  RESIDENCY: 'Residency',
-  OTHER:     'Other',
-};
-
-const STATUS_ORDER: BookingStatus[] = [
-  'ENQUIRY',
-  'CONFIRMED',
-  'INVOICED',
-  'SETTLED',
-  'COMPLETED',
-  'CANCELLED',
-];
-
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function formatFee(fee: string | null): string | null {
-  if (!fee) return null;
-  const n = parseFloat(fee);
-  return isNaN(n) ? null : currencyFormatter.format(n);
-}
 
 function formatDuration(minutes: number): string {
   if (minutes < 60) return `${minutes} min`;
@@ -65,10 +32,6 @@ function formatDuration(minutes: number): string {
 
 function invoiceLineTotal(invoice: Invoice): number {
   return invoice.lineItems.reduce((sum, item) => sum + parseFloat(item.amount), 0);
-}
-
-function statusGte(current: BookingStatus, threshold: BookingStatus): boolean {
-  return STATUS_ORDER.indexOf(current) >= STATUS_ORDER.indexOf(threshold);
 }
 
 // ─── Checklist ────────────────────────────────────────────────────────────────
@@ -300,13 +263,13 @@ function InvoiceRow({ invoice }: { invoice: Invoice }) {
       <div className="min-w-0">
         <p className="text-sm text-foreground">{invoice.isDeposit ? 'Deposit' : 'Balance'}</p>
         <p className="text-xs text-muted mt-0.5">
-          {dateFormatter.format(new Date(invoice.issueDate))}
-          {invoice.dueDate && ` · due ${dateFormatter.format(new Date(invoice.dueDate))}`}
+          {formatDate(invoice.issueDate)}
+          {invoice.dueDate && ` · due ${formatDate(invoice.dueDate)}`}
         </p>
       </div>
       <div className="flex items-center gap-2 flex-shrink-0">
         <span className="text-sm font-medium text-foreground">
-          {currencyFormatter.format(total)}
+          {formatCurrency(total)}
         </span>
         <InvoiceStatusPill status={invoice.status} isOverdue={overdue} />
       </div>
@@ -325,7 +288,7 @@ function CommunicationRow({ comm }: { comm: Communication }) {
         <p className="text-xs text-muted mt-0.5">{meta}</p>
       </div>
       <span className="text-xs text-muted flex-shrink-0">
-        {dateFormatter.format(new Date(comm.sentAt))}
+        {formatDate(comm.sentAt)}
       </span>
     </div>
   );
@@ -414,7 +377,7 @@ export default function BookingDetailPage() {
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2">
           <BookingStatusPill status={booking.status} />
           <span className="text-sm text-muted">
-            {dateFormatter.format(new Date(booking.date))}
+            {formatDate(booking.date)}
           </span>
           {fee && <span className="text-sm text-muted">{fee}</span>}
         </div>
