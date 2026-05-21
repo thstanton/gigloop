@@ -6,6 +6,7 @@ const config: Config = {
     extend: {
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
+        serif: ['Playfair', 'serif']
       },
       fontSize: {
         xs: ['0.75rem', { lineHeight: '1.4' }],   // 12px

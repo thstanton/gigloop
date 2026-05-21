@@ -186,7 +186,7 @@ function Sidebar() {
 function DesktopTopBar({ businessName, isLoading }: { businessName: string; isLoading: boolean }) {
   return (
     <header className="hidden md:flex fixed top-0 inset-x-0 h-14 bg-background border-b border-border items-center px-6 z-30">
-      <span className="text-sm font-semibold text-foreground">GigMan</span>
+      <span className="text-xl font-semibold text-foreground">GigMan</span>
       <div className="ml-auto">
         {isLoading
           ? <div className="h-3 w-28 bg-border rounded animate-pulse" />
