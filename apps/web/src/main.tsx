@@ -8,6 +8,10 @@ import SignUpPage from './pages/SignUpPage';
 import AdminLayout from './layouts/AdminLayout';
 import DashboardPage from './pages/admin/DashboardPage';
 import SettingsPage from './pages/admin/SettingsPage';
+import ContactsListPage from './pages/admin/contacts/ContactsListPage';
+import ContactNewPage from './pages/admin/contacts/ContactNewPage';
+import ContactDetailPage from './pages/admin/contacts/ContactDetailPage';
+import ContactEditPage from './pages/admin/contacts/ContactEditPage';
 
 const router = createBrowserRouter([
   {
@@ -28,6 +32,10 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <DashboardPage /> },
       { path: 'settings', element: <SettingsPage /> },
+      { path: 'contacts', element: <ContactsListPage /> },
+      { path: 'contacts/new', element: <ContactNewPage /> },
+      { path: 'contacts/:id', element: <ContactDetailPage /> },
+      { path: 'contacts/:id/edit', element: <ContactEditPage /> },
     ],
   },
 ]);

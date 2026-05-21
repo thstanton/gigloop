@@ -79,7 +79,7 @@ Status transitions are free — not enforced by the API.
 **Key fields:** status, eventType, date, title (optional), fee (agreed headline amount), notes (optional), customerId (required FK), venueId (optional FK), referrerId (optional FK)
 
 ### Contact
-Role-agnostic. Role is determined by which FK on a Booking references it (customer / venue / referrer). Cannot be deleted if referenced by any Booking in any role.
+Role-agnostic — no type field. Role is determined by which FK on a Booking references it (customer / venue / referrer). Cannot be deleted if referenced by any Booking in any role.
 
 **Fields:** name, email, phone, address, notes, parkingInfo, accessInfo, equipmentAvailable (venue extras), website, commissionArrangement (referrer extras) — all optional except name.
 
