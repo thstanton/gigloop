@@ -3,7 +3,8 @@ import { ChevronLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import BookingStatusPill from '@/components/BookingStatusPill';
 import { useContact } from '@/lib/hooks/useContact';
-import { formatDate, EVENT_TYPE_LABELS } from '@/lib/formatters';
+import { formatDate } from '@/lib/formatters';
+import { EVENT_TYPE_LABELS } from '@/lib/constants';
 import type { BookingRef, BookingStatus } from '@/types/api';
 
 // ─── Info row ─────────────────────────────────────────────────────────────────

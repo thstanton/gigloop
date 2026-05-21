@@ -10,9 +10,8 @@ import {
   formatDate,
   formatCurrency,
   formatFee,
-  EVENT_TYPE_LABELS,
-  statusGte,
 } from '@/lib/formatters';
+import { EVENT_TYPE_LABELS, statusGte } from '@/lib/constants';
 import type {
   BookingDetail,
   Contact,
