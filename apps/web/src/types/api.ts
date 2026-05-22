@@ -307,6 +307,8 @@ export type BuiltInTemplateType =
   | 'invoice_cover'
   | 'music_form_invite'
   | 'thank_you'
+  | 'contract_received'
+  | 'deposit_received'
   | 'contract';
 
 export interface Template {

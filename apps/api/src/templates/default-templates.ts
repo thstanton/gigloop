@@ -6,6 +6,8 @@ export type BuiltInTemplateType =
   | 'invoice_cover'
   | 'music_form_invite'
   | 'thank_you'
+  | 'contract_received'
+  | 'deposit_received'
   | 'contract';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -131,6 +133,30 @@ const DEFAULTS: Partial<Record<BuiltInTemplateType, ReturnType<typeof doc>>> = {
     p(v('musicianName', 'Musician name')),
     p(v('musicianEmail', 'Musician email')),
   ),
+
+  contract_received: doc(
+    p(t('Dear '), v('customerName', 'Customer name'), t(',')),
+    blank(),
+    p(t('Thank you — I\'ve received your signed contract for the booking on '), v('bookingDate', 'Booking date'), t('. Your date is now secured!')),
+    blank(),
+    p(t('I\'ll be in touch closer to the event. In the meantime, please don\'t hesitate to get in touch if you have any questions.')),
+    blank(),
+    p(t('Best wishes,')),
+    p(v('musicianName', 'Musician name')),
+    p(v('musicianEmail', 'Musician email')),
+  ),
+
+  deposit_received: doc(
+    p(t('Dear '), v('customerName', 'Customer name'), t(',')),
+    blank(),
+    p(t('I\'m pleased to confirm that I\'ve received your deposit for the booking on '), v('bookingDate', 'Booking date'), t('. Thank you!')),
+    blank(),
+    p(t('Your booking is fully confirmed and your date is secured. I look forward to performing at your event.')),
+    blank(),
+    p(t('Best wishes,')),
+    p(v('musicianName', 'Musician name')),
+    p(v('musicianEmail', 'Musician email')),
+  ),
 };
 
 export const BUILT_IN_EMAIL_TYPES: BuiltInTemplateType[] = [
@@ -139,6 +165,8 @@ export const BUILT_IN_EMAIL_TYPES: BuiltInTemplateType[] = [
   'contract_cover',
   'contract_and_invoice_cover',
   'invoice_cover',
+  'contract_received',
+  'deposit_received',
   'music_form_invite',
   'thank_you',
 ];
@@ -149,6 +177,8 @@ export const BUILT_IN_NAMES: Record<BuiltInTemplateType, string> = {
   contract_cover: 'Contract email',
   contract_and_invoice_cover: 'Contract & deposit email',
   invoice_cover: 'Invoice email',
+  contract_received: 'Contract received',
+  deposit_received: 'Deposit received',
   music_form_invite: 'Music form invitation',
   thank_you: 'Thank you',
   contract: 'Contract',
