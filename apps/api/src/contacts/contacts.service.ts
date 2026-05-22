@@ -30,6 +30,11 @@ export class ContactsService {
     await this.findOne(userId, id);
     const bookingCount = await this.repo.countBookings(userId, id);
     if (bookingCount > 0) {
+      // TODO: GDPR limitation — contacts with any booking history (including
+      // CANCELLED) cannot currently be deleted. The correct solution is to
+      // anonymise the contact (scrub PII, keep FK intact) so that booking and
+      // invoice financial records remain structurally valid while honouring a
+      // right-to-erasure request. Anonymisation is deferred to P2.
       throw new ConflictException(
         'Contact has associated bookings and cannot be deleted',
       );
