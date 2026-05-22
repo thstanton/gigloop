@@ -76,6 +76,14 @@ describe('renderTiptap', () => {
     expect(renderTiptap(doc)).toBe('<p>line one<br>line two</p>');
   });
 
+  it('renders a lineItems node as a sentinel placeholder', () => {
+    const doc = {
+      type: 'doc',
+      content: [{ type: 'lineItems' }],
+    };
+    expect(renderTiptap(doc)).toBe('{{LINE_ITEMS}}');
+  });
+
   it('renders children of unknown node types without crashing', () => {
     const doc = {
       type: 'doc',

@@ -14,6 +14,7 @@ export const BUILT_IN_EMAIL_TYPES: BuiltInTemplateType[] = [
 
 export const BUILT_IN_DOCUMENT_TYPES: BuiltInTemplateType[] = [
   'contract',
+  'invoice',
 ];
 
 export const TEMPLATE_DISPLAY: Record<BuiltInTemplateType, { name: string; description: string }> = {
@@ -27,6 +28,7 @@ export const TEMPLATE_DISPLAY: Record<BuiltInTemplateType, { name: string; descr
   music_form_invite:           { name: 'Music form invitation',    description: 'Sent when inviting the client to fill in their music preferences' },
   thank_you:                   { name: 'Thank you',                description: 'Sent after the performance to thank the client' },
   contract:                    { name: 'Contract',                 description: 'Performance agreement sent to clients for signing' },
+  invoice:                     { name: 'Invoice',                  description: 'Invoice layout sent to clients for payment' },
 };
 
 // ─── Variable definitions ─────────────────────────────────────────────────────
@@ -37,15 +39,17 @@ export interface TemplateVariable {
 }
 
 export const ALL_VARIABLES: TemplateVariable[] = [
-  { name: 'customerName',   label: 'Customer name'   },
-  { name: 'bookingDate',    label: 'Booking date'    },
-  { name: 'venueName',      label: 'Venue name'      },
-  { name: 'bookingFee',     label: 'Booking fee'     },
-  { name: 'setsSchedule',   label: 'Sets schedule'   },
-  { name: 'musicianName',   label: 'Musician name'   },
-  { name: 'musicianEmail',  label: 'Musician email'  },
-  { name: 'portalLink',     label: 'Portal link'     },
-  { name: 'invoiceTotal',   label: 'Invoice total'   },
+  { name: 'customerName',   label: 'Customer name'    },
+  { name: 'bookingDate',    label: 'Booking date'     },
+  { name: 'venueName',      label: 'Venue name'       },
+  { name: 'bookingFee',     label: 'Booking fee'      },
+  { name: 'setsSchedule',   label: 'Sets schedule'    },
+  { name: 'musicianName',   label: 'Musician name'    },
+  { name: 'musicianEmail',  label: 'Musician email'   },
+  { name: 'portalLink',     label: 'Portal link'      },
+  { name: 'invoiceNumber',  label: 'Invoice number'   },
+  { name: 'issueDate',      label: 'Issue date'       },
+  { name: 'invoiceTotal',   label: 'Invoice total'    },
   { name: 'invoiceDueDate', label: 'Invoice due date' },
 ];
 
@@ -58,12 +62,15 @@ const VAR_NAMES = {
   musicianName:   { name: 'musicianName',    label: 'Musician name'    },
   musicianEmail:  { name: 'musicianEmail',   label: 'Musician email'   },
   portalLink:     { name: 'portalLink',      label: 'Portal link'      },
+  invoiceNumber:  { name: 'invoiceNumber',   label: 'Invoice number'   },
+  issueDate:      { name: 'issueDate',       label: 'Issue date'       },
   invoiceTotal:   { name: 'invoiceTotal',    label: 'Invoice total'    },
   invoiceDueDate: { name: 'invoiceDueDate',  label: 'Invoice due date' },
 } as const;
 
 const { customerName, bookingDate, venueName, bookingFee, setsSchedule,
-        musicianName, musicianEmail, portalLink, invoiceTotal, invoiceDueDate } = VAR_NAMES;
+        musicianName, musicianEmail, portalLink,
+        invoiceNumber, issueDate, invoiceTotal, invoiceDueDate } = VAR_NAMES;
 
 export const TEMPLATE_VARIABLES: Record<BuiltInTemplateType, TemplateVariable[]> = {
   quote:                      [customerName, bookingDate, venueName, bookingFee, portalLink, musicianName, musicianEmail],
@@ -76,4 +83,5 @@ export const TEMPLATE_VARIABLES: Record<BuiltInTemplateType, TemplateVariable[]>
   music_form_invite:          [customerName, bookingDate, venueName, portalLink, musicianName, musicianEmail],
   thank_you:                  [customerName, bookingDate, portalLink, musicianName, musicianEmail],
   contract:                   [customerName, bookingDate, venueName, bookingFee, setsSchedule, musicianName, musicianEmail],
+  invoice:                    [musicianName, musicianEmail, customerName, invoiceNumber, issueDate, invoiceDueDate, invoiceTotal],
 };

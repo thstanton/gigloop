@@ -8,7 +8,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@clerk/react';
 import {
   Bold, Italic, Underline as UnderlineIcon, Link as LinkIcon,
-  List, ListOrdered, ChevronLeft, ChevronDown, Heading2, Heading3,
+  List, ListOrdered, ChevronLeft, ChevronDown, Heading2, Heading3, Table,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -20,6 +20,7 @@ import {
 import { useTemplate } from '@/lib/hooks/useTemplate';
 import { apiGet, apiPatch, apiPost } from '@/lib/api';
 import { VariableNode } from '@/features/templates/VariableNode';
+import { LineItemsNode } from '@/features/templates/LineItemsNode';
 import {
   TEMPLATE_DISPLAY,
   TEMPLATE_VARIABLES,
@@ -35,6 +36,8 @@ const PREVIEW_SAMPLES: Record<string, string> = {
   bookingFee:     '£1,500',
   setsSchedule:   'First set: 7:00pm – 7:45pm · Second set: 8:30pm – 9:15pm',
   portalLink:     'https://portal.example.com/booking/sample',
+  invoiceNumber:  'INV-2025-001',
+  issueDate:      '1 June 2025',
   invoiceTotal:   '£750',
   invoiceDueDate: '28 June 2025',
 };
@@ -74,10 +77,12 @@ function EditorToolbar({
   editor,
   variables,
   isDocument = false,
+  isInvoice = false,
 }: {
   editor: ReturnType<typeof useEditor>;
   variables: { name: string; label: string }[];
   isDocument?: boolean;
+  isInvoice?: boolean;
 }) {
   if (!editor) return null;
 
@@ -165,6 +170,17 @@ function EditorToolbar({
           </DropdownMenu>
         </>
       )}
+
+      {isInvoice && (
+        <>
+          <div className="w-px h-4 bg-border mx-1" />
+          <ToolbarButton
+            onClick={() => editor.chain().focus().insertContent({ type: 'lineItems' }).run()}
+          >
+            <Table size={14} />
+          </ToolbarButton>
+        </>
+      )}
     </div>
   );
 }
@@ -183,6 +199,7 @@ function TemplateEditor({ template }: { template: Template }) {
   const meta = builtInType ? TEMPLATE_DISPLAY[builtInType] : null;
   const variables = builtInType ? TEMPLATE_VARIABLES[builtInType] : [];
   const isDocument = builtInType ? BUILT_IN_DOCUMENT_TYPES.includes(builtInType) : false;
+  const isInvoice = builtInType === 'invoice';
 
   const { data: publicProfile } = useQuery({
     queryKey: ['publicProfile'],
@@ -215,6 +232,7 @@ function TemplateEditor({ template }: { template: Template }) {
       Underline,
       Link_.configure({ openOnClick: false }),
       VariableNode,
+      LineItemsNode,
     ],
     content: template.content as Record<string, unknown>,
     editorProps: {
@@ -297,7 +315,7 @@ function TemplateEditor({ template }: { template: Template }) {
           />
         ) : (
           <>
-            <EditorToolbar editor={editor} variables={variables} isDocument={isDocument} />
+            <EditorToolbar editor={editor} variables={variables} isDocument={isDocument} isInvoice={isInvoice} />
             <EditorContent editor={editor} />
           </>
         )}

@@ -8,7 +8,8 @@ export type BuiltInTemplateType =
   | 'thank_you'
   | 'contract_received'
   | 'deposit_received'
-  | 'contract';
+  | 'contract'
+  | 'invoice';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -173,6 +174,7 @@ export const BUILT_IN_EMAIL_TYPES: BuiltInTemplateType[] = [
 
 export const BUILT_IN_DOCUMENT_TYPES: BuiltInTemplateType[] = [
   'contract',
+  'invoice',
 ];
 
 export const ALL_BUILT_IN_TYPES: BuiltInTemplateType[] = [
@@ -187,7 +189,31 @@ const h = (level: 2 | 3, ...content: TNode[]): THeadingNode => ({ type: 'heading
 
 // ─── Document defaults ────────────────────────────────────────────────────────
 
+const li = (): TNode => ({ type: 'lineItems' });
+
 const DOCUMENT_DEFAULTS: Partial<Record<BuiltInTemplateType, ReturnType<typeof doc>>> = {
+  invoice: doc(
+    p(v('musicianName', 'Musician name')),
+    p(v('musicianEmail', 'Musician email')),
+    blank(),
+    h(2, t('Invoice')),
+    blank(),
+    p(t('Invoice number: '), v('invoiceNumber', 'Invoice number')),
+    p(t('Issue date: '), v('issueDate', 'Issue date')),
+    p(t('Due date: '), v('invoiceDueDate', 'Invoice due date')),
+    blank(),
+    p(t('Bill to:')),
+    p(v('customerName', 'Customer name')),
+    blank(),
+    li(),
+    blank(),
+    p(t('Total due: '), v('invoiceTotal', 'Invoice total')),
+    blank(),
+    h(2, t('Payment Terms')),
+    p(t('Please make payment to the account details below by the due date shown above.')),
+    blank(),
+  ),
+
   contract: doc(
     h(2, t('Performance Agreement')),
     blank(),
@@ -233,6 +259,7 @@ export const BUILT_IN_NAMES: Record<BuiltInTemplateType, string> = {
   music_form_invite: 'Music form invitation',
   thank_you: 'Thank you',
   contract: 'Contract',
+  invoice: 'Invoice',
 };
 
 export function getDefaultContent(type: BuiltInTemplateType): Record<string, unknown> {

@@ -82,6 +82,9 @@ function renderNode(node: TiptapNode): string {
     case 'variable':
       return `{{${node.attrs?.name ?? ''}}}`;
 
+    case 'lineItems':
+      return '{{LINE_ITEMS}}';
+
     default:
       return renderChildren(node);
   }
