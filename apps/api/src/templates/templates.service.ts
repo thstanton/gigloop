@@ -2,7 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { TemplatesRepository } from './templates.repository';
 import { CreateTemplateDto } from './dto/create-template.dto';
 import { UpdateTemplateDto } from './dto/update-template.dto';
-import { type BuiltInTemplateType, BUILT_IN_EMAIL_TYPES, getDefaultContent } from './default-templates';
+import { type BuiltInTemplateType, ALL_BUILT_IN_TYPES, getDefaultContent } from './default-templates';
 
 @Injectable()
 export class TemplatesService {
@@ -11,7 +11,7 @@ export class TemplatesService {
   async findAll(userId: string) {
     const templates = await this.repo.findAll(userId);
     const existing = new Set(templates.map((t) => t.builtInType).filter(Boolean));
-    const missing = BUILT_IN_EMAIL_TYPES.filter((type) => !existing.has(type));
+    const missing = ALL_BUILT_IN_TYPES.filter((type) => !existing.has(type));
     if (missing.length > 0) {
       await this.repo.seedBuiltIns(userId, missing);
       return this.repo.findAll(userId);

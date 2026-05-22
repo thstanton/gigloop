@@ -12,6 +12,10 @@ export const BUILT_IN_EMAIL_TYPES: BuiltInTemplateType[] = [
   'thank_you',
 ];
 
+export const BUILT_IN_DOCUMENT_TYPES: BuiltInTemplateType[] = [
+  'contract',
+];
+
 export const TEMPLATE_DISPLAY: Record<BuiltInTemplateType, { name: string; description: string }> = {
   quote:                       { name: 'Quote',                    description: 'Sent when providing a price quote for a new enquiry' },
   confirmation:                { name: 'Booking confirmation',     description: 'Sent to confirm an accepted booking' },
@@ -22,7 +26,7 @@ export const TEMPLATE_DISPLAY: Record<BuiltInTemplateType, { name: string; descr
   deposit_received:            { name: 'Deposit received',         description: 'Confirmation sent when the deposit payment arrives' },
   music_form_invite:           { name: 'Music form invitation',    description: 'Sent when inviting the client to fill in their music preferences' },
   thank_you:                   { name: 'Thank you',                description: 'Sent after the performance to thank the client' },
-  contract:                    { name: 'Contract',                 description: 'Contract document' },
+  contract:                    { name: 'Contract',                 description: 'Performance agreement sent to clients for signing' },
 };
 
 // ─── Variable definitions ─────────────────────────────────────────────────────
@@ -71,5 +75,5 @@ export const TEMPLATE_VARIABLES: Record<BuiltInTemplateType, TemplateVariable[]>
   deposit_received:           [customerName, bookingDate, portalLink, musicianName, musicianEmail],
   music_form_invite:          [customerName, bookingDate, venueName, portalLink, musicianName, musicianEmail],
   thank_you:                  [customerName, bookingDate, portalLink, musicianName, musicianEmail],
-  contract:                   [],
+  contract:                   [customerName, bookingDate, venueName, bookingFee, setsSchedule, musicianName, musicianEmail],
 };

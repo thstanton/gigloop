@@ -171,6 +171,57 @@ export const BUILT_IN_EMAIL_TYPES: BuiltInTemplateType[] = [
   'thank_you',
 ];
 
+export const BUILT_IN_DOCUMENT_TYPES: BuiltInTemplateType[] = [
+  'contract',
+];
+
+export const ALL_BUILT_IN_TYPES: BuiltInTemplateType[] = [
+  ...BUILT_IN_EMAIL_TYPES,
+  ...BUILT_IN_DOCUMENT_TYPES,
+];
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+type THeadingNode = TNode & { attrs: { level: number } };
+const h = (level: 2 | 3, ...content: TNode[]): THeadingNode => ({ type: 'heading', attrs: { level }, content });
+
+// ─── Document defaults ────────────────────────────────────────────────────────
+
+const DOCUMENT_DEFAULTS: Partial<Record<BuiltInTemplateType, ReturnType<typeof doc>>> = {
+  contract: doc(
+    h(2, t('Performance Agreement')),
+    blank(),
+    p(t('This agreement is entered into between '), v('musicianName', 'Musician name'), t(' ("the Musician") and '), v('customerName', 'Customer name'), t(' ("the Client").')),
+    blank(),
+    h(2, t('1. Event Details')),
+    p(t('Date: '), v('bookingDate', 'Booking date')),
+    p(t('Venue: '), v('venueName', 'Venue name')),
+    blank(),
+    h(2, t('2. Performance')),
+    p(v('setsSchedule', 'Sets schedule')),
+    blank(),
+    h(2, t('3. Fee')),
+    p(t('The agreed fee for this engagement is '), v('bookingFee', 'Booking fee'), t('.')),
+    blank(),
+    h(2, t('4. Payment Terms')),
+    p(t('Payment details to be agreed between the parties.')),
+    blank(),
+    h(2, t('5. Cancellation')),
+    p(t('Cancellation terms to be agreed between the parties.')),
+    blank(),
+    h(2, t('6. General')),
+    p(t('This agreement constitutes the entire understanding between the parties. Any amendments must be agreed in writing.')),
+    blank(),
+    h(2, t('Signatures')),
+    blank(),
+    p(t('Musician: '), v('musicianName', 'Musician name')),
+    p(t('Date: ____________________')),
+    blank(),
+    p(t('Client: '), v('customerName', 'Customer name')),
+    p(t('Date: ____________________')),
+  ),
+};
+
 export const BUILT_IN_NAMES: Record<BuiltInTemplateType, string> = {
   quote: 'Quote',
   confirmation: 'Booking confirmation',
@@ -185,5 +236,5 @@ export const BUILT_IN_NAMES: Record<BuiltInTemplateType, string> = {
 };
 
 export function getDefaultContent(type: BuiltInTemplateType): Record<string, unknown> {
-  return (DEFAULTS[type] ?? doc(blank())) as Record<string, unknown>;
+  return ((DEFAULTS[type] ?? DOCUMENT_DEFAULTS[type]) ?? doc(blank())) as Record<string, unknown>;
 }

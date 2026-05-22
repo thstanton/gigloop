@@ -7,7 +7,7 @@ import Link_ from '@tiptap/extension-link';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Bold, Italic, Underline as UnderlineIcon, Link as LinkIcon,
-  List, ListOrdered, ChevronLeft, ChevronDown,
+  List, ListOrdered, ChevronLeft, ChevronDown, Heading2, Heading3,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -22,6 +22,7 @@ import { VariableNode } from '@/features/templates/VariableNode';
 import {
   TEMPLATE_DISPLAY,
   TEMPLATE_VARIABLES,
+  BUILT_IN_DOCUMENT_TYPES,
 } from '@/features/templates/templateMeta';
 import { cn } from '@/lib/utils';
 import type { BuiltInTemplateType, Template } from '@/types/api';
@@ -60,9 +61,11 @@ function ToolbarButton({
 function EditorToolbar({
   editor,
   variables,
+  isDocument = false,
 }: {
   editor: ReturnType<typeof useEditor>;
   variables: { name: string; label: string }[];
+  isDocument?: boolean;
 }) {
   if (!editor) return null;
 
@@ -93,13 +96,26 @@ function EditorToolbar({
         <UnderlineIcon size={14} />
       </ToolbarButton>
 
+      {isDocument && (
+        <>
+          <div className="w-px h-4 bg-border mx-1" />
+          <ToolbarButton active={editor.isActive('heading', { level: 2 })} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}>
+            <Heading2 size={14} />
+          </ToolbarButton>
+          <ToolbarButton active={editor.isActive('heading', { level: 3 })} onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}>
+            <Heading3 size={14} />
+          </ToolbarButton>
+        </>
+      )}
+
       <div className="w-px h-4 bg-border mx-1" />
 
-      <ToolbarButton active={editor.isActive('link')} onClick={insertLink}>
-        <LinkIcon size={14} />
-      </ToolbarButton>
-
-      <div className="w-px h-4 bg-border mx-1" />
+      {!isDocument && (
+        <ToolbarButton active={editor.isActive('link')} onClick={insertLink}>
+          <LinkIcon size={14} />
+        </ToolbarButton>
+      )}
+      {!isDocument && <div className="w-px h-4 bg-border mx-1" />}
 
       <ToolbarButton active={editor.isActive('bulletList')} onClick={() => editor.chain().focus().toggleBulletList().run()}>
         <List size={14} />
@@ -148,15 +164,17 @@ function TemplateEditor({ template }: { template: Template }) {
   const queryClient = useQueryClient();
   const [resetConfirm, setResetConfirm] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [previewMode, setPreviewMode] = useState(false);
 
   const builtInType = template.builtInType as BuiltInTemplateType | null;
   const meta = builtInType ? TEMPLATE_DISPLAY[builtInType] : null;
   const variables = builtInType ? TEMPLATE_VARIABLES[builtInType] : [];
+  const isDocument = builtInType ? BUILT_IN_DOCUMENT_TYPES.includes(builtInType) : false;
 
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
-        heading: false,
+        heading: isDocument ? { levels: [2, 3] } : false,
         codeBlock: false,
         code: false,
         blockquote: false,
@@ -219,8 +237,41 @@ function TemplateEditor({ template }: { template: Template }) {
 
       {/* Editor */}
       <div className="border border-border rounded-md mb-6">
-        <EditorToolbar editor={editor} variables={variables} />
-        <EditorContent editor={editor} />
+        {isDocument && (
+          <div className="flex border-b border-border">
+            <button
+              type="button"
+              onClick={() => setPreviewMode(false)}
+              className={cn(
+                'px-3 py-1.5 text-xs font-medium transition-colors',
+                !previewMode ? 'text-foreground border-b-2 border-primary -mb-px' : 'text-muted hover:text-foreground',
+              )}
+            >
+              Edit
+            </button>
+            <button
+              type="button"
+              onClick={() => setPreviewMode(true)}
+              className={cn(
+                'px-3 py-1.5 text-xs font-medium transition-colors',
+                previewMode ? 'text-foreground border-b-2 border-primary -mb-px' : 'text-muted hover:text-foreground',
+              )}
+            >
+              Preview
+            </button>
+          </div>
+        )}
+        {previewMode ? (
+          <div
+            className="tiptap-content tiptap-preview text-sm text-foreground min-h-[240px] px-4 py-3"
+            dangerouslySetInnerHTML={{ __html: editor?.getHTML() ?? '' }}
+          />
+        ) : (
+          <>
+            <EditorToolbar editor={editor} variables={variables} isDocument={isDocument} />
+            <EditorContent editor={editor} />
+          </>
+        )}
       </div>
 
       {saveMutation.isError && (

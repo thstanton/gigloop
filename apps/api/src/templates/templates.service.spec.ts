@@ -1,7 +1,7 @@
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { TemplatesService } from './templates.service';
 import { TemplatesRepository } from './templates.repository';
-import { BUILT_IN_EMAIL_TYPES } from './default-templates';
+import { ALL_BUILT_IN_TYPES } from './default-templates';
 
 type MockRepo = {
   findAll: jest.Mock;
@@ -26,8 +26,8 @@ function makeRepo(): MockRepo {
 const content = { type: 'doc', content: [] };
 const customTemplate = { id: 't1', userId: 'u1', name: 'My Template', content, builtInType: null };
 const builtInTemplate = { id: 't2', userId: 'u1', name: 'Quote', content, builtInType: 'quote' };
-// A full set of seeded built-in templates (one per email type)
-const seededTemplates = BUILT_IN_EMAIL_TYPES.map((type, i) => ({
+// A full set of seeded built-in templates (one per built-in type)
+const seededTemplates = ALL_BUILT_IN_TYPES.map((type, i) => ({
   id: `t${i + 10}`, userId: 'u1', name: type, content, builtInType: type,
 }));
 
@@ -54,7 +54,7 @@ describe('TemplatesService', () => {
         .mockResolvedValueOnce(seededTemplates); // after seeding
       repo.seedBuiltIns.mockResolvedValue(undefined);
       const result = await service.findAll('u1');
-      expect(repo.seedBuiltIns).toHaveBeenCalledWith('u1', BUILT_IN_EMAIL_TYPES);
+      expect(repo.seedBuiltIns).toHaveBeenCalledWith('u1', ALL_BUILT_IN_TYPES);
       expect(result).toEqual(seededTemplates);
     });
   });
