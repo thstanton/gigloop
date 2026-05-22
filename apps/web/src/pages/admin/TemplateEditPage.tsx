@@ -4,7 +4,8 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
 import Link_ from '@tiptap/extension-link';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@clerk/react';
 import {
   Bold, Italic, Underline as UnderlineIcon, Link as LinkIcon,
   List, ListOrdered, ChevronLeft, ChevronDown, Heading2, Heading3,
@@ -17,7 +18,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useTemplate } from '@/lib/hooks/useTemplate';
-import { apiPatch, apiPost } from '@/lib/api';
+import { apiGet, apiPatch, apiPost } from '@/lib/api';
 import { VariableNode } from '@/features/templates/VariableNode';
 import {
   TEMPLATE_DISPLAY,
@@ -25,7 +26,18 @@ import {
   BUILT_IN_DOCUMENT_TYPES,
 } from '@/features/templates/templateMeta';
 import { cn } from '@/lib/utils';
-import type { BuiltInTemplateType, Template } from '@/types/api';
+import type { BuiltInTemplateType, PublicProfile, Template } from '@/types/api';
+
+const PREVIEW_SAMPLES: Record<string, string> = {
+  customerName:   'John Smith',
+  bookingDate:    'Saturday, 14 June 2025',
+  venueName:      'The Grand Hotel',
+  bookingFee:     '£1,500',
+  setsSchedule:   'First set: 7:00pm – 7:45pm · Second set: 8:30pm – 9:15pm',
+  portalLink:     'https://portal.example.com/booking/sample',
+  invoiceTotal:   '£750',
+  invoiceDueDate: '28 June 2025',
+};
 
 // ─── Toolbar ─────────────────────────────────────────────────────────────────
 
@@ -162,6 +174,7 @@ function EditorToolbar({
 function TemplateEditor({ template }: { template: Template }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { isLoaded } = useAuth();
   const [resetConfirm, setResetConfirm] = useState(false);
   const [saved, setSaved] = useState(false);
   const [previewMode, setPreviewMode] = useState(false);
@@ -170,6 +183,24 @@ function TemplateEditor({ template }: { template: Template }) {
   const meta = builtInType ? TEMPLATE_DISPLAY[builtInType] : null;
   const variables = builtInType ? TEMPLATE_VARIABLES[builtInType] : [];
   const isDocument = builtInType ? BUILT_IN_DOCUMENT_TYPES.includes(builtInType) : false;
+
+  const { data: publicProfile } = useQuery({
+    queryKey: ['publicProfile'],
+    queryFn: () => apiGet<PublicProfile>('/me/public'),
+    enabled: isLoaded && previewMode,
+  });
+
+  function applyPreview(html: string): string {
+    const values: Record<string, string> = {
+      ...PREVIEW_SAMPLES,
+      musicianName:  publicProfile?.businessName ?? publicProfile?.displayName ?? 'Your Name',
+      musicianEmail: publicProfile?.email ?? 'your@email.com',
+    };
+    return html.replace(
+      /<span[^>]+data-variable="([^"]+)"[^>]*>[^<]*<\/span>/g,
+      (_, name: string) => values[name] ?? `[${name}]`,
+    );
+  }
 
   const editor = useEditor({
     extensions: [
@@ -263,8 +294,8 @@ function TemplateEditor({ template }: { template: Template }) {
         )}
         {previewMode ? (
           <div
-            className="tiptap-content tiptap-preview text-sm text-foreground min-h-[240px] px-4 py-3"
-            dangerouslySetInnerHTML={{ __html: editor?.getHTML() ?? '' }}
+            className="tiptap-content text-sm text-foreground min-h-[240px] px-4 py-3"
+            dangerouslySetInnerHTML={{ __html: applyPreview(editor?.getHTML() ?? '') }}
           />
         ) : (
           <>
