@@ -268,8 +268,7 @@ function TemplateEditor({ template }: { template: Template }) {
 
       {/* Editor */}
       <div className="border border-border rounded-md mb-6">
-        {isDocument && (
-          <div className="flex border-b border-border">
+        <div className="flex border-b border-border">
             <button
               type="button"
               onClick={() => setPreviewMode(false)}
@@ -290,8 +289,7 @@ function TemplateEditor({ template }: { template: Template }) {
             >
               Preview
             </button>
-          </div>
-        )}
+        </div>
         {previewMode ? (
           <div
             className="tiptap-content text-sm text-foreground min-h-[240px] px-4 py-3"
