@@ -1,4 +1,4 @@
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, CheckCircle2, Circle, Music, FileText, DollarSign, FolderOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import BookingStatusPill from '@/components/BookingStatusPill';
@@ -6,6 +6,7 @@ import InvoiceStatusPill from '@/components/InvoiceStatusPill';
 import { useBooking } from '@/lib/hooks/useBooking';
 import { useBookingInvoices } from '@/lib/hooks/useBookingInvoices';
 import { useBookingCommunications } from '@/lib/hooks/useBookingCommunications';
+import BookingEditDrawer from '@/features/bookings/BookingEditDrawer';
 import {
   formatDate,
   formatCurrency,
@@ -318,7 +319,7 @@ function PageSkeleton() {
 
 export default function BookingDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
+  const [, setSearchParams] = useSearchParams();
 
   const { data: booking, isLoading, isError } = useBooking(id!);
   const { data: invoices = [], isPending: invoicesPending } = useBookingInvoices(id!);
@@ -368,7 +369,7 @@ export default function BookingDetailPage() {
             variant="outline"
             size="sm"
             className="flex-shrink-0"
-            onClick={() => navigate(`/admin/bookings/${id}/edit`)}
+            onClick={() => setSearchParams({ edit: 'true' })}
           >
             Edit
           </Button>
@@ -497,6 +498,7 @@ export default function BookingDetailPage() {
         )}
       </section>
 
+      <BookingEditDrawer booking={booking} />
     </div>
   );
 }

@@ -1,4 +1,15 @@
-import type { BookingStatus, EventType } from '@/types/api';
+import type { BookingStatus, EventType, SongGenre } from '@/types/api';
+
+export const GENRE_LABELS: Record<SongGenre, string> = {
+  CONTEMPORARY:    'Contemporary',
+  CLASSICAL:       'Classical',
+  JAZZ:            'Jazz',
+  FILM_TV_MUSICALS:'Film, TV & Musicals',
+  BOLLYWOOD:       'Bollywood',
+  CHRISTMAS:       'Christmas',
+};
+
+export const ALL_GENRES = Object.keys(GENRE_LABELS) as SongGenre[];
 
 export const EVENT_TYPE_LABELS: Record<EventType, string> = {
   WEDDING:   'Wedding',

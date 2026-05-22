@@ -1,10 +1,11 @@
-import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import BookingStatusPill from '@/components/BookingStatusPill';
 import { useContact } from '@/lib/hooks/useContact';
 import { formatDate } from '@/lib/formatters';
 import { EVENT_TYPE_LABELS } from '@/lib/constants';
+import ContactEditDrawer from '@/features/contacts/ContactEditDrawer';
 import type { BookingRef, BookingStatus } from '@/types/api';
 
 // ─── Info row ─────────────────────────────────────────────────────────────────
@@ -85,6 +86,7 @@ export default function ContactDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
+  const [, setSearchParams] = useSearchParams();
   const backNav = (location.state as { from?: string; label?: string } | null);
 
   const { data: contact, isLoading, isError } = useContact(id!);
@@ -132,7 +134,7 @@ export default function ContactDetailPage() {
             <Plus size={14} className="mr-1" />
             New booking
           </Button>
-          <Button variant="outline" size="sm" onClick={() => navigate(`/admin/contacts/${id}/edit`)}>
+          <Button variant="outline" size="sm" onClick={() => setSearchParams({ edit: 'true' })}>
             Edit
           </Button>
         </div>
@@ -170,6 +172,8 @@ export default function ContactDetailPage() {
         </h2>
         <BookingsList bookings={bookings} />
       </div>
+
+      <ContactEditDrawer contact={contact} />
     </div>
   );
 }

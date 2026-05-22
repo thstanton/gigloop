@@ -1,14 +1,10 @@
-import { useRef } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
-import { useForm, useFieldArray, Controller } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
+import { Controller } from 'react-hook-form';
+import type { Control, UseFormRegister, FieldErrors, FieldArrayWithId } from 'react-hook-form';
 import { z } from 'zod';
-import { ChevronLeft, Plus, Trash2 } from 'lucide-react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { Plus, Trash2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -16,22 +12,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import ContactPicker from '@/features/bookings/ContactPicker';
-import { useBooking } from '@/lib/hooks/useBooking';
-import { apiPatch, apiPost, apiDelete } from '@/lib/api';
-import type { BookingDetail, EventType, BookingStatus } from '@/types/api';
+import ContactPicker from './ContactPicker';
 import { EVENT_TYPE_LABELS } from '@/lib/constants';
+import type { EventType } from '@/types/api';
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
-const setSchema = z.object({
+export const setSchema = z.object({
   id: z.string().optional(),
   label: z.string(),
   duration: z.string().min(1, 'Duration is required'),
   startTime: z.string(),
 });
 
-const schema = z.object({
+export const bookingFormSchema = z.object({
   eventType: z.enum(['WEDDING', 'CORPORATE', 'PRIVATE', 'RESIDENCY', 'OTHER'] as const),
   date: z.string().min(1, 'Date is required'),
   status: z.enum(['ENQUIRY', 'CONFIRMED', 'INVOICED', 'SETTLED', 'COMPLETED', 'CANCELLED'] as const),
@@ -44,102 +38,29 @@ const schema = z.object({
   sets: z.array(setSchema),
 });
 
-type FormValues = z.infer<typeof schema>;
+export type BookingFormValues = z.infer<typeof bookingFormSchema>;
 
-function toDateInputValue(iso: string): string {
-  return iso.slice(0, 10);
+// ─── Component ────────────────────────────────────────────────────────────────
+
+interface Props {
+  control: Control<BookingFormValues>;
+  register: UseFormRegister<BookingFormValues>;
+  errors: FieldErrors<BookingFormValues>;
+  fields: FieldArrayWithId<BookingFormValues, 'sets'>[];
+  onAppendSet: () => void;
+  onRemoveSet: (index: number) => void;
 }
 
-// ─── Inner form (rendered once booking is loaded) ─────────────────────────────
-
-function EditForm({ booking }: { booking: BookingDetail }) {
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
-
-  const deletedSetIds = useRef<string[]>([]);
-
-  const {
-    register,
-    control,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<FormValues>({
-    resolver: zodResolver(schema),
-    defaultValues: {
-      eventType: booking.eventType as EventType,
-      date: toDateInputValue(booking.date),
-      status: booking.status as BookingStatus,
-      title: booking.title ?? '',
-      fee: booking.fee ?? '',
-      notes: booking.notes ?? '',
-      customerId: booking.customerId,
-      venueId: booking.venueId,
-      referrerId: booking.referrerId,
-      sets: booking.sets.map((s) => ({
-        id: s.id,
-        label: s.label ?? '',
-        duration: String(s.duration),
-        startTime: s.startTime ?? '',
-      })),
-    },
-  });
-
-  const { fields, append, remove } = useFieldArray({ control, name: 'sets' });
-
-  function handleRemove(index: number) {
-    const id = fields[index].id;
-    if (id) deletedSetIds.current.push(id);
-    remove(index);
-  }
-
-  const mutation = useMutation({
-    mutationFn: async (values: FormValues) => {
-      await apiPatch<BookingDetail>(`/bookings/${booking.id}`, {
-        eventType: values.eventType as EventType,
-        date: values.date,
-        customerId: values.customerId,
-        status: values.status as BookingStatus,
-        title: values.title || null,
-        fee: values.fee ? parseFloat(values.fee) : null,
-        notes: values.notes || null,
-        venueId: values.venueId,
-        referrerId: values.referrerId,
-      });
-
-      await Promise.all([
-        ...deletedSetIds.current.map((setId) =>
-          apiDelete(`/bookings/${booking.id}/sets/${setId}`),
-        ),
-        ...values.sets.map((s, i) =>
-          s.id
-            ? apiPatch(`/bookings/${booking.id}/sets/${s.id}`, {
-                order: i,
-                duration: parseInt(s.duration, 10),
-                startTime: s.startTime || null,
-                label: s.label || null,
-              })
-            : apiPost(`/bookings/${booking.id}/sets`, {
-                order: i,
-                duration: parseInt(s.duration, 10),
-                startTime: s.startTime || undefined,
-                label: s.label || undefined,
-              }),
-        ),
-      ]);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['booking', booking.id] });
-      queryClient.invalidateQueries({ queryKey: ['bookings'] });
-      navigate(`/admin/bookings/${booking.id}`);
-    },
-  });
-
-  function onSubmit(values: FormValues) {
-    mutation.mutate(values);
-  }
-
+export function BookingFormFields({
+  control,
+  register,
+  errors,
+  fields,
+  onAppendSet,
+  onRemoveSet,
+}: Props) {
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+    <div className="space-y-6">
       {/* Event type + Date */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-1.5">
@@ -202,7 +123,13 @@ function EditForm({ booking }: { booking: BookingDetail }) {
 
         <div className="space-y-1.5">
           <Label>Fee (optional)</Label>
-          <Input type="number" min="0" step="0.01" placeholder="0.00" {...register('fee')} />
+          <Input
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="0.00"
+            {...register('fee')}
+          />
         </div>
       </div>
 
@@ -274,7 +201,7 @@ function EditForm({ booking }: { booking: BookingDetail }) {
           <h2 className="text-sm font-semibold text-foreground">Sets</h2>
           <button
             type="button"
-            onClick={() => append({ label: '', duration: '60', startTime: '' })}
+            onClick={onAppendSet}
             className="inline-flex items-center gap-1 text-sm text-primary hover:text-primary/80 transition-colors"
           >
             <Plus size={14} />
@@ -292,7 +219,7 @@ function EditForm({ booking }: { booking: BookingDetail }) {
               <span className="text-sm font-medium text-foreground">Set {index + 1}</span>
               <button
                 type="button"
-                onClick={() => handleRemove(index)}
+                onClick={() => onRemoveSet(index)}
                 className="text-muted hover:text-foreground transition-colors"
               >
                 <Trash2 size={14} />
@@ -301,7 +228,10 @@ function EditForm({ booking }: { booking: BookingDetail }) {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="space-y-1.5">
                 <Label>Label (optional)</Label>
-                <Input placeholder="e.g. Ceremony" {...register(`sets.${index}.label`)} />
+                <Input
+                  placeholder="e.g. Ceremony"
+                  {...register(`sets.${index}.label`)}
+                />
               </div>
               <div className="space-y-1.5">
                 <Label>Duration (min)</Label>
@@ -329,77 +259,12 @@ function EditForm({ booking }: { booking: BookingDetail }) {
       {/* Notes */}
       <div className="space-y-1.5">
         <Label>Notes (optional)</Label>
-        <Textarea rows={3} placeholder="Any notes about this booking..." {...register('notes')} />
+        <Textarea
+          rows={3}
+          placeholder="Any notes about this booking..."
+          {...register('notes')}
+        />
       </div>
-
-      {/* Actions */}
-      {mutation.isError && (
-        <p className="text-sm text-status-cancelled">Failed to save changes. Please try again.</p>
-      )}
-      <div className="flex gap-3">
-        <Button type="submit" disabled={mutation.isPending}>
-          {mutation.isPending ? 'Saving...' : 'Save changes'}
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => navigate(`/admin/bookings/${booking.id}`)}
-        >
-          Cancel
-        </Button>
-      </div>
-    </form>
-  );
-}
-
-// ─── Page ─────────────────────────────────────────────────────────────────────
-
-function PageSkeleton() {
-  return (
-    <div className="px-6 py-8 max-w-2xl space-y-6 animate-pulse">
-      <div className="h-4 w-24 bg-border rounded" />
-      <div className="h-7 w-48 bg-border rounded" />
-      {[1, 2, 3, 4].map((i) => (
-        <div key={i} className="h-10 w-full bg-border rounded" />
-      ))}
-    </div>
-  );
-}
-
-export default function BookingEditPage() {
-  const { id } = useParams<{ id: string }>();
-  const { data: booking, isLoading, isError } = useBooking(id!);
-
-  if (isLoading) return <PageSkeleton />;
-  if (isError || !booking) {
-    return (
-      <div className="px-6 py-8">
-        <p className="text-sm text-muted">Booking not found.</p>
-        <Link
-          to="/admin/bookings"
-          className="text-sm text-primary underline underline-offset-2 mt-2 block"
-        >
-          Back to bookings
-        </Link>
-      </div>
-    );
-  }
-
-  const title = booking.title ?? EVENT_TYPE_LABELS[booking.eventType as EventType] ?? booking.eventType;
-
-  return (
-    <div className="px-6 py-8 max-w-2xl">
-      <Link
-        to={`/admin/bookings/${id}`}
-        className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground transition-colors mb-6"
-      >
-        <ChevronLeft size={14} />
-        {title}
-      </Link>
-
-      <h1 className="text-2xl font-semibold text-foreground mb-8">Edit booking</h1>
-
-      <EditForm booking={booking} />
     </div>
   );
 }

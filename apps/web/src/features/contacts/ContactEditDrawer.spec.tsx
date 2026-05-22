@@ -2,11 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import ContactEditPage from './ContactEditPage';
-import { useContact } from '@/lib/hooks/useContact';
+import ContactEditDrawer from './ContactEditDrawer';
 import type { ContactDetail } from '@/types/api';
 
-vi.mock('@/lib/hooks/useContact');
 vi.mock('@/lib/api', () => ({
   apiPatch: vi.fn(),
   apiDelete: vi.fn(),
@@ -39,49 +37,43 @@ const bookingRef = {
   eventType: 'WEDDING' as const,
 };
 
-function renderPage(contact: ContactDetail) {
-  vi.mocked(useContact).mockReturnValue({
-    data: contact,
-    isLoading: false,
-    isError: false,
-  } as ReturnType<typeof useContact>);
-
+function renderDrawer(contact: ContactDetail) {
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <MemoryRouter initialEntries={['/admin/contacts/contact-1/edit']}>
+      <MemoryRouter initialEntries={['/?edit=true']}>
         <Routes>
-          <Route path="/admin/contacts/:id/edit" element={<ContactEditPage />} />
+          <Route path="/" element={<ContactEditDrawer contact={contact} />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
   );
 }
 
-describe('ContactEditPage — delete section', () => {
+describe('ContactEditDrawer — delete section', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('enables the delete button when the contact has no bookings', () => {
-    renderPage(baseContact);
+    renderDrawer(baseContact);
     expect(screen.getByRole('button', { name: /delete contact/i })).not.toBeDisabled();
   });
 
   it('disables the delete button when the contact has customer bookings', () => {
-    renderPage({ ...baseContact, customerBookings: [bookingRef] });
+    renderDrawer({ ...baseContact, customerBookings: [bookingRef] });
     expect(screen.getByRole('button', { name: /delete contact/i })).toBeDisabled();
   });
 
   it('disables the delete button when the contact has venue bookings', () => {
-    renderPage({ ...baseContact, venueBookings: [bookingRef] });
+    renderDrawer({ ...baseContact, venueBookings: [bookingRef] });
     expect(screen.getByRole('button', { name: /delete contact/i })).toBeDisabled();
   });
 
   it('disables the delete button when the contact has referrer bookings', () => {
-    renderPage({ ...baseContact, referrerBookings: [bookingRef] });
+    renderDrawer({ ...baseContact, referrerBookings: [bookingRef] });
     expect(screen.getByRole('button', { name: /delete contact/i })).toBeDisabled();
   });
 
   it('shows the booking count in the explanation text', () => {
-    renderPage({
+    renderDrawer({
       ...baseContact,
       customerBookings: [bookingRef, { ...bookingRef, id: 'booking-2' }],
     });
@@ -89,7 +81,7 @@ describe('ContactEditPage — delete section', () => {
   });
 
   it('uses singular "booking" when there is exactly one', () => {
-    renderPage({ ...baseContact, customerBookings: [bookingRef] });
+    renderDrawer({ ...baseContact, customerBookings: [bookingRef] });
     expect(screen.getByText(/1 booking[^s]/i)).toBeInTheDocument();
   });
 });

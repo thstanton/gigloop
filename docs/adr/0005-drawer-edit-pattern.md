@@ -17,4 +17,6 @@ Mixing lifecycle actions into the edit drawer was rejected because it obscures t
 
 The same drawer pattern applies to Contact editing. New-entity forms (e.g. `/bookings/new`) remain as full-page routes — the drawer is for editing existing records only.
 
+**Exception — Songs (Repertoire):** Songs are simple enough (title, artist, genre — 3 fields) that a drawer is disproportionate. The Repertoire page uses fully inline editing: tapping a song row expands it into an editable form in place. New songs are added via an inline form row at the top of the list (not a separate page or drawer). The inline pattern was chosen specifically because musicians add multiple songs in one session and minimising interaction steps matters more than consistency with the drawer pattern.
+
 Form components are shared between the new-entity form and the edit drawer to prevent divergence.

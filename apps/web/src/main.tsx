@@ -13,11 +13,10 @@ import SettingsPage from './pages/admin/SettingsPage';
 import BookingsListPage from './pages/admin/bookings/BookingsListPage';
 import BookingDetailPage from './pages/admin/bookings/BookingDetailPage';
 import BookingNewPage from './pages/admin/bookings/BookingNewPage';
-import BookingEditPage from './pages/admin/bookings/BookingEditPage';
 import ContactsListPage from './pages/admin/contacts/ContactsListPage';
 import ContactNewPage from './pages/admin/contacts/ContactNewPage';
 import ContactDetailPage from './pages/admin/contacts/ContactDetailPage';
-import ContactEditPage from './pages/admin/contacts/ContactEditPage';
+import RepertoirePage from './pages/admin/RepertoirePage';
 
 const queryClient = new QueryClient();
 
@@ -43,11 +42,10 @@ const router = createBrowserRouter([
       { path: 'bookings', element: <BookingsListPage /> },
       { path: 'bookings/new', element: <BookingNewPage /> },
       { path: 'bookings/:id', element: <BookingDetailPage /> },
-      { path: 'bookings/:id/edit', element: <BookingEditPage /> },
       { path: 'contacts', element: <ContactsListPage /> },
       { path: 'contacts/new', element: <ContactNewPage /> },
       { path: 'contacts/:id', element: <ContactDetailPage /> },
-      { path: 'contacts/:id/edit', element: <ContactEditPage /> },
+      { path: 'repertoire', element: <RepertoirePage /> },
     ],
   },
 ]);
