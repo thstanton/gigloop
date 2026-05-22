@@ -62,14 +62,14 @@ const { customerName, bookingDate, venueName, bookingFee, setsSchedule,
         musicianName, musicianEmail, portalLink, invoiceTotal, invoiceDueDate } = VAR_NAMES;
 
 export const TEMPLATE_VARIABLES: Record<BuiltInTemplateType, TemplateVariable[]> = {
-  quote:                      [customerName, bookingDate, venueName, bookingFee, musicianName, musicianEmail],
-  confirmation:               [customerName, bookingDate, venueName, bookingFee, setsSchedule, musicianName, musicianEmail],
+  quote:                      [customerName, bookingDate, venueName, bookingFee, portalLink, musicianName, musicianEmail],
+  confirmation:               [customerName, bookingDate, venueName, bookingFee, setsSchedule, portalLink, musicianName, musicianEmail],
   contract_cover:             [customerName, bookingDate, venueName, portalLink, musicianName, musicianEmail],
   contract_and_invoice_cover: [customerName, bookingDate, venueName, portalLink, invoiceTotal, invoiceDueDate, musicianName, musicianEmail],
-  invoice_cover:              [customerName, bookingDate, invoiceTotal, invoiceDueDate, musicianName, musicianEmail],
-  contract_received:          [customerName, bookingDate, musicianName, musicianEmail],
-  deposit_received:           [customerName, bookingDate, musicianName, musicianEmail],
+  invoice_cover:              [customerName, bookingDate, invoiceTotal, invoiceDueDate, portalLink, musicianName, musicianEmail],
+  contract_received:          [customerName, bookingDate, portalLink, musicianName, musicianEmail],
+  deposit_received:           [customerName, bookingDate, portalLink, musicianName, musicianEmail],
   music_form_invite:          [customerName, bookingDate, venueName, portalLink, musicianName, musicianEmail],
-  thank_you:                  [customerName, bookingDate, musicianName, musicianEmail],
+  thank_you:                  [customerName, bookingDate, portalLink, musicianName, musicianEmail],
   contract:                   [],
 };
