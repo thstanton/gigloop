@@ -11,5 +11,10 @@
   },
   "devDependencies": {
     "concurrently": "^9.0.0"
+  },
+  "overrides": {
+    "chalk": {
+      "ansi-styles": "^4.1.0"
+    }
   }
 }
