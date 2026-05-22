@@ -70,11 +70,13 @@ Two ways to move to `Sent`: (1) **Send** — app emails the invoice PDF via Rese
 A freeform line on an [[Invoice]]: description (text) + amount (decimal). No fixed categories.
 
 ### Template
-A reusable content block stored as Tiptap JSON. Decoupled from rendering — the caller decides whether to render it as email HTML (via Resend) or as a PDF (via @react-pdf/renderer). Users can create custom templates alongside the built-in ones.
+A reusable content block stored as Tiptap JSON. Decoupled from rendering — the caller decides whether to render it as email HTML (via Resend) or as a PDF (via @react-pdf/renderer). Custom template creation is deferred to P2; MVP exposes only built-in templates.
 
 **Fields:** name, content (Tiptap JSON), builtInType (optional enum — only set for system-provided templates)
 
 **Built-in types:** `quote | confirmation | contract_cover | contract_and_invoice_cover | invoice_cover | music_form_invite | thank_you | contract`
+
+Seven of these are **email templates** — they produce the body of an outbound email. The eighth (`contract`) is a **contract document** — it produces the content of a signable PDF page on the [[Portal]], not an email body. The contract template is managed separately from the email templates; its editing UI is deferred to P2.
 
 - `contract_cover` — email body when sending only the contract portal link
 - `contract_and_invoice_cover` — email body when sending the contract portal link + a deposit invoice PDF attachment (the common case for new bookings)
@@ -84,9 +86,11 @@ The template type determines what gets attached — the musician picks the templ
 
 The `quote` template is optional — in current practice quotes are sent externally before a booking is created in the app. It becomes more useful once P2 email ingestion allows bookings to be created at the enquiry stage.
 
-**Variable substitution:** flat named variables — the API pre-computes a flat context object before rendering. No dot-notation paths or loops in template content. Multi-value data (e.g. sets schedule) is pre-rendered into a single substitution variable (e.g. `{{setsSchedule}}`).
+**Variable substitution:** flat named variables — the API pre-computes a flat context object before rendering. No dot-notation paths or loops in template content. Multi-value data (e.g. sets schedule) is pre-rendered into a single substitution variable (e.g. `{{setsSchedule}}`). Variables are filtered per template type in the editor — only variables that are meaningful for that template are offered for insertion.
 
-Expected variables include: `{{customerName}}`, `{{bookingDate}}`, `{{venueName}}`, `{{bookingFee}}`, `{{setsSchedule}}`, `{{musicianName}}`, `{{musicianEmail}}`, `{{portalLink}}`, `{{invoiceTotal}}`, `{{invoiceDueDate}}`.
+**Variable chips:** in the template editor, variables are inserted as non-editable inline nodes (chips) that display a human-readable label (e.g. "Customer name") but serialise as `{{customerName}}` in the Tiptap JSON. Free-typing variable syntax is not supported — variables must be inserted via the picker.
+
+Available variables: `{{customerName}}`, `{{bookingDate}}`, `{{venueName}}`, `{{bookingFee}}`, `{{setsSchedule}}`, `{{musicianName}}`, `{{musicianEmail}}`, `{{portalLink}}`, `{{invoiceTotal}}`, `{{invoiceDueDate}}`.
 
 ### Communication
 A log entry for a communication associated with a Booking. For MVP: outbound only (sent emails). Modelled generically to accommodate inbound messages (email ingestion) in a future release without schema changes.

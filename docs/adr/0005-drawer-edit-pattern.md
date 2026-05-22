@@ -20,3 +20,5 @@ The same drawer pattern applies to Contact editing. New-entity forms (e.g. `/boo
 **Exception — Songs (Repertoire):** Songs are simple enough (title, artist, genre — 3 fields) that a drawer is disproportionate. The Repertoire page uses fully inline editing: tapping a song row expands it into an editable form in place. New songs are added via an inline form row at the top of the list (not a separate page or drawer). The inline pattern was chosen specifically because musicians add multiple songs in one session and minimising interaction steps matters more than consistency with the drawer pattern.
 
 Form components are shared between the new-entity form and the edit drawer to prevent divergence.
+
+**Exception — Templates:** Template editing uses a full-page route (`/admin/templates/:id/edit`) rather than a drawer. A rich text editor (Tiptap) needs horizontal space that a drawer cannot provide. All 7 email templates share the same full-page editor.
