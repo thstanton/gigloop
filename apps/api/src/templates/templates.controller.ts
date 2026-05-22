@@ -57,4 +57,10 @@ export class TemplatesController {
   delete(@Req() req: AuthedRequest, @Param('id') id: string) {
     return this.service.delete(req.userId, id);
   }
+
+  @ApiOperation({ summary: 'Reset a built-in template to its default content' })
+  @Post(':id/reset')
+  resetToDefault(@Req() req: AuthedRequest, @Param('id') id: string) {
+    return this.service.resetToDefault(req.userId, id);
+  }
 }

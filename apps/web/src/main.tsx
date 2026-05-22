@@ -17,6 +17,8 @@ import ContactsListPage from './pages/admin/contacts/ContactsListPage';
 import ContactNewPage from './pages/admin/contacts/ContactNewPage';
 import ContactDetailPage from './pages/admin/contacts/ContactDetailPage';
 import RepertoirePage from './pages/admin/RepertoirePage';
+import TemplatesListPage from './pages/admin/TemplatesListPage';
+import TemplateEditPage from './pages/admin/TemplateEditPage';
 
 const queryClient = new QueryClient();
 
@@ -46,6 +48,8 @@ const router = createBrowserRouter([
       { path: 'contacts/new', element: <ContactNewPage /> },
       { path: 'contacts/:id', element: <ContactDetailPage /> },
       { path: 'repertoire', element: <RepertoirePage /> },
+      { path: 'templates', element: <TemplatesListPage /> },
+      { path: 'templates/:id/edit', element: <TemplateEditPage /> },
     ],
   },
 ]);

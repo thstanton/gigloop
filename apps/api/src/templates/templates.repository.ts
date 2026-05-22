@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTemplateDto } from './dto/create-template.dto';
 import { UpdateTemplateDto } from './dto/update-template.dto';
+import { type BuiltInTemplateType, BUILT_IN_NAMES, getDefaultContent } from './default-templates';
 
 @Injectable()
 export class TemplatesRepository {
@@ -44,6 +45,17 @@ export class TemplatesRepository {
   delete(id: string) {
     return this.prisma.template.delete({
       where: { id },
+    });
+  }
+
+  async seedBuiltIns(userId: string, types: BuiltInTemplateType[]) {
+    await this.prisma.template.createMany({
+      data: types.map((type) => ({
+        userId,
+        name: BUILT_IN_NAMES[type],
+        content: getDefaultContent(type) as Prisma.InputJsonValue,
+        builtInType: type,
+      })),
     });
   }
 }

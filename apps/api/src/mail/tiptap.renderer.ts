@@ -79,6 +79,9 @@ function renderNode(node: TiptapNode): string {
     case 'codeBlock':
       return `<pre><code>${renderChildren(node)}</code></pre>`;
 
+    case 'variable':
+      return `{{${node.attrs?.name ?? ''}}}`;
+
     default:
       return renderChildren(node);
   }

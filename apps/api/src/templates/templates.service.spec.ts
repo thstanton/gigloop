@@ -1,6 +1,7 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { TemplatesService } from './templates.service';
 import { TemplatesRepository } from './templates.repository';
+import { BUILT_IN_EMAIL_TYPES } from './default-templates';
 
 type MockRepo = {
   findAll: jest.Mock;
@@ -8,6 +9,7 @@ type MockRepo = {
   create: jest.Mock;
   update: jest.Mock;
   delete: jest.Mock;
+  seedBuiltIns: jest.Mock;
 };
 
 function makeRepo(): MockRepo {
@@ -17,12 +19,17 @@ function makeRepo(): MockRepo {
     create: jest.fn(),
     update: jest.fn(),
     delete: jest.fn(),
+    seedBuiltIns: jest.fn(),
   };
 }
 
 const content = { type: 'doc', content: [] };
 const customTemplate = { id: 't1', userId: 'u1', name: 'My Template', content, builtInType: null };
-const builtInTemplate = { id: 't2', userId: 'u1', name: 'Contract', content, builtInType: 'contract' };
+const builtInTemplate = { id: 't2', userId: 'u1', name: 'Quote', content, builtInType: 'quote' };
+// A full set of seeded built-in templates (one per email type)
+const seededTemplates = BUILT_IN_EMAIL_TYPES.map((type, i) => ({
+  id: `t${i + 10}`, userId: 'u1', name: type, content, builtInType: type,
+}));
 
 describe('TemplatesService', () => {
   let service: TemplatesService;
@@ -34,11 +41,21 @@ describe('TemplatesService', () => {
   });
 
   describe('findAll', () => {
-    it('delegates to repository', async () => {
-      repo.findAll.mockResolvedValue([customTemplate]);
+    it('returns templates when all built-ins already exist', async () => {
+      repo.findAll.mockResolvedValue(seededTemplates);
       const result = await service.findAll('u1');
-      expect(repo.findAll).toHaveBeenCalledWith('u1');
-      expect(result).toEqual([customTemplate]);
+      expect(repo.seedBuiltIns).not.toHaveBeenCalled();
+      expect(result).toEqual(seededTemplates);
+    });
+
+    it('seeds missing built-ins and returns refreshed list', async () => {
+      repo.findAll
+        .mockResolvedValueOnce([]) // first call: nothing seeded yet
+        .mockResolvedValueOnce(seededTemplates); // after seeding
+      repo.seedBuiltIns.mockResolvedValue(undefined);
+      const result = await service.findAll('u1');
+      expect(repo.seedBuiltIns).toHaveBeenCalledWith('u1', BUILT_IN_EMAIL_TYPES);
+      expect(result).toEqual(seededTemplates);
     });
   });
 
@@ -101,6 +118,27 @@ describe('TemplatesService', () => {
       repo.findOne.mockResolvedValue(builtInTemplate);
       await expect(service.delete('u1', 't2')).rejects.toThrow(ForbiddenException);
       expect(repo.delete).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('resetToDefault', () => {
+    it('resets content to default for a built-in template', async () => {
+      repo.findOne.mockResolvedValue(builtInTemplate);
+      const updated = { ...builtInTemplate };
+      repo.update.mockResolvedValue(updated);
+      await service.resetToDefault('u1', 't2');
+      expect(repo.update).toHaveBeenCalledWith('t2', expect.objectContaining({ content: expect.any(Object) }));
+    });
+
+    it('throws NotFoundException when template is not found', async () => {
+      repo.findOne.mockResolvedValue(null);
+      await expect(service.resetToDefault('u1', 'missing')).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws BadRequestException for a custom template', async () => {
+      repo.findOne.mockResolvedValue(customTemplate);
+      await expect(service.resetToDefault('u1', 't1')).rejects.toThrow(BadRequestException);
+      expect(repo.update).not.toHaveBeenCalled();
     });
   });
 });

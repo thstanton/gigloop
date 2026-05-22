@@ -50,3 +50,15 @@
     -moz-osx-font-smoothing: grayscale;
   }
 }
+
+/* ─── Tiptap editor content ─────────────────────────────────────────── */
+.tiptap-content p { margin-bottom: 0.75rem; }
+.tiptap-content p:last-child { margin-bottom: 0; }
+.tiptap-content ul { list-style-type: disc; padding-left: 1.5rem; margin-bottom: 0.75rem; }
+.tiptap-content ol { list-style-type: decimal; padding-left: 1.5rem; margin-bottom: 0.75rem; }
+.tiptap-content li { margin-bottom: 0.25rem; }
+.tiptap-content strong { font-weight: 600; }
+.tiptap-content em { font-style: italic; }
+.tiptap-content u { text-decoration: underline; }
+.tiptap-content a { color: hsl(var(--primary)); text-decoration: underline; }
+.tiptap-content:focus { outline: none; }
