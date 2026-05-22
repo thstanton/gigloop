@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -48,8 +48,10 @@ interface Props {
 
 export default function BookingEditDrawer({ booking }: Props) {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const isOpen = searchParams.get('edit') === 'true';
   const queryClient = useQueryClient();
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
 
   function close() {
     setSearchParams((prev) => {
@@ -74,8 +76,18 @@ export default function BookingEditDrawer({ booking }: Props) {
 
   // Reset to current booking data each time the drawer opens
   useEffect(() => {
-    if (isOpen) reset(buildDefaultValues(booking));
+    if (isOpen) {
+      reset(buildDefaultValues(booking));
+      setDeleteConfirm(false);
+    }
   }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const deleteMutation = useMutation({
+    mutationFn: () => apiDelete(`/bookings/${booking.id}`),
+    onSuccess: () => {
+      navigate('/admin/bookings');
+    },
+  });
 
   const mutation = useMutation({
     mutationFn: async (values: BookingFormValues) => {
@@ -161,6 +173,31 @@ export default function BookingEditDrawer({ booking }: Props) {
             <Button type="button" variant="outline" onClick={close}>
               Cancel
             </Button>
+          </div>
+
+          <div className="mt-6 pt-6 border-t border-border">
+            {deleteConfirm ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="text-status-cancelled border-status-cancelled hover:bg-status-cancelled/8"
+                disabled={deleteMutation.isPending}
+                onClick={() => deleteMutation.mutate()}
+              >
+                {deleteMutation.isPending ? 'Cancelling…' : 'Confirm cancellation'}
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="text-status-cancelled border-status-cancelled hover:bg-status-cancelled/8"
+                onClick={() => setDeleteConfirm(true)}
+              >
+                Cancel booking
+              </Button>
+            )}
           </div>
         </form>
       </SheetContent>

@@ -62,4 +62,16 @@ export class UpdateBookingDto {
   @ValidateIf((_, v) => v !== null)
   @IsUUID()
   referrerId?: string | null;
+
+  @ApiPropertyOptional({ example: '2026-06-15T10:00:00.000Z', nullable: true })
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsDateString()
+  contractSignedAt?: string | null;
+
+  @ApiPropertyOptional({ example: '2026-06-15T10:00:00.000Z', nullable: true })
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsDateString()
+  depositReceivedAt?: string | null;
 }

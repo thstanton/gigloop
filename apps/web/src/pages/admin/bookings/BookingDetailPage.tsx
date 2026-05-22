@@ -1,20 +1,29 @@
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, CheckCircle2, Circle, Music, FileText, DollarSign, FolderOpen } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckCircle2, Circle, Music, FileText, DollarSign, FolderOpen, ChevronDown, Check } from 'lucide-react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
-import BookingStatusPill from '@/components/BookingStatusPill';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import InvoiceStatusPill from '@/components/InvoiceStatusPill';
 import { useBooking } from '@/lib/hooks/useBooking';
 import { useBookingInvoices } from '@/lib/hooks/useBookingInvoices';
 import { useBookingCommunications } from '@/lib/hooks/useBookingCommunications';
 import BookingEditDrawer from '@/features/bookings/BookingEditDrawer';
+import { apiPatch } from '@/lib/api';
 import {
   formatDate,
   formatCurrency,
   formatFee,
 } from '@/lib/formatters';
-import { EVENT_TYPE_LABELS, statusGte } from '@/lib/constants';
+import { EVENT_TYPE_LABELS, STATUS_ORDER, statusGte } from '@/lib/constants';
+import { cn } from '@/lib/utils';
 import type {
   BookingDetail,
+  BookingStatus,
   Contact,
   PerformanceSet,
   Invoice,
@@ -111,6 +120,69 @@ function buildChecklist(
   return raw
     .filter((item) => !item.irrelevant)
     .map(({ key, label, done }) => ({ key, label, state: done ? 'done' : 'outstanding' as ChecklistState }));
+}
+
+// ─── Status dropdown ──────────────────────────────────────────────────────────
+
+const STATUS_PILL_CLASSES: Record<BookingStatus, string> = {
+  ENQUIRY:   'bg-status-enquiry/12 text-status-enquiry',
+  CONFIRMED: 'bg-status-confirmed/12 text-status-confirmed',
+  INVOICED:  'bg-status-invoiced/12 text-status-invoiced',
+  SETTLED:   'bg-status-settled/12 text-status-settled',
+  COMPLETED: 'bg-status-completed/12 text-status-completed',
+  CANCELLED: 'bg-status-cancelled/12 text-status-cancelled',
+};
+
+const STATUS_LABELS: Record<BookingStatus, string> = {
+  ENQUIRY:   'Enquiry',
+  CONFIRMED: 'Confirmed',
+  INVOICED:  'Invoiced',
+  SETTLED:   'Settled',
+  COMPLETED: 'Completed',
+  CANCELLED: 'Cancelled',
+};
+
+function StatusDropdown({ booking }: { booking: BookingDetail }) {
+  const queryClient = useQueryClient();
+
+  const mutation = useMutation({
+    mutationFn: (status: BookingStatus) =>
+      apiPatch<BookingDetail>(`/bookings/${booking.id}`, { status }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['booking', booking.id] });
+      queryClient.invalidateQueries({ queryKey: ['bookings'] });
+    },
+  });
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          className={cn(
+            'inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium cursor-pointer',
+            STATUS_PILL_CLASSES[booking.status],
+          )}
+        >
+          {STATUS_LABELS[booking.status]}
+          <ChevronDown size={10} className="opacity-60" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start">
+        {STATUS_ORDER.map((s) => (
+          <DropdownMenuItem
+            key={s}
+            onSelect={() => { if (s !== booking.status) mutation.mutate(s); }}
+            className="gap-2"
+          >
+            <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', STATUS_PILL_CLASSES[s])}>
+              {STATUS_LABELS[s]}
+            </span>
+            {s === booking.status && <Check size={12} className="ml-auto" />}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 }
 
 // ─── SectionHeader ────────────────────────────────────────────────────────────
@@ -320,10 +392,27 @@ function PageSkeleton() {
 export default function BookingDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [, setSearchParams] = useSearchParams();
+  const queryClient = useQueryClient();
 
   const { data: booking, isLoading, isError } = useBooking(id!);
   const { data: invoices = [], isPending: invoicesPending } = useBookingInvoices(id!);
   const { data: communications = [] } = useBookingCommunications(id!);
+
+  const contractMutation = useMutation({
+    mutationFn: () =>
+      apiPatch<BookingDetail>(`/bookings/${id}`, { contractSignedAt: new Date().toISOString() }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['booking', id] });
+    },
+  });
+
+  const depositMutation = useMutation({
+    mutationFn: () =>
+      apiPatch<BookingDetail>(`/bookings/${id}`, { depositReceivedAt: new Date().toISOString() }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['booking', id] });
+    },
+  });
 
   if (isLoading) return <PageSkeleton />;
 
@@ -375,12 +464,50 @@ export default function BookingDetailPage() {
           </Button>
         </div>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2">
-          <BookingStatusPill status={booking.status} />
+          <StatusDropdown booking={booking} />
           <span className="text-sm text-muted">
             {formatDate(booking.date)}
           </span>
           {fee && <span className="text-sm text-muted">{fee}</span>}
         </div>
+
+        {/* Lifecycle actions */}
+        {booking.status !== 'CANCELLED' && (() => {
+          const showContract =
+            !booking.contractSignedAt &&
+            booking.status !== 'ENQUIRY' &&
+            !statusGte(booking.status, 'SETTLED');
+          const trackDeposit = booking.depositTrackingMode !== 'NONE';
+          const showDeposit =
+            trackDeposit && !booking.depositReceivedAt && booking.status !== 'ENQUIRY';
+
+          if (!showContract && !showDeposit) return null;
+
+          return (
+            <div className="flex flex-wrap gap-2 mt-3">
+              {showContract && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={contractMutation.isPending}
+                  onClick={() => contractMutation.mutate()}
+                >
+                  {contractMutation.isPending ? 'Saving…' : 'Mark contract signed'}
+                </Button>
+              )}
+              {showDeposit && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={depositMutation.isPending}
+                  onClick={() => depositMutation.mutate()}
+                >
+                  {depositMutation.isPending ? 'Saving…' : 'Mark deposit received'}
+                </Button>
+              )}
+            </div>
+          );
+        })()}
       </section>
 
       {/* 2. People */}
