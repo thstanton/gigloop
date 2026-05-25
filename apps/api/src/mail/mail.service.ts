@@ -13,6 +13,7 @@ export interface EmailContext {
   musicianName: string;
   musicianEmail: string;
   portalLink: string;
+  issueDate: string;
   invoiceTotal: string;
   invoiceDueDate: string;
 }
@@ -59,6 +60,7 @@ export class MailService {
     });
     if (!publicProfile) throw new NotFoundException('Public profile not found — complete your profile before sending emails');
 
+    let issueDate = '';
     let invoiceTotal = '';
     let invoiceDueDate = '';
 
@@ -72,6 +74,7 @@ export class MailService {
           (sum, item) => sum + Number(item.amount),
           0,
         );
+        issueDate = invoice.issueDate.toISOString().split('T')[0];
         invoiceTotal = total.toFixed(2);
         invoiceDueDate = invoice.dueDate
           ? invoice.dueDate.toISOString().split('T')[0]
@@ -99,6 +102,7 @@ export class MailService {
       musicianName: publicProfile.displayName ?? publicProfile.businessName,
       musicianEmail: publicProfile.email ?? '',
       portalLink: `${process.env.APP_BASE_URL}/booking/${booking.portalToken}`,
+      issueDate,
       invoiceTotal,
       invoiceDueDate,
     };

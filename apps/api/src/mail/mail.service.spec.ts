@@ -98,12 +98,14 @@ describe('MailService', () => {
       expect(ctx.setsSchedule).toBe('');
     });
 
-    it('sums invoice line items for invoiceTotal', async () => {
+    it('sums invoice line items for invoiceTotal and captures dates', async () => {
       mockPrisma.invoice.findFirst.mockResolvedValue({
+        issueDate: new Date('2025-08-01'),
         dueDate: new Date('2025-09-01'),
         lineItems: [{ amount: '500.00' }, { amount: '1500.00' }],
       });
       const ctx = await service.buildContext('u1', 'b1', 'inv1');
+      expect(ctx.issueDate).toBe('2025-08-01');
       expect(ctx.invoiceTotal).toBe('2000.00');
       expect(ctx.invoiceDueDate).toBe('2025-09-01');
     });
@@ -129,6 +131,7 @@ describe('MailService', () => {
       musicianName: 'Tim Stanton',
       musicianEmail: 'tim@example.com',
       portalLink: 'https://app.gigman.com/booking/tok-abc',
+      issueDate: '',
       invoiceTotal: '',
       invoiceDueDate: '',
     };
@@ -157,7 +160,7 @@ describe('MailService', () => {
     const context: EmailContext = {
       customerName: 'Jane', bookingDate: '', venueName: '', bookingFee: '',
       setsSchedule: '', musicianName: '', musicianEmail: '', portalLink: '',
-      invoiceTotal: '', invoiceDueDate: '',
+      issueDate: '', invoiceTotal: '', invoiceDueDate: '',
     };
     const options = {
       userId: 'u1', bookingId: 'b1', contactId: 'ct1',
