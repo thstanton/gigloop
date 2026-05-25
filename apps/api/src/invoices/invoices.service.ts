@@ -2,7 +2,6 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { InvoicesRepository } from './invoices.repository';
 import { CommunicationsService } from '../communications/communications.service';
 import { DocumentsService } from '../documents/documents.service';
-import { PdfService } from '../documents/pdf.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { SendInvoiceDto } from './dto/send-invoice.dto';
@@ -16,7 +15,6 @@ export class InvoicesService {
     private repo: InvoicesRepository,
     private comms: CommunicationsService,
     private documents: DocumentsService,
-    private pdf: PdfService,
   ) {}
 
   findAll(userId: string, bookingId: string) {
@@ -57,9 +55,7 @@ export class InvoicesService {
 
     const sentInvoice = await this.repo.assignAndMarkSent(userId, id, issueDate, dueDate);
 
-    const pdfData = await this.pdf.buildInvoicePdfData(userId, sentInvoice.id, sentInvoice);
-    const pdfBuffer = await this.pdf.generateFromData(pdfData);
-    await this.documents.storeInvoicePdf(userId, bookingId, sentInvoice.id, pdfBuffer);
+    const { buffer: pdfBuffer } = await this.documents.generateAndStoreInvoicePdf(userId, bookingId, sentInvoice.id, sentInvoice);
 
     const filename = `${sentInvoice.invoiceNumber ?? 'invoice'}.pdf`;
 
@@ -77,7 +73,7 @@ export class InvoicesService {
 
   async generatePreviewPdf(userId: string, bookingId: string, id: string): Promise<Buffer> {
     await this.findOne(userId, bookingId, id);
-    return this.pdf.generateInvoicePdf(userId, id);
+    return this.documents.generatePreviewPdf(userId, id);
   }
 
   async markSent(userId: string, bookingId: string, id: string, dto: MarkSentDto) {

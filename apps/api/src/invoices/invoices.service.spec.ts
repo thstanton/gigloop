@@ -3,11 +3,11 @@ import { InvoicesService } from './invoices.service';
 import { InvoicesRepository } from './invoices.repository';
 import { CommunicationsService } from '../communications/communications.service';
 
-jest.mock('../documents/pdf.service', () => ({
-  PdfService: jest.fn().mockImplementation(() => ({ generateInvoicePdf: jest.fn() })),
-}));
 jest.mock('../documents/documents.service', () => ({
-  DocumentsService: jest.fn().mockImplementation(() => ({ storeInvoicePdf: jest.fn() })),
+  DocumentsService: jest.fn().mockImplementation(() => ({
+    generateAndStoreInvoicePdf: jest.fn(),
+    generatePreviewPdf: jest.fn(),
+  })),
 }));
 
 type MockRepo = {
@@ -42,9 +42,7 @@ function makeRepo(): MockRepo {
 
 const mockComms = { sendEmail: jest.fn() } as unknown as CommunicationsService;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const mockDocuments = { storeInvoicePdf: jest.fn() } as any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const mockPdf = { generateInvoicePdf: jest.fn(), buildInvoicePdfData: jest.fn(), generateFromData: jest.fn() } as any;
+const mockDocuments = { generateAndStoreInvoicePdf: jest.fn(), generatePreviewPdf: jest.fn() } as any;
 
 const invoice = { id: 'i1', bookingId: 'b1', userId: 'u1', status: 'DRAFT' };
 const lineItem = { id: 'li1', invoiceId: 'i1', userId: 'u1' };
@@ -55,7 +53,7 @@ describe('InvoicesService', () => {
 
   beforeEach(() => {
     repo = makeRepo();
-    service = new InvoicesService(repo as unknown as InvoicesRepository, mockComms, mockDocuments, mockPdf);
+    service = new InvoicesService(repo as unknown as InvoicesRepository, mockComms, mockDocuments);
   });
 
   describe('findAll', () => {
@@ -211,7 +209,6 @@ describe('InvoicesService', () => {
 
   describe('send', () => {
     const sentInvoice = { ...invoice, status: 'SENT', invoiceNumber: 'INV-2026-001', issueDate: new Date('2026-05-26'), dueDate: new Date('2026-06-09') };
-    const pdfData = { invoiceNumber: 'INV-2026-001' };
     const pdfBuffer = Buffer.from('pdf');
     const dto = {
       issueDate: '2026-05-26',
@@ -225,9 +222,7 @@ describe('InvoicesService', () => {
     beforeEach(() => {
       repo.findOne.mockResolvedValue(invoice);
       repo.assignAndMarkSent.mockResolvedValue(sentInvoice);
-      mockPdf.buildInvoicePdfData.mockResolvedValue(pdfData);
-      mockPdf.generateFromData.mockResolvedValue(pdfBuffer);
-      mockDocuments.storeInvoicePdf.mockResolvedValue({});
+      mockDocuments.generateAndStoreInvoicePdf.mockResolvedValue({ buffer: pdfBuffer });
       (mockComms.sendEmail as jest.Mock).mockResolvedValue(undefined);
     });
 
@@ -253,14 +248,9 @@ describe('InvoicesService', () => {
       expect(repo.assignAndMarkSent).toHaveBeenCalledWith('u1', 'i1', new Date('2026-05-26'), null);
     });
 
-    it('calls buildInvoicePdfData with the sentInvoice to avoid a redundant DB fetch', async () => {
+    it('calls generateAndStoreInvoicePdf with the sentInvoice to avoid a redundant DB fetch', async () => {
       await service.send('u1', 'b1', 'i1', dto);
-      expect(mockPdf.buildInvoicePdfData).toHaveBeenCalledWith('u1', sentInvoice.id, sentInvoice);
-    });
-
-    it('calls storeInvoicePdf with the generated buffer', async () => {
-      await service.send('u1', 'b1', 'i1', dto);
-      expect(mockDocuments.storeInvoicePdf).toHaveBeenCalledWith('u1', 'b1', sentInvoice.id, pdfBuffer);
+      expect(mockDocuments.generateAndStoreInvoicePdf).toHaveBeenCalledWith('u1', 'b1', sentInvoice.id, sentInvoice);
     });
 
     it('sends email with PDF attachment named after the invoice number', async () => {
