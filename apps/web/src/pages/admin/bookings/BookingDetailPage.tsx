@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '@clerk/react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, CheckCircle2, Circle, AlertTriangle, Mail, Music, FileText, DollarSign, FolderOpen, ChevronDown, Check, Pencil, Plus, Send } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckCircle2, Circle, AlertTriangle, Mail, Music, FileText, DollarSign, FolderOpen, ChevronDown, Check, Pencil, Plus, Send, Download } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import {
@@ -739,27 +739,39 @@ export default function BookingDetailPage() {
               </div>
             ) : (
               <div className="divide-y divide-border">
-                {documents.map((doc: Document) => (
-                  <a
-                    key={doc.id}
-                    href={doc.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 py-2 text-sm text-foreground hover:text-primary"
-                  >
-                    <FileText size={14} className="flex-shrink-0 text-muted" />
-                    <span>
-                      {doc.type === 'CONTRACT'
-                        ? 'Contract'
-                        : invoices.find((i) => i.id === doc.invoiceId)?.isDeposit
-                          ? 'Deposit invoice'
-                          : 'Balance invoice'}
-                    </span>
-                    <span className="text-muted ml-auto text-xs">
-                      {new Date(doc.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                    </span>
-                  </a>
-                ))}
+                {documents.map((doc: Document) => {
+                  const label = doc.type === 'CONTRACT'
+                    ? 'Contract'
+                    : invoices.find((i) => i.id === doc.invoiceId)?.isDeposit
+                      ? 'Deposit invoice'
+                      : 'Balance invoice';
+                  const filename = `${label.toLowerCase().replace(' ', '-')}.pdf`;
+                  const handleDownload = async () => {
+                    const res = await fetch(doc.url);
+                    const blob = await res.blob();
+                    const a = window.document.createElement('a');
+                    a.href = URL.createObjectURL(blob);
+                    a.download = filename;
+                    a.click();
+                    URL.revokeObjectURL(a.href);
+                  };
+                  return (
+                    <div key={doc.id} className="flex items-center gap-2 py-2">
+                      <FileText size={14} className="flex-shrink-0 text-muted" />
+                      <span className="text-sm text-foreground">{label}</span>
+                      <span className="text-muted ml-auto text-xs">
+                        {new Date(doc.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </span>
+                      <button
+                        onClick={handleDownload}
+                        title="Download"
+                        className="text-muted hover:text-foreground"
+                      >
+                        <Download size={14} />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </Card>
