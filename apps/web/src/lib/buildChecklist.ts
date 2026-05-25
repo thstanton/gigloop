@@ -65,7 +65,7 @@ export function buildChecklist(
       label: 'Create deposit invoice',
       done: depositInvoiceExists,
       failed: false,
-      irrelevant: !trackDeposit || booking.status === 'ENQUIRY',
+      irrelevant: !trackDeposit,
       shortcutAction: 'create_deposit_invoice',
     },
     {
