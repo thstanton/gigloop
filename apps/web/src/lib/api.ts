@@ -40,6 +40,11 @@ export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+export async function apiPostVoid(path: string, body: unknown): Promise<void> {
+  const res = await authedFetch(path, { method: 'POST', body: JSON.stringify(body) });
+  if (!res.ok) throw new Response(res.statusText, { status: res.status });
+}
+
 export async function apiDelete(path: string): Promise<void> {
   const res = await authedFetch(path, { method: 'DELETE' });
   if (!res.ok) throw new Response(res.statusText, { status: res.status });

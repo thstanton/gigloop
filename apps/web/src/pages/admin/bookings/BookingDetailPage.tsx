@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, CheckCircle2, Circle, Music, FileText, DollarSign, FolderOpen, ChevronDown, Check } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckCircle2, Circle, AlertTriangle, Mail, Music, FileText, DollarSign, FolderOpen, ChevronDown, Check } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import {
@@ -13,6 +14,7 @@ import { useBooking } from '@/lib/hooks/useBooking';
 import { useBookingInvoices } from '@/lib/hooks/useBookingInvoices';
 import { useBookingCommunications } from '@/lib/hooks/useBookingCommunications';
 import BookingEditDrawer from '@/features/bookings/BookingEditDrawer';
+import ComposeEmailSheet from '@/features/communications/ComposeEmailSheet';
 import { apiPatch } from '@/lib/api';
 import {
   formatDate,
@@ -45,12 +47,13 @@ function invoiceLineTotal(invoice: Invoice): number {
 
 // ─── Checklist ────────────────────────────────────────────────────────────────
 
-type ChecklistState = 'done' | 'outstanding';
+type ChecklistState = 'done' | 'outstanding' | 'failed';
 
 interface ChecklistItem {
   key: string;
   label: string;
   state: ChecklistState;
+  shortcutTemplateType?: string;
 }
 
 function buildChecklist(
@@ -65,61 +68,96 @@ function buildChecklist(
 
   const trackDeposit = booking.depositTrackingMode !== 'NONE';
 
-  const hasTemplate = (type: string) =>
-    communications.some((c) => c.template?.builtInType === type);
+  const hasSent = (...types: string[]) =>
+    communications.some((c) => types.includes(c.template?.builtInType ?? '') && c.status === 'SENT');
 
-  type RawItem = { key: string; label: string; done: boolean; irrelevant: boolean };
+  const mostRecentFailed = (...types: string[]) => {
+    const relevant = communications.filter((c) => types.includes(c.template?.builtInType ?? ''));
+    if (relevant.length === 0) return false;
+    const sorted = [...relevant].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+    return sorted[0].status === 'FAILED';
+  };
+
+  type RawItem = {
+    key: string;
+    label: string;
+    done: boolean;
+    failed: boolean;
+    irrelevant: boolean;
+    shortcutType?: string;
+  };
+
+  const hasDepositInvoice = booking.depositTrackingMode !== 'NONE';
+  const contractShortcutType = hasDepositInvoice ? 'contract_and_deposit_cover' : 'contract_cover';
 
   const raw: RawItem[] = [
     {
       key: 'send_quote',
       label: 'Send quote',
-      done: hasTemplate('quote'),
+      done: hasSent('quote'),
+      failed: mostRecentFailed('quote'),
       irrelevant: statusGte(booking.status, 'CONFIRMED'),
+      shortcutType: 'quote',
     },
     {
       key: 'send_contract',
       label: 'Send contract & deposit email',
-      done: hasTemplate('contract_cover') || hasTemplate('contract_and_invoice_cover'),
+      done: hasSent('contract_cover', 'contract_and_deposit_cover'),
+      failed: mostRecentFailed('contract_cover', 'contract_and_deposit_cover'),
       irrelevant:
         !!booking.contractSignedAt &&
         (!!booking.depositReceivedAt || !trackDeposit),
+      shortcutType: contractShortcutType,
     },
     {
       key: 'contract_signed',
       label: 'Contract signed',
       done: !!booking.contractSignedAt,
+      failed: false,
       irrelevant: booking.status === 'ENQUIRY' || statusGte(booking.status, 'SETTLED'),
     },
     {
       key: 'deposit_received',
       label: 'Deposit received',
       done: !!booking.depositReceivedAt,
+      failed: false,
       irrelevant: !trackDeposit || booking.status === 'ENQUIRY',
     },
     {
       key: 'music_form_invite',
       label: 'Send music form invite',
-      done: hasTemplate('music_form_invite'),
+      done: hasSent('music_form_invite'),
+      failed: mostRecentFailed('music_form_invite'),
       irrelevant: !booking.hasMusicFormConfig || booking.status === 'ENQUIRY',
+      shortcutType: 'music_form_invite',
     },
     {
       key: 'song_requests',
       label: 'Song requests received',
       done: booking.hasMusicFormResponse,
-      irrelevant: !booking.hasMusicFormConfig || !hasTemplate('music_form_invite'),
+      failed: false,
+      irrelevant: !booking.hasMusicFormConfig || !hasSent('music_form_invite'),
     },
     {
       key: 'send_thank_you',
       label: 'Send thank you',
-      done: hasTemplate('thank_you'),
+      done: hasSent('thank_you'),
+      failed: mostRecentFailed('thank_you'),
       irrelevant: !bookingDatePassed,
+      shortcutType: 'thank_you',
     },
   ];
 
   return raw
     .filter((item) => !item.irrelevant)
-    .map(({ key, label, done }) => ({ key, label, state: done ? 'done' : 'outstanding' as ChecklistState }));
+    .map(({ key, label, done, failed, shortcutType }) => ({
+      key,
+      label,
+      state: (done ? 'done' : failed ? 'failed' : 'outstanding') as ChecklistState,
+      shortcutTemplateType: shortcutType,
+    }));
 }
 
 // ─── Status dropdown ──────────────────────────────────────────────────────────
@@ -353,14 +391,23 @@ function InvoiceRow({ invoice }: { invoice: Invoice }) {
 
 function CommunicationRow({ comm }: { comm: Communication }) {
   const meta = [comm.template?.name, `To ${comm.contact.name}`].filter(Boolean).join(' · ');
+  const isFailed = comm.status === 'FAILED';
+  const isPending = comm.status === 'PENDING';
   return (
     <div className="flex items-start justify-between gap-3 py-3 border-b border-border last:border-0">
-      <div className="min-w-0">
-        <p className="text-sm text-foreground truncate">{comm.subject}</p>
-        <p className="text-xs text-muted mt-0.5">{meta}</p>
+      <div className="min-w-0 flex items-start gap-2">
+        {isFailed && <AlertTriangle size={14} className="text-status-cancelled flex-shrink-0 mt-0.5" />}
+        <div className="min-w-0">
+          <p className={`text-sm truncate ${isFailed ? 'text-status-cancelled' : 'text-foreground'}`}>
+            {comm.subject}
+          </p>
+          <p className="text-xs text-muted mt-0.5">
+            {isFailed ? 'Send failed · ' : isPending ? 'Sending · ' : ''}{meta}
+          </p>
+        </div>
       </div>
       <span className="text-xs text-muted flex-shrink-0">
-        {formatDate(comm.sentAt)}
+        {comm.sentAt ? formatDate(comm.sentAt) : '—'}
       </span>
     </div>
   );
@@ -394,9 +441,17 @@ export default function BookingDetailPage() {
   const [, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
 
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [composeTemplateType, setComposeTemplateType] = useState<string | undefined>();
+
   const { data: booking, isLoading, isError } = useBooking(id!);
   const { data: invoices = [], isPending: invoicesPending } = useBookingInvoices(id!);
   const { data: communications = [] } = useBookingCommunications(id!);
+
+  function openCompose(templateType?: string) {
+    setComposeTemplateType(templateType);
+    setComposeOpen(true);
+  }
 
   const contractMutation = useMutation({
     mutationFn: () =>
@@ -544,21 +599,40 @@ export default function BookingDetailPage() {
               <SectionHeader label="Checklist" />
               <div className="space-y-2.5">
                 {checklist.map((item) => (
-                  <div key={item.key} className="flex items-center gap-2.5">
-                    {item.state === 'done' ? (
-                      <CheckCircle2 size={16} className="text-status-confirmed flex-shrink-0" />
-                    ) : (
-                      <Circle size={16} className="text-muted flex-shrink-0" />
+                  <div key={item.key} className="flex items-center justify-between gap-2.5">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      {item.state === 'done' ? (
+                        <CheckCircle2 size={16} className="text-status-confirmed flex-shrink-0" />
+                      ) : item.state === 'failed' ? (
+                        <AlertTriangle size={16} className="text-status-cancelled flex-shrink-0" />
+                      ) : (
+                        <Circle size={16} className="text-muted flex-shrink-0" />
+                      )}
+                      <div className="min-w-0">
+                        <span
+                          className={
+                            item.state === 'done'
+                              ? 'text-sm text-muted line-through'
+                              : item.state === 'failed'
+                              ? 'text-sm text-status-cancelled'
+                              : 'text-sm text-foreground'
+                          }
+                        >
+                          {item.label}
+                        </span>
+                        {item.state === 'failed' && (
+                          <p className="text-xs text-status-cancelled">Last send failed</p>
+                        )}
+                      </div>
+                    </div>
+                    {item.shortcutTemplateType && item.state !== 'done' && (
+                      <button
+                        onClick={() => openCompose(item.shortcutTemplateType)}
+                        className="text-xs text-primary hover:underline flex-shrink-0"
+                      >
+                        Send
+                      </button>
                     )}
-                    <span
-                      className={
-                        item.state === 'done'
-                          ? 'text-sm text-muted line-through'
-                          : 'text-sm text-foreground'
-                      }
-                    >
-                      {item.label}
-                    </span>
                   </div>
                 ))}
               </div>
@@ -610,7 +684,13 @@ export default function BookingDetailPage() {
 
       {/* 6. Communications */}
       <section>
-        <SectionHeader label="Communications" />
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold text-foreground">Communications</h2>
+          <Button variant="outline" size="sm" onClick={() => openCompose()}>
+            <Mail size={14} className="mr-1.5" />
+            Send email
+          </Button>
+        </div>
         {communications.length === 0 ? (
           <div className="flex items-center gap-2 text-muted py-1">
             <FileText size={14} />
@@ -626,6 +706,14 @@ export default function BookingDetailPage() {
       </section>
 
       <BookingEditDrawer booking={booking} />
+      <ComposeEmailSheet
+        bookingId={id!}
+        booking={booking}
+        invoices={invoices}
+        open={composeOpen}
+        onOpenChange={setComposeOpen}
+        initialTemplateType={composeTemplateType}
+      />
     </div>
   );
 }
