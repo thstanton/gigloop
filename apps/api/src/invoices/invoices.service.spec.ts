@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { InvoicesService } from './invoices.service';
 import { InvoicesRepository } from './invoices.repository';
 import { MailService } from '../mail/mail.service';
@@ -44,7 +44,7 @@ const mockMail = { send: jest.fn() } as unknown as MailService;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockDocuments = { storeInvoicePdf: jest.fn() } as any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const mockPdf = { generateInvoicePdf: jest.fn() } as any;
+const mockPdf = { generateInvoicePdf: jest.fn(), buildInvoicePdfData: jest.fn(), generateFromData: jest.fn() } as any;
 
 const invoice = { id: 'i1', bookingId: 'b1', userId: 'u1', status: 'DRAFT' };
 const lineItem = { id: 'li1', invoiceId: 'i1', userId: 'u1' };
@@ -206,6 +206,107 @@ describe('InvoicesService', () => {
       repo.findLineItem.mockResolvedValue(null);
       await expect(service.deleteLineItem('u1', 'b1', 'i1', 'missing')).rejects.toThrow(NotFoundException);
       expect(repo.deleteLineItem).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('send', () => {
+    const sentInvoice = { ...invoice, status: 'SENT', invoiceNumber: 'INV-2026-001', issueDate: new Date('2026-05-26'), dueDate: new Date('2026-06-09') };
+    const pdfData = { invoiceNumber: 'INV-2026-001' };
+    const pdfBuffer = Buffer.from('pdf');
+    const dto = {
+      issueDate: '2026-05-26',
+      dueDate: '2026-06-09',
+      to: 'client@example.com',
+      contactId: 'c1',
+      subject: 'Invoice INV-2026-001',
+      body: '<p>Please find attached</p>',
+    };
+
+    beforeEach(() => {
+      repo.findOne.mockResolvedValue(invoice);
+      repo.assignAndMarkSent.mockResolvedValue(sentInvoice);
+      mockPdf.buildInvoicePdfData.mockResolvedValue(pdfData);
+      mockPdf.generateFromData.mockResolvedValue(pdfBuffer);
+      mockDocuments.storeInvoicePdf.mockResolvedValue({});
+      (mockMail.send as jest.Mock).mockResolvedValue(undefined);
+    });
+
+    it('throws NotFoundException when invoice is not found', async () => {
+      repo.findOne.mockResolvedValue(null);
+      await expect(service.send('u1', 'b1', 'missing', dto)).rejects.toThrow(NotFoundException);
+      expect(repo.assignAndMarkSent).not.toHaveBeenCalled();
+    });
+
+    it('throws BadRequestException when invoice is not DRAFT', async () => {
+      repo.findOne.mockResolvedValue({ ...invoice, status: 'SENT' });
+      await expect(service.send('u1', 'b1', 'i1', dto)).rejects.toThrow(BadRequestException);
+      expect(repo.assignAndMarkSent).not.toHaveBeenCalled();
+    });
+
+    it('calls assignAndMarkSent with parsed issueDate and dueDate', async () => {
+      await service.send('u1', 'b1', 'i1', dto);
+      expect(repo.assignAndMarkSent).toHaveBeenCalledWith('u1', 'i1', new Date('2026-05-26'), new Date('2026-06-09'));
+    });
+
+    it('calls assignAndMarkSent with null dueDate when not provided', async () => {
+      await service.send('u1', 'b1', 'i1', { ...dto, dueDate: undefined });
+      expect(repo.assignAndMarkSent).toHaveBeenCalledWith('u1', 'i1', new Date('2026-05-26'), null);
+    });
+
+    it('calls buildInvoicePdfData with the sentInvoice to avoid a redundant DB fetch', async () => {
+      await service.send('u1', 'b1', 'i1', dto);
+      expect(mockPdf.buildInvoicePdfData).toHaveBeenCalledWith('u1', sentInvoice.id, sentInvoice);
+    });
+
+    it('calls storeInvoicePdf with the generated buffer', async () => {
+      await service.send('u1', 'b1', 'i1', dto);
+      expect(mockDocuments.storeInvoicePdf).toHaveBeenCalledWith('u1', 'b1', sentInvoice.id, pdfBuffer);
+    });
+
+    it('sends email with PDF attachment named after the invoice number', async () => {
+      await service.send('u1', 'b1', 'i1', dto);
+      expect(mockMail.send).toHaveBeenCalledWith(expect.objectContaining({
+        attachments: [{ filename: 'INV-2026-001.pdf', content: pdfBuffer }],
+        to: dto.to,
+        subject: dto.subject,
+        body: dto.body,
+      }));
+    });
+  });
+
+  describe('markSent', () => {
+    const sentInvoice = { ...invoice, status: 'SENT', invoiceNumber: 'INV-2026-001' };
+    const dto = { issueDate: '2026-05-26', dueDate: '2026-06-09' };
+
+    beforeEach(() => {
+      repo.findOne.mockResolvedValue(invoice);
+      repo.assignAndMarkSent.mockResolvedValue(sentInvoice);
+    });
+
+    it('throws NotFoundException when invoice is not found', async () => {
+      repo.findOne.mockResolvedValue(null);
+      await expect(service.markSent('u1', 'b1', 'missing', dto)).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws BadRequestException when invoice is not DRAFT', async () => {
+      repo.findOne.mockResolvedValue({ ...invoice, status: 'SENT' });
+      await expect(service.markSent('u1', 'b1', 'i1', dto)).rejects.toThrow(BadRequestException);
+      expect(repo.assignAndMarkSent).not.toHaveBeenCalled();
+    });
+
+    it('calls assignAndMarkSent with parsed issueDate and dueDate', async () => {
+      await service.markSent('u1', 'b1', 'i1', dto);
+      expect(repo.assignAndMarkSent).toHaveBeenCalledWith('u1', 'i1', new Date('2026-05-26'), new Date('2026-06-09'));
+    });
+
+    it('calls assignAndMarkSent with null dueDate when not provided', async () => {
+      await service.markSent('u1', 'b1', 'i1', { issueDate: '2026-05-26' });
+      expect(repo.assignAndMarkSent).toHaveBeenCalledWith('u1', 'i1', new Date('2026-05-26'), null);
+    });
+
+    it('returns the updated invoice', async () => {
+      const result = await service.markSent('u1', 'b1', 'i1', dto);
+      expect(result).toBe(sentInvoice);
     });
   });
 });

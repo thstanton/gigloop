@@ -57,7 +57,8 @@ export class InvoicesService {
 
     const sentInvoice = await this.repo.assignAndMarkSent(userId, id, issueDate, dueDate);
 
-    const pdfBuffer = await this.pdf.generateInvoicePdf(userId, sentInvoice.id);
+    const pdfData = await this.pdf.buildInvoicePdfData(userId, sentInvoice.id, sentInvoice);
+    const pdfBuffer = await this.pdf.generateFromData(pdfData);
     await this.documents.storeInvoicePdf(userId, bookingId, sentInvoice.id, pdfBuffer);
 
     const filename = `${sentInvoice.invoiceNumber ?? 'invoice'}.pdf`;

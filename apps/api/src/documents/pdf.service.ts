@@ -30,12 +30,29 @@ async function fetchAsDataUrl(url: string): Promise<string> {
   return `data:${contentType};base64,${buffer.toString('base64')}`;
 }
 
+// Minimal shape needed to build PDF data from an already-fetched invoice.
+// Accepts Prisma Decimal for amount (hence the any — Number() handles it).
+type PreloadedInvoice = {
+  invoiceNumber: string | null;
+  issueDate: Date | null;
+  dueDate: Date | null;
+  isDeposit: boolean;
+  bookingId: string;
+  billToContact: { name: string };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  lineItems: Array<{ description: string; amount: any; order: number }>;
+};
+
 @Injectable()
 export class PdfService {
   constructor(private prisma: PrismaService) {}
 
-  async buildInvoicePdfData(userId: string, invoiceId: string): Promise<InvoicePdfData> {
-    const invoice = await this.prisma.invoice.findFirst({
+  async buildInvoicePdfData(
+    userId: string,
+    invoiceId: string,
+    preloaded?: PreloadedInvoice,
+  ): Promise<InvoicePdfData> {
+    const invoice = preloaded ?? await this.prisma.invoice.findFirst({
       where: { id: invoiceId, userId },
       include: {
         lineItems: { orderBy: { order: 'asc' } },
@@ -92,17 +109,19 @@ export class PdfService {
     };
   }
 
-  async generateInvoicePdf(userId: string, invoiceId: string): Promise<Buffer> {
-    const data = await this.buildInvoicePdfData(userId, invoiceId);
-
+  async generateFromData(data: InvoicePdfData): Promise<Buffer> {
     // pdfmake's Node.js image loader only handles file paths and data URLs,
     // not remote HTTPS URLs. Fetch the logo and convert to a data URL first.
     if (data.logoUrl) {
       data.logoUrl = await fetchAsDataUrl(data.logoUrl);
     }
-
     const docDef = buildInvoiceDefinition(data);
     return pdfmake.createPdf(docDef).getBuffer() as Promise<Buffer>;
+  }
+
+  async generateInvoicePdf(userId: string, invoiceId: string): Promise<Buffer> {
+    const data = await this.buildInvoicePdfData(userId, invoiceId);
+    return this.generateFromData(data);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
