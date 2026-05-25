@@ -1,5 +1,5 @@
-import { Body, Controller, Get, Patch, Post, Req } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Delete, Get, HttpCode, Patch, Post, Req } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { UserProfileService } from './user-profile.service';
 import { PublicProfileService } from './public-profile.service';
 import { UpdateUserProfileDto } from './dto/update-user-profile.dto';
@@ -42,11 +42,38 @@ export class UserProfileController {
   }
 
   @ApiOperation({ summary: 'Get a presigned upload URL for the logo' })
+  @ApiResponse({ status: 200, schema: { example: { uploadUrl: 'https://...', publicUrl: 'https://...' } } })
   @Post('logo-upload-url')
   getLogoUploadUrl(
     @Req() req: AuthedRequest,
     @Body('contentType') contentType: string,
   ) {
     return this.publicProfileService.getLogoUploadUrl(req.userId, contentType);
+  }
+
+  @ApiOperation({ summary: 'Get a presigned upload URL for the musician photo' })
+  @ApiResponse({ status: 200, schema: { example: { uploadUrl: 'https://...', publicUrl: 'https://...' } } })
+  @Post('photo-upload-url')
+  getPhotoUploadUrl(
+    @Req() req: AuthedRequest,
+    @Body('contentType') contentType: string,
+  ) {
+    return this.publicProfileService.getPhotoUploadUrl(req.userId, contentType);
+  }
+
+  @ApiOperation({ summary: 'Delete the logo from storage and clear the logoUrl field' })
+  @ApiResponse({ status: 204 })
+  @Delete('logo')
+  @HttpCode(204)
+  deleteLogo(@Req() req: AuthedRequest) {
+    return this.publicProfileService.deleteLogo(req.userId);
+  }
+
+  @ApiOperation({ summary: 'Delete the photo from storage and clear the photo field' })
+  @ApiResponse({ status: 204 })
+  @Delete('photo')
+  @HttpCode(204)
+  deletePhoto(@Req() req: AuthedRequest) {
+    return this.publicProfileService.deletePhoto(req.userId);
   }
 }

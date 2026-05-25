@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { PublicProfileService } from './public-profile.service';
 import { PublicProfileRepository } from './public-profile.repository';
+import { StorageService } from '../storage/storage.service';
 
 type MockRepo = { upsertByUserId: jest.Mock; updateByUserId: jest.Mock };
 
@@ -8,13 +9,20 @@ function makeRepo(): MockRepo {
   return { upsertByUserId: jest.fn(), updateByUserId: jest.fn() };
 }
 
+const mockStorage = {
+  getPresignedUploadUrl: jest.fn(),
+  putObject: jest.fn(),
+  deleteObject: jest.fn(),
+  getPublicUrl: jest.fn((key: string) => `https://cdn.example.com/${key}`),
+} as unknown as StorageService;
+
 describe('PublicProfileService', () => {
   let service: PublicProfileService;
   let repo: MockRepo;
 
   beforeEach(() => {
     repo = makeRepo();
-    service = new PublicProfileService(repo as unknown as PublicProfileRepository);
+    service = new PublicProfileService(repo as unknown as PublicProfileRepository, mockStorage);
   });
 
   describe('update — brandColour validation', () => {
