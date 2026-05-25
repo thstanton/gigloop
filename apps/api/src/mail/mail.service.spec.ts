@@ -1,9 +1,7 @@
 import { NotFoundException } from '@nestjs/common';
 import { MailService, EmailContext } from './mail.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { CommunicationsService } from '../communications/communications.service';
 
-// Prevent Resend constructor from failing without an API key in tests
 jest.mock('resend', () => ({
   Resend: jest.fn().mockImplementation(() => ({
     emails: { send: jest.fn().mockResolvedValue({ id: 'email-id' }) },
@@ -14,11 +12,7 @@ const mockPrisma = {
   booking: { findFirst: jest.fn() },
   publicProfile: { findUnique: jest.fn() },
   invoice: { findFirst: jest.fn() },
-  template: { findFirst: jest.fn() },
-};
-
-const mockCommunications = {
-  create: jest.fn(),
+  communication: { create: jest.fn(), update: jest.fn() },
 };
 
 const booking = {
@@ -42,10 +36,7 @@ const publicProfile = {
 };
 
 function makeService(): MailService {
-  return new MailService(
-    mockPrisma as unknown as PrismaService,
-    mockCommunications as unknown as CommunicationsService,
-  );
+  return new MailService(mockPrisma as unknown as PrismaService);
 }
 
 describe('MailService', () => {
@@ -141,7 +132,7 @@ describe('MailService', () => {
         type: 'doc',
         content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Dear {{customerName}},' }] }],
       };
-      const html = service.renderTemplate(content, context);
+      const { html } = service.renderTemplate(content, context);
       expect(html).toBe('<p>Dear Jane Doe,</p>');
     });
 
@@ -150,41 +141,76 @@ describe('MailService', () => {
         type: 'doc',
         content: [{ type: 'paragraph', content: [{ type: 'text', text: '{{unknownVar}}' }] }],
       };
-      const html = service.renderTemplate(content, context);
+      const { html } = service.renderTemplate(content, context);
       expect(html).toBe('<p></p>');
+    });
+
+    it('returns missingVariables when a variable with a fallback is empty', () => {
+      const contextWithMissingDate: EmailContext = { ...context, bookingDate: '' };
+      const content = {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Event on {{bookingDate}}' }] }],
+      };
+      const { html, missingVariables } = service.renderTemplate(content, contextWithMissingDate);
+      expect(html).toBe('<p>Event on your event</p>');
+      expect(missingVariables).toContain('bookingDate');
+    });
+
+    it('does not report missingVariables for variables without a defined fallback', () => {
+      const contextWithNoFee: EmailContext = { ...context, bookingFee: '' };
+      const content = {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Fee: {{bookingFee}}' }] }],
+      };
+      const { missingVariables } = service.renderTemplate(content, contextWithNoFee);
+      expect(missingVariables).not.toContain('bookingFee');
     });
   });
 
   describe('send', () => {
-    const template = { id: 'tmpl1', content: { type: 'doc', content: [] } };
-    const context: EmailContext = {
-      customerName: 'Jane', bookingDate: '', venueName: '', bookingFee: '',
-      setsSchedule: '', musicianName: '', musicianEmail: '', portalLink: '',
-      issueDate: '', invoiceTotal: '', invoiceDueDate: '',
-    };
-    const options = {
+    const sendOptions = {
       userId: 'u1', bookingId: 'b1', contactId: 'ct1',
-      to: 'jane@example.com', subject: 'Your invoice', templateId: 'tmpl1', context,
+      to: 'jane@example.com', subject: 'Your invoice',
+      body: '<p>Dear Jane,</p>', templateId: 'tmpl1',
     };
 
-    it('throws NotFoundException when template is not found', async () => {
-      mockPrisma.template.findFirst.mockResolvedValue(null);
-      await expect(service.send(options)).rejects.toThrow(NotFoundException);
-      expect(mockCommunications.create).not.toHaveBeenCalled();
-    });
+    it('creates a PENDING communication, sends via Resend, then updates to SENT', async () => {
+      mockPrisma.communication.create.mockResolvedValue({ id: 'comm1' });
+      mockPrisma.communication.update.mockResolvedValue({});
+      await service.send(sendOptions);
 
-    it('sends via Resend and logs a communication on success', async () => {
-      mockPrisma.template.findFirst.mockResolvedValue(template);
-      mockCommunications.create.mockResolvedValue({});
-      await service.send(options);
+      expect(mockPrisma.communication.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status: 'PENDING', body: '<p>Dear Jane,</p>' }),
+        }),
+      );
 
       const resendInstance = (service as unknown as { resend: { emails: { send: jest.Mock } } }).resend;
       expect(resendInstance.emails.send).toHaveBeenCalledWith(
-        expect.objectContaining({ to: 'jane@example.com', subject: 'Your invoice' }),
+        expect.objectContaining({ to: 'jane@example.com', subject: 'Your invoice', html: '<p>Dear Jane,</p>' }),
       );
-      expect(mockCommunications.create).toHaveBeenCalledWith(
-        'u1', 'b1',
-        expect.objectContaining({ contactId: 'ct1', subject: 'Your invoice', templateId: 'tmpl1' }),
+
+      expect(mockPrisma.communication.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'comm1' },
+          data: expect.objectContaining({ status: 'SENT' }),
+        }),
+      );
+    });
+
+    it('updates communication to FAILED and rethrows when Resend throws', async () => {
+      mockPrisma.communication.create.mockResolvedValue({ id: 'comm1' });
+      mockPrisma.communication.update.mockResolvedValue({});
+      const resendInstance = (service as unknown as { resend: { emails: { send: jest.Mock } } }).resend;
+      resendInstance.emails.send.mockRejectedValueOnce(new Error('Resend error'));
+
+      await expect(service.send(sendOptions)).rejects.toThrow('Resend error');
+
+      expect(mockPrisma.communication.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'comm1' },
+          data: { status: 'FAILED' },
+        }),
       );
     });
   });

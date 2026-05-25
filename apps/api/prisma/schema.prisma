@@ -39,6 +39,12 @@ enum DocumentType {
   INVOICE
 }
 
+enum CommunicationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
 enum SongGenre {
   CONTEMPORARY
   CLASSICAL
@@ -247,11 +253,12 @@ model Communication {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  direction String @default("OUTBOUND")
-  channel   String @default("EMAIL")
+  direction String              @default("OUTBOUND")
+  channel   String              @default("EMAIL")
+  status    CommunicationStatus @default(SENT)
   subject   String
   body      String
-  sentAt    DateTime               @default(now())
+  sentAt    DateTime?
 
   bookingId String
   booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)

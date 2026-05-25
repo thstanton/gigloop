@@ -1,8 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Resend } from 'resend';
+import { CommunicationStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { CommunicationsService } from '../communications/communications.service';
 import { renderTiptap } from './tiptap.renderer';
+import { TEMPLATE_DEFAULT_SUBJECTS, VARIABLE_FALLBACKS } from '../templates/default-templates';
 
 export interface EmailContext {
   customerName: string;
@@ -18,14 +19,19 @@ export interface EmailContext {
   invoiceDueDate: string;
 }
 
+export interface RenderResult {
+  html: string;
+  missingVariables: string[];
+}
+
 export interface SendEmailOptions {
   userId: string;
   bookingId: string;
   contactId: string;
   to: string;
   subject: string;
-  templateId: string;
-  context: EmailContext;
+  body: string;
+  templateId?: string;
   attachments?: Array<{ filename: string; content: Buffer }>;
 }
 
@@ -33,10 +39,7 @@ export interface SendEmailOptions {
 export class MailService {
   private resend: Resend;
 
-  constructor(
-    private prisma: PrismaService,
-    private communications: CommunicationsService,
-  ) {
+  constructor(private prisma: PrismaService) {
     this.resend = new Resend(process.env.RESEND_API_KEY);
   }
 
@@ -58,7 +61,10 @@ export class MailService {
     const publicProfile = await this.prisma.publicProfile.findUnique({
       where: { userId },
     });
-    if (!publicProfile) throw new NotFoundException('Public profile not found — complete your profile before sending emails');
+    if (!publicProfile)
+      throw new NotFoundException(
+        'Public profile not found — complete your profile before sending emails',
+      );
 
     let issueDate = '';
     let invoiceTotal = '';
@@ -95,11 +101,11 @@ export class MailService {
 
     return {
       customerName: booking.customer.name,
-      bookingDate: booking.date.toISOString().split('T')[0],
+      bookingDate: booking.date ? booking.date.toISOString().split('T')[0] : '',
       venueName: booking.venue?.name ?? '',
       bookingFee: booking.fee != null ? Number(booking.fee).toFixed(2) : '',
       setsSchedule,
-      musicianName: publicProfile.displayName ?? publicProfile.businessName,
+      musicianName: publicProfile.displayName ?? publicProfile.businessName ?? '',
       musicianEmail: publicProfile.email ?? '',
       portalLink: `${process.env.APP_BASE_URL}/booking/${booking.portalToken}`,
       issueDate,
@@ -108,40 +114,78 @@ export class MailService {
     };
   }
 
-  renderTemplate(content: unknown, context: EmailContext): string {
+  renderTemplate(content: unknown, context: EmailContext): RenderResult {
     const html = renderTiptap(content);
-    return html.replace(/\{\{(\w+)\}\}/g, (_, key) => {
+    const missingVariables: string[] = [];
+
+    const rendered = html.replace(/\{\{(\w+)\}\}/g, (_, key) => {
       const value = context[key as keyof EmailContext];
-      return value ?? '';
+      if (value) return value;
+      if (key in VARIABLE_FALLBACKS) {
+        missingVariables.push(key);
+        return VARIABLE_FALLBACKS[key]!;
+      }
+      return '';
     });
+
+    return { html: rendered, missingVariables };
+  }
+
+  renderSubject(builtInType: string | null, context: EmailContext): { subject: string; missingVariables: string[] } {
+    const template = (builtInType && TEMPLATE_DEFAULT_SUBJECTS[builtInType]) ?? '';
+    const missingVariables: string[] = [];
+
+    const subject = template.replace(/\{\{(\w+)\}\}/g, (_, key) => {
+      const value = context[key as keyof EmailContext];
+      if (value) return value;
+      if (key in VARIABLE_FALLBACKS) {
+        missingVariables.push(key);
+        return VARIABLE_FALLBACKS[key]!;
+      }
+      return '';
+    });
+
+    return { subject, missingVariables };
   }
 
   async send(options: SendEmailOptions): Promise<void> {
-    const { userId, bookingId, contactId, to, subject, templateId, context, attachments } = options;
+    const { userId, bookingId, contactId, to, subject, body, templateId, attachments } = options;
 
-    const template = await this.prisma.template.findFirst({
-      where: { id: templateId, userId },
-    });
-    if (!template) throw new NotFoundException('Template not found');
-
-    const html = this.renderTemplate(template.content, context);
-
-    await this.resend.emails.send({
-      from: process.env.RESEND_FROM ?? 'noreply@gigman.com',
-      to,
-      subject,
-      html,
-      attachments: attachments?.map((a) => ({
-        filename: a.filename,
-        content: a.content,
-      })),
+    // Create the communication record as PENDING before attempting to send
+    const communication = await this.prisma.communication.create({
+      data: {
+        userId,
+        bookingId,
+        contactId,
+        subject,
+        body,
+        status: CommunicationStatus.PENDING,
+        ...(templateId ? { templateId } : {}),
+      },
     });
 
-    await this.communications.create(userId, bookingId, {
-      contactId,
-      subject,
-      body: html,
-      templateId,
-    });
+    try {
+      await this.resend.emails.send({
+        from: process.env.RESEND_FROM ?? 'noreply@gigman.com',
+        to,
+        subject,
+        html: body,
+        attachments: attachments?.map((a) => ({
+          filename: a.filename,
+          content: a.content,
+        })),
+      });
+
+      await this.prisma.communication.update({
+        where: { id: communication.id },
+        data: { status: CommunicationStatus.SENT, sentAt: new Date() },
+      });
+    } catch (err) {
+      await this.prisma.communication.update({
+        where: { id: communication.id },
+        data: { status: CommunicationStatus.FAILED },
+      });
+      throw err;
+    }
   }
 }

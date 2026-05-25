@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { CommunicationStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCommunicationDto } from './dto/create-communication.dto';
 
@@ -15,7 +16,14 @@ export class CommunicationsRepository {
     return this.prisma.communication.findMany({
       where: { userId, bookingId },
       include,
-      orderBy: { sentAt: 'desc' },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  findTemplate(userId: string, templateId: string) {
+    return this.prisma.template.findFirst({
+      where: { id: templateId, userId },
+      select: { id: true, name: true, builtInType: true, content: true },
     });
   }
 
@@ -41,8 +49,9 @@ export class CommunicationsRepository {
         contactId: dto.contactId,
         subject: dto.subject,
         body: dto.body,
+        status: CommunicationStatus.SENT,
+        sentAt: dto.sentAt ? new Date(dto.sentAt) : new Date(),
         ...(dto.templateId !== undefined ? { templateId: dto.templateId } : {}),
-        ...(dto.sentAt !== undefined ? { sentAt: new Date(dto.sentAt) } : {}),
       },
       include,
     });

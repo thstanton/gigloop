@@ -4,8 +4,9 @@ export const BUILT_IN_EMAIL_TYPES: BuiltInTemplateType[] = [
   'quote',
   'confirmation',
   'contract_cover',
-  'contract_and_invoice_cover',
-  'invoice_cover',
+  'contract_and_deposit_cover',
+  'deposit_invoice_cover',
+  'balance_invoice_cover',
   'contract_received',
   'deposit_received',
   'music_form_invite',
@@ -18,17 +19,18 @@ export const BUILT_IN_DOCUMENT_TYPES: BuiltInTemplateType[] = [
 ];
 
 export const TEMPLATE_DISPLAY: Record<BuiltInTemplateType, { name: string; description: string }> = {
-  quote:                       { name: 'Quote',                    description: 'Sent when providing a price quote for a new enquiry' },
-  confirmation:                { name: 'Booking confirmation',     description: 'Sent to confirm an accepted booking' },
-  contract_cover:              { name: 'Contract email',           description: 'Email body when sending only the contract link' },
-  contract_and_invoice_cover:  { name: 'Contract & deposit email', description: 'Email body when sending the contract link with a deposit invoice' },
-  invoice_cover:               { name: 'Invoice email',            description: 'Email body when sending a standalone invoice' },
-  contract_received:           { name: 'Contract received',        description: 'Confirmation sent when the client signs the contract' },
-  deposit_received:            { name: 'Deposit received',         description: 'Confirmation sent when the deposit payment arrives' },
-  music_form_invite:           { name: 'Music form invitation',    description: 'Sent when inviting the client to fill in their music preferences' },
-  thank_you:                   { name: 'Thank you',                description: 'Sent after the performance to thank the client' },
-  contract:                    { name: 'Contract',                 description: 'Performance agreement sent to clients for signing' },
-  invoice:                     { name: 'Invoice',                  description: 'Invoice layout sent to clients for payment' },
+  quote:                        { name: 'Quote',                    description: 'Sent when providing a price quote for a new enquiry' },
+  confirmation:                 { name: 'Booking confirmation',     description: 'Sent to confirm an accepted booking' },
+  contract_cover:               { name: 'Contract email',           description: 'Email body when sending only the contract link' },
+  contract_and_deposit_cover:   { name: 'Contract & deposit email', description: 'Email body when sending the contract link with a deposit invoice' },
+  deposit_invoice_cover:        { name: 'Deposit invoice email',    description: 'Email body when sending the deposit invoice' },
+  balance_invoice_cover:        { name: 'Balance invoice email',    description: 'Email body when sending the final balance invoice' },
+  contract_received:            { name: 'Contract received',        description: 'Confirmation sent when the client signs the contract' },
+  deposit_received:             { name: 'Deposit received',         description: 'Confirmation sent when the deposit payment arrives' },
+  music_form_invite:            { name: 'Music form invitation',    description: 'Sent when inviting the client to fill in their music preferences' },
+  thank_you:                    { name: 'Thank you',                description: 'Sent after the performance to thank the client' },
+  contract:                     { name: 'Contract',                 description: 'Performance agreement sent to clients for signing' },
+  invoice:                      { name: 'Invoice',                  description: 'Invoice layout sent to clients for payment' },
 };
 
 // ─── Variable definitions ─────────────────────────────────────────────────────
@@ -53,6 +55,22 @@ export const ALL_VARIABLES: TemplateVariable[] = [
   { name: 'invoiceDueDate', label: 'Invoice due date' },
 ];
 
+// Human-readable labels keyed by variable name — used to render specific missing-variable warnings.
+export const VAR_LABELS: Record<string, string> = {
+  customerName:   'Customer name',
+  bookingDate:    'Booking date',
+  venueName:      'Venue name',
+  bookingFee:     'Booking fee',
+  setsSchedule:   'Sets schedule',
+  musicianName:   'Musician name',
+  musicianEmail:  'Musician email',
+  portalLink:     'Portal link',
+  invoiceNumber:  'Invoice number',
+  issueDate:      'Issue date',
+  invoiceTotal:   'Invoice total',
+  invoiceDueDate: 'Invoice due date',
+};
+
 const VAR_NAMES = {
   customerName:   { name: 'customerName',   label: 'Customer name'    },
   bookingDate:    { name: 'bookingDate',     label: 'Booking date'     },
@@ -73,15 +91,16 @@ const { customerName, bookingDate, venueName, bookingFee, setsSchedule,
         invoiceNumber, issueDate, invoiceTotal, invoiceDueDate } = VAR_NAMES;
 
 export const TEMPLATE_VARIABLES: Record<BuiltInTemplateType, TemplateVariable[]> = {
-  quote:                      [customerName, bookingDate, venueName, bookingFee, portalLink, musicianName, musicianEmail],
-  confirmation:               [customerName, bookingDate, venueName, bookingFee, setsSchedule, portalLink, musicianName, musicianEmail],
-  contract_cover:             [customerName, bookingDate, venueName, portalLink, musicianName, musicianEmail],
-  contract_and_invoice_cover: [customerName, bookingDate, venueName, portalLink, invoiceTotal, invoiceDueDate, musicianName, musicianEmail],
-  invoice_cover:              [customerName, bookingDate, invoiceTotal, invoiceDueDate, portalLink, musicianName, musicianEmail],
-  contract_received:          [customerName, bookingDate, portalLink, musicianName, musicianEmail],
-  deposit_received:           [customerName, bookingDate, portalLink, musicianName, musicianEmail],
-  music_form_invite:          [customerName, bookingDate, venueName, portalLink, musicianName, musicianEmail],
-  thank_you:                  [customerName, bookingDate, portalLink, musicianName, musicianEmail],
-  contract:                   [customerName, bookingDate, venueName, bookingFee, setsSchedule, musicianName, musicianEmail],
-  invoice:                    [musicianName, musicianEmail, customerName, invoiceNumber, issueDate, invoiceDueDate, invoiceTotal],
+  quote:                       [customerName, bookingDate, venueName, bookingFee, portalLink, musicianName, musicianEmail],
+  confirmation:                [customerName, bookingDate, venueName, bookingFee, setsSchedule, portalLink, musicianName, musicianEmail],
+  contract_cover:              [customerName, bookingDate, venueName, portalLink, musicianName, musicianEmail],
+  contract_and_deposit_cover:  [customerName, bookingDate, venueName, portalLink, invoiceTotal, invoiceDueDate, musicianName, musicianEmail],
+  deposit_invoice_cover:       [customerName, bookingDate, invoiceTotal, invoiceDueDate, portalLink, musicianName, musicianEmail],
+  balance_invoice_cover:       [customerName, bookingDate, invoiceTotal, invoiceDueDate, portalLink, musicianName, musicianEmail],
+  contract_received:           [customerName, bookingDate, portalLink, musicianName, musicianEmail],
+  deposit_received:            [customerName, bookingDate, portalLink, musicianName, musicianEmail],
+  music_form_invite:           [customerName, bookingDate, venueName, portalLink, musicianName, musicianEmail],
+  thank_you:                   [customerName, bookingDate, portalLink, musicianName, musicianEmail],
+  contract:                    [customerName, bookingDate, venueName, bookingFee, setsSchedule, musicianName, musicianEmail],
+  invoice:                     [musicianName, musicianEmail, customerName, invoiceNumber, issueDate, invoiceDueDate, invoiceTotal],
 };

@@ -271,15 +271,18 @@ export interface UpdateSongInput {
 // Communications
 // ─────────────────────────────────────────
 
+export type CommunicationStatus = 'PENDING' | 'SENT' | 'FAILED';
+
 export interface Communication {
   id: string;
   createdAt: string;
   updatedAt: string;
   direction: 'OUTBOUND';
   channel: 'EMAIL';
+  status: CommunicationStatus;
   subject: string;
   body: string;
-  sentAt: string;
+  sentAt: string | null;
   bookingId: string;
   contactId: string;
   contact: Contact;
@@ -303,8 +306,9 @@ export type BuiltInTemplateType =
   | 'quote'
   | 'confirmation'
   | 'contract_cover'
-  | 'contract_and_invoice_cover'
-  | 'invoice_cover'
+  | 'contract_and_deposit_cover'
+  | 'deposit_invoice_cover'
+  | 'balance_invoice_cover'
   | 'music_form_invite'
   | 'thank_you'
   | 'contract_received'

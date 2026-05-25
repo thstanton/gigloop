@@ -62,7 +62,7 @@ A financial document issued to a Contact for a Booking. A Booking can have multi
 
 **Status:** `Draft | Sent | Paid` (stored). *Overdue* is derived — not a stored state — inferred when status is `Sent`, a due date is set, and that date has passed.
 
-Two ways to move to `Sent`: (1) **Send** — app emails the invoice PDF via Resend using the `invoice_cover` template and atomically marks it Sent; (2) **Mark as sent** — marks it Sent without sending an email, for cases where the invoice was communicated outside the app.
+Two ways to move to `Sent`: (1) **Send** — app emails the invoice PDF via Resend using the appropriate invoice cover template (`deposit_invoice_cover` or `balance_invoice_cover`) and atomically marks it Sent; (2) **Mark as sent** — marks it Sent without sending an email, for cases where the invoice was communicated outside the app.
 
 **Fields include:** issueDate, dueDate (optional), status, isDeposit (boolean, default false — at most one deposit invoice per booking), and a reference to which Contact it is addressed to (defaults to the Booking's customer but may differ). When `isDeposit` is true and the invoice is marked Paid, `Booking.depositReceivedAt` is automatically set (if `depositTrackingMode` resolves to `INVOICE`).
 
@@ -74,15 +74,23 @@ A reusable content block stored as Tiptap JSON. Decoupled from rendering — the
 
 **Fields:** name, content (Tiptap JSON), builtInType (optional enum — only set for system-provided templates)
 
-**Built-in types:** `quote | confirmation | contract_cover | contract_and_invoice_cover | invoice_cover | music_form_invite | thank_you | contract`
+**Built-in email types:** `quote | confirmation | contract_cover | contract_and_deposit_cover | deposit_invoice_cover | balance_invoice_cover | contract_received | deposit_received | music_form_invite | thank_you`
 
-Seven of these are **email templates** — they produce the body of an outbound email. The eighth (`contract`) is a **contract document** — it produces the content of a signable PDF page on the [[Portal]], not an email body. The contract template is managed separately from the email templates; its editing UI is deferred to P2.
+**Built-in document types:** `contract | invoice`
 
-- `contract_cover` — email body when sending only the contract portal link
-- `contract_and_invoice_cover` — email body when sending the contract portal link + a deposit invoice PDF attachment (the common case for new bookings)
-- `invoice_cover` — email body when sending a standalone invoice PDF
+Email templates produce the body of an outbound email. Document templates (`contract`, `invoice`) produce PDF documents — the contract is signed on the [[Portal]]; the invoice is generated at send time.
 
-The template type determines what gets attached — the musician picks the template, not individual attachments.
+The template type encodes what gets attached — the musician picks the template, not individual attachments:
+
+| Template | Portal link | Attachment |
+|---|---|---|
+| `contract_cover` | ✓ | none |
+| `contract_and_deposit_cover` | ✓ | deposit [[Invoice]] PDF |
+| `deposit_invoice_cover` | — | deposit [[Invoice]] PDF |
+| `balance_invoice_cover` | — | balance [[Invoice]] PDF |
+| all others | — | none |
+
+`contract_and_deposit_cover` is the common first-contact flow: send the contract link and the deposit invoice together. `deposit_invoice_cover` and `balance_invoice_cover` are for sending invoices independently. The distinction between deposit and balance is encoded in the template type rather than a runtime selection — this prevents accidentally sending the wrong invoice.
 
 The `quote` template is optional — in current practice quotes are sent externally before a booking is created in the app. It becomes more useful once P2 email ingestion allows bookings to be created at the enquiry stage.
 
@@ -95,7 +103,13 @@ Available variables: `{{customerName}}`, `{{bookingDate}}`, `{{venueName}}`, `{{
 ### Communication
 A log entry for a communication associated with a Booking. For MVP: outbound only (sent emails). Modelled generically to accommodate inbound messages (email ingestion) in a future release without schema changes.
 
-**Fields:** direction (`OUTBOUND` — MVP only), channel (`EMAIL`), contactId, sentAt, subject, body (rendered HTML), templateId (FK — all outbound emails in MVP are template-based; freeform email is not supported).
+**Fields:** direction (`OUTBOUND` — MVP only), channel (`EMAIL`), contactId, sentAt (nullable — set only when status is `SENT`), subject, body (rendered HTML), templateId (FK — nullable; records which template seeded the draft, but the body field is authoritative — it stores the exact HTML that was sent, which may have been edited by the musician after template rendering), status (`PENDING | SENT | FAILED`).
+
+**Status lifecycle:** a Communication record is created as `PENDING` before the Resend call. On success it transitions to `SENT` and `sentAt` is set. On failure it transitions to `FAILED` and `sentAt` remains null. The `PENDING` state is added now in anticipation of P2 batch sending, where records will be created as `PENDING` and updated asynchronously by a worker. See ADR-0007.
+
+**Separation of concerns:** rendering and sending are distinct operations. The render step (template → substituted HTML) is performed before the send step and is independent of it. The send endpoint receives final HTML and does not re-render from a template. This preserves the musician's edits and correctly reflects what was actually sent in the Communication record.
+
+**Render endpoint:** `GET /bookings/:bookingId/communications/render?templateId=X&invoiceId=Y` returns `{ subject: string, body: string, missingVariables: string[] }`. The subject is derived from a per-template default (with variable substitution and per-variable fallbacks for null values). `missingVariables` lists the keys of variables that fell back to a default — the compose sheet surfaces these specifically so the musician can fix the booking details before sending.
 
 ### PublicProfile
 The public, portal-visible half of the musician's settings (one per `userId`). Safe to return to unauthenticated portal clients — contains no sensitive data. See ADR-0002.
@@ -143,20 +157,23 @@ A computed, context-sensitive list of actions for a [[Booking]]. Not a stored en
 
 **Items (in order):** Send quote, Send contract/deposit email, Contract signed, Deposit received, Send music form invite, Song requests received, Send thank you.
 
-Each item has one of three states:
+Each item has one of four states:
 - **Done** — completed; shown with a tick and muted text
 - **Outstanding** — not yet done and still applicable; shown with an empty circle
+- **Failed** — a send was attempted but the most recent relevant Communication has `status = FAILED`; shown with a warning indicator and "Last send failed" message. Takes priority over Outstanding.
 - **Irrelevant** — not done but no longer applicable; hidden entirely
 
-| Item | Done when | Irrelevant when |
-|---|---|---|
-| Send quote | `quote` [[Communication]] exists | status ≥ CONFIRMED |
-| Send contract/deposit email | `contract_cover` or `contract_and_invoice_cover` Communication exists | `contractSignedAt` set AND (`depositReceivedAt` set OR deposit tracking resolves to NONE) |
-| Contract signed | `contractSignedAt` set | status is ENQUIRY OR status ≥ SETTLED |
-| Deposit received | `depositReceivedAt` set | deposit tracking resolves to NONE OR status is ENQUIRY |
-| Send music form invite | `music_form_invite` Communication exists | no [[MusicFormConfig]] on booking OR status is ENQUIRY |
-| Song requests received | [[MusicFormResponse]] exists | no MusicFormConfig OR no `music_form_invite` Communication exists |
-| Send thank you | `thank_you` Communication exists | today is before booking date |
+A Communication only counts as "Done" if `status = SENT`. `PENDING` and `FAILED` records do not satisfy the Done condition. "Most recent attempt" is used for Failed — if a retry succeeds, the item reverts to Done.
+
+| Item | Done when | Failed when | Irrelevant when |
+|---|---|---|---|
+| Send quote | `quote` [[Communication]] with status SENT exists | most recent `quote` Communication is FAILED | status ≥ CONFIRMED |
+| Send contract/deposit email | `contract_cover` or `contract_and_deposit_cover` Communication with status SENT exists | most recent such Communication is FAILED | `contractSignedAt` set AND (`depositReceivedAt` set OR deposit tracking resolves to NONE) |
+| Contract signed | `contractSignedAt` set | — | status is ENQUIRY OR status ≥ SETTLED |
+| Deposit received | `depositReceivedAt` set | — | deposit tracking resolves to NONE OR status is ENQUIRY |
+| Send music form invite | `music_form_invite` Communication with status SENT exists | most recent `music_form_invite` Communication is FAILED | no [[MusicFormConfig]] on booking OR status is ENQUIRY |
+| Song requests received | [[MusicFormResponse]] exists | — | no MusicFormConfig OR no `music_form_invite` Communication with status SENT exists |
+| Send thank you | `thank_you` Communication with status SENT exists | most recent `thank_you` Communication is FAILED | today is before booking date |
 
 The checklist is hidden entirely for CANCELLED bookings.
 

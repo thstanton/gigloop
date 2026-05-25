@@ -1,9 +1,10 @@
-import { Body, Controller, Get, HttpCode, Param, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, NotFoundException, Param, Post, Query, Req } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { CommunicationsService } from './communications.service';
 import { MailService } from '../mail/mail.service';
 import { CreateCommunicationDto } from './dto/create-communication.dto';
 import { SendEmailDto } from './dto/send-email.dto';
+import { RenderEmailQueryDto } from './dto/render-email-query.dto';
 import type { Request } from 'express';
 
 type AuthedRequest = Request & { userId: string };
@@ -26,6 +27,37 @@ export class CommunicationsController {
     return this.service.findAll(req.userId, bookingId);
   }
 
+  @ApiOperation({ summary: 'Render a template with booking context — returns subject and body for the compose sheet' })
+  @ApiResponse({
+    status: 200,
+    description: 'Rendered subject and body with list of variables that fell back to defaults',
+    schema: {
+      properties: {
+        subject: { type: 'string' },
+        body: { type: 'string' },
+        missingVariables: { type: 'array', items: { type: 'string' } },
+      },
+    },
+  })
+  @Get('render')
+  async render(
+    @Req() req: AuthedRequest,
+    @Param('bookingId') bookingId: string,
+    @Query() query: RenderEmailQueryDto,
+  ) {
+    const template = await this.service.findTemplate(req.userId, query.templateId);
+    if (!template) throw new NotFoundException('Template not found');
+
+    const context = await this.mail.buildContext(req.userId, bookingId, query.invoiceId);
+
+    const { html, missingVariables: bodyMissing } = this.mail.renderTemplate(template.content, context);
+    const { subject, missingVariables: subjectMissing } = this.mail.renderSubject(template.builtInType, context);
+
+    const missingVariables = [...new Set([...subjectMissing, ...bodyMissing])];
+
+    return { subject, body: html, missingVariables };
+  }
+
   @ApiOperation({ summary: 'Get a communication by ID' })
   @Get(':id')
   findOne(
@@ -46,9 +78,9 @@ export class CommunicationsController {
     return this.service.create(req.userId, bookingId, dto);
   }
 
-  @ApiOperation({ summary: 'Send an email for a booking using a template' })
+  @ApiOperation({ summary: 'Send an email for a booking' })
   @ApiResponse({ status: 204, description: 'Email sent and communication logged' })
-  @ApiResponse({ status: 404, description: 'Booking, template, or public profile not found' })
+  @ApiResponse({ status: 404, description: 'Booking or public profile not found' })
   @Post('send')
   @HttpCode(204)
   async send(
@@ -56,15 +88,14 @@ export class CommunicationsController {
     @Param('bookingId') bookingId: string,
     @Body() dto: SendEmailDto,
   ) {
-    const context = await this.mail.buildContext(req.userId, bookingId, dto.invoiceId);
     await this.mail.send({
       userId: req.userId,
       bookingId,
       contactId: dto.contactId,
       to: dto.to,
       subject: dto.subject,
+      body: dto.body,
       templateId: dto.templateId,
-      context,
     });
   }
 }

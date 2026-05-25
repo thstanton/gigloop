@@ -2,14 +2,36 @@ export type BuiltInTemplateType =
   | 'quote'
   | 'confirmation'
   | 'contract_cover'
-  | 'contract_and_invoice_cover'
-  | 'invoice_cover'
+  | 'contract_and_deposit_cover'
+  | 'deposit_invoice_cover'
+  | 'balance_invoice_cover'
   | 'music_form_invite'
   | 'thank_you'
   | 'contract_received'
   | 'deposit_received'
   | 'contract'
   | 'invoice';
+
+export const TEMPLATE_DEFAULT_SUBJECTS: Record<string, string> = {
+  quote: 'Your quote from {{musicianName}}',
+  confirmation: 'Booking confirmation — {{bookingDate}}',
+  contract_cover: 'Your contract — {{bookingDate}}',
+  contract_and_deposit_cover: 'Your contract and deposit invoice — {{bookingDate}}',
+  deposit_invoice_cover: 'Your deposit invoice — {{bookingDate}}',
+  balance_invoice_cover: 'Your balance invoice — {{bookingDate}}',
+  contract_received: 'Contract received — thank you',
+  deposit_received: 'Deposit received — thank you',
+  music_form_invite: 'Your music request form — {{bookingDate}}',
+  thank_you: 'Thank you — it was a pleasure',
+};
+
+// Fallback display text used when a variable is null/empty during rendering.
+// Keys that appear here are tracked in missingVariables when the fallback is used.
+export const VARIABLE_FALLBACKS: Partial<Record<string, string>> = {
+  bookingDate: 'your event',
+  venueName: 'the venue',
+  customerName: 'your client',
+};
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -74,7 +96,7 @@ const DEFAULTS: Partial<Record<BuiltInTemplateType, ReturnType<typeof doc>>> = {
     p(v('musicianEmail', 'Musician email')),
   ),
 
-  contract_and_invoice_cover: doc(
+  contract_and_deposit_cover: doc(
     p(t('Dear '), v('customerName', 'Customer name'), t(',')),
     blank(),
     p(t('Thank you for confirming your booking for '), v('bookingDate', 'Booking date'), t('.')),
@@ -92,10 +114,25 @@ const DEFAULTS: Partial<Record<BuiltInTemplateType, ReturnType<typeof doc>>> = {
     p(v('musicianEmail', 'Musician email')),
   ),
 
-  invoice_cover: doc(
+  deposit_invoice_cover: doc(
     p(t('Dear '), v('customerName', 'Customer name'), t(',')),
     blank(),
-    p(t('Please find attached your invoice for the booking on '), v('bookingDate', 'Booking date'), t('.')),
+    p(t('Please find attached your deposit invoice for the booking on '), v('bookingDate', 'Booking date'), t('.')),
+    blank(),
+    p(t('Amount due: '), v('invoiceTotal', 'Invoice total')),
+    p(t('Due date: '), v('invoiceDueDate', 'Invoice due date')),
+    blank(),
+    p(t('Please don\'t hesitate to get in touch if you have any questions.')),
+    blank(),
+    p(t('Best wishes,')),
+    p(v('musicianName', 'Musician name')),
+    p(v('musicianEmail', 'Musician email')),
+  ),
+
+  balance_invoice_cover: doc(
+    p(t('Dear '), v('customerName', 'Customer name'), t(',')),
+    blank(),
+    p(t('Please find attached your final balance invoice for the booking on '), v('bookingDate', 'Booking date'), t('.')),
     blank(),
     p(t('Amount due: '), v('invoiceTotal', 'Invoice total')),
     p(t('Due date: '), v('invoiceDueDate', 'Invoice due date')),
@@ -164,8 +201,9 @@ export const BUILT_IN_EMAIL_TYPES: BuiltInTemplateType[] = [
   'quote',
   'confirmation',
   'contract_cover',
-  'contract_and_invoice_cover',
-  'invoice_cover',
+  'contract_and_deposit_cover',
+  'deposit_invoice_cover',
+  'balance_invoice_cover',
   'contract_received',
   'deposit_received',
   'music_form_invite',
@@ -252,8 +290,9 @@ export const BUILT_IN_NAMES: Record<BuiltInTemplateType, string> = {
   quote: 'Quote',
   confirmation: 'Booking confirmation',
   contract_cover: 'Contract email',
-  contract_and_invoice_cover: 'Contract & deposit email',
-  invoice_cover: 'Invoice email',
+  contract_and_deposit_cover: 'Contract & deposit email',
+  deposit_invoice_cover: 'Deposit invoice email',
+  balance_invoice_cover: 'Balance invoice email',
   contract_received: 'Contract received',
   deposit_received: 'Deposit received',
   music_form_invite: 'Music form invitation',

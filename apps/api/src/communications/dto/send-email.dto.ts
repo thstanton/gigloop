@@ -15,12 +15,13 @@ export class SendEmailDto {
   @IsNotEmpty()
   subject!: string;
 
-  @ApiProperty({ description: 'Template used to generate the email body' })
-  @IsUUID()
-  templateId!: string;
+  @ApiProperty({ description: 'Final rendered HTML body to send (produced by the render endpoint, optionally edited by the musician)' })
+  @IsString()
+  @IsNotEmpty()
+  body!: string;
 
-  @ApiPropertyOptional({ description: 'Invoice ID for invoice-specific variable substitution' })
+  @ApiPropertyOptional({ description: 'Template that seeded the body — recorded on the communication for reference only; no re-rendering occurs' })
   @IsOptional()
   @IsUUID()
-  invoiceId?: string;
+  templateId?: string;
 }

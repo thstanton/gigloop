@@ -21,4 +21,8 @@ export class CommunicationsService {
     if (!booking) throw new NotFoundException('Booking not found');
     return this.repo.create(userId, bookingId, dto);
   }
+
+  findTemplate(userId: string, templateId: string) {
+    return this.repo.findTemplate(userId, templateId);
+  }
 }
