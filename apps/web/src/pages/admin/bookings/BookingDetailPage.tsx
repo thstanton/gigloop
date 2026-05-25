@@ -749,7 +749,11 @@ export default function BookingDetailPage() {
                   >
                     <FileText size={14} className="flex-shrink-0 text-muted" />
                     <span>
-                      {doc.type === 'INVOICE' ? 'Invoice' : 'Contract'}
+                      {doc.type === 'CONTRACT'
+                        ? 'Contract'
+                        : invoices.find((i) => i.id === doc.invoiceId)?.isDeposit
+                          ? 'Deposit invoice'
+                          : 'Balance invoice'}
                     </span>
                     <span className="text-muted ml-auto text-xs">
                       {new Date(doc.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
