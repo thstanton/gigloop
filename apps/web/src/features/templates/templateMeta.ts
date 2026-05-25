@@ -15,7 +15,6 @@ export const BUILT_IN_EMAIL_TYPES: BuiltInTemplateType[] = [
 
 export const BUILT_IN_DOCUMENT_TYPES: BuiltInTemplateType[] = [
   'contract',
-  'invoice',
 ];
 
 export const TEMPLATE_DISPLAY: Record<BuiltInTemplateType, { name: string; description: string }> = {
@@ -30,7 +29,6 @@ export const TEMPLATE_DISPLAY: Record<BuiltInTemplateType, { name: string; descr
   music_form_invite:            { name: 'Music form invitation',    description: 'Sent when inviting the client to fill in their music preferences' },
   thank_you:                    { name: 'Thank you',                description: 'Sent after the performance to thank the client' },
   contract:                     { name: 'Contract',                 description: 'Performance agreement sent to clients for signing' },
-  invoice:                      { name: 'Invoice',                  description: 'Invoice layout sent to clients for payment' },
 };
 
 // ─── Variable definitions ─────────────────────────────────────────────────────
@@ -102,5 +100,4 @@ export const TEMPLATE_VARIABLES: Record<BuiltInTemplateType, TemplateVariable[]>
   music_form_invite:           [customerName, bookingDate, venueName, portalLink, musicianName, musicianEmail],
   thank_you:                   [customerName, bookingDate, portalLink, musicianName, musicianEmail],
   contract:                    [customerName, bookingDate, venueName, bookingFee, setsSchedule, musicianName, musicianEmail],
-  invoice:                     [musicianName, musicianEmail, customerName, invoiceNumber, issueDate, invoiceDueDate, invoiceTotal],
 };

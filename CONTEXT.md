@@ -74,21 +74,21 @@ Two ways to move to `Sent`: (1) **Send** — app emails the invoice via Resend u
 A freeform line on an [[Invoice]]: description (text) + amount (decimal). No fixed categories.
 
 ### Template
-A reusable content block stored as Tiptap JSON. Decoupled from rendering — the caller decides whether to render it as email HTML (via Resend) or as a PDF (via @react-pdf/renderer). Custom template creation is deferred to P2; MVP exposes only built-in templates.
+A reusable content block stored as Tiptap JSON. Used for email body rendering and contract display on the [[Portal]]. Custom template creation is deferred to P2; MVP exposes only built-in templates.
 
 **Fields:** name, content (Tiptap JSON), builtInType (optional enum — only set for system-provided templates)
 
 **Built-in email types:** `quote | confirmation | contract_cover | contract_and_deposit_cover | deposit_invoice_cover | balance_invoice_cover | contract_received | deposit_received | music_form_invite | thank_you`
 
-**Built-in document types:** `contract | invoice`
+**Built-in document types:** `contract`
 
-Email templates produce the body of an outbound email. Document templates (`contract`, `invoice`) produce PDF documents — the contract is signed on the [[Portal]]; the invoice is generated at send time.
+Email templates produce the body of an outbound email. The `contract` document template is rendered as HTML on the [[Portal]] for the client to read before signing — it is not used to generate a PDF. Invoice PDFs use a fixed layout with no template involvement — appearance customisation is deferred to P2.
 
 The template type encodes what gets attached — the musician picks the template, not individual attachments:
 
 | Template | Portal link | Attachment |
 |---|---|---|
-| `contract_cover` | ✓ | none |
+| `contract_cover` | ✓ | none — client reads contract as HTML on the portal |
 | `contract_and_deposit_cover` | ✓ | deposit [[Invoice]] PDF |
 | `deposit_invoice_cover` | — | deposit [[Invoice]] PDF |
 | `balance_invoice_cover` | — | balance [[Invoice]] PDF |
@@ -214,9 +214,11 @@ The client-facing public interface at `/booking/:token`. Bypasses Clerk auth —
 No payment functionality on the portal for MVP.
 
 ### Document
-A generated PDF stored in Cloudflare R2, associated with a Booking. Two types for MVP: **Contract** and **Invoice**. Stored so the musician has a record of what was sent.
+A generated PDF stored in Cloudflare R2, associated with a Booking. Two types: **Invoice** (MVP) and **SignedContract** (P2, portal feature).
 
-The Contract is generated from a user-editable template (Tiptap JSON, same mechanism as [[Template]]). The client signs it via the [[Portal]] — a drawn or typed signature is captured on a canvas, embedded into a regenerated PDF, and the signed version replaces the original in R2. See ADR-0001.
+**Invoice PDF:** generated at invoice send time (`POST /invoices/:id/send`), stored in R2, and attached to the outbound email. Uses a fixed `@react-pdf/renderer` layout with Tiptap-JSON-driven content sections (variable substitution + line items table). Balance invoices include a deposit deduction section (subtotal, less deposit, balance due) when a deposit [[Invoice]] exists on the booking.
+
+**Signed contract PDF:** generated only after the client signs via the [[Portal]] — a drawn or typed signature is captured on a canvas, embedded into a PDF, and stored in R2. No unsigned contract PDF is ever generated or stored. The [[Portal]] renders the contract content as HTML (from the Tiptap template) for the client to read before signing. See ADR-0001.
 
 ### Contact Roles (on a Booking)
 A Booking has up to three Contact relations, each a separate FK:

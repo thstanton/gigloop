@@ -8,7 +8,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@clerk/react';
 import {
   Bold, Italic, Underline as UnderlineIcon, Link as LinkIcon,
-  List, ListOrdered, ChevronLeft, ChevronDown, Heading2, Heading3, Table,
+  List, ListOrdered, ChevronLeft, ChevronDown, Heading2, Heading3,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -20,7 +20,6 @@ import {
 import { useTemplate } from '@/lib/hooks/useTemplate';
 import { apiGet, apiPatch, apiPost } from '@/lib/api';
 import { VariableNode } from '@/features/templates/VariableNode';
-import { LineItemsNode } from '@/features/templates/LineItemsNode';
 import {
   TEMPLATE_DISPLAY,
   TEMPLATE_VARIABLES,
@@ -77,12 +76,10 @@ function EditorToolbar({
   editor,
   variables,
   isDocument = false,
-  isInvoice = false,
 }: {
   editor: ReturnType<typeof useEditor>;
   variables: { name: string; label: string }[];
   isDocument?: boolean;
-  isInvoice?: boolean;
 }) {
   if (!editor) return null;
 
@@ -171,16 +168,6 @@ function EditorToolbar({
         </>
       )}
 
-      {isInvoice && (
-        <>
-          <div className="w-px h-4 bg-border mx-1" />
-          <ToolbarButton
-            onClick={() => editor.chain().focus().insertContent({ type: 'lineItems' }).run()}
-          >
-            <Table size={14} />
-          </ToolbarButton>
-        </>
-      )}
     </div>
   );
 }
@@ -199,7 +186,6 @@ function TemplateEditor({ template }: { template: Template }) {
   const meta = builtInType ? TEMPLATE_DISPLAY[builtInType] : null;
   const variables = builtInType ? TEMPLATE_VARIABLES[builtInType] : [];
   const isDocument = builtInType ? BUILT_IN_DOCUMENT_TYPES.includes(builtInType) : false;
-  const isInvoice = builtInType === 'invoice';
 
   const { data: publicProfile } = useQuery({
     queryKey: ['publicProfile'],
@@ -232,7 +218,6 @@ function TemplateEditor({ template }: { template: Template }) {
       Underline,
       Link_.configure({ openOnClick: false }),
       VariableNode,
-      LineItemsNode,
     ],
     content: template.content as Record<string, unknown>,
     editorProps: {
@@ -315,7 +300,7 @@ function TemplateEditor({ template }: { template: Template }) {
           />
         ) : (
           <>
-            <EditorToolbar editor={editor} variables={variables} isDocument={isDocument} isInvoice={isInvoice} />
+            <EditorToolbar editor={editor} variables={variables} isDocument={isDocument} />
             <EditorContent editor={editor} />
           </>
         )}

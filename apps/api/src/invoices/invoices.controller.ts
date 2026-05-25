@@ -3,12 +3,15 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   HttpCode,
   Param,
   Patch,
   Post,
   Req,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { InvoicesService } from './invoices.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
@@ -20,6 +23,7 @@ import { UpdateLineItemDto } from './dto/update-line-item.dto';
 import type { Request } from 'express';
 
 type AuthedRequest = Request & { userId: string };
+type AuthedResponse = Response;
 
 @ApiTags('Invoices')
 @ApiBearerAuth('clerk-jwt')
@@ -138,5 +142,20 @@ export class InvoicesController {
     @Param('itemId') itemId: string,
   ) {
     return this.service.deleteLineItem(req.userId, bookingId, id, itemId);
+  }
+
+  @ApiOperation({ summary: 'Preview invoice PDF' })
+  @ApiResponse({ status: 200, description: 'PDF stream' })
+  @Get(':id/preview.pdf')
+  @Header('Content-Type', 'application/pdf')
+  @Header('Content-Disposition', 'inline; filename="invoice-preview.pdf"')
+  async previewPdf(
+    @Req() req: AuthedRequest,
+    @Param('bookingId') bookingId: string,
+    @Param('id') id: string,
+    @Res() res: AuthedResponse,
+  ) {
+    const buffer = await this.service.generatePreviewPdf(req.userId, bookingId, id);
+    res.end(buffer);
   }
 }

@@ -310,8 +310,7 @@ export type BuiltInTemplateType =
   | 'thank_you'
   | 'contract_received'
   | 'deposit_received'
-  | 'contract'
-  | 'invoice';
+  | 'contract';
 
 export interface Template {
   id: string;

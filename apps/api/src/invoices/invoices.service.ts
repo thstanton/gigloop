@@ -1,6 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InvoicesRepository } from './invoices.repository';
 import { MailService } from '../mail/mail.service';
+import { DocumentsService } from '../documents/documents.service';
+import { PdfService } from '../documents/pdf.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { SendInvoiceDto } from './dto/send-invoice.dto';
@@ -13,6 +15,8 @@ export class InvoicesService {
   constructor(
     private repo: InvoicesRepository,
     private mail: MailService,
+    private documents: DocumentsService,
+    private pdf: PdfService,
   ) {}
 
   findAll(userId: string, bookingId: string) {
@@ -51,7 +55,12 @@ export class InvoicesService {
     const issueDate = new Date(dto.issueDate);
     const dueDate = dto.dueDate ? new Date(dto.dueDate) : null;
 
-    await this.repo.assignAndMarkSent(userId, id, issueDate, dueDate);
+    const sentInvoice = await this.repo.assignAndMarkSent(userId, id, issueDate, dueDate);
+
+    const pdfBuffer = await this.pdf.generateInvoicePdf(userId, sentInvoice.id);
+    await this.documents.storeInvoicePdf(userId, bookingId, sentInvoice.id, pdfBuffer);
+
+    const filename = `${sentInvoice.invoiceNumber ?? 'invoice'}.pdf`;
 
     await this.mail.send({
       userId,
@@ -61,7 +70,13 @@ export class InvoicesService {
       subject: dto.subject,
       body: dto.body,
       templateId: dto.templateId,
+      attachments: [{ filename, content: pdfBuffer }],
     });
+  }
+
+  async generatePreviewPdf(userId: string, bookingId: string, id: string): Promise<Buffer> {
+    await this.findOne(userId, bookingId, id);
+    return this.pdf.generateInvoicePdf(userId, id);
   }
 
   async markSent(userId: string, bookingId: string, id: string, dto: MarkSentDto) {

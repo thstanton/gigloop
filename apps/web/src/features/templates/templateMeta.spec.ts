@@ -132,12 +132,5 @@ describe('templateMeta completeness', () => {
     expect(names).toContain('musicianName');
   });
 
-  it('invoice template includes all invoice-specific variables', () => {
-    const names = TEMPLATE_VARIABLES['invoice'].map((v) => v.name);
-    expect(names).toContain('invoiceTotal');
-    expect(names).toContain('invoiceDueDate');
-    expect(names).toContain('issueDate');
-    expect(names).toContain('customerName');
-    expect(names).toContain('musicianName');
-  });
+
 });

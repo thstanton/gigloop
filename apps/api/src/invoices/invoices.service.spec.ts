@@ -3,6 +3,13 @@ import { InvoicesService } from './invoices.service';
 import { InvoicesRepository } from './invoices.repository';
 import { MailService } from '../mail/mail.service';
 
+jest.mock('../documents/pdf.service', () => ({
+  PdfService: jest.fn().mockImplementation(() => ({ generateInvoicePdf: jest.fn() })),
+}));
+jest.mock('../documents/documents.service', () => ({
+  DocumentsService: jest.fn().mockImplementation(() => ({ storeInvoicePdf: jest.fn() })),
+}));
+
 type MockRepo = {
   findBookingCustomerId: jest.Mock;
   findAll: jest.Mock;
@@ -34,6 +41,10 @@ function makeRepo(): MockRepo {
 }
 
 const mockMail = { send: jest.fn() } as unknown as MailService;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mockDocuments = { storeInvoicePdf: jest.fn() } as any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mockPdf = { generateInvoicePdf: jest.fn() } as any;
 
 const invoice = { id: 'i1', bookingId: 'b1', userId: 'u1', status: 'DRAFT' };
 const lineItem = { id: 'li1', invoiceId: 'i1', userId: 'u1' };
@@ -44,7 +55,7 @@ describe('InvoicesService', () => {
 
   beforeEach(() => {
     repo = makeRepo();
-    service = new InvoicesService(repo as unknown as InvoicesRepository, mockMail);
+    service = new InvoicesService(repo as unknown as InvoicesRepository, mockMail, mockDocuments, mockPdf);
   });
 
   describe('findAll', () => {
