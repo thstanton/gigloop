@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
@@ -21,7 +21,8 @@ import {
 } from '@/components/ui/select';
 import { apiGet, apiPostVoid } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
-import { BUILT_IN_EMAIL_TYPES, TEMPLATE_DISPLAY, VAR_LABELS } from '@/features/templates/templateMeta';
+import { BUILT_IN_EMAIL_TYPES, TEMPLATE_DISPLAY } from '@/features/templates/templateMeta';
+import { getInvoiceIdForTemplate, formatMissingVariables } from './composeHelpers';
 import type { BookingDetail, BuiltInTemplateType, Invoice, Template } from '@/types/api';
 
 interface RenderResult {
@@ -39,44 +40,6 @@ interface Props {
   initialTemplateType?: string;
 }
 
-function getInvoiceIdForTemplate(
-  type: BuiltInTemplateType | null,
-  invoices: Invoice[],
-): string | undefined {
-  if (type === 'deposit_invoice_cover' || type === 'contract_and_deposit_cover') {
-    return invoices.find((i) => i.isDeposit)?.id;
-  }
-  if (type === 'balance_invoice_cover') {
-    return invoices.find((i) => !i.isDeposit)?.id;
-  }
-  return undefined;
-}
-
-function shouldHideTemplate(
-  type: BuiltInTemplateType,
-  invoices: Invoice[],
-  bookingDate: string,
-): boolean {
-  if (
-    (type === 'deposit_invoice_cover' || type === 'contract_and_deposit_cover') &&
-    !invoices.some((i) => i.isDeposit)
-  ) return true;
-  if (type === 'balance_invoice_cover' && !invoices.some((i) => !i.isDeposit)) return true;
-  if (type === 'thank_you') {
-    const date = new Date(bookingDate);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return date >= today;
-  }
-  return false;
-}
-
-function formatMissingVariables(keys: string[]): string {
-  const labels = keys.map((k) => VAR_LABELS[k] ?? k);
-  if (labels.length === 1) return labels[0];
-  if (labels.length === 2) return `${labels[0]} and ${labels[1]}`;
-  return `${labels.slice(0, -1).join(', ')}, and ${labels[labels.length - 1]}`;
-}
 
 export default function ComposeEmailSheet({
   bookingId,
@@ -110,28 +73,36 @@ export default function ComposeEmailSheet({
     enabled: isLoaded && open,
   });
 
-  // Pre-select template by type once templates load, and reset when sheet opens
-  useEffect(() => {
-    if (open) {
-      setSubject('');
-      setMissingVariables([]);
-      setSendError(null);
-      editor?.commands.setContent('');
-      if (initialTemplateType && templates.length > 0) {
-        const match = templates.find((t) => t.builtInType === initialTemplateType);
-        setSelectedTemplateId(match?.id ?? '');
-      } else if (!initialTemplateType) {
-        setSelectedTemplateId('');
-      }
-    }
-  }, [open, initialTemplateType, templates.length]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const emailTemplates = templates.filter(
-    (t) =>
-      t.builtInType &&
-      BUILT_IN_EMAIL_TYPES.includes(t.builtInType) &&
-      !shouldHideTemplate(t.builtInType, invoices, booking.date),
+  const emailTemplates = useMemo(
+    () =>
+      templates.filter(
+        (t) =>
+          t.builtInType &&
+          BUILT_IN_EMAIL_TYPES.includes(t.builtInType as BuiltInTemplateType),
+      ),
+    [templates],
   );
+
+  // Reset form state when sheet opens
+  useEffect(() => {
+    if (!open) return;
+    setSubject('');
+    setMissingVariables([]);
+    setSendError(null);
+    setSelectedTemplateId('');
+    editor?.commands.setContent('');
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Pre-select once when the filtered template list is ready — uses emailTemplates so the
+  // selected id always has a matching SelectItem (avoids Radix showing the control as empty)
+  const didPreselect = useRef(false);
+  useEffect(() => {
+    if (!open) { didPreselect.current = false; return; }
+    if (didPreselect.current || !initialTemplateType || emailTemplates.length === 0) return;
+    const match = emailTemplates.find((t) => t.builtInType === initialTemplateType);
+    if (match) setSelectedTemplateId(match.id);
+    didPreselect.current = true;
+  }, [open, initialTemplateType, emailTemplates]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const selectedTemplate = emailTemplates.find((t) => t.id === selectedTemplateId) ?? null;
   const selectedType = selectedTemplate?.builtInType ?? null;
@@ -143,7 +114,7 @@ export default function ComposeEmailSheet({
       apiGet<RenderResult>(
         `/bookings/${bookingId}/communications/render?templateId=${selectedTemplateId}${invoiceId ? `&invoiceId=${invoiceId}` : ''}`,
       ),
-    enabled: isLoaded && open && !!selectedTemplateId,
+    enabled: isLoaded && open && !!selectedTemplateId && !!selectedTemplate,
     staleTime: 0,
   });
 

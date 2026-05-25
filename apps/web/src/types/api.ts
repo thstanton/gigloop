@@ -350,6 +350,7 @@ export interface UserProfile {
   invoiceNumberSequence: number;
   invoiceSequenceYear: number;
   depositTrackingMode: string;
+  depositPercentage: number | null;
   digestEmailEnabled: boolean;
   songRequestFormEnabled: boolean;
   quoteReminderDays: number | null;
@@ -383,6 +384,7 @@ export interface UpdateUserProfileInput {
   vatNumber?: string;
   defaultPaymentTermsDays?: number;
   depositTrackingMode?: string;
+  depositPercentage?: number;
   digestEmailEnabled?: boolean;
   songRequestFormEnabled?: boolean;
   quoteReminderDays?: number | null;

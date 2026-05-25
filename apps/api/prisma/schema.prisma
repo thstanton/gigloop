@@ -92,6 +92,7 @@ model UserProfile {
   invoiceNumberSequence   Int     @default(0)
   invoiceSequenceYear     Int     @default(0)
   depositTrackingMode     String  @default("INVOICE")
+  depositPercentage       Int?
 
   digestEmailEnabled         Boolean @default(true)
   songRequestFormEnabled     Boolean @default(true)

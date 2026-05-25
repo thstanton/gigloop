@@ -40,6 +40,7 @@ const mockUserProfile: UserProfile = {
   invoiceNumberSequence: 1,
   invoiceSequenceYear: 2025,
   depositTrackingMode: 'INVOICE',
+  depositPercentage: null,
   digestEmailEnabled: false,
   songRequestFormEnabled: false,
   quoteReminderDays: null,

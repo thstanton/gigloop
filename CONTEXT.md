@@ -66,6 +66,8 @@ Two ways to move to `Sent`: (1) **Send** — app emails the invoice PDF via Rese
 
 **Fields include:** issueDate, dueDate (optional), status, isDeposit (boolean, default false — at most one deposit invoice per booking), and a reference to which Contact it is addressed to (defaults to the Booking's customer but may differ). When `isDeposit` is true and the invoice is marked Paid, `Booking.depositReceivedAt` is automatically set (if `depositTrackingMode` resolves to `INVOICE`).
 
+**Balance invoice PDF rendering:** when generating the balance invoice PDF, derive the deposit amount at render time from the deposit [[Invoice]]'s line item total (isDeposit=true). Show a breakdown: subtotal, less deposit paid, balance due. Only show this section if a deposit Invoice exists on the booking. Do not add a stored field for this.
+
 ### InvoiceLineItem
 A freeform line on an [[Invoice]]: description (text) + amount (decimal). No fixed categories.
 
@@ -123,7 +125,7 @@ The client-facing [[Portal]] is musician-branded: displays the musician's logo, 
 ### UserProfile
 The private, authenticated-only half of the musician's settings (one per `userId`). Never returned to portal clients. See ADR-0002.
 
-**Fields:** address, bankDetails (encrypted at rest — see ADR-0003), vatNumber, defaultPaymentTermsDays, invoiceNumberSequence, invoiceSequenceYear, depositTrackingMode, digestEmailEnabled, songRequestFormEnabled, quoteReminderDays, contractReminderDays, depositInvoiceReminderDays, balanceInvoiceReminderDays, musicFormReminderDays, thankYouReminderDays.
+**Fields:** address, bankDetails (encrypted at rest — see ADR-0003), vatNumber, defaultPaymentTermsDays, invoiceNumberSequence, invoiceSequenceYear, depositTrackingMode, depositPercentage (nullable integer 1–100 — the default deposit % of the booking fee; null means no default set), digestEmailEnabled, songRequestFormEnabled, quoteReminderDays, contractReminderDays, depositInvoiceReminderDays, balanceInvoiceReminderDays, musicFormReminderDays, thankYouReminderDays.
 
 **Invoice numbering:** format `INV-{year}-{NNN}` (e.g. `INV-2025-001`). `invoiceNumberSequence` is a per-year counter; `invoiceSequenceYear` records the year it was last reset. Both reset each January. Subject to revision.
 

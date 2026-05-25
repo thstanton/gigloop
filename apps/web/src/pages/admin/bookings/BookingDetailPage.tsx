@@ -1,7 +1,8 @@
 import { useState } from 'react';
+import { useAuth } from '@clerk/react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, CheckCircle2, Circle, AlertTriangle, Mail, Music, FileText, DollarSign, FolderOpen, ChevronDown, Check } from 'lucide-react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { ChevronLeft, ChevronRight, CheckCircle2, Circle, AlertTriangle, Mail, Music, FileText, DollarSign, FolderOpen, ChevronDown, Check, Pencil, Trash2, Plus } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -15,7 +16,9 @@ import { useBookingInvoices } from '@/lib/hooks/useBookingInvoices';
 import { useBookingCommunications } from '@/lib/hooks/useBookingCommunications';
 import BookingEditDrawer from '@/features/bookings/BookingEditDrawer';
 import ComposeEmailSheet from '@/features/communications/ComposeEmailSheet';
-import { apiPatch } from '@/lib/api';
+import InvoiceSheet from '@/features/invoices/InvoiceSheet';
+import { buildChecklist } from '@/lib/buildChecklist';
+import { apiGet, apiPatch, apiDelete, apiPost } from '@/lib/api';
 import {
   formatDate,
   formatCurrency,
@@ -30,6 +33,7 @@ import type {
   PerformanceSet,
   Invoice,
   Communication,
+  UserProfile,
 } from '@/types/api';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -43,121 +47,6 @@ function formatDuration(minutes: number): string {
 
 function invoiceLineTotal(invoice: Invoice): number {
   return invoice.lineItems.reduce((sum, item) => sum + parseFloat(item.amount), 0);
-}
-
-// ─── Checklist ────────────────────────────────────────────────────────────────
-
-type ChecklistState = 'done' | 'outstanding' | 'failed';
-
-interface ChecklistItem {
-  key: string;
-  label: string;
-  state: ChecklistState;
-  shortcutTemplateType?: string;
-}
-
-function buildChecklist(
-  booking: BookingDetail,
-  communications: Communication[],
-): ChecklistItem[] {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const bookingDate = new Date(booking.date);
-  bookingDate.setHours(0, 0, 0, 0);
-  const bookingDatePassed = bookingDate < today;
-
-  const trackDeposit = booking.depositTrackingMode !== 'NONE';
-
-  const hasSent = (...types: string[]) =>
-    communications.some((c) => types.includes(c.template?.builtInType ?? '') && c.status === 'SENT');
-
-  const mostRecentFailed = (...types: string[]) => {
-    const relevant = communications.filter((c) => types.includes(c.template?.builtInType ?? ''));
-    if (relevant.length === 0) return false;
-    const sorted = [...relevant].sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-    );
-    return sorted[0].status === 'FAILED';
-  };
-
-  type RawItem = {
-    key: string;
-    label: string;
-    done: boolean;
-    failed: boolean;
-    irrelevant: boolean;
-    shortcutType?: string;
-  };
-
-  const hasDepositInvoice = booking.depositTrackingMode !== 'NONE';
-  const contractShortcutType = hasDepositInvoice ? 'contract_and_deposit_cover' : 'contract_cover';
-
-  const raw: RawItem[] = [
-    {
-      key: 'send_quote',
-      label: 'Send quote',
-      done: hasSent('quote'),
-      failed: mostRecentFailed('quote'),
-      irrelevant: statusGte(booking.status, 'CONFIRMED'),
-      shortcutType: 'quote',
-    },
-    {
-      key: 'send_contract',
-      label: 'Send contract & deposit email',
-      done: hasSent('contract_cover', 'contract_and_deposit_cover'),
-      failed: mostRecentFailed('contract_cover', 'contract_and_deposit_cover'),
-      irrelevant:
-        !!booking.contractSignedAt &&
-        (!!booking.depositReceivedAt || !trackDeposit),
-      shortcutType: contractShortcutType,
-    },
-    {
-      key: 'contract_signed',
-      label: 'Contract signed',
-      done: !!booking.contractSignedAt,
-      failed: false,
-      irrelevant: booking.status === 'ENQUIRY' || statusGte(booking.status, 'SETTLED'),
-    },
-    {
-      key: 'deposit_received',
-      label: 'Deposit received',
-      done: !!booking.depositReceivedAt,
-      failed: false,
-      irrelevant: !trackDeposit || booking.status === 'ENQUIRY',
-    },
-    {
-      key: 'music_form_invite',
-      label: 'Send music form invite',
-      done: hasSent('music_form_invite'),
-      failed: mostRecentFailed('music_form_invite'),
-      irrelevant: !booking.hasMusicFormConfig || booking.status === 'ENQUIRY',
-      shortcutType: 'music_form_invite',
-    },
-    {
-      key: 'song_requests',
-      label: 'Song requests received',
-      done: booking.hasMusicFormResponse,
-      failed: false,
-      irrelevant: !booking.hasMusicFormConfig || !hasSent('music_form_invite'),
-    },
-    {
-      key: 'send_thank_you',
-      label: 'Send thank you',
-      done: hasSent('thank_you'),
-      failed: mostRecentFailed('thank_you'),
-      irrelevant: !bookingDatePassed,
-      shortcutType: 'thank_you',
-    },
-  ];
-
-  return raw
-    .filter((item) => !item.irrelevant)
-    .map(({ key, label, done, failed, shortcutType }) => ({
-      key,
-      label,
-      state: (done ? 'done' : failed ? 'failed' : 'outstanding') as ChecklistState,
-      shortcutTemplateType: shortcutType,
-    }));
 }
 
 // ─── Status dropdown ──────────────────────────────────────────────────────────
@@ -361,12 +250,21 @@ function VenueCard({ venue, linkState }: { venue: Contact; linkState?: Record<st
 
 // ─── Invoices ─────────────────────────────────────────────────────────────────
 
-function InvoiceRow({ invoice }: { invoice: Invoice }) {
+function InvoiceRow({
+  invoice,
+  onEdit,
+  onDelete,
+}: {
+  invoice: Invoice;
+  onEdit: (invoice: Invoice) => void;
+  onDelete: (invoice: Invoice) => void;
+}) {
   const overdue =
     invoice.status === 'SENT' &&
     !!invoice.dueDate &&
     new Date(invoice.dueDate) < new Date();
   const total = invoiceLineTotal(invoice);
+  const isDraft = invoice.status === 'DRAFT';
 
   return (
     <div className="flex items-start justify-between gap-3 py-2.5 border-b border-border last:border-0">
@@ -382,6 +280,24 @@ function InvoiceRow({ invoice }: { invoice: Invoice }) {
           {formatCurrency(total)}
         </span>
         <InvoiceStatusPill status={invoice.status} isOverdue={overdue} />
+        {isDraft && (
+          <>
+            <button
+              onClick={() => onEdit(invoice)}
+              className="text-muted hover:text-foreground transition-colors"
+              aria-label="Edit invoice"
+            >
+              <Pencil size={13} />
+            </button>
+            <button
+              onClick={() => onDelete(invoice)}
+              className="text-muted hover:text-status-cancelled transition-colors"
+              aria-label="Delete invoice"
+            >
+              <Trash2 size={13} />
+            </button>
+          </>
+        )}
       </div>
     </div>
   );
@@ -443,15 +359,68 @@ export default function BookingDetailPage() {
 
   const [composeOpen, setComposeOpen] = useState(false);
   const [composeTemplateType, setComposeTemplateType] = useState<string | undefined>();
+  const [invoiceSheetOpen, setInvoiceSheetOpen] = useState(false);
+  const [editingInvoice, setEditingInvoice] = useState<Invoice | undefined>();
+  const [invoiceSheetPrefill, setInvoiceSheetPrefill] = useState<{ isDeposit: boolean; amount?: number } | undefined>();
 
+  const { isLoaded } = useAuth();
   const { data: booking, isLoading, isError } = useBooking(id!);
   const { data: invoices = [], isPending: invoicesPending } = useBookingInvoices(id!);
   const { data: communications = [] } = useBookingCommunications(id!);
+  const { data: userProfile } = useQuery({
+    queryKey: ['me'],
+    queryFn: () => apiGet<UserProfile>('/me'),
+    enabled: isLoaded,
+  });
 
   function openCompose(templateType?: string) {
     setComposeTemplateType(templateType);
     setComposeOpen(true);
   }
+
+  function openCreateInvoice(prefill?: { isDeposit: boolean; amount?: number }) {
+    setEditingInvoice(undefined);
+    setInvoiceSheetPrefill(prefill);
+    setInvoiceSheetOpen(true);
+  }
+
+  function openEditInvoice(invoice: Invoice) {
+    setEditingInvoice(invoice);
+    setInvoiceSheetPrefill(undefined);
+    setInvoiceSheetOpen(true);
+  }
+
+  const autoCreateInvoiceMutation = useMutation({
+    mutationFn: ({ isDeposit, amount }: { isDeposit: boolean; amount: number }) =>
+      apiPost<Invoice>(`/bookings/${id}/invoices`, {
+        isDeposit,
+        lineItems: [{ description: isDeposit ? 'Deposit' : 'Balance', amount }],
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bookingInvoices', id] });
+    },
+  });
+
+  function handleInvoiceAction(action: 'create_deposit_invoice' | 'create_balance_invoice') {
+    const isDeposit = action === 'create_deposit_invoice';
+    const fee = booking?.fee ? parseFloat(booking.fee) : null;
+    const pct = userProfile?.depositPercentage;
+
+    if (fee && pct) {
+      const amount = isDeposit ? (fee * pct) / 100 : fee * (1 - pct / 100);
+      autoCreateInvoiceMutation.mutate({ isDeposit, amount: Math.round(amount * 100) / 100 });
+    } else {
+      openCreateInvoice({ isDeposit });
+    }
+  }
+
+  const deleteInvoiceMutation = useMutation({
+    mutationFn: (invoiceId: string) =>
+      apiDelete(`/bookings/${id}/invoices/${invoiceId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bookingInvoices', id] });
+    },
+  });
 
   const contractMutation = useMutation({
     mutationFn: () =>
@@ -489,7 +458,7 @@ export default function BookingDetailPage() {
   const fee = formatFee(booking.fee);
   const checklist =
     booking.status !== 'CANCELLED'
-      ? buildChecklist(booking, communications)
+      ? buildChecklist(booking, communications, invoices)
       : [];
   const backState = { from: `/admin/bookings/${id}`, label: title };
 
@@ -633,6 +602,14 @@ export default function BookingDetailPage() {
                         Send
                       </button>
                     )}
+                    {item.shortcutAction && item.state !== 'done' && (
+                      <button
+                        onClick={() => handleInvoiceAction(item.shortcutAction!)}
+                        className="text-xs text-primary hover:underline flex-shrink-0"
+                      >
+                        Create
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -655,7 +632,44 @@ export default function BookingDetailPage() {
         <SectionHeader label="Finance" />
         <div className="space-y-4">
           {/* Invoices */}
-          <Card title="Invoices">
+          <div className="bg-background border border-border rounded-lg p-4">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-medium text-muted uppercase tracking-wide">Invoices</p>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <Plus size={14} className="mr-1.5" />
+                    Add invoice
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    onClick={() => {
+                      const fee = booking.fee ? parseFloat(booking.fee) : null;
+                      const pct = userProfile?.depositPercentage;
+                      openCreateInvoice({
+                        isDeposit: true,
+                        amount: fee && pct ? Math.round((fee * pct / 100) * 100) / 100 : undefined,
+                      });
+                    }}
+                  >
+                    Deposit invoice
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      const fee = booking.fee ? parseFloat(booking.fee) : null;
+                      const pct = userProfile?.depositPercentage;
+                      openCreateInvoice({
+                        isDeposit: false,
+                        amount: fee && pct ? Math.round((fee * (1 - pct / 100)) * 100) / 100 : undefined,
+                      });
+                    }}
+                  >
+                    Balance invoice
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
             {invoicesPending ? (
               <div className="space-y-2 animate-pulse">
                 {[1, 2].map((i) => <div key={i} className="h-9 bg-border rounded" />)}
@@ -667,10 +681,17 @@ export default function BookingDetailPage() {
               </div>
             ) : (
               <div>
-                {invoices.map((inv) => <InvoiceRow key={inv.id} invoice={inv} />)}
+                {invoices.map((inv) => (
+                  <InvoiceRow
+                    key={inv.id}
+                    invoice={inv}
+                    onEdit={openEditInvoice}
+                    onDelete={(inv) => deleteInvoiceMutation.mutate(inv.id)}
+                  />
+                ))}
               </div>
             )}
-          </Card>
+          </div>
 
           {/* Documents */}
           <Card title="Documents">
@@ -706,6 +727,14 @@ export default function BookingDetailPage() {
       </section>
 
       <BookingEditDrawer booking={booking} />
+      <InvoiceSheet
+        bookingId={id!}
+        invoice={editingInvoice}
+        hasDepositInvoice={invoices.some((inv) => inv.isDeposit)}
+        prefill={invoiceSheetPrefill}
+        open={invoiceSheetOpen}
+        onOpenChange={setInvoiceSheetOpen}
+      />
       <ComposeEmailSheet
         bookingId={id!}
         booking={booking}

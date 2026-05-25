@@ -34,6 +34,10 @@ const businessSchema = z.object({
   vatNumber: z.string(),
   defaultPaymentTermsDays: z.number().int().min(0, 'Must be 0 or more'),
   depositTrackingMode: z.enum(['INVOICE', 'MANUAL']),
+  depositPercentage: z.union([
+    z.nan().transform((): undefined => undefined),
+    z.number().int().min(1, 'Must be 1–100').max(100, 'Must be 1–100'),
+  ]).optional(),
 });
 
 type BusinessForm = z.infer<typeof businessSchema>;
@@ -285,6 +289,7 @@ function BusinessDetailsSection({ profile }: { profile: UserProfile }) {
     vatNumber: profile.vatNumber ?? '',
     defaultPaymentTermsDays: profile.defaultPaymentTermsDays,
     depositTrackingMode: (profile.depositTrackingMode ?? 'INVOICE') as 'INVOICE' | 'MANUAL',
+    depositPercentage: profile.depositPercentage ?? undefined,
   };
 
   const {
@@ -313,6 +318,7 @@ function BusinessDetailsSection({ profile }: { profile: UserProfile }) {
       vatNumber: values.vatNumber || undefined,
       defaultPaymentTermsDays: values.defaultPaymentTermsDays,
       depositTrackingMode: values.depositTrackingMode,
+      depositPercentage: values.depositPercentage,
     });
   }
 
@@ -348,6 +354,19 @@ function BusinessDetailsSection({ profile }: { profile: UserProfile }) {
               className="w-20"
             />
             <span className="text-sm text-muted">days</span>
+          </div>
+        </Field>
+        <Field label="Default deposit" error={errors.depositPercentage?.message}>
+          <div className="flex items-center gap-2">
+            <Input
+              type="number"
+              min={1}
+              max={100}
+              placeholder="e.g. 30"
+              {...register('depositPercentage', { valueAsNumber: true })}
+              className="w-20"
+            />
+            <span className="text-sm text-muted">% of fee</span>
           </div>
         </Field>
       </div>

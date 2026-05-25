@@ -125,7 +125,7 @@ export class MailService {
       return VARIABLE_FALLBACKS[key] ?? '';
     });
 
-    return { html: rendered, missingVariables };
+    return { html: rendered, missingVariables: [...new Set(missingVariables)] };
   }
 
   renderSubject(builtInType: string | null, context: EmailContext): { subject: string; missingVariables: string[] } {
@@ -139,7 +139,7 @@ export class MailService {
       return VARIABLE_FALLBACKS[key] ?? '';
     });
 
-    return { subject, missingVariables };
+    return { subject, missingVariables: [...new Set(missingVariables)] };
   }
 
   async send(options: SendEmailOptions): Promise<void> {

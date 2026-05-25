@@ -113,10 +113,11 @@ Tiptap JSON content block. Decoupled from rendering — rendered as email HTML o
 
 **Fields:** name, content (Tiptap JSON), builtInType (optional enum — only set for system-provided templates)
 
-**Built-in types:** `quote | confirmation | contract_cover | contract_and_invoice_cover | invoice_cover | music_form_invite | thank_you | contract`
+**Built-in types:** `quote | confirmation | contract_cover | contract_and_deposit_cover | deposit_invoice_cover | balance_invoice_cover | music_form_invite | thank_you | contract`
 - `contract_cover` — email body when sending only the contract portal link
-- `contract_and_invoice_cover` — email body when sending the contract portal link + deposit invoice PDF (the common case for new bookings)
-- `invoice_cover` — email body when sending a standalone invoice PDF
+- `contract_and_deposit_cover` — email body when sending the contract portal link + deposit invoice PDF (the common case for new bookings)
+- `deposit_invoice_cover` — email body when sending the deposit invoice standalone
+- `balance_invoice_cover` — email body when sending the balance invoice
 
 **Variables:** flat named substitutions pre-computed by the API — `{{customerName}}`, `{{bookingDate}}`, `{{venueName}}`, `{{bookingFee}}`, `{{setsSchedule}}`, `{{musicianName}}`, `{{musicianEmail}}`, `{{portalLink}}`, `{{invoiceTotal}}`, `{{invoiceDueDate}}`.
 
