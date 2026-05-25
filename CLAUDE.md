@@ -144,3 +144,17 @@ GigMan is used on phones. Design every screen for 375px first, then enhance for 
 - Stick to the type scale. No text-sm for body — use text-base.
 - Empty states get an icon, a heading, one paragraph, and one CTA. Nothing else.
 - Forms use react-hook-form with a Zod schema. Validation messages render below the field in text-status-cancelled text-sm.
+
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked in GitHub Issues. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default label vocabulary (needs-triage, needs-info, ready-for-agent, ready-for-human, wontfix). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context repo — one `CONTEXT.md` + `docs/adr/` at the root. See `docs/agents/domain.md`.
