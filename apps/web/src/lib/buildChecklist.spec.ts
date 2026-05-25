@@ -192,6 +192,11 @@ describe('contract_signed', () => {
     const items = buildChecklist(makeBooking({ status: 'CONFIRMED' }), []);
     expect(getItem(items, 'contract_signed')?.shortcutTemplateType).toBeUndefined();
   });
+
+  it('has shortcutMarkDone mark_contract_signed when outstanding', () => {
+    const items = buildChecklist(makeBooking({ status: 'CONFIRMED' }), []);
+    expect(getItem(items, 'contract_signed')?.shortcutMarkDone).toBe('mark_contract_signed');
+  });
 });
 
 // ─── deposit_received ─────────────────────────────────────────────────────────
@@ -216,6 +221,11 @@ describe('deposit_received', () => {
   it('is irrelevant at ENQUIRY status', () => {
     const items = buildChecklist(makeBooking({ status: 'ENQUIRY', depositTrackingMode: 'INVOICE' }), []);
     expect(getItem(items, 'deposit_received')).toBeUndefined();
+  });
+
+  it('has shortcutMarkDone mark_deposit_received when outstanding', () => {
+    const items = buildChecklist(makeBooking({ depositTrackingMode: 'INVOICE' }), []);
+    expect(getItem(items, 'deposit_received')?.shortcutMarkDone).toBe('mark_deposit_received');
   });
 });
 

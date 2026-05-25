@@ -26,7 +26,7 @@ import {
   formatCurrency,
   formatFee,
 } from '@/lib/formatters';
-import { EVENT_TYPE_LABELS, STATUS_ORDER, statusGte } from '@/lib/constants';
+import { EVENT_TYPE_LABELS, STATUS_ORDER } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 import type {
   BookingDetail,
@@ -530,43 +530,6 @@ export default function BookingDetailPage() {
           {fee && <span className="text-sm text-muted">{fee}</span>}
         </div>
 
-        {/* Lifecycle actions */}
-        {booking.status !== 'CANCELLED' && (() => {
-          const showContract =
-            !booking.contractSignedAt &&
-            booking.status !== 'ENQUIRY' &&
-            !statusGte(booking.status, 'SETTLED');
-          const trackDeposit = booking.depositTrackingMode !== 'NONE';
-          const showDeposit =
-            trackDeposit && !booking.depositReceivedAt && booking.status !== 'ENQUIRY';
-
-          if (!showContract && !showDeposit) return null;
-
-          return (
-            <div className="flex flex-wrap gap-2 mt-3">
-              {showContract && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={contractMutation.isPending}
-                  onClick={() => contractMutation.mutate()}
-                >
-                  {contractMutation.isPending ? 'Saving…' : 'Mark contract signed'}
-                </Button>
-              )}
-              {showDeposit && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={depositMutation.isPending}
-                  onClick={() => depositMutation.mutate()}
-                >
-                  {depositMutation.isPending ? 'Saving…' : 'Mark deposit received'}
-                </Button>
-              )}
-            </div>
-          );
-        })()}
       </section>
 
       {/* 2. People */}
@@ -629,7 +592,15 @@ export default function BookingDetailPage() {
                         )}
                       </div>
                     </div>
-                    {item.shortcutTemplateType && item.state !== 'done' && (
+                    {item.shortcutTemplateType && item.state === 'failed' && (
+                      <button
+                        onClick={() => openCompose(item.shortcutTemplateType)}
+                        className="text-xs text-primary hover:underline flex-shrink-0"
+                      >
+                        Retry
+                      </button>
+                    )}
+                    {item.shortcutTemplateType && item.state === 'outstanding' && (
                       <button
                         onClick={() => openCompose(item.shortcutTemplateType)}
                         className="text-xs text-primary hover:underline flex-shrink-0"
@@ -643,6 +614,18 @@ export default function BookingDetailPage() {
                         className="text-xs text-primary hover:underline flex-shrink-0"
                       >
                         Create
+                      </button>
+                    )}
+                    {item.shortcutMarkDone && item.state === 'outstanding' && (
+                      <button
+                        onClick={() => {
+                          if (item.shortcutMarkDone === 'mark_contract_signed') contractMutation.mutate();
+                          else depositMutation.mutate();
+                        }}
+                        disabled={contractMutation.isPending || depositMutation.isPending}
+                        className="text-xs text-primary hover:underline flex-shrink-0 disabled:opacity-50"
+                      >
+                        Mark done
                       </button>
                     )}
                   </div>

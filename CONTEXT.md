@@ -2,6 +2,8 @@
 
 A CRM for musicians. The central workflow is managing Bookings with Contacts.
 
+**Design principle — contextual actions:** The [[BookingChecklist]] is the primary interface for progressing a booking. The happy path is: musician opens a booking, sees what needs doing, and completes it from the checklist without navigating elsewhere. Other panels (Invoices, Communications, Documents) exist for specificity and historical detail — not for primary workflow. Every outstanding checklist item should, where possible, carry an inline action that resolves it in one tap. This is the core differentiator: a smart management system that surfaces the right action at the right time, rather than a passive record-keeper the musician has to manually interrogate. Checklist intelligence is scoped to a single booking — cross-booking awareness (e.g. double-booking detection, band member coordination) is explicitly deferred.
+
 ---
 
 ## Terms
@@ -167,7 +169,7 @@ Each item has one of four states:
 - **Failed** — a send was attempted but the most recent relevant Communication has `status = FAILED`; shown with a warning indicator and "Last send failed" message. Takes priority over Outstanding.
 - **Irrelevant** — not done but no longer applicable; hidden entirely
 
-A Communication only counts as "Done" if `status = SENT`. `PENDING` and `FAILED` records do not satisfy the Done condition. "Most recent attempt" is used for Failed — if a retry succeeds, the item reverts to Done.
+A Communication only counts as "Done" if `status = SENT`. `PENDING` and `FAILED` records do not satisfy the Done condition. "Most recent attempt" is used for Failed — if a retry succeeds, the item reverts to Done. Items in the `failed` state carry a **Retry** shortcut that opens the compose sheet pre-loaded with the same template type — this is the primary recovery path, consistent with the contextual actions principle.
 
 | Item | Done when | Failed when | Irrelevant when |
 |---|---|---|---|
@@ -178,7 +180,7 @@ A Communication only counts as "Done" if `status = SENT`. `PENDING` and `FAILED`
 | Deposit received | `depositReceivedAt` set | — | deposit tracking resolves to NONE OR status is ENQUIRY |
 | Create balance invoice | balance [[Invoice]] exists (isDeposit=false) | — | status is ENQUIRY |
 | Send music form invite | `music_form_invite` Communication with status SENT exists | most recent `music_form_invite` Communication is FAILED | no [[MusicFormConfig]] on booking OR status is ENQUIRY |
-| Song requests received | [[MusicFormResponse]] exists | — | no MusicFormConfig OR no `music_form_invite` Communication with status SENT exists |
+| Song requests received | [[MusicFormResponse]] exists | — | no MusicFormConfig OR no `music_form_invite` Communication with status SENT exists | This item is intentionally passive — the client may choose to communicate preferences informally rather than via the form, and that is acceptable. No chase-up action is provided. |
 | Send thank you | `thank_you` Communication with status SENT exists | most recent `thank_you` Communication is FAILED | today is before booking date |
 
 The checklist is hidden entirely for CANCELLED bookings.

@@ -9,6 +9,7 @@ export interface ChecklistItem {
   state: ChecklistState;
   shortcutTemplateType?: string;
   shortcutAction?: 'create_deposit_invoice' | 'create_balance_invoice';
+  shortcutMarkDone?: 'mark_contract_signed' | 'mark_deposit_received';
 }
 
 export function buildChecklist(
@@ -44,6 +45,7 @@ export function buildChecklist(
     irrelevant: boolean;
     shortcutType?: string;
     shortcutAction?: ChecklistItem['shortcutAction'];
+    shortcutMarkDone?: ChecklistItem['shortcutMarkDone'];
   };
 
   const depositInvoiceExists = invoices.some((i) => i.isDeposit);
@@ -84,6 +86,7 @@ export function buildChecklist(
       done: !!booking.contractSignedAt,
       failed: false,
       irrelevant: booking.status === 'ENQUIRY' || statusGte(booking.status, 'SETTLED'),
+      shortcutMarkDone: 'mark_contract_signed',
     },
     {
       key: 'deposit_received',
@@ -91,6 +94,7 @@ export function buildChecklist(
       done: !!booking.depositReceivedAt,
       failed: false,
       irrelevant: !trackDeposit || booking.status === 'ENQUIRY',
+      shortcutMarkDone: 'mark_deposit_received',
     },
     {
       key: 'create_balance_invoice',
@@ -127,11 +131,12 @@ export function buildChecklist(
 
   return raw
     .filter((item) => !item.irrelevant)
-    .map(({ key, label, done, failed, shortcutType, shortcutAction }) => ({
+    .map(({ key, label, done, failed, shortcutType, shortcutAction, shortcutMarkDone }) => ({
       key,
       label,
       state: (done ? 'done' : failed ? 'failed' : 'outstanding') as ChecklistState,
       shortcutTemplateType: shortcutType,
       shortcutAction,
+      shortcutMarkDone,
     }));
 }
