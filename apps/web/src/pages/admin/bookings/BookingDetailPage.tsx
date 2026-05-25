@@ -740,9 +740,10 @@ export default function BookingDetailPage() {
             ) : (
               <div className="divide-y divide-border">
                 {documents.map((doc: Document) => {
+                  const invoice = invoices.find((i) => i.id === doc.invoiceId);
                   const label = doc.type === 'CONTRACT'
                     ? 'Contract'
-                    : invoices.find((i) => i.id === doc.invoiceId)?.isDeposit
+                    : invoice?.isDeposit
                       ? 'Deposit invoice'
                       : 'Balance invoice';
                   const filename = `${label.toLowerCase().replace(' ', '-')}.pdf`;
@@ -757,15 +758,20 @@ export default function BookingDetailPage() {
                   };
                   return (
                     <div key={doc.id} className="flex items-center gap-2 py-2">
-                      <FileText size={14} className="flex-shrink-0 text-muted" />
-                      <span className="text-sm text-foreground">{label}</span>
-                      <span className="text-muted ml-auto text-xs">
+                      <FileText size={14} className="flex-shrink-0 text-muted mt-0.5 self-start" />
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-sm text-foreground">{label}</span>
+                        {invoice?.invoiceNumber && (
+                          <span className="text-xs text-muted">{invoice.invoiceNumber}</span>
+                        )}
+                      </div>
+                      <span className="text-muted ml-auto text-xs shrink-0">
                         {new Date(doc.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                       </span>
                       <button
                         onClick={handleDownload}
                         title="Download"
-                        className="text-muted hover:text-foreground"
+                        className="text-muted hover:text-foreground shrink-0"
                       >
                         <Download size={14} />
                       </button>
