@@ -156,14 +156,14 @@ describe('MailService', () => {
       expect(missingVariables).toContain('bookingDate');
     });
 
-    it('does not report missingVariables for variables without a defined fallback', () => {
+    it('reports missingVariables for empty variables even without a defined fallback', () => {
       const contextWithNoFee: EmailContext = { ...context, bookingFee: '' };
       const content = {
         type: 'doc',
         content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Fee: {{bookingFee}}' }] }],
       };
       const { missingVariables } = service.renderTemplate(content, contextWithNoFee);
-      expect(missingVariables).not.toContain('bookingFee');
+      expect(missingVariables).toContain('bookingFee');
     });
   });
 

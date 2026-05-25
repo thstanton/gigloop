@@ -121,11 +121,8 @@ export class MailService {
     const rendered = html.replace(/\{\{(\w+)\}\}/g, (_, key) => {
       const value = context[key as keyof EmailContext];
       if (value) return value;
-      if (key in VARIABLE_FALLBACKS) {
-        missingVariables.push(key);
-        return VARIABLE_FALLBACKS[key]!;
-      }
-      return '';
+      missingVariables.push(key);
+      return VARIABLE_FALLBACKS[key] ?? '';
     });
 
     return { html: rendered, missingVariables };
@@ -138,11 +135,8 @@ export class MailService {
     const subject = template.replace(/\{\{(\w+)\}\}/g, (_, key) => {
       const value = context[key as keyof EmailContext];
       if (value) return value;
-      if (key in VARIABLE_FALLBACKS) {
-        missingVariables.push(key);
-        return VARIABLE_FALLBACKS[key]!;
-      }
-      return '';
+      missingVariables.push(key);
+      return VARIABLE_FALLBACKS[key] ?? '';
     });
 
     return { subject, missingVariables };
