@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import InvoiceStatusPill from '@/components/InvoiceStatusPill';
 import { useBooking } from '@/lib/hooks/useBooking';
+import { useBookingActions } from '@/lib/hooks/useBookingActions';
 import { useBookingInvoices } from '@/lib/hooks/useBookingInvoices';
 import { useBookingCommunications } from '@/lib/hooks/useBookingCommunications';
 import { useBookingDocuments } from '@/lib/hooks/useBookingDocuments';
@@ -20,7 +21,7 @@ import ComposeEmailSheet from '@/features/communications/ComposeEmailSheet';
 import InvoiceSheet from '@/features/invoices/InvoiceSheet';
 import MarkSentDialog from '@/features/invoices/MarkSentDialog';
 import { buildChecklist } from '@/lib/buildChecklist';
-import { apiGet, apiPatch, apiDelete, apiPost } from '@/lib/api';
+import { apiGet, apiPatch } from '@/lib/api';
 import {
   formatDate,
   formatCurrency,
@@ -383,7 +384,6 @@ function PageSkeleton() {
 export default function BookingDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [, setSearchParams] = useSearchParams();
-  const queryClient = useQueryClient();
 
   const [composeOpen, setComposeOpen] = useState(false);
   const [composeTemplateType, setComposeTemplateType] = useState<string | undefined>();
@@ -402,6 +402,8 @@ export default function BookingDetailPage() {
     queryFn: () => apiGet<UserProfile>('/me'),
     enabled: isLoaded,
   });
+
+  const actions = useBookingActions(id!);
 
   function openCompose(templateType?: string) {
     setComposeTemplateType(templateType);
@@ -425,17 +427,6 @@ export default function BookingDetailPage() {
     openCompose(templateType);
   }
 
-  const autoCreateInvoiceMutation = useMutation({
-    mutationFn: ({ isDeposit, amount }: { isDeposit: boolean; amount: number }) =>
-      apiPost<Invoice>(`/bookings/${id}/invoices`, {
-        isDeposit,
-        lineItems: [{ description: isDeposit ? 'Deposit' : 'Balance', amount }],
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['bookingInvoices', id] });
-    },
-  });
-
   function handleInvoiceAction(action: 'create_deposit_invoice' | 'create_balance_invoice') {
     const isDeposit = action === 'create_deposit_invoice';
     const fee = booking?.fee ? parseFloat(booking.fee) : null;
@@ -443,35 +434,11 @@ export default function BookingDetailPage() {
 
     if (fee && pct) {
       const amount = isDeposit ? (fee * pct) / 100 : fee * (1 - pct / 100);
-      autoCreateInvoiceMutation.mutate({ isDeposit, amount: Math.round(amount * 100) / 100 });
+      actions.autoCreateInvoice({ isDeposit, amount: Math.round(amount * 100) / 100 });
     } else {
       openCreateInvoice({ isDeposit });
     }
   }
-
-  const deleteInvoiceMutation = useMutation({
-    mutationFn: (invoiceId: string) =>
-      apiDelete(`/bookings/${id}/invoices/${invoiceId}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['bookingInvoices', id] });
-    },
-  });
-
-  const contractMutation = useMutation({
-    mutationFn: () =>
-      apiPatch<BookingDetail>(`/bookings/${id}`, { contractSignedAt: new Date().toISOString() }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['booking', id] });
-    },
-  });
-
-  const depositMutation = useMutation({
-    mutationFn: () =>
-      apiPatch<BookingDetail>(`/bookings/${id}`, { depositReceivedAt: new Date().toISOString() }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['booking', id] });
-    },
-  });
 
   if (isLoading) return <PageSkeleton />;
 
@@ -619,10 +586,10 @@ export default function BookingDetailPage() {
                     {item.shortcutMarkDone && item.state === 'outstanding' && (
                       <button
                         onClick={() => {
-                          if (item.shortcutMarkDone === 'mark_contract_signed') contractMutation.mutate();
-                          else depositMutation.mutate();
+                          if (item.shortcutMarkDone === 'mark_contract_signed') actions.markContractSigned();
+                          else actions.markDepositReceived();
                         }}
-                        disabled={contractMutation.isPending || depositMutation.isPending}
+                        disabled={actions.isPending}
                         className="text-xs text-primary hover:underline flex-shrink-0 disabled:opacity-50"
                       >
                         Mark done
@@ -704,7 +671,7 @@ export default function BookingDetailPage() {
                     key={inv.id}
                     invoice={inv}
                     onEdit={openEditInvoice}
-                    onDelete={(inv) => deleteInvoiceMutation.mutate(inv.id)}
+                    onDelete={(inv) => actions.deleteInvoice(inv.id)}
                     onSend={openSendInvoice}
                     onMarkSent={setMarkSentInvoice}
                   />
