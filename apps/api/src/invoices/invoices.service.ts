@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InvoicesRepository } from './invoices.repository';
-import { MailService } from '../mail/mail.service';
+import { CommunicationsService } from '../communications/communications.service';
 import { DocumentsService } from '../documents/documents.service';
 import { PdfService } from '../documents/pdf.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
@@ -14,7 +14,7 @@ import { UpdateLineItemDto } from './dto/update-line-item.dto';
 export class InvoicesService {
   constructor(
     private repo: InvoicesRepository,
-    private mail: MailService,
+    private comms: CommunicationsService,
     private documents: DocumentsService,
     private pdf: PdfService,
   ) {}
@@ -63,7 +63,7 @@ export class InvoicesService {
 
     const filename = `${sentInvoice.invoiceNumber ?? 'invoice'}.pdf`;
 
-    await this.mail.send({
+    await this.comms.sendEmail({
       userId,
       bookingId,
       contactId: dto.contactId,

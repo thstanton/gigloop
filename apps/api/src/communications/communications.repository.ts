@@ -56,4 +56,39 @@ export class CommunicationsRepository {
       include,
     });
   }
+
+  createPending(
+    userId: string,
+    bookingId: string,
+    contactId: string,
+    subject: string,
+    body: string,
+    templateId?: string,
+  ) {
+    return this.prisma.communication.create({
+      data: {
+        userId,
+        bookingId,
+        contactId,
+        subject,
+        body,
+        status: CommunicationStatus.PENDING,
+        ...(templateId ? { templateId } : {}),
+      },
+    });
+  }
+
+  markSent(id: string) {
+    return this.prisma.communication.update({
+      where: { id },
+      data: { status: CommunicationStatus.SENT, sentAt: new Date() },
+    });
+  }
+
+  markFailed(id: string) {
+    return this.prisma.communication.update({
+      where: { id },
+      data: { status: CommunicationStatus.FAILED },
+    });
+  }
 }

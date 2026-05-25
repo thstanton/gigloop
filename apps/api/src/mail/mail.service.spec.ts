@@ -437,77 +437,31 @@ describe('MailService', () => {
 
   describe('send', () => {
     const sendOptions = {
-      userId: 'u1', bookingId: 'b1', contactId: 'ct1',
-      to: 'jane@example.com', subject: 'Your invoice',
-      body: '<p>Dear Jane,</p>', templateId: 'tmpl1',
+      to: 'jane@example.com',
+      subject: 'Your invoice',
+      body: '<p>Dear Jane,</p>',
     };
 
-    it('creates a PENDING communication before attempting send', async () => {
-      mockPrisma.communication.create.mockResolvedValue({ id: 'comm1' });
-      mockPrisma.communication.update.mockResolvedValue({});
-      await service.send(sendOptions);
-      expect(mockPrisma.communication.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({ status: 'PENDING' }),
-        }),
-      );
-    });
-
-    it('sends the provided body HTML directly without re-rendering', async () => {
-      mockPrisma.communication.create.mockResolvedValue({ id: 'comm1' });
-      mockPrisma.communication.update.mockResolvedValue({});
+    it('calls resend with the provided subject and body', async () => {
       await service.send(sendOptions);
       const resendInstance = (service as unknown as { resend: { emails: { send: jest.Mock } } }).resend;
       expect(resendInstance.emails.send).toHaveBeenCalledWith(
-        expect.objectContaining({ html: '<p>Dear Jane,</p>' }),
+        expect.objectContaining({ subject: 'Your invoice', html: '<p>Dear Jane,</p>' }),
       );
     });
 
-    it('updates communication to SENT with sentAt on success', async () => {
-      mockPrisma.communication.create.mockResolvedValue({ id: 'comm1' });
-      mockPrisma.communication.update.mockResolvedValue({});
-      await service.send(sendOptions);
-      expect(mockPrisma.communication.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: 'comm1' },
-          data: expect.objectContaining({ status: 'SENT', sentAt: expect.any(Date) }),
-        }),
-      );
-    });
-
-    it('updates communication to FAILED and rethrows when Resend throws', async () => {
-      mockPrisma.communication.create.mockResolvedValue({ id: 'comm1' });
-      mockPrisma.communication.update.mockResolvedValue({});
+    it('rethrows errors from Resend', async () => {
       const resendInstance = (service as unknown as { resend: { emails: { send: jest.Mock } } }).resend;
       resendInstance.emails.send.mockRejectedValueOnce(new Error('Resend error'));
       await expect(service.send(sendOptions)).rejects.toThrow('Resend error');
-      expect(mockPrisma.communication.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: 'comm1' },
-          data: { status: 'FAILED' },
-        }),
-      );
     });
 
-    it('does not set sentAt on FAILED update', async () => {
-      mockPrisma.communication.create.mockResolvedValue({ id: 'comm1' });
-      mockPrisma.communication.update.mockResolvedValue({});
+    it('passes attachments to Resend when provided', async () => {
+      const content = Buffer.from('pdf');
+      await service.send({ ...sendOptions, attachments: [{ filename: 'inv.pdf', content }] });
       const resendInstance = (service as unknown as { resend: { emails: { send: jest.Mock } } }).resend;
-      resendInstance.emails.send.mockRejectedValueOnce(new Error('fail'));
-      await expect(service.send(sendOptions)).rejects.toThrow();
-      const updateCall = mockPrisma.communication.update.mock.calls[0][0];
-      expect(updateCall.data.sentAt).toBeUndefined();
-    });
-
-    it('omits templateId from communication when not provided', async () => {
-      mockPrisma.communication.create.mockResolvedValue({ id: 'comm1' });
-      mockPrisma.communication.update.mockResolvedValue({});
-      const { templateId: _omit, ...opts } = sendOptions;
-      await service.send(opts);
-      expect(mockPrisma.communication.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.not.objectContaining({ templateId: expect.anything() }),
-        }),
+      expect(resendInstance.emails.send).toHaveBeenCalledWith(
+        expect.objectContaining({ attachments: [{ filename: 'inv.pdf', content }] }),
       );
     });
   });

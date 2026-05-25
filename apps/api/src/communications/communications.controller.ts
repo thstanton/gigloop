@@ -88,7 +88,7 @@ export class CommunicationsController {
     @Param('bookingId') bookingId: string,
     @Body() dto: SendEmailDto,
   ) {
-    await this.mail.send({
+    await this.service.sendEmail({
       userId: req.userId,
       bookingId,
       contactId: dto.contactId,

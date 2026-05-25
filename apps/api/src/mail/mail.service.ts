@@ -1,6 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Resend } from 'resend';
-import { CommunicationStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { renderTiptap } from './tiptap.renderer';
 import { TEMPLATE_DEFAULT_SUBJECTS, VARIABLE_FALLBACKS } from '../templates/default-templates';
@@ -24,14 +23,10 @@ export interface RenderResult {
   missingVariables: string[];
 }
 
-export interface SendEmailOptions {
-  userId: string;
-  bookingId: string;
-  contactId: string;
+export interface MailTransportOptions {
   to: string;
   subject: string;
   body: string;
-  templateId?: string;
   attachments?: Array<{ filename: string; content: Buffer }>;
 }
 
@@ -144,46 +139,20 @@ export class MailService {
     return { subject, missingVariables: [...new Set(missingVariables)] };
   }
 
-  async send(options: SendEmailOptions): Promise<void> {
-    const { userId, bookingId, contactId, to, subject, body, templateId, attachments } = options;
+  async send(options: MailTransportOptions): Promise<void> {
+    const { to, subject, body, attachments } = options;
 
-    // Create the communication record as PENDING before attempting to send
-    const communication = await this.prisma.communication.create({
-      data: {
-        userId,
-        bookingId,
-        contactId,
-        subject,
-        body,
-        status: CommunicationStatus.PENDING,
-        ...(templateId ? { templateId } : {}),
-      },
+    await this.resend.emails.send({
+      from: process.env.RESEND_FROM ?? 'noreply@gigman.com',
+      // TODO: For testing purposes only send emails to my address. When domain is set up this can be changed.
+      // to,
+      to: 'thstanton@proton.me',
+      subject,
+      html: body,
+      attachments: attachments?.map((a) => ({
+        filename: a.filename,
+        content: a.content,
+      })),
     });
-
-    try {
-      await this.resend.emails.send({
-        from: process.env.RESEND_FROM ?? 'noreply@gigman.com',
-        // TODO: For testing purposes only send emails to my address. When domain is set up this can be changed.
-        // to,
-        to: 'thstanton@proton.me',
-        subject,
-        html: body,
-        attachments: attachments?.map((a) => ({
-          filename: a.filename,
-          content: a.content,
-        })),
-      });
-
-      await this.prisma.communication.update({
-        where: { id: communication.id },
-        data: { status: CommunicationStatus.SENT, sentAt: new Date() },
-      });
-    } catch (err) {
-      await this.prisma.communication.update({
-        where: { id: communication.id },
-        data: { status: CommunicationStatus.FAILED },
-      });
-      throw err;
-    }
   }
 }

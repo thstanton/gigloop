@@ -1,7 +1,7 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { InvoicesService } from './invoices.service';
 import { InvoicesRepository } from './invoices.repository';
-import { MailService } from '../mail/mail.service';
+import { CommunicationsService } from '../communications/communications.service';
 
 jest.mock('../documents/pdf.service', () => ({
   PdfService: jest.fn().mockImplementation(() => ({ generateInvoicePdf: jest.fn() })),
@@ -40,7 +40,7 @@ function makeRepo(): MockRepo {
   };
 }
 
-const mockMail = { send: jest.fn() } as unknown as MailService;
+const mockComms = { sendEmail: jest.fn() } as unknown as CommunicationsService;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockDocuments = { storeInvoicePdf: jest.fn() } as any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -55,7 +55,7 @@ describe('InvoicesService', () => {
 
   beforeEach(() => {
     repo = makeRepo();
-    service = new InvoicesService(repo as unknown as InvoicesRepository, mockMail, mockDocuments, mockPdf);
+    service = new InvoicesService(repo as unknown as InvoicesRepository, mockComms, mockDocuments, mockPdf);
   });
 
   describe('findAll', () => {
@@ -228,7 +228,7 @@ describe('InvoicesService', () => {
       mockPdf.buildInvoicePdfData.mockResolvedValue(pdfData);
       mockPdf.generateFromData.mockResolvedValue(pdfBuffer);
       mockDocuments.storeInvoicePdf.mockResolvedValue({});
-      (mockMail.send as jest.Mock).mockResolvedValue(undefined);
+      (mockComms.sendEmail as jest.Mock).mockResolvedValue(undefined);
     });
 
     it('throws NotFoundException when invoice is not found', async () => {
@@ -265,7 +265,7 @@ describe('InvoicesService', () => {
 
     it('sends email with PDF attachment named after the invoice number', async () => {
       await service.send('u1', 'b1', 'i1', dto);
-      expect(mockMail.send).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockComms.sendEmail).toHaveBeenCalledWith(expect.objectContaining({
         attachments: [{ filename: 'INV-2026-001.pdf', content: pdfBuffer }],
         to: dto.to,
         subject: dto.subject,
