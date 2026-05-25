@@ -24,7 +24,7 @@ import { apiGet, apiPostVoid } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
 import { BUILT_IN_EMAIL_TYPES, TEMPLATE_DISPLAY } from '@/features/templates/templateMeta';
 import { getInvoiceIdForTemplate, formatMissingVariables } from './composeHelpers';
-import type { BookingDetail, BuiltInTemplateType, Invoice, Template, UserProfile } from '@/types/api';
+import type { BookingDetail, BuiltInTemplateType, Invoice, Template } from '@/types/api';
 
 interface RenderResult {
   subject: string;
@@ -36,6 +36,7 @@ interface Props {
   bookingId: string;
   booking: BookingDetail;
   invoices: Invoice[];
+  defaultPaymentTermsDays: number | undefined;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialTemplateType?: string;
@@ -46,6 +47,7 @@ export default function ComposeEmailSheet({
   bookingId,
   booking,
   invoices,
+  defaultPaymentTermsDays,
   open,
   onOpenChange,
   initialTemplateType,
@@ -73,12 +75,6 @@ export default function ComposeEmailSheet({
   const { data: templates = [] } = useQuery({
     queryKey: ['templates'],
     queryFn: () => apiGet<Template[]>('/templates'),
-    enabled: isLoaded && open,
-  });
-
-  const { data: userProfile } = useQuery({
-    queryKey: ['userProfile'],
-    queryFn: () => apiGet<UserProfile>('/me'),
     enabled: isLoaded && open,
   });
 
@@ -125,7 +121,7 @@ export default function ComposeEmailSheet({
     if (!showDateFields) return;
     const today = new Date().toISOString().slice(0, 10);
     setFormIssueDate(today);
-    const terms = userProfile?.defaultPaymentTermsDays;
+    const terms = defaultPaymentTermsDays;
     if (terms) {
       const due = new Date();
       due.setDate(due.getDate() + terms);
@@ -133,7 +129,7 @@ export default function ComposeEmailSheet({
     } else {
       setFormDueDate('');
     }
-  }, [showDateFields, userProfile?.defaultPaymentTermsDays]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [showDateFields, defaultPaymentTermsDays]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const renderQueryKey = ['renderEmail', bookingId, selectedTemplateId, invoiceId, formIssueDate, formDueDate];
   const renderUrl = useMemo(() => {
@@ -148,7 +144,7 @@ export default function ComposeEmailSheet({
   const { data: renderResult, isFetching: rendering } = useQuery({
     queryKey: renderQueryKey,
     queryFn: () => apiGet<RenderResult>(renderUrl),
-    enabled: isLoaded && open && !!selectedTemplateId && !!selectedTemplate && !!renderUrl,
+    enabled: isLoaded && open && !!selectedTemplateId && !!selectedTemplate && !!renderUrl && (!showDateFields || !!formIssueDate),
     staleTime: 0,
   });
 

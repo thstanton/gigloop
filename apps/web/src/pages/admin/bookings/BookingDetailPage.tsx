@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '@clerk/react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, CheckCircle2, Circle, AlertTriangle, Mail, Music, FileText, DollarSign, FolderOpen, ChevronDown, Check, Pencil, Trash2, Plus, Send } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckCircle2, Circle, AlertTriangle, Mail, Music, FileText, DollarSign, FolderOpen, ChevronDown, Check, Pencil, Plus, Send } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import {
@@ -773,6 +773,7 @@ export default function BookingDetailPage() {
         bookingId={id!}
         booking={booking}
         invoices={invoices}
+        defaultPaymentTermsDays={userProfile?.defaultPaymentTermsDays}
         open={composeOpen}
         onOpenChange={setComposeOpen}
         initialTemplateType={composeTemplateType}
