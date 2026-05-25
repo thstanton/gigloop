@@ -86,7 +86,7 @@ const VAR_NAMES = {
 
 const { customerName, bookingDate, venueName, bookingFee, setsSchedule,
         musicianName, musicianEmail, portalLink,
-        invoiceNumber, issueDate, invoiceTotal, invoiceDueDate } = VAR_NAMES;
+        invoiceTotal, invoiceDueDate } = VAR_NAMES;
 
 export const TEMPLATE_VARIABLES: Record<BuiltInTemplateType, TemplateVariable[]> = {
   quote:                       [customerName, bookingDate, venueName, bookingFee, portalLink, musicianName, musicianEmail],

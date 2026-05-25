@@ -14,6 +14,7 @@ import InvoiceStatusPill from '@/components/InvoiceStatusPill';
 import { useBooking } from '@/lib/hooks/useBooking';
 import { useBookingInvoices } from '@/lib/hooks/useBookingInvoices';
 import { useBookingCommunications } from '@/lib/hooks/useBookingCommunications';
+import { useBookingDocuments } from '@/lib/hooks/useBookingDocuments';
 import BookingEditDrawer from '@/features/bookings/BookingEditDrawer';
 import ComposeEmailSheet from '@/features/communications/ComposeEmailSheet';
 import InvoiceSheet from '@/features/invoices/InvoiceSheet';
@@ -34,6 +35,7 @@ import type {
   PerformanceSet,
   Invoice,
   Communication,
+  Document,
   UserProfile,
 } from '@/types/api';
 
@@ -394,6 +396,7 @@ export default function BookingDetailPage() {
   const { data: booking, isLoading, isError } = useBooking(id!);
   const { data: invoices = [], isPending: invoicesPending } = useBookingInvoices(id!);
   const { data: communications = [] } = useBookingCommunications(id!);
+  const { data: documents = [] } = useBookingDocuments(id!);
   const { data: userProfile } = useQuery({
     queryKey: ['me'],
     queryFn: () => apiGet<UserProfile>('/me'),
@@ -729,10 +732,32 @@ export default function BookingDetailPage() {
 
           {/* Documents */}
           <Card title="Documents">
-            <div className="flex items-center gap-2 text-muted py-1">
-              <FolderOpen size={14} />
-              <span className="text-sm">No documents yet</span>
-            </div>
+            {documents.length === 0 ? (
+              <div className="flex items-center gap-2 text-muted py-1">
+                <FolderOpen size={14} />
+                <span className="text-sm">No documents yet</span>
+              </div>
+            ) : (
+              <div className="divide-y divide-border">
+                {documents.map((doc: Document) => (
+                  <a
+                    key={doc.id}
+                    href={doc.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 py-2 text-sm text-foreground hover:text-primary"
+                  >
+                    <FileText size={14} className="flex-shrink-0 text-muted" />
+                    <span>
+                      {doc.type === 'INVOICE' ? 'Invoice' : 'Contract'}
+                    </span>
+                    <span className="text-muted ml-auto text-xs">
+                      {new Date(doc.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </span>
+                  </a>
+                ))}
+              </div>
+            )}
           </Card>
         </div>
       </section>

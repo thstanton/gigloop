@@ -265,6 +265,20 @@ export interface UpdateSongInput {
 }
 
 // ─────────────────────────────────────────
+// Documents
+// ─────────────────────────────────────────
+
+export type DocumentType = 'INVOICE' | 'CONTRACT';
+
+export interface Document {
+  id: string;
+  createdAt: string;
+  type: DocumentType;
+  url: string;
+  invoiceId: string | null;
+}
+
+// ─────────────────────────────────────────
 // Communications
 // ─────────────────────────────────────────
 
