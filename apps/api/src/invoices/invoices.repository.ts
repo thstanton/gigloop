@@ -44,13 +44,15 @@ export class InvoicesRepository {
     billToContactId: string,
     dto: CreateInvoiceDto,
   ) {
-    const { lineItems, billToContactId: _ignored, ...fields } = dto;
+    const { lineItems, billToContactId: _ignored, issueDate, dueDate, ...fields } = dto;
     return this.prisma.invoice.create({
       data: {
         userId,
         bookingId,
         billToContactId,
         ...fields,
+        ...(issueDate ? { issueDate: new Date(issueDate) } : {}),
+        ...(dueDate ? { dueDate: new Date(dueDate) } : {}),
         lineItems: lineItems?.length
           ? {
               create: lineItems.map((item, i) => ({
@@ -66,9 +68,14 @@ export class InvoicesRepository {
   }
 
   update(id: string, dto: UpdateInvoiceDto) {
+    const { issueDate, dueDate, ...fields } = dto;
     return this.prisma.invoice.update({
       where: { id },
-      data: dto,
+      data: {
+        ...fields,
+        ...(issueDate ? { issueDate: new Date(issueDate) } : {}),
+        ...(dueDate !== undefined ? { dueDate: dueDate ? new Date(dueDate) : null } : {}),
+      },
       include: invoiceIncludes,
     });
   }
