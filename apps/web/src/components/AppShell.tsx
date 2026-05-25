@@ -3,6 +3,7 @@ import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth, useClerk, useUser } from '@clerk/react';
 import { useQuery } from '@tanstack/react-query';
 import { apiGet } from '@/lib/api';
+import type { PublicProfile } from '@/types/api';
 import {
   LayoutDashboard,
   CalendarDays,
@@ -40,16 +41,18 @@ const secondaryNav: NavItem[] = [
 
 // ─── Hooks ───────────────────────────────────────────────────────────────────
 
-function useBusinessName() {
+function usePublicProfileData() {
   const { isLoaded } = useAuth();
   const { data, isPending } = useQuery({
     queryKey: ['publicProfile'],
-    queryFn: () => apiGet<{ businessName?: string }>('/me/public'),
+    queryFn: () => apiGet<PublicProfile>('/me/public'),
     enabled: isLoaded,
     staleTime: 5 * 60 * 1000,
   });
   return {
     businessName: data?.businessName ?? '',
+    logoUrl: data?.logoUrl ?? null,
+    photo: data?.photo ?? null,
     isLoading: !isLoaded || isPending,
   };
 }
@@ -135,6 +138,7 @@ function UserMenu() {
 
 function UserAvatar({ size = 'sm' }: { size?: 'sm' | 'md' }) {
   const { user } = useUser();
+  const { photo } = usePublicProfileData();
   const initials =
     [user?.firstName, user?.lastName]
       .filter(Boolean)
@@ -142,11 +146,21 @@ function UserAvatar({ size = 'sm' }: { size?: 'sm' | 'md' }) {
       .join('')
       .toUpperCase() || '?';
 
+  const sizeClass = size === 'sm' ? 'w-7 h-7' : 'w-9 h-9';
+
+  if (photo) {
+    return (
+      <div className={cn('rounded-full overflow-hidden flex-shrink-0', sizeClass)}>
+        <img src={photo} alt="Profile" className="w-full h-full object-cover" />
+      </div>
+    );
+  }
+
   return (
     <div
       className={cn(
         'rounded-full bg-primary flex items-center justify-center flex-shrink-0',
-        size === 'sm' ? 'w-7 h-7' : 'w-9 h-9',
+        sizeClass,
       )}
     >
       <span
@@ -183,10 +197,14 @@ function Sidebar() {
 
 // ─── Desktop: top bar ─────────────────────────────────────────────────────────
 
-function DesktopTopBar({ businessName, isLoading }: { businessName: string; isLoading: boolean }) {
+function DesktopTopBar({ businessName, logoUrl, isLoading }: { businessName: string; logoUrl: string | null; isLoading: boolean }) {
   return (
     <header className="hidden md:flex fixed top-0 inset-x-0 h-14 bg-background border-b border-border items-center px-6 z-30">
-      <span className="text-xl font-semibold text-foreground">GigMan</span>
+      {logoUrl ? (
+        <img src={logoUrl} alt={businessName} className="h-8 max-w-32 object-contain" />
+      ) : (
+        <span className="text-xl font-semibold text-foreground">GigMan</span>
+      )}
       <div className="ml-auto">
         {isLoading
           ? <div className="h-3 w-28 bg-border rounded animate-pulse" />
@@ -199,10 +217,14 @@ function DesktopTopBar({ businessName, isLoading }: { businessName: string; isLo
 
 // ─── Mobile: top bar ─────────────────────────────────────────────────────────
 
-function MobileTopBar() {
+function MobileTopBar({ logoUrl, businessName }: { logoUrl: string | null; businessName: string }) {
   return (
     <header className="md:hidden fixed top-0 inset-x-0 h-14 bg-background border-b border-border flex items-center px-4 z-20">
-      <span className="text-sm font-semibold text-foreground">GigMan</span>
+      {logoUrl ? (
+        <img src={logoUrl} alt={businessName} className="h-8 max-w-28 object-contain" />
+      ) : (
+        <span className="text-sm font-semibold text-foreground">GigMan</span>
+      )}
     </header>
   );
 }
@@ -304,7 +326,7 @@ function BottomTabBar() {
 // ─── AppShell ────────────────────────────────────────────────────────────────
 
 export default function AppShell() {
-  const { businessName, isLoading } = useBusinessName();
+  const { businessName, logoUrl, isLoading } = usePublicProfileData();
 
   return (
     <div className="min-h-screen bg-surface">
@@ -312,11 +334,11 @@ export default function AppShell() {
       <Sidebar />
 
       {/* Mobile top bar */}
-      <MobileTopBar />
+      <MobileTopBar logoUrl={logoUrl} businessName={businessName} />
 
       {/* Content — offset for sidebar on desktop, top bar on mobile */}
       <div className="md:ml-60 flex flex-col min-h-screen pt-14 pb-16 md:pb-0">
-        <DesktopTopBar businessName={businessName} isLoading={isLoading} />
+        <DesktopTopBar businessName={businessName} logoUrl={logoUrl} isLoading={isLoading} />
         <main className="flex-1 md:overflow-y-auto">
           <Outlet />
         </main>

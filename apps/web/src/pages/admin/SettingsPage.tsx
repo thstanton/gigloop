@@ -146,6 +146,8 @@ function Toggle({
 
 // ─── Image upload field ───────────────────────────────────────────────────────
 
+const MAX_UPLOAD_BYTES = 5 * 1024 * 1024; // 5 MB
+
 function ImageUploadField({
   label,
   description,
@@ -155,6 +157,7 @@ function ImageUploadField({
   onFileSelect,
   onRemove,
   variant = 'square',
+  maxSizeBytes = MAX_UPLOAD_BYTES,
 }: {
   label: string;
   description?: string;
@@ -164,6 +167,7 @@ function ImageUploadField({
   onFileSelect: (file: File) => void;
   onRemove: () => void;
   variant?: 'square' | 'landscape';
+  maxSizeBytes?: number;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -223,7 +227,13 @@ function ImageUploadField({
           className="sr-only"
           onChange={(e) => {
             const file = e.target.files?.[0];
-            if (file) onFileSelect(file);
+            if (!file) return;
+            if (file.size > maxSizeBytes) {
+              toast({ title: `File too large — maximum size is ${Math.round(maxSizeBytes / 1024 / 1024)} MB`, variant: 'destructive' });
+              e.target.value = '';
+              return;
+            }
+            onFileSelect(file);
             e.target.value = '';
           }}
         />
