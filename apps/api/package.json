@@ -19,7 +19,7 @@
     "@clerk/backend": "^3.4.11",
     "@neondatabase/serverless": "^0.9.0",
     "@nestjs/common": "^10.0.0",
-    "@nestjs/core": "^10.0.0",
+    "@nestjs/core": "^11.1.24",
     "@nestjs/platform-express": "^10.0.0",
     "@nestjs/swagger": "^11.4.4",
     "@prisma/adapter-neon": "^6.0.0",
