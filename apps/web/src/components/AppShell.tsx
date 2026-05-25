@@ -200,15 +200,13 @@ function Sidebar() {
 function DesktopTopBar({ businessName, logoUrl, isLoading }: { businessName: string; logoUrl: string | null; isLoading: boolean }) {
   return (
     <header className="hidden md:flex fixed top-0 inset-x-0 h-14 bg-background border-b border-border items-center px-6 z-30">
-      {logoUrl ? (
-        <img src={logoUrl} alt={businessName} className="h-8 max-w-32 object-contain" />
-      ) : (
-        <span className="text-xl font-semibold text-foreground">GigMan</span>
-      )}
+      <span className="text-xl font-semibold text-foreground">GigMan</span>
       <div className="ml-auto">
         {isLoading
           ? <div className="h-3 w-28 bg-border rounded animate-pulse" />
-          : <span className="text-sm text-muted">{businessName}</span>
+          : logoUrl
+            ? <img src={logoUrl} alt={businessName} className="h-8 max-w-32 object-contain" />
+            : <span className="text-sm text-muted">{businessName}</span>
         }
       </div>
     </header>
@@ -217,14 +215,10 @@ function DesktopTopBar({ businessName, logoUrl, isLoading }: { businessName: str
 
 // ─── Mobile: top bar ─────────────────────────────────────────────────────────
 
-function MobileTopBar({ logoUrl, businessName }: { logoUrl: string | null; businessName: string }) {
+function MobileTopBar() {
   return (
     <header className="md:hidden fixed top-0 inset-x-0 h-14 bg-background border-b border-border flex items-center px-4 z-20">
-      {logoUrl ? (
-        <img src={logoUrl} alt={businessName} className="h-8 max-w-28 object-contain" />
-      ) : (
-        <span className="text-sm font-semibold text-foreground">GigMan</span>
-      )}
+      <span className="text-sm font-semibold text-foreground">GigMan</span>
     </header>
   );
 }
@@ -334,7 +328,7 @@ export default function AppShell() {
       <Sidebar />
 
       {/* Mobile top bar */}
-      <MobileTopBar logoUrl={logoUrl} businessName={businessName} />
+      <MobileTopBar />
 
       {/* Content — offset for sidebar on desktop, top bar on mobile */}
       <div className="md:ml-60 flex flex-col min-h-screen pt-14 pb-16 md:pb-0">
