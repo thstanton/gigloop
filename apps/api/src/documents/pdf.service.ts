@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { join, dirname } from 'path';
 import { createRequire } from 'module';
 import { PrismaService } from '../prisma/prisma.service';
@@ -22,14 +22,17 @@ pdfmake.addFonts({
 pdfmake.setLocalAccessPolicy(() => true);
 pdfmake.setUrlAccessPolicy(() => true);
 
-@Injectable()
-export class PdfService implements OnModuleInit {
-  constructor(private prisma: PrismaService) {}
+async function fetchAsDataUrl(url: string): Promise<string> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Failed to fetch image: ${res.status} ${url}`);
+  const buffer = Buffer.from(await res.arrayBuffer());
+  const contentType = res.headers.get('content-type') ?? 'image/png';
+  return `data:${contentType};base64,${buffer.toString('base64')}`;
+}
 
-  onModuleInit() {
-    // Fonts are configured at module level above; this hook exists for future
-    // warm-up steps (e.g. pre-fetching the logo) if needed.
-  }
+@Injectable()
+export class PdfService {
+  constructor(private prisma: PrismaService) {}
 
   async buildInvoicePdfData(userId: string, invoiceId: string): Promise<InvoicePdfData> {
     const invoice = await this.prisma.invoice.findFirst({
@@ -91,6 +94,13 @@ export class PdfService implements OnModuleInit {
 
   async generateInvoicePdf(userId: string, invoiceId: string): Promise<Buffer> {
     const data = await this.buildInvoicePdfData(userId, invoiceId);
+
+    // pdfmake's Node.js image loader only handles file paths and data URLs,
+    // not remote HTTPS URLs. Fetch the logo and convert to a data URL first.
+    if (data.logoUrl) {
+      data.logoUrl = await fetchAsDataUrl(data.logoUrl);
+    }
+
     const docDef = buildInvoiceDefinition(data);
     return pdfmake.createPdf(docDef).getBuffer() as Promise<Buffer>;
   }
