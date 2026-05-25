@@ -198,10 +198,11 @@ model Invoice {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  status    InvoiceStatus @default(DRAFT)
-  isDeposit Boolean       @default(false)
-  issueDate DateTime      @default(now())
-  dueDate   DateTime?
+  status        InvoiceStatus @default(DRAFT)
+  isDeposit     Boolean       @default(false)
+  invoiceNumber String?
+  issueDate     DateTime?
+  dueDate       DateTime?
 
   bookingId String
   booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)

@@ -1,6 +1,7 @@
 import { NotFoundException } from '@nestjs/common';
 import { InvoicesService } from './invoices.service';
 import { InvoicesRepository } from './invoices.repository';
+import { MailService } from '../mail/mail.service';
 
 type MockRepo = {
   findBookingCustomerId: jest.Mock;
@@ -9,6 +10,7 @@ type MockRepo = {
   create: jest.Mock;
   update: jest.Mock;
   delete: jest.Mock;
+  assignAndMarkSent: jest.Mock;
   findLineItem: jest.Mock;
   addLineItem: jest.Mock;
   updateLineItem: jest.Mock;
@@ -23,6 +25,7 @@ function makeRepo(): MockRepo {
     create: jest.fn(),
     update: jest.fn(),
     delete: jest.fn(),
+    assignAndMarkSent: jest.fn(),
     findLineItem: jest.fn(),
     addLineItem: jest.fn(),
     updateLineItem: jest.fn(),
@@ -30,7 +33,9 @@ function makeRepo(): MockRepo {
   };
 }
 
-const invoice = { id: 'i1', bookingId: 'b1', userId: 'u1' };
+const mockMail = { send: jest.fn() } as unknown as MailService;
+
+const invoice = { id: 'i1', bookingId: 'b1', userId: 'u1', status: 'DRAFT' };
 const lineItem = { id: 'li1', invoiceId: 'i1', userId: 'u1' };
 
 describe('InvoicesService', () => {
@@ -39,7 +44,7 @@ describe('InvoicesService', () => {
 
   beforeEach(() => {
     repo = makeRepo();
-    service = new InvoicesService(repo as unknown as InvoicesRepository);
+    service = new InvoicesService(repo as unknown as InvoicesRepository, mockMail);
   });
 
   describe('findAll', () => {

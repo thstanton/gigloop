@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsUUID } from 'class-validator';
+import { IsDateString, IsOptional, IsUUID } from 'class-validator';
 
 export class RenderEmailQueryDto {
   @ApiProperty({ description: 'Template to render' })
@@ -10,4 +10,14 @@ export class RenderEmailQueryDto {
   @IsOptional()
   @IsUUID()
   invoiceId?: string;
+
+  @ApiPropertyOptional({ description: 'Issue date override for draft invoice preview', example: '2026-06-01' })
+  @IsOptional()
+  @IsDateString()
+  issueDate?: string;
+
+  @ApiPropertyOptional({ description: 'Due date override for draft invoice preview', example: '2026-06-15' })
+  @IsOptional()
+  @IsDateString()
+  dueDate?: string;
 }

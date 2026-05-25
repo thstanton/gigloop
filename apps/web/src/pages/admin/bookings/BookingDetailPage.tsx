@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '@clerk/react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, CheckCircle2, Circle, AlertTriangle, Mail, Music, FileText, DollarSign, FolderOpen, ChevronDown, Check, Pencil, Trash2, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckCircle2, Circle, AlertTriangle, Mail, Music, FileText, DollarSign, FolderOpen, ChevronDown, Check, Pencil, Trash2, Plus, Send } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import {
@@ -17,6 +17,7 @@ import { useBookingCommunications } from '@/lib/hooks/useBookingCommunications';
 import BookingEditDrawer from '@/features/bookings/BookingEditDrawer';
 import ComposeEmailSheet from '@/features/communications/ComposeEmailSheet';
 import InvoiceSheet from '@/features/invoices/InvoiceSheet';
+import MarkSentDialog from '@/features/invoices/MarkSentDialog';
 import { buildChecklist } from '@/lib/buildChecklist';
 import { apiGet, apiPatch, apiDelete, apiPost } from '@/lib/api';
 import {
@@ -254,10 +255,14 @@ function InvoiceRow({
   invoice,
   onEdit,
   onDelete,
+  onSend,
+  onMarkSent,
 }: {
   invoice: Invoice;
   onEdit: (invoice: Invoice) => void;
   onDelete: (invoice: Invoice) => void;
+  onSend: (invoice: Invoice) => void;
+  onMarkSent: (invoice: Invoice) => void;
 }) {
   const overdue =
     invoice.status === 'SENT' &&
@@ -271,7 +276,7 @@ function InvoiceRow({
       <div className="min-w-0">
         <p className="text-sm text-foreground">{invoice.isDeposit ? 'Deposit' : 'Balance'}</p>
         <p className="text-xs text-muted mt-0.5">
-          {formatDate(invoice.issueDate)}
+          {invoice.issueDate ? formatDate(invoice.issueDate) : '—'}
           {invoice.dueDate && ` · due ${formatDate(invoice.dueDate)}`}
         </p>
       </div>
@@ -283,19 +288,40 @@ function InvoiceRow({
         {isDraft && (
           <>
             <button
+              onClick={() => onSend(invoice)}
+              className="text-muted hover:text-foreground transition-colors"
+              aria-label="Send invoice"
+            >
+              <Send size={13} />
+            </button>
+            <button
               onClick={() => onEdit(invoice)}
               className="text-muted hover:text-foreground transition-colors"
               aria-label="Edit invoice"
             >
               <Pencil size={13} />
             </button>
-            <button
-              onClick={() => onDelete(invoice)}
-              className="text-muted hover:text-status-cancelled transition-colors"
-              aria-label="Delete invoice"
-            >
-              <Trash2 size={13} />
-            </button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="text-muted hover:text-foreground transition-colors"
+                  aria-label="More actions"
+                >
+                  <ChevronDown size={13} />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => onMarkSent(invoice)}>
+                  Mark as sent
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => onDelete(invoice)}
+                  className="text-status-cancelled focus:text-status-cancelled"
+                >
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </>
         )}
       </div>
@@ -362,6 +388,7 @@ export default function BookingDetailPage() {
   const [invoiceSheetOpen, setInvoiceSheetOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<Invoice | undefined>();
   const [invoiceSheetPrefill, setInvoiceSheetPrefill] = useState<{ isDeposit: boolean; amount?: number } | undefined>();
+  const [markSentInvoice, setMarkSentInvoice] = useState<Invoice | undefined>();
 
   const { isLoaded } = useAuth();
   const { data: booking, isLoading, isError } = useBooking(id!);
@@ -388,6 +415,11 @@ export default function BookingDetailPage() {
     setEditingInvoice(invoice);
     setInvoiceSheetPrefill(undefined);
     setInvoiceSheetOpen(true);
+  }
+
+  function openSendInvoice(invoice: Invoice) {
+    const templateType = invoice.isDeposit ? 'deposit_invoice_cover' : 'balance_invoice_cover';
+    openCompose(templateType);
   }
 
   const autoCreateInvoiceMutation = useMutation({
@@ -687,6 +719,8 @@ export default function BookingDetailPage() {
                     invoice={inv}
                     onEdit={openEditInvoice}
                     onDelete={(inv) => deleteInvoiceMutation.mutate(inv.id)}
+                    onSend={openSendInvoice}
+                    onMarkSent={setMarkSentInvoice}
                   />
                 ))}
               </div>
@@ -743,6 +777,15 @@ export default function BookingDetailPage() {
         onOpenChange={setComposeOpen}
         initialTemplateType={composeTemplateType}
       />
+      {markSentInvoice && (
+        <MarkSentDialog
+          bookingId={id!}
+          invoice={markSentInvoice}
+          userProfile={userProfile}
+          open={!!markSentInvoice}
+          onOpenChange={(open) => { if (!open) setMarkSentInvoice(undefined); }}
+        />
+      )}
     </div>
   );
 }

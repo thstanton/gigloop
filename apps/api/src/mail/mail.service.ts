@@ -47,6 +47,8 @@ export class MailService {
     userId: string,
     bookingId: string,
     invoiceId?: string,
+    issueDateOverride?: string,
+    dueDateOverride?: string,
   ): Promise<EmailContext> {
     const booking = await this.prisma.booking.findFirst({
       where: { id: bookingId, userId },
@@ -80,11 +82,11 @@ export class MailService {
           (sum, item) => sum + Number(item.amount),
           0,
         );
-        issueDate = invoice.issueDate.toISOString().split('T')[0];
+        issueDate = issueDateOverride
+          ?? (invoice.issueDate ? invoice.issueDate.toISOString().split('T')[0] : '');
         invoiceTotal = total.toFixed(2);
-        invoiceDueDate = invoice.dueDate
-          ? invoice.dueDate.toISOString().split('T')[0]
-          : '';
+        invoiceDueDate = dueDateOverride
+          ?? (invoice.dueDate ? invoice.dueDate.toISOString().split('T')[0] : '');
       }
     }
 

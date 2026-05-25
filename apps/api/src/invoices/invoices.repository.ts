@@ -27,7 +27,7 @@ export class InvoicesRepository {
     return this.prisma.invoice.findMany({
       where: { userId, bookingId },
       include: invoiceIncludes,
-      orderBy: { issueDate: 'asc' },
+      orderBy: { issueDate: { sort: 'asc', nulls: 'last' } },
     });
   }
 
@@ -44,15 +44,13 @@ export class InvoicesRepository {
     billToContactId: string,
     dto: CreateInvoiceDto,
   ) {
-    const { lineItems, billToContactId: _ignored, issueDate, dueDate, ...fields } = dto;
+    const { lineItems, billToContactId: _ignored, ...fields } = dto;
     return this.prisma.invoice.create({
       data: {
         userId,
         bookingId,
         billToContactId,
         ...fields,
-        ...(issueDate ? { issueDate: new Date(issueDate) } : {}),
-        ...(dueDate ? { dueDate: new Date(dueDate) } : {}),
         lineItems: lineItems?.length
           ? {
               create: lineItems.map((item, i) => ({
@@ -68,20 +66,45 @@ export class InvoicesRepository {
   }
 
   update(id: string, dto: UpdateInvoiceDto) {
-    const { issueDate, dueDate, ...fields } = dto;
     return this.prisma.invoice.update({
       where: { id },
-      data: {
-        ...fields,
-        ...(issueDate ? { issueDate: new Date(issueDate) } : {}),
-        ...(dueDate !== undefined ? { dueDate: dueDate ? new Date(dueDate) : null } : {}),
-      },
+      data: dto,
       include: invoiceIncludes,
     });
   }
 
   delete(id: string) {
     return this.prisma.invoice.delete({ where: { id } });
+  }
+
+  async assignAndMarkSent(
+    userId: string,
+    id: string,
+    issueDate: Date,
+    dueDate: Date | null,
+  ) {
+    const currentYear = new Date().getFullYear();
+
+    return this.prisma.$transaction(async (tx) => {
+      const profile = await tx.userProfile.findUnique({ where: { userId } });
+      if (!profile) throw new Error('User profile not found');
+
+      const isNewYear = profile.invoiceSequenceYear !== currentYear;
+      const nextSeq = isNewYear ? 1 : profile.invoiceNumberSequence + 1;
+
+      await tx.userProfile.update({
+        where: { userId },
+        data: { invoiceNumberSequence: nextSeq, invoiceSequenceYear: currentYear },
+      });
+
+      const invoiceNumber = `INV-${currentYear}-${String(nextSeq).padStart(3, '0')}`;
+
+      return tx.invoice.update({
+        where: { id },
+        data: { invoiceNumber, issueDate, dueDate, status: 'SENT' },
+        include: invoiceIncludes,
+      });
+    });
   }
 
   findLineItem(userId: string, invoiceId: string, itemId: string) {

@@ -9,10 +9,12 @@ import {
   Post,
   Req,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { InvoicesService } from './invoices.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
+import { SendInvoiceDto } from './dto/send-invoice.dto';
+import { MarkSentDto } from './dto/mark-sent.dto';
 import { CreateLineItemDto } from './dto/create-line-item.dto';
 import { UpdateLineItemDto } from './dto/update-line-item.dto';
 import type { Request } from 'express';
@@ -63,6 +65,33 @@ export class InvoicesController {
     @Body() dto: UpdateInvoiceDto,
   ) {
     return this.service.update(req.userId, bookingId, id, dto);
+  }
+
+  @ApiOperation({ summary: 'Send an invoice email and mark it Sent' })
+  @ApiResponse({ status: 204, description: 'Invoice sent and marked Sent' })
+  @ApiResponse({ status: 400, description: 'Invoice is not a draft' })
+  @Post(':id/send')
+  @HttpCode(204)
+  send(
+    @Req() req: AuthedRequest,
+    @Param('bookingId') bookingId: string,
+    @Param('id') id: string,
+    @Body() dto: SendInvoiceDto,
+  ) {
+    return this.service.send(req.userId, bookingId, id, dto);
+  }
+
+  @ApiOperation({ summary: 'Mark an invoice as sent without emailing' })
+  @ApiResponse({ status: 200, description: 'Invoice marked Sent' })
+  @ApiResponse({ status: 400, description: 'Invoice is not a draft' })
+  @Post(':id/mark-sent')
+  markSent(
+    @Req() req: AuthedRequest,
+    @Param('bookingId') bookingId: string,
+    @Param('id') id: string,
+    @Body() dto: MarkSentDto,
+  ) {
+    return this.service.markSent(req.userId, bookingId, id, dto);
   }
 
   @ApiOperation({ summary: 'Delete an invoice' })

@@ -62,9 +62,11 @@ A financial document issued to a Contact for a Booking. A Booking can have multi
 
 **Status:** `Draft | Sent | Paid` (stored). *Overdue* is derived — not a stored state — inferred when status is `Sent`, a due date is set, and that date has passed.
 
-Two ways to move to `Sent`: (1) **Send** — app emails the invoice PDF via Resend using the appropriate invoice cover template (`deposit_invoice_cover` or `balance_invoice_cover`) and atomically marks it Sent; (2) **Mark as sent** — marks it Sent without sending an email, for cases where the invoice was communicated outside the app.
+Two ways to move to `Sent`: (1) **Send** — app emails the invoice via Resend using the appropriate invoice cover template (`deposit_invoice_cover` or `balance_invoice_cover`) and atomically sets the issue date, due date, invoice number, and marks it Sent; (2) **Mark as sent** — sets dates and invoice number and marks it Sent without sending an email, for cases where the invoice was communicated outside the app. Both paths go through dedicated endpoints (`POST /invoices/:id/send` and `POST /invoices/:id/mark-sent`).
 
-**Fields include:** issueDate, dueDate (optional), status, isDeposit (boolean, default false — at most one deposit invoice per booking), and a reference to which Contact it is addressed to (defaults to the Booking's customer but may differ). When `isDeposit` is true and the invoice is marked Paid, `Booking.depositReceivedAt` is automatically set (if `depositTrackingMode` resolves to `INVOICE`).
+**Fields include:** invoiceNumber (nullable — null until sent, assigned from `UserProfile.invoiceNumberSequence` at send time, format `INV-{year}-{NNN}`), issueDate (nullable — null until sent, defaults to today at send time), dueDate (nullable — null until sent, defaults to `issueDate + UserProfile.defaultPaymentTermsDays` if set), status, isDeposit (boolean, default false — at most one deposit invoice per booking), and a reference to which Contact it is addressed to (defaults to the Booking's customer but may differ). When `isDeposit` is true and the invoice is marked Paid, `Booking.depositReceivedAt` is automatically set (if `depositTrackingMode` resolves to `INVOICE`).
+
+**Draft state:** a draft invoice has no invoiceNumber, issueDate, or dueDate. These display as "—" in the UI.
 
 **Balance invoice PDF rendering:** when generating the balance invoice PDF, derive the deposit amount at render time from the deposit [[Invoice]]'s line item total (isDeposit=true). Show a breakdown: subtotal, less deposit paid, balance due. Only show this section if a deposit Invoice exists on the booking. Do not add a stored field for this.
 
@@ -157,7 +159,7 @@ A closed enum categorising Songs: `Contemporary | Classical | Jazz | Film, TV an
 ### BookingChecklist
 A computed, context-sensitive list of actions for a [[Booking]]. Not a stored entity — derived entirely from existing booking state. Displayed on the Booking detail page and shared as the "required actions" content in the [[DigestNotification]].
 
-**Items (in order):** Send quote, Send contract/deposit email, Contract signed, Deposit received, Send music form invite, Song requests received, Send thank you.
+**Items (in order):** Send quote, Create deposit invoice, Send contract/deposit email, Contract signed, Deposit received, Create balance invoice, Send music form invite, Song requests received, Send thank you.
 
 Each item has one of four states:
 - **Done** — completed; shown with a tick and muted text
@@ -170,9 +172,11 @@ A Communication only counts as "Done" if `status = SENT`. `PENDING` and `FAILED`
 | Item | Done when | Failed when | Irrelevant when |
 |---|---|---|---|
 | Send quote | `quote` [[Communication]] with status SENT exists | most recent `quote` Communication is FAILED | status ≥ CONFIRMED |
+| Create deposit invoice | deposit [[Invoice]] exists (isDeposit=true) | — | deposit tracking resolves to NONE |
 | Send contract/deposit email | `contract_cover` or `contract_and_deposit_cover` Communication with status SENT exists | most recent such Communication is FAILED | `contractSignedAt` set AND (`depositReceivedAt` set OR deposit tracking resolves to NONE) |
 | Contract signed | `contractSignedAt` set | — | status is ENQUIRY OR status ≥ SETTLED |
 | Deposit received | `depositReceivedAt` set | — | deposit tracking resolves to NONE OR status is ENQUIRY |
+| Create balance invoice | balance [[Invoice]] exists (isDeposit=false) | — | status is ENQUIRY |
 | Send music form invite | `music_form_invite` Communication with status SENT exists | most recent `music_form_invite` Communication is FAILED | no [[MusicFormConfig]] on booking OR status is ENQUIRY |
 | Song requests received | [[MusicFormResponse]] exists | — | no MusicFormConfig OR no `music_form_invite` Communication with status SENT exists |
 | Send thank you | `thank_you` Communication with status SENT exists | most recent `thank_you` Communication is FAILED | today is before booking date |

@@ -12,6 +12,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
@@ -23,7 +24,7 @@ import { apiGet, apiPostVoid } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
 import { BUILT_IN_EMAIL_TYPES, TEMPLATE_DISPLAY } from '@/features/templates/templateMeta';
 import { getInvoiceIdForTemplate, formatMissingVariables } from './composeHelpers';
-import type { BookingDetail, BuiltInTemplateType, Invoice, Template } from '@/types/api';
+import type { BookingDetail, BuiltInTemplateType, Invoice, Template, UserProfile } from '@/types/api';
 
 interface RenderResult {
   subject: string;
@@ -56,6 +57,8 @@ export default function ComposeEmailSheet({
   const [subject, setSubject] = useState('');
   const [missingVariables, setMissingVariables] = useState<string[]>([]);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [formIssueDate, setFormIssueDate] = useState('');
+  const [formDueDate, setFormDueDate] = useState('');
 
   const editor = useEditor({
     extensions: [StarterKit, Underline],
@@ -70,6 +73,12 @@ export default function ComposeEmailSheet({
   const { data: templates = [] } = useQuery({
     queryKey: ['templates'],
     queryFn: () => apiGet<Template[]>('/templates'),
+    enabled: isLoaded && open,
+  });
+
+  const { data: userProfile } = useQuery({
+    queryKey: ['userProfile'],
+    queryFn: () => apiGet<UserProfile>('/me'),
     enabled: isLoaded && open,
   });
 
@@ -90,11 +99,12 @@ export default function ComposeEmailSheet({
     setMissingVariables([]);
     setSendError(null);
     setSelectedTemplateId('');
+    setFormIssueDate('');
+    setFormDueDate('');
     editor?.commands.setContent('');
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Pre-select once when the filtered template list is ready — uses emailTemplates so the
-  // selected id always has a matching SelectItem (avoids Radix showing the control as empty)
+  // Pre-select once when the filtered template list is ready
   const didPreselect = useRef(false);
   useEffect(() => {
     if (!open) { didPreselect.current = false; return; }
@@ -107,14 +117,38 @@ export default function ComposeEmailSheet({
   const selectedTemplate = emailTemplates.find((t) => t.id === selectedTemplateId) ?? null;
   const selectedType = selectedTemplate?.builtInType ?? null;
   const invoiceId = getInvoiceIdForTemplate(selectedType, invoices);
+  const invoiceForSend = invoices.find((i) => i.id === invoiceId);
+  const showDateFields = !!invoiceId && invoiceForSend?.status === 'DRAFT';
+
+  // Seed date defaults when switching to an invoice template
+  useEffect(() => {
+    if (!showDateFields) return;
+    const today = new Date().toISOString().slice(0, 10);
+    setFormIssueDate(today);
+    const terms = userProfile?.defaultPaymentTermsDays;
+    if (terms) {
+      const due = new Date();
+      due.setDate(due.getDate() + terms);
+      setFormDueDate(due.toISOString().slice(0, 10));
+    } else {
+      setFormDueDate('');
+    }
+  }, [showDateFields, userProfile?.defaultPaymentTermsDays]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const renderQueryKey = ['renderEmail', bookingId, selectedTemplateId, invoiceId, formIssueDate, formDueDate];
+  const renderUrl = useMemo(() => {
+    if (!selectedTemplateId) return '';
+    let url = `/bookings/${bookingId}/communications/render?templateId=${selectedTemplateId}`;
+    if (invoiceId) url += `&invoiceId=${invoiceId}`;
+    if (formIssueDate && showDateFields) url += `&issueDate=${formIssueDate}`;
+    if (formDueDate && showDateFields) url += `&dueDate=${formDueDate}`;
+    return url;
+  }, [bookingId, selectedTemplateId, invoiceId, formIssueDate, formDueDate, showDateFields]);
 
   const { data: renderResult, isFetching: rendering } = useQuery({
-    queryKey: ['renderEmail', bookingId, selectedTemplateId, invoiceId],
-    queryFn: () =>
-      apiGet<RenderResult>(
-        `/bookings/${bookingId}/communications/render?templateId=${selectedTemplateId}${invoiceId ? `&invoiceId=${invoiceId}` : ''}`,
-      ),
-    enabled: isLoaded && open && !!selectedTemplateId && !!selectedTemplate,
+    queryKey: renderQueryKey,
+    queryFn: () => apiGet<RenderResult>(renderUrl),
+    enabled: isLoaded && open && !!selectedTemplateId && !!selectedTemplate && !!renderUrl,
     staleTime: 0,
   });
 
@@ -129,6 +163,19 @@ export default function ComposeEmailSheet({
   const sendMutation = useMutation({
     mutationFn: () => {
       const body = editor?.getHTML() ?? '';
+
+      if (showDateFields && invoiceId) {
+        return apiPostVoid(`/bookings/${bookingId}/invoices/${invoiceId}/send`, {
+          issueDate: formIssueDate,
+          dueDate: formDueDate || undefined,
+          to: booking.customer.email,
+          contactId: booking.customerId,
+          subject,
+          body,
+          ...(selectedTemplateId ? { templateId: selectedTemplateId } : {}),
+        });
+      }
+
       return apiPostVoid(`/bookings/${bookingId}/communications/send`, {
         to: booking.customer.email,
         contactId: booking.customerId,
@@ -139,6 +186,9 @@ export default function ComposeEmailSheet({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bookingCommunications', bookingId] });
+      if (showDateFields && invoiceId) {
+        queryClient.invalidateQueries({ queryKey: ['bookingInvoices', bookingId] });
+      }
       onOpenChange(false);
       toast({ title: 'Email sent' });
     },
@@ -148,7 +198,13 @@ export default function ComposeEmailSheet({
   });
 
   const noEmail = !booking.customer.email;
-  const canSend = !noEmail && !!selectedTemplateId && !!subject && !rendering && !sendMutation.isPending;
+  const canSend =
+    !noEmail &&
+    !!selectedTemplateId &&
+    !!subject &&
+    !rendering &&
+    !sendMutation.isPending &&
+    (!showDateFields || !!formIssueDate);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -192,6 +248,28 @@ export default function ComposeEmailSheet({
               </SelectContent>
             </Select>
           </div>
+
+          {/* Invoice dates — only for draft invoices */}
+          {showDateFields && (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-xs text-muted">Issue date</label>
+                <Input
+                  type="date"
+                  value={formIssueDate}
+                  onChange={(e) => setFormIssueDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs text-muted">Due date (optional)</label>
+                <Input
+                  type="date"
+                  value={formDueDate}
+                  onChange={(e) => setFormDueDate(e.target.value)}
+                />
+              </div>
+            </div>
+          )}
 
           {/* Missing variables warning */}
           {missingVariables.length > 0 && (

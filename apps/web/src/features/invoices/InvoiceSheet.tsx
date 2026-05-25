@@ -28,8 +28,6 @@ const lineItemSchema = z.object({
 });
 
 const schema = z.object({
-  issueDate: z.string().min(1, 'Required'),
-  dueDate: z.string().optional(),
   isDeposit: z.boolean(),
   lineItems: z.array(lineItemSchema).min(1, 'At least one line item is required'),
 });
@@ -38,24 +36,16 @@ type FormValues = z.infer<typeof schema>;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function toDateInput(isoString: string): string {
-  return isoString.slice(0, 10);
-}
-
 function buildDefaults(invoice?: Invoice, prefill?: Props['prefill']): FormValues {
   if (!invoice) {
     const description = prefill ? (prefill.isDeposit ? 'Deposit' : 'Balance') : '';
     const amount = prefill?.amount != null ? prefill.amount.toFixed(2) : '';
     return {
-      issueDate: new Date().toISOString().slice(0, 10),
-      dueDate: '',
       isDeposit: prefill?.isDeposit ?? false,
       lineItems: [{ serverId: undefined, description, amount }],
     };
   }
   return {
-    issueDate: toDateInput(invoice.issueDate),
-    dueDate: invoice.dueDate ? toDateInput(invoice.dueDate) : '',
     isDeposit: invoice.isDeposit,
     lineItems: invoice.lineItems.map((item) => ({
       serverId: item.id,
@@ -121,8 +111,6 @@ export default function InvoiceSheet({
   const createMutation = useMutation({
     mutationFn: (values: FormValues) =>
       apiPost<Invoice>(`/bookings/${bookingId}/invoices`, {
-        issueDate: values.issueDate,
-        dueDate: values.dueDate || undefined,
         isDeposit: values.isDeposit,
         lineItems: values.lineItems.map((item, i) => ({
           description: item.description,
@@ -143,11 +131,6 @@ export default function InvoiceSheet({
   const editMutation = useMutation({
     mutationFn: async (values: FormValues) => {
       if (!invoice) return;
-
-      await apiPatch(`/bookings/${bookingId}/invoices/${invoice.id}`, {
-        issueDate: values.issueDate,
-        dueDate: values.dueDate || null,
-      });
 
       const originalById = Object.fromEntries(invoice.lineItems.map((i) => [i.id, i]));
       const keptServerIds = new Set(values.lineItems.map((i) => i.serverId).filter(Boolean));
@@ -208,24 +191,6 @@ export default function InvoiceSheet({
         </SheetHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-          {/* Dates */}
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-foreground">Issue date</label>
-              <Input type="date" {...register('issueDate')} />
-              {errors.issueDate && (
-                <p className="text-sm text-status-cancelled">{errors.issueDate.message}</p>
-              )}
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-foreground">
-                Due date <span className="text-muted font-normal">(optional)</span>
-              </label>
-              <Input type="date" {...register('dueDate')} />
-            </div>
-          </div>
-
           {/* Deposit toggle — create mode only, hidden if booking already has one */}
           {showDepositToggle && (
             <label className="flex items-center gap-3 cursor-pointer">
@@ -292,7 +257,6 @@ export default function InvoiceSheet({
               <p className="text-sm text-status-cancelled">{errors.lineItems.root.message}</p>
             )}
 
-            {/* Minimum 1 item error (zod .min(1)) surfaces here */}
             {errors.lineItems?.message && (
               <p className="text-sm text-status-cancelled">{errors.lineItems.message}</p>
             )}

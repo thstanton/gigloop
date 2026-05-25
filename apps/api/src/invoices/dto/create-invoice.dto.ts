@@ -4,7 +4,6 @@ import { Type } from 'class-transformer';
 import {
   IsArray,
   IsBoolean,
-  IsDateString,
   IsEnum,
   IsOptional,
   IsUUID,
@@ -22,16 +21,6 @@ export class CreateInvoiceDto {
   @IsOptional()
   @IsBoolean()
   isDeposit?: boolean;
-
-  @ApiPropertyOptional({ example: '2026-06-01' })
-  @IsOptional()
-  @IsDateString()
-  issueDate?: string;
-
-  @ApiPropertyOptional({ example: '2026-06-15' })
-  @IsOptional()
-  @IsDateString()
-  dueDate?: string;
 
   @ApiPropertyOptional({ description: 'Defaults to the booking customer when omitted' })
   @IsOptional()

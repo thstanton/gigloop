@@ -199,7 +199,8 @@ export interface Invoice {
   updatedAt: string;
   status: InvoiceStatus;
   isDeposit: boolean;
-  issueDate: string;
+  invoiceNumber: string | null;
+  issueDate: string | null;
   dueDate: string | null;
   bookingId: string;
   billToContactId: string;
@@ -211,16 +212,12 @@ export interface Invoice {
 export interface CreateInvoiceInput {
   status?: InvoiceStatus;
   isDeposit?: boolean;
-  issueDate?: string;
-  dueDate?: string;
   billToContactId?: string; // defaults to booking's customerId
   lineItems?: CreateLineItemInput[];
 }
 
 export interface UpdateInvoiceInput {
   status?: InvoiceStatus;
-  issueDate?: string;
-  dueDate?: string | null;
   billToContactId?: string;
 }
 

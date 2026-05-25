@@ -71,7 +71,7 @@ describe('InvoicesRepository', () => {
       expect(prisma.invoice.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { userId: 'u1', bookingId: 'b1' },
-          orderBy: { issueDate: 'asc' },
+          orderBy: { issueDate: { sort: 'asc', nulls: 'last' } },
         }),
       );
     });

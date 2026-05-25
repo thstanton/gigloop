@@ -48,7 +48,7 @@ export class CommunicationsController {
     const template = await this.service.findTemplate(req.userId, query.templateId);
     if (!template) throw new NotFoundException('Template not found');
 
-    const context = await this.mail.buildContext(req.userId, bookingId, query.invoiceId);
+    const context = await this.mail.buildContext(req.userId, bookingId, query.invoiceId, query.issueDate, query.dueDate);
 
     const { html, missingVariables: bodyMissing } = this.mail.renderTemplate(template.content, context);
     const { subject, missingVariables: subjectMissing } = this.mail.renderSubject(template.builtInType, context);
