@@ -161,7 +161,9 @@ export class MailService {
     try {
       await this.resend.emails.send({
         from: process.env.RESEND_FROM ?? 'noreply@gigman.com',
-        to,
+        // TODO: For testing purposes only send emails to my address. When domain is set up this can be changed.
+        // to,
+        to: 'thstanton@proton.me',
         subject,
         html: body,
         attachments: attachments?.map((a) => ({
