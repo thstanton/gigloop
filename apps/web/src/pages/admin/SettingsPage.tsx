@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -9,7 +9,9 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { apiGet, apiPatch } from '@/lib/api';
+import { ImageIcon, Trash2, Upload } from 'lucide-react';
+import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
+import { toast } from '@/lib/hooks/use-toast';
 import type { PublicProfile, UserProfile, UpdatePublicProfileInput, UpdateUserProfileInput, PortalTheme } from '@/types/api';
 import { cn } from '@/lib/utils';
 
@@ -142,6 +144,94 @@ function Toggle({
   );
 }
 
+// ─── Image upload field ───────────────────────────────────────────────────────
+
+function ImageUploadField({
+  label,
+  description,
+  currentUrl,
+  uploading,
+  removing,
+  onFileSelect,
+  onRemove,
+  variant = 'square',
+}: {
+  label: string;
+  description?: string;
+  currentUrl: string | null;
+  uploading: boolean;
+  removing: boolean;
+  onFileSelect: (file: File) => void;
+  onRemove: () => void;
+  variant?: 'square' | 'landscape';
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  return (
+    <div className="space-y-1.5">
+      <Label>{label}</Label>
+      {description && <p className="text-xs text-muted">{description}</p>}
+      <div className="flex items-center gap-3">
+        <div
+          className={cn(
+            'border border-border bg-muted/30 flex items-center justify-center overflow-hidden flex-shrink-0',
+            variant === 'landscape' ? 'w-32 h-12 rounded-md' : 'w-12 h-12 rounded-full',
+          )}
+        >
+          {currentUrl ? (
+            <img
+              src={currentUrl}
+              alt={label}
+              className={cn(
+                variant === 'landscape'
+                  ? 'max-w-full max-h-full object-contain p-1'
+                  : 'w-full h-full object-cover',
+              )}
+            />
+          ) : (
+            <ImageIcon size={18} className="text-muted" />
+          )}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={uploading || removing}
+            onClick={() => inputRef.current?.click()}
+          >
+            <Upload size={14} className="mr-1.5" />
+            {uploading ? 'Uploading…' : currentUrl ? 'Change' : 'Upload'}
+          </Button>
+          {currentUrl && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={uploading || removing}
+              onClick={onRemove}
+            >
+              <Trash2 size={14} className="mr-1.5" />
+              {removing ? 'Removing…' : 'Remove'}
+            </Button>
+          )}
+        </div>
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*"
+          className="sr-only"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) onFileSelect(file);
+            e.target.value = '';
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
 // ─── Public profile section ───────────────────────────────────────────────────
 
 function PublicProfileSection({ profile }: { profile: PublicProfile }) {
@@ -179,6 +269,44 @@ function PublicProfileSection({ profile }: { profile: PublicProfile }) {
     },
   });
 
+  const logoUploadMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const { uploadUrl, publicUrl } = await apiPost<{ uploadUrl: string; publicUrl: string }>(
+        '/me/logo-upload-url',
+        { contentType: file.type },
+      );
+      await fetch(uploadUrl, { method: 'PUT', body: file, headers: { 'Content-Type': file.type } });
+      await apiPatch<PublicProfile>('/me/public', { logoUrl: publicUrl });
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['publicProfile'] }),
+    onError: () => toast({ title: 'Failed to upload logo', variant: 'destructive' }),
+  });
+
+  const logoDeleteMutation = useMutation({
+    mutationFn: () => apiDelete('/me/logo'),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['publicProfile'] }),
+    onError: () => toast({ title: 'Failed to remove logo', variant: 'destructive' }),
+  });
+
+  const photoUploadMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const { uploadUrl, publicUrl } = await apiPost<{ uploadUrl: string; publicUrl: string }>(
+        '/me/photo-upload-url',
+        { contentType: file.type },
+      );
+      await fetch(uploadUrl, { method: 'PUT', body: file, headers: { 'Content-Type': file.type } });
+      await apiPatch<PublicProfile>('/me/public', { photo: publicUrl });
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['publicProfile'] }),
+    onError: () => toast({ title: 'Failed to upload photo', variant: 'destructive' }),
+  });
+
+  const photoDeleteMutation = useMutation({
+    mutationFn: () => apiDelete('/me/photo'),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['publicProfile'] }),
+    onError: () => toast({ title: 'Failed to remove photo', variant: 'destructive' }),
+  });
+
   function onSubmit(values: PublicForm) {
     mutation.mutate({
       businessName: values.businessName,
@@ -195,11 +323,36 @@ function PublicProfileSection({ profile }: { profile: PublicProfile }) {
   const brandColour = watch('brandColour');
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+    <div className="space-y-5">
       <SectionHeader
         title="Public profile"
         description="Shown on your client portal and in emails."
       />
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <ImageUploadField
+          label="Logo"
+          description="Used on invoices and your client portal."
+          currentUrl={profile.logoUrl}
+          uploading={logoUploadMutation.isPending}
+          removing={logoDeleteMutation.isPending}
+          onFileSelect={(file) => logoUploadMutation.mutate(file)}
+          onRemove={() => logoDeleteMutation.mutate()}
+          variant="landscape"
+        />
+        <ImageUploadField
+          label="Photo"
+          description="Your headshot — shown on the client portal."
+          currentUrl={profile.photo}
+          uploading={photoUploadMutation.isPending}
+          removing={photoDeleteMutation.isPending}
+          onFileSelect={(file) => photoUploadMutation.mutate(file)}
+          onRemove={() => photoDeleteMutation.mutate()}
+          variant="square"
+        />
+      </div>
+
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Field label="Business name" required error={errors.businessName?.message}>
@@ -274,6 +427,7 @@ function PublicProfileSection({ profile }: { profile: PublicProfile }) {
 
       <SaveBar isPending={mutation.isPending} saved={saved} isError={mutation.isError} />
     </form>
+    </div>
   );
 }
 
