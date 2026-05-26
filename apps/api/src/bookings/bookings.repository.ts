@@ -61,11 +61,12 @@ export class BookingsRepository {
   }
 
   create(userId: string, dto: CreateBookingDto) {
-    const { formatIds: _, fee, ...fields } = dto;
+    const { formatIds: _, fee, date, ...fields } = dto;
     return this.prisma.booking.create({
       data: {
         userId,
         ...fields,
+        date: new Date(date),
         ...(fee !== undefined ? { fee } : {}),
       },
       include: bookingIncludes,
@@ -80,7 +81,7 @@ export class BookingsRepository {
   }
 
   createWithFormats(userId: string, dto: CreateBookingDto, orderedFormats: FormatWithSlots[]) {
-    const { formatIds: _, fee, ...fields } = dto;
+    const { formatIds: _, fee, date, ...fields } = dto;
 
     let slotOrder = 1;
     const setRecords = orderedFormats.flatMap((fmt) =>
@@ -108,6 +109,7 @@ export class BookingsRepository {
       data: {
         userId,
         ...fields,
+        date: new Date(date),
         ...(fee !== undefined ? { fee } : {}),
         sets: setRecords.length ? { create: setRecords } : undefined,
         performanceFormats: { create: formatRecords },
@@ -124,9 +126,10 @@ export class BookingsRepository {
   }
 
   update(id: string, dto: UpdateBookingDto) {
+    const { date, ...rest } = dto;
     return this.prisma.booking.update({
       where: { id },
-      data: dto,
+      data: { ...rest, ...(date !== undefined ? { date: new Date(date) } : {}) },
       include: bookingIncludes,
     });
   }
