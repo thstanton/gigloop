@@ -17,6 +17,7 @@ import {
 } from './BookingFormFields';
 import { apiDelete, apiPatch } from '@/lib/api';
 import PerformanceEditor from './PerformanceEditor';
+import MusicFormEditor from './MusicFormEditor';
 import type { BookingDetail, EventType, BookingStatus } from '@/types/api';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -143,6 +144,12 @@ export default function BookingEditDrawer({ booking }: Props) {
             <PerformanceEditor booking={booking} />
             <p className="text-xs text-muted mt-3">Performance changes save automatically.</p>
           </div>
+
+          {booking.hasMusicFormConfig && (
+            <div className="mt-8 pt-6 border-t border-border">
+              <MusicFormEditor booking={booking} isOpen={isOpen} />
+            </div>
+          )}
 
           <div className="mt-8 pt-6 border-t border-border">
             {deleteConfirm ? (

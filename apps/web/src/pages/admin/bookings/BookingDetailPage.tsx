@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@clerk/react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, CheckCircle2, Circle, AlertTriangle, Mail, Music, FileText, DollarSign, FolderOpen, ChevronDown, Check, Pencil, Plus, Send, Download, Heart, GlassWater, Utensils, Moon, Briefcase, Music2, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckCircle2, Circle, AlertTriangle, Mail, Music, FileText, DollarSign, FolderOpen, ChevronDown, Check, Pencil, Plus, Send, Download, Heart, GlassWater, Utensils, Moon, Briefcase, Music2 } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -29,7 +29,7 @@ import {
   formatCurrency,
   formatFee,
 } from '@/lib/formatters';
-import { ALL_GENRES, EVENT_TYPE_LABELS, GENRE_LABELS, STATUS_ORDER } from '@/lib/constants';
+import { EVENT_TYPE_LABELS, GENRE_LABELS, STATUS_ORDER } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 import {
   Sheet,
@@ -367,8 +367,8 @@ function PerformanceSection({ booking }: { booking: BookingDetail }) {
 
 function MusicFormSection({ booking, documents }: { booking: BookingDetail; documents: Document[] }) {
   const queryClient = useQueryClient();
-  const [editing, setEditing] = useState(false);
   const [viewingResponse, setViewingResponse] = useState(false);
+  const [, setSearchParams] = useSearchParams();
 
   const { isLoaded } = useAuth();
 
@@ -386,41 +386,6 @@ function MusicFormSection({ booking, documents }: { booking: BookingDetail; docu
 
   const songListDoc = documents.find((d) => d.type === 'SONG_LIST');
 
-  const [localKeyMoments, setLocalKeyMoments] = useState<KeyMoment[]>([]);
-  const [localGenres, setLocalGenres] = useState<string[]>([]);
-
-  function openEditor() {
-    const existing = config?.keyMoments ?? [];
-    const existingKeys = new Set(existing.map((km) => `${km.section}::${km.label}`));
-    const fromFormats: KeyMoment[] = (booking.performanceFormats ?? []).flatMap((bpf) =>
-      bpf.performanceFormat.keyMoments.map((km) => ({ label: km, section: bpf.performanceFormat.label })),
-    );
-    const merged = [...existing, ...fromFormats.filter((km) => !existingKeys.has(`${km.section}::${km.label}`))];
-    const genresFromFormats = [...new Set((booking.performanceFormats ?? []).flatMap((bpf) => bpf.performanceFormat.defaultGenreSelection))];
-    setLocalKeyMoments(merged);
-    setLocalGenres(config?.enabledGenres?.length ? config.enabledGenres : genresFromFormats);
-    setEditing(true);
-  }
-
-  const save = useMutation({
-    mutationFn: () =>
-      apiPut<MusicFormConfig>(`/bookings/${booking.id}/music-form-config`, {
-        keyMoments: localKeyMoments,
-        enabledGenres: localGenres,
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['booking-music-form-config', booking.id] });
-      queryClient.invalidateQueries({ queryKey: ['booking', booking.id] });
-      setEditing(false);
-    },
-  });
-
-  function toggleGenre(genre: string) {
-    setLocalGenres((prev) =>
-      prev.includes(genre) ? prev.filter((g) => g !== genre) : [...prev, genre],
-    );
-  }
-
   const seedKeyMoments: KeyMoment[] = (booking.performanceFormats ?? []).flatMap((bpf) =>
     bpf.performanceFormat.keyMoments.map((km) => ({ label: km, section: bpf.performanceFormat.label })),
   );
@@ -435,11 +400,13 @@ function MusicFormSection({ booking, documents }: { booking: BookingDetail; docu
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['booking-music-form-config', booking.id] });
       queryClient.invalidateQueries({ queryKey: ['booking', booking.id] });
-      setLocalKeyMoments(seedKeyMoments);
-      setLocalGenres(seedGenres);
-      setEditing(true);
+      setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('edit', 'true'); return next; });
     },
   });
+
+  function openDrawer() {
+    setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('edit', 'true'); return next; });
+  }
 
   if (!booking.hasMusicFormConfig) {
     return (
@@ -465,99 +432,6 @@ function MusicFormSection({ booking, documents }: { booking: BookingDetail; docu
     );
   }
 
-  if (editing) {
-    const sectionMap = new Map<string, KeyMoment[]>();
-    for (const km of localKeyMoments) {
-      if (!sectionMap.has(km.section)) sectionMap.set(km.section, []);
-      sectionMap.get(km.section)!.push(km);
-    }
-
-    return (
-      <Card title="Music form">
-        <div className="space-y-4">
-          <div>
-            <p className="text-xs font-medium text-muted mb-2">Key moments</p>
-            {sectionMap.size === 0 ? (
-              <p className="text-sm text-muted">No key moments configured.</p>
-            ) : (
-              <div className="space-y-3">
-                {Array.from(sectionMap.entries()).map(([section, moments]) => (
-                  <div key={section}>
-                    <p className="text-xs text-muted uppercase tracking-wide mb-1">{section}</p>
-                    <div className="space-y-1">
-                      {moments.map((km, i) => (
-                        <div key={i} className="flex items-center justify-between gap-2">
-                          <input
-                            value={km.label}
-                            onChange={(e) => {
-                              const updated = localKeyMoments.map((m) =>
-                                m === km ? { ...m, label: e.target.value } : m,
-                              );
-                              setLocalKeyMoments(updated);
-                            }}
-                            className="flex-1 text-sm bg-background border border-border rounded px-2 py-1"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setLocalKeyMoments((prev) => prev.filter((m) => m !== km))}
-                            className="text-muted hover:text-status-cancelled transition-colors"
-                            aria-label="Remove key moment"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div>
-            <p className="text-xs font-medium text-muted mb-2">Enabled genres</p>
-            <div className="flex flex-wrap gap-2">
-              {ALL_GENRES.map((genre) => {
-                const active = localGenres.includes(genre);
-                return (
-                  <button
-                    key={genre}
-                    type="button"
-                    onClick={() => toggleGenre(genre)}
-                    className={`inline-flex items-center px-3 py-1 rounded-full border text-sm transition-colors ${
-                      active
-                        ? 'border-primary text-primary bg-primary/8'
-                        : 'border-border text-muted hover:border-primary'
-                    }`}
-                  >
-                    {GENRE_LABELS[genre as keyof typeof GENRE_LABELS] ?? genre}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3 pt-1">
-            <Button
-              size="sm"
-              onClick={() => save.mutate()}
-              disabled={save.isPending}
-            >
-              {save.isPending ? 'Saving…' : 'Save'}
-            </Button>
-            <button
-              type="button"
-              onClick={() => setEditing(false)}
-              className="text-sm text-muted hover:text-foreground transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      </Card>
-    );
-  }
-
   const sectionMap = new Map<string, KeyMoment[]>();
   for (const km of config.keyMoments) {
     if (!sectionMap.has(km.section)) sectionMap.set(km.section, []);
@@ -571,7 +445,7 @@ function MusicFormSection({ booking, documents }: { booking: BookingDetail; docu
         action={
           <button
             type="button"
-            onClick={openEditor}
+            onClick={openDrawer}
             className="text-xs text-primary hover:text-primary/80 transition-colors"
           >
             Edit
