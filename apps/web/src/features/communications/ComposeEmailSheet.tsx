@@ -13,7 +13,6 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
@@ -22,6 +21,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { apiGet, apiPostVoid } from '@/lib/api';
+import { DatePicker } from '@/components/ui/date-picker';
 import { toast } from '@/lib/hooks/use-toast';
 import { BUILT_IN_EMAIL_TYPES, TEMPLATE_DISPLAY } from '@/features/templates/templateMeta';
 import { getInvoiceIdForTemplate, formatMissingVariables } from './composeHelpers';
@@ -253,19 +253,11 @@ export default function ComposeEmailSheet({
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <label className="text-xs text-muted">Issue date</label>
-                <Input
-                  type="date"
-                  value={formIssueDate}
-                  onChange={(e) => setFormIssueDate(e.target.value)}
-                />
+                <DatePicker value={formIssueDate} onChange={setFormIssueDate} />
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs text-muted">Due date (optional)</label>
-                <Input
-                  type="date"
-                  value={formDueDate}
-                  onChange={(e) => setFormDueDate(e.target.value)}
-                />
+                <DatePicker value={formDueDate} onChange={setFormDueDate} placeholder="No due date" />
               </div>
             </div>
           )}

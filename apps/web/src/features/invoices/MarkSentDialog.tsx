@@ -8,7 +8,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { apiPost } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
 import type { Invoice, UserProfile } from '@/types/api';
@@ -72,21 +72,13 @@ export default function MarkSentDialog({
         <div className="space-y-4 py-2">
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-foreground">Issue date</label>
-            <Input
-              type="date"
-              value={issueDate}
-              onChange={(e) => setIssueDate(e.target.value)}
-            />
+            <DatePicker value={issueDate} onChange={setIssueDate} />
           </div>
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-foreground">
               Due date <span className="text-muted font-normal">(optional)</span>
             </label>
-            <Input
-              type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-            />
+            <DatePicker value={dueDate} onChange={setDueDate} placeholder="No due date" />
           </div>
         </div>
 

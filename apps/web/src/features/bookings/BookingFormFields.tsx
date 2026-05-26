@@ -3,6 +3,7 @@ import type { Control, UseFormRegister, FieldErrors } from 'react-hook-form';
 import { z } from 'zod';
 import { ChevronUp, ChevronDown, Heart, GlassWater, Utensils, Moon, Briefcase, Music, Music2, Check } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -189,7 +190,13 @@ export function BookingFormFields({
 
         <div className="space-y-1.5">
           <Label>Date</Label>
-          <Input type="date" {...register('date')} />
+          <Controller
+            name="date"
+            control={control}
+            render={({ field }) => (
+              <DatePicker value={field.value} onChange={field.onChange} />
+            )}
+          />
           {errors.date && (
             <p className="text-sm text-status-cancelled">{errors.date.message}</p>
           )}
