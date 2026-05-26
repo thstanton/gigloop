@@ -33,6 +33,14 @@ export function getContractContent(token: string): Promise<PortalContractData> {
   return portalGet<PortalContractData>(`/booking/${token}/contract`);
 }
 
-export function signContract(token: string, signature: string): Promise<void> {
-  return portalPost<void>(`/booking/${token}/sign`, { signature });
+export async function signContract(token: string, signature: string): Promise<void> {
+  const res = await portalFetch(`/booking/${token}/sign`, {
+    method: 'POST',
+    body: JSON.stringify({ signature }),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText);
+    throw new Response(text, { status: res.status });
+  }
+  // 201 with empty body — no JSON to parse
 }

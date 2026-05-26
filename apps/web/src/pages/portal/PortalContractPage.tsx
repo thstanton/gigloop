@@ -2,7 +2,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import Underline from '@tiptap/extension-underline';
+import { VariableNode } from '../../features/templates/VariableNode';
 import { useRef, useState, useEffect } from 'react';
 import { FileText, PenLine, RotateCcw } from 'lucide-react';
 import { getPortalData, getContractContent, signContract } from '../../lib/portalApi';
@@ -11,6 +11,7 @@ import { PortalLayout } from '../../layouts/PortalLayout';
 function SignatureCanvas({ onSign }: { onSign: (dataUrl: string) => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
+  const hasDrawnRef = useRef(false);
   const [hasSignature, setHasSignature] = useState(false);
 
   function getPos(e: MouseEvent | TouchEvent, canvas: HTMLCanvasElement): { x: number; y: number } {
@@ -54,13 +55,17 @@ function SignatureCanvas({ onSign }: { onSign: (dataUrl: string) => void }) {
       const pos = getPos(e, canvas!);
       ctx!.lineTo(pos.x, pos.y);
       ctx!.stroke();
-      setHasSignature(true);
+      if (!hasDrawnRef.current) {
+        hasDrawnRef.current = true;
+        setHasSignature(true);
+      }
     }
 
     function stopDraw() {
       if (drawing.current) {
         drawing.current = false;
-        if (hasSignature) {
+        // Use ref (not state) — state is stale in this closure
+        if (hasDrawnRef.current) {
           onSign(canvas!.toDataURL('image/png'));
         }
       }
@@ -83,7 +88,7 @@ function SignatureCanvas({ onSign }: { onSign: (dataUrl: string) => void }) {
       canvas.removeEventListener('touchmove', draw);
       canvas.removeEventListener('touchend', stopDraw);
     };
-  }, [hasSignature, onSign]);
+  }, [onSign]);
 
   function clear() {
     const canvas = canvasRef.current;
@@ -91,6 +96,7 @@ function SignatureCanvas({ onSign }: { onSign: (dataUrl: string) => void }) {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    hasDrawnRef.current = false;
     setHasSignature(false);
     onSign('');
   }
@@ -150,9 +156,10 @@ export default function PortalContractPage() {
   });
 
   const editor = useEditor({
+    // StarterKit v3 includes Underline — do not add it separately
     extensions: [
       StarterKit.configure({ codeBlock: false, code: false }),
-      Underline,
+      VariableNode,
     ],
     content: contractQuery.data?.content as Record<string, unknown> | undefined,
     editable: false,
@@ -179,6 +186,17 @@ export default function PortalContractPage() {
   const brand = profile?.brandColour ?? '#1a1a1a';
   const isBold = profile?.portalTheme === 'BOLD_MODERN' || profile?.portalTheme === 'BOLD_ROMANTIC';
 
+  const contractError = contractQuery.error;
+  const alreadySigned = contractError instanceof Response && contractError.status === 400;
+  const notFound =
+    portalQuery.isError ||
+    (contractError instanceof Response && contractError.status === 404);
+
+  // Redirect after already-signed detection — must be in effect, not render body
+  useEffect(() => {
+    if (alreadySigned) navigate(`/booking/${token}`, { replace: true });
+  }, [alreadySigned, navigate, token]);
+
   if (portalQuery.isLoading || contractQuery.isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white">
@@ -186,13 +204,6 @@ export default function PortalContractPage() {
       </div>
     );
   }
-
-  const contractError = contractQuery.error;
-  const alreadySigned =
-    contractError instanceof Response && contractError.status === 400;
-  const notFound =
-    portalQuery.isError ||
-    (contractError instanceof Response && contractError.status === 404);
 
   if (notFound) {
     return (
@@ -208,10 +219,7 @@ export default function PortalContractPage() {
     );
   }
 
-  if (alreadySigned) {
-    navigate(`/booking/${token}`, { replace: true });
-    return null;
-  }
+  if (alreadySigned) return null;
 
   if (!profile || !contractQuery.data) return null;
 
