@@ -61,7 +61,7 @@ function BookingsList({ bookings }: { bookings: RoleBooking[] }) {
         <div
           key={`${b.role}-${b.id}`}
           onClick={() => navigate(`/admin/bookings/${b.id}`)}
-          className="py-3 flex items-center gap-3 cursor-pointer hover:bg-surface active:bg-surface transition-colors duration-100 -mx-1 px-1 rounded"
+          className="py-3 flex items-start justify-between gap-3 cursor-pointer hover:bg-surface active:bg-surface transition-colors duration-100 -mx-1 px-1 rounded"
         >
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-foreground truncate">
@@ -70,8 +70,10 @@ function BookingsList({ bookings }: { bookings: RoleBooking[] }) {
             <p className="text-xs text-muted mt-0.5">
               {formatDate(b.date)} · {b.role}
             </p>
+            <div className="mt-1.5">
+              <BookingStatusPill status={b.status as BookingStatus} />
+            </div>
           </div>
-          <BookingStatusPill status={b.status as BookingStatus} />
         </div>
       ))}
     </div>

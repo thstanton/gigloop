@@ -44,7 +44,7 @@ function UpcomingGigsWidget({ bookings }: { bookings: BookingListItem[] }) {
         <li key={g.id}>
           <button
             onClick={() => navigate(`/admin/bookings/${g.id}`)}
-            className="w-full flex items-center justify-between gap-4 py-3 text-left hover:bg-muted/30 transition-colors -mx-4 px-4"
+            className="w-full flex items-start justify-between gap-4 py-3 text-left hover:bg-muted/30 transition-colors -mx-4 px-4"
           >
             <div className="flex flex-col gap-0.5 min-w-0">
               <span className="text-sm text-foreground truncate">
@@ -56,11 +56,11 @@ function UpcomingGigsWidget({ bookings }: { bookings: BookingListItem[] }) {
               {g.venue && (
                 <span className="text-xs text-muted truncate">{g.venue.name}</span>
               )}
+              <div className="mt-1">
+                <BookingStatusPill status={g.status} />
+              </div>
             </div>
-            <div className="flex flex-col items-end gap-1 flex-shrink-0">
-              <span className="text-xs text-muted">{formatDate(g.date)}</span>
-              <BookingStatusPill status={g.status} />
-            </div>
+            <span className="text-xs text-muted flex-shrink-0 mt-0.5">{formatDate(g.date)}</span>
           </button>
         </li>
       ))}
@@ -292,9 +292,9 @@ function CalendarWidget({ bookings }: { bookings: BookingListItem[] }) {
             <li key={b.id}>
               <button
                 onClick={() => navigate(`/admin/bookings/${b.id}`)}
-                className="w-full flex items-center justify-between gap-3 py-2 text-left hover:bg-muted/30 transition-colors -mx-4 px-4"
+                className="w-full flex flex-col items-start gap-1 py-2 text-left hover:bg-muted/30 transition-colors -mx-4 px-4"
               >
-                <span className="text-sm text-foreground truncate">
+                <span className="text-sm text-foreground">
                   {b.title ?? b.customer.name}
                 </span>
                 <BookingStatusPill status={b.status} />

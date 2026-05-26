@@ -59,6 +59,31 @@
   }
 }
 
+/* ─── Design-token utilities (explicit overrides for Tailwind JIT) ──── */
+@layer utilities {
+  .font-display { font-family: 'Playfair Display', serif; }
+
+  .bg-chrome    { background-color: hsl(var(--chrome)); }
+  .bg-dashboard { background-color: hsl(var(--dashboard-surface)); }
+
+  .text-chrome-foreground { color: hsl(var(--chrome-foreground)); }
+  .text-chrome-muted      { color: hsl(var(--chrome-muted)); }
+
+  /* Opacity variants used in AppShell nav */
+  .bg-chrome-foreground\/10  { background-color: hsl(var(--chrome-foreground) / 0.10); }
+  .bg-chrome-foreground\/8   { background-color: hsl(var(--chrome-foreground) / 0.08); }
+  .border-chrome-muted\/30   { border-color: hsl(var(--chrome-muted) / 0.30); }
+  .bg-chrome-muted\/40       { background-color: hsl(var(--chrome-muted) / 0.40); }
+
+  /* Status badge left-border accent colours */
+  .border-l-status-enquiry   { border-left-color: hsl(var(--status-enquiry)); }
+  .border-l-status-confirmed { border-left-color: hsl(var(--status-confirmed)); }
+  .border-l-status-invoiced  { border-left-color: hsl(var(--status-invoiced)); }
+  .border-l-status-settled   { border-left-color: hsl(var(--status-settled)); }
+  .border-l-status-completed { border-left-color: hsl(var(--status-completed)); }
+  .border-l-status-cancelled { border-left-color: hsl(var(--status-cancelled)); }
+}
+
 /* ─── Tiptap editor content ─────────────────────────────────────────── */
 .tiptap-content p { margin-bottom: 0.75rem; }
 .tiptap-content p:last-child { margin-bottom: 0; }

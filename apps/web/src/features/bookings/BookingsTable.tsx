@@ -118,19 +118,21 @@ function BookingCardList({ data }: { data: BookingListItem[] }) {
             onClick={() => navigate(`/admin/bookings/${booking.id}`)}
             className="py-3 flex flex-col gap-1 cursor-pointer active:bg-surface transition-colors duration-100"
           >
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-sm font-medium text-foreground truncate">
-                {booking.customer.name}
-              </span>
-              <BookingStatusPill status={booking.status} />
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <span className="text-sm font-medium text-foreground truncate block">
+                  {booking.customer.name}
+                </span>
+                {booking.title && (
+                  <span className="text-xs text-muted truncate block">{booking.title}</span>
+                )}
+                <div className="mt-1">
+                  <BookingStatusPill status={booking.status} />
+                </div>
+              </div>
+              {fee && <span className="text-sm text-foreground tabular-nums flex-shrink-0">{fee}</span>}
             </div>
-            {booking.title && (
-              <span className="text-xs text-muted truncate">{booking.title}</span>
-            )}
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-sm text-muted">{date} · {day}</span>
-              {fee && <span className="text-sm text-foreground tabular-nums">{fee}</span>}
-            </div>
+            <span className="text-sm text-muted">{date} · {day}</span>
             {booking.venue && (
               <span className="text-xs text-muted truncate">{booking.venue.name}</span>
             )}
