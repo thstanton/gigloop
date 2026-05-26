@@ -228,38 +228,36 @@ function PersonCard({
   linkState?: Record<string, string>;
 }) {
   return (
-    <Link
-      to={`/admin/contacts/${contact.id}`}
-      state={linkState}
-      className="block py-4 border-b border-border last:border-0 group"
-    >
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <p className="text-xs font-medium text-muted uppercase tracking-wide mb-1.5">{role}</p>
-          <p className="text-sm font-medium text-foreground group-hover:text-primary transition-colors">
-            {contact.name}
-          </p>
-          {(contact.email || contact.phone) && (
-            <p className="text-sm text-muted mt-0.5" onClick={(e) => e.stopPropagation()}>
-              {contact.email && (
-                <a href={`mailto:${contact.email}`} className="hover:text-primary transition-colors">{contact.email}</a>
-              )}
-              {contact.email && contact.phone && ' · '}
-              {contact.phone && (
-                <a href={`tel:${contact.phone}`} className="hover:text-primary transition-colors">{contact.phone}</a>
-              )}
-            </p>
+    <div className="py-4 border-b border-border last:border-0">
+      <p className="text-xs font-medium text-muted uppercase tracking-wide mb-1.5">{role}</p>
+      <Link
+        to={`/admin/contacts/${contact.id}`}
+        state={linkState}
+        className="inline-flex items-center gap-1 group"
+      >
+        <span className="text-sm font-medium text-foreground group-hover:text-primary transition-colors">
+          {contact.name}
+        </span>
+        <ChevronRight size={14} className="text-muted group-hover:text-primary transition-colors" />
+      </Link>
+      {(contact.email || contact.phone) && (
+        <p className="text-sm text-muted mt-0.5">
+          {contact.email && (
+            <a href={`mailto:${contact.email}`} className="hover:text-primary transition-colors">{contact.email}</a>
           )}
-          {commissionArrangement && (
-            <p className="text-sm text-muted mt-0.5">
-              <span className="text-foreground">Commission</span>
-              {' · '}{commissionArrangement}
-            </p>
+          {contact.email && contact.phone && ' · '}
+          {contact.phone && (
+            <a href={`tel:${contact.phone}`} className="hover:text-primary transition-colors">{contact.phone}</a>
           )}
-        </div>
-        <ChevronRight size={16} className="text-muted flex-shrink-0 mt-0.5 group-hover:text-primary transition-colors" />
-      </div>
-    </Link>
+        </p>
+      )}
+      {commissionArrangement && (
+        <p className="text-sm text-muted mt-0.5">
+          <span className="text-foreground">Commission</span>
+          {' · '}{commissionArrangement}
+        </p>
+      )}
+    </div>
   );
 }
 
