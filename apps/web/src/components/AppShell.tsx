@@ -71,7 +71,7 @@ function SidebarNavGroup({ items }: { items: NavItem[] }) {
               cn(
                 'flex items-center gap-3 px-3 py-2 rounded text-sm transition-colors duration-150',
                 isActive
-                  ? 'bg-chrome-foreground/10 text-chrome-foreground font-medium'
+                  ? 'bg-primary/20 text-chrome-foreground font-medium'
                   : 'text-chrome-muted hover:bg-chrome-foreground/8 hover:text-chrome-foreground font-normal',
               )
             }

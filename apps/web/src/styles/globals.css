@@ -17,12 +17,12 @@
     --primary: 152 45% 25%;
     --primary-foreground: 120 30% 95%;
 
-    /* App chrome — top bar + mobile top bar */
-    --chrome: 152 50% 17%;
-    --chrome-foreground: 120 25% 92%;
-    --chrome-muted: 140 18% 60%;
-    /* Desktop sidebar — deeper shade */
-    --chrome-sidebar: 152 55% 11%;
+    /* App chrome — dark warm charcoal; green stays in accents only */
+    --chrome: 30 8% 13%;
+    --chrome-foreground: 38 15% 88%;
+    --chrome-muted: 35 6% 50%;
+    /* Desktop sidebar — slightly deeper */
+    --chrome-sidebar: 30 8% 9%;
 
     /* Dashboard background — deeper warm parchment */
     --dashboard-surface: 35 35% 91%;
@@ -67,6 +67,7 @@
 
   .bg-chrome         { background-color: hsl(var(--chrome)); }
   .bg-chrome-sidebar { background-color: hsl(var(--chrome-sidebar)); }
+  .bg-primary\/20    { background-color: hsl(var(--primary) / 0.20); }
   .bg-dashboard { background-color: hsl(var(--dashboard-surface)); }
 
   .text-chrome-foreground { color: hsl(var(--chrome-foreground)); }
