@@ -524,7 +524,43 @@ export interface PortalData {
   signedContractUrl: string | null;
   documents: PortalDocument[];
   hasMusicForm: boolean;
+  hasMusicFormResponse: boolean;
   depositInvoiceDueDate: string | null;
+}
+
+export interface PortalSong {
+  id: string;
+  title: string;
+  artist: string | null;
+  genre: string;
+}
+
+export interface PortalSpecialRequest {
+  key: string;
+  songId?: string;
+  freeText?: string;
+}
+
+export interface PortalExistingMusicResponse {
+  selectedSongIds: string[];
+  specialRequests: PortalSpecialRequest[];
+  notes: string | null;
+}
+
+export interface PortalMusicFormData {
+  config: {
+    keyMoments: KeyMoment[];
+    enabledGenres: string[];
+  };
+  songs: PortalSong[];
+  allSongs: PortalSong[];
+  existingResponse: PortalExistingMusicResponse | null;
+}
+
+export interface SubmitMusicFormInput {
+  selectedSongIds: string[];
+  specialRequests: PortalSpecialRequest[];
+  notes?: string;
 }
 
 export interface PortalContractData {

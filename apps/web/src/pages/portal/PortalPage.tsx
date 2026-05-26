@@ -1,11 +1,11 @@
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { FileText, Download, CheckCircle, Clock } from 'lucide-react';
+import { FileText, Download, CheckCircle, Clock, Music, ClipboardCheck } from 'lucide-react';
 import { getPortalData } from '../../lib/portalApi';
 import { PortalLayout } from '../../layouts/PortalLayout';
 import type { PortalData, PortalDocument } from '../../types/api';
 
-function BookingSummary({ data }: { data: PortalData }) {
+function BookingSummary({ data, musicSuccess }: { data: PortalData; musicSuccess: boolean }) {
   const { booking, publicProfile } = data;
   const brand = publicProfile.brandColour ?? '#1a1a1a';
   const isBold = publicProfile.portalTheme === 'BOLD_MODERN' || publicProfile.portalTheme === 'BOLD_ROMANTIC';
@@ -87,6 +87,43 @@ function BookingSummary({ data }: { data: PortalData }) {
 
       </div>
 
+      {/* Music form success banner */}
+      {musicSuccess && (
+        <div className={`flex items-center gap-3 rounded-lg p-4 text-sm ${isBold ? 'bg-white/10' : 'bg-green-50 border border-green-200'}`}>
+          <ClipboardCheck className={`h-4 w-4 flex-shrink-0 ${isBold ? 'text-green-400' : 'text-green-600'}`} />
+          <span className={isBold ? 'text-white/80' : 'text-green-800'}>
+            Song requests submitted — thank you!
+          </span>
+        </div>
+      )}
+
+      {/* Music form link */}
+      {data.hasMusicForm && (
+        data.hasMusicFormResponse && !musicSuccess ? (
+          <div className={`flex items-center gap-3 rounded-lg p-4 text-sm ${isBold ? 'bg-white/10' : 'bg-[#f9fafb] border border-[#e5e5e5]'}`}>
+            <ClipboardCheck className={`h-4 w-4 flex-shrink-0 ${isBold ? 'text-green-400' : 'text-green-600'}`} />
+            <span className={isBold ? 'text-white/80' : 'text-[#374151]'}>
+              Song requests submitted
+            </span>
+            <Link
+              to="music"
+              className={`ml-auto text-xs underline underline-offset-2 ${isBold ? 'text-white/60 hover:text-white' : 'text-[#6b7280] hover:text-[#1a1a1a]'}`}
+            >
+              Update
+            </Link>
+          </div>
+        ) : !data.hasMusicFormResponse ? (
+          <Link
+            to="music"
+            className="flex items-center justify-center gap-2 w-full rounded-lg px-5 py-3 text-sm font-medium text-white transition-opacity hover:opacity-90"
+            style={{ backgroundColor: brand }}
+          >
+            <Music className="h-4 w-4" />
+            Choose your songs
+          </Link>
+        ) : null
+      )}
+
       {data.documents.length > 0 && (
         <div className="space-y-2">
           <p className={`text-sm font-medium ${isBold ? 'text-white/60' : 'text-[#6b7280]'}`}>
@@ -115,6 +152,8 @@ function BookingSummary({ data }: { data: PortalData }) {
 
 export default function PortalPage() {
   const { token } = useParams<{ token: string }>();
+  const [searchParams] = useSearchParams();
+  const musicSuccess = searchParams.get('music') === '1';
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['portal', token],
@@ -151,7 +190,7 @@ export default function PortalPage() {
 
   return (
     <PortalLayout profile={data.publicProfile}>
-      <BookingSummary data={data} />
+      <BookingSummary data={data} musicSuccess={musicSuccess} />
     </PortalLayout>
   );
 }

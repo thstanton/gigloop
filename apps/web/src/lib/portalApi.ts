@@ -1,4 +1,4 @@
-import type { PortalData, PortalContractData } from '../types/api';
+import type { PortalData, PortalContractData, PortalMusicFormData, SubmitMusicFormInput } from '../types/api';
 
 async function portalFetch(path: string, init?: RequestInit): Promise<Response> {
   return fetch(`/api${path}`, {
@@ -31,6 +31,21 @@ export function getPortalData(token: string): Promise<PortalData> {
 
 export function getContractContent(token: string): Promise<PortalContractData> {
   return portalGet<PortalContractData>(`/booking/${token}/contract`);
+}
+
+export function getMusicFormData(token: string): Promise<PortalMusicFormData> {
+  return portalGet<PortalMusicFormData>(`/booking/${token}/music`);
+}
+
+export async function submitMusicForm(token: string, body: SubmitMusicFormInput): Promise<void> {
+  const res = await portalFetch(`/booking/${token}/music`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText);
+    throw new Response(text, { status: res.status });
+  }
 }
 
 export async function signContract(token: string, signature: string): Promise<void> {

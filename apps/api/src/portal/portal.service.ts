@@ -5,6 +5,7 @@ import { DocumentsService } from '../documents/documents.service';
 import { StorageService } from '../storage/storage.service';
 import { substituteTiptapVariables } from '../mail/tiptap-portal';
 import type { Request } from 'express';
+import type { SubmitMusicFormDto } from './dto/submit-music-form.dto';
 
 @Injectable()
 export class PortalService {
@@ -78,6 +79,7 @@ export class PortalService {
       signedContractUrl,
       documents,
       hasMusicForm: !!booking.musicFormConfig,
+      hasMusicFormResponse: !!booking.musicFormResponse,
       depositInvoiceDueDate: sentDepositInvoice?.dueDate?.toISOString() ?? null,
     };
   }
@@ -134,6 +136,48 @@ export class PortalService {
     await this.repo.markContractSigned(booking.id, ip);
 
     await this.sendSigningNotification(booking, publicProfile, signedAt);
+  }
+
+  async getMusicFormData(token: string) {
+    const data = await this.repo.findMusicFormDataByToken(token);
+    if (!data) throw new NotFoundException('Booking not found');
+    if (!data.musicFormConfig) throw new NotFoundException('Music form not found');
+
+    const config = data.musicFormConfig as { keyMoments: unknown; enabledGenres: string[] };
+    const [songs, allSongs] = await Promise.all([
+      this.repo.findSongsByUserId(data.userId, config.enabledGenres),
+      this.repo.findAllSongsByUserId(data.userId),
+    ]);
+
+    return {
+      config: {
+        keyMoments: config.keyMoments,
+        enabledGenres: config.enabledGenres,
+      },
+      songs,
+      allSongs,
+      existingResponse: data.musicFormResponse
+        ? {
+            selectedSongIds: data.musicFormResponse.selectedSongIds,
+            specialRequests: data.musicFormResponse.specialRequests,
+            notes: data.musicFormResponse.notes,
+          }
+        : null,
+    };
+  }
+
+  async submitMusicForm(token: string, dto: SubmitMusicFormDto) {
+    const data = await this.repo.findMusicFormDataByToken(token);
+    if (!data) throw new NotFoundException('Booking not found');
+    if (!data.musicFormConfig) throw new NotFoundException('Music form not found');
+
+    await this.repo.upsertMusicFormResponse(
+      data.id,
+      data.userId,
+      dto.selectedSongIds,
+      dto.specialRequests,
+      dto.notes,
+    );
   }
 
   private async sendSigningNotification(

@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import type { SpecialRequestDto } from './dto/submit-music-form.dto';
 
 @Injectable()
 export class PortalRepository {
@@ -25,6 +27,69 @@ export class PortalRepository {
           orderBy: { createdAt: 'asc' },
         },
         musicFormConfig: { select: { id: true } },
+        musicFormResponse: { select: { id: true } },
+      },
+    });
+  }
+
+  findMusicFormDataByToken(token: string) {
+    return this.prisma.booking.findUnique({
+      where: { portalToken: token },
+      select: {
+        id: true,
+        userId: true,
+        musicFormConfig: {
+          select: { keyMoments: true, enabledGenres: true },
+        },
+        musicFormResponse: {
+          select: {
+            selectedSongIds: true,
+            specialRequests: true,
+            notes: true,
+          },
+        },
+      },
+    });
+  }
+
+  findSongsByUserId(userId: string, genres: string[]) {
+    return this.prisma.song.findMany({
+      where: { userId, genre: { in: genres }, active: true },
+      select: { id: true, title: true, artist: true, genre: true },
+      orderBy: [{ genre: 'asc' }, { title: 'asc' }],
+    });
+  }
+
+  findAllSongsByUserId(userId: string) {
+    return this.prisma.song.findMany({
+      where: { userId, active: true },
+      select: { id: true, title: true, artist: true, genre: true },
+      orderBy: [{ genre: 'asc' }, { title: 'asc' }],
+    });
+  }
+
+  async upsertMusicFormResponse(
+    bookingId: string,
+    userId: string,
+    selectedSongIds: string[],
+    specialRequests: SpecialRequestDto[],
+    notes: string | undefined,
+  ) {
+    return this.prisma.musicFormResponse.upsert({
+      where: { bookingId },
+      create: {
+        bookingId,
+        userId,
+        selectedSongIds,
+        specialRequests: specialRequests as unknown as Prisma.InputJsonValue,
+        notes,
+        submittedAt: new Date(),
+      },
+      update: {
+        selectedSongIds,
+        specialRequests: specialRequests as unknown as Prisma.InputJsonValue,
+        notes,
+        submittedAt: new Date(),
       },
     });
   }
