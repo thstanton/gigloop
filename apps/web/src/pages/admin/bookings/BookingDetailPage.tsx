@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@clerk/react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, CheckCircle2, Circle, AlertTriangle, Mail, Music, FileText, DollarSign, FolderOpen, ChevronDown, Check, Pencil, Plus, Send, Download, Heart, GlassWater, Utensils, Moon, Briefcase, Music2, Car, KeyRound, Speaker } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckCircle2, Circle, AlertTriangle, Mail, Music, FileText, DollarSign, FolderOpen, ChevronDown, Check, Pencil, Plus, Send, Download, Eye, Heart, GlassWater, Utensils, Moon, Briefcase, Music2, Car, KeyRound, Speaker } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -18,6 +18,7 @@ import { useBookingInvoices } from '@/lib/hooks/useBookingInvoices';
 import { useBookingCommunications } from '@/lib/hooks/useBookingCommunications';
 import { useBookingDocuments } from '@/lib/hooks/useBookingDocuments';
 import BookingEditDrawer from '@/features/bookings/BookingEditDrawer';
+import ContractSheet from '@/features/bookings/ContractSheet';
 import ContactEditSheet from '@/features/contacts/ContactEditSheet';
 import ComposeEmailSheet from '@/features/communications/ComposeEmailSheet';
 import InvoiceSheet from '@/features/invoices/InvoiceSheet';
@@ -686,6 +687,106 @@ function VenueCard({ venue, linkState, onEdit }: { venue: Contact; linkState?: R
   );
 }
 
+// ─── Contract ─────────────────────────────────────────────────────────────────
+
+type ContractState = 'not_started' | 'draft' | 'sent' | 'signed';
+
+function deriveContractState(booking: BookingDetail, communications: Communication[]): ContractState {
+  if (booking.contractSignedAt) return 'signed';
+  const contractSent = communications.some(
+    (c) =>
+      c.status === 'SENT' &&
+      (c.template?.builtInType === 'contract_cover' || c.template?.builtInType === 'contract_and_deposit_cover'),
+  );
+  if (contractSent) return 'sent';
+  if (booking.contractContent !== null) return 'draft';
+  return 'not_started';
+}
+
+const CONTRACT_PILL_CLASSES: Record<Exclude<ContractState, 'not_started'>, string> = {
+  draft:  'bg-status-invoiced/12 text-status-invoiced border-l-status-invoiced',
+  sent:   'bg-status-confirmed/12 text-status-confirmed border-l-status-confirmed',
+  signed: 'bg-status-settled/12 text-status-settled border-l-status-settled',
+};
+
+const CONTRACT_PILL_LABELS: Record<Exclude<ContractState, 'not_started'>, string> = {
+  draft:  'Draft',
+  sent:   'Sent',
+  signed: 'Signed',
+};
+
+function ContractCard({
+  booking,
+  communications,
+  documents,
+  isCreating,
+  onCreateContract,
+  onEdit,
+  onPreview,
+}: {
+  booking: BookingDetail;
+  communications: Communication[];
+  documents: Document[];
+  isCreating: boolean;
+  onCreateContract: () => void;
+  onEdit: () => void;
+  onPreview: () => void;
+}) {
+  const state = deriveContractState(booking, communications);
+  const contractDoc = documents.find((d) => d.type === 'CONTRACT');
+
+  return (
+    <Card title="Contract">
+      {state === 'not_started' ? (
+        <button
+          type="button"
+          onClick={onCreateContract}
+          disabled={isCreating}
+          className="inline-flex items-center gap-1 text-sm text-primary hover:text-primary/80 transition-colors disabled:opacity-50"
+        >
+          <Plus size={14} />
+          {isCreating ? 'Creating…' : 'Create contract'}
+        </button>
+      ) : (
+        <div className="flex items-center gap-2">
+          {state === 'draft' && (
+            <button
+              type="button"
+              onClick={onEdit}
+              className="text-muted hover:text-foreground transition-colors"
+              aria-label="Edit contract"
+            >
+              <Pencil size={14} />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onPreview}
+            className="text-muted hover:text-foreground transition-colors"
+            aria-label="Preview contract"
+          >
+            <Eye size={14} />
+          </button>
+          {contractDoc && (
+            <a
+              href={contractDoc.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-muted hover:text-foreground transition-colors"
+              aria-label="Download contract PDF"
+            >
+              <Download size={14} />
+            </a>
+          )}
+          <span className={cn('inline-flex items-center border-l-[3px] pl-2 pr-2.5 py-0.5 text-xs font-medium', CONTRACT_PILL_CLASSES[state as Exclude<ContractState, 'not_started'>])}>
+            {CONTRACT_PILL_LABELS[state as Exclude<ContractState, 'not_started'>]}
+          </span>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 // ─── Invoices ─────────────────────────────────────────────────────────────────
 
 function InvoiceRow({
@@ -900,6 +1001,9 @@ export default function BookingDetailPage() {
   const [invoiceSheetPrefill, setInvoiceSheetPrefill] = useState<{ isDeposit: boolean; amount?: number } | undefined>();
   const [markSentInvoice, setMarkSentInvoice] = useState<Invoice | undefined>();
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
+  const [contractSheetOpen, setContractSheetOpen] = useState(false);
+  const [contractSheetReadOnly, setContractSheetReadOnly] = useState(false);
+  const [pendingContractContent, setPendingContractContent] = useState<unknown | null>(null);
 
   const { isLoaded } = useAuth();
   const { data: booking, isLoading, isError } = useBooking(id!);
@@ -914,6 +1018,17 @@ export default function BookingDetailPage() {
 
   const actions = useBookingActions(id!);
   const queryClient = useQueryClient();
+
+  const createContract = useMutation({
+    mutationFn: () => apiPost<{ contractContent: unknown }>(`/bookings/${id}/contract/create`, {}),
+    onSuccess: (data) => {
+      setPendingContractContent(data.contractContent);
+      queryClient.invalidateQueries({ queryKey: ['booking', id] });
+      setContractSheetReadOnly(false);
+      setContractSheetOpen(true);
+    },
+    onError: () => toast({ title: 'Failed to create contract', variant: 'destructive' }),
+  });
 
   const markPaid = useMutation({
     mutationFn: (invoiceId: string) => apiPost(`/bookings/${id}/invoices/${invoiceId}/mark-paid`, {}),
@@ -1150,6 +1265,19 @@ export default function BookingDetailPage() {
             </section>
           )}
 
+          {/* Contract */}
+          {booking.status !== 'CANCELLED' && (
+            <ContractCard
+              booking={booking}
+              communications={communications}
+              documents={documents}
+              isCreating={createContract.isPending}
+              onCreateContract={() => createContract.mutate()}
+              onEdit={() => { setContractSheetReadOnly(false); setContractSheetOpen(true); }}
+              onPreview={() => { setContractSheetReadOnly(true); setContractSheetOpen(true); }}
+            />
+          )}
+
           {/* Invoices */}
           <div className="bg-background border border-border rounded-lg p-4">
             <div className="flex items-center justify-between mb-3">
@@ -1294,6 +1422,13 @@ export default function BookingDetailPage() {
         </div>{/* end right column */}
       </div>{/* end two-column grid */}
 
+      <ContractSheet
+        bookingId={id!}
+        content={pendingContractContent ?? booking.contractContent}
+        readOnly={contractSheetReadOnly}
+        open={contractSheetOpen}
+        onClose={() => { setContractSheetOpen(false); setPendingContractContent(null); }}
+      />
       <BookingEditDrawer booking={booking} />
       <ContactEditSheet contact={editingContact} onClose={() => setEditingContact(null)} />
       <InvoiceSheet

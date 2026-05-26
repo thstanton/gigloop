@@ -1,6 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { BookingStatus } from '@prisma/client';
 import {
+  Allow,
   IsDateString,
   IsEnum,
   IsIn,
@@ -76,4 +77,9 @@ export class UpdateBookingDto {
   @ValidateIf((_, v) => v !== null)
   @IsDateString()
   depositReceivedAt?: string | null;
+
+  @ApiPropertyOptional({ description: 'Tiptap JSON contract content', nullable: true })
+  @IsOptional()
+  @Allow()
+  contractContent?: unknown | null;
 }

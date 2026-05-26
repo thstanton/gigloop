@@ -126,10 +126,14 @@ export class BookingsRepository {
   }
 
   update(id: string, dto: UpdateBookingDto) {
-    const { date, ...rest } = dto;
+    const { date, contractContent, ...rest } = dto;
     return this.prisma.booking.update({
       where: { id },
-      data: { ...rest, ...(date !== undefined ? { date: new Date(date) } : {}) },
+      data: {
+        ...rest,
+        ...(date !== undefined ? { date: new Date(date) } : {}),
+        ...(contractContent !== undefined ? { contractContent: contractContent as Prisma.InputJsonValue } : {}),
+      },
       include: bookingIncludes,
     });
   }
