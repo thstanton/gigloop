@@ -763,6 +763,19 @@ function InvoiceRow({
 
 // ─── Communications ───────────────────────────────────────────────────────────
 
+function emailDoc(body: string) {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Inter',system-ui,sans-serif;font-size:14px;line-height:1.6;color:hsl(222 47% 11%);background:#fff;padding:24px;-webkit-font-smoothing:antialiased}
+    p{margin-bottom:.75em}p:last-child{margin-bottom:0}
+    ul{list-style:disc;padding-left:1.5em;margin-bottom:.75em}
+    ol{list-style:decimal;padding-left:1.5em;margin-bottom:.75em}
+    li{margin-bottom:.25em}
+    strong{font-weight:600}
+    a{color:hsl(222 89% 55%)}
+  </style></head><body>${body}</body></html>`;
+}
+
 function CommunicationRow({ comm }: { comm: Communication }) {
   const [open, setOpen] = useState(false);
   const meta = [comm.template?.name, `To ${comm.contact.name}`].filter(Boolean).join(' · ');
@@ -805,7 +818,7 @@ function CommunicationRow({ comm }: { comm: Communication }) {
           </SheetHeader>
           <div className="flex-1 overflow-y-auto">
             <iframe
-              srcDoc={comm.body}
+              srcDoc={emailDoc(comm.body)}
               title={comm.subject}
               className="w-full h-full border-0"
               sandbox="allow-same-origin"
