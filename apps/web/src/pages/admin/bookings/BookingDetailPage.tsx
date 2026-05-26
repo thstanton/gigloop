@@ -183,7 +183,7 @@ function InlineNotes({ bookingId, initialNotes }: { bookingId: string; initialNo
         value={value}
         onChange={(e) => setValue(e.target.value)}
         placeholder="Add notes about this booking…"
-        rows={3}
+        rows={5}
         className="resize-none text-sm"
       />
     </section>
