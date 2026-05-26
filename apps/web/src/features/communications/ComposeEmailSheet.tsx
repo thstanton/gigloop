@@ -185,6 +185,7 @@ export default function ComposeEmailSheet({
       queryClient.invalidateQueries({ queryKey: ['bookingCommunications', bookingId] });
       if (showDateFields && invoiceId) {
         queryClient.invalidateQueries({ queryKey: ['bookingInvoices', bookingId] });
+        queryClient.invalidateQueries({ queryKey: ['bookingDocuments', bookingId] });
       }
       onOpenChange(false);
       toast({ title: 'Email sent' });
