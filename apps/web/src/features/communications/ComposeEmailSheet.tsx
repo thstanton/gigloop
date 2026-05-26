@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
+import Link_ from '@tiptap/extension-link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@clerk/react';
 import { AlertTriangle } from 'lucide-react';
@@ -63,7 +64,7 @@ export default function ComposeEmailSheet({
   const [formDueDate, setFormDueDate] = useState('');
 
   const editor = useEditor({
-    extensions: [StarterKit, Underline],
+    extensions: [StarterKit, Underline, Link_.configure({ openOnClick: false })],
     content: '',
     editorProps: {
       attributes: {

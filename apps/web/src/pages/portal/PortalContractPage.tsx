@@ -2,6 +2,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
+import Link_ from '@tiptap/extension-link';
 import { VariableNode } from '../../features/templates/VariableNode';
 import { useRef, useState, useEffect } from 'react';
 import { FileText, PenLine, RotateCcw } from 'lucide-react';
@@ -159,6 +160,7 @@ export default function PortalContractPage() {
     // StarterKit v3 includes Underline — do not add it separately
     extensions: [
       StarterKit.configure({ codeBlock: false, code: false }),
+      Link_.configure({ openOnClick: true }),
       VariableNode,
     ],
     content: contractQuery.data?.content as Record<string, unknown> | undefined,
