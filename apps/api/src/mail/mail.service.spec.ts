@@ -100,11 +100,12 @@ describe('MailService', () => {
       expect(ctx.bookingFee).toBe('');
     });
 
-    it('renders sets schedule as an HTML list', async () => {
+    it('renders sets schedule as newline-separated plain text', async () => {
       const ctx = await service.buildContext('u1', 'b1');
-      expect(ctx.setsSchedule).toContain('<ul>');
+      expect(ctx.setsSchedule).not.toContain('<');
       expect(ctx.setsSchedule).toContain('Ceremony');
       expect(ctx.setsSchedule).toContain('30 min');
+      expect(ctx.setsSchedule).toContain('\n');
     });
 
     it('uses start time prefix when set is timed', async () => {

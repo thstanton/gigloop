@@ -88,13 +88,12 @@ export class MailService {
     const setsSchedule =
       booking.sets.length === 0
         ? ''
-        : `<ul>${booking.sets
+        : booking.sets
             .map((s) => {
               const time = s.startTime ? `${s.startTime} — ` : '';
-              const label = s.label ?? 'Set';
-              return `<li>${time}${label} (${s.duration} min)</li>`;
+              return `${time}${s.label ?? 'Set'} (${s.duration} min)`;
             })
-            .join('')}</ul>`;
+            .join('\n');
 
     return {
       customerName: booking.customer.name,
@@ -117,7 +116,7 @@ export class MailService {
 
     const rendered = html.replace(/\{\{(\w+)\}\}/g, (_, key) => {
       const value = context[key as keyof EmailContext];
-      if (value) return value;
+      if (value) return value.replace(/\n/g, '<br>');
       missingVariables.push(key);
       return VARIABLE_FALLBACKS[key] ?? '';
     });
