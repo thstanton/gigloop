@@ -15,6 +15,9 @@ type MockPrisma = {
     update: jest.Mock;
     delete: jest.Mock;
   };
+  performanceFormat: {
+    findMany: jest.Mock;
+  };
 };
 
 function makePrisma(): MockPrisma {
@@ -30,6 +33,9 @@ function makePrisma(): MockPrisma {
       create: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
+    },
+    performanceFormat: {
+      findMany: jest.fn(),
     },
   };
 }
@@ -98,10 +104,8 @@ describe('BookingsRepository', () => {
 
   describe('create', () => {
     it('passes userId and booking fields to Prisma', async () => {
-      const booking = { id: 'b1' };
-      prisma.booking.create.mockResolvedValue(booking);
-      const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1' };
-      await repo.create('u1', dto);
+      prisma.booking.create.mockResolvedValue({ id: 'b1' });
+      await repo.create('u1', { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1' });
       const data = prisma.booking.create.mock.calls[0][0].data;
       expect(data.userId).toBe('u1');
       expect(data.customerId).toBe('c1');
@@ -121,20 +125,55 @@ describe('BookingsRepository', () => {
       const data = prisma.booking.create.mock.calls[0][0].data;
       expect(data.fee).toBe(1500);
     });
+  });
 
-    it('creates nested sets with userId when provided', async () => {
+  describe('findFormats', () => {
+    it('queries by userId and ids', async () => {
+      prisma.performanceFormat.findMany.mockResolvedValue([]);
+      await repo.findFormats('u1', ['f1', 'f2']);
+      expect(prisma.performanceFormat.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: { in: ['f1', 'f2'] }, userId: 'u1' } }),
+      );
+    });
+  });
+
+  describe('createWithFormats', () => {
+    it('creates sets from format slots with performanceFormatId', async () => {
       prisma.booking.create.mockResolvedValue({ id: 'b1' });
-      const sets = [{ order: 1, duration: 60, label: 'Ceremony' }];
-      await repo.create('u1', { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', sets });
+      const fmt = {
+        id: 'f1',
+        label: 'Ceremony',
+        keyMoments: [],
+        defaultGenreSelection: ['CONTEMPORARY'],
+        slots: [{ label: 'Ceremony', duration: 30, order: 1 }],
+      };
+      await repo.createWithFormats('u1', { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1' }, [fmt]);
       const data = prisma.booking.create.mock.calls[0][0].data;
-      expect(data.sets.create).toEqual([{ userId: 'u1', order: 1, duration: 60, label: 'Ceremony' }]);
+      expect(data.sets.create[0]).toMatchObject({ duration: 30, performanceFormatId: 'f1' });
     });
 
-    it('omits sets relation when no sets are provided', async () => {
+    it('creates musicFormConfig when formats have keyMoments', async () => {
       prisma.booking.create.mockResolvedValue({ id: 'b1' });
-      await repo.create('u1', { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1' });
+      const fmt = {
+        id: 'f1',
+        label: 'Wedding Ceremony',
+        keyMoments: ['Processional'],
+        defaultGenreSelection: ['CLASSICAL'],
+        slots: [],
+      };
+      await repo.createWithFormats('u1', { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1' }, [fmt]);
       const data = prisma.booking.create.mock.calls[0][0].data;
-      expect(data.sets).toBeUndefined();
+      expect(data.musicFormConfig.create.keyMoments).toEqual([
+        { label: 'Processional', section: 'Wedding Ceremony' },
+      ]);
+    });
+
+    it('omits musicFormConfig when no formats have keyMoments', async () => {
+      prisma.booking.create.mockResolvedValue({ id: 'b1' });
+      const fmt = { id: 'f1', label: 'Background', keyMoments: [], defaultGenreSelection: [], slots: [] };
+      await repo.createWithFormats('u1', { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1' }, [fmt]);
+      const data = prisma.booking.create.mock.calls[0][0].data;
+      expect(data.musicFormConfig).toBeUndefined();
     });
   });
 

@@ -7,6 +7,8 @@ type MockRepo = {
   findAll: jest.Mock;
   findOne: jest.Mock;
   create: jest.Mock;
+  findFormats: jest.Mock;
+  createWithFormats: jest.Mock;
   update: jest.Mock;
   cancel: jest.Mock;
   findSet: jest.Mock;
@@ -20,6 +22,8 @@ function makeRepo(): MockRepo {
     findAll: jest.fn(),
     findOne: jest.fn(),
     create: jest.fn(),
+    findFormats: jest.fn(),
+    createWithFormats: jest.fn(),
     update: jest.fn(),
     cancel: jest.fn(),
     findSet: jest.fn(),
@@ -95,12 +99,36 @@ describe('BookingsService', () => {
   });
 
   describe('create', () => {
-    it('delegates to repository with userId and dto', async () => {
+    it('delegates to repo.create when no formatIds provided', async () => {
       repo.create.mockResolvedValue(booking);
       const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1' };
       const result = await service.create('u1', dto);
       expect(repo.create).toHaveBeenCalledWith('u1', dto);
+      expect(repo.findFormats).not.toHaveBeenCalled();
       expect(result).toBe(booking);
+    });
+
+    it('fetches formats and calls createWithFormats when formatIds provided', async () => {
+      const fmt = { id: 'f1', label: 'Wedding Ceremony', keyMoments: ['Processional'], defaultGenreSelection: ['CONTEMPORARY'], slots: [] };
+      repo.findFormats.mockResolvedValue([fmt]);
+      repo.createWithFormats.mockResolvedValue(booking);
+      const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', formatIds: ['f1'] };
+      const result = await service.create('u1', dto);
+      expect(repo.findFormats).toHaveBeenCalledWith('u1', ['f1']);
+      expect(repo.createWithFormats).toHaveBeenCalledWith('u1', dto, [fmt]);
+      expect(result).toBe(booking);
+    });
+
+    it('preserves order from formatIds when creating with formats', async () => {
+      const fmt1 = { id: 'f1', label: 'A', keyMoments: [], defaultGenreSelection: [], slots: [] };
+      const fmt2 = { id: 'f2', label: 'B', keyMoments: [], defaultGenreSelection: [], slots: [] };
+      repo.findFormats.mockResolvedValue([fmt2, fmt1]); // reversed from DB
+      repo.createWithFormats.mockResolvedValue(booking);
+      const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', formatIds: ['f1', 'f2'] };
+      await service.create('u1', dto);
+      const orderedFormats = repo.createWithFormats.mock.calls[0][2];
+      expect(orderedFormats[0].id).toBe('f1');
+      expect(orderedFormats[1].id).toBe('f2');
     });
   });
 

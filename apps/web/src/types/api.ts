@@ -168,7 +168,7 @@ export interface CreateBookingInput {
   notes?: string;
   venueId?: string;
   referrerId?: string;
-  sets?: CreateSetInput[];
+  formatIds?: string[];
 }
 
 export interface UpdateBookingInput {

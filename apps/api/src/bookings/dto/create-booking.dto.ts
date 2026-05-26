@@ -1,6 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { BookingStatus } from '@prisma/client';
-import { Type } from 'class-transformer';
 import {
   IsArray,
   IsDateString,
@@ -11,10 +10,8 @@ import {
   IsOptional,
   IsString,
   IsUUID,
-  ValidateNested,
 } from 'class-validator';
 import { EVENT_TYPES } from '../../common/constants';
-import { CreateSetDto } from './create-set.dto';
 
 export class CreateBookingDto {
   @ApiProperty({ enum: EVENT_TYPES })
@@ -60,10 +57,9 @@ export class CreateBookingDto {
   @IsUUID()
   referrerId?: string;
 
-  @ApiPropertyOptional({ type: () => CreateSetDto, isArray: true })
+  @ApiPropertyOptional({ type: [String], description: 'Performance format IDs to apply (in order)' })
   @IsOptional()
   @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => CreateSetDto)
-  sets?: CreateSetDto[];
+  @IsUUID('all', { each: true })
+  formatIds?: string[];
 }

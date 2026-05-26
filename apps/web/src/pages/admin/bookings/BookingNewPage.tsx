@@ -1,24 +1,38 @@
 import { useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useForm, useFieldArray } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ChevronLeft } from 'lucide-react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@clerk/clerk-react';
 import { Button } from '@/components/ui/button';
 import {
   BookingFormFields,
   bookingFormSchema,
   type BookingFormValues,
 } from '@/features/bookings/BookingFormFields';
-import { apiPost } from '@/lib/api';
-import type { BookingDetail, EventType, BookingStatus } from '@/types/api';
+import { apiGet, apiPost } from '@/lib/api';
+import type { BookingDetail, EventType, BookingStatus, UserProfile, PerformanceFormat } from '@/types/api';
 
 export default function BookingNewPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
+  const { isLoaded } = useAuth();
 
   const locationState = location.state as { customerId?: string; date?: string } | null;
+
+  const { data: userProfile } = useQuery({
+    queryKey: ['me'],
+    queryFn: () => apiGet<UserProfile>('/me'),
+    enabled: isLoaded,
+  });
+
+  const { data: formats } = useQuery({
+    queryKey: ['performance-formats'],
+    queryFn: () => apiGet<PerformanceFormat[]>('/performance-formats'),
+    enabled: isLoaded && (userProfile?.songRequestFormEnabled ?? false),
+  });
 
   const {
     register,
@@ -38,11 +52,9 @@ export default function BookingNewPage() {
       customerId: locationState?.customerId ?? '',
       venueId: null,
       referrerId: null,
-      sets: [],
+      formatIds: [],
     },
   });
-
-  const { fields, append, remove } = useFieldArray({ control, name: 'sets' });
 
   useEffect(() => {
     if (locationState?.customerId) {
@@ -65,14 +77,7 @@ export default function BookingNewPage() {
         notes: values.notes || undefined,
         venueId: values.venueId ?? undefined,
         referrerId: values.referrerId ?? undefined,
-        sets: fields.length
-          ? values.sets.map((s, i) => ({
-              order: i,
-              duration: parseInt(s.duration, 10),
-              startTime: s.startTime || undefined,
-              label: s.label || undefined,
-            }))
-          : undefined,
+        formatIds: values.formatIds.length ? values.formatIds : undefined,
       }),
     onSuccess: (created) => {
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
@@ -100,9 +105,8 @@ export default function BookingNewPage() {
           control={control}
           register={register}
           errors={errors}
-          fields={fields}
-          onAppendSet={() => append({ label: '', duration: '60', startTime: '' })}
-          onRemoveSet={remove}
+          songRequestFormEnabled={userProfile?.songRequestFormEnabled}
+          formats={formats}
         />
 
         {mutation.isError && (

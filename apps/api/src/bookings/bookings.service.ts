@@ -91,8 +91,15 @@ export class BookingsService {
     };
   }
 
-  create(userId: string, dto: CreateBookingDto) {
-    return this.repo.create(userId, dto);
+  async create(userId: string, dto: CreateBookingDto) {
+    if (!dto.formatIds?.length) {
+      return this.repo.create(userId, dto);
+    }
+    const formats = await this.repo.findFormats(userId, dto.formatIds);
+    const orderedFormats = dto.formatIds
+      .map((id) => formats.find((f) => f.id === id))
+      .filter((f): f is NonNullable<typeof f> => f !== null && f !== undefined);
+    return this.repo.createWithFormats(userId, dto, orderedFormats);
   }
 
   async update(userId: string, id: string, dto: UpdateBookingDto) {

@@ -1,7 +1,7 @@
 import { Controller } from 'react-hook-form';
-import type { Control, UseFormRegister, FieldErrors, FieldArrayWithId } from 'react-hook-form';
+import type { Control, UseFormRegister, FieldErrors } from 'react-hook-form';
 import { z } from 'zod';
-import { Plus, Trash2 } from 'lucide-react';
+import { ChevronUp, ChevronDown, Heart, GlassWater, Utensils, Moon, Briefcase, Music, Music2, Check } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -14,19 +14,14 @@ import {
 } from '@/components/ui/select';
 import ContactPicker from './ContactPicker';
 import { EVENT_TYPE_LABELS } from '@/lib/constants';
-import type { EventType } from '@/types/api';
+import type { EventType, PerformanceFormat } from '@/types/api';
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
-export const setSchema = z.object({
-  id: z.string().optional(),
-  label: z.string(),
-  duration: z.string().min(1, 'Duration is required'),
-  startTime: z.string(),
-});
-
 export const bookingFormSchema = z.object({
-  eventType: z.enum(['WEDDING', 'CORPORATE', 'PRIVATE', 'RESIDENCY', 'OTHER'] as const),
+  eventType: z.enum([
+    'WEDDING', 'CORPORATE', 'PRIVATE', 'RESIDENCY', 'FESTIVAL', 'OUTDOOR', 'FUNCTION', 'OTHER',
+  ] as const),
   date: z.string().min(1, 'Date is required'),
   status: z.enum(['ENQUIRY', 'CONFIRMED', 'INVOICED', 'SETTLED', 'COMPLETED', 'CANCELLED'] as const),
   title: z.string(),
@@ -35,10 +30,117 @@ export const bookingFormSchema = z.object({
   customerId: z.string().min(1, 'Customer is required'),
   venueId: z.string().nullable(),
   referrerId: z.string().nullable(),
-  sets: z.array(setSchema),
+  formatIds: z.array(z.string()),
 });
 
 export type BookingFormValues = z.infer<typeof bookingFormSchema>;
+
+// ─── Icon map ─────────────────────────────────────────────────────────────────
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const ICON_MAP: Record<string, React.ComponentType<any>> = {
+  heart: Heart,
+  'glass-water': GlassWater,
+  utensils: Utensils,
+  moon: Moon,
+  briefcase: Briefcase,
+  music: Music,
+  'music-2': Music2,
+};
+
+function FormatIcon({ icon, size = 16 }: { icon: string; size?: number }) {
+  const Icon = ICON_MAP[icon] ?? Music;
+  return <Icon size={size} />;
+}
+
+// ─── Format selector ──────────────────────────────────────────────────────────
+
+function FormatSelector({
+  formats,
+  value,
+  onChange,
+}: {
+  formats: PerformanceFormat[];
+  value: string[];
+  onChange: (ids: string[]) => void;
+}) {
+  function toggle(id: string) {
+    if (value.includes(id)) {
+      onChange(value.filter((v) => v !== id));
+    } else {
+      onChange([...value, id]);
+    }
+  }
+
+  function move(id: string, direction: 'up' | 'down') {
+    const idx = value.indexOf(id);
+    if (direction === 'up' && idx === 0) return;
+    if (direction === 'down' && idx === value.length - 1) return;
+    const next = [...value];
+    const swap = direction === 'up' ? idx - 1 : idx + 1;
+    [next[idx], next[swap]] = [next[swap], next[idx]];
+    onChange(next);
+  }
+
+  const selected = value
+    .map((id) => formats.find((f) => f.id === id))
+    .filter((f): f is PerformanceFormat => f !== undefined);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-2">
+        {formats.map((fmt) => {
+          const active = value.includes(fmt.id);
+          return (
+            <button
+              key={fmt.id}
+              type="button"
+              onClick={() => toggle(fmt.id)}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-sm transition-colors ${
+                active
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'bg-background text-foreground border-border hover:border-primary'
+              }`}
+            >
+              <FormatIcon icon={fmt.icon} size={14} />
+              {fmt.label}
+              {active && <Check size={12} />}
+            </button>
+          );
+        })}
+      </div>
+
+      {selected.length > 0 && (
+        <div className="space-y-1">
+          {selected.map((fmt, idx) => (
+            <div key={fmt.id} className="flex items-center gap-2 px-3 py-2 border border-border rounded-md">
+              <FormatIcon icon={fmt.icon} size={14} />
+              <span className="flex-1 text-sm">{fmt.label}</span>
+              <div className="flex gap-1">
+                <button
+                  type="button"
+                  disabled={idx === 0}
+                  onClick={() => move(fmt.id, 'up')}
+                  className="text-muted hover:text-foreground disabled:opacity-30 transition-colors"
+                >
+                  <ChevronUp size={14} />
+                </button>
+                <button
+                  type="button"
+                  disabled={idx === selected.length - 1}
+                  onClick={() => move(fmt.id, 'down')}
+                  className="text-muted hover:text-foreground disabled:opacity-30 transition-colors"
+                >
+                  <ChevronDown size={14} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -46,18 +148,16 @@ interface Props {
   control: Control<BookingFormValues>;
   register: UseFormRegister<BookingFormValues>;
   errors: FieldErrors<BookingFormValues>;
-  fields: FieldArrayWithId<BookingFormValues, 'sets'>[];
-  onAppendSet: () => void;
-  onRemoveSet: (index: number) => void;
+  songRequestFormEnabled?: boolean;
+  formats?: PerformanceFormat[];
 }
 
 export function BookingFormFields({
   control,
   register,
   errors,
-  fields,
-  onAppendSet,
-  onRemoveSet,
+  songRequestFormEnabled,
+  formats,
 }: Props) {
   return (
     <div className="space-y-6">
@@ -195,66 +295,23 @@ export function BookingFormFields({
         </div>
       </div>
 
-      {/* Sets */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-foreground">Sets</h2>
-          <button
-            type="button"
-            onClick={onAppendSet}
-            className="inline-flex items-center gap-1 text-sm text-primary hover:text-primary/80 transition-colors"
-          >
-            <Plus size={14} />
-            Add set
-          </button>
+      {/* Performance formats */}
+      {songRequestFormEnabled && formats && formats.length > 0 && (
+        <div className="space-y-3">
+          <h2 className="text-sm font-semibold text-foreground">Performance formats</h2>
+          <Controller
+            name="formatIds"
+            control={control}
+            render={({ field }) => (
+              <FormatSelector
+                formats={formats}
+                value={field.value}
+                onChange={field.onChange}
+              />
+            )}
+          />
         </div>
-
-        {fields.length === 0 && (
-          <p className="text-sm text-muted">No sets added yet.</p>
-        )}
-
-        {fields.map((field, index) => (
-          <div key={field.id} className="border border-border rounded-md p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-foreground">Set {index + 1}</span>
-              <button
-                type="button"
-                onClick={() => onRemoveSet(index)}
-                className="text-muted hover:text-foreground transition-colors"
-              >
-                <Trash2 size={14} />
-              </button>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="space-y-1.5">
-                <Label>Label (optional)</Label>
-                <Input
-                  placeholder="e.g. Ceremony"
-                  {...register(`sets.${index}.label`)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Duration (min)</Label>
-                <Input
-                  type="number"
-                  min="1"
-                  placeholder="60"
-                  {...register(`sets.${index}.duration`)}
-                />
-                {errors.sets?.[index]?.duration?.message && (
-                  <p className="text-sm text-status-cancelled">
-                    {errors.sets[index].duration?.message}
-                  </p>
-                )}
-              </div>
-              <div className="space-y-1.5">
-                <Label>Start time (optional)</Label>
-                <Input type="time" {...register(`sets.${index}.startTime`)} />
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
+      )}
 
       {/* Notes */}
       <div className="space-y-1.5">
