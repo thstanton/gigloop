@@ -68,12 +68,12 @@ function invoiceLineTotal(invoice: Invoice): number {
 // ─── Status dropdown ──────────────────────────────────────────────────────────
 
 const STATUS_PILL_CLASSES: Record<BookingStatus, string> = {
-  ENQUIRY:   'bg-status-enquiry/12 text-status-enquiry',
-  CONFIRMED: 'bg-status-confirmed/12 text-status-confirmed',
-  INVOICED:  'bg-status-invoiced/12 text-status-invoiced',
-  SETTLED:   'bg-status-settled/12 text-status-settled',
-  COMPLETED: 'bg-status-completed/12 text-status-completed',
-  CANCELLED: 'bg-status-cancelled/12 text-status-cancelled',
+  ENQUIRY:   'bg-status-enquiry/12 text-status-enquiry border-l-status-enquiry',
+  CONFIRMED: 'bg-status-confirmed/12 text-status-confirmed border-l-status-confirmed',
+  INVOICED:  'bg-status-invoiced/12 text-status-invoiced border-l-status-invoiced',
+  SETTLED:   'bg-status-settled/12 text-status-settled border-l-status-settled',
+  COMPLETED: 'bg-status-completed/12 text-status-completed border-l-status-completed',
+  CANCELLED: 'bg-status-cancelled/12 text-status-cancelled border-l-status-cancelled',
 };
 
 const STATUS_LABELS: Record<BookingStatus, string> = {
@@ -102,7 +102,7 @@ function StatusDropdown({ booking }: { booking: BookingDetail }) {
       <DropdownMenuTrigger asChild>
         <button
           className={cn(
-            'inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium cursor-pointer',
+            'inline-flex items-center gap-1 border-l-[3px] pl-2 pr-2.5 py-0.5 text-xs font-medium cursor-pointer',
             STATUS_PILL_CLASSES[booking.status],
           )}
         >
@@ -117,7 +117,7 @@ function StatusDropdown({ booking }: { booking: BookingDetail }) {
             onSelect={() => { if (s !== booking.status) mutation.mutate(s); }}
             className="gap-2"
           >
-            <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', STATUS_PILL_CLASSES[s])}>
+            <span className={cn('inline-flex items-center border-l-[3px] pl-2 pr-2.5 py-0.5 text-xs font-medium', STATUS_PILL_CLASSES[s])}>
               {STATUS_LABELS[s]}
             </span>
             {s === booking.status && <Check size={12} className="ml-auto" />}
