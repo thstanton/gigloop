@@ -545,6 +545,7 @@ export interface PortalData {
   documents: PortalDocument[];
   hasMusicForm: boolean;
   hasMusicFormResponse: boolean;
+  hasContractEmail: boolean;
   depositInvoiceDueDate: string | null;
 }
 

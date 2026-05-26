@@ -74,7 +74,7 @@ function BookingSummary({ data, musicSuccess }: { data: PortalData; musicSuccess
               Contract signed {new Date(booking.contractSignedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
             </span>
           </div>
-        ) : (
+        ) : data.hasContractEmail ? (
           <Link
             to="contract"
             className="flex items-center justify-center gap-2 w-full rounded-lg px-5 py-3 text-sm font-medium text-white transition-opacity hover:opacity-90"
@@ -83,7 +83,7 @@ function BookingSummary({ data, musicSuccess }: { data: PortalData; musicSuccess
             <FileText className="h-4 w-4" />
             Review &amp; sign contract
           </Link>
-        )}
+        ) : null}
 
       </div>
 

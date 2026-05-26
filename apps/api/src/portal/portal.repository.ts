@@ -28,6 +28,12 @@ export class PortalRepository {
         },
         musicFormConfig: { select: { id: true } },
         musicFormResponse: { select: { id: true } },
+        communications: {
+          select: {
+            sentAt: true,
+            template: { select: { builtInType: true } },
+          },
+        },
       },
     });
   }

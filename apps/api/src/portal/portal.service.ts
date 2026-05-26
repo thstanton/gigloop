@@ -25,6 +25,11 @@ export class PortalService {
 
     const sentDepositInvoice = booking.invoices[0] ?? null;
 
+    const contractEmailTypes = new Set(['contract_cover', 'contract_and_deposit_cover']);
+    const hasContractEmail = booking.communications.some(
+      (c) => c.sentAt && c.template?.builtInType && contractEmailTypes.has(c.template.builtInType),
+    );
+
     const documents = booking.documents.map((doc) => {
       let label: string;
       if (doc.type === 'CONTRACT') {
@@ -82,6 +87,7 @@ export class PortalService {
       documents,
       hasMusicForm: !!booking.musicFormConfig,
       hasMusicFormResponse: !!booking.musicFormResponse,
+      hasContractEmail,
       depositInvoiceDueDate: sentDepositInvoice?.dueDate?.toISOString() ?? null,
     };
   }
