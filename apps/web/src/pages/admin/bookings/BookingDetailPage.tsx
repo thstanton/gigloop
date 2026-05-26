@@ -434,17 +434,22 @@ function MusicFormSection({ booking, documents }: { booking: BookingDetail; docu
     );
   }
 
+  const seedKeyMoments: KeyMoment[] = (booking.performanceFormats ?? []).flatMap((bpf) =>
+    bpf.performanceFormat.keyMoments.map((km) => ({ label: km, section: bpf.performanceFormat.label })),
+  );
+  const seedGenres = [...new Set((booking.performanceFormats ?? []).flatMap((bpf) => bpf.performanceFormat.defaultGenreSelection))];
+
   const configure = useMutation({
     mutationFn: () =>
       apiPut<MusicFormConfig>(`/bookings/${booking.id}/music-form-config`, {
-        keyMoments: [],
-        enabledGenres: [],
+        keyMoments: seedKeyMoments,
+        enabledGenres: seedGenres,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['booking-music-form-config', booking.id] });
       queryClient.invalidateQueries({ queryKey: ['booking', booking.id] });
-      setLocalKeyMoments([]);
-      setLocalGenres([]);
+      setLocalKeyMoments(seedKeyMoments);
+      setLocalGenres(seedGenres);
       setEditing(true);
     },
   });

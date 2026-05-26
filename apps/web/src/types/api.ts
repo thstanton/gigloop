@@ -122,6 +122,8 @@ export interface BookingPerformanceFormatSummary {
     id: string;
     label: string;
     icon: string;
+    keyMoments: string[];
+    defaultGenreSelection: string[];
   };
 }
 

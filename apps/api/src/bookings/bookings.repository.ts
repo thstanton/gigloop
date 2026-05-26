@@ -22,7 +22,7 @@ const bookingIncludes = {
   sets: { orderBy: { order: 'asc' as const } },
   performanceFormats: {
     include: {
-      performanceFormat: { select: { id: true, label: true, icon: true } },
+      performanceFormat: { select: { id: true, label: true, icon: true, keyMoments: true, defaultGenreSelection: true } },
     },
     orderBy: { order: 'asc' as const },
   },
