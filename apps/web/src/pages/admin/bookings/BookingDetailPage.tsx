@@ -465,7 +465,7 @@ function MusicFormSection({ booking, documents }: { booking: BookingDetail; docu
           )}
           {Array.from(sectionMap.entries()).map(([section, moments]) => (
             <div key={section}>
-              <p className="text-xs text-muted uppercase tracking-wide mb-1">{section}</p>
+              <p className="text-xs font-medium text-muted uppercase tracking-wide mb-1">{section}</p>
               <div className="space-y-0.5">
                 {moments.map((km, i) => (
                   <p key={i} className="text-sm text-foreground">{km.label}</p>
@@ -475,7 +475,7 @@ function MusicFormSection({ booking, documents }: { booking: BookingDetail; docu
           ))}
           {config.enabledGenres.length > 0 && (
             <div>
-              <p className="text-xs text-muted uppercase tracking-wide mb-1">Genres</p>
+              <p className="text-xs font-medium text-muted uppercase tracking-wide mb-1">Genres</p>
               <p className="text-sm text-foreground">
                 {config.enabledGenres
                   .map((g) => GENRE_LABELS[g as keyof typeof GENRE_LABELS] ?? g)
@@ -604,24 +604,24 @@ function VenueCard({ venue, linkState }: { venue: Contact; linkState?: Record<st
         <p className="text-sm text-muted mt-0.5 whitespace-pre-wrap">{venue.address}</p>
       )}
       {(venue.parkingInfo || venue.accessInfo || venue.equipmentAvailable) && (
-        <div className="mt-3 pt-3 border-t border-border space-y-1.5">
+        <div className="mt-3 pt-3 border-t border-border space-y-2.5">
           {venue.parkingInfo && (
-            <p className="text-sm text-muted">
-              <span className="text-foreground">Parking</span>
-              {' · '}{venue.parkingInfo}
-            </p>
+            <div>
+              <p className="text-xs font-medium text-muted uppercase tracking-wide mb-0.5">Parking</p>
+              <p className="text-sm text-foreground">{venue.parkingInfo}</p>
+            </div>
           )}
           {venue.accessInfo && (
-            <p className="text-sm text-muted">
-              <span className="text-foreground">Access</span>
-              {' · '}{venue.accessInfo}
-            </p>
+            <div>
+              <p className="text-xs font-medium text-muted uppercase tracking-wide mb-0.5">Access</p>
+              <p className="text-sm text-foreground">{venue.accessInfo}</p>
+            </div>
           )}
           {venue.equipmentAvailable && (
-            <p className="text-sm text-muted">
-              <span className="text-foreground">Equipment</span>
-              {' · '}{venue.equipmentAvailable}
-            </p>
+            <div>
+              <p className="text-xs font-medium text-muted uppercase tracking-wide mb-0.5">Equipment</p>
+              <p className="text-sm text-foreground">{venue.equipmentAvailable}</p>
+            </div>
           )}
         </div>
       )}
