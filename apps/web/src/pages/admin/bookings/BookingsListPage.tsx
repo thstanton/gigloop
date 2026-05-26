@@ -87,7 +87,7 @@ export default function BookingsListPage() {
   }
 
   return (
-    <div className="px-6 py-8 max-w-6xl">
+    <div className="px-6 py-8 max-w-6xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <h1 className="font-display text-2xl font-semibold text-foreground">Bookings</h1>
