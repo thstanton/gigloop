@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { FileText, Download, CheckCircle, Clock } from 'lucide-react';
 import { getPortalData } from '../../lib/portalApi';
 import { PortalLayout } from '../../layouts/PortalLayout';
-import type { PortalData } from '../../types/api';
+import type { PortalData, PortalDocument } from '../../types/api';
 
 function BookingSummary({ data }: { data: PortalData }) {
   const { booking, publicProfile } = data;
@@ -85,20 +85,30 @@ function BookingSummary({ data }: { data: PortalData }) {
           </Link>
         )}
 
-        {data.signedContractUrl && (
-          <a
-            href={data.signedContractUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={`flex items-center justify-center gap-2 w-full rounded-lg px-5 py-3 text-sm font-medium border transition-opacity hover:opacity-80 ${
-              isBold ? 'border-white/20 text-white' : 'border-[#e5e5e5] text-[#1a1a1a]'
-            }`}
-          >
-            <Download className="h-4 w-4" />
-            Download signed contract
-          </a>
-        )}
       </div>
+
+      {data.documents.length > 0 && (
+        <div className="space-y-2">
+          <p className={`text-sm font-medium ${isBold ? 'text-white/60' : 'text-[#6b7280]'}`}>
+            Documents
+          </p>
+          <div className={`rounded-lg divide-y ${isBold ? 'divide-white/10 bg-white/10' : 'divide-[#e5e5e5] border border-[#e5e5e5]'}`}>
+            {data.documents.map((doc: PortalDocument) => (
+              <a
+                key={doc.id}
+                href={doc.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`flex items-center gap-3 px-4 py-3 text-sm transition-opacity hover:opacity-70 ${isBold ? 'text-white' : 'text-[#1a1a1a]'}`}
+              >
+                <FileText className={`h-4 w-4 flex-shrink-0 ${isBold ? 'text-white/40' : 'text-[#9ca3af]'}`} />
+                <span className="flex-1 min-w-0 truncate">{doc.label}</span>
+                <Download className={`h-3.5 w-3.5 flex-shrink-0 ${isBold ? 'text-white/40' : 'text-[#9ca3af]'}`} />
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

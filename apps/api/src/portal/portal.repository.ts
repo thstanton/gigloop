@@ -19,9 +19,10 @@ export class PortalRepository {
           take: 1,
         },
         documents: {
-          where: { type: 'CONTRACT' },
-          orderBy: { createdAt: 'desc' },
-          take: 1,
+          include: {
+            invoice: { select: { id: true, invoiceNumber: true, isDeposit: true } },
+          },
+          orderBy: { createdAt: 'asc' },
         },
         musicFormConfig: { select: { id: true } },
       },

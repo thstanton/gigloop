@@ -480,14 +480,23 @@ export default function BookingDetailPage() {
       <section>
         <div className="flex items-start justify-between gap-4">
           <h1 className="text-2xl font-semibold text-foreground">{title}</h1>
-          <Button
-            variant="outline"
-            size="sm"
-            className="flex-shrink-0"
-            onClick={() => setSearchParams({ edit: 'true' })}
-          >
-            Edit
-          </Button>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <a
+              href={`/booking/${booking.portalToken}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-foreground transition-colors border border-border rounded-md px-3 py-1.5"
+            >
+              Client portal
+            </a>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSearchParams({ edit: 'true' })}
+            >
+              Edit
+            </Button>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2">
           <StatusDropdown booking={booking} />

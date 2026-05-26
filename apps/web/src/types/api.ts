@@ -456,10 +456,19 @@ export interface PortalPublicProfile {
   portalTheme: PortalTheme | null;
 }
 
+export interface PortalDocument {
+  id: string;
+  type: 'CONTRACT' | 'INVOICE';
+  label: string;
+  url: string;
+  createdAt: string;
+}
+
 export interface PortalData {
   booking: PortalBooking;
   publicProfile: PortalPublicProfile;
   signedContractUrl: string | null;
+  documents: PortalDocument[];
   hasMusicForm: boolean;
   depositInvoiceDueDate: string | null;
 }

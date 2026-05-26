@@ -22,12 +22,30 @@ export class PortalService {
     const publicProfile = await this.repo.findPublicProfile(booking.userId);
     if (!publicProfile) throw new NotFoundException('Booking not found');
 
-    const signedDoc = booking.documents[0];
-    const signedContractUrl = signedDoc
-      ? this.storage.getPublicUrl(signedDoc.storageKey)
-      : null;
-
     const sentDepositInvoice = booking.invoices[0] ?? null;
+
+    const documents = booking.documents.map((doc) => {
+      let label: string;
+      if (doc.type === 'CONTRACT') {
+        label = 'Signed contract';
+      } else if (doc.invoice?.isDeposit) {
+        label = `Deposit invoice${doc.invoice.invoiceNumber ? ` ${doc.invoice.invoiceNumber}` : ''}`;
+      } else {
+        label = `Invoice${doc.invoice?.invoiceNumber ? ` ${doc.invoice.invoiceNumber}` : ''}`;
+      }
+      return {
+        id: doc.id,
+        type: doc.type as 'CONTRACT' | 'INVOICE',
+        label,
+        url: this.storage.getPublicUrl(doc.storageKey),
+        createdAt: doc.createdAt.toISOString(),
+      };
+    });
+
+    const signedContract = booking.documents.find((d) => d.type === 'CONTRACT');
+    const signedContractUrl = signedContract
+      ? this.storage.getPublicUrl(signedContract.storageKey)
+      : null;
 
     return {
       booking: {
@@ -58,6 +76,7 @@ export class PortalService {
         portalTheme: publicProfile.portalTheme,
       },
       signedContractUrl,
+      documents,
       hasMusicForm: !!booking.musicFormConfig,
       depositInvoiceDueDate: sentDepositInvoice?.dueDate?.toISOString() ?? null,
     };
