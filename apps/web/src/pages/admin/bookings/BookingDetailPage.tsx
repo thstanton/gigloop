@@ -471,14 +471,28 @@ function MusicFormSection({ booking, documents }: { booking: BookingDetail; docu
       >
         <div className="space-y-4">
           {booking.hasMusicFormResponse && (
-            <button
-              type="button"
-              onClick={() => setViewingResponse(true)}
-              className="inline-flex items-center gap-1.5 text-xs font-medium text-status-confirmed bg-status-confirmed/10 rounded-full px-2.5 py-0.5 hover:bg-status-confirmed/20 transition-colors"
-            >
-              <CheckCircle2 size={11} />
-              Response received · View
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setViewingResponse(true)}
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-status-confirmed bg-status-confirmed/10 rounded-full px-2.5 py-0.5 hover:bg-status-confirmed/20 transition-colors"
+              >
+                <CheckCircle2 size={11} />
+                Response received · View
+              </button>
+              {songListDoc && (
+                <a
+                  href={songListDoc.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors"
+                  aria-label="Download song list PDF"
+                >
+                  <Download size={12} />
+                  Song list
+                </a>
+              )}
+            </div>
           )}
           {Array.from(sectionMap.entries()).map(([section, moments]) => (
             <div key={section}>
@@ -1136,10 +1150,6 @@ export default function BookingDetailPage() {
             </section>
           )}
 
-          {/* Finance */}
-          <section>
-            <SectionHeader label="Finance" />
-        <div className="space-y-4">
           {/* Invoices */}
           <div className="bg-background border border-border rounded-lg p-4">
             <div className="flex items-center justify-between mb-3">
@@ -1257,8 +1267,6 @@ export default function BookingDetailPage() {
               </div>
             )}
           </Card>
-        </div>
-          </section>
 
           {/* Communications */}
           <section>
