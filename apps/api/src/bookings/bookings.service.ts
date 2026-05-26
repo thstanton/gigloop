@@ -5,6 +5,7 @@ import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
 import { CreateSetDto } from './dto/create-set.dto';
 import { UpdateSetDto } from './dto/update-set.dto';
+import { UpsertMusicFormConfigDto } from './dto/upsert-music-form-config.dto';
 
 const VALID_STATUSES = new Set<string>(Object.values(BookingStatus));
 
@@ -129,6 +130,18 @@ export class BookingsService {
     const set = await this.repo.findSet(userId, bookingId, setId);
     if (!set) throw new NotFoundException('Set not found');
     return this.repo.deleteSet(setId);
+  }
+
+  async getMusicFormConfig(userId: string, bookingId: string) {
+    await this.findOne(userId, bookingId);
+    const config = await this.repo.findMusicFormConfig(bookingId);
+    if (!config) throw new NotFoundException('Music form config not found');
+    return config;
+  }
+
+  async upsertMusicFormConfig(userId: string, bookingId: string, dto: UpsertMusicFormConfigDto) {
+    await this.findOne(userId, bookingId);
+    return this.repo.upsertMusicFormConfig(userId, bookingId, dto);
   }
 
   async applyFormat(userId: string, bookingId: string, formatId: string) {

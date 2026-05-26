@@ -1,10 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { BookingStatus } from '@prisma/client';
+import { BookingStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
 import { CreateSetDto } from './dto/create-set.dto';
 import { UpdateSetDto } from './dto/update-set.dto';
+import { UpsertMusicFormConfigDto } from './dto/upsert-music-form-config.dto';
 
 type FormatWithSlots = {
   id: string;
@@ -185,6 +186,18 @@ export class BookingsRepository {
 
   findUserProfile(userId: string) {
     return this.prisma.userProfile.findUnique({ where: { userId } });
+  }
+
+  findMusicFormConfig(bookingId: string) {
+    return this.prisma.musicFormConfig.findUnique({ where: { bookingId } });
+  }
+
+  upsertMusicFormConfig(userId: string, bookingId: string, dto: UpsertMusicFormConfigDto) {
+    return this.prisma.musicFormConfig.upsert({
+      where: { bookingId },
+      create: { userId, bookingId, keyMoments: dto.keyMoments as unknown as Prisma.InputJsonValue, enabledGenres: dto.enabledGenres },
+      update: { keyMoments: dto.keyMoments as unknown as Prisma.InputJsonValue, enabledGenres: dto.enabledGenres },
+    });
   }
 
   findBookingFormat(userId: string, bookingId: string, bookingFormatId: string) {

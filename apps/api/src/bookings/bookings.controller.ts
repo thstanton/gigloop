@@ -7,6 +7,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   Req,
 } from '@nestjs/common';
@@ -18,6 +19,7 @@ import { UpdateBookingDto } from './dto/update-booking.dto';
 import { CreateSetDto } from './dto/create-set.dto';
 import { UpdateSetDto } from './dto/update-set.dto';
 import { ApplyFormatDto } from './dto/apply-format.dto';
+import { UpsertMusicFormConfigDto } from './dto/upsert-music-form-config.dto';
 import type { Request } from 'express';
 
 type AuthedRequest = Request & { userId: string };
@@ -68,6 +70,22 @@ export class BookingsController {
   @HttpCode(204)
   delete(@Req() req: AuthedRequest, @Param('id') id: string) {
     return this.service.delete(req.userId, id);
+  }
+
+  @ApiOperation({ summary: 'Get the music form config for a booking' })
+  @Get(':id/music-form-config')
+  getMusicFormConfig(@Req() req: AuthedRequest, @Param('id') id: string) {
+    return this.service.getMusicFormConfig(req.userId, id);
+  }
+
+  @ApiOperation({ summary: 'Create or replace the music form config for a booking' })
+  @Put(':id/music-form-config')
+  upsertMusicFormConfig(
+    @Req() req: AuthedRequest,
+    @Param('id') id: string,
+    @Body() dto: UpsertMusicFormConfigDto,
+  ) {
+    return this.service.upsertMusicFormConfig(req.userId, id, dto);
   }
 
   @ApiOperation({ summary: 'Apply a performance format to a booking' })

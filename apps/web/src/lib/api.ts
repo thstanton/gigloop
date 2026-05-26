@@ -40,6 +40,12 @@ export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+export async function apiPut<T>(path: string, body: unknown): Promise<T> {
+  const res = await authedFetch(path, { method: 'PUT', body: JSON.stringify(body) });
+  if (!res.ok) throw new Response(res.statusText, { status: res.status });
+  return res.json() as Promise<T>;
+}
+
 export async function apiPostVoid(path: string, body: unknown): Promise<void> {
   const res = await authedFetch(path, { method: 'POST', body: JSON.stringify(body) });
   if (!res.ok) throw new Response(res.statusText, { status: res.status });

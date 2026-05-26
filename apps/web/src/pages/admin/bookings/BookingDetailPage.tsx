@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '@clerk/react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, CheckCircle2, Circle, AlertTriangle, Mail, Music, FileText, DollarSign, FolderOpen, ChevronDown, Check, Pencil, Plus, Send, Download, Heart, GlassWater, Utensils, Moon, Briefcase, Music2, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckCircle2, Circle, AlertTriangle, Mail, Music, FileText, DollarSign, FolderOpen, ChevronDown, Check, Pencil, Plus, Send, Download, Heart, GlassWater, Utensils, Moon, Briefcase, Music2, Trash2, ClipboardList } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import {
@@ -21,19 +21,21 @@ import ComposeEmailSheet from '@/features/communications/ComposeEmailSheet';
 import InvoiceSheet from '@/features/invoices/InvoiceSheet';
 import MarkSentDialog from '@/features/invoices/MarkSentDialog';
 import { buildChecklist } from '@/lib/buildChecklist';
-import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
+import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from '@/lib/api';
 import {
   formatDate,
   formatCurrency,
   formatFee,
 } from '@/lib/formatters';
-import { EVENT_TYPE_LABELS, STATUS_ORDER } from '@/lib/constants';
+import { ALL_GENRES, EVENT_TYPE_LABELS, GENRE_LABELS, STATUS_ORDER } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 import type {
   BookingDetail,
   BookingPerformanceFormatSummary,
   BookingStatus,
   Contact,
+  KeyMoment,
+  MusicFormConfig,
   PerformanceFormat,
   PerformanceSet,
   Invoice,
@@ -201,11 +203,9 @@ function FormatIcon({ icon, size = 14 }: { icon: string; size?: number }) {
 
 function SetRow({
   set,
-  bookingId,
   onUpdate,
 }: {
   set: PerformanceSet;
-  bookingId: string;
   onUpdate: (setId: string, startTime: string | null) => void;
 }) {
   return (
@@ -310,7 +310,7 @@ function PerformanceSection({ booking }: { booking: BookingDetail }) {
               <SetRow
                 key={set.id}
                 set={set}
-                bookingId={booking.id}
+
                 onUpdate={(setId, startTime) => updateSet.mutate({ setId, startTime })}
               />
             ))}
@@ -325,7 +325,6 @@ function PerformanceSection({ booking }: { booking: BookingDetail }) {
             <SetRow
               key={set.id}
               set={set}
-              bookingId={booking.id}
               onUpdate={(setId, startTime) => updateSet.mutate({ setId, startTime })}
             />
           ))}
@@ -371,6 +370,208 @@ function PerformanceSection({ booking }: { booking: BookingDetail }) {
           </button>
         </div>
       )}
+    </Card>
+  );
+}
+
+// ─── Music form config section ────────────────────────────────────────────────
+
+function MusicFormSection({ booking }: { booking: BookingDetail }) {
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState(false);
+
+  const { isLoaded } = useAuth();
+
+  const { data: config, isLoading } = useQuery({
+    queryKey: ['booking-music-form-config', booking.id],
+    queryFn: () => apiGet<MusicFormConfig>(`/bookings/${booking.id}/music-form-config`),
+    enabled: isLoaded && booking.hasMusicFormConfig,
+  });
+
+  const [localKeyMoments, setLocalKeyMoments] = useState<KeyMoment[]>([]);
+  const [localGenres, setLocalGenres] = useState<string[]>([]);
+
+  function openEditor() {
+    setLocalKeyMoments(config?.keyMoments ?? []);
+    setLocalGenres(config?.enabledGenres ?? []);
+    setEditing(true);
+  }
+
+  const save = useMutation({
+    mutationFn: () =>
+      apiPut<MusicFormConfig>(`/bookings/${booking.id}/music-form-config`, {
+        keyMoments: localKeyMoments,
+        enabledGenres: localGenres,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['booking-music-form-config', booking.id] });
+      queryClient.invalidateQueries({ queryKey: ['booking', booking.id] });
+      setEditing(false);
+    },
+  });
+
+  function toggleGenre(genre: string) {
+    setLocalGenres((prev) =>
+      prev.includes(genre) ? prev.filter((g) => g !== genre) : [...prev, genre],
+    );
+  }
+
+  if (!booking.hasMusicFormConfig) {
+    return (
+      <Card title="Music form">
+        <div className="flex items-center gap-2 text-muted py-1">
+          <ClipboardList size={14} />
+          <span className="text-sm">No song request form configured</span>
+        </div>
+      </Card>
+    );
+  }
+
+  if (isLoading || !config) {
+    return (
+      <Card title="Music form">
+        <div className="h-16 bg-border rounded animate-pulse" />
+      </Card>
+    );
+  }
+
+  if (editing) {
+    const sectionMap = new Map<string, KeyMoment[]>();
+    for (const km of localKeyMoments) {
+      if (!sectionMap.has(km.section)) sectionMap.set(km.section, []);
+      sectionMap.get(km.section)!.push(km);
+    }
+
+    return (
+      <Card title="Music form">
+        <div className="space-y-4">
+          <div>
+            <p className="text-xs font-medium text-muted mb-2">Key moments</p>
+            {sectionMap.size === 0 ? (
+              <p className="text-sm text-muted">No key moments configured.</p>
+            ) : (
+              <div className="space-y-3">
+                {Array.from(sectionMap.entries()).map(([section, moments]) => (
+                  <div key={section}>
+                    <p className="text-xs text-muted uppercase tracking-wide mb-1">{section}</p>
+                    <div className="space-y-1">
+                      {moments.map((km, i) => (
+                        <div key={i} className="flex items-center justify-between gap-2">
+                          <input
+                            value={km.label}
+                            onChange={(e) => {
+                              const updated = localKeyMoments.map((m) =>
+                                m === km ? { ...m, label: e.target.value } : m,
+                              );
+                              setLocalKeyMoments(updated);
+                            }}
+                            className="flex-1 text-sm bg-background border border-border rounded px-2 py-1"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setLocalKeyMoments((prev) => prev.filter((m) => m !== km))}
+                            className="text-muted hover:text-status-cancelled transition-colors"
+                            aria-label="Remove key moment"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <p className="text-xs font-medium text-muted mb-2">Enabled genres</p>
+            <div className="flex flex-wrap gap-2">
+              {ALL_GENRES.map((genre) => {
+                const active = localGenres.includes(genre);
+                return (
+                  <button
+                    key={genre}
+                    type="button"
+                    onClick={() => toggleGenre(genre)}
+                    className={`inline-flex items-center px-3 py-1 rounded-full border text-sm transition-colors ${
+                      active
+                        ? 'border-primary text-primary bg-primary/8'
+                        : 'border-border text-muted hover:border-primary'
+                    }`}
+                  >
+                    {GENRE_LABELS[genre as keyof typeof GENRE_LABELS] ?? genre}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 pt-1">
+            <Button
+              size="sm"
+              onClick={() => save.mutate()}
+              disabled={save.isPending}
+            >
+              {save.isPending ? 'Saving…' : 'Save'}
+            </Button>
+            <button
+              type="button"
+              onClick={() => setEditing(false)}
+              className="text-sm text-muted hover:text-foreground transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
+  const sectionMap = new Map<string, KeyMoment[]>();
+  for (const km of config.keyMoments) {
+    if (!sectionMap.has(km.section)) sectionMap.set(km.section, []);
+    sectionMap.get(km.section)!.push(km);
+  }
+
+  return (
+    <Card title="Music form">
+      <div className="space-y-3">
+        {booking.hasMusicFormResponse && (
+          <div className="inline-flex items-center gap-1.5 text-xs font-medium text-status-confirmed bg-status-confirmed/10 rounded-full px-2.5 py-0.5">
+            <CheckCircle2 size={11} />
+            Response received
+          </div>
+        )}
+        {Array.from(sectionMap.entries()).map(([section, moments]) => (
+          <div key={section}>
+            <p className="text-xs text-muted uppercase tracking-wide mb-1">{section}</p>
+            <div className="space-y-0.5">
+              {moments.map((km, i) => (
+                <p key={i} className="text-sm text-foreground">{km.label}</p>
+              ))}
+            </div>
+          </div>
+        ))}
+        {config.enabledGenres.length > 0 && (
+          <div>
+            <p className="text-xs text-muted uppercase tracking-wide mb-1">Genres</p>
+            <p className="text-sm text-foreground">
+              {config.enabledGenres
+                .map((g) => GENRE_LABELS[g as keyof typeof GENRE_LABELS] ?? g)
+                .join(', ')}
+            </p>
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={openEditor}
+          className="inline-flex items-center gap-1 text-sm text-primary hover:text-primary/80 transition-colors pt-1"
+        >
+          <Pencil size={13} />
+          Edit
+        </button>
+      </div>
     </Card>
   );
 }
@@ -787,6 +988,7 @@ export default function BookingDetailPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <PerformanceSection booking={booking} />
           {booking.venue && <VenueCard venue={booking.venue} linkState={backState} />}
+          <MusicFormSection booking={booking} />
         </div>
       </section>
 

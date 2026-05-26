@@ -125,6 +125,20 @@ export interface BookingPerformanceFormatSummary {
   };
 }
 
+export interface KeyMoment {
+  label: string;
+  section: string;
+}
+
+export interface MusicFormConfig {
+  id: string;
+  bookingId: string;
+  keyMoments: KeyMoment[];
+  enabledGenres: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface BookingListItem {
   id: string;
   createdAt: string;

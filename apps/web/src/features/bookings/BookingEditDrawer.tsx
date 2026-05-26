@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useForm, useFieldArray } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -15,7 +15,7 @@ import {
   bookingFormSchema,
   type BookingFormValues,
 } from './BookingFormFields';
-import { apiDelete, apiPatch, apiPost } from '@/lib/api';
+import { apiDelete, apiPatch } from '@/lib/api';
 import type { BookingDetail, EventType, BookingStatus } from '@/types/api';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -31,12 +31,7 @@ function buildDefaultValues(booking: BookingDetail): BookingFormValues {
     customerId: booking.customerId,
     venueId: booking.venueId,
     referrerId: booking.referrerId,
-    sets: booking.sets.map((s) => ({
-      id: s.id,
-      label: s.label ?? '',
-      duration: String(s.duration),
-      startTime: s.startTime ?? '',
-    })),
+    formatIds: [],
   };
 }
 
@@ -72,8 +67,6 @@ export default function BookingEditDrawer({ booking }: Props) {
     defaultValues: buildDefaultValues(booking),
   });
 
-  const { fields, append, remove } = useFieldArray({ control, name: 'sets' });
-
   // Reset to current booking data each time the drawer opens
   useEffect(() => {
     if (isOpen) {
@@ -102,33 +95,6 @@ export default function BookingEditDrawer({ booking }: Props) {
         venueId: values.venueId,
         referrerId: values.referrerId,
       });
-
-      // Reconcile sets: delete removed ones, patch/post remaining
-      const keptSetIds = new Set(values.sets.map((s) => s.id).filter(Boolean));
-      const deletedSetIds = booking.sets
-        .filter((s) => !keptSetIds.has(s.id))
-        .map((s) => s.id);
-
-      await Promise.all([
-        ...deletedSetIds.map((setId) =>
-          apiDelete(`/bookings/${booking.id}/sets/${setId}`),
-        ),
-        ...values.sets.map((s, i) =>
-          s.id
-            ? apiPatch(`/bookings/${booking.id}/sets/${s.id}`, {
-                order: i,
-                duration: parseInt(s.duration, 10),
-                startTime: s.startTime || null,
-                label: s.label || null,
-              })
-            : apiPost(`/bookings/${booking.id}/sets`, {
-                order: i,
-                duration: parseInt(s.duration, 10),
-                startTime: s.startTime || undefined,
-                label: s.label || undefined,
-              }),
-        ),
-      ]);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['booking', booking.id] });
@@ -155,9 +121,6 @@ export default function BookingEditDrawer({ booking }: Props) {
             control={control}
             register={register}
             errors={errors}
-            fields={fields}
-            onAppendSet={() => append({ label: '', duration: '60', startTime: '' })}
-            onRemoveSet={remove}
           />
 
           {mutation.isError && (
