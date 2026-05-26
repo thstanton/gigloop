@@ -20,6 +20,9 @@ export type EventType =
   | 'CORPORATE'
   | 'PRIVATE'
   | 'RESIDENCY'
+  | 'FESTIVAL'
+  | 'OUTDOOR'
+  | 'FUNCTION'
   | 'OTHER';
 
 export type SongGenre =

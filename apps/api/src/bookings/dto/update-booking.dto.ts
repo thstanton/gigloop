@@ -1,8 +1,9 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { BookingStatus, EventType } from '@prisma/client';
+import { BookingStatus } from '@prisma/client';
 import {
   IsDateString,
   IsEnum,
+  IsIn,
   IsNotEmpty,
   IsNumber,
   IsOptional,
@@ -10,12 +11,13 @@ import {
   IsUUID,
   ValidateIf,
 } from 'class-validator';
+import { EVENT_TYPES } from '../../common/constants';
 
 export class UpdateBookingDto {
-  @ApiPropertyOptional({ enum: EventType })
+  @ApiPropertyOptional({ enum: EVENT_TYPES })
   @IsOptional()
-  @IsEnum(EventType)
-  eventType?: EventType;
+  @IsIn(EVENT_TYPES)
+  eventType?: string;
 
   @ApiPropertyOptional({ example: '2026-09-15T14:00:00.000Z' })
   @IsOptional()

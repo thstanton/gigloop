@@ -16,6 +16,9 @@ export const EVENT_TYPE_LABELS: Record<EventType, string> = {
   CORPORATE: 'Corporate',
   PRIVATE:   'Private event',
   RESIDENCY: 'Residency',
+  FESTIVAL:  'Festival',
+  OUTDOOR:   'Outdoor event',
+  FUNCTION:  'Function',
   OTHER:     'Other',
 };
 

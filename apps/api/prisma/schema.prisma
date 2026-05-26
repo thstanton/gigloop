@@ -20,14 +20,6 @@ enum BookingStatus {
   CANCELLED
 }
 
-enum EventType {
-  WEDDING
-  CORPORATE
-  PRIVATE
-  RESIDENCY
-  OTHER
-}
-
 enum InvoiceStatus {
   DRAFT
   SENT
@@ -43,15 +35,6 @@ enum CommunicationStatus {
   PENDING
   SENT
   FAILED
-}
-
-enum SongGenre {
-  CONTEMPORARY
-  CLASSICAL
-  JAZZ
-  FILM_TV_MUSICALS
-  BOLLYWOOD
-  CHRISTMAS
 }
 
 // ─────────────────────────────────────────
@@ -142,7 +125,7 @@ model Booking {
   updatedAt DateTime @updatedAt
 
   status      BookingStatus @default(ENQUIRY)
-  eventType   EventType
+  eventType   String
   date        DateTime
   title       String?
   fee         Decimal?      @db.Decimal(10, 2)
@@ -304,7 +287,7 @@ model Song {
 
   title  String
   artist String?
-  genre  SongGenre
+  genre  String
   active Boolean   @default(true)
   tags   String[]
 
@@ -317,7 +300,7 @@ model MusicFormConfig {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  enabledGenres SongGenre[]
+  enabledGenres String[]
   keyMoments    String[]
 
   bookingId String  @unique

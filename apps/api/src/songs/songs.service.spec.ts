@@ -1,5 +1,4 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { SongGenre } from '@prisma/client';
 import { SongsService } from './songs.service';
 import { SongsRepository } from './songs.repository';
 
@@ -21,7 +20,7 @@ function makeRepo(): MockRepo {
   };
 }
 
-const song = { id: 's1', userId: 'u1', title: 'Clair de Lune', genre: SongGenre.CLASSICAL };
+const song = { id: 's1', userId: 'u1', title: 'Clair de Lune', genre: 'CLASSICAL' };
 
 describe('SongsService', () => {
   let service: SongsService;
@@ -85,7 +84,7 @@ describe('SongsService', () => {
   describe('create', () => {
     it('delegates to repository with userId and dto', async () => {
       repo.create.mockResolvedValue(song);
-      const dto = { title: 'Clair de Lune', genre: SongGenre.CLASSICAL };
+      const dto = { title: 'Clair de Lune', genre: 'CLASSICAL' };
       const result = await service.create('u1', dto);
       expect(repo.create).toHaveBeenCalledWith('u1', dto);
       expect(result).toBe(song);

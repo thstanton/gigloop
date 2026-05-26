@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { SongGenre } from '@prisma/client';
-import { IsArray, IsBoolean, IsEnum, IsNotEmpty, IsOptional, IsString, ValidateIf } from 'class-validator';
+import { IsArray, IsBoolean, IsIn, IsNotEmpty, IsOptional, IsString, ValidateIf } from 'class-validator';
+import { SONG_GENRES } from '../../common/constants';
 
 export class UpdateSongDto {
   @ApiPropertyOptional({ example: 'Clair de Lune' })
@@ -9,10 +9,10 @@ export class UpdateSongDto {
   @IsNotEmpty()
   title?: string;
 
-  @ApiPropertyOptional({ enum: SongGenre })
+  @ApiPropertyOptional({ enum: SONG_GENRES })
   @IsOptional()
-  @IsEnum(SongGenre)
-  genre?: SongGenre;
+  @IsIn(SONG_GENRES)
+  genre?: string;
 
   @ApiPropertyOptional({ example: 'Claude Debussy', nullable: true })
   @IsOptional()

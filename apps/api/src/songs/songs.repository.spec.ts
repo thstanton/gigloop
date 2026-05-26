@@ -1,4 +1,3 @@
-import { SongGenre } from '@prisma/client';
 import { SongsRepository } from './songs.repository';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -44,9 +43,9 @@ describe('SongsRepository', () => {
 
     it('applies genre filter when provided', async () => {
       prisma.song.findMany.mockResolvedValue([]);
-      await repo.findAll('u1', SongGenre.JAZZ);
+      await repo.findAll('u1', 'JAZZ');
       const where = prisma.song.findMany.mock.calls[0][0].where;
-      expect(where.genre).toBe(SongGenre.JAZZ);
+      expect(where.genre).toBe('JAZZ');
     });
 
     it('applies active filter when provided', async () => {
@@ -79,7 +78,7 @@ describe('SongsRepository', () => {
     it('passes userId and dto to Prisma', async () => {
       const song = { id: 's1' };
       prisma.song.create.mockResolvedValue(song);
-      const dto = { title: 'Clair de Lune', genre: SongGenre.CLASSICAL };
+      const dto = { title: 'Clair de Lune', genre: 'CLASSICAL' };
       const result = await repo.create('u1', dto);
       expect(prisma.song.create).toHaveBeenCalledWith({
         data: { userId: 'u1', ...dto },

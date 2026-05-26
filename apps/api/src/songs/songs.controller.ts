@@ -11,7 +11,7 @@ import {
   Req,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
-import { SongGenre } from '@prisma/client';
+import { SONG_GENRES } from '../common/constants';
 import { SongsService } from './songs.service';
 import { CreateSongDto } from './dto/create-song.dto';
 import { UpdateSongDto } from './dto/update-song.dto';
@@ -26,7 +26,7 @@ export class SongsController {
   constructor(private service: SongsService) {}
 
   @ApiOperation({ summary: 'List songs' })
-  @ApiQuery({ name: 'genre', required: false, enum: SongGenre, description: 'Filter by genre' })
+  @ApiQuery({ name: 'genre', required: false, enum: SONG_GENRES, description: 'Filter by genre' })
   @ApiQuery({ name: 'active', required: false, type: Boolean, description: 'Filter by active status' })
   @Get()
   findAll(

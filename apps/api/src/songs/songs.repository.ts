@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import type { SongGenre } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSongDto } from './dto/create-song.dto';
 import { UpdateSongDto } from './dto/update-song.dto';
@@ -8,7 +7,7 @@ import { UpdateSongDto } from './dto/update-song.dto';
 export class SongsRepository {
   constructor(private prisma: PrismaService) {}
 
-  findAll(userId: string, genre?: SongGenre, active?: boolean) {
+  findAll(userId: string, genre?: string, active?: boolean) {
     return this.prisma.song.findMany({
       where: {
         userId,

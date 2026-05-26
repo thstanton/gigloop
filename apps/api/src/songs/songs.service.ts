@@ -1,10 +1,10 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { SongGenre } from '@prisma/client';
+import { SONG_GENRES } from '../common/constants';
 import { SongsRepository } from './songs.repository';
 import { CreateSongDto } from './dto/create-song.dto';
 import { UpdateSongDto } from './dto/update-song.dto';
 
-const VALID_GENRES = new Set<string>(Object.values(SongGenre));
+const VALID_GENRES = new Set<string>(SONG_GENRES);
 
 @Injectable()
 export class SongsService {
@@ -20,7 +20,7 @@ export class SongsService {
     else if (active !== undefined) {
       throw new BadRequestException(`Invalid active value: ${active}. Use "true" or "false"`);
     }
-    return this.repo.findAll(userId, genre as SongGenre | undefined, activeFilter);
+    return this.repo.findAll(userId, genre, activeFilter);
   }
 
   async findOne(userId: string, id: string) {

@@ -1,10 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { BookingStatus, EventType } from '@prisma/client';
+import { BookingStatus } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
   IsArray,
   IsDateString,
   IsEnum,
+  IsIn,
   IsNotEmpty,
   IsNumber,
   IsOptional,
@@ -12,12 +13,13 @@ import {
   IsUUID,
   ValidateNested,
 } from 'class-validator';
+import { EVENT_TYPES } from '../../common/constants';
 import { CreateSetDto } from './create-set.dto';
 
 export class CreateBookingDto {
-  @ApiProperty({ enum: EventType })
-  @IsEnum(EventType)
-  eventType!: EventType;
+  @ApiProperty({ enum: EVENT_TYPES })
+  @IsIn(EVENT_TYPES)
+  eventType!: string;
 
   @ApiProperty({ example: '2026-09-15T14:00:00.000Z' })
   @IsDateString()
