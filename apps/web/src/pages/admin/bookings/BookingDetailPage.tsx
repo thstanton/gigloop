@@ -566,7 +566,18 @@ function MusicFormSection({ booking, documents }: { booking: BookingDetail; docu
 
   return (
     <>
-      <Card title="Music form">
+      <Card
+        title="Music form"
+        action={
+          <button
+            type="button"
+            onClick={openEditor}
+            className="text-xs text-primary hover:text-primary/80 transition-colors"
+          >
+            Edit
+          </button>
+        }
+      >
         <div className="space-y-3">
           {booking.hasMusicFormResponse && (
             <button
@@ -598,14 +609,6 @@ function MusicFormSection({ booking, documents }: { booking: BookingDetail; docu
               </p>
             </div>
           )}
-          <button
-            type="button"
-            onClick={openEditor}
-            className="inline-flex items-center gap-1 text-sm text-primary hover:text-primary/80 transition-colors pt-1"
-          >
-            <Pencil size={13} />
-            Edit
-          </button>
         </div>
       </Card>
 
