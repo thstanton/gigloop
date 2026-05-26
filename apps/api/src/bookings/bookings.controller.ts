@@ -34,6 +34,12 @@ export class BookingsController {
     return this.service.findAll(req.userId, status);
   }
 
+  @ApiOperation({ summary: 'Get dashboard action items for upcoming bookings' })
+  @Get('actions')
+  getActions(@Req() req: AuthedRequest) {
+    return this.service.getActions(req.userId);
+  }
+
   @ApiOperation({ summary: 'Get a booking by ID' })
   @Get(':id')
   findOne(@Req() req: AuthedRequest, @Param('id') id: string) {

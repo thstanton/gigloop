@@ -477,3 +477,45 @@ export interface PortalContractData {
   content: unknown; // Tiptap JSON
   title: string;
 }
+
+// ─────────────────────────────────────────
+// Dashboard
+// ─────────────────────────────────────────
+
+export interface UpcomingGig {
+  id: string;
+  date: string;
+  title: string | null;
+  customerName: string;
+  venueName: string | null;
+  status: BookingStatus;
+}
+
+export interface CalendarBooking {
+  id: string;
+  date: string;
+  title: string | null;
+  customerName: string;
+  status: BookingStatus;
+}
+
+export interface DashboardActionItem {
+  key: string;
+  label: string;
+  state: 'outstanding' | 'failed';
+}
+
+export interface DashboardAction {
+  bookingId: string;
+  bookingDate: string;
+  bookingTitle: string | null;
+  customerName: string;
+  venueName: string | null;
+  item: DashboardActionItem;
+}
+
+export interface DashboardData {
+  upcomingGigs: UpcomingGig[];
+  actions: DashboardAction[];
+  calendarBookings: CalendarBooking[];
+}

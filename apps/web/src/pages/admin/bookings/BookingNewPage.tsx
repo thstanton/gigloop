@@ -18,7 +18,7 @@ export default function BookingNewPage() {
   const location = useLocation();
   const queryClient = useQueryClient();
 
-  const locationState = location.state as { customerId?: string } | null;
+  const locationState = location.state as { customerId?: string; date?: string } | null;
 
   const {
     register,
@@ -30,7 +30,7 @@ export default function BookingNewPage() {
     resolver: zodResolver(bookingFormSchema),
     defaultValues: {
       eventType: 'WEDDING',
-      date: '',
+      date: locationState?.date ?? '',
       status: 'CONFIRMED',
       title: '',
       fee: '',
@@ -48,7 +48,10 @@ export default function BookingNewPage() {
     if (locationState?.customerId) {
       setValue('customerId', locationState.customerId);
     }
-  }, [locationState?.customerId, setValue]);
+    if (locationState?.date) {
+      setValue('date', locationState.date);
+    }
+  }, [locationState?.customerId, locationState?.date, setValue]);
 
   const mutation = useMutation({
     mutationFn: (values: BookingFormValues) =>

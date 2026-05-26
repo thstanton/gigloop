@@ -99,4 +99,29 @@ export class BookingsRepository {
       where: { id: setId },
     });
   }
+
+  findBookingsForActions(userId: string, from: Date, to: Date) {
+    return this.prisma.booking.findMany({
+      where: {
+        userId,
+        status: { not: BookingStatus.CANCELLED },
+        date: { gte: from, lte: to },
+      },
+      include: {
+        customer: { select: { name: true } },
+        venue: { select: { name: true } },
+        invoices: { select: { isDeposit: true, status: true } },
+        communications: {
+          select: { status: true, template: { select: { builtInType: true } } },
+        },
+        musicFormConfig: { select: { id: true } },
+        musicFormResponse: { select: { id: true } },
+      },
+      orderBy: { date: 'asc' },
+    });
+  }
+
+  findUserProfile(userId: string) {
+    return this.prisma.userProfile.findUnique({ where: { userId } });
+  }
 }

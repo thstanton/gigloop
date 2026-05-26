@@ -254,6 +254,17 @@ A generated PDF stored in Cloudflare R2, associated with a Booking. Two types: *
 
 The signed contract PDF is generated using pdfmake (same library as invoices) via a `renderTiptapToPdfmake` converter that maps Tiptap JSON nodes (paragraphs, bold, italic, headings) directly to pdfmake content — no HTML→PDF step needed. Variable substitution is applied before conversion. The PDF structure is: musician header (name/logo), contract body, signature section (customer name, timestamp, signature image).
 
+### Dashboard
+The home screen. Action-oriented — designed for the musician's morning check-in. No analytics (deferred). Three widgets stacked vertically:
+
+1. **Actions** — one outstanding actionable item per upcoming booking, filtered by the same reminder window as [[DigestNotification]]. Only surfaces items the musician can directly act on (send email, create invoice); passive-wait items (contract signed, deposit received, song requests received) are omitted. Tapping navigates to the booking detail page where the inline checklist action lives. Items in `failed` state are shown in a warning colour.
+
+2. **Upcoming gigs** — bookings in the next 90 days (excluding CANCELLED), capped at 8 items. Each row: date, title or customer name, venue name, status pill. Tap → booking detail.
+
+3. **Calendar** — month view. Booked dates show dots (one per booking). Tapping a date with one booking → booking detail. Tapping a date with multiple bookings → inline list of that day's bookings. Tapping an empty date → new booking pre-filled with that date. Today highlighted. Prev/next month navigation.
+
+**Actionable checklist items shown in Actions widget (priority order):** Send quote, Create deposit invoice, Send contract & deposit email, Create balance invoice, Send music form invite, Send thank you. Reminder windows are the same `*ReminderDays` fields on [[UserProfile]] used by [[DigestNotification]]. If `reminderDays` is null for an item type, that item type never appears in the Actions widget.
+
 ### Contact Roles (on a Booking)
 A Booking has up to three Contact relations, each a separate FK:
 - **Customer** (required): the direct payer (e.g. a couple getting married). Rarely repeats.
