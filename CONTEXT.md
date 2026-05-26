@@ -4,6 +4,10 @@ A CRM for musicians. The central workflow is managing Bookings with Contacts.
 
 **Design principle — contextual actions:** The [[BookingChecklist]] is the primary interface for progressing a booking. The happy path is: musician opens a booking, sees what needs doing, and completes it from the checklist without navigating elsewhere. Other panels (Invoices, Communications, Documents) exist for specificity and historical detail — not for primary workflow. Every outstanding checklist item should, where possible, carry an inline action that resolves it in one tap. This is the core differentiator: a smart management system that surfaces the right action at the right time, rather than a passive record-keeper the musician has to manually interrogate. Checklist intelligence is scoped to a single booking — cross-booking awareness (e.g. double-booking detection, band member coordination) is explicitly deferred.
 
+**Design principle — template + overrides:** System-provided defaults (seeded [[PerformanceFormat]]s, built-in [[Template]]s, [[UserProfile]] reminder offsets) act as templates. Per-booking configuration is always a copy of that template, editable by the musician without touching the original. Further customisation of templates and user-defined defaults is a P2 concern — MVP ships sensible system defaults only.
+
+**Design principle — enums for closed lifecycles only:** Use Prisma enums for states that are genuinely exhaustive domain constants (e.g. `BookingStatus`, `InvoiceStatus`). Avoid them for extensible classifier fields (event categories, genres, format types) — store those as validated strings instead. Adding a new value to an extensible enum requires a DB migration and cascading code changes; a constants list requires only a deploy.
+
 ---
 
 ## Terms
@@ -32,7 +36,7 @@ Status transitions are not enforced by the API — a Booking can move freely bet
 - **title** (optional): human-readable label; useful when the booking is for a named event (e.g. a festival) not easily derived from the customer name
 - **fee**: the agreed total amount (Option A — independent of invoice line items; represents what was verbally agreed, used in the contract)
 - **notes** (optional): freeform internal notes for the musician
-- **eventType**: `WEDDING | CORPORATE | PRIVATE | RESIDENCY | OTHER` — controls portal music form sections and default template behaviour
+- **eventType**: string — one of `WEDDING | CORPORATE | PRIVATE | RESIDENCY | FESTIVAL | OUTDOOR | FUNCTION | OTHER`; a display classifier and filter axis; stored as a plain string (not a Prisma enum), validated in application code; decoupled from [[PerformanceFormat]] behaviour
 - **customerId** (required FK → Contact)
 - **venueId** (optional FK → Contact): venue address/info lives on the Contact record, not duplicated
 - **referrerId** (optional FK → Contact)
@@ -51,13 +55,14 @@ A person or organisation the musician does business with. Role-agnostic — the 
 All fields live on the Contact table as nullable columns — no sub-type tables. A Contact can serve as both a venue and a referrer on different Bookings; the extra fields are always available regardless of role.
 
 ### Set
-A scheduled performance slot within a Booking. Multiple Sets form the running order for the day and constitute the performance schedule in the contract. Fields:
+A scheduled performance slot within a Booking — always traceable to a [[PerformanceFormat]]. Multiple Sets form the running order for the day and constitute the performance schedule in the contract. Fields:
 - **duration** (required): length in minutes (e.g. 45)
-- **startTime** (optional): the time the set begins (e.g. 14:00)
-- **label** (optional): occasion name (e.g. "Ceremony", "Drinks Reception", "Dinner")
+- **startTime** (optional): the time the set begins (e.g. 14:00) — set at the booking level; not on the format template
+- **label** (optional): occasion name (e.g. "Ceremony", "Drinks Reception")
 - **order** (required): integer used to preserve sequence when start times are absent
+- **performanceFormatId** (optional FK → [[PerformanceFormat]]): records which format this set was copied from; used to group sets by format in the UI
 
-Song requirements within a Set (must-haves, don't-plays, special roles) are deferred to the Song Library feature.
+Sets are created by applying a [[PerformanceFormat]] to a booking — the format's default slots are copied as editable Set records. Ad-hoc sets without a format association are not permitted. Song requirements within a Set (must-haves, don't-plays, special roles) are deferred to the Song Library feature.
 
 ### Invoice
 A financial document issued to a Contact for a Booking. A Booking can have multiple Invoices (e.g. a deposit invoice followed by a balance invoice, or a single full invoice — the musician decides). Has many [[InvoiceLineItem]]s.
@@ -148,21 +153,25 @@ The client's submitted music preferences, stored on a Booking (zero-to-one). Re-
 
 **Fields:**
 - `selectedSongIds` — array of [[Song]] IDs chosen from the general list
-- `specialRequests` — array of `{ key: string, songId?: string, freeText?: string }` — one entry per key moment; the key matches the label from [[MusicFormConfig]]; value is either a library song or free text
+- `specialRequests` — array of `{ key: string, songId?: string, freeText?: string }` — one entry per key moment; the key matches the `label` from [[MusicFormConfig]]; value is either a library song or free text
 - `notes` — freeform text
 - `submittedAt` — timestamp
+
+**On submission:** the API generates a `SONG_LIST` [[Document]] PDF (booking header, key moments + chosen songs, general song list grouped by genre, notes, timestamp), stores it in R2, and sends a notification email to the musician containing the full list inline (key moments + general selections) with the PDF attached. The PDF is available for download from the booking detail page (admin) and the [[Portal]] documents section (client).
+
+**Admin view:** key moments + chosen songs displayed inline in the Music Form section on the booking detail page. Full general song list accessible via a sheet ("View full song list"). The musician cannot edit the response — only the client can re-submit.
 
 ### Song
 An entry in a musician's repertoire library. Every Song has a `userId` — songs are fully per-user, not shared. Used in [[MusicForm]] general selection and key moment autocomplete.
 
-**Fields:** title (required), artist (optional), genre (required — see [[Genre]]), active (boolean — hides without deleting), tags (string array — for search and future playlist generation).
+**Fields:** title (required), artist (optional), genre (required — string, one of `CONTEMPORARY | CLASSICAL | JAZZ | FILM_TV_MUSICALS | BOLLYWOOD | CHRISTMAS`; stored as a plain string, not a Prisma enum), active (boolean — hides without deleting), tags (string array — for search and future playlist generation).
 
 **Seeding:** a static seed catalogue (derived from the existing `mick-form` song list) is presented during onboarding. The musician opts in to the songs they want; selected songs are created as Song records with their `userId`. The seed catalogue is a static file, not a DB table — there is no global song pool.
 
 **Onboarding song selection:** two-level — select/deselect an entire genre (toggles all songs in that genre), or select/deselect individual songs within a genre. Both levels are independent.
 
 ### Genre
-A closed enum categorising Songs: `Contemporary | Classical | Jazz | Film, TV and Musicals | Bollywood | Christmas`. Managed at the system level — musicians cannot add custom genres for MVP.
+A string value categorising Songs: `CONTEMPORARY | CLASSICAL | JAZZ | FILM_TV_MUSICALS | BOLLYWOOD | CHRISTMAS`. Stored as a plain string (not a Prisma enum) — new genres can be added without a DB migration. Validated in application code against a constants list. Managed at the system level — musicians cannot add custom genres for MVP.
 
 ### BookingChecklist
 A computed, context-sensitive list of actions for a [[Booking]]. Not a stored entity — derived entirely from existing booking state. Displayed on the Booking detail page and shared as the "required actions" content in the [[DigestNotification]].
@@ -197,17 +206,21 @@ Whether an item appears in the [[DigestNotification]] is controlled by the corre
 A daily summary email sent to the musician via Resend. MVP scope. Contains upcoming Bookings and their outstanding [[BookingChecklist]] actions — filtered to items where today falls within the configured reminder window (e.g. `contractReminderDays = 14` means the "send contract" item appears in the digest from 14 days before the booking date).
 
 ### MusicFormConfig
-The per-booking configuration for a [[MusicForm]]. Set by the musician when sending the `music_form_invite`. Controls:
-- Which [[Genre]]s are visible in the general song selection
-- Which key moments appear (each defined as a label string, e.g. "Processional", "1st Signing Register") — defaults to the wedding set for `WEDDING` eventType, empty for others
+The per-booking configuration for a [[MusicForm]]. Created at booking creation (if [[PerformanceFormat]]s are applied) or from the Music Form section on the booking detail page. Independent of the send invite action — the config may exist before the invite is sent.
+
+**Fields:**
+- `keyMoments` — `{ label: string, section: string }[]`; `section` is the format label the moment came from (e.g. "Wedding Ceremony"), used to group moments in the portal form. Copied from applied formats; editable per-booking without affecting the format template.
+- `enabledGenres` — `string[]`; the genres shown in the general song selection. Copied from applied formats (union of all format defaults); editable.
+
+The `Send music form invite` [[BookingChecklist]] item is irrelevant until a `MusicFormConfig` exists on the booking.
 
 ### MusicForm
 The client-facing song preference form on the [[Portal]]. Has three sections:
-1. **General list** — client selects from the musician's [[Song]] library, browsed by genre (genres shown controlled by [[MusicFormConfig]]); no client details section — identity and booking date are already known from the portal token
-2. **Key moments** — one autocomplete field per moment label defined in [[MusicFormConfig]]; searches full [[Song]] library; free-text entry allowed if song is not in the library
+1. **General list** — client selects from the musician's [[Song]] library; browsed via genre tabs (one tab per enabled genre in [[MusicFormConfig]]) with a search bar that queries across all enabled genres; no client details section — identity and booking date are already known from the portal token
+2. **Key moments** — one autocomplete field per moment, grouped by section (format label) as defined in [[MusicFormConfig]]; searches the full [[Song]] library (not limited to enabled genres); free-text entry allowed if song is not in the library
 3. **Notes** — freeform; covers informal requests and "don't plays"
 
-Key moments default to the wedding set for `WEDDING` eventType but are fully configurable, enabling other event types to define their own special song moments. See also [[Song]], [[MusicFormConfig]], [[MusicFormResponse]].
+See also [[Song]], [[MusicFormConfig]], [[MusicFormResponse]].
 
 ### Portal
 The client-facing public interface at `/booking/:token`. Bypasses Clerk auth — access is validated by the Booking's `portalToken`. Sections are conditionally visible based on booking state — not every booking has every section:
@@ -226,8 +239,8 @@ The client-facing public interface at `/booking/:token`. Bypasses Clerk auth —
 - `GET /booking/:token` — returns: booking summary fields (date, fee, title, customerName, venueName, sets), publicProfile (full), contractSignedAt (timestamp or null), signedContractUrl (R2 public URL or null), hasMusicForm (boolean)
 - `GET /booking/:token/contract` — returns `{ content: TiptapJSON, title: string }` where `content` is the contract template's Tiptap JSON with variables already substituted as plain text nodes (server-side). The frontend renders using the Tiptap React viewer — no `dangerouslySetInnerHTML`, XSS structurally impossible.
 - `POST /booking/:token/sign` — signature submission; body: `{ signature: string }` (base64-encoded PNG — same format for draw and type methods; the frontend renders typed signatures to canvas before submission). The API extracts the client IP from `X-Forwarded-For` (fallback: socket address), stores it in `Booking.contractSignedFromIp` (new nullable field, requires migration), and includes it in the signed PDF signature section.
-- `GET /booking/:token/music` — music form config + song list *(deferred — separate build session)*
-- `POST /booking/:token/music` — music form submission *(deferred)*
+- `GET /booking/:token/music` — returns [[MusicFormConfig]] (keyMoments with section labels, enabledGenres) + musician's song library filtered to enabled genres; also returns existing [[MusicFormResponse]] if already submitted (to pre-populate a re-submission)
+- `POST /booking/:token/music` — music form submission; body: `{ selectedSongIds: string[], specialRequests: { key: string, songId?: string, freeText?: string }[], notes?: string }`; generates SONG_LIST PDF, stores in R2, sends notification email to musician
 
 **Header:** personal — uses the Booking `title` if present, otherwise constructed from customer name + event date. Venue name also shown.
 
@@ -246,13 +259,15 @@ This is a system-generated email (not a [[Template]]).
 **Cancelled bookings:** the portal still loads for cancelled bookings (the token remains valid). A notice is shown ("This booking has been cancelled"). The booking summary is visible. Contract signing is hidden. Signed contract download remains visible if it exists.
 
 ### Document
-A generated PDF stored in Cloudflare R2, associated with a Booking. Two types: **Invoice** (MVP) and **SignedContract** (P2, portal feature).
+A generated PDF stored in Cloudflare R2, associated with a Booking. Three types (stored as `DocumentType` Prisma enum): **INVOICE**, **CONTRACT**, **SONG_LIST**.
 
 **Invoice PDF:** generated at invoice send time (`POST /invoices/:id/send`), stored in R2, and attached to the outbound email. Uses a fixed `@react-pdf/renderer` layout with Tiptap-JSON-driven content sections (variable substitution + line items table). Balance invoices include a deposit deduction section (subtotal, less deposit, balance due) when a deposit [[Invoice]] exists on the booking.
 
 **Signed contract PDF:** generated only after the client signs via the [[Portal]] — a drawn or typed signature is captured on a canvas, embedded into a PDF, and stored in R2. No unsigned contract PDF is ever generated or stored. The [[Portal]] renders the contract content as HTML (from the Tiptap template) for the client to read before signing. See ADR-0001.
 
 The signed contract PDF is generated using pdfmake (same library as invoices) via a `renderTiptapToPdfmake` converter that maps Tiptap JSON nodes (paragraphs, bold, italic, headings) directly to pdfmake content — no HTML→PDF step needed. Variable substitution is applied before conversion. The PDF structure is: musician header (name/logo), contract body, signature section (customer name, timestamp, signature image).
+
+**Song list PDF (`SONG_LIST`):** generated at [[MusicFormResponse]] submission time. Structure: booking header (musician name, customer, date, venue), key moments section (moment label + chosen song, grouped by format section), general song requests (selected songs grouped by genre), notes (if present), submitted timestamp. Stored in R2 as a Document; available for download from the booking detail page (admin) and the [[Portal]] documents section (client).
 
 ### Dashboard
 The home screen. Action-oriented — designed for the musician's morning check-in. No analytics (deferred). Three widgets stacked vertically:
@@ -264,6 +279,38 @@ The home screen. Action-oriented — designed for the musician's morning check-i
 3. **Calendar** — month view. Booked dates show dots (one per booking). Tapping a date with one booking → booking detail. Tapping a date with multiple bookings → inline list of that day's bookings. Tapping an empty date → new booking pre-filled with that date. Today highlighted. Prev/next month navigation.
 
 **Actionable checklist items shown in Actions widget (priority order):** Send quote, Create deposit invoice, Send contract & deposit email, Create balance invoice, Send music form invite, Send thank you. Reminder windows are the same `*ReminderDays` fields on [[UserProfile]] used by [[DigestNotification]]. If `reminderDays` is null for an item type, that item type never appears in the Actions widget.
+
+### PerformanceFormat
+A named template defining what a musician offers for a specific type of performance engagement. Per-user — seeded from system defaults on first access (on-demand); user-defined formats are a P2 feature.
+
+**Fields:**
+- `label` — human-readable name (e.g. "Wedding Ceremony", "Evening Reception", "Solo Piano")
+- `category` (optional string) — contextual classifier using the same values as `Booking.eventType`; filters which formats are suggested when creating a booking of that type
+- `keyMoments` — `string[]`; moment labels copied into [[MusicFormConfig]] when the format is applied to a booking (e.g. `["Processional", "Signing of the Register (Song 1)", "Signing of the Register (Song 2)", "Signing of the Register (Song 3)", "Recessional"]`)
+- `defaultGenreSelection` — `string[]`; genre values enabled by default in [[MusicFormConfig]]; all formats default to Contemporary, Classical, Jazz, Film/TV/Musicals (Bollywood and Christmas excluded)
+- `icon` — Lucide icon name (string) for display in the booking creation form and booking detail
+- `sets` — ordered list of default [[Set]] definitions (label, duration, order); copied onto the booking as editable `PerformanceSet` records when the format is applied; start times are not set on the format — added at the booking level
+- `notes` (optional) — freeform description of the format
+
+**Template + overrides:** applying a format to a booking copies its sets and seeds its `keyMoments` + `defaultGenreSelection` into the booking's [[MusicFormConfig]]. Per-booking edits do not affect the format.
+
+**Relationship to [[Set]]:** every `Set` on a booking is traceable to a `PerformanceFormat` via an optional `performanceFormatId` FK. Ad-hoc sets without a format are not permitted.
+
+**Relationship to [[Booking]]:** a booking has many PerformanceFormats applied (via a `BookingPerformanceFormat` join table with an `order` field). Formats are selected at booking creation via multi-select chips in the creation form; editing (add/remove/reorder) is available on the booking detail page.
+
+**MVP seeded formats (system defaults, per user):**
+
+| Label | Category | Sets | Key moments |
+|---|---|---|---|
+| Wedding Ceremony | WEDDING | Ceremony, 30 min | Processional, Signing ×3, Recessional |
+| Drinks Reception | WEDDING | Drinks Reception, 90 min | — |
+| Wedding Breakfast | WEDDING | Wedding Breakfast, 90 min | — |
+| Evening Reception | WEDDING | Evening Reception, 45 min × 2 | First Dance |
+| Corporate Dinner | CORPORATE | Drinks, 60 min · Dinner, 90 min | — |
+| Background Music | — | Background Music, 60 min | — |
+| Solo Piano | — | Solo Piano, 60 min | — |
+
+**Known technical debt:** `UserProfile.*ReminderDays` fields are hard-coded columns — adding a new reminder type requires a DB migration. Parked for a future refactor to a JSON `reminderSettings` field.
 
 ### Contact Roles (on a Booking)
 A Booking has up to three Contact relations, each a separate FK:
