@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '@clerk/react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, CheckCircle2, Circle, AlertTriangle, Mail, Music, FileText, DollarSign, FolderOpen, ChevronDown, Check, Pencil, Plus, Send, Download } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckCircle2, Circle, AlertTriangle, Mail, Music, FileText, DollarSign, FolderOpen, ChevronDown, Check, Pencil, Plus, Send, Download, Heart, GlassWater, Utensils, Moon, Briefcase, Music2, Trash2 } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import {
@@ -21,7 +21,7 @@ import ComposeEmailSheet from '@/features/communications/ComposeEmailSheet';
 import InvoiceSheet from '@/features/invoices/InvoiceSheet';
 import MarkSentDialog from '@/features/invoices/MarkSentDialog';
 import { buildChecklist } from '@/lib/buildChecklist';
-import { apiGet, apiPatch } from '@/lib/api';
+import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
 import {
   formatDate,
   formatCurrency,
@@ -31,8 +31,10 @@ import { EVENT_TYPE_LABELS, STATUS_ORDER } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 import type {
   BookingDetail,
+  BookingPerformanceFormatSummary,
   BookingStatus,
   Contact,
+  PerformanceFormat,
   PerformanceSet,
   Invoice,
   Communication,
@@ -179,27 +181,194 @@ function PersonCard({
 
 // ─── Running order ────────────────────────────────────────────────────────────
 
-function SetRow({ set }: { set: PerformanceSet }) {
-  const parts = [set.label, formatDuration(set.duration), set.startTime].filter(Boolean);
+// ─── Performance section ──────────────────────────────────────────────────────
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const FORMAT_ICON_MAP: Record<string, React.ComponentType<any>> = {
+  heart: Heart,
+  'glass-water': GlassWater,
+  utensils: Utensils,
+  moon: Moon,
+  briefcase: Briefcase,
+  music: Music,
+  'music-2': Music2,
+};
+
+function FormatIcon({ icon, size = 14 }: { icon: string; size?: number }) {
+  const Icon = FORMAT_ICON_MAP[icon] ?? Music;
+  return <Icon size={size} />;
+}
+
+function SetRow({
+  set,
+  bookingId,
+  onUpdate,
+}: {
+  set: PerformanceSet;
+  bookingId: string;
+  onUpdate: (setId: string, startTime: string | null) => void;
+}) {
   return (
-    <div className="flex items-start gap-3 py-2 border-b border-border last:border-0">
+    <div className="flex items-center gap-3 py-2 border-b border-border last:border-0">
       <span className="text-sm text-muted w-4 flex-shrink-0 text-right">{set.order}</span>
-      <span className="text-sm text-foreground">{parts.join(' · ')}</span>
+      <span className="flex-1 text-sm text-foreground">
+        {[set.label, formatDuration(set.duration)].filter(Boolean).join(' · ')}
+      </span>
+      <input
+        type="time"
+        defaultValue={set.startTime ?? ''}
+        onBlur={(e) => {
+          const val = e.target.value || null;
+          if (val !== set.startTime) onUpdate(set.id, val);
+        }}
+        className="text-sm text-muted border border-border rounded px-2 py-0.5 w-24 bg-background"
+        aria-label={`Start time for ${set.label ?? 'set'}`}
+      />
     </div>
   );
 }
 
-function RunningOrderCard({ sets }: { sets: PerformanceSet[] }) {
+function PerformanceSection({ booking }: { booking: BookingDetail }) {
+  const queryClient = useQueryClient();
+  const [addOpen, setAddOpen] = useState(false);
+
+  const { data: allFormats = [] } = useQuery({
+    queryKey: ['performance-formats'],
+    queryFn: () => apiGet<PerformanceFormat[]>('/performance-formats'),
+    enabled: addOpen,
+  });
+
+  const appliedFormatIds = new Set(booking.performanceFormats.map((bpf) => bpf.performanceFormatId));
+  const availableFormats = allFormats.filter((f) => !appliedFormatIds.has(f.id));
+
+  const updateSet = useMutation({
+    mutationFn: ({ setId, startTime }: { setId: string; startTime: string | null }) =>
+      apiPatch(`/bookings/${booking.id}/sets/${setId}`, { startTime }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['booking', booking.id] }),
+  });
+
+  const applyFormat = useMutation({
+    mutationFn: (formatId: string) =>
+      apiPost(`/bookings/${booking.id}/formats`, { formatId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['booking', booking.id] });
+      setAddOpen(false);
+    },
+  });
+
+  const removeFormat = useMutation({
+    mutationFn: (bookingFormatId: string) =>
+      apiDelete(`/bookings/${booking.id}/formats/${bookingFormatId}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['booking', booking.id] }),
+  });
+
+  function handleRemove(bpf: BookingPerformanceFormatSummary) {
+    const sets = booking.sets.filter((s) => s.performanceFormatId === bpf.performanceFormatId);
+    const hasStartTimes = sets.some((s) => s.startTime);
+    if (hasStartTimes && !window.confirm(`Remove "${bpf.performanceFormat.label}" and its ${sets.length} set(s)?`)) return;
+    removeFormat.mutate(bpf.id);
+  }
+
+  const setsByFormatId = new Map<string | null, PerformanceSet[]>();
+  for (const set of booking.sets) {
+    const key = set.performanceFormatId ?? null;
+    if (!setsByFormatId.has(key)) setsByFormatId.set(key, []);
+    setsByFormatId.get(key)!.push(set);
+  }
+
+  const unassigned = setsByFormatId.get(null) ?? [];
+
   return (
-    <Card title="Running order">
-      {sets.length === 0 ? (
-        <div className="flex items-center gap-2 text-muted py-1">
+    <Card title="Performance">
+      {booking.performanceFormats.length === 0 && unassigned.length === 0 && (
+        <div className="flex items-center gap-2 text-muted py-1 mb-3">
           <Music size={14} />
-          <span className="text-sm">No sets added</span>
+          <span className="text-sm">No formats applied</span>
         </div>
+      )}
+
+      {booking.performanceFormats.map((bpf) => {
+        const sets = setsByFormatId.get(bpf.performanceFormatId) ?? [];
+        return (
+          <div key={bpf.id} className="mb-4 last:mb-0">
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                <FormatIcon icon={bpf.performanceFormat.icon} />
+                {bpf.performanceFormat.label}
+              </div>
+              <button
+                type="button"
+                onClick={() => handleRemove(bpf)}
+                disabled={removeFormat.isPending}
+                className="text-muted hover:text-status-cancelled transition-colors disabled:opacity-50"
+                aria-label={`Remove ${bpf.performanceFormat.label}`}
+              >
+                <Trash2 size={13} />
+              </button>
+            </div>
+            {sets.map((set) => (
+              <SetRow
+                key={set.id}
+                set={set}
+                bookingId={booking.id}
+                onUpdate={(setId, startTime) => updateSet.mutate({ setId, startTime })}
+              />
+            ))}
+          </div>
+        );
+      })}
+
+      {unassigned.length > 0 && (
+        <div className="mb-4">
+          <p className="text-xs text-muted mb-1">Other sets</p>
+          {unassigned.map((set) => (
+            <SetRow
+              key={set.id}
+              set={set}
+              bookingId={booking.id}
+              onUpdate={(setId, startTime) => updateSet.mutate({ setId, startTime })}
+            />
+          ))}
+        </div>
+      )}
+
+      {!addOpen ? (
+        <button
+          type="button"
+          onClick={() => setAddOpen(true)}
+          className="inline-flex items-center gap-1 text-sm text-primary hover:text-primary/80 transition-colors mt-2"
+        >
+          <Plus size={14} />
+          Add format
+        </button>
       ) : (
-        <div>
-          {sets.map((set) => <SetRow key={set.id} set={set} />)}
+        <div className="mt-3 space-y-2">
+          <p className="text-xs text-muted font-medium uppercase tracking-wide">Select a format</p>
+          {availableFormats.length === 0 ? (
+            <p className="text-sm text-muted">All formats already applied.</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {availableFormats.map((fmt) => (
+                <button
+                  key={fmt.id}
+                  type="button"
+                  disabled={applyFormat.isPending}
+                  onClick={() => applyFormat.mutate(fmt.id)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border text-sm hover:border-primary transition-colors disabled:opacity-50"
+                >
+                  <FormatIcon icon={fmt.icon} />
+                  {fmt.label}
+                </button>
+              ))}
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => setAddOpen(false)}
+            className="text-sm text-muted hover:text-foreground transition-colors"
+          >
+            Cancel
+          </button>
         </div>
       )}
     </Card>
@@ -616,7 +785,7 @@ export default function BookingDetailPage() {
       <section>
         <SectionHeader label="For the day" />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <RunningOrderCard sets={booking.sets} />
+          <PerformanceSection booking={booking} />
           {booking.venue && <VenueCard venue={booking.venue} linkState={backState} />}
         </div>
       </section>

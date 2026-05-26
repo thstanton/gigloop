@@ -18,7 +18,13 @@ const bookingIncludes = {
   customer: true,
   venue: true,
   referrer: true,
-  sets: { orderBy: { order: 'asc' } },
+  sets: { orderBy: { order: 'asc' as const } },
+  performanceFormats: {
+    include: {
+      performanceFormat: { select: { id: true, label: true, icon: true } },
+    },
+    orderBy: { order: 'asc' as const },
+  },
   musicFormConfig: { select: { id: true } },
   musicFormResponse: { select: { id: true } },
 } as const;
@@ -179,5 +185,52 @@ export class BookingsRepository {
 
   findUserProfile(userId: string) {
     return this.prisma.userProfile.findUnique({ where: { userId } });
+  }
+
+  findBookingFormat(userId: string, bookingId: string, bookingFormatId: string) {
+    return this.prisma.bookingPerformanceFormat.findFirst({
+      where: { id: bookingFormatId, bookingId, userId },
+    });
+  }
+
+  async applyFormat(userId: string, bookingId: string, format: FormatWithSlots) {
+    const [existingFormats, existingSets] = await Promise.all([
+      this.prisma.bookingPerformanceFormat.findMany({ where: { bookingId }, select: { order: true } }),
+      this.prisma.performanceSet.findMany({ where: { bookingId }, select: { order: true } }),
+    ]);
+    const nextFormatOrder = existingFormats.length
+      ? Math.max(...existingFormats.map((f) => f.order)) + 1
+      : 1;
+    const nextSetOrder = existingSets.length
+      ? Math.max(...existingSets.map((s) => s.order)) + 1
+      : 1;
+
+    await this.prisma.$transaction([
+      this.prisma.bookingPerformanceFormat.create({
+        data: { userId, bookingId, order: nextFormatOrder, performanceFormatId: format.id },
+      }),
+      ...format.slots.map((slot, idx) =>
+        this.prisma.performanceSet.create({
+          data: {
+            userId,
+            bookingId,
+            order: nextSetOrder + idx,
+            duration: slot.duration,
+            label: slot.label ?? undefined,
+            performanceFormatId: format.id,
+          },
+        }),
+      ),
+    ]);
+
+    return this.prisma.booking.findFirst({ where: { id: bookingId }, include: bookingIncludes });
+  }
+
+  async removeFormat(bookingId: string, bookingFormatId: string, performanceFormatId: string) {
+    await this.prisma.$transaction([
+      this.prisma.performanceSet.deleteMany({ where: { bookingId, performanceFormatId } }),
+      this.prisma.bookingPerformanceFormat.delete({ where: { id: bookingFormatId } }),
+    ]);
+    return this.prisma.booking.findFirst({ where: { id: bookingId }, include: bookingIncludes });
   }
 }

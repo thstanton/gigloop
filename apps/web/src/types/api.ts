@@ -111,6 +111,18 @@ export interface PerformanceSet {
   duration: number;
   startTime: string | null;
   label: string | null;
+  performanceFormatId: string | null;
+}
+
+export interface BookingPerformanceFormatSummary {
+  id: string;
+  order: number;
+  performanceFormatId: string;
+  performanceFormat: {
+    id: string;
+    label: string;
+    icon: string;
+  };
 }
 
 export interface BookingListItem {
@@ -136,6 +148,7 @@ export interface BookingDetail extends Omit<BookingListItem, 'customer' | 'venue
   venue: Contact | null;
   referrer: Contact | null;
   sets: PerformanceSet[];
+  performanceFormats: BookingPerformanceFormatSummary[];
   contractSignedAt: string | null;
   depositReceivedAt: string | null;
   depositTrackingMode: string | null;

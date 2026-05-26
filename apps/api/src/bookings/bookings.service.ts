@@ -131,6 +131,24 @@ export class BookingsService {
     return this.repo.deleteSet(setId);
   }
 
+  async applyFormat(userId: string, bookingId: string, formatId: string) {
+    await this.findOne(userId, bookingId);
+    const formats = await this.repo.findFormats(userId, [formatId]);
+    if (!formats.length) throw new NotFoundException('Format not found');
+    const booking = await this.repo.applyFormat(userId, bookingId, formats[0]);
+    const { musicFormConfig, musicFormResponse, ...rest } = booking!;
+    return { ...rest, hasMusicFormConfig: !!musicFormConfig, hasMusicFormResponse: !!musicFormResponse };
+  }
+
+  async removeFormat(userId: string, bookingId: string, bookingFormatId: string) {
+    await this.findOne(userId, bookingId);
+    const bookingFormat = await this.repo.findBookingFormat(userId, bookingId, bookingFormatId);
+    if (!bookingFormat) throw new NotFoundException('Applied format not found');
+    const booking = await this.repo.removeFormat(bookingId, bookingFormatId, bookingFormat.performanceFormatId);
+    const { musicFormConfig, musicFormResponse, ...rest } = booking!;
+    return { ...rest, hasMusicFormConfig: !!musicFormConfig, hasMusicFormResponse: !!musicFormResponse };
+  }
+
   async getActions(userId: string) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);

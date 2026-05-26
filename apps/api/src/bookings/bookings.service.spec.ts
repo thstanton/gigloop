@@ -9,6 +9,9 @@ type MockRepo = {
   create: jest.Mock;
   findFormats: jest.Mock;
   createWithFormats: jest.Mock;
+  findBookingFormat: jest.Mock;
+  applyFormat: jest.Mock;
+  removeFormat: jest.Mock;
   update: jest.Mock;
   cancel: jest.Mock;
   findSet: jest.Mock;
@@ -24,6 +27,9 @@ function makeRepo(): MockRepo {
     create: jest.fn(),
     findFormats: jest.fn(),
     createWithFormats: jest.fn(),
+    findBookingFormat: jest.fn(),
+    applyFormat: jest.fn(),
+    removeFormat: jest.fn(),
     update: jest.fn(),
     cancel: jest.fn(),
     findSet: jest.fn(),
@@ -161,6 +167,51 @@ describe('BookingsService', () => {
       repo.findOne.mockResolvedValue(null);
       await expect(service.delete('u1', 'missing')).rejects.toThrow(NotFoundException);
       expect(repo.cancel).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('applyFormat', () => {
+    const rawBooking = { ...booking, musicFormConfig: null, musicFormResponse: null, performanceFormats: [] };
+
+    it('applies a format when booking and format both exist', async () => {
+      const fmt = { id: 'f1', label: 'Ceremony', keyMoments: [], defaultGenreSelection: [], slots: [] };
+      repo.findOne.mockResolvedValue(rawBooking);
+      repo.findFormats.mockResolvedValue([fmt]);
+      repo.applyFormat.mockResolvedValue(rawBooking);
+      await service.applyFormat('u1', 'b1', 'f1');
+      expect(repo.applyFormat).toHaveBeenCalledWith('u1', 'b1', fmt);
+    });
+
+    it('throws NotFoundException when format is not found', async () => {
+      repo.findOne.mockResolvedValue(rawBooking);
+      repo.findFormats.mockResolvedValue([]);
+      await expect(service.applyFormat('u1', 'b1', 'bad-id')).rejects.toThrow(NotFoundException);
+      expect(repo.applyFormat).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException when booking is not found', async () => {
+      repo.findOne.mockResolvedValue(null);
+      await expect(service.applyFormat('u1', 'missing', 'f1')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('removeFormat', () => {
+    const rawBooking = { ...booking, musicFormConfig: null, musicFormResponse: null, performanceFormats: [] };
+
+    it('removes a format when booking and bookingFormat both exist', async () => {
+      const bookingFormat = { id: 'bf1', performanceFormatId: 'f1' };
+      repo.findOne.mockResolvedValue(rawBooking);
+      repo.findBookingFormat.mockResolvedValue(bookingFormat);
+      repo.removeFormat.mockResolvedValue(rawBooking);
+      await service.removeFormat('u1', 'b1', 'bf1');
+      expect(repo.removeFormat).toHaveBeenCalledWith('b1', 'bf1', 'f1');
+    });
+
+    it('throws NotFoundException when bookingFormat is not found', async () => {
+      repo.findOne.mockResolvedValue(rawBooking);
+      repo.findBookingFormat.mockResolvedValue(null);
+      await expect(service.removeFormat('u1', 'b1', 'bf1')).rejects.toThrow(NotFoundException);
+      expect(repo.removeFormat).not.toHaveBeenCalled();
     });
   });
 

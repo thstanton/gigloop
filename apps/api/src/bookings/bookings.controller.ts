@@ -17,6 +17,7 @@ import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
 import { CreateSetDto } from './dto/create-set.dto';
 import { UpdateSetDto } from './dto/update-set.dto';
+import { ApplyFormatDto } from './dto/apply-format.dto';
 import type { Request } from 'express';
 
 type AuthedRequest = Request & { userId: string };
@@ -67,6 +68,27 @@ export class BookingsController {
   @HttpCode(204)
   delete(@Req() req: AuthedRequest, @Param('id') id: string) {
     return this.service.delete(req.userId, id);
+  }
+
+  @ApiOperation({ summary: 'Apply a performance format to a booking' })
+  @Post(':id/formats')
+  applyFormat(
+    @Req() req: AuthedRequest,
+    @Param('id') id: string,
+    @Body() dto: ApplyFormatDto,
+  ) {
+    return this.service.applyFormat(req.userId, id, dto.formatId);
+  }
+
+  @ApiOperation({ summary: 'Remove an applied format and its sets from a booking' })
+  @Delete(':id/formats/:bookingFormatId')
+  @HttpCode(204)
+  removeFormat(
+    @Req() req: AuthedRequest,
+    @Param('id') id: string,
+    @Param('bookingFormatId') bookingFormatId: string,
+  ) {
+    return this.service.removeFormat(req.userId, id, bookingFormatId);
   }
 
   @ApiOperation({ summary: 'Add a performance set to a booking' })
