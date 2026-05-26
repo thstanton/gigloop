@@ -676,6 +676,7 @@ function VenueCard({ venue, linkState, onEdit }: { venue: Contact; linkState?: R
 
 function InvoiceRow({
   invoice,
+  pdfUrl,
   onEdit,
   onDelete,
   onSend,
@@ -683,6 +684,7 @@ function InvoiceRow({
   onMarkPaid,
 }: {
   invoice: Invoice;
+  pdfUrl: string | null;
   onEdit: (invoice: Invoice) => void;
   onDelete: (invoice: Invoice) => void;
   onSend: (invoice: Invoice) => void;
@@ -696,6 +698,7 @@ function InvoiceRow({
   const total = invoiceLineTotal(invoice);
   const isDraft = invoice.status === 'DRAFT';
   const isSent = invoice.status === 'SENT';
+  const isPaid = invoice.status === 'PAID';
 
   return (
     <div className="flex items-start justify-between gap-3 py-2.5 border-b border-border last:border-0">
@@ -707,10 +710,9 @@ function InvoiceRow({
         </p>
       </div>
       <div className="flex items-center gap-2 flex-shrink-0">
-        <span className="text-sm font-medium text-foreground">
+        <span className="text-sm font-medium text-foreground tabular-nums">
           {formatCurrency(total)}
         </span>
-        <InvoiceStatusPill status={invoice.status} isOverdue={overdue} />
         {isDraft && (
           <>
             <button
@@ -718,14 +720,14 @@ function InvoiceRow({
               className="text-muted hover:text-foreground transition-colors"
               aria-label="Send invoice"
             >
-              <Send size={13} />
+              <Send size={14} />
             </button>
             <button
               onClick={() => onEdit(invoice)}
               className="text-muted hover:text-foreground transition-colors"
               aria-label="Edit invoice"
             >
-              <Pencil size={13} />
+              <Pencil size={14} />
             </button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -733,7 +735,7 @@ function InvoiceRow({
                   className="text-muted hover:text-foreground transition-colors"
                   aria-label="More actions"
                 >
-                  <ChevronDown size={13} />
+                  <ChevronDown size={14} />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -753,11 +755,24 @@ function InvoiceRow({
         {isSent && (
           <button
             onClick={() => onMarkPaid(invoice)}
-            className="text-xs text-muted hover:text-foreground transition-colors"
+            className="text-muted hover:text-foreground transition-colors"
+            aria-label="Mark invoice as paid"
           >
-            Mark paid
+            <CheckCircle2 size={14} />
           </button>
         )}
+        {(isSent || isPaid) && pdfUrl && (
+          <a
+            href={pdfUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-muted hover:text-foreground transition-colors"
+            aria-label="Download invoice PDF"
+          >
+            <Download size={14} />
+          </a>
+        )}
+        <InvoiceStatusPill status={invoice.status} isOverdue={overdue} />
       </div>
     </div>
   );
@@ -1179,6 +1194,7 @@ export default function BookingDetailPage() {
                   <InvoiceRow
                     key={inv.id}
                     invoice={inv}
+                    pdfUrl={documents.find((d) => d.type === 'INVOICE' && d.invoiceId === inv.id)?.url ?? null}
                     onEdit={openEditInvoice}
                     onDelete={(inv) => actions.deleteInvoice(inv.id)}
                     onSend={openSendInvoice}
