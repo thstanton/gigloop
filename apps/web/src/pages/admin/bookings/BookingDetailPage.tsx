@@ -1128,10 +1128,20 @@ export default function BookingDetailPage() {
                     {item.shortcutMarkDone && item.state === 'outstanding' && (
                       <button
                         onClick={() => {
-                          if (item.shortcutMarkDone === 'mark_contract_signed') actions.markContractSigned();
-                          else actions.markDepositReceived();
+                          if (item.shortcutMarkDone === 'mark_contract_signed') {
+                            actions.markContractSigned();
+                          } else {
+                            const sentDepositInvoice = invoices.find(
+                              (inv) => inv.isDeposit && inv.status === 'SENT',
+                            );
+                            if (sentDepositInvoice) {
+                              markPaid.mutate(sentDepositInvoice.id);
+                            } else {
+                              actions.markDepositReceived();
+                            }
+                          }
                         }}
-                        disabled={actions.isPending}
+                        disabled={actions.isPending || markPaid.isPending}
                         className="text-xs text-primary hover:underline flex-shrink-0 disabled:opacity-50"
                       >
                         Mark done

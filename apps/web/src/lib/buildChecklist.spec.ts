@@ -223,14 +223,14 @@ describe('deposit_received', () => {
     expect(getItem(items, 'deposit_received')).toBeUndefined();
   });
 
-  it('has no shortcutMarkDone for INVOICE mode — user must use invoice dropdown', () => {
+  it('has shortcutMarkDone mark_deposit_received for INVOICE mode', () => {
     const items = buildChecklist(makeBooking({ depositTrackingMode: 'INVOICE' }), []);
-    expect(getItem(items, 'deposit_received')?.shortcutMarkDone).toBeUndefined();
+    expect(getItem(items, 'deposit_received')?.shortcutMarkDone).toBe('mark_deposit_received');
   });
 
-  it('has no shortcutMarkDone when depositTrackingMode is null (inherits INVOICE default)', () => {
+  it('has shortcutMarkDone mark_deposit_received when depositTrackingMode is null (inherits INVOICE default)', () => {
     const items = buildChecklist(makeBooking({ depositTrackingMode: null }), []);
-    expect(getItem(items, 'deposit_received')?.shortcutMarkDone).toBeUndefined();
+    expect(getItem(items, 'deposit_received')?.shortcutMarkDone).toBe('mark_deposit_received');
   });
 
   it('has shortcutMarkDone mark_deposit_received for MANUAL mode', () => {

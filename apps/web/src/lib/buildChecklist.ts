@@ -94,9 +94,7 @@ export function buildChecklist(
       done: !!booking.depositReceivedAt,
       failed: false,
       irrelevant: !trackDeposit || booking.status === 'ENQUIRY',
-      // INVOICE mode: deposit is marked received by paying the invoice (invoice dropdown)
-      // MANUAL mode: direct shortcut is appropriate
-      shortcutMarkDone: resolvedDepositMode === 'MANUAL' ? 'mark_deposit_received' : undefined,
+      shortcutMarkDone: 'mark_deposit_received',
     },
     {
       key: 'create_balance_invoice',
