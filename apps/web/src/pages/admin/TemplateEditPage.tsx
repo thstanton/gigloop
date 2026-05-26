@@ -253,7 +253,7 @@ function TemplateEditor({ template }: { template: Template }) {
   }, [saveMutation]);
 
   return (
-    <div className="px-4 md:px-6 py-6 max-w-2xl">
+    <div className="px-4 md:px-6 py-6 max-w-3xl mx-auto">
       <Link
         to="/admin/templates"
         className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground transition-colors mb-6"
@@ -361,7 +361,7 @@ export default function TemplateEditPage() {
 
   if (isLoading) {
     return (
-      <div className="px-4 md:px-6 py-6 max-w-2xl animate-pulse space-y-4">
+      <div className="px-4 md:px-6 py-6 max-w-3xl mx-auto animate-pulse space-y-4">
         <div className="h-3.5 w-20 bg-border rounded" />
         <div className="h-7 w-56 bg-border rounded" />
         <div className="h-3 w-72 bg-border rounded" />

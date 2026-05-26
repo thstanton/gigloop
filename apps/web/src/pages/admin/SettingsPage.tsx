@@ -697,7 +697,7 @@ function NotificationsSection({ profile }: { profile: UserProfile }) {
 
 function SettingsSkeleton() {
   return (
-    <div className="px-6 py-8 max-w-2xl space-y-10 animate-pulse">
+    <div className="px-6 py-8 max-w-3xl mx-auto space-y-10 animate-pulse">
       <div className="h-7 w-24 bg-border rounded" />
       {[0, 1, 2].map((i) => (
         <div key={i} className="space-y-4">
@@ -731,7 +731,7 @@ export default function SettingsPage() {
   if (!publicProfile || !userProfile) return <SettingsSkeleton />;
 
   return (
-    <div className="px-6 py-8 max-w-2xl">
+    <div className="px-6 py-8 max-w-3xl mx-auto">
       <h1 className="font-display text-2xl font-semibold text-foreground mb-10">Settings</h1>
       <div className="space-y-12">
         <PublicProfileSection profile={publicProfile} />

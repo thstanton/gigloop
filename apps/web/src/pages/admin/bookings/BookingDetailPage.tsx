@@ -911,7 +911,7 @@ export default function BookingDetailPage() {
   const backState = { from: `/admin/bookings/${id}`, label: title };
 
   return (
-    <div className="px-4 md:px-6 py-6 max-w-2xl space-y-8">
+    <div className="px-4 md:px-6 py-6 max-w-7xl mx-auto">
 
       {/* Back */}
       <Link
@@ -922,62 +922,78 @@ export default function BookingDetailPage() {
         Bookings
       </Link>
 
-      {/* 1. Header */}
-      <section>
-        <div className="flex items-start justify-between gap-4">
-          <h1 className="font-display text-2xl font-semibold text-foreground">{title}</h1>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <a
-              href={`/booking/${booking.portalToken}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-foreground transition-colors border border-border rounded-md px-3 py-1.5"
-            >
-              Client portal
-            </a>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setSearchParams({ edit: 'true' })}
-            >
-              Edit
-            </Button>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2">
-          <StatusDropdown booking={booking} />
-          <span className="text-sm text-muted">
-            {formatDate(booking.date)}
-          </span>
-          {fee && <span className="text-sm text-muted">{fee}</span>}
+      <div className="mt-6 md:grid md:grid-cols-[3fr_2fr] md:gap-8 md:items-start">
+
+        {/* ─── Left column ─── */}
+        <div className="space-y-8">
+
+          {/* 1. Header */}
+          <section>
+            <div className="flex items-start justify-between gap-4">
+              <h1 className="font-display text-2xl font-semibold text-foreground">{title}</h1>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <a
+                  href={`/booking/${booking.portalToken}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-foreground transition-colors border border-border rounded px-3 py-1.5"
+                >
+                  Client portal
+                </a>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSearchParams({ edit: 'true' })}
+                >
+                  Edit
+                </Button>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2">
+              <StatusDropdown booking={booking} />
+              <span className="text-sm text-muted">{formatDate(booking.date)}</span>
+              {fee && <span className="text-sm text-muted">{fee}</span>}
+            </div>
+          </section>
+
+          {/* 2. People */}
+          <section>
+            <SectionHeader label="People" />
+            <div className="border-t border-border">
+              <PersonCard role="Customer" contact={booking.customer} linkState={backState} />
+              {booking.referrer && (
+                <PersonCard
+                  role="Referrer"
+                  contact={booking.referrer}
+                  commissionArrangement={booking.referrer.commissionArrangement}
+                  linkState={backState}
+                />
+              )}
+            </div>
+          </section>
+
+          {/* 3. Notes */}
+          <InlineNotes bookingId={booking.id} initialNotes={booking.notes} />
+
+          {/* 4. For the day */}
+          <section>
+            <SectionHeader label="For the day" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <PerformanceSection booking={booking} />
+              {booking.venue && <VenueCard venue={booking.venue} linkState={backState} />}
+              <div className={booking.venue ? 'sm:col-span-2' : undefined}>
+                <MusicFormSection booking={booking} documents={documents} />
+              </div>
+            </div>
+          </section>
+
         </div>
 
-      </section>
+        {/* ─── Right column ─── */}
+        <div className="mt-8 md:mt-0 space-y-6 md:sticky md:top-20 md:max-h-[calc(100vh-5rem)] md:overflow-y-auto md:pb-6">
 
-      {/* 2. People */}
-      <section>
-        <SectionHeader label="People" />
-        <div className="border-t border-border">
-          <PersonCard role="Customer" contact={booking.customer} linkState={backState} />
-          {booking.referrer && (
-            <PersonCard
-              role="Referrer"
-              contact={booking.referrer}
-              commissionArrangement={booking.referrer.commissionArrangement}
-              linkState={backState}
-            />
-          )}
-        </div>
-      </section>
-
-      {/* 3. Notes & Checklist */}
-      <div className={
-        booking.status !== 'CANCELLED' && checklist.length > 0
-          ? 'grid grid-cols-1 md:grid-cols-2 gap-6'
-          : undefined
-      }>
-        <InlineNotes bookingId={booking.id} initialNotes={booking.notes} />
-        {booking.status !== 'CANCELLED' && checklist.length > 0 && (
+          {/* Checklist */}
+          {booking.status !== 'CANCELLED' && checklist.length > 0 && (
             <section>
               <SectionHeader label="Checklist" />
               <div className="space-y-2.5">
@@ -1059,23 +1075,10 @@ export default function BookingDetailPage() {
               </div>
             </section>
           )}
-        </div>
 
-      {/* 4. For the day */}
-      <section>
-        <SectionHeader label="For the day" />
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <PerformanceSection booking={booking} />
-          {booking.venue && <VenueCard venue={booking.venue} linkState={backState} />}
-          <div className={booking.venue ? 'md:col-span-2' : undefined}>
-            <MusicFormSection booking={booking} documents={documents} />
-          </div>
-        </div>
-      </section>
-
-      {/* 5. Finance */}
-      <section>
-        <SectionHeader label="Finance" />
+          {/* Finance */}
+          <section>
+            <SectionHeader label="Finance" />
         <div className="space-y-4">
           {/* Invoices */}
           <div className="bg-background border border-border rounded-lg p-4">
@@ -1194,30 +1197,33 @@ export default function BookingDetailPage() {
             )}
           </Card>
         </div>
-      </section>
+          </section>
 
-      {/* 6. Communications */}
-      <section>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold text-foreground">Communications</h2>
-          <Button variant="outline" size="sm" onClick={() => openCompose()}>
-            <Mail size={14} className="mr-1.5" />
-            Send email
-          </Button>
-        </div>
-        {communications.length === 0 ? (
-          <div className="flex items-center gap-2 text-muted py-1">
-            <FileText size={14} />
-            <span className="text-sm">No emails sent yet</span>
-          </div>
-        ) : (
-          <div className="border-t border-border">
-            {communications.map((comm) => (
-              <CommunicationRow key={comm.id} comm={comm} />
-            ))}
-          </div>
-        )}
-      </section>
+          {/* Communications */}
+          <section>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-semibold text-foreground">Communications</h2>
+              <Button variant="outline" size="sm" onClick={() => openCompose()}>
+                <Mail size={14} className="mr-1.5" />
+                Send email
+              </Button>
+            </div>
+            {communications.length === 0 ? (
+              <div className="flex items-center gap-2 text-muted py-1">
+                <FileText size={14} />
+                <span className="text-sm">No emails sent yet</span>
+              </div>
+            ) : (
+              <div className="border-t border-border">
+                {communications.map((comm) => (
+                  <CommunicationRow key={comm.id} comm={comm} />
+                ))}
+              </div>
+            )}
+          </section>
+
+        </div>{/* end right column */}
+      </div>{/* end two-column grid */}
 
       <BookingEditDrawer booking={booking} />
       <InvoiceSheet

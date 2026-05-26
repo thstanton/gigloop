@@ -126,7 +126,7 @@ export default function ContactDetailPage() {
   const hasVenueDetails = contact.parkingInfo || contact.accessInfo || contact.equipmentAvailable;
 
   return (
-    <div className="px-6 py-8 max-w-2xl">
+    <div className="px-6 py-8 max-w-7xl mx-auto">
       {/* Back */}
       <Link
         to={backNav?.from ?? '/admin/contacts'}
@@ -136,55 +136,62 @@ export default function ContactDetailPage() {
         {backNav?.label ?? 'Contacts'}
       </Link>
 
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4 mb-8">
-        <h1 className="font-display text-2xl font-semibold text-foreground">{contact.name}</h1>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => navigate(`/admin/bookings/new`, { state: { customerId: id } })}
-          >
-            <Plus size={14} className="mr-1" />
-            New booking
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setSearchParams({ edit: 'true' })}>
-            Edit
-          </Button>
-        </div>
-      </div>
+      <div className="md:grid md:grid-cols-[3fr_2fr] md:gap-8 md:items-start">
 
-      {/* Details */}
-      <div className="border-t border-border mb-8">
-        <InfoRow label="Email" value={contact.email} href={contact.email ? `mailto:${contact.email}` : undefined} />
-        <InfoRow label="Phone" value={contact.phone} href={contact.phone ? `tel:${contact.phone}` : undefined} />
-        <InfoRow label="Website" value={contact.website} />
-        <InfoRow label="Address" value={contact.address} />
-        <InfoRow label="Notes" value={contact.notes} />
-        <InfoRow label="Commission" value={contact.commissionArrangement} />
-      </div>
-
-      {/* Venue details */}
-      {hasVenueDetails && (
-        <div className="mb-8">
-          <h2 className="text-sm font-semibold text-foreground mb-1">Venue details</h2>
-          <div className="border-t border-border">
-            <InfoRow label="Parking" value={contact.parkingInfo} />
-            <InfoRow label="Access" value={contact.accessInfo} />
-            <InfoRow label="Equipment" value={contact.equipmentAvailable} />
+        {/* ─── Left column ─── */}
+        <div>
+          {/* Header */}
+          <div className="flex items-start justify-between gap-4 mb-8">
+            <h1 className="font-display text-2xl font-semibold text-foreground">{contact.name}</h1>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate(`/admin/bookings/new`, { state: { customerId: id } })}
+              >
+                <Plus size={14} className="mr-1" />
+                New booking
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setSearchParams({ edit: 'true' })}>
+                Edit
+              </Button>
+            </div>
           </div>
-        </div>
-      )}
 
-      {/* Bookings */}
-      <div>
-        <h2 className="text-sm font-semibold text-foreground mb-3">
-          Bookings
-          {bookings.length > 0 && (
-            <span className="ml-2 text-xs font-normal text-muted">({bookings.length})</span>
+          {/* Details */}
+          <div className="border-t border-border mb-8">
+            <InfoRow label="Email" value={contact.email} href={contact.email ? `mailto:${contact.email}` : undefined} />
+            <InfoRow label="Phone" value={contact.phone} href={contact.phone ? `tel:${contact.phone}` : undefined} />
+            <InfoRow label="Website" value={contact.website} />
+            <InfoRow label="Address" value={contact.address} />
+            <InfoRow label="Notes" value={contact.notes} />
+            <InfoRow label="Commission" value={contact.commissionArrangement} />
+          </div>
+
+          {/* Venue details */}
+          {hasVenueDetails && (
+            <div>
+              <h2 className="text-sm font-semibold text-foreground mb-1">Venue details</h2>
+              <div className="border-t border-border">
+                <InfoRow label="Parking" value={contact.parkingInfo} />
+                <InfoRow label="Access" value={contact.accessInfo} />
+                <InfoRow label="Equipment" value={contact.equipmentAvailable} />
+              </div>
+            </div>
           )}
-        </h2>
-        <BookingsList bookings={bookings} />
+        </div>
+
+        {/* ─── Right column ─── */}
+        <div className="mt-8 md:mt-0 md:sticky md:top-20 md:max-h-[calc(100vh-5rem)] md:overflow-y-auto md:pb-6">
+          <h2 className="text-sm font-semibold text-foreground mb-3">
+            Bookings
+            {bookings.length > 0 && (
+              <span className="ml-2 text-xs font-normal text-muted">({bookings.length})</span>
+            )}
+          </h2>
+          <BookingsList bookings={bookings} />
+        </div>
+
       </div>
 
       <ContactEditDrawer contact={contact} />

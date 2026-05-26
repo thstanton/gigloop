@@ -86,7 +86,7 @@ export default function BookingNewPage() {
   });
 
   return (
-    <div className="px-6 py-8 max-w-2xl">
+    <div className="px-6 py-8 max-w-3xl mx-auto">
       <Link
         to="/admin/bookings"
         className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground transition-colors mb-6"

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@clerk/react';
+import { useUser } from '@clerk/react';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, AlertCircle, RotateCcw } from 'lucide-react';
 import { apiGet } from '@/lib/api';
@@ -333,32 +334,78 @@ function WidgetSkeleton() {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
+function greeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
+function nextUpcomingGig(bookings: BookingListItem[]): BookingListItem | null {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return (
+    bookings
+      .filter((b) => b.status !== 'CANCELLED' && new Date(b.date) >= today)
+      .sort((a, b) => a.date.localeCompare(b.date))[0] ?? null
+  );
+}
+
 export default function DashboardPage() {
   const { data: bookings = [], isLoading } = useBookings('ALL');
+  const { user } = useUser();
+
+  const firstName = user?.firstName ?? '';
+  const nextGig = nextUpcomingGig(bookings);
 
   return (
-    <div className="px-4 py-6 max-w-2xl space-y-4">
-      <h1 className="font-display text-2xl font-semibold text-foreground">Dashboard</h1>
+    <div className="min-h-screen bg-dashboard">
+      <div className="px-4 md:px-8 py-8 max-w-7xl mx-auto">
 
-      <Widget title="Actions">
-        <ActionsWidget />
-      </Widget>
+        {/* Welcome */}
+        <div className="mb-8">
+          <h1 className="font-display text-3xl font-semibold text-foreground">
+            {greeting()}{firstName ? `, ${firstName}` : ''}.
+          </h1>
+          {!isLoading && (
+            <p className="text-base text-muted mt-1">
+              {nextGig
+                ? <>Your next gig is <span className="text-foreground font-medium">{nextGig.title ?? nextGig.customer?.name}</span> on {formatDate(nextGig.date)}.</>
+                : 'No upcoming gigs scheduled.'}
+            </p>
+          )}
+        </div>
 
-      {isLoading ? (
-        <WidgetSkeleton />
-      ) : (
-        <Widget title="Upcoming gigs">
-          <UpcomingGigsWidget bookings={bookings} />
-        </Widget>
-      )}
+        {/* Two-column grid */}
+        <div className="md:grid md:grid-cols-2 md:gap-8 space-y-4 md:space-y-0">
 
-      {isLoading ? (
-        <WidgetSkeleton />
-      ) : (
-        <Widget title="Calendar">
-          <CalendarWidget bookings={bookings} />
-        </Widget>
-      )}
+          {/* Left: Actions */}
+          <div className="space-y-4">
+            <Widget title="Actions">
+              <ActionsWidget />
+            </Widget>
+          </div>
+
+          {/* Right: Calendar + Upcoming */}
+          <div className="space-y-4">
+            {isLoading ? (
+              <WidgetSkeleton />
+            ) : (
+              <Widget title="Calendar">
+                <CalendarWidget bookings={bookings} />
+              </Widget>
+            )}
+            {isLoading ? (
+              <WidgetSkeleton />
+            ) : (
+              <Widget title="Upcoming gigs">
+                <UpcomingGigsWidget bookings={bookings} />
+              </Widget>
+            )}
+          </div>
+
+        </div>
+      </div>
     </div>
   );
 }
