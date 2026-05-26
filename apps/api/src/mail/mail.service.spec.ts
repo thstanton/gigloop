@@ -40,13 +40,13 @@ const fullContext: EmailContext = {
   customerName: 'Jane Doe',
   bookingDate: '2025-08-15',
   venueName: 'The Grand Hotel',
-  bookingFee: '2500.00',
+  bookingFee: '£2500.00',
   setsSchedule: '<ul><li>Ceremony</li></ul>',
   musicianName: 'Tim Stanton',
   musicianEmail: 'tim@example.com',
   portalLink: 'https://app.gigman.com/booking/tok-abc',
   issueDate: '2025-06-01',
-  invoiceTotal: '750.00',
+  invoiceTotal: '£750.00',
   invoiceDueDate: '2025-07-01',
 };
 
@@ -131,7 +131,7 @@ describe('MailService', () => {
         lineItems: [{ amount: '500.00' }, { amount: '1500.00' }],
       });
       const ctx = await service.buildContext('u1', 'b1', 'inv1');
-      expect(ctx.invoiceTotal).toBe('2000.00');
+      expect(ctx.invoiceTotal).toBe('£2000.00');
     });
 
     it('captures issueDate and invoiceDueDate from invoice', async () => {
@@ -166,6 +166,21 @@ describe('MailService', () => {
       mockPrisma.booking.findFirst.mockResolvedValue({ ...booking, date: null });
       const ctx = await service.buildContext('u1', 'b1');
       expect(ctx.bookingDate).toBe('');
+    });
+
+    it('formats bookingFee with £ symbol', async () => {
+      const ctx = await service.buildContext('u1', 'b1');
+      expect(ctx.bookingFee).toMatch(/^£\d+\.\d{2}$/);
+    });
+
+    it('formats invoiceTotal with £ symbol', async () => {
+      mockPrisma.invoice.findFirst.mockResolvedValue({
+        issueDate: new Date('2025-08-01'),
+        dueDate: null,
+        lineItems: [{ amount: '360.00' }],
+      });
+      const ctx = await service.buildContext('u1', 'b1', 'inv1');
+      expect(ctx.invoiceTotal).toBe('£360.00');
     });
 
     it('throws NotFoundException when booking is not found', async () => {

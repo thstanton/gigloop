@@ -79,7 +79,7 @@ export class MailService {
         );
         issueDate = issueDateOverride
           ?? (invoice.issueDate ? invoice.issueDate.toISOString().split('T')[0] : '');
-        invoiceTotal = total.toFixed(2);
+        invoiceTotal = `£${total.toFixed(2)}`;
         invoiceDueDate = dueDateOverride
           ?? (invoice.dueDate ? invoice.dueDate.toISOString().split('T')[0] : '');
       }
@@ -99,7 +99,7 @@ export class MailService {
       customerName: booking.customer.name,
       bookingDate: booking.date ? booking.date.toISOString().split('T')[0] : '',
       venueName: booking.venue?.name ?? '',
-      bookingFee: booking.fee != null ? Number(booking.fee).toFixed(2) : '',
+      bookingFee: booking.fee != null ? `£${Number(booking.fee).toFixed(2)}` : '',
       setsSchedule,
       musicianName: publicProfile.displayName ?? publicProfile.businessName ?? '',
       musicianEmail: publicProfile.email ?? '',
