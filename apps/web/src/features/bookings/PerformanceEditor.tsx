@@ -191,9 +191,9 @@ export default function PerformanceEditor({ booking }: { booking: BookingDetail 
 
             {sets.length > 0 && (
               <div className="text-xs text-muted grid grid-cols-[1fr_5rem_5rem_auto] gap-2 pb-1 mb-1 border-b border-border">
-                <span>Label</span>
-                <span>Min</span>
-                <span>Start</span>
+                <span className="pl-2">Label</span>
+                <span className="pl-2">Min</span>
+                <span className="pl-2">Start</span>
                 <span />
               </div>
             )}
