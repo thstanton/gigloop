@@ -141,7 +141,7 @@ export class PortalService {
       ip,
     );
 
-    await this.repo.markContractSigned(booking.id, ip);
+    await this.repo.markContractSigned(booking.id, ip, signatureBase64);
 
     await this.sendSigningNotification(booking, publicProfile, signedAt);
   }

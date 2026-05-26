@@ -9,7 +9,77 @@ import { FileText, PenLine, RotateCcw } from 'lucide-react';
 import { getPortalData, getContractContent, signContract } from '../../lib/portalApi';
 import { PortalLayout } from '../../layouts/PortalLayout';
 
-function SignatureCanvas({ onSign }: { onSign: (dataUrl: string) => void }) {
+// ─── Typed signature ─────────────────────────────────────────────────────────
+
+function TypedSignature({ onSign, brand }: { onSign: (dataUrl: string) => void; brand: string }) {
+  const [name, setName] = useState('');
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&display=swap';
+    document.head.appendChild(link);
+    return () => { document.head.removeChild(link); };
+  }, []);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (!name.trim()) { onSign(''); return; }
+    document.fonts.load('700 64px "Dancing Script"').then(() => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.font = '700 64px "Dancing Script", cursive';
+      ctx.fillStyle = '#1a1a1a';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(name.trim(), 20, canvas.height / 2);
+      onSign(canvas.toDataURL('image/png'));
+    });
+  }, [name]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <div className="space-y-3">
+      <input
+        type="text"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="Type your full name"
+        className="w-full border border-[#e5e5e5] rounded-lg px-3 py-2.5 text-sm bg-white text-[#1a1a1a] placeholder-[#9ca3af] focus:outline-none focus:ring-1"
+        style={{ '--tw-ring-color': brand } as React.CSSProperties}
+      />
+      <canvas ref={canvasRef} width={600} height={120} className="hidden" />
+      {name.trim() ? (
+        <div className="border border-[#e5e5e5] rounded-lg bg-white px-5 py-3 min-h-[88px] flex items-center overflow-hidden">
+          <span
+            style={{
+              fontFamily: '"Dancing Script", cursive',
+              fontSize: '52px',
+              color: '#1a1a1a',
+              lineHeight: 1.2,
+              display: 'block',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              maxWidth: '100%',
+            }}
+          >
+            {name}
+          </span>
+        </div>
+      ) : (
+        <div className="border border-dashed border-[#d1d5db] rounded-lg min-h-[88px] flex items-center justify-center">
+          <span className="text-[#9ca3af] text-sm">Your signature preview</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Drawn signature ──────────────────────────────────────────────────────────
+
+function DrawnSignature({ onSign }: { onSign: (dataUrl: string) => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
   const hasDrawnRef = useRef(false);
@@ -36,7 +106,6 @@ function SignatureCanvas({ onSign }: { onSign: (dataUrl: string) => void }) {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-
     ctx.strokeStyle = '#1a1a1a';
     ctx.lineWidth = 2;
     ctx.lineCap = 'round';
@@ -49,26 +118,18 @@ function SignatureCanvas({ onSign }: { onSign: (dataUrl: string) => void }) {
       ctx!.beginPath();
       ctx!.moveTo(pos.x, pos.y);
     }
-
     function draw(e: MouseEvent | TouchEvent) {
       if (!drawing.current) return;
       e.preventDefault();
       const pos = getPos(e, canvas!);
       ctx!.lineTo(pos.x, pos.y);
       ctx!.stroke();
-      if (!hasDrawnRef.current) {
-        hasDrawnRef.current = true;
-        setHasSignature(true);
-      }
+      if (!hasDrawnRef.current) { hasDrawnRef.current = true; setHasSignature(true); }
     }
-
     function stopDraw() {
       if (drawing.current) {
         drawing.current = false;
-        // Use ref (not state) — state is stale in this closure
-        if (hasDrawnRef.current) {
-          onSign(canvas!.toDataURL('image/png'));
-        }
+        if (hasDrawnRef.current) onSign(canvas!.toDataURL('image/png'));
       }
     }
 
@@ -79,7 +140,6 @@ function SignatureCanvas({ onSign }: { onSign: (dataUrl: string) => void }) {
     canvas.addEventListener('touchstart', startDraw, { passive: false });
     canvas.addEventListener('touchmove', draw, { passive: false });
     canvas.addEventListener('touchend', stopDraw);
-
     return () => {
       canvas.removeEventListener('mousedown', startDraw);
       canvas.removeEventListener('mousemove', draw);
@@ -126,12 +186,63 @@ function SignatureCanvas({ onSign }: { onSign: (dataUrl: string) => void }) {
           type="button"
           onClick={clear}
           className="flex items-center gap-1.5 text-sm text-[#6b7280] hover:text-[#1a1a1a] transition-colors"
-          style={{ color: undefined }}
         >
           <RotateCcw className="h-3.5 w-3.5" />
           Clear
         </button>
       )}
+    </div>
+  );
+}
+
+// ─── Signature section (tabbed) ───────────────────────────────────────────────
+
+function SignatureSection({
+  onSign,
+  brand,
+  isBold,
+}: {
+  onSign: (dataUrl: string) => void;
+  brand: string;
+  isBold: boolean;
+}) {
+  const [mode, setMode] = useState<'type' | 'draw'>('type');
+
+  function handleModeChange(next: 'type' | 'draw') {
+    setMode(next);
+    onSign('');
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* Tab bar */}
+      <div className="flex gap-1 p-1 rounded-lg bg-[#f3f4f6] w-fit">
+        {(['type', 'draw'] as const).map((m) => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => handleModeChange(m)}
+            className="px-4 py-1.5 rounded-md text-sm font-medium transition-all duration-150"
+            style={
+              mode === m
+                ? { backgroundColor: '#fff', color: brand, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }
+                : { color: '#6b7280' }
+            }
+          >
+            {m === 'type' ? 'Type' : 'Draw'}
+          </button>
+        ))}
+      </div>
+
+      {mode === 'type' ? (
+        <TypedSignature onSign={onSign} brand={brand} />
+      ) : (
+        <DrawnSignature onSign={onSign} />
+      )}
+
+      <p className={`text-xs ${isBold ? 'text-white/40' : 'text-[#9ca3af]'}`}>
+        By submitting, you confirm this constitutes your electronic signature.
+      </p>
     </div>
   );
 }
@@ -282,7 +393,7 @@ export default function PortalContractPage() {
               <p className={`text-sm font-medium ${isBold ? 'text-white' : 'text-[#1a1a1a]'}`}>
                 Sign below
               </p>
-              <SignatureCanvas onSign={setSignature} />
+              <SignatureSection onSign={setSignature} brand={brand} isBold={isBold} />
             </div>
           )}
 

@@ -111,10 +111,10 @@ export class PortalRepository {
     return this.prisma.publicProfile.findUnique({ where: { userId } });
   }
 
-  markContractSigned(bookingId: string, signedFromIp: string) {
+  markContractSigned(bookingId: string, signedFromIp: string, signatureDataUrl: string) {
     return this.prisma.booking.update({
       where: { id: bookingId },
-      data: { contractSignedAt: new Date(), contractSignedFromIp: signedFromIp },
+      data: { contractSignedAt: new Date(), contractSignedFromIp: signedFromIp, signatureDataUrl },
     });
   }
 

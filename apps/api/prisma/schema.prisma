@@ -134,6 +134,7 @@ model Booking {
   portalToken         String    @unique @default(uuid())
   contractSignedAt      DateTime?
   contractSignedFromIp  String?
+  signatureDataUrl      String?
   depositReceivedAt     DateTime?
   depositTrackingMode String?
 
