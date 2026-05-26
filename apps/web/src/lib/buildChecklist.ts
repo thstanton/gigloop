@@ -23,7 +23,8 @@ export function buildChecklist(
   bookingDate.setHours(0, 0, 0, 0);
   const bookingDatePassed = bookingDate < today;
 
-  const trackDeposit = booking.depositTrackingMode !== 'NONE';
+  const resolvedDepositMode = booking.depositTrackingMode ?? 'INVOICE';
+  const trackDeposit = resolvedDepositMode !== 'NONE';
 
   const hasSent = (...types: string[]) =>
     communications.some((c) => types.includes(c.template?.builtInType ?? '') && c.status === 'SENT');
@@ -50,8 +51,7 @@ export function buildChecklist(
 
   const depositInvoiceExists = invoices.some((i) => i.isDeposit);
   const balanceInvoiceExists = invoices.some((i) => !i.isDeposit);
-  const hasDepositInvoice = trackDeposit;
-  const contractShortcutType = hasDepositInvoice ? 'contract_and_deposit_cover' : 'contract_cover';
+  const contractShortcutType = trackDeposit ? 'contract_and_deposit_cover' : 'contract_cover';
 
   const raw: RawItem[] = [
     {
@@ -94,7 +94,9 @@ export function buildChecklist(
       done: !!booking.depositReceivedAt,
       failed: false,
       irrelevant: !trackDeposit || booking.status === 'ENQUIRY',
-      shortcutMarkDone: 'mark_deposit_received',
+      // INVOICE mode: deposit is marked received by paying the invoice (invoice dropdown)
+      // MANUAL mode: direct shortcut is appropriate
+      shortcutMarkDone: resolvedDepositMode === 'MANUAL' ? 'mark_deposit_received' : undefined,
     },
     {
       key: 'create_balance_invoice',

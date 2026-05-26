@@ -25,17 +25,12 @@ export interface SongListPdfData {
   submittedAt: string;
 }
 
-function grey(text: string): Content {
-  return { text, color: '#666666', fontSize: 9 };
-}
-
 function sectionHeading(text: string): Content {
   return {
     text: text.toUpperCase(),
     fontSize: 8,
     bold: true,
     color: '#999999',
-    letterSpacing: 0.5,
     margin: [0, 10, 0, 4],
   };
 }
@@ -66,14 +61,14 @@ export function buildSongListDefinition(data: SongListPdfData): TDocumentDefinit
     // Booking summary
     {
       columns: [
-        { text: 'Customer', width: 100, ...grey('Customer') },
+        { text: 'Customer', width: 100, fontSize: 9, color: '#666666' },
         { text: data.customerName, fontSize: 10, width: '*' },
       ],
       margin: [0, 0, 0, 4],
     },
     {
       columns: [
-        grey('Date'),
+        { text: 'Date', width: 100, fontSize: 9, color: '#666666' },
         { text: data.bookingDate, fontSize: 10, width: '*' },
       ],
       margin: [0, 0, 0, 4],
@@ -81,7 +76,7 @@ export function buildSongListDefinition(data: SongListPdfData): TDocumentDefinit
     ...(data.venueName
       ? [{
           columns: [
-            grey('Venue'),
+            { text: 'Venue', width: 100, fontSize: 9, color: '#666666' },
             { text: data.venueName, fontSize: 10, width: '*' },
           ],
           margin: [0, 0, 0, 4],
@@ -89,7 +84,7 @@ export function buildSongListDefinition(data: SongListPdfData): TDocumentDefinit
       : []),
     {
       columns: [
-        grey('Submitted'),
+        { text: 'Submitted', width: 100, fontSize: 9, color: '#666666' },
         { text: data.submittedAt, fontSize: 10, width: '*' },
       ],
       margin: [0, 0, 0, 4],

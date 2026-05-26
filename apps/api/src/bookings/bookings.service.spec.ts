@@ -125,12 +125,23 @@ describe('BookingsService', () => {
     it('fetches formats and calls createWithFormats when formatIds provided', async () => {
       const fmt = { id: 'f1', label: 'Wedding Ceremony', keyMoments: ['Processional'], defaultGenreSelection: ['CONTEMPORARY'], slots: [] };
       repo.findFormats.mockResolvedValue([fmt]);
+      repo.findUserProfile.mockResolvedValue(null);
       repo.createWithFormats.mockResolvedValue(booking);
       const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', formatIds: ['f1'] };
       const result = await service.create('u1', dto);
       expect(repo.findFormats).toHaveBeenCalledWith('u1', ['f1']);
-      expect(repo.createWithFormats).toHaveBeenCalledWith('u1', dto, [fmt]);
+      expect(repo.createWithFormats).toHaveBeenCalledWith('u1', dto, [fmt], false);
       expect(result).toBe(booking);
+    });
+
+    it('passes songRequestFormEnabled=true when profile has it enabled', async () => {
+      const fmt = { id: 'f1', label: 'Wedding Ceremony', keyMoments: [], defaultGenreSelection: [], slots: [] };
+      repo.findFormats.mockResolvedValue([fmt]);
+      repo.findUserProfile.mockResolvedValue({ songRequestFormEnabled: true });
+      repo.createWithFormats.mockResolvedValue(booking);
+      const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', formatIds: ['f1'] };
+      await service.create('u1', dto);
+      expect(repo.createWithFormats).toHaveBeenCalledWith('u1', dto, [fmt], true);
     });
 
     it('preserves order from formatIds when creating with formats', async () => {
