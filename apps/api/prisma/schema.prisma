@@ -148,8 +148,9 @@ model Booking {
   fee         Decimal?      @db.Decimal(10, 2)
   notes               String?
   portalToken         String    @unique @default(uuid())
-  contractSignedAt    DateTime?
-  depositReceivedAt   DateTime?
+  contractSignedAt      DateTime?
+  contractSignedFromIp  String?
+  depositReceivedAt     DateTime?
   depositTrackingMode String?
 
   customerId String

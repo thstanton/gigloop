@@ -420,3 +420,51 @@ export interface UpdatePublicProfileInput {
   socials?: Record<string, string> | null;
   portalTheme?: PortalTheme;
 }
+
+// ─────────────────────────────────────────
+// Portal (public, no auth)
+// ─────────────────────────────────────────
+
+export interface PortalBookingSet {
+  order: number;
+  label: string | null;
+  startTime: string | null;
+  duration: number | null;
+}
+
+export interface PortalBooking {
+  id: string;
+  date: string;
+  fee: string | null;
+  title: string | null;
+  status: BookingStatus;
+  customerName: string;
+  venueName: string | null;
+  sets: PortalBookingSet[];
+  contractSignedAt: string | null;
+}
+
+export interface PortalPublicProfile {
+  businessName: string;
+  displayName: string | null;
+  bio: string | null;
+  email: string | null;
+  phone: string | null;
+  logoUrl: string | null;
+  brandColour: string;
+  photo: string | null;
+  portalTheme: PortalTheme | null;
+}
+
+export interface PortalData {
+  booking: PortalBooking;
+  publicProfile: PortalPublicProfile;
+  signedContractUrl: string | null;
+  hasMusicForm: boolean;
+  depositInvoiceDueDate: string | null;
+}
+
+export interface PortalContractData {
+  content: unknown; // Tiptap JSON
+  title: string;
+}

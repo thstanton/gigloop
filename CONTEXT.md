@@ -84,7 +84,7 @@ A reusable content block stored as Tiptap JSON. Used for email body rendering an
 
 **Built-in document types:** `contract`
 
-Email templates produce the body of an outbound email. The `contract` document template is rendered as HTML on the [[Portal]] for the client to read before signing — it is not used to generate a PDF. Invoice PDFs use a fixed layout with no template involvement — appearance customisation is deferred to P2.
+Email templates produce the body of an outbound email. The `contract` document template is rendered as HTML on the [[Portal]] for the client to read before signing — it is not used to generate a PDF. The contract template uses the same variable set as email templates — the API reuses the existing `EmailContext` object (booking data + public profile) at render time, with the same variable substitution logic. Invoice PDFs use a fixed layout with no template involvement — appearance customisation is deferred to P2.
 
 The template type encodes what gets attached — the musician picks the template, not individual attachments:
 
@@ -104,7 +104,7 @@ The `quote` template is optional — in current practice quotes are sent externa
 
 **Variable chips:** in the template editor, variables are inserted as non-editable inline nodes (chips) that display a human-readable label (e.g. "Customer name") but serialise as `{{customerName}}` in the Tiptap JSON. Free-typing variable syntax is not supported — variables must be inserted via the picker.
 
-Available variables: `{{customerName}}`, `{{bookingDate}}`, `{{venueName}}`, `{{bookingFee}}`, `{{setsSchedule}}`, `{{musicianName}}`, `{{musicianEmail}}`, `{{portalLink}}`, `{{invoiceTotal}}`, `{{invoiceDueDate}}`.
+Available variables: `{{customerName}}`, `{{bookingDate}}`, `{{venueName}}`, `{{bookingFee}}`, `{{setsSchedule}}`, `{{musicianName}}`, `{{musicianEmail}}`, `{{portalLink}}`, `{{invoiceTotal}}`, `{{invoiceDueDate}}`. `{{portalLink}}` always points to `/booking/:token` (the main portal page) — there is no separate `{{contractLink}}` variable. Contract template copy should guide the client to sign from there; this orientation is intentional for first-time portal visitors.
 
 ### Communication
 A log entry for a communication associated with a Booking. For MVP: outbound only (sent emails). Modelled generically to accommodate inbound messages (email ingestion) in a future release without schema changes.
@@ -125,6 +125,12 @@ The public, portal-visible half of the musician's settings (one per `userId`). S
 **`portalTheme` enum:** `BOLD_ROMANTIC | BOLD_MODERN | LIGHT_ROMANTIC | LIGHT_MODERN`. Each preset bundles a layout style (Bold = full-bleed photo hero; Light = clean white with contained photo) with a font pairing (Romantic = Cormorant Garamond/Lato; Modern = DM Sans). Four themes cover the full matrix.
 
 The client-facing [[Portal]] is musician-branded: displays the musician's logo, photo, name, and chosen theme. It is not GigMan-branded. Design reference: WithJoy — photo-forward, elegant typography, premium and personal in feel, mobile-first.
+
+**Graceful degradation:** `publicProfile` always exists by the time emails are sent (API enforces this). Missing optional fields degrade gracefully: no photo/logo → layout renders without them (no broken images). No `brandColour` → neutral fallback (`#1a1a1a`). The portal must never look broken due to incomplete profile setup.
+
+**Theme implementation:** two layout components (`BoldPortalLayout` / `LightPortalLayout`) × two CSS font variants (`romantic` / `modern`) applied within each — four combinations total. Bold = full-bleed photo hero (photo fills viewport width). Light = clean white with contained photo. Romantic = Cormorant Garamond/Lato font pairing. Modern = DM Sans.
+
+`brandColour` is applied to buttons and links only — everything else uses neutral colours (white/near-white backgrounds, dark text).
 
 ### UserProfile
 The private, authenticated-only half of the musician's settings (one per `userId`). Never returned to portal clients. See ADR-0002.
@@ -206,14 +212,38 @@ Key moments default to the wedding set for `WEDDING` eventType but are fully con
 ### Portal
 The client-facing public interface at `/booking/:token`. Bypasses Clerk auth — access is validated by the Booking's `portalToken`. Sections are conditionally visible based on booking state — not every booking has every section:
 
-- **Booking summary** — always visible; shows date, venue, sets schedule
-- **Contract signing** — visible until signed; client reads the contract, draws or types a signature, submits; API regenerates the PDF with signature embedded, stores in R2, sets `Booking.contractSignedAt`
+- **Booking summary** — always visible; shows date, venue, sets schedule, and fee. Opens with a greeting using the customer name (e.g. "Hello, Jane!"). Internal notes and event type are never shown to the client.
+- **Contract signing** — visible until signed; client reads the contract, draws or types a signature (draw is default, type is the fallback), submits; API generates the signed PDF, stores in R2, sets `Booking.contractSignedAt`
 - **Signed contract download** — visible once `contractSignedAt` is set
-- **Music form** — only visible when a [[MusicFormConfig]] exists on the booking (not all bookings have one — e.g. a hotel residency would not)
+- **Music form link** — only visible when a [[MusicFormConfig]] exists on the booking; links to the music form sub-page
+
+**Routing:** the portal has three routes sharing the same musician branding:
+- `/booking/:token` — main page (summary, signed contract download, music form link)
+- `/booking/:token/contract` — read contract + sign; redirects to main page on success (with `?signed=1` param — main page shows a one-time success banner "Your contract has been signed — thank you!"); redirects immediately to main page if already signed. Signature canvas and submit are gated behind an "I have read and agree to the above" checkbox.
+- `/booking/:token/music` — song selection form; redirects to main page on success
+
+**API calls:** three endpoint groups, each scoped to a route:
+- `GET /booking/:token` — returns: booking summary fields (date, fee, title, customerName, venueName, sets), publicProfile (full), contractSignedAt (timestamp or null), signedContractUrl (R2 public URL or null), hasMusicForm (boolean)
+- `GET /booking/:token/contract` — returns `{ content: TiptapJSON, title: string }` where `content` is the contract template's Tiptap JSON with variables already substituted as plain text nodes (server-side). The frontend renders using the Tiptap React viewer — no `dangerouslySetInnerHTML`, XSS structurally impossible.
+- `POST /booking/:token/sign` — signature submission; body: `{ signature: string }` (base64-encoded PNG — same format for draw and type methods; the frontend renders typed signatures to canvas before submission). The API extracts the client IP from `X-Forwarded-For` (fallback: socket address), stores it in `Booking.contractSignedFromIp` (new nullable field, requires migration), and includes it in the signed PDF signature section.
+- `GET /booking/:token/music` — music form config + song list *(deferred — separate build session)*
+- `POST /booking/:token/music` — music form submission *(deferred)*
 
 **Header:** personal — uses the Booking `title` if present, otherwise constructed from customer name + event date. Venue name also shown.
 
 No payment functionality on the portal for MVP.
+
+**Footer:** "Powered by GigMan" — small, tasteful, at the bottom of every portal page.
+
+**Signing notification:** when the client signs, the API sends a notification email to the musician (via Resend). Subject: "[CustomerName] has signed your contract for [booking title]". Body is plain text: customer name, booking date, venue (if set), link to `/admin/bookings/:id`. Context-aware deposit section:
+- If `depositTrackingMode` resolves to `NONE`: no deposit mention.
+- If deposit not yet received and a sent deposit invoice exists with a `dueDate`: "Awaiting deposit — due [date]".
+- If deposit not yet received and no sent deposit invoice (or no due date): "Awaiting deposit."
+- If deposit already received (`depositReceivedAt` set): include a link to `/admin/bookings/:id` prompting the musician to mark the booking as Confirmed.
+
+This is a system-generated email (not a [[Template]]).
+
+**Cancelled bookings:** the portal still loads for cancelled bookings (the token remains valid). A notice is shown ("This booking has been cancelled"). The booking summary is visible. Contract signing is hidden. Signed contract download remains visible if it exists.
 
 ### Document
 A generated PDF stored in Cloudflare R2, associated with a Booking. Two types: **Invoice** (MVP) and **SignedContract** (P2, portal feature).
@@ -221,6 +251,8 @@ A generated PDF stored in Cloudflare R2, associated with a Booking. Two types: *
 **Invoice PDF:** generated at invoice send time (`POST /invoices/:id/send`), stored in R2, and attached to the outbound email. Uses a fixed `@react-pdf/renderer` layout with Tiptap-JSON-driven content sections (variable substitution + line items table). Balance invoices include a deposit deduction section (subtotal, less deposit, balance due) when a deposit [[Invoice]] exists on the booking.
 
 **Signed contract PDF:** generated only after the client signs via the [[Portal]] — a drawn or typed signature is captured on a canvas, embedded into a PDF, and stored in R2. No unsigned contract PDF is ever generated or stored. The [[Portal]] renders the contract content as HTML (from the Tiptap template) for the client to read before signing. See ADR-0001.
+
+The signed contract PDF is generated using pdfmake (same library as invoices) via a `renderTiptapToPdfmake` converter that maps Tiptap JSON nodes (paragraphs, bold, italic, headings) directly to pdfmake content — no HTML→PDF step needed. Variable substitution is applied before conversion. The PDF structure is: musician header (name/logo), contract body, signature section (customer name, timestamp, signature image).
 
 ### Contact Roles (on a Booking)
 A Booking has up to three Contact relations, each a separate FK:

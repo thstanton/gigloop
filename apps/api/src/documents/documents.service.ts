@@ -6,6 +6,9 @@ import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { DocumentsRepository } from './documents.repository';
 import { buildInvoiceDefinition, type InvoicePdfData } from './invoice-document';
+import { renderTiptapToPdfmake } from '../mail/tiptap-pdfmake';
+import type { EmailContext } from '../mail/mail.service';
+import { substituteTiptapVariables } from '../mail/tiptap-portal';
 
 // Resolve pdfmake relative to this file so font paths work correctly
 // regardless of where the process was started from.
@@ -149,6 +152,52 @@ export class DocumentsService {
   async generatePreviewPdf(userId: string, invoiceId: string): Promise<Buffer> {
     const data = await this.buildInvoicePdfData(userId, invoiceId);
     return this.generatePdfBuffer(data);
+  }
+
+  // ─── Signed contract PDF ───────────────────────────────────────────────────
+
+  async generateAndStoreSignedContractPdf(
+    userId: string,
+    bookingId: string,
+    tiptapContent: unknown,
+    context: EmailContext,
+    musicianName: string,
+    customerName: string,
+    signatureBase64: string,
+    signedAt: Date,
+    signedFromIp: string,
+  ): Promise<DocumentWithUrl> {
+    const substituted = substituteTiptapVariables(tiptapContent, context);
+    const contractContent = renderTiptapToPdfmake(substituted);
+
+    const logoUrl = context.musicianEmail ? null : null; // logo handled via publicProfile separately
+    const signatureDataUrl = signatureBase64.startsWith('data:')
+      ? signatureBase64
+      : `data:image/png;base64,${signatureBase64}`;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const docDef: any = {
+      pageSize: 'A4',
+      pageMargins: [54, 48, 54, 60],
+      defaultStyle: { font: 'Roboto', fontSize: 10, color: '#1a1a1a', lineHeight: 1.4 },
+      content: [
+        { text: musicianName, style: 'header', margin: [0, 0, 0, 4] },
+        { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 487, y2: 0, lineWidth: 0.5, lineColor: '#e5e5e5' }], margin: [0, 0, 0, 24] },
+        ...contractContent,
+        { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 487, y2: 0, lineWidth: 0.5, lineColor: '#e5e5e5' }], margin: [0, 16, 0, 16] },
+        { text: 'Electronic Signature', bold: true, fontSize: 11, margin: [0, 0, 0, 8] },
+        { text: `Signed by: ${customerName}`, margin: [0, 0, 0, 2] },
+        { text: `Date: ${signedAt.toISOString().split('T')[0]}`, margin: [0, 0, 0, 2] },
+        { text: `IP address: ${signedFromIp}`, color: '#666666', margin: [0, 0, 0, 12] },
+        { image: signatureDataUrl, width: 200, margin: [0, 0, 0, 4] },
+      ],
+      styles: {
+        header: { fontSize: 14, bold: true },
+      },
+    };
+
+    const buffer: Buffer = await (pdfmake.createPdf(docDef).getBuffer() as Promise<Buffer>);
+    return this.storeSignedContractPdf(userId, bookingId, buffer);
   }
 
   // ─── Storage: public ───────────────────────────────────────────────────────

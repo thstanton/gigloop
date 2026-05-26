@@ -19,6 +19,8 @@ import ContactDetailPage from './pages/admin/contacts/ContactDetailPage';
 import RepertoirePage from './pages/admin/RepertoirePage';
 import TemplatesListPage from './pages/admin/TemplatesListPage';
 import TemplateEditPage from './pages/admin/TemplateEditPage';
+import PortalPage from './pages/portal/PortalPage';
+import PortalContractPage from './pages/portal/PortalContractPage';
 
 const queryClient = new QueryClient();
 
@@ -34,6 +36,14 @@ const router = createBrowserRouter([
   {
     path: '/sign-up/*',
     element: <SignUpPage />,
+  },
+  {
+    path: '/booking/:token',
+    element: <PortalPage />,
+  },
+  {
+    path: '/booking/:token/contract',
+    element: <PortalContractPage />,
   },
   {
     path: '/admin',
