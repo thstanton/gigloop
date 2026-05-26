@@ -23,7 +23,9 @@ async function main() {
   await prisma.invoiceLineItem.deleteMany({ where: { userId: USER_ID } });
   await prisma.invoice.deleteMany({ where: { userId: USER_ID } });
   await prisma.performanceSet.deleteMany({ where: { userId: USER_ID } });
+  await prisma.bookingPerformanceFormat.deleteMany({ where: { userId: USER_ID } });
   await prisma.booking.deleteMany({ where: { userId: USER_ID } });
+  await prisma.performanceFormat.deleteMany({ where: { userId: USER_ID } });
   await prisma.contact.deleteMany({ where: { userId: USER_ID } });
   await prisma.song.deleteMany({ where: { userId: USER_ID } });
   await prisma.template.deleteMany({ where: { userId: USER_ID } });
@@ -325,6 +327,37 @@ async function main() {
     }),
   ]);
 
+  console.log('Seeding performance formats...');
+
+  const DEFAULT_GENRES = ['CONTEMPORARY', 'CLASSICAL', 'JAZZ', 'FILM_TV_MUSICALS'];
+  const formatDefs = [
+    { label: 'Wedding Ceremony',  category: 'WEDDING',    icon: 'heart',       keyMoments: ['Processional', 'Signing of the Register (Song 1)', 'Signing of the Register (Song 2)', 'Signing of the Register (Song 3)', 'Recessional'], defaultGenreSelection: DEFAULT_GENRES, slots: [{ label: 'Ceremony', duration: 30, order: 1 }] },
+    { label: 'Drinks Reception',  category: 'WEDDING',    icon: 'glass-water', keyMoments: [], defaultGenreSelection: DEFAULT_GENRES, slots: [{ label: 'Drinks Reception', duration: 90, order: 1 }] },
+    { label: 'Wedding Breakfast', category: 'WEDDING',    icon: 'utensils',    keyMoments: [], defaultGenreSelection: DEFAULT_GENRES, slots: [{ label: 'Wedding Breakfast', duration: 90, order: 1 }] },
+    { label: 'Evening Reception', category: 'WEDDING',    icon: 'moon',        keyMoments: ['First Dance'], defaultGenreSelection: DEFAULT_GENRES, slots: [{ label: 'Evening Reception', duration: 45, order: 1 }, { label: 'Evening Reception', duration: 45, order: 2 }] },
+    { label: 'Corporate Dinner',  category: 'CORPORATE',  icon: 'briefcase',   keyMoments: [], defaultGenreSelection: DEFAULT_GENRES, slots: [{ label: 'Drinks', duration: 60, order: 1 }, { label: 'Dinner', duration: 90, order: 2 }] },
+    { label: 'Background Music',  category: null,          icon: 'music',       keyMoments: [], defaultGenreSelection: DEFAULT_GENRES, slots: [{ label: 'Background Music', duration: 60, order: 1 }] },
+    { label: 'Solo Piano',        category: null,          icon: 'music-2',     keyMoments: [], defaultGenreSelection: DEFAULT_GENRES, slots: [{ label: 'Solo Piano', duration: 60, order: 1 }] },
+  ];
+
+  for (const fmt of formatDefs) {
+    await prisma.performanceFormat.create({
+      data: {
+        userId: USER_ID,
+        label: fmt.label,
+        category: fmt.category ?? undefined,
+        icon: fmt.icon,
+        keyMoments: fmt.keyMoments,
+        defaultGenreSelection: fmt.defaultGenreSelection,
+        slots: { create: fmt.slots.map((s) => ({ ...s, userId: USER_ID })) },
+        notes: null,
+      },
+    });
+  }
+
+  const allFormats = await prisma.performanceFormat.findMany({ where: { userId: USER_ID } });
+  const fmt = Object.fromEntries(allFormats.map((f) => [f.label, f.id]));
+
   console.log('Seeding bookings...');
 
   // 1. ENQUIRY — Sophie & Daniel, no venue yet, nothing done
@@ -358,9 +391,16 @@ async function main() {
 
   await prisma.performanceSet.createMany({
     data: [
-      { userId: USER_ID, bookingId: booking2.id, order: 1, duration: 45, startTime: '13:00', label: 'Ceremony' },
-      { userId: USER_ID, bookingId: booking2.id, order: 2, duration: 90, startTime: '14:00', label: 'Drinks Reception' },
-      { userId: USER_ID, bookingId: booking2.id, order: 3, duration: 60, startTime: '19:00', label: 'Dinner' },
+      { userId: USER_ID, bookingId: booking2.id, order: 1, duration: 45, startTime: '13:00', label: 'Ceremony',         performanceFormatId: fmt['Wedding Ceremony'] },
+      { userId: USER_ID, bookingId: booking2.id, order: 2, duration: 90, startTime: '14:00', label: 'Drinks Reception', performanceFormatId: fmt['Drinks Reception'] },
+      { userId: USER_ID, bookingId: booking2.id, order: 3, duration: 60, startTime: '19:00', label: 'Dinner',           performanceFormatId: fmt['Wedding Breakfast'] },
+    ],
+  });
+  await prisma.bookingPerformanceFormat.createMany({
+    data: [
+      { userId: USER_ID, bookingId: booking2.id, performanceFormatId: fmt['Wedding Ceremony'],  order: 1 },
+      { userId: USER_ID, bookingId: booking2.id, performanceFormatId: fmt['Drinks Reception'],  order: 2 },
+      { userId: USER_ID, bookingId: booking2.id, performanceFormatId: fmt['Wedding Breakfast'], order: 3 },
     ],
   });
 
@@ -412,8 +452,13 @@ async function main() {
 
   await prisma.performanceSet.createMany({
     data: [
-      { userId: USER_ID, bookingId: booking3.id, order: 1, duration: 30, startTime: '11:30', label: 'Pre-ceremony' },
-      { userId: USER_ID, bookingId: booking3.id, order: 2, duration: 25, startTime: '12:00', label: 'Ceremony' },
+      { userId: USER_ID, bookingId: booking3.id, order: 1, duration: 30, startTime: '11:30', label: 'Pre-ceremony', performanceFormatId: fmt['Wedding Ceremony'] },
+      { userId: USER_ID, bookingId: booking3.id, order: 2, duration: 25, startTime: '12:00', label: 'Ceremony',     performanceFormatId: fmt['Wedding Ceremony'] },
+    ],
+  });
+  await prisma.bookingPerformanceFormat.createMany({
+    data: [
+      { userId: USER_ID, bookingId: booking3.id, performanceFormatId: fmt['Wedding Ceremony'], order: 1 },
     ],
   });
 
@@ -480,8 +525,13 @@ async function main() {
 
   await prisma.performanceSet.createMany({
     data: [
-      { userId: USER_ID, bookingId: booking4.id, order: 1, duration: 60, startTime: '19:30', label: 'Drinks' },
-      { userId: USER_ID, bookingId: booking4.id, order: 2, duration: 90, startTime: '21:00', label: 'Dinner' },
+      { userId: USER_ID, bookingId: booking4.id, order: 1, duration: 60, startTime: '19:30', label: 'Drinks', performanceFormatId: fmt['Corporate Dinner'] },
+      { userId: USER_ID, bookingId: booking4.id, order: 2, duration: 90, startTime: '21:00', label: 'Dinner', performanceFormatId: fmt['Corporate Dinner'] },
+    ],
+  });
+  await prisma.bookingPerformanceFormat.createMany({
+    data: [
+      { userId: USER_ID, bookingId: booking4.id, performanceFormatId: fmt['Corporate Dinner'], order: 1 },
     ],
   });
 
@@ -550,9 +600,15 @@ async function main() {
 
   await prisma.performanceSet.createMany({
     data: [
-      { userId: USER_ID, bookingId: booking5.id, order: 1, duration: 30, startTime: '12:30', label: 'Pre-ceremony' },
-      { userId: USER_ID, bookingId: booking5.id, order: 2, duration: 30, startTime: '13:00', label: 'Ceremony' },
-      { userId: USER_ID, bookingId: booking5.id, order: 3, duration: 75, startTime: '14:30', label: 'Drinks Reception' },
+      { userId: USER_ID, bookingId: booking5.id, order: 1, duration: 30, startTime: '12:30', label: 'Pre-ceremony',    performanceFormatId: fmt['Wedding Ceremony'] },
+      { userId: USER_ID, bookingId: booking5.id, order: 2, duration: 30, startTime: '13:00', label: 'Ceremony',        performanceFormatId: fmt['Wedding Ceremony'] },
+      { userId: USER_ID, bookingId: booking5.id, order: 3, duration: 75, startTime: '14:30', label: 'Drinks Reception', performanceFormatId: fmt['Drinks Reception'] },
+    ],
+  });
+  await prisma.bookingPerformanceFormat.createMany({
+    data: [
+      { userId: USER_ID, bookingId: booking5.id, performanceFormatId: fmt['Wedding Ceremony'], order: 1 },
+      { userId: USER_ID, bookingId: booking5.id, performanceFormatId: fmt['Drinks Reception'], order: 2 },
     ],
   });
 
