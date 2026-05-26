@@ -90,7 +90,7 @@ export default function BookingsListPage() {
     <div className="px-6 py-8 max-w-6xl">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold text-foreground">Bookings</h1>
+        <h1 className="font-display text-2xl font-semibold text-foreground">Bookings</h1>
         <Button onClick={() => navigate('/admin/bookings/new')}>
           New booking
         </Button>

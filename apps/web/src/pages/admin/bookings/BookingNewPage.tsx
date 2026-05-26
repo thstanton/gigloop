@@ -95,7 +95,7 @@ export default function BookingNewPage() {
         Bookings
       </Link>
 
-      <h1 className="text-2xl font-semibold text-foreground mb-8">New booking</h1>
+      <h1 className="font-display text-2xl font-semibold text-foreground mb-8">New booking</h1>
 
       <form
         onSubmit={handleSubmit((values) => mutation.mutate(values))}

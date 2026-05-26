@@ -5,17 +5,29 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
-        serif: ['Playfair', 'serif']
+        sans: ['Commissioner', 'system-ui', 'sans-serif'],
+        serif: ['Playfair Display', 'serif'],
+        display: ['Playfair Display', 'serif'],
       },
       fontSize: {
-        xs: ['0.75rem', { lineHeight: '1.4' }],   // 12px
-        sm: ['0.875rem', { lineHeight: '1.5' }],  // 14px
-        base: ['1rem', { lineHeight: '1.5' }],    // 16px
-        lg: ['1.125rem', { lineHeight: '1.5' }],  // 18px
-        '2xl': ['1.5rem', { lineHeight: '1.4' }], // 24px
-        '3xl': ['1.875rem', { lineHeight: '1.3' }], // 30px
-        '4xl': ['2.25rem', { lineHeight: '1.2' }],  // 36px
+        xs: ['0.75rem', { lineHeight: '1.4' }],
+        sm: ['0.875rem', { lineHeight: '1.5' }],
+        base: ['1rem', { lineHeight: '1.5' }],
+        lg: ['1.125rem', { lineHeight: '1.5' }],
+        '2xl': ['1.5rem', { lineHeight: '1.4' }],
+        '3xl': ['1.875rem', { lineHeight: '1.3' }],
+        '4xl': ['2.25rem', { lineHeight: '1.2' }],
+      },
+      borderRadius: {
+        none: '0px',
+        sm: '2px',
+        DEFAULT: '2px',
+        md: '2px',
+        lg: '2px',
+        xl: '3px',
+        '2xl': '4px',
+        '3xl': '6px',
+        full: '9999px',
       },
       colors: {
         background: 'hsl(var(--background))',
@@ -31,6 +43,12 @@ const config: Config = {
           DEFAULT: 'hsl(var(--primary))',
           foreground: 'hsl(var(--primary-foreground))',
         },
+        chrome: {
+          DEFAULT: 'hsl(var(--chrome))',
+          foreground: 'hsl(var(--chrome-foreground))',
+          muted: 'hsl(var(--chrome-muted))',
+        },
+        dashboard: 'hsl(var(--dashboard-surface))',
         popover: {
           DEFAULT: 'hsl(var(--popover))',
           foreground: 'hsl(var(--popover-foreground))',

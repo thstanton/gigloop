@@ -77,7 +77,7 @@ export default function TemplatesListPage() {
 
   return (
     <div className="px-4 md:px-6 py-6 max-w-2xl">
-      <h1 className="text-2xl font-semibold text-foreground mb-6">Templates</h1>
+      <h1 className="font-display text-2xl font-semibold text-foreground mb-6">Templates</h1>
 
       <TemplateSection
         title="Email templates"

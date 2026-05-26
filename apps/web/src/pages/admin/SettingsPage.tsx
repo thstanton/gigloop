@@ -732,7 +732,7 @@ export default function SettingsPage() {
 
   return (
     <div className="px-6 py-8 max-w-2xl">
-      <h1 className="text-2xl font-semibold text-foreground mb-10">Settings</h1>
+      <h1 className="font-display text-2xl font-semibold text-foreground mb-10">Settings</h1>
       <div className="space-y-12">
         <PublicProfileSection profile={publicProfile} />
         <div className="border-t border-border" />

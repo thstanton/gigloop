@@ -30,7 +30,7 @@ export default function ContactNewPage() {
         Contacts
       </Link>
 
-      <h1 className="text-2xl font-semibold text-foreground mb-8">New contact</h1>
+      <h1 className="font-display text-2xl font-semibold text-foreground mb-8">New contact</h1>
 
       <ContactForm
         onSubmit={(values) => mutation.mutate(values)}

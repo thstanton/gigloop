@@ -338,7 +338,7 @@ export default function DashboardPage() {
 
   return (
     <div className="px-4 py-6 max-w-2xl space-y-4">
-      <h1 className="text-2xl font-semibold text-foreground">Dashboard</h1>
+      <h1 className="font-display text-2xl font-semibold text-foreground">Dashboard</h1>
 
       <Widget title="Actions">
         <ActionsWidget />

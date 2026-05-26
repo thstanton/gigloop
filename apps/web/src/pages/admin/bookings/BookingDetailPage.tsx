@@ -925,7 +925,7 @@ export default function BookingDetailPage() {
       {/* 1. Header */}
       <section>
         <div className="flex items-start justify-between gap-4">
-          <h1 className="text-2xl font-semibold text-foreground">{title}</h1>
+          <h1 className="font-display text-2xl font-semibold text-foreground">{title}</h1>
           <div className="flex items-center gap-2 flex-shrink-0">
             <a
               href={`/booking/${booking.portalToken}`}

@@ -138,7 +138,7 @@ export default function ContactDetailPage() {
 
       {/* Header */}
       <div className="flex items-start justify-between gap-4 mb-8">
-        <h1 className="text-2xl font-semibold text-foreground">{contact.name}</h1>
+        <h1 className="font-display text-2xl font-semibold text-foreground">{contact.name}</h1>
         <div className="flex items-center gap-2">
           <Button
             variant="outline"

@@ -69,10 +69,10 @@ function SidebarNavGroup({ items }: { items: NavItem[] }) {
             end={to === '/admin'}
             className={({ isActive }) =>
               cn(
-                'flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors duration-150 relative',
+                'flex items-center gap-3 px-3 py-2 rounded text-sm transition-colors duration-150',
                 isActive
-                  ? 'bg-surface text-foreground font-medium before:absolute before:left-0 before:top-1 before:bottom-1 before:w-0.5 before:bg-primary before:rounded-full'
-                  : 'text-muted hover:bg-surface hover:text-foreground font-normal',
+                  ? 'bg-chrome-foreground/10 text-chrome-foreground font-medium'
+                  : 'text-chrome-muted hover:bg-chrome-foreground/8 hover:text-chrome-foreground font-normal',
               )
             }
           >
@@ -118,16 +118,16 @@ function UserMenu() {
 
       <button
         onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-md hover:bg-surface transition-colors duration-150"
+        className="w-full flex items-center gap-2.5 px-3 py-2 rounded hover:bg-chrome-foreground/8 transition-colors duration-150"
       >
         <UserAvatar size="sm" />
         <div className="flex-1 text-left min-w-0">
-          <p className="text-sm font-medium text-foreground leading-tight truncate">{fullName}</p>
+          <p className="text-sm font-medium text-chrome-foreground leading-tight truncate">{fullName}</p>
         </div>
         <ChevronUp
           size={14}
           strokeWidth={1.75}
-          className={cn('text-muted flex-shrink-0 transition-transform duration-150', !open && 'rotate-180')}
+          className={cn('text-chrome-muted flex-shrink-0 transition-transform duration-150', !open && 'rotate-180')}
         />
       </button>
     </div>
@@ -179,16 +179,16 @@ function UserAvatar({ size = 'sm' }: { size?: 'sm' | 'md' }) {
 
 function Sidebar() {
   return (
-    <aside className="hidden md:flex fixed top-14 left-0 bottom-0 w-60 bg-background border-r border-border flex-col z-30">
+    <aside className="hidden md:flex fixed top-14 left-0 bottom-0 w-60 bg-chrome flex-col z-30">
       <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-5">
         <SidebarNavGroup items={primaryNav} />
         <div>
-          <div className="h-px bg-border mx-1 mb-3" />
+          <div className="h-px bg-chrome-muted/30 mx-1 mb-3" />
           <SidebarNavGroup items={secondaryNav} />
         </div>
       </nav>
 
-      <div className="px-2 py-3 border-t border-border flex-shrink-0">
+      <div className="px-2 py-3 border-t border-chrome-muted/30 flex-shrink-0">
         <UserMenu />
       </div>
     </aside>
@@ -199,14 +199,14 @@ function Sidebar() {
 
 function DesktopTopBar({ businessName, logoUrl, isLoading }: { businessName: string; logoUrl: string | null; isLoading: boolean }) {
   return (
-    <header className="hidden md:flex fixed top-0 inset-x-0 h-14 bg-background border-b border-border items-center px-6 z-30">
-      <span className="text-xl font-semibold text-foreground">GigMan</span>
+    <header className="hidden md:flex fixed top-0 inset-x-0 h-14 bg-chrome items-center px-6 z-30">
+      <span className="text-xl font-display font-semibold text-chrome-foreground tracking-wide">GigMan</span>
       <div className="ml-auto">
         {isLoading
-          ? <div className="h-3 w-28 bg-border rounded animate-pulse" />
+          ? <div className="h-3 w-28 bg-chrome-muted/40 rounded animate-pulse" />
           : logoUrl
             ? <img src={logoUrl} alt={businessName} className="h-8 max-w-32 object-contain" />
-            : <span className="text-sm text-muted">{businessName}</span>
+            : <span className="text-sm text-chrome-muted">{businessName}</span>
         }
       </div>
     </header>
@@ -217,8 +217,8 @@ function DesktopTopBar({ businessName, logoUrl, isLoading }: { businessName: str
 
 function MobileTopBar() {
   return (
-    <header className="md:hidden fixed top-0 inset-x-0 h-14 bg-background border-b border-border flex items-center px-4 z-20">
-      <span className="text-sm font-semibold text-foreground">GigMan</span>
+    <header className="md:hidden fixed top-0 inset-x-0 h-14 bg-chrome flex items-center px-4 z-20">
+      <span className="text-sm font-display font-semibold text-chrome-foreground tracking-wide">GigMan</span>
     </header>
   );
 }
@@ -238,7 +238,7 @@ function BottomTabBar() {
 
   return (
     <>
-      <nav className="md:hidden fixed bottom-0 inset-x-0 h-16 bg-background border-t border-border flex z-30">
+      <nav className="md:hidden fixed bottom-0 inset-x-0 h-16 bg-chrome border-t border-chrome-muted/30 flex z-30">
         {primaryNav.map(({ label, to, icon: Icon }) => (
           <NavLink
             key={to}
@@ -247,7 +247,7 @@ function BottomTabBar() {
             className={({ isActive }) =>
               cn(
                 'flex-1 flex flex-col items-center justify-center gap-1 transition-colors duration-150',
-                isActive ? 'text-primary' : 'text-muted',
+                isActive ? 'text-chrome-foreground' : 'text-chrome-muted',
               )
             }
           >
@@ -260,7 +260,7 @@ function BottomTabBar() {
           onClick={() => setMoreOpen(true)}
           className={cn(
             'flex-1 flex flex-col items-center justify-center gap-1 transition-colors duration-150',
-            moreIsActive ? 'text-primary' : 'text-muted',
+            moreIsActive ? 'text-chrome-foreground' : 'text-chrome-muted',
           )}
         >
           <MoreHorizontal size={22} strokeWidth={1.75} />
