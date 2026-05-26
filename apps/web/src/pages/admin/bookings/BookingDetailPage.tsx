@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@clerk/react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, CheckCircle2, Circle, AlertTriangle, Mail, Music, FileText, DollarSign, FolderOpen, ChevronDown, Check, Pencil, Plus, Send, Download, Heart, GlassWater, Utensils, Moon, Briefcase, Music2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckCircle2, Circle, AlertTriangle, Mail, Music, FileText, DollarSign, FolderOpen, ChevronDown, Check, Pencil, Plus, Send, Download, Heart, GlassWater, Utensils, Moon, Briefcase, Music2, Car, KeyRound, Speaker } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -430,6 +430,13 @@ function MusicFormSection({ booking, documents }: { booking: BookingDetail; docu
     );
   }
 
+  const sectionIconMap = new Map<string, string>(
+    (booking.performanceFormats ?? []).map((bpf) => [
+      bpf.performanceFormat.label,
+      bpf.performanceFormat.icon,
+    ]),
+  );
+
   const sectionMap = new Map<string, KeyMoment[]>();
   for (const km of config.keyMoments) {
     if (!sectionMap.has(km.section)) sectionMap.set(km.section, []);
@@ -450,7 +457,7 @@ function MusicFormSection({ booking, documents }: { booking: BookingDetail; docu
           </button>
         }
       >
-        <div className="space-y-3">
+        <div className="space-y-4">
           {booking.hasMusicFormResponse && (
             <button
               type="button"
@@ -463,7 +470,10 @@ function MusicFormSection({ booking, documents }: { booking: BookingDetail; docu
           )}
           {Array.from(sectionMap.entries()).map(([section, moments]) => (
             <div key={section}>
-              <p className="text-xs font-medium text-muted uppercase tracking-wide mb-1">{section}</p>
+              <div className="flex items-center gap-1.5 text-sm font-medium text-foreground mb-1">
+                <FormatIcon icon={sectionIconMap.get(section) ?? 'music'} />
+                {section}
+              </div>
               <div className="space-y-0.5">
                 {moments.map((km, i) => (
                   <p key={i} className="text-sm text-foreground">{km.label}</p>
@@ -473,7 +483,10 @@ function MusicFormSection({ booking, documents }: { booking: BookingDetail; docu
           ))}
           {config.enabledGenres.length > 0 && (
             <div>
-              <p className="text-xs font-medium text-muted uppercase tracking-wide mb-1">Genres</p>
+              <div className="flex items-center gap-1.5 text-sm font-medium text-foreground mb-1">
+                <Music2 size={14} />
+                Genres
+              </div>
               <p className="text-sm text-foreground">
                 {config.enabledGenres
                   .map((g) => GENRE_LABELS[g as keyof typeof GENRE_LABELS] ?? g)
@@ -602,22 +615,31 @@ function VenueCard({ venue, linkState }: { venue: Contact; linkState?: Record<st
         <p className="text-sm text-muted mt-0.5 whitespace-pre-wrap">{venue.address}</p>
       )}
       {(venue.parkingInfo || venue.accessInfo || venue.equipmentAvailable) && (
-        <div className="mt-3 pt-3 border-t border-border space-y-2.5">
+        <div className="mt-3 pt-3 border-t border-border space-y-3">
           {venue.parkingInfo && (
             <div>
-              <p className="text-xs font-medium text-muted uppercase tracking-wide mb-0.5">Parking</p>
+              <div className="flex items-center gap-1.5 text-sm font-medium text-foreground mb-0.5">
+                <Car size={14} />
+                Parking
+              </div>
               <p className="text-sm text-foreground">{venue.parkingInfo}</p>
             </div>
           )}
           {venue.accessInfo && (
             <div>
-              <p className="text-xs font-medium text-muted uppercase tracking-wide mb-0.5">Access</p>
+              <div className="flex items-center gap-1.5 text-sm font-medium text-foreground mb-0.5">
+                <KeyRound size={14} />
+                Access
+              </div>
               <p className="text-sm text-foreground">{venue.accessInfo}</p>
             </div>
           )}
           {venue.equipmentAvailable && (
             <div>
-              <p className="text-xs font-medium text-muted uppercase tracking-wide mb-0.5">Equipment</p>
+              <div className="flex items-center gap-1.5 text-sm font-medium text-foreground mb-0.5">
+                <Speaker size={14} />
+                Equipment
+              </div>
               <p className="text-sm text-foreground">{venue.equipmentAvailable}</p>
             </div>
           )}
