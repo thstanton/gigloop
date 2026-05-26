@@ -1131,10 +1131,10 @@ export default function BookingDetailPage() {
               <p className="text-xs font-medium text-muted uppercase tracking-wide">Invoices</p>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    <Plus size={14} className="mr-1.5" />
+                  <button type="button" className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors">
+                    <Plus size={12} />
                     Add invoice
-                  </Button>
+                  </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem
@@ -1248,10 +1248,10 @@ export default function BookingDetailPage() {
           <section>
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-semibold text-foreground">Communications</h2>
-              <Button variant="outline" size="sm" onClick={() => openCompose()}>
-                <Mail size={14} className="mr-1.5" />
+              <button type="button" onClick={() => openCompose()} className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors">
+                <Mail size={12} />
                 Send email
-              </Button>
+              </button>
             </div>
             {communications.length === 0 ? (
               <div className="flex items-center gap-2 text-muted py-1">
