@@ -268,6 +268,30 @@ export interface UpdateSongInput {
 }
 
 // ─────────────────────────────────────────
+// Performance Formats
+// ─────────────────────────────────────────
+
+export interface PerformanceFormatSlot {
+  id: string;
+  label: string | null;
+  duration: number;
+  order: number;
+}
+
+export interface PerformanceFormat {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  label: string;
+  category: string | null;
+  icon: string;
+  keyMoments: string[];
+  defaultGenreSelection: string[];
+  notes: string | null;
+  slots: PerformanceFormatSlot[];
+}
+
+// ─────────────────────────────────────────
 // Documents
 // ─────────────────────────────────────────
 

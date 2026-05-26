@@ -146,6 +146,7 @@ model Booking {
   referrer   Contact? @relation("BookingReferrer", fields: [referrerId], references: [id], onDelete: Restrict)
 
   sets              PerformanceSet[]
+  performanceFormats BookingPerformanceFormat[]
   invoices          Invoice[]
   communications    Communication[]
   documents         Document[]
@@ -172,8 +173,68 @@ model PerformanceSet {
   bookingId String
   booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 
+  performanceFormatId String?
+  performanceFormat   PerformanceFormat? @relation(fields: [performanceFormatId], references: [id], onDelete: SetNull)
+
   @@index([userId])
   @@index([bookingId])
+  @@index([performanceFormatId])
+}
+
+model PerformanceFormat {
+  id        String   @id @default(uuid())
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  label                 String
+  category              String?
+  icon                  String
+  keyMoments            String[]
+  defaultGenreSelection String[]
+  notes                 String?
+
+  slots          PerformanceFormatSlot[]
+  bookingFormats BookingPerformanceFormat[]
+  sets           PerformanceSet[]
+
+  @@index([userId])
+}
+
+model PerformanceFormatSlot {
+  id        String   @id @default(uuid())
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  label    String?
+  duration Int
+  order    Int
+
+  performanceFormatId String
+  performanceFormat   PerformanceFormat @relation(fields: [performanceFormatId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([performanceFormatId])
+}
+
+model BookingPerformanceFormat {
+  id        String   @id @default(uuid())
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  order Int
+
+  bookingId String
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  performanceFormatId String
+  performanceFormat   PerformanceFormat @relation(fields: [performanceFormatId], references: [id], onDelete: Restrict)
+
+  @@index([userId])
+  @@index([bookingId])
+  @@index([performanceFormatId])
 }
 
 model Invoice {
@@ -301,7 +362,7 @@ model MusicFormConfig {
   updatedAt DateTime @updatedAt
 
   enabledGenres String[]
-  keyMoments    String[]
+  keyMoments    Json     @default("[]")
 
   bookingId String  @unique
   booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)

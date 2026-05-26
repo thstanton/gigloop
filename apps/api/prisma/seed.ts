@@ -437,7 +437,13 @@ async function main() {
       userId: USER_ID,
       bookingId: booking3.id,
       enabledGenres: ['CONTEMPORARY', 'CLASSICAL', 'JAZZ'],
-      keyMoments: ['Processional', 'Signing of the Register', 'Recessional'],
+      keyMoments: [
+        { label: 'Processional', section: 'Ceremony' },
+        { label: 'Signing of the Register (Song 1)', section: 'Signing of the Register' },
+        { label: 'Signing of the Register (Song 2)', section: 'Signing of the Register' },
+        { label: 'Signing of the Register (Song 3)', section: 'Signing of the Register' },
+        { label: 'Recessional', section: 'Ceremony' },
+      ],
     },
   });
 

@@ -12,9 +12,10 @@ import { SongsModule } from './songs/songs.module';
 import { StorageModule } from './storage/storage.module';
 import { TemplatesModule } from './templates/templates.module';
 import { UserProfileModule } from './user-profile/user-profile.module';
+import { PerformanceFormatsModule } from './performance-formats/performance-formats.module';
 import { PortalModule } from './portal/portal.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, HealthModule, StorageModule, MailModule, UserProfileModule, ContactsModule, BookingsModule, SongsModule, InvoicesModule, TemplatesModule, CommunicationsModule, DocumentsModule, PortalModule],
+  imports: [PrismaModule, AuthModule, HealthModule, StorageModule, MailModule, UserProfileModule, ContactsModule, BookingsModule, SongsModule, InvoicesModule, TemplatesModule, CommunicationsModule, DocumentsModule, PortalModule, PerformanceFormatsModule],
 })
 export class AppModule {}
