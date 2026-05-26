@@ -22,7 +22,7 @@ import InvoiceSheet from '@/features/invoices/InvoiceSheet';
 import MarkSentDialog from '@/features/invoices/MarkSentDialog';
 import { buildChecklist } from '@/lib/buildChecklist';
 import { toast } from '@/lib/hooks/use-toast';
-import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from '@/lib/api';
+import { apiGet, apiPatch, apiPost, apiPut } from '@/lib/api';
 import {
   formatDate,
   formatCurrency,
@@ -38,14 +38,12 @@ import {
 } from '@/components/ui/sheet';
 import type {
   BookingDetail,
-  BookingPerformanceFormatSummary,
   BookingStatus,
   Contact,
   Document,
   KeyMoment,
   MusicFormConfig,
   MusicFormResponse,
-  PerformanceFormat,
   PerformanceSet,
   Invoice,
   Communication,
@@ -138,11 +136,14 @@ function SectionHeader({ label }: { label: string }) {
 
 // ─── Card ─────────────────────────────────────────────────────────────────────
 
-function Card({ title, children }: { title?: string; children: React.ReactNode }) {
+function Card({ title, action, children }: { title?: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="bg-background border border-border rounded-lg p-4">
       {title && (
-        <p className="text-xs font-medium text-muted uppercase tracking-wide mb-3">{title}</p>
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-xs font-medium text-muted uppercase tracking-wide">{title}</p>
+          {action}
+        </div>
       )}
       {children}
     </div>
@@ -209,73 +210,8 @@ function FormatIcon({ icon, size = 14 }: { icon: string; size?: number }) {
   return <Icon size={size} />;
 }
 
-function SetRow({
-  set,
-  onUpdate,
-}: {
-  set: PerformanceSet;
-  onUpdate: (setId: string, startTime: string | null) => void;
-}) {
-  return (
-    <div className="flex items-center gap-3 py-2 border-b border-border last:border-0">
-      <span className="text-sm text-muted w-4 flex-shrink-0 text-right">{set.order}</span>
-      <span className="flex-1 text-sm text-foreground">
-        {[set.label, formatDuration(set.duration)].filter(Boolean).join(' · ')}
-      </span>
-      <input
-        type="time"
-        defaultValue={set.startTime ?? ''}
-        onBlur={(e) => {
-          const val = e.target.value || null;
-          if (val !== set.startTime) onUpdate(set.id, val);
-        }}
-        className="text-sm text-muted border border-border rounded px-2 py-0.5 w-24 bg-background"
-        aria-label={`Start time for ${set.label ?? 'set'}`}
-      />
-    </div>
-  );
-}
-
 function PerformanceSection({ booking }: { booking: BookingDetail }) {
-  const queryClient = useQueryClient();
-  const [addOpen, setAddOpen] = useState(false);
-
-  const { data: allFormats = [], isLoading: formatsLoading } = useQuery({
-    queryKey: ['performance-formats'],
-    queryFn: () => apiGet<PerformanceFormat[]>('/performance-formats'),
-    enabled: addOpen,
-  });
-
-  const appliedFormatIds = new Set((booking.performanceFormats ?? []).map((bpf) => bpf.performanceFormatId));
-  const availableFormats = allFormats.filter((f) => !appliedFormatIds.has(f.id));
-
-  const updateSet = useMutation({
-    mutationFn: ({ setId, startTime }: { setId: string; startTime: string | null }) =>
-      apiPatch(`/bookings/${booking.id}/sets/${setId}`, { startTime }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['booking', booking.id] }),
-  });
-
-  const applyFormat = useMutation({
-    mutationFn: (formatId: string) =>
-      apiPost(`/bookings/${booking.id}/formats`, { formatId }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['booking', booking.id] });
-      setAddOpen(false);
-    },
-  });
-
-  const removeFormat = useMutation({
-    mutationFn: (bookingFormatId: string) =>
-      apiDelete(`/bookings/${booking.id}/formats/${bookingFormatId}`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['booking', booking.id] }),
-  });
-
-  function handleRemove(bpf: BookingPerformanceFormatSummary) {
-    const sets = (booking.sets ?? []).filter((s) => s.performanceFormatId === bpf.performanceFormatId);
-    const hasStartTimes = sets.some((s) => s.startTime);
-    if (hasStartTimes && !window.confirm(`Remove "${bpf.performanceFormat.label}" and its ${sets.length} set(s)?`)) return;
-    removeFormat.mutate(bpf.id);
-  }
+  const [, setSearchParams] = useSearchParams();
 
   const setsByFormatId = new Map<string | null, PerformanceSet[]>();
   for (const set of booking.sets ?? []) {
@@ -283,13 +219,31 @@ function PerformanceSection({ booking }: { booking: BookingDetail }) {
     if (!setsByFormatId.has(key)) setsByFormatId.set(key, []);
     setsByFormatId.get(key)!.push(set);
   }
-
   const unassigned = setsByFormatId.get(null) ?? [];
 
+  function openDrawer() {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('edit', 'true');
+      return next;
+    });
+  }
+
   return (
-    <Card title="Performance">
+    <Card
+      title="Performance"
+      action={
+        <button
+          type="button"
+          onClick={openDrawer}
+          className="text-xs text-primary hover:text-primary/80 transition-colors"
+        >
+          Edit
+        </button>
+      }
+    >
       {(booking.performanceFormats ?? []).length === 0 && unassigned.length === 0 && (
-        <div className="flex items-center gap-2 text-muted py-1 mb-3">
+        <div className="flex items-center gap-2 text-muted py-1">
           <Music size={14} />
           <span className="text-sm">No formats applied</span>
         </div>
@@ -299,28 +253,19 @@ function PerformanceSection({ booking }: { booking: BookingDetail }) {
         const sets = setsByFormatId.get(bpf.performanceFormatId) ?? [];
         return (
           <div key={bpf.id} className="mb-4 last:mb-0">
-            <div className="flex items-center justify-between mb-1">
-              <div className="flex items-center gap-1.5 text-sm font-medium text-foreground">
-                <FormatIcon icon={bpf.performanceFormat.icon} />
-                {bpf.performanceFormat.label}
-              </div>
-              <button
-                type="button"
-                onClick={() => handleRemove(bpf)}
-                disabled={removeFormat.isPending}
-                className="text-muted hover:text-status-cancelled transition-colors disabled:opacity-50"
-                aria-label={`Remove ${bpf.performanceFormat.label}`}
-              >
-                <Trash2 size={13} />
-              </button>
+            <div className="flex items-center gap-1.5 text-sm font-medium text-foreground mb-1">
+              <FormatIcon icon={bpf.performanceFormat.icon} />
+              {bpf.performanceFormat.label}
             </div>
             {sets.map((set) => (
-              <SetRow
-                key={set.id}
-                set={set}
-
-                onUpdate={(setId, startTime) => updateSet.mutate({ setId, startTime })}
-              />
+              <div key={set.id} className="flex items-center gap-3 py-1.5 border-b border-border last:border-0">
+                <span className="flex-1 text-sm text-foreground">
+                  {[set.label, formatDuration(set.duration)].filter(Boolean).join(' · ')}
+                </span>
+                {set.startTime && (
+                  <span className="text-sm text-muted flex-shrink-0">{set.startTime}</span>
+                )}
+              </div>
             ))}
           </div>
         );
@@ -330,54 +275,15 @@ function PerformanceSection({ booking }: { booking: BookingDetail }) {
         <div className="mb-4">
           <p className="text-xs text-muted mb-1">Other sets</p>
           {unassigned.map((set) => (
-            <SetRow
-              key={set.id}
-              set={set}
-              onUpdate={(setId, startTime) => updateSet.mutate({ setId, startTime })}
-            />
-          ))}
-        </div>
-      )}
-
-      {!addOpen ? (
-        <button
-          type="button"
-          onClick={() => setAddOpen(true)}
-          className="inline-flex items-center gap-1 text-sm text-primary hover:text-primary/80 transition-colors mt-2"
-        >
-          <Plus size={14} />
-          Add format
-        </button>
-      ) : (
-        <div className="mt-3 space-y-2">
-          <p className="text-xs text-muted font-medium uppercase tracking-wide">Select a format</p>
-          {formatsLoading ? (
-            <p className="text-sm text-muted">Loading…</p>
-          ) : availableFormats.length === 0 ? (
-            <p className="text-sm text-muted">All formats already applied.</p>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {availableFormats.map((fmt) => (
-                <button
-                  key={fmt.id}
-                  type="button"
-                  disabled={applyFormat.isPending}
-                  onClick={() => applyFormat.mutate(fmt.id)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border text-sm hover:border-primary transition-colors disabled:opacity-50"
-                >
-                  <FormatIcon icon={fmt.icon} />
-                  {fmt.label}
-                </button>
-              ))}
+            <div key={set.id} className="flex items-center gap-3 py-1.5 border-b border-border last:border-0">
+              <span className="flex-1 text-sm text-foreground">
+                {[set.label, formatDuration(set.duration)].filter(Boolean).join(' · ')}
+              </span>
+              {set.startTime && (
+                <span className="text-sm text-muted flex-shrink-0">{set.startTime}</span>
+              )}
             </div>
-          )}
-          <button
-            type="button"
-            onClick={() => setAddOpen(false)}
-            className="text-sm text-muted hover:text-foreground transition-colors"
-          >
-            Cancel
-          </button>
+          ))}
         </div>
       )}
     </Card>

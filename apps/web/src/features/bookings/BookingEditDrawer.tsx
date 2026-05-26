@@ -16,6 +16,7 @@ import {
   type BookingFormValues,
 } from './BookingFormFields';
 import { apiDelete, apiPatch } from '@/lib/api';
+import PerformanceEditor from './PerformanceEditor';
 import type { BookingDetail, EventType, BookingStatus } from '@/types/api';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -113,56 +114,59 @@ export default function BookingEditDrawer({ booking }: Props) {
           <SheetTitle>Edit booking</SheetTitle>
         </SheetHeader>
 
-        <form
-          onSubmit={handleSubmit((values) => mutation.mutate(values))}
-          className="flex-1 overflow-y-auto px-6 py-6"
-        >
-          <BookingFormFields
-            control={control}
-            register={register}
-            errors={errors}
-          />
+        <div className="flex-1 overflow-y-auto px-6 py-6">
+          <form onSubmit={handleSubmit((values) => mutation.mutate(values))}>
+            <BookingFormFields
+              control={control}
+              register={register}
+              errors={errors}
+            />
 
-          {mutation.isError && (
-            <p className="mt-4 text-sm text-status-cancelled">
-              Failed to save changes. Please try again.
-            </p>
-          )}
+            {mutation.isError && (
+              <p className="mt-4 text-sm text-status-cancelled">
+                Failed to save changes. Please try again.
+              </p>
+            )}
 
-          <div className="flex gap-3 mt-6">
-            <Button type="submit" disabled={mutation.isPending}>
-              {mutation.isPending ? 'Saving...' : 'Save changes'}
-            </Button>
-            <Button type="button" variant="outline" onClick={close}>
-              Cancel
-            </Button>
-          </div>
+            <div className="flex gap-3 mt-6">
+              <Button type="submit" disabled={mutation.isPending}>
+                {mutation.isPending ? 'Saving...' : 'Save changes'}
+              </Button>
+              <Button type="button" variant="outline" onClick={close}>
+                Cancel
+              </Button>
+            </div>
+
+            <div className="mt-6 pt-6 border-t border-border">
+              {deleteConfirm ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="text-status-cancelled border-status-cancelled hover:bg-status-cancelled/8"
+                  disabled={deleteMutation.isPending}
+                  onClick={() => deleteMutation.mutate()}
+                >
+                  {deleteMutation.isPending ? 'Cancelling…' : 'Confirm cancellation'}
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="text-status-cancelled border-status-cancelled hover:bg-status-cancelled/8"
+                  onClick={() => setDeleteConfirm(true)}
+                >
+                  Cancel booking
+                </Button>
+              )}
+            </div>
+          </form>
 
           <div className="mt-6 pt-6 border-t border-border">
-            {deleteConfirm ? (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="text-status-cancelled border-status-cancelled hover:bg-status-cancelled/8"
-                disabled={deleteMutation.isPending}
-                onClick={() => deleteMutation.mutate()}
-              >
-                {deleteMutation.isPending ? 'Cancelling…' : 'Confirm cancellation'}
-              </Button>
-            ) : (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="text-status-cancelled border-status-cancelled hover:bg-status-cancelled/8"
-                onClick={() => setDeleteConfirm(true)}
-              >
-                Cancel booking
-              </Button>
-            )}
+            <PerformanceEditor booking={booking} />
           </div>
-        </form>
+        </div>
       </SheetContent>
     </Sheet>
   );

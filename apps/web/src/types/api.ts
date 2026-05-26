@@ -178,6 +178,7 @@ export interface CreateSetInput {
   duration: number;
   startTime?: string;
   label?: string;
+  performanceFormatId?: string;
 }
 
 export interface UpdateSetInput {
