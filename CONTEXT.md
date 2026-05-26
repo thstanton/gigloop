@@ -40,6 +40,7 @@ Status transitions are not enforced by the API — a Booking can move freely bet
 - **customerId** (required FK → Contact)
 - **venueId** (optional FK → Contact): venue address/info lives on the Contact record, not duplicated
 - **referrerId** (optional FK → Contact)
+- **contractContent** (optional): per-booking contract body stored as Tiptap JSON; populated by the "Create contract" action with all variables already substituted as plain text; editable until the contract email is sent, read-only thereafter; authoritative source for what the client reads on the [[Portal]] (the template is not re-rendered at portal time). See ADR-0013.
 - **sets**: ordered list of [[Set]] entities
 - **songList** (optional): song requirements for the booking — deferred to [[song-library]] feature
 
@@ -176,7 +177,7 @@ A string value categorising Songs: `CONTEMPORARY | CLASSICAL | JAZZ | FILM_TV_MU
 ### BookingChecklist
 A computed, context-sensitive list of actions for a [[Booking]]. Not a stored entity — derived entirely from existing booking state. Displayed on the Booking detail page and shared as the "required actions" content in the [[DigestNotification]].
 
-**Items (in order):** Send quote, Create deposit invoice, Send contract/deposit email, Contract signed, Deposit received, Create balance invoice, Send music form invite, Song requests received, Send thank you.
+**Items (in order):** Send quote, Create deposit invoice, Create contract, Send contract/deposit email, Contract signed, Deposit received, Create balance invoice, Send music form invite, Song requests received, Send thank you.
 
 Each item has one of four states:
 - **Done** — completed; shown with a tick and muted text
@@ -190,6 +191,7 @@ A Communication only counts as "Done" if `status = SENT`. `PENDING` and `FAILED`
 |---|---|---|---|
 | Send quote | `quote` [[Communication]] with status SENT exists | most recent `quote` Communication is FAILED | status ≥ CONFIRMED |
 | Create deposit invoice | deposit [[Invoice]] exists (isDeposit=true) | — | deposit tracking resolves to NONE |
+| Create contract | `contractContent` is non-null | — | `contractSignedAt` set |
 | Send contract/deposit email | `contract_cover` or `contract_and_deposit_cover` Communication with status SENT exists | most recent such Communication is FAILED | `contractSignedAt` set AND (`depositReceivedAt` set OR deposit tracking resolves to NONE) |
 | Contract signed | `contractSignedAt` set | — | status is ENQUIRY OR status ≥ SETTLED |
 | Deposit received | `depositReceivedAt` set | — | deposit tracking resolves to NONE OR status is ENQUIRY |
@@ -237,7 +239,7 @@ The client-facing public interface at `/booking/:token`. Bypasses Clerk auth —
 
 **API calls:** three endpoint groups, each scoped to a route:
 - `GET /booking/:token` — returns: booking summary fields (date, fee, title, customerName, venueName, sets), publicProfile (full), contractSignedAt (timestamp or null), signedContractUrl (R2 public URL or null), hasMusicForm (boolean)
-- `GET /booking/:token/contract` — returns `{ content: TiptapJSON, title: string }` where `content` is the contract template's Tiptap JSON with variables already substituted as plain text nodes (server-side). The frontend renders using the Tiptap React viewer — no `dangerouslySetInnerHTML`, XSS structurally impossible.
+- `GET /booking/:token/contract` — returns `{ content: TiptapJSON, title: string }` where `content` is `Booking.contractContent` (variables already substituted at creation time). Returns 404 if `contractContent` is null. The frontend renders using the Tiptap React viewer — no `dangerouslySetInnerHTML`, XSS structurally impossible.
 - `POST /booking/:token/sign` — signature submission; body: `{ signature: string }` (base64-encoded PNG — same format for draw and type methods; the frontend renders typed signatures to canvas before submission). The API extracts the client IP from `X-Forwarded-For` (fallback: socket address), stores it in `Booking.contractSignedFromIp` (new nullable field, requires migration), and includes it in the signed PDF signature section.
 - `GET /booking/:token/music` — returns [[MusicFormConfig]] (keyMoments with section labels, enabledGenres) + musician's song library filtered to enabled genres; also returns existing [[MusicFormResponse]] if already submitted (to pre-populate a re-submission)
 - `POST /booking/:token/music` — music form submission; body: `{ selectedSongIds: string[], specialRequests: { key: string, songId?: string, freeText?: string }[], notes?: string }`; generates SONG_LIST PDF, stores in R2, sends notification email to musician
@@ -263,7 +265,7 @@ A generated PDF stored in Cloudflare R2, associated with a Booking. Three types 
 
 **Invoice PDF:** generated at invoice send time (`POST /invoices/:id/send`), stored in R2, and attached to the outbound email. Uses a fixed `@react-pdf/renderer` layout with Tiptap-JSON-driven content sections (variable substitution + line items table). Balance invoices include a deposit deduction section (subtotal, less deposit, balance due) when a deposit [[Invoice]] exists on the booking.
 
-**Signed contract PDF:** generated only after the client signs via the [[Portal]] — a drawn or typed signature is captured on a canvas, embedded into a PDF, and stored in R2. No unsigned contract PDF is ever generated or stored. The [[Portal]] renders the contract content as HTML (from the Tiptap template) for the client to read before signing. See ADR-0001.
+**Signed contract PDF:** generated only after the client signs via the [[Portal]] — a drawn or typed signature is captured on a canvas, embedded into a PDF, and stored in R2. No unsigned contract PDF is ever generated or stored. The [[Portal]] renders `Booking.contractContent` (Tiptap JSON, variables pre-substituted at creation time) as HTML for the client to read before signing — the contract template is not re-rendered at portal time. See ADR-0001 and ADR-0013.
 
 The signed contract PDF is generated using pdfmake (same library as invoices) via a `renderTiptapToPdfmake` converter that maps Tiptap JSON nodes (paragraphs, bold, italic, headings) directly to pdfmake content — no HTML→PDF step needed. Variable substitution is applied before conversion. The PDF structure is: musician header (name/logo), contract body, signature section (customer name, timestamp, signature image).
 
