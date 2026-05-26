@@ -17,10 +17,12 @@
     --primary: 152 45% 25%;
     --primary-foreground: 120 30% 95%;
 
-    /* App chrome — darker forest green for sidebar + mobile top bar */
+    /* App chrome — top bar + mobile top bar */
     --chrome: 152 50% 17%;
     --chrome-foreground: 120 25% 92%;
     --chrome-muted: 140 18% 60%;
+    /* Desktop sidebar — deeper shade */
+    --chrome-sidebar: 152 55% 11%;
 
     /* Dashboard background — deeper warm parchment */
     --dashboard-surface: 35 35% 91%;
@@ -63,7 +65,8 @@
 @layer utilities {
   .font-display { font-family: 'Playfair Display', serif; }
 
-  .bg-chrome    { background-color: hsl(var(--chrome)); }
+  .bg-chrome         { background-color: hsl(var(--chrome)); }
+  .bg-chrome-sidebar { background-color: hsl(var(--chrome-sidebar)); }
   .bg-dashboard { background-color: hsl(var(--dashboard-surface)); }
 
   .text-chrome-foreground { color: hsl(var(--chrome-foreground)); }

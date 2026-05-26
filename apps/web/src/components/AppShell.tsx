@@ -179,7 +179,7 @@ function UserAvatar({ size = 'sm' }: { size?: 'sm' | 'md' }) {
 
 function Sidebar() {
   return (
-    <aside className="hidden md:flex fixed top-14 left-0 bottom-0 w-60 bg-chrome flex-col z-30">
+    <aside className="hidden md:flex fixed top-14 left-0 bottom-0 w-60 bg-chrome-sidebar flex-col z-30">
       <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-5">
         <SidebarNavGroup items={primaryNav} />
         <div>
