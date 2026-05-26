@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@clerk/react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, CheckCircle2, Circle, AlertTriangle, Mail, Music, FileText, DollarSign, FolderOpen, ChevronDown, Check, Pencil, Plus, Send, Download, Eye, Heart, GlassWater, Utensils, Moon, Briefcase, Music2, Car, KeyRound, Speaker } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckCircle2, Circle, AlertTriangle, Mail, Music, FileText, DollarSign, FolderOpen, ChevronDown, Check, Pencil, Plus, Send, Download, Eye, Lock, Heart, GlassWater, Utensils, Moon, Briefcase, Music2, Car, KeyRound, Speaker } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -1193,6 +1193,8 @@ export default function BookingDetailPage() {
                         <CheckCircle2 size={16} className="text-status-confirmed flex-shrink-0" />
                       ) : item.state === 'failed' ? (
                         <AlertTriangle size={16} className="text-status-cancelled flex-shrink-0" />
+                      ) : item.state === 'blocked' ? (
+                        <Lock size={16} className="text-muted flex-shrink-0" />
                       ) : (
                         <Circle size={16} className="text-muted flex-shrink-0" />
                       )}
@@ -1203,6 +1205,8 @@ export default function BookingDetailPage() {
                               ? 'text-sm text-muted line-through'
                               : item.state === 'failed'
                               ? 'text-sm text-status-cancelled'
+                              : item.state === 'blocked'
+                              ? 'text-sm text-muted'
                               : 'text-sm text-foreground'
                           }
                         >
@@ -1210,6 +1214,9 @@ export default function BookingDetailPage() {
                         </span>
                         {item.state === 'failed' && (
                           <p className="text-xs text-status-cancelled">Last send failed</p>
+                        )}
+                        {item.state === 'blocked' && item.hint && (
+                          <p className="text-xs text-muted">{item.hint}</p>
                         )}
                       </div>
                     </div>

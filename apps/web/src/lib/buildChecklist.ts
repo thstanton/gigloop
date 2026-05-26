@@ -1,12 +1,13 @@
 import type { BookingDetail, Communication, Invoice } from '@/types/api';
 import { statusGte } from '@/lib/constants';
 
-export type ChecklistState = 'done' | 'outstanding' | 'failed';
+export type ChecklistState = 'done' | 'outstanding' | 'failed' | 'blocked';
 
 export interface ChecklistItem {
   key: string;
   label: string;
   state: ChecklistState;
+  hint?: string;
   shortcutTemplateType?: string;
   shortcutAction?: 'create_deposit_invoice' | 'create_balance_invoice';
   shortcutMarkDone?: 'mark_contract_signed' | 'mark_deposit_received';
@@ -44,6 +45,8 @@ export function buildChecklist(
     done: boolean;
     failed: boolean;
     irrelevant: boolean;
+    blocked?: boolean;
+    hint?: string;
     shortcutType?: string;
     shortcutAction?: ChecklistItem['shortcutAction'];
     shortcutMarkDone?: ChecklistItem['shortcutMarkDone'];
@@ -71,6 +74,13 @@ export function buildChecklist(
       shortcutAction: 'create_deposit_invoice',
     },
     {
+      key: 'create_contract',
+      label: 'Create contract',
+      done: booking.contractContent !== null,
+      failed: false,
+      irrelevant: !!booking.contractSignedAt,
+    },
+    {
       key: 'send_contract',
       label: 'Send contract & deposit email',
       done: hasSent('contract_cover', 'contract_and_deposit_cover'),
@@ -78,6 +88,8 @@ export function buildChecklist(
       irrelevant:
         !!booking.contractSignedAt &&
         (!!booking.depositReceivedAt || !trackDeposit),
+      blocked: booking.contractContent === null,
+      hint: 'Create a contract first',
       shortcutType: contractShortcutType,
     },
     {
@@ -131,10 +143,11 @@ export function buildChecklist(
 
   return raw
     .filter((item) => !item.irrelevant)
-    .map(({ key, label, done, failed, shortcutType, shortcutAction, shortcutMarkDone }) => ({
+    .map(({ key, label, done, failed, blocked, hint, shortcutType, shortcutAction, shortcutMarkDone }) => ({
       key,
       label,
-      state: (done ? 'done' : failed ? 'failed' : 'outstanding') as ChecklistState,
+      state: (done ? 'done' : blocked ? 'blocked' : failed ? 'failed' : 'outstanding') as ChecklistState,
+      hint: blocked ? hint : undefined,
       shortcutTemplateType: shortcutType,
       shortcutAction,
       shortcutMarkDone,
