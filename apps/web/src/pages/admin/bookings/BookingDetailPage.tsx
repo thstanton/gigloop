@@ -410,8 +410,15 @@ function MusicFormSection({ booking, documents }: { booking: BookingDetail; docu
   const [localGenres, setLocalGenres] = useState<string[]>([]);
 
   function openEditor() {
-    setLocalKeyMoments(config?.keyMoments ?? []);
-    setLocalGenres(config?.enabledGenres ?? []);
+    const existing = config?.keyMoments ?? [];
+    const existingKeys = new Set(existing.map((km) => `${km.section}::${km.label}`));
+    const fromFormats: KeyMoment[] = (booking.performanceFormats ?? []).flatMap((bpf) =>
+      bpf.performanceFormat.keyMoments.map((km) => ({ label: km, section: bpf.performanceFormat.label })),
+    );
+    const merged = [...existing, ...fromFormats.filter((km) => !existingKeys.has(`${km.section}::${km.label}`))];
+    const genresFromFormats = [...new Set((booking.performanceFormats ?? []).flatMap((bpf) => bpf.performanceFormat.defaultGenreSelection))];
+    setLocalKeyMoments(merged);
+    setLocalGenres(config?.enabledGenres?.length ? config.enabledGenres : genresFromFormats);
     setEditing(true);
   }
 
