@@ -83,9 +83,10 @@ export default function ComposeEmailSheet({
       templates.filter(
         (t) =>
           t.builtInType &&
-          BUILT_IN_EMAIL_TYPES.includes(t.builtInType as BuiltInTemplateType),
+          BUILT_IN_EMAIL_TYPES.includes(t.builtInType as BuiltInTemplateType) &&
+          (t.builtInType !== 'music_form_invite' || booking.hasMusicFormConfig),
       ),
-    [templates],
+    [templates, booking.hasMusicFormConfig],
   );
 
   // Reset form state when sheet opens
