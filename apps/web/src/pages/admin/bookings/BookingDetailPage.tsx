@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '@clerk/react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, CheckCircle2, Circle, AlertTriangle, Mail, Music, FileText, DollarSign, FolderOpen, ChevronDown, Check, Pencil, Plus, Send, Download, Heart, GlassWater, Utensils, Moon, Briefcase, Music2, Trash2, ClipboardList } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckCircle2, Circle, AlertTriangle, Mail, Music, FileText, DollarSign, FolderOpen, ChevronDown, Check, Pencil, Plus, Send, Download, Heart, GlassWater, Utensils, Moon, Briefcase, Music2, Trash2 } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import {
@@ -434,13 +434,33 @@ function MusicFormSection({ booking, documents }: { booking: BookingDetail; docu
     );
   }
 
+  const configure = useMutation({
+    mutationFn: () =>
+      apiPut<MusicFormConfig>(`/bookings/${booking.id}/music-form-config`, {
+        keyMoments: [],
+        enabledGenres: [],
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['booking-music-form-config', booking.id] });
+      queryClient.invalidateQueries({ queryKey: ['booking', booking.id] });
+      setLocalKeyMoments([]);
+      setLocalGenres([]);
+      setEditing(true);
+    },
+  });
+
   if (!booking.hasMusicFormConfig) {
     return (
       <Card title="Music form">
-        <div className="flex items-center gap-2 text-muted py-1">
-          <ClipboardList size={14} />
-          <span className="text-sm">No song request form configured</span>
-        </div>
+        <button
+          type="button"
+          onClick={() => configure.mutate()}
+          disabled={configure.isPending}
+          className="inline-flex items-center gap-1 text-sm text-primary hover:text-primary/80 transition-colors disabled:opacity-50"
+        >
+          <Plus size={14} />
+          Configure song request form
+        </button>
       </Card>
     );
   }
