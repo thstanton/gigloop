@@ -2,6 +2,8 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { BookingStatus } from '@prisma/client';
 import { BookingsService } from './bookings.service';
 import { BookingsRepository } from './bookings.repository';
+import { MailService } from '../mail/mail.service';
+import type { EmailContext } from '../mail/mail.service';
 
 type MockRepo = {
   findAll: jest.Mock;
@@ -22,7 +24,11 @@ type MockRepo = {
   upsertMusicFormConfig: jest.Mock;
   findBookingsForActions: jest.Mock;
   findUserProfile: jest.Mock;
+  findContractTemplate: jest.Mock;
+  saveContractContent: jest.Mock;
 };
+
+type MockMail = { buildContext: jest.Mock };
 
 function makeRepo(): MockRepo {
   return {
@@ -44,19 +50,44 @@ function makeRepo(): MockRepo {
     upsertMusicFormConfig: jest.fn(),
     findBookingsForActions: jest.fn(),
     findUserProfile: jest.fn(),
+    findContractTemplate: jest.fn(),
+    saveContractContent: jest.fn(),
   };
+}
+
+function makeMail(): MockMail {
+  return { buildContext: jest.fn() };
 }
 
 const booking = { id: 'b1', userId: 'u1', status: BookingStatus.CONFIRMED };
 const set = { id: 's1', bookingId: 'b1', userId: 'u1' };
 
+const baseContext: EmailContext = {
+  customerName: 'Jane Smith',
+  bookingDate: '2026-08-15',
+  venueName: 'The Grand Hotel',
+  bookingFee: '£1,500.00',
+  setsSchedule: '',
+  musicianName: 'Tim Stanton',
+  musicianEmail: 'tim@example.com',
+  portalLink: 'https://app.gigman.com/booking/abc123',
+  issueDate: '',
+  invoiceTotal: '',
+  invoiceDueDate: '',
+};
+
 describe('BookingsService', () => {
   let service: BookingsService;
   let repo: MockRepo;
+  let mail: MockMail;
 
   beforeEach(() => {
     repo = makeRepo();
-    service = new BookingsService(repo as unknown as BookingsRepository);
+    mail = makeMail();
+    service = new BookingsService(
+      repo as unknown as BookingsRepository,
+      mail as unknown as MailService,
+    );
   });
 
   describe('findAll', () => {
@@ -346,6 +377,79 @@ describe('BookingsService', () => {
       repo.findOne.mockResolvedValue(null);
       await expect(service.upsertMusicFormConfig('u1', 'missing', dto)).rejects.toThrow(NotFoundException);
       expect(repo.upsertMusicFormConfig).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('createContract', () => {
+    const rawBooking = { ...booking, musicFormConfig: null, musicFormResponse: null };
+
+    const contractTemplate = {
+      content: {
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [
+              { type: 'text', text: 'This agreement is between ' },
+              { type: 'variable', attrs: { name: 'customerName' } },
+              { type: 'text', text: ' and ' },
+              { type: 'variable', attrs: { name: 'musicianName' } },
+              { type: 'text', text: '.' },
+            ],
+          },
+        ],
+      },
+    };
+
+    beforeEach(() => {
+      repo.findOne.mockResolvedValue(rawBooking);
+      repo.findContractTemplate.mockResolvedValue(contractTemplate);
+      mail.buildContext.mockResolvedValue(baseContext);
+      repo.saveContractContent.mockResolvedValue({ id: 'b1' });
+    });
+
+    it('substitutes variables and saves the result', async () => {
+      const result = await service.createContract('u1', 'b1');
+
+      expect(repo.findContractTemplate).toHaveBeenCalledWith('u1');
+      expect(mail.buildContext).toHaveBeenCalledWith('u1', 'b1');
+      expect(repo.saveContractContent).toHaveBeenCalledWith('b1', expect.any(Object));
+      expect(result.contractContent).toBeDefined();
+    });
+
+    it('replaces variable chip nodes with plain text in the stored content', async () => {
+      const result = await service.createContract('u1', 'b1');
+
+      // Walk the Tiptap JSON and assert no variable nodes remain
+      const json = JSON.stringify(result.contractContent);
+      expect(json).not.toContain('"type":"variable"');
+      expect(json).toContain('Jane Smith');
+      expect(json).toContain('Tim Stanton');
+    });
+
+    it('throws NotFoundException when the booking does not exist', async () => {
+      repo.findOne.mockResolvedValue(null);
+      await expect(service.createContract('u1', 'missing')).rejects.toThrow(NotFoundException);
+      expect(repo.findContractTemplate).not.toHaveBeenCalled();
+      expect(repo.saveContractContent).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException when no contract template exists', async () => {
+      repo.findContractTemplate.mockResolvedValue(null);
+      await expect(service.createContract('u1', 'b1')).rejects.toThrow(NotFoundException);
+      expect(repo.saveContractContent).not.toHaveBeenCalled();
+    });
+
+    it('does not mutate the original template content', async () => {
+      const originalContent = JSON.parse(JSON.stringify(contractTemplate.content));
+      await service.createContract('u1', 'b1');
+      expect(contractTemplate.content).toEqual(originalContent);
+    });
+
+    it('overwrites existing contractContent when called again', async () => {
+      await service.createContract('u1', 'b1');
+      await service.createContract('u1', 'b1');
+      expect(repo.saveContractContent).toHaveBeenCalledTimes(2);
     });
   });
 });

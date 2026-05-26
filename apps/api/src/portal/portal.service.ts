@@ -3,7 +3,6 @@ import { PortalRepository } from './portal.repository';
 import { MailService } from '../mail/mail.service';
 import { DocumentsService } from '../documents/documents.service';
 import { StorageService } from '../storage/storage.service';
-import { substituteTiptapVariables } from '../mail/tiptap-portal';
 import type { Request } from 'express';
 import type { SubmitMusicFormDto } from './dto/submit-music-form.dto';
 
@@ -98,19 +97,11 @@ export class PortalService {
 
     if (booking.contractSignedAt) throw new BadRequestException('already_signed');
 
-    const template = await this.repo.findContractTemplate(booking.userId);
-    if (!template) throw new NotFoundException('Contract template not found');
-
-    const publicProfile = await this.repo.findPublicProfile(booking.userId);
-    if (!publicProfile) throw new NotFoundException('Booking not found');
-
-    const context = await this.mail.buildContext(booking.userId, booking.id);
-
-    const substituted = substituteTiptapVariables(template.content, context);
+    if (!booking.contractContent) throw new NotFoundException('Contract not found');
 
     const title = booking.title ?? `${booking.customer.name} · ${booking.date.toISOString().split('T')[0]}`;
 
-    return { content: substituted, title };
+    return { content: booking.contractContent, title };
   }
 
   async signContract(token: string, signatureBase64: string, req: Request) {
@@ -118,12 +109,13 @@ export class PortalService {
     if (!booking) throw new NotFoundException('Booking not found');
     if (booking.contractSignedAt) throw new BadRequestException('Contract already signed');
 
-    const template = await this.repo.findContractTemplate(booking.userId);
-    if (!template) throw new NotFoundException('Contract template not found');
+    if (!booking.contractContent) throw new NotFoundException('Contract not found');
 
     const publicProfile = await this.repo.findPublicProfile(booking.userId);
     if (!publicProfile) throw new NotFoundException('Booking not found');
 
+    // Context still needed for musicianName/customerName resolution used inside generateAndStoreSignedContractPdf.
+    // The second substitution pass on already-substituted content is a no-op.
     const context = await this.mail.buildContext(booking.userId, booking.id);
 
     const signedAt = new Date();
@@ -132,7 +124,7 @@ export class PortalService {
     await this.documents.generateAndStoreSignedContractPdf(
       booking.userId,
       booking.id,
-      template.content,
+      booking.contractContent,
       context,
       publicProfile.displayName ?? publicProfile.businessName,
       booking.customer.name,

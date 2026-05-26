@@ -137,6 +137,7 @@ model Booking {
   signatureDataUrl      String?
   depositReceivedAt     DateTime?
   depositTrackingMode String?
+  contractContent     Json?
 
   customerId String
   customer   Contact @relation("BookingCustomer", fields: [customerId], references: [id], onDelete: Restrict)

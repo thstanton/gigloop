@@ -269,4 +269,18 @@ export class BookingsRepository {
     ]);
     return this.prisma.booking.findFirst({ where: { id: bookingId }, include: bookingIncludes });
   }
+
+  findContractTemplate(userId: string) {
+    return this.prisma.template.findFirst({
+      where: { userId, builtInType: 'contract' },
+      select: { content: true },
+    });
+  }
+
+  saveContractContent(id: string, content: unknown) {
+    return this.prisma.booking.update({
+      where: { id },
+      data: { contractContent: content as Prisma.InputJsonValue },
+    });
+  }
 }

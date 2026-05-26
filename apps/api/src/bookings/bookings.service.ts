@@ -6,6 +6,8 @@ import { UpdateBookingDto } from './dto/update-booking.dto';
 import { CreateSetDto } from './dto/create-set.dto';
 import { UpdateSetDto } from './dto/update-set.dto';
 import { UpsertMusicFormConfigDto } from './dto/upsert-music-form-config.dto';
+import { MailService } from '../mail/mail.service';
+import { substituteTiptapVariables } from '../mail/tiptap-portal';
 
 const VALID_STATUSES = new Set<string>(Object.values(BookingStatus));
 
@@ -72,7 +74,10 @@ function computeActionItem(booking: any, profile: any, today: Date) {
 
 @Injectable()
 export class BookingsService {
-  constructor(private repo: BookingsRepository) {}
+  constructor(
+    private repo: BookingsRepository,
+    private mail: MailService,
+  ) {}
 
   findAll(userId: string, status?: string) {
     if (status !== undefined && !VALID_STATUSES.has(status)) {
@@ -192,6 +197,20 @@ export class BookingsService {
       notes: response.notes,
       submittedAt: response.submittedAt.toISOString(),
     };
+  }
+
+  async createContract(userId: string, bookingId: string) {
+    await this.findOne(userId, bookingId);
+
+    const template = await this.repo.findContractTemplate(userId);
+    if (!template) throw new NotFoundException('Contract template not found');
+
+    const context = await this.mail.buildContext(userId, bookingId);
+    const substituted = substituteTiptapVariables(template.content, context);
+
+    await this.repo.saveContractContent(bookingId, substituted);
+
+    return { contractContent: substituted };
   }
 
   async getActions(userId: string) {

@@ -72,6 +72,13 @@ export class BookingsController {
     return this.service.delete(req.userId, id);
   }
 
+  @ApiOperation({ summary: 'Create contract content for a booking from the contract template' })
+  @Post(':id/contract/create')
+  @HttpCode(200)
+  createContract(@Req() req: AuthedRequest, @Param('id') id: string) {
+    return this.service.createContract(req.userId, id);
+  }
+
   @ApiOperation({ summary: 'Get the music form config for a booking' })
   @Get(':id/music-form-config')
   getMusicFormConfig(@Req() req: AuthedRequest, @Param('id') id: string) {

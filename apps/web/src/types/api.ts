@@ -166,6 +166,7 @@ export interface BookingDetail extends Omit<BookingListItem, 'customer' | 'venue
   sets: PerformanceSet[];
   performanceFormats: BookingPerformanceFormatSummary[];
   contractSignedAt: string | null;
+  contractContent: unknown | null;
   depositReceivedAt: string | null;
   depositTrackingMode: string | null;
   portalToken: string;
