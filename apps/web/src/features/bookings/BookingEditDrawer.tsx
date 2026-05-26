@@ -136,35 +136,36 @@ export default function BookingEditDrawer({ booking }: Props) {
                 Cancel
               </Button>
             </div>
-
-            <div className="mt-6 pt-6 border-t border-border">
-              {deleteConfirm ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  className="text-status-cancelled border-status-cancelled hover:bg-status-cancelled/8"
-                  disabled={deleteMutation.isPending}
-                  onClick={() => deleteMutation.mutate()}
-                >
-                  {deleteMutation.isPending ? 'Cancelling…' : 'Confirm cancellation'}
-                </Button>
-              ) : (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  className="text-status-cancelled border-status-cancelled hover:bg-status-cancelled/8"
-                  onClick={() => setDeleteConfirm(true)}
-                >
-                  Cancel booking
-                </Button>
-              )}
-            </div>
           </form>
 
-          <div className="mt-6 pt-6 border-t border-border">
+          <div className="mt-8 pt-6 border-t border-border">
             <PerformanceEditor booking={booking} />
+            <p className="text-xs text-muted mt-3">Performance changes save automatically.</p>
+          </div>
+
+          <div className="mt-8 pt-6 border-t border-border">
+            {deleteConfirm ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="text-status-cancelled border-status-cancelled hover:bg-status-cancelled/8"
+                disabled={deleteMutation.isPending}
+                onClick={() => deleteMutation.mutate()}
+              >
+                {deleteMutation.isPending ? 'Cancelling…' : 'Confirm cancellation'}
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="text-status-cancelled border-status-cancelled hover:bg-status-cancelled/8"
+                onClick={() => setDeleteConfirm(true)}
+              >
+                Cancel booking
+              </Button>
+            )}
           </div>
         </div>
       </SheetContent>
