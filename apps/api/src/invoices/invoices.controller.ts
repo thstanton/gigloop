@@ -98,6 +98,18 @@ export class InvoicesController {
     return this.service.markSent(req.userId, bookingId, id, dto);
   }
 
+  @ApiOperation({ summary: 'Mark an invoice as paid' })
+  @ApiResponse({ status: 200, description: 'Invoice marked Paid; depositReceivedAt set if deposit invoice with INVOICE tracking mode' })
+  @ApiResponse({ status: 400, description: 'Invoice is not sent' })
+  @Post(':id/mark-paid')
+  markPaid(
+    @Req() req: AuthedRequest,
+    @Param('bookingId') bookingId: string,
+    @Param('id') id: string,
+  ) {
+    return this.service.markPaid(req.userId, bookingId, id);
+  }
+
   @ApiOperation({ summary: 'Delete an invoice' })
   @Delete(':id')
   @HttpCode(204)

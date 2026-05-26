@@ -88,6 +88,14 @@ export class InvoicesService {
     return this.repo.assignAndMarkSent(userId, id, issueDate, dueDate);
   }
 
+  async markPaid(userId: string, bookingId: string, id: string) {
+    const invoice = await this.findOne(userId, bookingId, id);
+    if (invoice.status !== 'SENT') {
+      throw new BadRequestException('Only sent invoices can be marked as paid');
+    }
+    return this.repo.markPaid(userId, bookingId, id);
+  }
+
   async addLineItem(
     userId: string,
     bookingId: string,

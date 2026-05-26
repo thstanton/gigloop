@@ -771,12 +771,14 @@ function InvoiceRow({
   onDelete,
   onSend,
   onMarkSent,
+  onMarkPaid,
 }: {
   invoice: Invoice;
   onEdit: (invoice: Invoice) => void;
   onDelete: (invoice: Invoice) => void;
   onSend: (invoice: Invoice) => void;
   onMarkSent: (invoice: Invoice) => void;
+  onMarkPaid: (invoice: Invoice) => void;
 }) {
   const overdue =
     invoice.status === 'SENT' &&
@@ -784,6 +786,7 @@ function InvoiceRow({
     new Date(invoice.dueDate) < new Date();
   const total = invoiceLineTotal(invoice);
   const isDraft = invoice.status === 'DRAFT';
+  const isSent = invoice.status === 'SENT';
 
   return (
     <div className="flex items-start justify-between gap-3 py-2.5 border-b border-border last:border-0">
@@ -837,6 +840,23 @@ function InvoiceRow({
               </DropdownMenuContent>
             </DropdownMenu>
           </>
+        )}
+        {isSent && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="text-muted hover:text-foreground transition-colors"
+                aria-label="More actions"
+              >
+                <ChevronDown size={13} />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => onMarkPaid(invoice)}>
+                Mark as paid
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
       </div>
     </div>
@@ -915,6 +935,15 @@ export default function BookingDetailPage() {
   });
 
   const actions = useBookingActions(id!);
+  const queryClient = useQueryClient();
+
+  const markPaid = useMutation({
+    mutationFn: (invoiceId: string) => apiPost(`/bookings/${id}/invoices/${invoiceId}/mark-paid`, {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bookingInvoices', id] });
+      queryClient.invalidateQueries({ queryKey: ['booking', id] });
+    },
+  });
 
   function openCompose(templateType?: string) {
     setComposeTemplateType(templateType);
@@ -1195,6 +1224,7 @@ export default function BookingDetailPage() {
                     onDelete={(inv) => actions.deleteInvoice(inv.id)}
                     onSend={openSendInvoice}
                     onMarkSent={setMarkSentInvoice}
+                    onMarkPaid={(inv) => markPaid.mutate(inv.id)}
                   />
                 ))}
               </div>

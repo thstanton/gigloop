@@ -107,6 +107,33 @@ export class InvoicesRepository {
     });
   }
 
+  async markPaid(userId: string, bookingId: string, invoiceId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const [invoice, booking, profile] = await Promise.all([
+        tx.invoice.findFirst({ where: { id: invoiceId, userId, bookingId }, select: { isDeposit: true } }),
+        tx.booking.findFirst({ where: { id: bookingId, userId }, select: { depositTrackingMode: true } }),
+        tx.userProfile.findUnique({ where: { userId }, select: { depositTrackingMode: true } }),
+      ]);
+
+      if (!invoice) return null;
+
+      const updated = await tx.invoice.update({
+        where: { id: invoiceId },
+        data: { status: 'PAID' },
+        include: invoiceIncludes,
+      });
+
+      if (invoice.isDeposit) {
+        const trackingMode = booking?.depositTrackingMode ?? profile?.depositTrackingMode ?? 'INVOICE';
+        if (trackingMode === 'INVOICE') {
+          await tx.booking.update({ where: { id: bookingId }, data: { depositReceivedAt: new Date() } });
+        }
+      }
+
+      return updated;
+    });
+  }
+
   findLineItem(userId: string, invoiceId: string, itemId: string) {
     return this.prisma.invoiceLineItem.findFirst({
       where: { id: itemId, invoiceId, userId },

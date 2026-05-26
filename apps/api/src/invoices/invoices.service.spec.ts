@@ -18,6 +18,7 @@ type MockRepo = {
   update: jest.Mock;
   delete: jest.Mock;
   assignAndMarkSent: jest.Mock;
+  markPaid: jest.Mock;
   findLineItem: jest.Mock;
   addLineItem: jest.Mock;
   updateLineItem: jest.Mock;
@@ -33,6 +34,7 @@ function makeRepo(): MockRepo {
     update: jest.fn(),
     delete: jest.fn(),
     assignAndMarkSent: jest.fn(),
+    markPaid: jest.fn(),
     findLineItem: jest.fn(),
     addLineItem: jest.fn(),
     updateLineItem: jest.fn(),
@@ -297,6 +299,32 @@ describe('InvoicesService', () => {
     it('returns the updated invoice', async () => {
       const result = await service.markSent('u1', 'b1', 'i1', dto);
       expect(result).toBe(sentInvoice);
+    });
+  });
+
+  describe('markPaid', () => {
+    const sentInvoice = { id: 'i1', bookingId: 'b1', userId: 'u1', status: 'SENT', isDeposit: false };
+    const paidInvoice = { ...sentInvoice, status: 'PAID' };
+
+    beforeEach(() => {
+      repo.findOne.mockResolvedValue(sentInvoice);
+      repo.markPaid.mockResolvedValue(paidInvoice);
+    });
+
+    it('throws BadRequestException when invoice is not SENT', async () => {
+      repo.findOne.mockResolvedValue({ ...sentInvoice, status: 'DRAFT' });
+      await expect(service.markPaid('u1', 'b1', 'i1')).rejects.toThrow(BadRequestException);
+      expect(repo.markPaid).not.toHaveBeenCalled();
+    });
+
+    it('delegates to repository markPaid', async () => {
+      await service.markPaid('u1', 'b1', 'i1');
+      expect(repo.markPaid).toHaveBeenCalledWith('u1', 'b1', 'i1');
+    });
+
+    it('returns the paid invoice', async () => {
+      const result = await service.markPaid('u1', 'b1', 'i1');
+      expect(result).toBe(paidInvoice);
     });
   });
 });
