@@ -1133,7 +1133,9 @@ export default function BookingDetailPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <PerformanceSection booking={booking} />
           {booking.venue && <VenueCard venue={booking.venue} linkState={backState} />}
-          <MusicFormSection booking={booking} documents={documents} />
+          <div className={booking.venue ? 'md:col-span-2' : undefined}>
+            <MusicFormSection booking={booking} documents={documents} />
+          </div>
         </div>
       </section>
 
