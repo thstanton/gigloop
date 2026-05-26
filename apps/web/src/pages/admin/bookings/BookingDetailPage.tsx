@@ -18,6 +18,7 @@ import { useBookingInvoices } from '@/lib/hooks/useBookingInvoices';
 import { useBookingCommunications } from '@/lib/hooks/useBookingCommunications';
 import { useBookingDocuments } from '@/lib/hooks/useBookingDocuments';
 import BookingEditDrawer from '@/features/bookings/BookingEditDrawer';
+import ContactEditSheet from '@/features/contacts/ContactEditSheet';
 import ComposeEmailSheet from '@/features/communications/ComposeEmailSheet';
 import InvoiceSheet from '@/features/invoices/InvoiceSheet';
 import MarkSentDialog from '@/features/invoices/MarkSentDialog';
@@ -221,15 +222,26 @@ function PersonCard({
   contact,
   commissionArrangement,
   linkState,
+  onEdit,
 }: {
   role: string;
   contact: Contact;
   commissionArrangement?: string | null;
   linkState?: Record<string, string>;
+  onEdit: () => void;
 }) {
   return (
     <div className="py-4 border-b border-border last:border-0">
-      <p className="text-xs font-medium text-muted uppercase tracking-wide mb-1.5">{role}</p>
+      <div className="flex items-center justify-between mb-1.5">
+        <p className="text-xs font-medium text-muted uppercase tracking-wide">{role}</p>
+        <button
+          type="button"
+          onClick={onEdit}
+          className="text-xs text-primary hover:text-primary/80 transition-colors"
+        >
+          Edit
+        </button>
+      </div>
       <Link
         to={`/admin/contacts/${contact.id}`}
         state={linkState}
@@ -587,9 +599,20 @@ function MusicFormSection({ booking, documents }: { booking: BookingDetail; docu
 
 // ─── Venue card ───────────────────────────────────────────────────────────────
 
-function VenueCard({ venue, linkState }: { venue: Contact; linkState?: Record<string, string> }) {
+function VenueCard({ venue, linkState, onEdit }: { venue: Contact; linkState?: Record<string, string>; onEdit: () => void }) {
   return (
-    <Card title="Venue">
+    <Card
+      title="Venue"
+      action={
+        <button
+          type="button"
+          onClick={onEdit}
+          className="text-xs text-primary hover:text-primary/80 transition-colors"
+        >
+          Edit
+        </button>
+      }
+    >
       <Link
         to={`/admin/contacts/${venue.id}`}
         state={linkState}
@@ -847,6 +870,7 @@ export default function BookingDetailPage() {
   const [editingInvoice, setEditingInvoice] = useState<Invoice | undefined>();
   const [invoiceSheetPrefill, setInvoiceSheetPrefill] = useState<{ isDeposit: boolean; amount?: number } | undefined>();
   const [markSentInvoice, setMarkSentInvoice] = useState<Invoice | undefined>();
+  const [editingContact, setEditingContact] = useState<Contact | null>(null);
 
   const { isLoaded } = useAuth();
   const { data: booking, isLoading, isError } = useBooking(id!);
@@ -980,13 +1004,14 @@ export default function BookingDetailPage() {
           <section>
             <SectionHeader label="People" />
             <div className="border-t border-border">
-              <PersonCard role="Customer" contact={booking.customer} linkState={backState} />
+              <PersonCard role="Customer" contact={booking.customer} linkState={backState} onEdit={() => setEditingContact(booking.customer)} />
               {booking.referrer && (
                 <PersonCard
                   role="Referrer"
                   contact={booking.referrer}
                   commissionArrangement={booking.referrer.commissionArrangement}
                   linkState={backState}
+                  onEdit={() => setEditingContact(booking.referrer!)}
                 />
               )}
             </div>
@@ -1000,7 +1025,7 @@ export default function BookingDetailPage() {
             <SectionHeader label="For the day" />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <PerformanceSection booking={booking} />
-              {booking.venue && <VenueCard venue={booking.venue} linkState={backState} />}
+              {booking.venue && <VenueCard venue={booking.venue} linkState={backState} onEdit={() => setEditingContact(booking.venue!)} />}
               <div className={booking.venue ? 'sm:col-span-2' : undefined}>
                 <MusicFormSection booking={booking} documents={documents} />
               </div>
@@ -1246,6 +1271,7 @@ export default function BookingDetailPage() {
       </div>{/* end two-column grid */}
 
       <BookingEditDrawer booking={booking} />
+      <ContactEditSheet contact={editingContact} onClose={() => setEditingContact(null)} />
       <InvoiceSheet
         bookingId={id!}
         invoice={editingInvoice}
