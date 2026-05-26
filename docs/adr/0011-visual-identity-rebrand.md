@@ -36,6 +36,14 @@ The current layout constrains almost all pages to `max-w-2xl` (672px), left-alig
 - **Booking detail** — 60/40 split. Left (60%): booking header, customer, venue, performance, music form, notes. Right (40%): checklist, invoices, communications, documents. Right panel is `sticky` with `overflow-y-auto` so it only scrolls when its content exceeds the viewport; left panel scrolls freely with the page.
 - **Contact detail** — same 60/40 split. Left: contact info. Right: associated bookings (supporting context, not primary workflow).
 
+**Dashboard** — distinct from other pages in two ways:
+
+1. **Background:** A deeper warm surface (warm parchment/stone tone) that reads clearly as a "home base," distinct from the cream-white of content pages. Widget cards sit on this surface with a slightly lighter card background.
+
+2. **Grid layout:** Two columns at `md+` — 50/50 split. Left: welcome message + Actions widget (future analytics widgets grow this column downward). Right: Calendar + Upcoming gigs stacked. Mobile remains a single column.
+
+3. **Welcome message:** Displayed above the Actions widget. A Playfair Display greeting line ("Good morning, [first name]") followed by the user's next upcoming gig ("Your next gig is [title] on [date]"). Personal and contextual — the one piece of information a musician wants when opening the app.
+
 **Single-column pages** (wider, centered):
 - List pages (bookings, contacts): `max-w-6xl` centered
 - Form/detail pages (settings, new booking, repertoire, templates): `max-w-3xl` centered
