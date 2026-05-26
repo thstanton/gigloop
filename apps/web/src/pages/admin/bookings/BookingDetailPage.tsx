@@ -239,13 +239,13 @@ function PerformanceSection({ booking }: { booking: BookingDetail }) {
   const queryClient = useQueryClient();
   const [addOpen, setAddOpen] = useState(false);
 
-  const { data: allFormats = [] } = useQuery({
+  const { data: allFormats = [], isLoading: formatsLoading } = useQuery({
     queryKey: ['performance-formats'],
     queryFn: () => apiGet<PerformanceFormat[]>('/performance-formats'),
     enabled: addOpen,
   });
 
-  const appliedFormatIds = new Set(booking.performanceFormats.map((bpf) => bpf.performanceFormatId));
+  const appliedFormatIds = new Set((booking.performanceFormats ?? []).map((bpf) => bpf.performanceFormatId));
   const availableFormats = allFormats.filter((f) => !appliedFormatIds.has(f.id));
 
   const updateSet = useMutation({
@@ -270,14 +270,14 @@ function PerformanceSection({ booking }: { booking: BookingDetail }) {
   });
 
   function handleRemove(bpf: BookingPerformanceFormatSummary) {
-    const sets = booking.sets.filter((s) => s.performanceFormatId === bpf.performanceFormatId);
+    const sets = (booking.sets ?? []).filter((s) => s.performanceFormatId === bpf.performanceFormatId);
     const hasStartTimes = sets.some((s) => s.startTime);
     if (hasStartTimes && !window.confirm(`Remove "${bpf.performanceFormat.label}" and its ${sets.length} set(s)?`)) return;
     removeFormat.mutate(bpf.id);
   }
 
   const setsByFormatId = new Map<string | null, PerformanceSet[]>();
-  for (const set of booking.sets) {
+  for (const set of booking.sets ?? []) {
     const key = set.performanceFormatId ?? null;
     if (!setsByFormatId.has(key)) setsByFormatId.set(key, []);
     setsByFormatId.get(key)!.push(set);
@@ -287,14 +287,14 @@ function PerformanceSection({ booking }: { booking: BookingDetail }) {
 
   return (
     <Card title="Performance">
-      {booking.performanceFormats.length === 0 && unassigned.length === 0 && (
+      {(booking.performanceFormats ?? []).length === 0 && unassigned.length === 0 && (
         <div className="flex items-center gap-2 text-muted py-1 mb-3">
           <Music size={14} />
           <span className="text-sm">No formats applied</span>
         </div>
       )}
 
-      {booking.performanceFormats.map((bpf) => {
+      {(booking.performanceFormats ?? []).map((bpf) => {
         const sets = setsByFormatId.get(bpf.performanceFormatId) ?? [];
         return (
           <div key={bpf.id} className="mb-4 last:mb-0">
@@ -350,7 +350,9 @@ function PerformanceSection({ booking }: { booking: BookingDetail }) {
       ) : (
         <div className="mt-3 space-y-2">
           <p className="text-xs text-muted font-medium uppercase tracking-wide">Select a format</p>
-          {availableFormats.length === 0 ? (
+          {formatsLoading ? (
+            <p className="text-sm text-muted">Loading…</p>
+          ) : availableFormats.length === 0 ? (
             <p className="text-sm text-muted">All formats already applied.</p>
           ) : (
             <div className="flex flex-wrap gap-2">
