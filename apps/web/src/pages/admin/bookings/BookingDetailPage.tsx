@@ -764,26 +764,56 @@ function InvoiceRow({
 // ─── Communications ───────────────────────────────────────────────────────────
 
 function CommunicationRow({ comm }: { comm: Communication }) {
+  const [open, setOpen] = useState(false);
   const meta = [comm.template?.name, `To ${comm.contact.name}`].filter(Boolean).join(' · ');
   const isFailed = comm.status === 'FAILED';
   const isPending = comm.status === 'PENDING';
+  const isSent = comm.status === 'SENT';
+
   return (
-    <div className="flex items-start justify-between gap-3 py-3 border-b border-border last:border-0">
-      <div className="min-w-0 flex items-start gap-2">
-        {isFailed && <AlertTriangle size={14} className="text-status-cancelled flex-shrink-0 mt-0.5" />}
-        <div className="min-w-0">
-          <p className={`text-sm truncate ${isFailed ? 'text-status-cancelled' : 'text-foreground'}`}>
-            {comm.subject}
-          </p>
-          <p className="text-xs text-muted mt-0.5">
-            {isFailed ? 'Send failed · ' : isPending ? 'Sending · ' : ''}{meta}
-          </p>
+    <>
+      <div
+        className={`flex items-start justify-between gap-3 py-3 border-b border-border last:border-0 ${isSent ? 'cursor-pointer hover:bg-muted/30 -mx-4 px-4 rounded transition-colors' : ''}`}
+        onClick={() => { if (isSent) setOpen(true); }}
+        role={isSent ? 'button' : undefined}
+        aria-label={isSent ? `View email: ${comm.subject}` : undefined}
+      >
+        <div className="min-w-0 flex items-start gap-2">
+          {isFailed && <AlertTriangle size={14} className="text-status-cancelled flex-shrink-0 mt-0.5" />}
+          <div className="min-w-0">
+            <p className={`text-sm truncate ${isFailed ? 'text-status-cancelled' : 'text-foreground'}`}>
+              {comm.subject}
+            </p>
+            <p className="text-xs text-muted mt-0.5">
+              {isFailed ? 'Send failed · ' : isPending ? 'Sending · ' : ''}{meta}
+            </p>
+          </div>
         </div>
+        <span className="text-xs text-muted flex-shrink-0">
+          {comm.sentAt ? formatDate(comm.sentAt) : '—'}
+        </span>
       </div>
-      <span className="text-xs text-muted flex-shrink-0">
-        {comm.sentAt ? formatDate(comm.sentAt) : '—'}
-      </span>
-    </div>
+
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-lg flex flex-col p-0">
+          <SheetHeader className="px-6 pt-6 pb-4 border-b border-border shrink-0">
+            <SheetTitle className="truncate">{comm.subject}</SheetTitle>
+            <div className="space-y-0.5 mt-1">
+              <p className="text-xs text-muted">To: {comm.contact.name}{comm.contact.email ? ` <${comm.contact.email}>` : ''}</p>
+              {comm.sentAt && <p className="text-xs text-muted">Sent: {formatDate(comm.sentAt)}</p>}
+            </div>
+          </SheetHeader>
+          <div className="flex-1 overflow-y-auto">
+            <iframe
+              srcDoc={comm.body}
+              title={comm.subject}
+              className="w-full h-full border-0"
+              sandbox="allow-same-origin"
+            />
+          </div>
+        </SheetContent>
+      </Sheet>
+    </>
   );
 }
 
