@@ -21,6 +21,7 @@ import ComposeEmailSheet from '@/features/communications/ComposeEmailSheet';
 import InvoiceSheet from '@/features/invoices/InvoiceSheet';
 import MarkSentDialog from '@/features/invoices/MarkSentDialog';
 import { buildChecklist } from '@/lib/buildChecklist';
+import { toast } from '@/lib/hooks/use-toast';
 import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from '@/lib/api';
 import {
   formatDate,
@@ -842,21 +843,12 @@ function InvoiceRow({
           </>
         )}
         {isSent && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                className="text-muted hover:text-foreground transition-colors"
-                aria-label="More actions"
-              >
-                <ChevronDown size={13} />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => onMarkPaid(invoice)}>
-                Mark as paid
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <button
+            onClick={() => onMarkPaid(invoice)}
+            className="text-xs text-muted hover:text-foreground transition-colors"
+          >
+            Mark paid
+          </button>
         )}
       </div>
     </div>
@@ -943,6 +935,7 @@ export default function BookingDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['bookingInvoices', id] });
       queryClient.invalidateQueries({ queryKey: ['booking', id] });
     },
+    onError: () => toast({ title: 'Failed to mark invoice as paid', variant: 'destructive' }),
   });
 
   function openCompose(templateType?: string) {
