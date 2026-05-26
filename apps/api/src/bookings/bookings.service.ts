@@ -96,11 +96,15 @@ export class BookingsService {
     if (!dto.formatIds?.length) {
       return this.repo.create(userId, dto);
     }
-    const formats = await this.repo.findFormats(userId, dto.formatIds);
+    const [formats, profile] = await Promise.all([
+      this.repo.findFormats(userId, dto.formatIds),
+      this.repo.findUserProfile(userId),
+    ]);
     const orderedFormats = dto.formatIds
       .map((id) => formats.find((f) => f.id === id))
       .filter((f): f is NonNullable<typeof f> => f !== null && f !== undefined);
-    return this.repo.createWithFormats(userId, dto, orderedFormats);
+    const songRequestFormEnabled = profile?.songRequestFormEnabled ?? false;
+    return this.repo.createWithFormats(userId, dto, orderedFormats, songRequestFormEnabled);
   }
 
   async update(userId: string, id: string, dto: UpdateBookingDto) {

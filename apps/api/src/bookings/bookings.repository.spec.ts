@@ -147,12 +147,12 @@ describe('BookingsRepository', () => {
         defaultGenreSelection: ['CONTEMPORARY'],
         slots: [{ label: 'Ceremony', duration: 30, order: 1 }],
       };
-      await repo.createWithFormats('u1', { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1' }, [fmt]);
+      await repo.createWithFormats('u1', { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1' }, [fmt], false);
       const data = prisma.booking.create.mock.calls[0][0].data;
       expect(data.sets.create[0]).toMatchObject({ duration: 30, performanceFormatId: 'f1' });
     });
 
-    it('creates musicFormConfig when formats have keyMoments', async () => {
+    it('creates musicFormConfig when formats have keyMoments and songRequestFormEnabled', async () => {
       prisma.booking.create.mockResolvedValue({ id: 'b1' });
       const fmt = {
         id: 'f1',
@@ -161,17 +161,25 @@ describe('BookingsRepository', () => {
         defaultGenreSelection: ['CLASSICAL'],
         slots: [],
       };
-      await repo.createWithFormats('u1', { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1' }, [fmt]);
+      await repo.createWithFormats('u1', { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1' }, [fmt], true);
       const data = prisma.booking.create.mock.calls[0][0].data;
       expect(data.musicFormConfig.create.keyMoments).toEqual([
         { label: 'Processional', section: 'Wedding Ceremony' },
       ]);
     });
 
-    it('omits musicFormConfig when no formats have keyMoments', async () => {
+    it('creates musicFormConfig with empty keyMoments when formats have none but songRequestFormEnabled', async () => {
+      prisma.booking.create.mockResolvedValue({ id: 'b1' });
+      const fmt = { id: 'f1', label: 'Background', keyMoments: [], defaultGenreSelection: ['CONTEMPORARY'], slots: [] };
+      await repo.createWithFormats('u1', { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1' }, [fmt], true);
+      const data = prisma.booking.create.mock.calls[0][0].data;
+      expect(data.musicFormConfig.create.keyMoments).toEqual([]);
+    });
+
+    it('omits musicFormConfig when songRequestFormEnabled is false', async () => {
       prisma.booking.create.mockResolvedValue({ id: 'b1' });
       const fmt = { id: 'f1', label: 'Background', keyMoments: [], defaultGenreSelection: [], slots: [] };
-      await repo.createWithFormats('u1', { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1' }, [fmt]);
+      await repo.createWithFormats('u1', { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1' }, [fmt], false);
       const data = prisma.booking.create.mock.calls[0][0].data;
       expect(data.musicFormConfig).toBeUndefined();
     });

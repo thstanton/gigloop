@@ -80,7 +80,7 @@ export class BookingsRepository {
     });
   }
 
-  createWithFormats(userId: string, dto: CreateBookingDto, orderedFormats: FormatWithSlots[]) {
+  createWithFormats(userId: string, dto: CreateBookingDto, orderedFormats: FormatWithSlots[], songRequestFormEnabled: boolean) {
     const { formatIds: _, fee, date, ...fields } = dto;
 
     let slotOrder = 1;
@@ -113,7 +113,7 @@ export class BookingsRepository {
         ...(fee !== undefined ? { fee } : {}),
         sets: setRecords.length ? { create: setRecords } : undefined,
         performanceFormats: { create: formatRecords },
-        ...(allKeyMoments.length
+        ...(songRequestFormEnabled
           ? {
               musicFormConfig: {
                 create: { userId, enabledGenres: allGenres, keyMoments: allKeyMoments },
