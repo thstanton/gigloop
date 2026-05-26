@@ -322,7 +322,7 @@ export interface PerformanceFormat {
 // Documents
 // ─────────────────────────────────────────
 
-export type DocumentType = 'INVOICE' | 'CONTRACT';
+export type DocumentType = 'INVOICE' | 'CONTRACT' | 'SONG_LIST';
 
 export interface Document {
   id: string;
@@ -512,10 +512,30 @@ export interface PortalPublicProfile {
 
 export interface PortalDocument {
   id: string;
-  type: 'CONTRACT' | 'INVOICE';
+  type: 'CONTRACT' | 'INVOICE' | 'SONG_LIST';
   label: string;
   url: string;
   createdAt: string;
+}
+
+export interface MusicFormResponseSong {
+  id: string;
+  title: string;
+  artist: string | null;
+  genre: string;
+}
+
+export interface MusicFormResponseSpecialRequest {
+  key: string;
+  song: MusicFormResponseSong | null;
+  freeText: string | null;
+}
+
+export interface MusicFormResponse {
+  selectedSongs: MusicFormResponseSong[];
+  specialRequests: MusicFormResponseSpecialRequest[];
+  notes: string | null;
+  submittedAt: string;
 }
 
 export interface PortalData {

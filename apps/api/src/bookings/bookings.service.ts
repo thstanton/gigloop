@@ -162,6 +162,34 @@ export class BookingsService {
     return { ...rest, hasMusicFormConfig: !!musicFormConfig, hasMusicFormResponse: !!musicFormResponse };
   }
 
+  async getMusicFormResponse(userId: string, bookingId: string) {
+    await this.findOne(userId, bookingId);
+    const response = await this.repo.findMusicFormResponse(userId, bookingId);
+    if (!response) throw new NotFoundException('Music form response not found');
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const requests = (response.specialRequests as any[]) ?? [];
+    const allSongIds = [
+      ...response.selectedSongIds,
+      ...requests.map((r: { songId?: string }) => r.songId).filter((id): id is string => !!id),
+    ];
+    const songs = await this.repo.findSongsByIds(userId, allSongIds);
+    const songMap = new Map(songs.map((s) => [s.id, s]));
+
+    return {
+      selectedSongs: response.selectedSongIds
+        .map((id) => songMap.get(id))
+        .filter((s): s is NonNullable<typeof s> => s !== undefined),
+      specialRequests: requests.map((r: { key: string; songId?: string; freeText?: string }) => ({
+        key: r.key,
+        song: r.songId ? (songMap.get(r.songId) ?? null) : null,
+        freeText: r.freeText ?? null,
+      })),
+      notes: response.notes,
+      submittedAt: response.submittedAt.toISOString(),
+    };
+  }
+
   async getActions(userId: string) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);

@@ -32,6 +32,12 @@ export class DocumentsRepository {
     });
   }
 
+  findSongListForBooking(userId: string, bookingId: string) {
+    return this.prisma.document.findFirst({
+      where: { userId, bookingId, type: 'SONG_LIST' },
+    });
+  }
+
   delete(id: string) {
     return this.prisma.document.delete({ where: { id } });
   }

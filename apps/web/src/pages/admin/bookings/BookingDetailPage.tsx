@@ -29,18 +29,25 @@ import {
 } from '@/lib/formatters';
 import { ALL_GENRES, EVENT_TYPE_LABELS, GENRE_LABELS, STATUS_ORDER } from '@/lib/constants';
 import { cn } from '@/lib/utils';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import type {
   BookingDetail,
   BookingPerformanceFormatSummary,
   BookingStatus,
   Contact,
+  Document,
   KeyMoment,
   MusicFormConfig,
+  MusicFormResponse,
   PerformanceFormat,
   PerformanceSet,
   Invoice,
   Communication,
-  Document,
   UserProfile,
 } from '@/types/api';
 
@@ -376,9 +383,10 @@ function PerformanceSection({ booking }: { booking: BookingDetail }) {
 
 // ─── Music form config section ────────────────────────────────────────────────
 
-function MusicFormSection({ booking }: { booking: BookingDetail }) {
+function MusicFormSection({ booking, documents }: { booking: BookingDetail; documents: Document[] }) {
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
+  const [viewingResponse, setViewingResponse] = useState(false);
 
   const { isLoaded } = useAuth();
 
@@ -387,6 +395,14 @@ function MusicFormSection({ booking }: { booking: BookingDetail }) {
     queryFn: () => apiGet<MusicFormConfig>(`/bookings/${booking.id}/music-form-config`),
     enabled: isLoaded && booking.hasMusicFormConfig,
   });
+
+  const { data: response } = useQuery({
+    queryKey: ['booking-music-form-response', booking.id],
+    queryFn: () => apiGet<MusicFormResponse>(`/bookings/${booking.id}/music-form-response`),
+    enabled: isLoaded && booking.hasMusicFormResponse && viewingResponse,
+  });
+
+  const songListDoc = documents.find((d) => d.type === 'SONG_LIST');
 
   const [localKeyMoments, setLocalKeyMoments] = useState<KeyMoment[]>([]);
   const [localGenres, setLocalGenres] = useState<string[]>([]);
@@ -535,44 +551,135 @@ function MusicFormSection({ booking }: { booking: BookingDetail }) {
   }
 
   return (
-    <Card title="Music form">
-      <div className="space-y-3">
-        {booking.hasMusicFormResponse && (
-          <div className="inline-flex items-center gap-1.5 text-xs font-medium text-status-confirmed bg-status-confirmed/10 rounded-full px-2.5 py-0.5">
-            <CheckCircle2 size={11} />
-            Response received
-          </div>
-        )}
-        {Array.from(sectionMap.entries()).map(([section, moments]) => (
-          <div key={section}>
-            <p className="text-xs text-muted uppercase tracking-wide mb-1">{section}</p>
-            <div className="space-y-0.5">
-              {moments.map((km, i) => (
-                <p key={i} className="text-sm text-foreground">{km.label}</p>
-              ))}
+    <>
+      <Card title="Music form">
+        <div className="space-y-3">
+          {booking.hasMusicFormResponse && (
+            <button
+              type="button"
+              onClick={() => setViewingResponse(true)}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-status-confirmed bg-status-confirmed/10 rounded-full px-2.5 py-0.5 hover:bg-status-confirmed/20 transition-colors"
+            >
+              <CheckCircle2 size={11} />
+              Response received · View
+            </button>
+          )}
+          {Array.from(sectionMap.entries()).map(([section, moments]) => (
+            <div key={section}>
+              <p className="text-xs text-muted uppercase tracking-wide mb-1">{section}</p>
+              <div className="space-y-0.5">
+                {moments.map((km, i) => (
+                  <p key={i} className="text-sm text-foreground">{km.label}</p>
+                ))}
+              </div>
             </div>
+          ))}
+          {config.enabledGenres.length > 0 && (
+            <div>
+              <p className="text-xs text-muted uppercase tracking-wide mb-1">Genres</p>
+              <p className="text-sm text-foreground">
+                {config.enabledGenres
+                  .map((g) => GENRE_LABELS[g as keyof typeof GENRE_LABELS] ?? g)
+                  .join(', ')}
+              </p>
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={openEditor}
+            className="inline-flex items-center gap-1 text-sm text-primary hover:text-primary/80 transition-colors pt-1"
+          >
+            <Pencil size={13} />
+            Edit
+          </button>
+        </div>
+      </Card>
+
+      {/* Song list response sheet */}
+      <Sheet open={viewingResponse} onOpenChange={setViewingResponse}>
+        <SheetContent side="right" className="w-full sm:max-w-lg flex flex-col p-0">
+          <SheetHeader className="px-6 pt-6 pb-4 border-b border-border shrink-0">
+            <div className="flex items-center justify-between">
+              <SheetTitle>Song requests</SheetTitle>
+              {songListDoc && (
+                <a
+                  href={songListDoc.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-foreground transition-colors"
+                >
+                  <Download size={14} />
+                  Download PDF
+                </a>
+              )}
+            </div>
+          </SheetHeader>
+          <div className="flex-1 overflow-y-auto px-6 py-6">
+            {!response ? (
+              <div className="space-y-3 animate-pulse">
+                {[1, 2, 3, 4].map((i) => <div key={i} className="h-4 bg-border rounded w-3/4" />)}
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {response.specialRequests.some((r) => r.song || r.freeText) && (
+                  <section>
+                    <p className="text-xs font-medium text-muted uppercase tracking-wide mb-3">Key moments</p>
+                    <div className="space-y-2">
+                      {response.specialRequests.map((req, i) => (
+                        <div key={i} className="flex items-start gap-3">
+                          <span className="text-sm text-muted w-36 flex-shrink-0">{req.key}</span>
+                          <span className="text-sm text-foreground">
+                            {req.song
+                              ? `${req.song.title}${req.song.artist ? ` — ${req.song.artist}` : ''}`
+                              : req.freeText ?? <span className="text-muted italic">No selection</span>}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                )}
+                {response.selectedSongs.length > 0 && (() => {
+                  const genreMap = new Map<string, typeof response.selectedSongs>();
+                  for (const song of response.selectedSongs) {
+                    if (!genreMap.has(song.genre)) genreMap.set(song.genre, []);
+                    genreMap.get(song.genre)!.push(song);
+                  }
+                  return (
+                    <section>
+                      <p className="text-xs font-medium text-muted uppercase tracking-wide mb-3">General requests</p>
+                      <div className="space-y-4">
+                        {Array.from(genreMap.entries()).map(([genre, songs]) => (
+                          <div key={genre}>
+                            <p className="text-xs text-muted mb-1.5">{GENRE_LABELS[genre as keyof typeof GENRE_LABELS] ?? genre}</p>
+                            <div className="space-y-1">
+                              {songs.map((song) => (
+                                <div key={song.id} className="flex items-baseline justify-between gap-2">
+                                  <span className="text-sm text-foreground">{song.title}</span>
+                                  {song.artist && <span className="text-sm text-muted flex-shrink-0">{song.artist}</span>}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  );
+                })()}
+                {response.notes && (
+                  <section>
+                    <p className="text-xs font-medium text-muted uppercase tracking-wide mb-2">Notes</p>
+                    <p className="text-sm text-foreground whitespace-pre-wrap">{response.notes}</p>
+                  </section>
+                )}
+                {response.selectedSongs.length === 0 && !response.specialRequests.some((r) => r.song || r.freeText) && !response.notes && (
+                  <p className="text-sm text-muted">No selections made.</p>
+                )}
+              </div>
+            )}
           </div>
-        ))}
-        {config.enabledGenres.length > 0 && (
-          <div>
-            <p className="text-xs text-muted uppercase tracking-wide mb-1">Genres</p>
-            <p className="text-sm text-foreground">
-              {config.enabledGenres
-                .map((g) => GENRE_LABELS[g as keyof typeof GENRE_LABELS] ?? g)
-                .join(', ')}
-            </p>
-          </div>
-        )}
-        <button
-          type="button"
-          onClick={openEditor}
-          className="inline-flex items-center gap-1 text-sm text-primary hover:text-primary/80 transition-colors pt-1"
-        >
-          <Pencil size={13} />
-          Edit
-        </button>
-      </div>
-    </Card>
+        </SheetContent>
+      </Sheet>
+    </>
   );
 }
 
@@ -988,7 +1095,7 @@ export default function BookingDetailPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <PerformanceSection booking={booking} />
           {booking.venue && <VenueCard venue={booking.venue} linkState={backState} />}
-          <MusicFormSection booking={booking} />
+          <MusicFormSection booking={booking} documents={documents} />
         </div>
       </section>
 

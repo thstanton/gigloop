@@ -78,6 +78,12 @@ export class BookingsController {
     return this.service.getMusicFormConfig(req.userId, id);
   }
 
+  @ApiOperation({ summary: 'Get the music form response for a booking' })
+  @Get(':id/music-form-response')
+  getMusicFormResponse(@Req() req: AuthedRequest, @Param('id') id: string) {
+    return this.service.getMusicFormResponse(req.userId, id);
+  }
+
   @ApiOperation({ summary: 'Create or replace the music form config for a booking' })
   @Put(':id/music-form-config')
   upsertMusicFormConfig(

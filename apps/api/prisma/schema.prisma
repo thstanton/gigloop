@@ -29,6 +29,7 @@ enum InvoiceStatus {
 enum DocumentType {
   CONTRACT
   INVOICE
+  SONG_LIST
 }
 
 enum CommunicationStatus {

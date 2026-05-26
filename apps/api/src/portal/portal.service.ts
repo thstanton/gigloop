@@ -29,6 +29,8 @@ export class PortalService {
       let label: string;
       if (doc.type === 'CONTRACT') {
         label = 'Signed contract';
+      } else if (doc.type === 'SONG_LIST') {
+        label = 'Song list';
       } else if (doc.invoice?.isDeposit) {
         label = `Deposit invoice${doc.invoice.invoiceNumber ? ` ${doc.invoice.invoiceNumber}` : ''}`;
       } else {
@@ -36,7 +38,7 @@ export class PortalService {
       }
       return {
         id: doc.id,
-        type: doc.type as 'CONTRACT' | 'INVOICE',
+        type: doc.type as 'CONTRACT' | 'INVOICE' | 'SONG_LIST',
         label,
         url: this.storage.getPublicUrl(doc.storageKey),
         createdAt: doc.createdAt.toISOString(),
@@ -171,6 +173,7 @@ export class PortalService {
     if (!data) throw new NotFoundException('Booking not found');
     if (!data.musicFormConfig) throw new NotFoundException('Music form not found');
 
+    const submittedAt = new Date();
     await this.repo.upsertMusicFormResponse(
       data.id,
       data.userId,
@@ -178,6 +181,115 @@ export class PortalService {
       dto.specialRequests,
       dto.notes,
     );
+
+    // Fire-and-forget: PDF generation + email (do not fail the submission)
+    this.generateSongListAndNotify(data, dto, submittedAt).catch(() => {});
+  }
+
+  private async generateSongListAndNotify(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    bookingData: { id: string; userId: string; musicFormConfig: any },
+    dto: SubmitMusicFormDto,
+    submittedAt: Date,
+  ) {
+    const [booking, publicProfile, songs] = await Promise.all([
+      this.repo.findBookingForSongList(bookingData.id),
+      this.repo.findPublicProfile(bookingData.userId),
+      this.repo.findSongsByIds(bookingData.userId, [
+        ...dto.selectedSongIds,
+        ...dto.specialRequests.map((r) => r.songId).filter((id): id is string => !!id),
+      ]),
+    ]);
+
+    if (!booking || !publicProfile) return;
+
+    const songMap = new Map(songs.map((s) => [s.id, s]));
+    const config = bookingData.musicFormConfig as { keyMoments: Array<{ label: string; section: string }>; enabledGenres: string[] };
+
+    const selectedSongs = dto.selectedSongIds
+      .map((id) => songMap.get(id))
+      .filter((s): s is NonNullable<typeof s> => s !== undefined);
+
+    const specialRequests = config.keyMoments.map((km) => {
+      const req = dto.specialRequests.find((r) => r.key === km.label);
+      return {
+        key: km.label,
+        section: km.section,
+        song: req?.songId ? (songMap.get(req.songId) ?? undefined) : undefined,
+        freeText: req?.freeText,
+      };
+    });
+
+    const bookingTitle = booking.title ?? `${booking.customer.name} · ${booking.date.toISOString().split('T')[0]}`;
+    const bookingDate = booking.date.toISOString().split('T')[0];
+    const musicianName = publicProfile.displayName ?? publicProfile.businessName;
+
+    // Generate PDF
+    const { buffer } = await this.documents.generateAndStoreSongListPdf(
+      bookingData.userId,
+      bookingData.id,
+      {
+        musicianName,
+        customerName: booking.customer.name,
+        bookingDate,
+        venueName: booking.venue?.name ?? null,
+        specialRequests,
+        selectedSongs,
+        notes: dto.notes ?? null,
+        submittedAt: submittedAt.toISOString().replace('T', ' ').split('.')[0] + ' UTC',
+      },
+    );
+
+    if (!publicProfile.email) return;
+
+    // Build email body
+    const adminUrl = `${process.env.APP_BASE_URL}/admin/bookings/${bookingData.id}`;
+    let body = `${booking.customer.name} has submitted their song requests for ${bookingTitle}.\n\n`;
+
+    if (specialRequests.length > 0) {
+      body += 'KEY MOMENTS\n';
+      const sectionMap = new Map<string, typeof specialRequests>();
+      for (const req of specialRequests) {
+        if (!sectionMap.has(req.section)) sectionMap.set(req.section, []);
+        sectionMap.get(req.section)!.push(req);
+      }
+      for (const [section, reqs] of sectionMap.entries()) {
+        body += `\n${section}\n`;
+        for (const req of reqs) {
+          const song = req.song
+            ? `${req.song.title}${req.song.artist ? ` — ${req.song.artist}` : ''}`
+            : req.freeText ?? '(no selection)';
+          body += `  ${req.key}: ${song}\n`;
+        }
+      }
+      body += '\n';
+    }
+
+    if (selectedSongs.length > 0) {
+      body += 'GENERAL REQUESTS\n';
+      const genreMap = new Map<string, typeof selectedSongs>();
+      for (const song of selectedSongs) {
+        if (!genreMap.has(song.genre)) genreMap.set(song.genre, []);
+        genreMap.get(song.genre)!.push(song);
+      }
+      for (const [genre, songs] of genreMap.entries()) {
+        body += `\n${genre}\n`;
+        for (const song of songs) {
+          body += `  ${song.title}${song.artist ? ` — ${song.artist}` : ''}\n`;
+        }
+      }
+      body += '\n';
+    }
+
+    if (dto.notes) body += `NOTES\n${dto.notes}\n\n`;
+    body += `View booking: ${adminUrl}`;
+
+    await this.mail.send({
+      to: publicProfile.email,
+      subject: `${booking.customer.name} has submitted their song requests for ${bookingTitle}`,
+      body: body.replace(/\n/g, '<br>'),
+      attachments: [{ filename: 'song-list.pdf', content: buffer }],
+    });
   }
 
   private async sendSigningNotification(

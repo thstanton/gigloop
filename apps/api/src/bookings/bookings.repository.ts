@@ -192,6 +192,26 @@ export class BookingsRepository {
     return this.prisma.musicFormConfig.findUnique({ where: { bookingId } });
   }
 
+  findMusicFormResponse(userId: string, bookingId: string) {
+    return this.prisma.musicFormResponse.findUnique({
+      where: { bookingId },
+      select: {
+        selectedSongIds: true,
+        specialRequests: true,
+        notes: true,
+        submittedAt: true,
+        booking: { select: { userId: true } },
+      },
+    });
+  }
+
+  findSongsByIds(userId: string, ids: string[]) {
+    return this.prisma.song.findMany({
+      where: { id: { in: ids }, userId },
+      select: { id: true, title: true, artist: true, genre: true },
+    });
+  }
+
   upsertMusicFormConfig(userId: string, bookingId: string, dto: UpsertMusicFormConfigDto) {
     return this.prisma.musicFormConfig.upsert({
       where: { bookingId },

@@ -112,6 +112,27 @@ export class PortalRepository {
     });
   }
 
+  findBookingForSongList(bookingId: string) {
+    return this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      select: {
+        id: true,
+        title: true,
+        date: true,
+        customer: { select: { name: true } },
+        venue: { select: { name: true } },
+      },
+    });
+  }
+
+  findSongsByIds(userId: string, ids: string[]) {
+    if (!ids.length) return Promise.resolve([]);
+    return this.prisma.song.findMany({
+      where: { id: { in: ids }, userId },
+      select: { id: true, title: true, artist: true, genre: true },
+    });
+  }
+
   findDepositInvoice(bookingId: string, userId: string) {
     return this.prisma.invoice.findFirst({
       where: { bookingId, userId, isDeposit: true, status: 'SENT' },

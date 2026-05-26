@@ -6,6 +6,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { DocumentsRepository } from './documents.repository';
 import { buildInvoiceDefinition, type InvoicePdfData } from './invoice-document';
+import { buildSongListDefinition, type SongListPdfData } from './song-list-document';
 import { renderTiptapToPdfmake } from '../mail/tiptap-pdfmake';
 import type { EmailContext } from '../mail/mail.service';
 import { substituteTiptapVariables } from '../mail/tiptap-portal';
@@ -246,5 +247,24 @@ export class DocumentsService {
     const doc = await this.repo.findContractForBooking(userId, bookingId);
     if (!doc) return null;
     return { ...doc, url: this.storage.getPublicUrl(doc.storageKey) };
+  }
+
+  async generateAndStoreSongListPdf(
+    userId: string,
+    bookingId: string,
+    data: SongListPdfData,
+  ): Promise<{ buffer: Buffer; url: string }> {
+    const docDef = buildSongListDefinition(data);
+    const buffer: Buffer = await (pdfmake.createPdf(docDef).getBuffer() as Promise<Buffer>);
+
+    const key = `song-lists/${userId}/${bookingId}.pdf`;
+    await this.storage.putObject(key, buffer, 'application/pdf');
+
+    // Replace any existing SONG_LIST document
+    const existing = await this.repo.findSongListForBooking(userId, bookingId);
+    if (existing) await this.repo.delete(existing.id);
+
+    await this.repo.create(userId, bookingId, 'SONG_LIST', key);
+    return { buffer, url: this.storage.getPublicUrl(key) };
   }
 }
