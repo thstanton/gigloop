@@ -15,7 +15,7 @@ The initial design used Inter (body), Playfair (unused), a cool blue primary, an
 
 ### Colour palette
 - **Primary (interactive):** Deep forest green — rich, dark, high contrast on warm off-white. Approx `hsl(152, 45%, 25%)`. Used for buttons, links, focus rings, active nav states.
-- **App chrome:** Forest green background on the sidebar (desktop) and top bar (mobile), with light text. Creates a strong visual anchor that immediately distinguishes the tool from the plain-surface default.
+- **App chrome:** Dark warm charcoal on the sidebar (desktop) and top/bottom bars (mobile) — approx `hsl(30, 8%, 13%)` for the top bar, slightly deeper `hsl(30, 8%, 9%)` for the desktop sidebar. Light warm off-white text. Creates a strong visual anchor that distinguishes the tool from the plain-surface default. Green is deliberately reserved for interactive accents (buttons, links, active states) and must not dominate structural surfaces.
 - **Neutrals:** Warm throughout. Background is barely-off-white (warm hue ~35–40, not cool ~220). Surface, borders, and muted text all shift from cool-gray to warm-gray. Warmth should be felt rather than seen — the green and typography carry the distinctiveness.
 - **Foreground:** Warm near-black (slight warm undertone, not the current cool-blue near-black).
 
@@ -55,7 +55,8 @@ Mobile layout is unchanged — the two-panel split only activates at `md` (768px
 - **Dark theme:** Rejected for MVP. Light with warm neutrals is more readable on-the-go (mobile, between soundchecks). Dark mode is a P2 option.
 - **All-sans typography (better sans only):** Considered staying sans throughout with a better font. Rejected — Playfair at display scale is the single biggest differentiator and fits the wedding stationery reference directly.
 - **Muted/dusty green primary:** Considered. Rejected — muted greens look washed out on buttons and lose contrast on warm off-white backgrounds. Functional interactive elements need a confident colour.
-- **Neutral chrome:** Considered keeping the nav warm off-white (blending with content). Rejected — lack of contrast between chrome and content was identified as the most obvious weakness of the current design. Green chrome resolves it.
+- **Neutral chrome:** Considered keeping the nav warm off-white (blending with content). Rejected — lack of contrast between chrome and content was identified as the most obvious weakness of the current design.
+- **Green chrome:** Implemented initially. Rejected — the all-green nav reads as thematic ("garden centre") rather than refined. Green belongs in accents, not in structural surfaces. Dark charcoal resolves the contrast problem without overpowering the palette.
 - **Rounded-pill status indicators:** Current default. Rejected in favour of sharp rectangular badges — more consistent with the 2px radius system and more distinctive.
 
 ## Consequences
