@@ -120,6 +120,7 @@ export default function BookingEditDrawer({ booking }: Props) {
               control={control}
               register={register}
               errors={errors}
+              hideNotes
             />
 
             {mutation.isError && (

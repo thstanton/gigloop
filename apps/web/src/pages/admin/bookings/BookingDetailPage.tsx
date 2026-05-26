@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@clerk/react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, CheckCircle2, Circle, AlertTriangle, Mail, Music, FileText, DollarSign, FolderOpen, ChevronDown, Check, Pencil, Plus, Send, Download, Heart, GlassWater, Utensils, Moon, Briefcase, Music2, Trash2 } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -123,6 +124,69 @@ function StatusDropdown({ booking }: { booking: BookingDetail }) {
         ))}
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+// ─── InlineNotes ─────────────────────────────────────────────────────────────
+
+function InlineNotes({ bookingId, initialNotes }: { bookingId: string; initialNotes: string | null }) {
+  const queryClient = useQueryClient();
+  const [value, setValue] = useState(initialNotes ?? '');
+  const [savedVisible, setSavedVisible] = useState(false);
+  const lastSavedRef = useRef(initialNotes ?? '');
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const mutation = useMutation({
+    mutationFn: (notes: string) => apiPatch(`/bookings/${bookingId}`, { notes: notes || null }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['booking', bookingId] });
+      queryClient.invalidateQueries({ queryKey: ['bookings'] });
+      setSavedVisible(true);
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+      savedTimerRef.current = setTimeout(() => setSavedVisible(false), 2000);
+    },
+  });
+
+  // Sync from server when nothing is pending (e.g. after drawer save)
+  useEffect(() => {
+    if (!mutation.isPending && value === lastSavedRef.current) {
+      setValue(initialNotes ?? '');
+    }
+    lastSavedRef.current = initialNotes ?? '';
+  }, [initialNotes]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Debounced auto-save
+  useEffect(() => {
+    if (value === lastSavedRef.current) return;
+    const timer = setTimeout(() => {
+      lastSavedRef.current = value;
+      mutation.mutate(value);
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    return () => { if (savedTimerRef.current) clearTimeout(savedTimerRef.current); };
+  }, []);
+
+  const statusText = mutation.isPending ? 'Saving…' : savedVisible ? 'Saved' : null;
+
+  return (
+    <section>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-semibold text-foreground">Notes</h2>
+        <span className={`text-xs transition-opacity duration-300 ${statusText ? 'opacity-100' : 'opacity-0'} ${savedVisible && !mutation.isPending ? 'text-status-confirmed' : 'text-muted'}`}>
+          {statusText ?? 'Saved'}
+        </span>
+      </div>
+      <Textarea
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        placeholder="Add notes about this booking…"
+        rows={3}
+        className="resize-none text-sm"
+      />
+    </section>
   );
 }
 
@@ -1030,19 +1094,13 @@ export default function BookingDetailPage() {
       </section>
 
       {/* 3. Notes & Checklist */}
-      {(booking.notes || (booking.status !== 'CANCELLED' && checklist.length > 0)) && (
-        <div className={
-          booking.notes && booking.status !== 'CANCELLED' && checklist.length > 0
-            ? 'grid grid-cols-1 md:grid-cols-2 gap-6'
-            : undefined
-        }>
-          {booking.notes && (
-            <section>
-              <SectionHeader label="Notes" />
-              <p className="text-sm text-muted whitespace-pre-wrap">{booking.notes}</p>
-            </section>
-          )}
-          {booking.status !== 'CANCELLED' && checklist.length > 0 && (
+      <div className={
+        booking.status !== 'CANCELLED' && checklist.length > 0
+          ? 'grid grid-cols-1 md:grid-cols-2 gap-6'
+          : undefined
+      }>
+        <InlineNotes bookingId={booking.id} initialNotes={booking.notes} />
+        {booking.status !== 'CANCELLED' && checklist.length > 0 && (
             <section>
               <SectionHeader label="Checklist" />
               <div className="space-y-2.5">
@@ -1125,7 +1183,6 @@ export default function BookingDetailPage() {
             </section>
           )}
         </div>
-      )}
 
       {/* 4. For the day */}
       <section>

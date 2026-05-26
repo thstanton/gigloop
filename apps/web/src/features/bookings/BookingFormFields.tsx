@@ -151,6 +151,7 @@ interface Props {
   errors: FieldErrors<BookingFormValues>;
   songRequestFormEnabled?: boolean;
   formats?: PerformanceFormat[];
+  hideNotes?: boolean;
 }
 
 export function BookingFormFields({
@@ -159,6 +160,7 @@ export function BookingFormFields({
   errors,
   songRequestFormEnabled,
   formats,
+  hideNotes,
 }: Props) {
   return (
     <div className="space-y-6">
@@ -320,15 +322,17 @@ export function BookingFormFields({
         </div>
       )}
 
-      {/* Notes */}
-      <div className="space-y-1.5">
-        <Label>Notes (optional)</Label>
-        <Textarea
-          rows={3}
-          placeholder="Any notes about this booking..."
-          {...register('notes')}
-        />
-      </div>
+      {/* Notes — hidden when managed by inline auto-save on the detail page */}
+      {!hideNotes && (
+        <div className="space-y-1.5">
+          <Label>Notes (optional)</Label>
+          <Textarea
+            rows={3}
+            placeholder="Any notes about this booking..."
+            {...register('notes')}
+          />
+        </div>
+      )}
     </div>
   );
 }
