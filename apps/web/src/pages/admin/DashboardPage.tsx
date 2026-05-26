@@ -359,7 +359,7 @@ export default function DashboardPage() {
   const nextGig = nextUpcomingGig(bookings);
 
   return (
-    <div className="min-h-screen bg-dashboard">
+    <div className="min-h-screen">
       <div className="px-4 md:px-8 py-8 max-w-7xl mx-auto">
 
         {/* Welcome */}
