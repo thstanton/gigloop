@@ -10,12 +10,26 @@ import type { BookingRef, BookingStatus } from '@/types/api';
 
 // ─── Info row ─────────────────────────────────────────────────────────────────
 
-function InfoRow({ label, value }: { label: string; value: string | null | undefined }) {
+function InfoRow({
+  label,
+  value,
+  href,
+}: {
+  label: string;
+  value: string | null | undefined;
+  href?: string;
+}) {
   if (!value) return null;
   return (
     <div className="py-3 grid grid-cols-[140px_1fr] gap-4 border-b border-border last:border-0">
       <span className="text-sm text-muted">{label}</span>
-      <span className="text-sm text-foreground whitespace-pre-wrap">{value}</span>
+      {href ? (
+        <a href={href} className="text-sm text-foreground hover:text-primary transition-colors">
+          {value}
+        </a>
+      ) : (
+        <span className="text-sm text-foreground whitespace-pre-wrap">{value}</span>
+      )}
     </div>
   );
 }
@@ -142,8 +156,8 @@ export default function ContactDetailPage() {
 
       {/* Details */}
       <div className="border-t border-border mb-8">
-        <InfoRow label="Email" value={contact.email} />
-        <InfoRow label="Phone" value={contact.phone} />
+        <InfoRow label="Email" value={contact.email} href={contact.email ? `mailto:${contact.email}` : undefined} />
+        <InfoRow label="Phone" value={contact.phone} href={contact.phone ? `tel:${contact.phone}` : undefined} />
         <InfoRow label="Website" value={contact.website} />
         <InfoRow label="Address" value={contact.address} />
         <InfoRow label="Notes" value={contact.notes} />

@@ -163,7 +163,6 @@ function PersonCard({
   commissionArrangement?: string | null;
   linkState?: Record<string, string>;
 }) {
-  const contactLine = [contact.email, contact.phone].filter(Boolean).join(' · ');
   return (
     <Link
       to={`/admin/contacts/${contact.id}`}
@@ -176,7 +175,17 @@ function PersonCard({
           <p className="text-sm font-medium text-foreground group-hover:text-primary transition-colors">
             {contact.name}
           </p>
-          {contactLine && <p className="text-sm text-muted mt-0.5">{contactLine}</p>}
+          {(contact.email || contact.phone) && (
+            <p className="text-sm text-muted mt-0.5" onClick={(e) => e.stopPropagation()}>
+              {contact.email && (
+                <a href={`mailto:${contact.email}`} className="hover:text-primary transition-colors">{contact.email}</a>
+              )}
+              {contact.email && contact.phone && ' · '}
+              {contact.phone && (
+                <a href={`tel:${contact.phone}`} className="hover:text-primary transition-colors">{contact.phone}</a>
+              )}
+            </p>
+          )}
           {commissionArrangement && (
             <p className="text-sm text-muted mt-0.5">
               <span className="text-foreground">Commission</span>
@@ -627,7 +636,6 @@ function MusicFormSection({ booking, documents }: { booking: BookingDetail; docu
 // ─── Venue card ───────────────────────────────────────────────────────────────
 
 function VenueCard({ venue, linkState }: { venue: Contact; linkState?: Record<string, string> }) {
-  const contactLine = [venue.email, venue.phone].filter(Boolean).join(' · ');
   return (
     <Card title="Venue">
       <Link
@@ -640,7 +648,17 @@ function VenueCard({ venue, linkState }: { venue: Contact; linkState?: Record<st
         </span>
         <ChevronRight size={14} className="text-muted group-hover:text-primary transition-colors" />
       </Link>
-      {contactLine && <p className="text-sm text-muted mt-0.5">{contactLine}</p>}
+      {(venue.email || venue.phone) && (
+        <p className="text-sm text-muted mt-0.5">
+          {venue.email && (
+            <a href={`mailto:${venue.email}`} className="hover:text-primary transition-colors">{venue.email}</a>
+          )}
+          {venue.email && venue.phone && ' · '}
+          {venue.phone && (
+            <a href={`tel:${venue.phone}`} className="hover:text-primary transition-colors">{venue.phone}</a>
+          )}
+        </p>
+      )}
       {venue.address && (
         <p className="text-sm text-muted mt-0.5 whitespace-pre-wrap">{venue.address}</p>
       )}
@@ -812,7 +830,12 @@ function CommunicationRow({ comm }: { comm: Communication }) {
           <SheetHeader className="px-6 pt-6 pb-4 border-b border-border shrink-0">
             <SheetTitle className="truncate">{comm.subject}</SheetTitle>
             <div className="space-y-0.5 mt-1">
-              <p className="text-xs text-muted">To: {comm.contact.name}{comm.contact.email ? ` <${comm.contact.email}>` : ''}</p>
+              <p className="text-xs text-muted">
+                To: {comm.contact.name}
+                {comm.contact.email && (
+                  <> &lt;<a href={`mailto:${comm.contact.email}`} className="hover:text-primary transition-colors">{comm.contact.email}</a>&gt;</>
+                )}
+              </p>
               {comm.sentAt && <p className="text-xs text-muted">Sent: {formatDate(comm.sentAt)}</p>}
             </div>
           </SheetHeader>

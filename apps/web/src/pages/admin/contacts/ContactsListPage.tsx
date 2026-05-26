@@ -81,10 +81,30 @@ function ContactsTable({ contacts }: { contacts: Contact[] }) {
                 <span className="text-sm font-medium text-foreground">{c.name}</span>
               </td>
               <td className="px-4">
-                <span className="text-sm text-muted">{c.email ?? '—'}</span>
+                {c.email ? (
+                  <a
+                    href={`mailto:${c.email}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-sm text-muted hover:text-primary transition-colors"
+                  >
+                    {c.email}
+                  </a>
+                ) : (
+                  <span className="text-sm text-muted">—</span>
+                )}
               </td>
               <td className="px-4">
-                <span className="text-sm text-muted">{c.phone ?? '—'}</span>
+                {c.phone ? (
+                  <a
+                    href={`tel:${c.phone}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-sm text-muted hover:text-primary transition-colors"
+                  >
+                    {c.phone}
+                  </a>
+                ) : (
+                  <span className="text-sm text-muted">—</span>
+                )}
               </td>
             </tr>
           ))}
@@ -108,8 +128,18 @@ function ContactCardList({ contacts }: { contacts: Contact[] }) {
         >
           <span className="text-sm font-medium text-foreground">{c.name}</span>
           {(c.email || c.phone) && (
-            <span className="text-sm text-muted">
-              {[c.email, c.phone].filter(Boolean).join(' · ')}
+            <span className="text-sm text-muted" onClick={(e) => e.stopPropagation()}>
+              {c.email && (
+                <a href={`mailto:${c.email}`} className="hover:text-primary transition-colors">
+                  {c.email}
+                </a>
+              )}
+              {c.email && c.phone && ' · '}
+              {c.phone && (
+                <a href={`tel:${c.phone}`} className="hover:text-primary transition-colors">
+                  {c.phone}
+                </a>
+              )}
             </span>
           )}
         </div>
