@@ -3,6 +3,7 @@ import type { EmailContext } from './mail.service';
 
 const ctx: EmailContext = {
   customerName: 'Jane Smith',
+  greetingName: 'Jane',
   bookingDate: '2026-08-15',
   venueName: 'The Grand Hotel',
   bookingFee: '£1,500.00',
@@ -17,6 +18,7 @@ const ctx: EmailContext = {
 
 const emptyCtx: EmailContext = {
   customerName: '',
+  greetingName: '',
   bookingDate: '',
   venueName: '',
   bookingFee: '',

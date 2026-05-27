@@ -7,6 +7,11 @@ export class CreateContactDto {
   @IsNotEmpty()
   name!: string;
 
+  @ApiPropertyOptional({ example: 'Jane', description: 'Informal first name used in greetings and emails' })
+  @IsOptional()
+  @IsString()
+  greetingName?: string;
+
   @ApiPropertyOptional({ example: 'jane@example.com' })
   @IsOptional()
   @IsEmail()

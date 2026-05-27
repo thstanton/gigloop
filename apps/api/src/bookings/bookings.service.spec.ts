@@ -64,6 +64,7 @@ const set = { id: 's1', bookingId: 'b1', userId: 'u1' };
 
 const baseContext: EmailContext = {
   customerName: 'Jane Smith',
+  greetingName: 'Jane',
   bookingDate: '2026-08-15',
   venueName: 'The Grand Hotel',
   bookingFee: '£1,500.00',

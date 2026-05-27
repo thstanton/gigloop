@@ -30,6 +30,7 @@ export const VARIABLE_FALLBACKS: Partial<Record<string, string>> = {
   bookingDate: 'your event',
   venueName: 'the venue',
   customerName: 'your client',
+  greetingName: 'there',
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

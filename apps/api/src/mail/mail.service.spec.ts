@@ -38,6 +38,7 @@ const publicProfile = {
 
 const fullContext: EmailContext = {
   customerName: 'Jane Doe',
+  greetingName: 'Jane',
   bookingDate: '2025-08-15',
   venueName: 'The Grand Hotel',
   bookingFee: '£2500.00',
@@ -198,7 +199,7 @@ describe('MailService', () => {
 
   describe('renderTemplate', () => {
     const emptyContext: EmailContext = {
-      customerName: '', bookingDate: '', venueName: '', bookingFee: '',
+      customerName: '', greetingName: '', bookingDate: '', venueName: '', bookingFee: '',
       setsSchedule: '', musicianName: '', musicianEmail: '', portalLink: '',
       issueDate: '', invoiceTotal: '', invoiceDueDate: '',
     };

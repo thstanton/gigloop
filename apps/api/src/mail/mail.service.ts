@@ -6,6 +6,7 @@ import { TEMPLATE_DEFAULT_SUBJECTS, VARIABLE_FALLBACKS } from '../templates/defa
 
 export interface EmailContext {
   customerName: string;
+  greetingName: string;
   bookingDate: string;
   venueName: string;
   bookingFee: string;
@@ -97,6 +98,7 @@ export class MailService {
 
     return {
       customerName: booking.customer.name,
+      greetingName: booking.customer.greetingName ?? booking.customer.name,
       bookingDate: booking.date ? booking.date.toISOString().split('T')[0] : '',
       venueName: booking.venue?.name ?? '',
       bookingFee: booking.fee != null ? `£${Number(booking.fee).toFixed(2)}` : '',

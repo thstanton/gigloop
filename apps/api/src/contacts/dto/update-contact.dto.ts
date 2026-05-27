@@ -8,6 +8,12 @@ export class UpdateContactDto {
   @IsNotEmpty()
   name?: string;
 
+  @ApiPropertyOptional({ example: 'Jane', nullable: true, description: 'Informal first name used in greetings and emails' })
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsString()
+  greetingName?: string | null;
+
   @ApiPropertyOptional({ example: 'jane@example.com', nullable: true })
   @IsOptional()
   @ValidateIf((_, v) => v !== null)

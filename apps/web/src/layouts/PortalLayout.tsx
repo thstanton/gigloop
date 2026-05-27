@@ -48,7 +48,7 @@ export function PortalLayout({ profile, children, wide = false, hero }: PortalLa
             className={`font-semibold ${displayFontClass} ${romantic ? 'text-xl tracking-wide' : 'text-sm tracking-tight'} ${bold ? 'text-white' : ''}`}
             style={!bold ? { color: brand } : undefined}
           >
-            {profile.displayName ?? profile.businessName}
+            {profile.businessName}
           </p>
         </div>
       </header>

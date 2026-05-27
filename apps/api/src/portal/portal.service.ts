@@ -62,6 +62,7 @@ export class PortalService {
         title: booking.title,
         status: booking.status,
         customerName: booking.customer.name,
+        customerGreetingName: booking.customer.greetingName ?? null,
         venueName: booking.venue?.name ?? null,
         sets: booking.sets.map((s) => ({
           order: s.order,

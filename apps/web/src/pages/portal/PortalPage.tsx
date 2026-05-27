@@ -48,19 +48,16 @@ const FORMAT_ICON_MAP: Record<string, React.ComponentType<any>> = {
 // ─── Contact card ─────────────────────────────────────────────────────────────
 
 function ContactCard({ profile, bold }: { profile: PortalPublicProfile; bold: boolean }) {
-  const name = profile.displayName ?? profile.businessName;
-  const showBusiness = profile.displayName != null && profile.displayName !== profile.businessName;
-
   return (
     <div className={`rounded-lg p-5 space-y-3 ${bold ? 'bg-white/15' : 'bg-[#f5f2ed]'}`}>
+      <p className={`text-xs font-medium uppercase tracking-wide ${bold ? 'text-white/50' : 'text-[#a39e97]'}`}>
+        Get in touch
+      </p>
       {profile.showContactPhoto && profile.photo && (
-        <img src={profile.photo} alt={name} className="w-16 h-16 rounded-full object-cover" />
+        <img src={profile.photo} alt={profile.businessName} className="w-16 h-16 rounded-full object-cover" />
       )}
       <div>
-        <p className={`font-semibold ${bold ? 'text-white' : 'text-[#1a1a1a]'}`}>{name}</p>
-        {showBusiness && (
-          <p className={`text-sm ${bold ? 'text-white/55' : 'text-[#9a9189]'}`}>{profile.businessName}</p>
-        )}
+        <p className={`font-semibold ${bold ? 'text-white' : 'text-[#1a1a1a]'}`}>{profile.businessName}</p>
       </div>
       {profile.showContactEmail && profile.email && (
         <a
@@ -86,8 +83,8 @@ function ContactCard({ profile, bold }: { profile: PortalPublicProfile; bold: bo
 
 // ─── LIGHT greeting (full-width, above the two-column grid) ───────────────────
 
-function LightGreeting({ firstName, title, theme }: {
-  firstName: string;
+function LightGreeting({ greetingName, title, theme }: {
+  greetingName: string;
   title: string | null;
   theme: string | null;
 }) {
@@ -97,7 +94,7 @@ function LightGreeting({ firstName, title, theme }: {
   return (
     <div className="mb-10">
       <h1 className={`${displayFont} ${romantic ? 'text-5xl' : 'text-4xl font-light'} text-[#1a1a1a] leading-tight mb-2`}>
-        {romantic ? `Hello, ${firstName}!` : `Hello, ${firstName}.`}
+        {romantic ? `Hello, ${greetingName}!` : `Hello, ${greetingName}.`}
       </h1>
       {title && (
         <p className="text-base text-[#9a9189]">{title}</p>
@@ -108,8 +105,8 @@ function LightGreeting({ firstName, title, theme }: {
 
 // ─── BOLD hero ────────────────────────────────────────────────────────────────
 
-function BoldHero({ firstName, title, formattedDate, portalHeroImage, theme, brand }: {
-  firstName: string;
+function BoldHero({ greetingName, title, formattedDate, portalHeroImage, theme, brand }: {
+  greetingName: string;
   title: string | null;
   formattedDate: string;
   portalHeroImage: string | null;
@@ -141,7 +138,7 @@ function BoldHero({ firstName, title, formattedDate, portalHeroImage, theme, bra
       />
       <div className="relative z-10 max-w-4xl mx-auto px-6 pt-12 pb-10">
         <h1 className={`${displayFont} ${romantic ? 'text-5xl' : 'text-4xl font-semibold'} text-white leading-tight mb-2`}>
-          {romantic ? `Hello, ${firstName}!` : (title ?? `Hello, ${firstName}.`)}
+          {romantic ? `Hello, ${greetingName}!` : (title ?? `Hello, ${greetingName}.`)}
         </h1>
         {romantic && title && (
           <p className="text-white/80 text-base mb-1">{title}</p>
@@ -199,7 +196,7 @@ function SetsCard({ sets, formats, bold }: { sets: PortalBookingSet[]; formats: 
                   )}
                 </span>
                 {s.startTime && (
-                  <span className={`text-sm flex-shrink-0 ${mutedClass}`}>{s.startTime}</span>
+                  <span className={`text-sm flex-shrink-0 font-medium ${labelClass}`}>{s.startTime}</span>
                 )}
               </div>
             );
@@ -442,7 +439,7 @@ export default function PortalPage() {
 
   const { publicProfile, booking } = data;
   const boldTheme = publicProfile.portalTheme === 'BOLD_MODERN' || publicProfile.portalTheme === 'BOLD_ROMANTIC';
-  const firstName = booking.customerName.split(' ')[0];
+  const greetingName = booking.customerGreetingName ?? booking.customerName;
   const formattedDate = new Date(booking.date).toLocaleDateString('en-GB', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
   });
@@ -451,7 +448,7 @@ export default function PortalPage() {
 
   const hero = boldTheme ? (
     <BoldHero
-      firstName={firstName}
+      greetingName={greetingName}
       title={booking.title}
       formattedDate={formattedDate}
       portalHeroImage={publicProfile.portalHeroImage}
@@ -465,7 +462,7 @@ export default function PortalPage() {
       {/* LIGHT: greeting spans full width above the two-column grid */}
       {!boldTheme && (
         <LightGreeting
-          firstName={firstName}
+          greetingName={greetingName}
           title={booking.title}
           theme={publicProfile.portalTheme}
         />

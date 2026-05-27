@@ -44,6 +44,7 @@ export interface Contact {
   createdAt: string;
   updatedAt: string;
   name: string;
+  greetingName: string | null;
   email: string | null;
   phone: string | null;
   address: string | null;
@@ -71,6 +72,7 @@ export interface ContactDetail extends Contact {
 
 export interface CreateContactInput {
   name: string;
+  greetingName?: string;
   email?: string;
   phone?: string;
   address?: string;
@@ -84,6 +86,7 @@ export interface CreateContactInput {
 
 export interface UpdateContactInput {
   name?: string;
+  greetingName?: string | null;
   email?: string | null;
   phone?: string | null;
   address?: string | null;
@@ -513,6 +516,7 @@ export interface PortalBooking {
   title: string | null;
   status: BookingStatus;
   customerName: string;
+  customerGreetingName: string | null;
   venueName: string | null;
   sets: PortalBookingSet[];
   formats: PortalBookingFormat[];
