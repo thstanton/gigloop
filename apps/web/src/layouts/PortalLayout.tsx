@@ -35,10 +35,10 @@ export function PortalLayout({ profile, children, wide = false, hero }: PortalLa
       style={bold ? { backgroundColor: brand } : undefined}
     >
       <header
-        className={`px-6 ${bold ? 'py-4 border-b border-white/15' : 'py-5 bg-white border-b border-[#ede9e4]'}`}
+        className={`${bold ? 'py-4 border-b border-white/15' : 'py-5 bg-white border-b border-[#ede9e4]'}`}
         style={bold ? { backgroundColor: brand } : undefined}
       >
-        <div className={`${wide ? 'max-w-4xl' : 'max-w-2xl'} mx-auto flex items-center gap-4`}>
+        <div className={`${wide ? 'max-w-4xl' : 'max-w-2xl'} mx-auto px-6 flex items-center gap-4`}>
           {profile.logoUrl && (
             <img
               src={profile.logoUrl}
