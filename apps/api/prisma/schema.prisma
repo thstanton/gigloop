@@ -151,11 +151,37 @@ model Booking {
   musicFormConfig   MusicFormConfig?
   musicFormResponse MusicFormResponse?
   contracts         Contract[]
+  checklistItems    BookingChecklistItem[]
 
   @@index([userId])
   @@index([customerId])
   @@index([venueId])
   @@index([referrerId])
+}
+
+model BookingChecklistItem {
+  id        String   @id @default(uuid())
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  bookingId String
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  key              String?
+  label            String
+  completedBy      String    @default("USER")
+  state            String    @default("PENDING")
+  order            Int
+  dependsOn        String[]
+  autoCompleteRule Json?
+  requiredForStatus String?
+  completedAt      DateTime?
+  dueDate          DateTime?
+  dueDateRule      Json?
+
+  @@index([userId])
+  @@index([bookingId])
 }
 
 model Contract {

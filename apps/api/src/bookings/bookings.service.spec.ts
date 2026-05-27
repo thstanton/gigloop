@@ -30,6 +30,9 @@ type MockRepo = {
   voidContract: jest.Mock;
   updateContract: jest.Mock;
   findContractById: jest.Mock;
+  seedChecklistItems: jest.Mock;
+  findChecklistItems: jest.Mock;
+  recomputeChecklistDueDates: jest.Mock;
 };
 
 type MockMail = { buildContext: jest.Mock };
@@ -60,6 +63,9 @@ function makeRepo(): MockRepo {
     voidContract: jest.fn(),
     updateContract: jest.fn(),
     findContractById: jest.fn(),
+    seedChecklistItems: jest.fn().mockResolvedValue({ count: 10 }),
+    findChecklistItems: jest.fn(),
+    recomputeChecklistDueDates: jest.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -153,32 +159,45 @@ describe('BookingsService', () => {
   });
 
   describe('create', () => {
+    const createdBooking = { ...booking, date: new Date('2026-06-01'), createdAt: new Date('2026-01-01') };
+
     it('delegates to repo.create when no formatIds provided', async () => {
-      repo.create.mockResolvedValue(booking);
+      repo.findUserProfile.mockResolvedValue(null);
+      repo.create.mockResolvedValue(createdBooking);
       const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1' };
       const result = await service.create('u1', dto);
       expect(repo.create).toHaveBeenCalledWith('u1', dto);
       expect(repo.findFormats).not.toHaveBeenCalled();
-      expect(result).toBe(booking);
+      expect(result).toBe(createdBooking);
+    });
+
+    it('seeds checklist items after creation', async () => {
+      repo.findUserProfile.mockResolvedValue(null);
+      repo.create.mockResolvedValue(createdBooking);
+      const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1' };
+      await service.create('u1', dto);
+      expect(repo.seedChecklistItems).toHaveBeenCalledWith(
+        'u1', createdBooking.id, expect.any(Array), createdBooking.date, createdBooking.createdAt,
+      );
     });
 
     it('fetches formats and calls createWithFormats when formatIds provided', async () => {
       const fmt = { id: 'f1', label: 'Wedding Ceremony', keyMoments: ['Processional'], defaultGenreSelection: ['CONTEMPORARY'], slots: [] };
       repo.findFormats.mockResolvedValue([fmt]);
       repo.findUserProfile.mockResolvedValue(null);
-      repo.createWithFormats.mockResolvedValue(booking);
+      repo.createWithFormats.mockResolvedValue(createdBooking);
       const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', formatIds: ['f1'] };
       const result = await service.create('u1', dto);
       expect(repo.findFormats).toHaveBeenCalledWith('u1', ['f1']);
       expect(repo.createWithFormats).toHaveBeenCalledWith('u1', dto, [fmt], false);
-      expect(result).toBe(booking);
+      expect(result).toBe(createdBooking);
     });
 
     it('passes songRequestFormEnabled=true when profile has it enabled', async () => {
       const fmt = { id: 'f1', label: 'Wedding Ceremony', keyMoments: [], defaultGenreSelection: [], slots: [] };
       repo.findFormats.mockResolvedValue([fmt]);
       repo.findUserProfile.mockResolvedValue({ songRequestFormEnabled: true });
-      repo.createWithFormats.mockResolvedValue(booking);
+      repo.createWithFormats.mockResolvedValue(createdBooking);
       const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', formatIds: ['f1'] };
       await service.create('u1', dto);
       expect(repo.createWithFormats).toHaveBeenCalledWith('u1', dto, [fmt], true);
@@ -188,19 +207,34 @@ describe('BookingsService', () => {
       const fmt1 = { id: 'f1', label: 'A', keyMoments: [], defaultGenreSelection: [], slots: [] };
       const fmt2 = { id: 'f2', label: 'B', keyMoments: [], defaultGenreSelection: [], slots: [] };
       repo.findFormats.mockResolvedValue([fmt2, fmt1]); // reversed from DB
-      repo.createWithFormats.mockResolvedValue(booking);
+      repo.findUserProfile.mockResolvedValue(null);
+      repo.createWithFormats.mockResolvedValue(createdBooking);
       const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', formatIds: ['f1', 'f2'] };
       await service.create('u1', dto);
       const orderedFormats = repo.createWithFormats.mock.calls[0][2];
       expect(orderedFormats[0].id).toBe('f1');
       expect(orderedFormats[1].id).toBe('f2');
     });
+
+    it('uses custom checklist defaults from preferences', async () => {
+      const customDefault = [{
+        key: 'custom_task', label: 'Custom task', completedBy: 'USER' as const,
+        dependsOn: [], autoCompleteRule: null, requiredForStatus: null, dueDateRule: null,
+      }];
+      repo.findUserProfile.mockResolvedValue({ preferences: { checklistDefaults: customDefault } });
+      repo.create.mockResolvedValue(createdBooking);
+      const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1' };
+      await service.create('u1', dto);
+      expect(repo.seedChecklistItems).toHaveBeenCalledWith(
+        'u1', createdBooking.id, customDefault, createdBooking.date, createdBooking.createdAt,
+      );
+    });
   });
 
   describe('update', () => {
     it('updates and returns result when booking exists', async () => {
       repo.findOne.mockResolvedValue(booking);
-      const updated = { ...booking, status: BookingStatus.CONFIRMED };
+      const updated = { ...booking, status: BookingStatus.CONFIRMED, date: new Date(), createdAt: new Date() };
       repo.update.mockResolvedValue(updated);
       const result = await service.update('u1', 'b1', { status: BookingStatus.CONFIRMED });
       expect(repo.update).toHaveBeenCalledWith('b1', { status: BookingStatus.CONFIRMED });
@@ -211,6 +245,23 @@ describe('BookingsService', () => {
       repo.findOne.mockResolvedValue(null);
       await expect(service.update('u1', 'missing', {})).rejects.toThrow(NotFoundException);
       expect(repo.update).not.toHaveBeenCalled();
+    });
+
+    it('recomputes checklist due dates when date changes', async () => {
+      const newDate = '2027-01-01';
+      const updated = { ...booking, date: new Date(newDate), createdAt: new Date() };
+      repo.findOne.mockResolvedValue(booking);
+      repo.update.mockResolvedValue(updated);
+      await service.update('u1', 'b1', { date: newDate });
+      expect(repo.recomputeChecklistDueDates).toHaveBeenCalledWith('b1', updated.date, updated.createdAt);
+    });
+
+    it('does not recompute checklist due dates when date does not change', async () => {
+      const updated = { ...booking, date: new Date(), createdAt: new Date() };
+      repo.findOne.mockResolvedValue(booking);
+      repo.update.mockResolvedValue(updated);
+      await service.update('u1', 'b1', { status: BookingStatus.CONFIRMED });
+      expect(repo.recomputeChecklistDueDates).not.toHaveBeenCalled();
     });
   });
 
@@ -386,6 +437,40 @@ describe('BookingsService', () => {
       repo.findOne.mockResolvedValue(null);
       await expect(service.upsertMusicFormConfig('u1', 'missing', dto)).rejects.toThrow(NotFoundException);
       expect(repo.upsertMusicFormConfig).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getChecklist', () => {
+    const now = new Date('2026-05-27T12:00:00Z');
+    const checklistItems = [
+      {
+        id: 'ci1', userId: 'u1', bookingId: 'b1', createdAt: now, updatedAt: now,
+        key: 'send_quote', label: 'Send quote', completedBy: 'USER', state: 'PENDING',
+        order: 1, dependsOn: [], autoCompleteRule: null, requiredForStatus: null,
+        completedAt: null, dueDate: null, dueDateRule: null,
+      },
+      {
+        id: 'ci2', userId: 'u1', bookingId: 'b1', createdAt: now, updatedAt: now,
+        key: 'send_contract', label: 'Send contract & deposit email', completedBy: 'USER', state: 'BLOCKED',
+        order: 4, dependsOn: ['create_contract'], autoCompleteRule: null, requiredForStatus: 'CONFIRMED',
+        completedAt: null, dueDate: new Date('2026-06-01'), dueDateRule: null,
+      },
+    ];
+
+    it('returns checklist items with ISO date strings', async () => {
+      repo.findOne.mockResolvedValue({ ...booking, musicFormConfig: null, musicFormResponse: null, contracts: [] });
+      repo.findChecklistItems.mockResolvedValue(checklistItems);
+      const result = await service.getChecklist('u1', 'b1');
+      expect(repo.findChecklistItems).toHaveBeenCalledWith('u1', 'b1');
+      expect(result[0].createdAt).toBe(now.toISOString());
+      expect(result[1].dueDate).toBe(new Date('2026-06-01').toISOString());
+      expect(result[0].dueDate).toBeNull();
+    });
+
+    it('throws NotFoundException when booking does not exist', async () => {
+      repo.findOne.mockResolvedValue(null);
+      await expect(service.getChecklist('u1', 'missing')).rejects.toThrow(NotFoundException);
+      expect(repo.findChecklistItems).not.toHaveBeenCalled();
     });
   });
 

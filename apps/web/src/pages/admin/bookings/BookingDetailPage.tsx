@@ -23,7 +23,6 @@ import ContactEditSheet from '@/features/contacts/ContactEditSheet';
 import ComposeEmailSheet from '@/features/communications/ComposeEmailSheet';
 import InvoiceSheet from '@/features/invoices/InvoiceSheet';
 import MarkSentDialog from '@/features/invoices/MarkSentDialog';
-import { buildChecklist } from '@/lib/buildChecklist';
 import { toast } from '@/lib/hooks/use-toast';
 import { apiGet, apiPatch, apiPost, apiPut } from '@/lib/api';
 import {
@@ -42,6 +41,7 @@ import {
 import type {
   BookingDetail,
   BookingStatus,
+  ChecklistItem,
   Contact,
   Contract,
   Document,
@@ -1018,6 +1018,12 @@ export default function BookingDetailPage() {
   const actions = useBookingActions(id!);
   const queryClient = useQueryClient();
 
+  const { data: checklist = [] } = useQuery({
+    queryKey: ['bookingChecklist', id],
+    queryFn: () => apiGet<ChecklistItem[]>(`/bookings/${id}/checklist`),
+    enabled: isLoaded && !!booking && booking.status !== 'CANCELLED',
+  });
+
   const createContract = useMutation({
     mutationFn: () => apiPost<Contract>(`/bookings/${id}/contracts`, {}),
     onSuccess: (data) => {
@@ -1091,10 +1097,25 @@ export default function BookingDetailPage() {
 
   const title = booking.title ?? EVENT_TYPE_LABELS[booking.eventType];
   const fee = formatFee(booking.fee);
-  const checklist =
-    booking.status !== 'CANCELLED'
-      ? buildChecklist(booking, communications, invoices)
-      : [];
+  const resolvedDepositMode = booking.depositTrackingMode ?? 'INVOICE';
+  const trackDeposit = resolvedDepositMode !== 'NONE';
+  const contractShortcutType = trackDeposit ? 'contract_and_deposit_cover' : 'contract_cover';
+
+  const CHECKLIST_SHORTCUTS: Record<string, {
+    shortcutTemplateType?: string;
+    shortcutAction?: 'create_deposit_invoice' | 'create_balance_invoice';
+    shortcutMarkDone?: 'mark_contract_signed' | 'mark_deposit_received';
+  }> = {
+    send_quote: { shortcutTemplateType: 'quote' },
+    create_deposit_invoice: { shortcutAction: 'create_deposit_invoice' },
+    send_contract: { shortcutTemplateType: contractShortcutType },
+    contract_signed: { shortcutMarkDone: 'mark_contract_signed' },
+    deposit_received: { shortcutMarkDone: 'mark_deposit_received' },
+    create_balance_invoice: { shortcutAction: 'create_balance_invoice' },
+    music_form_invite: { shortcutTemplateType: 'music_form_invite' },
+    send_thank_you: { shortcutTemplateType: 'thank_you' },
+  };
+
   const backState = { from: `/admin/bookings/${id}`, label: title };
 
   return (
@@ -1183,88 +1204,73 @@ export default function BookingDetailPage() {
             <section>
               <SectionHeader label="Checklist" />
               <div className="space-y-2.5">
-                {checklist.map((item) => (
-                  <div key={item.key} className="flex items-center justify-between gap-2.5">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      {item.state === 'done' ? (
-                        <CheckCircle2 size={16} className="text-status-confirmed flex-shrink-0" />
-                      ) : item.state === 'failed' ? (
-                        <AlertTriangle size={16} className="text-status-cancelled flex-shrink-0" />
-                      ) : item.state === 'blocked' ? (
-                        <Lock size={16} className="text-muted flex-shrink-0" />
-                      ) : (
-                        <Circle size={16} className="text-muted flex-shrink-0" />
-                      )}
-                      <div className="min-w-0">
+                {checklist.map((item) => {
+                  const isDone = item.state === 'COMPLETE';
+                  const isBlocked = item.state === 'BLOCKED';
+                  const shortcuts = item.key ? (CHECKLIST_SHORTCUTS[item.key] ?? {}) : {};
+                  return (
+                    <div key={item.id} className="flex items-center justify-between gap-2.5">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        {isDone ? (
+                          <CheckCircle2 size={16} className="text-status-confirmed flex-shrink-0" />
+                        ) : isBlocked ? (
+                          <Lock size={16} className="text-muted flex-shrink-0" />
+                        ) : (
+                          <Circle size={16} className="text-muted flex-shrink-0" />
+                        )}
                         <span
                           className={
-                            item.state === 'done'
+                            isDone
                               ? 'text-sm text-muted line-through'
-                              : item.state === 'failed'
-                              ? 'text-sm text-status-cancelled'
-                              : item.state === 'blocked'
+                              : isBlocked
                               ? 'text-sm text-muted'
                               : 'text-sm text-foreground'
                           }
                         >
                           {item.label}
                         </span>
-                        {item.state === 'failed' && (
-                          <p className="text-xs text-status-cancelled">Last send failed</p>
-                        )}
-                        {item.state === 'blocked' && item.hint && (
-                          <p className="text-xs text-muted">{item.hint}</p>
-                        )}
                       </div>
-                    </div>
-                    {item.shortcutTemplateType && item.state === 'failed' && (
-                      <button
-                        onClick={() => openCompose(item.shortcutTemplateType)}
-                        className="text-xs text-primary hover:underline flex-shrink-0"
-                      >
-                        Retry
-                      </button>
-                    )}
-                    {item.shortcutTemplateType && item.state === 'outstanding' && (
-                      <button
-                        onClick={() => openCompose(item.shortcutTemplateType)}
-                        className="text-xs text-primary hover:underline flex-shrink-0"
-                      >
-                        Send
-                      </button>
-                    )}
-                    {item.shortcutAction && item.state !== 'done' && (
-                      <button
-                        onClick={() => handleInvoiceAction(item.shortcutAction!)}
-                        className="text-xs text-primary hover:underline flex-shrink-0"
-                      >
-                        Create
-                      </button>
-                    )}
-                    {item.shortcutMarkDone && item.state === 'outstanding' && (
-                      <button
-                        onClick={() => {
-                          if (item.shortcutMarkDone === 'mark_contract_signed') {
-                            if (booking.activeContract) actions.markContractSigned(booking.activeContract.id);
-                          } else {
-                            const sentDepositInvoice = invoices.find(
-                              (inv) => inv.isDeposit && inv.status === 'SENT',
-                            );
-                            if (sentDepositInvoice) {
-                              markPaid.mutate(sentDepositInvoice.id);
+                      {shortcuts.shortcutTemplateType && !isDone && !isBlocked && (
+                        <button
+                          onClick={() => openCompose(shortcuts.shortcutTemplateType)}
+                          className="text-xs text-primary hover:underline flex-shrink-0"
+                        >
+                          Send
+                        </button>
+                      )}
+                      {shortcuts.shortcutAction && !isDone && !isBlocked && (
+                        <button
+                          onClick={() => handleInvoiceAction(shortcuts.shortcutAction!)}
+                          className="text-xs text-primary hover:underline flex-shrink-0"
+                        >
+                          Create
+                        </button>
+                      )}
+                      {shortcuts.shortcutMarkDone && !isDone && !isBlocked && (
+                        <button
+                          onClick={() => {
+                            if (shortcuts.shortcutMarkDone === 'mark_contract_signed') {
+                              if (booking.activeContract) actions.markContractSigned(booking.activeContract.id);
                             } else {
-                              actions.markDepositReceived();
+                              const sentDepositInvoice = invoices.find(
+                                (inv) => inv.isDeposit && inv.status === 'SENT',
+                              );
+                              if (sentDepositInvoice) {
+                                markPaid.mutate(sentDepositInvoice.id);
+                              } else {
+                                actions.markDepositReceived();
+                              }
                             }
-                          }
-                        }}
-                        disabled={actions.isPending || markPaid.isPending}
-                        className="text-xs text-primary hover:underline flex-shrink-0 disabled:opacity-50"
-                      >
-                        Mark done
-                      </button>
-                    )}
-                  </div>
-                ))}
+                          }}
+                          disabled={actions.isPending || markPaid.isPending}
+                          className="text-xs text-primary hover:underline flex-shrink-0 disabled:opacity-50"
+                        >
+                          Mark done
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </section>
           )}

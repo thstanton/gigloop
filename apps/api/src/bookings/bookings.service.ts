@@ -9,6 +9,7 @@ import { UpdateSetDto } from './dto/update-set.dto';
 import { UpsertMusicFormConfigDto } from './dto/upsert-music-form-config.dto';
 import { MailService } from '../mail/mail.service';
 import { substituteTiptapVariables } from '../mail/tiptap-portal';
+import { getChecklistDefaults } from './checklist-defaults';
 
 const VALID_STATUSES = new Set<string>(Object.values(BookingStatus));
 
@@ -108,23 +109,32 @@ export class BookingsService {
   }
 
   async create(userId: string, dto: CreateBookingDto) {
+    const profile = await this.repo.findUserProfile(userId);
+    const checklistDefaults = getChecklistDefaults(profile?.preferences as Record<string, unknown> | null);
+
+    let booking;
     if (!dto.formatIds?.length) {
-      return this.repo.create(userId, dto);
+      booking = await this.repo.create(userId, dto);
+    } else {
+      const formats = await this.repo.findFormats(userId, dto.formatIds);
+      const orderedFormats = dto.formatIds
+        .map((id) => formats.find((f) => f.id === id))
+        .filter((f): f is NonNullable<typeof f> => f !== null && f !== undefined);
+      const songRequestFormEnabled = profile?.songRequestFormEnabled ?? false;
+      booking = await this.repo.createWithFormats(userId, dto, orderedFormats, songRequestFormEnabled);
     }
-    const [formats, profile] = await Promise.all([
-      this.repo.findFormats(userId, dto.formatIds),
-      this.repo.findUserProfile(userId),
-    ]);
-    const orderedFormats = dto.formatIds
-      .map((id) => formats.find((f) => f.id === id))
-      .filter((f): f is NonNullable<typeof f> => f !== null && f !== undefined);
-    const songRequestFormEnabled = profile?.songRequestFormEnabled ?? false;
-    return this.repo.createWithFormats(userId, dto, orderedFormats, songRequestFormEnabled);
+
+    await this.repo.seedChecklistItems(userId, booking.id, checklistDefaults, booking.date, booking.createdAt);
+    return booking;
   }
 
   async update(userId: string, id: string, dto: UpdateBookingDto) {
     await this.findOne(userId, id);
-    return this.repo.update(id, dto);
+    const updated = await this.repo.update(id, dto);
+    if (dto.date !== undefined) {
+      await this.repo.recomputeChecklistDueDates(id, updated.date, updated.createdAt);
+    }
+    return updated;
   }
 
   async delete(userId: string, id: string) {
@@ -261,6 +271,18 @@ export class BookingsService {
       content: updated.content,
       signedAt: updated.signedAt?.toISOString() ?? null,
     };
+  }
+
+  async getChecklist(userId: string, bookingId: string) {
+    await this.findOne(userId, bookingId);
+    const items = await this.repo.findChecklistItems(userId, bookingId);
+    return items.map((item) => ({
+      ...item,
+      createdAt: item.createdAt.toISOString(),
+      updatedAt: item.updatedAt.toISOString(),
+      completedAt: item.completedAt?.toISOString() ?? null,
+      dueDate: item.dueDate?.toISOString() ?? null,
+    }));
   }
 
   async getActions(userId: string) {

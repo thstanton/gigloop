@@ -172,6 +172,26 @@ export interface Contract {
   signedAt: string | null;
 }
 
+export type ChecklistItemState = 'PENDING' | 'BLOCKED' | 'COMPLETE' | 'SKIPPED';
+
+export interface ChecklistItem {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  bookingId: string;
+  key: string | null;
+  label: string;
+  completedBy: 'USER' | 'CUSTOMER' | 'BAND_MEMBER';
+  state: ChecklistItemState;
+  order: number;
+  dependsOn: string[];
+  autoCompleteRule: Record<string, unknown> | null;
+  requiredForStatus: 'CONFIRMED' | 'READY' | 'COMPLETE' | null;
+  completedAt: string | null;
+  dueDate: string | null;
+  dueDateRule: DueDateRule | null;
+}
+
 export interface BookingDetail extends Omit<BookingListItem, 'customer' | 'venue' | 'referrer'> {
   customer: Contact;
   venue: Contact | null;

@@ -1,0 +1,127 @@
+export interface DueDateRule {
+  basis: 'bookingDate' | 'bookingCreation';
+  offsetDays: number;
+}
+
+export interface ChecklistDefaultItem {
+  key: string;
+  label: string;
+  completedBy: 'USER' | 'CUSTOMER' | 'BAND_MEMBER';
+  dependsOn: string[];
+  autoCompleteRule: Record<string, unknown> | null;
+  requiredForStatus: 'CONFIRMED' | 'READY' | 'COMPLETE' | null;
+  dueDateRule: DueDateRule | null;
+}
+
+export const CHECKLIST_DEFAULTS: ChecklistDefaultItem[] = [
+  {
+    key: 'send_quote',
+    label: 'Send quote',
+    completedBy: 'USER',
+    dependsOn: [],
+    autoCompleteRule: { type: 'communicationSent', templateTypes: ['quote'] },
+    requiredForStatus: null,
+    dueDateRule: null,
+  },
+  {
+    key: 'create_deposit_invoice',
+    label: 'Create deposit invoice',
+    completedBy: 'USER',
+    dependsOn: [],
+    autoCompleteRule: { type: 'invoiceExists', isDeposit: true },
+    requiredForStatus: 'CONFIRMED',
+    dueDateRule: null,
+  },
+  {
+    key: 'create_contract',
+    label: 'Create contract',
+    completedBy: 'USER',
+    dependsOn: [],
+    autoCompleteRule: { type: 'bookingField', field: 'activeContract', operator: 'notNull' },
+    requiredForStatus: 'CONFIRMED',
+    dueDateRule: null,
+  },
+  {
+    key: 'send_contract',
+    label: 'Send contract & deposit email',
+    completedBy: 'USER',
+    dependsOn: ['create_contract'],
+    autoCompleteRule: { type: 'communicationSent', templateTypes: ['contract_cover', 'contract_and_deposit_cover'] },
+    requiredForStatus: 'CONFIRMED',
+    dueDateRule: { basis: 'bookingDate', offsetDays: -60 },
+  },
+  {
+    key: 'contract_signed',
+    label: 'Contract signed',
+    completedBy: 'CUSTOMER',
+    dependsOn: ['send_contract'],
+    autoCompleteRule: { type: 'contractSigned' },
+    requiredForStatus: 'CONFIRMED',
+    dueDateRule: { basis: 'bookingDate', offsetDays: -45 },
+  },
+  {
+    key: 'deposit_received',
+    label: 'Deposit received',
+    completedBy: 'USER',
+    dependsOn: ['send_contract'],
+    autoCompleteRule: { type: 'bookingField', field: 'depositReceivedAt', operator: 'notNull' },
+    requiredForStatus: 'CONFIRMED',
+    dueDateRule: { basis: 'bookingDate', offsetDays: -30 },
+  },
+  {
+    key: 'create_balance_invoice',
+    label: 'Create balance invoice',
+    completedBy: 'USER',
+    dependsOn: [],
+    autoCompleteRule: { type: 'invoiceExists', isDeposit: false },
+    requiredForStatus: 'READY',
+    dueDateRule: { basis: 'bookingDate', offsetDays: -14 },
+  },
+  {
+    key: 'music_form_invite',
+    label: 'Send music form invite',
+    completedBy: 'USER',
+    dependsOn: [],
+    autoCompleteRule: { type: 'communicationSent', templateTypes: ['music_form_invite'] },
+    requiredForStatus: null,
+    dueDateRule: { basis: 'bookingDate', offsetDays: -30 },
+  },
+  {
+    key: 'song_requests',
+    label: 'Song requests received',
+    completedBy: 'CUSTOMER',
+    dependsOn: ['music_form_invite'],
+    autoCompleteRule: { type: 'musicFormResponse' },
+    requiredForStatus: 'READY',
+    dueDateRule: { basis: 'bookingDate', offsetDays: -14 },
+  },
+  {
+    key: 'send_thank_you',
+    label: 'Send thank you',
+    completedBy: 'USER',
+    dependsOn: [],
+    autoCompleteRule: { type: 'communicationSent', templateTypes: ['thank_you'] },
+    requiredForStatus: 'COMPLETE',
+    dueDateRule: { basis: 'bookingDate', offsetDays: 7 },
+  },
+];
+
+export function computeDueDate(
+  rule: DueDateRule | null,
+  bookingDate: Date,
+  bookingCreatedAt: Date,
+): Date | null {
+  if (!rule) return null;
+  const base = new Date(rule.basis === 'bookingDate' ? bookingDate : bookingCreatedAt);
+  base.setDate(base.getDate() + rule.offsetDays);
+  return base;
+}
+
+export function getChecklistDefaults(
+  preferences: Record<string, unknown> | null | undefined,
+): ChecklistDefaultItem[] {
+  const defaults = (preferences as { checklistDefaults?: ChecklistDefaultItem[] } | null)
+    ?.checklistDefaults;
+  if (Array.isArray(defaults) && defaults.length > 0) return defaults;
+  return CHECKLIST_DEFAULTS;
+}

@@ -7,6 +7,7 @@ import { UpdateContractDto } from './dto/update-contract.dto';
 import { CreateSetDto } from './dto/create-set.dto';
 import { UpdateSetDto } from './dto/update-set.dto';
 import { UpsertMusicFormConfigDto } from './dto/upsert-music-form-config.dto';
+import { ChecklistDefaultItem, computeDueDate } from './checklist-defaults';
 
 type FormatWithSlots = {
   id: string;
@@ -333,5 +334,58 @@ export class BookingsRepository {
     return this.prisma.contract.findFirst({
       where: { id: contractId, bookingId, userId },
     });
+  }
+
+  seedChecklistItems(
+    userId: string,
+    bookingId: string,
+    defaults: ChecklistDefaultItem[],
+    bookingDate: Date,
+    bookingCreatedAt: Date,
+  ) {
+    const data = defaults.map((item, idx) => ({
+      userId,
+      bookingId,
+      key: item.key,
+      label: item.label,
+      completedBy: item.completedBy,
+      state: item.dependsOn.length > 0 ? 'BLOCKED' : 'PENDING',
+      order: idx + 1,
+      dependsOn: item.dependsOn,
+      ...(item.autoCompleteRule !== null
+        ? { autoCompleteRule: item.autoCompleteRule as Prisma.InputJsonValue }
+        : {}),
+      requiredForStatus: item.requiredForStatus,
+      dueDate: computeDueDate(item.dueDateRule, bookingDate, bookingCreatedAt),
+      ...(item.dueDateRule !== null
+        ? { dueDateRule: item.dueDateRule as unknown as Prisma.InputJsonValue }
+        : {}),
+    }));
+    return this.prisma.bookingChecklistItem.createMany({ data });
+  }
+
+  findChecklistItems(userId: string, bookingId: string) {
+    return this.prisma.bookingChecklistItem.findMany({
+      where: { bookingId, userId },
+      orderBy: { order: 'asc' },
+    });
+  }
+
+  async recomputeChecklistDueDates(bookingId: string, bookingDate: Date, bookingCreatedAt: Date) {
+    const items = await this.prisma.bookingChecklistItem.findMany({
+      where: { bookingId },
+      select: { id: true, dueDateRule: true },
+    });
+    const toUpdate = items.filter((item) => item.dueDateRule !== null);
+    if (!toUpdate.length) return;
+    await Promise.all(
+      toUpdate.map((item) => {
+        const rule = item.dueDateRule as { basis: 'bookingDate' | 'bookingCreation'; offsetDays: number };
+        return this.prisma.bookingChecklistItem.update({
+          where: { id: item.id },
+          data: { dueDate: computeDueDate(rule, bookingDate, bookingCreatedAt) },
+        });
+      }),
+    );
   }
 }

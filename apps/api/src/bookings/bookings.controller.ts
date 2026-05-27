@@ -90,6 +90,12 @@ export class BookingsController {
     return this.service.updateContract(req.userId, id, contractId, dto);
   }
 
+  @ApiOperation({ summary: 'Get checklist items for a booking' })
+  @Get(':id/checklist')
+  getChecklist(@Req() req: AuthedRequest, @Param('id') id: string) {
+    return this.service.getChecklist(req.userId, id);
+  }
+
   @ApiOperation({ summary: 'Get the music form config for a booking' })
   @Get(':id/music-form-config')
   getMusicFormConfig(@Req() req: AuthedRequest, @Param('id') id: string) {
