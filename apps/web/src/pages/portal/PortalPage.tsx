@@ -45,6 +45,20 @@ const FORMAT_ICON_MAP: Record<string, React.ComponentType<any>> = {
   'music-2': Music2,
 };
 
+// ─── Status message ───────────────────────────────────────────────────────────
+
+function bookingStatusMessage(status: string): string {
+  switch (status) {
+    case 'ENQUIRY':   return 'Confirm your booking';
+    case 'CONFIRMED': return 'Your booking is confirmed';
+    case 'INVOICED':  return 'Your booking is confirmed';
+    case 'SETTLED':   return "You're all set";
+    case 'COMPLETED': return 'Thanks for your booking!';
+    case 'CANCELLED': return 'This booking has been cancelled';
+    default:          return '';
+  }
+}
+
 // ─── Contact card ─────────────────────────────────────────────────────────────
 
 function ContactCard({ profile, bold }: { profile: PortalPublicProfile; bold: boolean }) {
@@ -83,9 +97,10 @@ function ContactCard({ profile, bold }: { profile: PortalPublicProfile; bold: bo
 
 // ─── LIGHT greeting (full-width, above the two-column grid) ───────────────────
 
-function LightGreeting({ greetingName, title, theme }: {
+function LightGreeting({ greetingName, title, statusMessage, theme }: {
   greetingName: string;
   title: string | null;
+  statusMessage: string;
   theme: string | null;
 }) {
   const displayFont = getDisplayFontClass(theme);
@@ -97,7 +112,10 @@ function LightGreeting({ greetingName, title, theme }: {
         {romantic ? `Hello, ${greetingName}!` : `Hello, ${greetingName}.`}
       </h1>
       {title && (
-        <p className="text-base text-[#9a9189]">{title}</p>
+        <p className="text-base text-[#9a9189] mb-1">{title}</p>
+      )}
+      {statusMessage && (
+        <p className="text-base text-[#5a544e]">{statusMessage}</p>
       )}
     </div>
   );
@@ -105,10 +123,11 @@ function LightGreeting({ greetingName, title, theme }: {
 
 // ─── BOLD hero ────────────────────────────────────────────────────────────────
 
-function BoldHero({ greetingName, title, formattedDate, portalHeroImage, theme, brand }: {
+function BoldHero({ greetingName, title, formattedDate, statusMessage, portalHeroImage, theme, brand }: {
   greetingName: string;
   title: string | null;
   formattedDate: string;
+  statusMessage: string;
   portalHeroImage: string | null;
   theme: string | null;
   brand: string;
@@ -144,6 +163,9 @@ function BoldHero({ greetingName, title, formattedDate, portalHeroImage, theme, 
           <p className="text-white/80 text-base mb-1">{title}</p>
         )}
         <p className="text-white/55 text-sm">{formattedDate}</p>
+        {statusMessage && (
+          <p className="text-white/80 text-base mt-2">{statusMessage}</p>
+        )}
       </div>
     </div>
   );
@@ -445,12 +467,14 @@ export default function PortalPage() {
   });
 
   const brand = publicProfile.brandColour ?? '#1a1a1a';
+  const statusMessage = bookingStatusMessage(booking.status);
 
   const hero = boldTheme ? (
     <BoldHero
       greetingName={greetingName}
       title={booking.title}
       formattedDate={formattedDate}
+      statusMessage={statusMessage}
       portalHeroImage={publicProfile.portalHeroImage}
       theme={publicProfile.portalTheme}
       brand={brand}
@@ -464,6 +488,7 @@ export default function PortalPage() {
         <LightGreeting
           greetingName={greetingName}
           title={booking.title}
+          statusMessage={statusMessage}
           theme={publicProfile.portalTheme}
         />
       )}
