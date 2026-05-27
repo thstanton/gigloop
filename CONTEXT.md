@@ -22,11 +22,16 @@ The central entity. Represents a performance engagement — confirmed or in-prog
 - *Settled*: the balance invoice has been paid in full; typically also before the performance date.
 - *Completed*: post-gig admin is done. For MVP this is a simple manual flag set by the musician. A configurable per-user post-gig checklist is a future feature.
 
-**Pre-confirmation tracking:** two nullable timestamp fields — `contractSignedAt` and `depositReceivedAt` — record when each arrived. `contractSignedAt` is always set manually. `depositReceivedAt` behaviour is controlled by `depositTrackingMode`:
+**Pre-confirmation tracking:** two nullable timestamp fields — `contractSignedAt` and `depositReceivedAt` — record when each arrived.
+
+`depositReceivedAt` behaviour is controlled by `depositTrackingMode`:
 - `INVOICE` — automatically set when the deposit [[Invoice]] is marked Paid.
 - `MANUAL` — set directly by the musician on the Booking.
+- `NONE` — deposit not tracked.
 
 `UserProfile.depositTrackingMode` is the global default. `Booking.depositTrackingMode` is a nullable per-booking override; `null` means inherit from UserProfile. Neither triggers automatic status transitions — the musician still moves status to `Confirmed` manually.
+
+**Planned deprecation:** `depositTrackingMode` (including the MANUAL mode) will be removed when the [[BookingChecklistItem]] model ships. Whether to track the deposit, and how, will be configured through the checklist template instead — the `deposit_received` item's presence and `autoCompleteRule` determine tracking behaviour. At that point `depositReceivedAt` on Booking becomes purely derived from the deposit [[Invoice]]'s paid state (i.e. a property of the invoice, not the booking).
 
 Status transitions are not enforced by the API — a Booking can move freely between any statuses.
 
@@ -39,21 +44,42 @@ Status transitions are not enforced by the API — a Booking can move freely bet
 - **eventType**: string — one of `WEDDING | CORPORATE | PRIVATE | RESIDENCY | FESTIVAL | OUTDOOR | FUNCTION | OTHER`; a display classifier and filter axis; stored as a plain string (not a Prisma enum), validated in application code; decoupled from [[PerformanceFormat]] behaviour
 - **customerId** (required FK → Contact)
 - **venueId** (optional FK → Contact): venue address/info lives on the Contact record, not duplicated
-- **referrerId** (optional FK → Contact)
-- **contractContent** (optional): per-booking contract body stored as Tiptap JSON; populated by the "Create contract" action with all variables already substituted as plain text; editable until the contract email is sent, read-only thereafter; authoritative source for what the client reads on the [[Portal]] (the template is not re-rendered at portal time). See ADR-0013.
+- **bookingAgentId** (optional FK → Contact)
+- **contracts**: zero-to-many [[Contract]] entities; at most one is in a non-VOID state at any time
 - **sets**: ordered list of [[Set]] entities
 - **songList** (optional): song requirements for the booking — deferred to [[song-library]] feature
 
+### Contract
+A contract document associated with a [[Booking]]. A Booking can have many Contracts over time (full history preserved), but at most one may be in a non-VOID state — the active contract. See ADR-0017.
+
+**Lifecycle:** `DRAFT → SENT → SIGNED → VOID`
+- *DRAFT*: contract body created; content editable; no email sent yet.
+- *SENT*: contract email sent; portal link is live; content becomes read-only.
+- *SIGNED*: client has signed via the [[Portal]]; content read-only.
+- *VOID*: superseded or cancelled by the musician. A new Contract can be created on the same Booking once the previous one is voided.
+
+**Fields:**
+- `content` — Tiptap JSON; the contract body with variables already substituted as plain text at creation time (same as the former `Booking.contractContent`). Authoritative source for what the client reads on the Portal. See ADR-0013.
+- `status` — `DRAFT | SENT | SIGNED | VOID`
+- `signedAt` — timestamp set when the client signs; null until then
+- `signedFromIp` — client IP captured at signing time; included in the signed PDF
+- `voidedAt` — timestamp set when voided
+
+A Booking's "active contract" is the single Contract with `status != VOID`. `contractSignedAt` on the booking detail view is derived from `activeContract.signedAt`.
+
+Only one Contract per Booking may be non-VOID at any time — enforced at the application layer (voiding the existing contract is a prerequisite for creating a new one).
+
 ### Contact
-A person or organisation the musician does business with. Role-agnostic — the role is determined by which FK on the Booking references it. A Contact with associated Bookings (in any role) cannot be deleted.
+A person or organisation the musician does business with. Role-agnostic — the role on any given Booking is determined by which FK references it. A Contact with associated Bookings (in any role) cannot be deleted.
 
 **Fields (all optional except name):**
 - name (required)
 - email, phone, address (freeform text), notes
+- **primaryRole** (optional string — one of `CUSTOMER | VENUE | BOOKING_AGENT`): the role this contact most commonly plays. Used to pre-populate the correct field when creating a booking from their detail page, and to show a role badge in contact lists and detail views. Stored as a plain string (not a Prisma enum) — validated in application code against the constants list. A contact can still appear in any role on any booking regardless of `primaryRole`; this is a hint for the UI, not a constraint.
 - *Venue extras:* parkingInfo, accessInfo, equipmentAvailable
-- *Referrer extras:* website, commissionArrangement (freeform text)
+- *Booking agent extras:* website, commissionArrangement (freeform text)
 
-All fields live on the Contact table as nullable columns — no sub-type tables. A Contact can serve as both a venue and a referrer on different Bookings; the extra fields are always available regardless of role.
+All fields live on the Contact table as nullable columns — no sub-type tables. A Contact can serve as both a venue and a booking agent on different Bookings; the extra fields are always available regardless of role.
 
 ### Set
 A scheduled performance slot within a Booking — always traceable to a [[PerformanceFormat]]. Multiple Sets form the running order for the day and constitute the performance schedule in the contract. Fields:
@@ -68,7 +94,7 @@ Sets are created by applying a [[PerformanceFormat]] to a booking — the format
 ### Invoice
 A financial document issued to a Contact for a Booking. A Booking can have multiple Invoices (e.g. a deposit invoice followed by a balance invoice, or a single full invoice — the musician decides). Has many [[InvoiceLineItem]]s.
 
-**Status:** `Draft | Sent | Paid` (stored). *Overdue* is derived — not a stored state — inferred when status is `Sent`, a due date is set, and that date has passed.
+**Status:** `Draft | Sent | Paid | Void` (stored). *Overdue* is derived — not a stored state — inferred when status is `Sent`, a due date is set, and that date has passed. A Void invoice is preserved for history but no longer active; a new invoice can be created on the same booking after voiding.
 
 Two ways to move to `Sent`: (1) **Send** — app emails the invoice via Resend using the appropriate invoice cover template (`deposit_invoice_cover` or `balance_invoice_cover`) and atomically sets the issue date, due date, invoice number, and marks it Sent; (2) **Mark as sent** — sets dates and invoice number and marks it Sent without sending an email, for cases where the invoice was communicated outside the app. Both paths go through dedicated endpoints (`POST /invoices/:id/send` and `POST /invoices/:id/mark-sent`).
 
@@ -79,7 +105,11 @@ Two ways to move to `Sent`: (1) **Send** — app emails the invoice via Resend u
 **Balance invoice PDF rendering:** when generating the balance invoice PDF, derive the deposit amount at render time from the deposit [[Invoice]]'s line item total (isDeposit=true). Show a breakdown: subtotal, less deposit paid, balance due. Only show this section if a deposit Invoice exists on the booking. Do not add a stored field for this.
 
 ### InvoiceLineItem
-A freeform line on an [[Invoice]]: description (text) + amount (decimal). No fixed categories.
+A line on an [[Invoice]]: description (text) + amount (decimal).
+
+**First line item — service description:** when an invoice is created, the first line item description is pre-populated from the booking's performance formats and sets (e.g. "Wedding Ceremony (30 min), Drinks Reception (90 min), Evening Reception (45 min × 2)"). This gives clients the service detail they typically request. The amount defaults to the booking fee (or deposit percentage for deposit invoices). The description is fully editable — pre-population is a convenience, not a constraint.
+
+**Additional line items:** free text for anything beyond the core service — travel, equipment hire, accommodation, etc. No fixed categories.
 
 ### Template
 A reusable content block stored as Tiptap JSON. Used for email body rendering and contract display on the [[Portal]]. Custom template creation is deferred to P2; MVP exposes only built-in templates.
@@ -126,32 +156,44 @@ A log entry for a communication associated with a Booking. For MVP: outbound onl
 ### PublicProfile
 The public, portal-visible half of the musician's settings (one per `userId`). Safe to return to unauthenticated portal clients — contains no sensitive data. See ADR-0002.
 
-**Fields:** businessName, displayName, bio, email, phone, logoUrl (R2 URL — client-facing only; see ADR-0014), brandColour (hex), portalHeroImage (string? — predefined key: `'piano'` | `'stage'` | null), showContactPhoto (bool, default false), showContactEmail (bool, default true), showContactPhone (bool, default false), photo (R2 URL), website, socials (JSON — platform → URL), portalTheme.
+**Identity fields (explicit columns):** businessName, displayName, bio, email, phone, logoUrl (R2 URL — client-facing only; see ADR-0014), photo (R2 URL), website, socials (JSON — platform → URL).
 
-**`portalTheme` enum:** `BOLD_ROMANTIC | BOLD_MODERN | LIGHT_ROMANTIC | LIGHT_MODERN`. Each preset bundles a layout style (Bold = hero section + dark background; Light = clean white, spacious) with a font pairing (Romantic = Caveat display + Commissioner body; Modern = Lexend Deca display + Commissioner body). Four themes cover the full matrix.
+**`clientPortalConfig` (JSON column):** all client portal appearance and behaviour preferences. See ADR-0015. Shape:
+- `theme` — `BOLD_ROMANTIC | BOLD_MODERN | LIGHT_ROMANTIC | LIGHT_MODERN` (default: `LIGHT_MODERN`)
+- `brandColour` — hex string (default: `#1a1a1a`)
+- `heroImage` — `'piano'` | `'stage'` | `null` (BOLD themes only; null = solid brand colour block)
+- `showContactPhoto` — boolean (default: false)
+- `showContactEmail` — boolean (default: true)
+- `showContactPhone` — boolean (default: false)
 
-**BOLD hero section:** full-width block at the top of the portal. If `portalHeroImage` is set, the image fills the block with a dark gradient overlay and the booking title/date are reversed out. If `portalHeroImage` is null, a solid `brandColour` block is used instead. LIGHT themes have no hero section.
+Named `clientPortalConfig` (not `portalConfig`) to distinguish from future portals (e.g. band member portal) that will use sibling keys. See ADR-0015.
+
+**`theme` values:** each preset bundles a layout style (Bold = hero section + dark background; Light = clean white, spacious) with a font pairing (Romantic = Caveat display + Commissioner body; Modern = Lexend Deca display + Commissioner body). Four themes cover the full matrix.
+
+**BOLD hero section:** full-width block at the top of the portal. If `heroImage` is set, the image fills the block with a dark gradient overlay. If `heroImage` is null, a solid `brandColour` block is used. LIGHT themes have no hero section.
 
 **Predefined hero images:** a small curated set of photographic assets (`/piano.png` — intimate black-and-white piano scene; `/stage.png` — atmospheric lit stage) stored in the web `public/` folder. Custom image upload is deferred to P2.
 
 The client-facing [[Portal]] is musician-branded: displays the musician's logo, name, and chosen theme. It is not GigMan-branded. Design reference: WithJoy — elegant typography, premium and personal in feel, mobile-first.
 
-**Graceful degradation:** `publicProfile` always exists by the time emails are sent (API enforces this). Missing optional fields degrade gracefully: no logo → layout renders without it. No `brandColour` → neutral fallback (`#1a1a1a`). No `portalHeroImage` on a BOLD theme → solid brand colour hero block. The portal must never look broken due to incomplete profile setup.
+**Graceful degradation:** `publicProfile` always exists by the time emails are sent (API enforces this). Missing optional fields degrade gracefully: no logo → layout renders without it. No `brandColour` → neutral fallback (`#1a1a1a`). No `heroImage` on a BOLD theme → solid brand colour hero block. The portal must never look broken due to incomplete profile setup.
 
 `brandColour` is applied to hero overlays, CTAs, and links. Admin top bar always uses `businessName` as text — `logoUrl` is not rendered in the admin UI. See ADR-0014.
 
 **Portal configuration:** managed via the Portal Preview page (`/admin/portal-preview`). Settings page "Business" section owns the logo upload; settings page "Portal" section is a single link to the Portal Preview. Theme, hero image, brand colour, and contact card visibility are all configured via a sheet within the Portal Preview.
 
-**Contact card:** displayed on the main portal page — bottom of the page on mobile; sticky right panel on desktop (main page only; contract and music form pages stay single-column). Shows the musician's name, business name, and optionally photo, email, and phone. Name and business name are always visible when the card renders. Photo, email, and phone each have a per-field visibility toggle (`showContactPhoto`, `showContactEmail`, `showContactPhone` on PublicProfile). Defaults: email shown, photo and phone hidden. Toggles live in the Customise sheet; actual field values (email, phone, photo) are set in the settings Business section. The sheet shows current values as read-only context.
+**Contact card:** displayed on the main portal page — bottom of the page on mobile; sticky right panel on desktop (main page only; contract and music form pages stay single-column). Shows the musician's name, business name, and optionally photo, email, and phone. Name and business name are always visible when the card renders. Photo, email, and phone each have a per-field visibility toggle (in `clientPortalConfig`). Defaults: email shown, photo and phone hidden. Toggles live in the Customise sheet; actual field values (email, phone, photo) are set in the settings Business section. The sheet shows current values as read-only context.
 
 ### UserProfile
 The private, authenticated-only half of the musician's settings (one per `userId`). Never returned to portal clients. See ADR-0002.
 
-**Fields:** address, bankDetails (encrypted at rest — see ADR-0003), vatNumber, defaultPaymentTermsDays, invoiceNumberSequence, invoiceSequenceYear, depositTrackingMode, depositPercentage (nullable integer 1–100 — the default deposit % of the booking fee; null means no default set), digestEmailEnabled, songRequestFormEnabled, quoteReminderDays, contractReminderDays, depositInvoiceReminderDays, balanceInvoiceReminderDays, musicFormReminderDays, thankYouReminderDays.
+**Business fields (explicit columns):** address, bankDetails (encrypted at rest — see ADR-0003), vatNumber, defaultPaymentTermsDays, invoiceNumberSequence, invoiceSequenceYear, depositTrackingMode, depositPercentage (nullable integer 1–100 — the default deposit % of the booking fee; null means no default set), digestEmailEnabled, songRequestFormEnabled.
+
+**`preferences` (JSON column):** all workflow and behaviour preferences, gated by subscription tier at write time. See ADR-0015. Contains:
+- `checklistDefaults` — the musician's default [[BookingChecklistItem]] template; an ordered array of item definitions (key, label, completedBy, dependsOn, autoCompleteRule, requiredForStatus, reminderDays). Seeded from system defaults on first access. The system defaults represent the current 10-item workflow. Custom items (no `key`) can be appended. Per-item `reminderDays` replaces the former flat `*ReminderDays` columns — null means no reminder, positive integer = days before booking date (days after for `send_thank_you`).
+- Future preference domains (dashboard widget config, feature toggles, etc.) are added as sibling keys.
 
 **Invoice numbering:** format `INV-{year}-{NNN}` (e.g. `INV-2025-001`). `invoiceNumberSequence` is a per-year counter; `invoiceSequenceYear` records the year it was last reset. Both reset each January. Subject to revision.
-
-**Reminder offsets:** the `*ReminderDays` fields are global defaults controlling when each [[BookingChecklist]] action appears in the [[DigestNotification]] and on the booking detail page. Positive integer = days before the booking date (except `thankYouReminderDays` which is days after). `null` means the reminder is disabled. Per-booking overrides are deferred to P3.
 
 `songRequestFormEnabled` is a global toggle — when false, the music form feature is hidden across the entire app (no [[MusicFormConfig]] creation, no [[MusicForm]] on the [[Portal]]).
 
@@ -180,38 +222,52 @@ An entry in a musician's repertoire library. Every Song has a `userId` — songs
 ### Genre
 A string value categorising Songs: `CONTEMPORARY | CLASSICAL | JAZZ | FILM_TV_MUSICALS | BOLLYWOOD | CHRISTMAS`. Stored as a plain string (not a Prisma enum) — new genres can be added without a DB migration. Validated in application code against a constants list. Managed at the system level — musicians cannot add custom genres for MVP.
 
-### BookingChecklist
-A computed, context-sensitive list of actions for a [[Booking]]. Not a stored entity — derived entirely from existing booking state. Displayed on the Booking detail page and shared as the "required actions" content in the [[DigestNotification]].
+### BookingChecklistItem
+A stored action item on a [[Booking]], representing something that needs to happen to progress or complete the booking. Together the items form the booking's checklist — a project management-style task list that surfaces the right action at the right time. See ADR-0016.
 
-**Items (in order):** Send quote, Create deposit invoice, Create contract, Send contract/deposit email, Contract signed, Deposit received, Create balance invoice, Send music form invite, Song requests received, Send thank you.
+Items are **seeded at booking creation** from the musician's `checklistDefaults` template in [[UserProfile]]`.preferences` (system defaults on first use). Each item is an independent DB record with stored state — never computed at read time.
 
-Each item has one of four states:
-- **Done** — completed; shown with a tick and muted text
-- **Outstanding** — not yet done and still applicable; shown with an empty circle
-- **Failed** — a send was attempted but the most recent relevant Communication has `status = FAILED`; shown with a warning indicator and "Last send failed" message. Takes priority over Outstanding.
-- **Irrelevant** — not done but no longer applicable; hidden entirely
+**Fields:**
+- `key` — string identifier for system items (e.g. `create_contract`, `contract_signed`); null for user-defined custom items
+- `label` — display label; system items have a default, custom items are user-defined
+- `completedBy` — `USER | CUSTOMER | BAND_MEMBER`; declares which actor resolves this item
+- `state` — `PENDING | DONE | FAILED | BLOCKED | SKIPPED`
+- `order` — integer preserving display sequence
+- `dependsOn` — `string[]`; keys of items that must be DONE before this item unblocks (transitions from BLOCKED → PENDING automatically)
+- `autoCompleteRule` — optional JSON; when present, the system evaluates the rule on relevant business events and sets state to DONE automatically. When absent, the item is manual-only. Rule types: `bookingField` (done when a named Booking field is non-null), `communicationSent` (done when a SENT Communication of a given template type exists), `invoiceExists` (done when an invoice of the given kind exists), `musicFormResponse` (done when a MusicFormResponse exists).
+- `requiredForStatus` — optional `BookingStatus`; advisory association — the UI warns the musician if they attempt to advance the booking to this status while this item is PENDING or FAILED, and prompts them to advance when all items for this status become DONE. The API does not enforce this gate.
+- `completedAt` — timestamp set when state transitions to DONE
+- `reminderDays` — how many days before the booking date this item surfaces in the [[DigestNotification]] and Dashboard Actions widget; null = no reminder
 
-A Communication only counts as "Done" if `status = SENT`. `PENDING` and `FAILED` records do not satisfy the Done condition. "Most recent attempt" is used for Failed — if a retry succeeds, the item reverts to Done. Items in the `failed` state carry a **Retry** shortcut that opens the compose sheet pre-loaded with the same template type — this is the primary recovery path, consistent with the contextual actions principle.
+**States:**
+- **PENDING** — not yet done, applicable, unblocked
+- **DONE** — completed (auto or manual); shown with a tick
+- **FAILED** — a system action associated with this item was attempted and failed (e.g. email send failed); shown with a warning
+- **BLOCKED** — one or more `dependsOn` items are not yet DONE; shown as inactive
+- **SKIPPED** — was applicable but is no longer relevant (e.g. booking advanced past the point where this item applied); hidden from the active checklist
 
-| Item | Done when | Failed when | Irrelevant when |
+Items in the FAILED state carry a **Retry** shortcut consistent with the contextual actions design principle. The checklist is hidden entirely for CANCELLED bookings. CUSTOMER-completedBy items (e.g. contract signed, music form submitted) are resolved by portal actions — their `autoCompleteRule` fires when the corresponding booking field is set.
+
+**System item keys and their auto-complete rules:**
+
+| Key | completedBy | autoCompleteRule | requiredForStatus |
 |---|---|---|---|
-| Send quote | `quote` [[Communication]] with status SENT exists | most recent `quote` Communication is FAILED | status ≥ CONFIRMED |
-| Create deposit invoice | deposit [[Invoice]] exists (isDeposit=true) | — | deposit tracking resolves to NONE |
-| Create contract | `contractContent` is non-null | — | `contractSignedAt` set |
-| Send contract/deposit email | `contract_cover` or `contract_and_deposit_cover` Communication with status SENT exists | most recent such Communication is FAILED | `contractSignedAt` set AND (`depositReceivedAt` set OR deposit tracking resolves to NONE) |
-| Contract signed | `contractSignedAt` set | — | status is ENQUIRY OR status ≥ SETTLED |
-| Deposit received | `depositReceivedAt` set | — | deposit tracking resolves to NONE OR status is ENQUIRY |
-| Create balance invoice | balance [[Invoice]] exists (isDeposit=false) | — | status is ENQUIRY |
-| Send music form invite | `music_form_invite` Communication with status SENT exists | most recent `music_form_invite` Communication is FAILED | no [[MusicFormConfig]] on booking OR status is ENQUIRY |
-| Song requests received | [[MusicFormResponse]] exists | — | no MusicFormConfig OR no `music_form_invite` Communication with status SENT exists | This item is intentionally passive — the client may choose to communicate preferences informally rather than via the form, and that is acceptable. No chase-up action is provided. |
-| Send thank you | `thank_you` Communication with status SENT exists | most recent `thank_you` Communication is FAILED | today is before booking date |
+| `send_quote` | USER | communicationSent: quote | — |
+| `create_deposit_invoice` | USER | invoiceExists: isDeposit=true | — |
+| `create_contract` | USER | bookingField: contractContent | — |
+| `send_contract` | USER | communicationSent: contract_cover \| contract_and_deposit_cover | — |
+| `contract_signed` | CUSTOMER | bookingField: contractSignedAt | CONFIRMED |
+| `deposit_received` | CUSTOMER | bookingField: depositReceivedAt | CONFIRMED |
+| `create_balance_invoice` | USER | invoiceExists: isDeposit=false | — |
+| `send_music_form_invite` | USER | communicationSent: music_form_invite | — |
+| `song_requests` | CUSTOMER | musicFormResponse | — |
+| `send_thank_you` | USER | communicationSent: thank_you | — |
 
-The checklist is hidden entirely for CANCELLED bookings.
-
-Whether an item appears in the [[DigestNotification]] is controlled by the corresponding `*ReminderDays` field on [[UserProfile]].
+### BookingChecklist
+The ordered collection of [[BookingChecklistItem]] records for a given [[Booking]]. Not a separate model — a logical grouping term. Displayed on the Booking detail page; outstanding items feed the [[DigestNotification]] and Dashboard Actions widget filtered by each item's `reminderDays` window.
 
 ### DigestNotification
-A daily summary email sent to the musician via Resend. MVP scope. Contains upcoming Bookings and their outstanding [[BookingChecklist]] actions — filtered to items where today falls within the configured reminder window (e.g. `contractReminderDays = 14` means the "send contract" item appears in the digest from 14 days before the booking date).
+A daily summary email sent to the musician via Resend. MVP scope. Contains upcoming Bookings and their outstanding [[BookingChecklistItem]] records — filtered to items where today falls within the item's `reminderDays` window (e.g. `reminderDays = 14` on the `send_contract` item means it appears in the digest from 14 days before the booking date). Items with `reminderDays = null` never appear in the digest.
 
 ### MusicFormConfig
 The per-booking configuration for a [[MusicForm]]. Created at booking creation (if [[PerformanceFormat]]s are applied) or from the Music Form section on the booking detail page. Independent of the send invite action — the config may exist before the invite is sent.
@@ -290,7 +346,7 @@ The home screen. Action-oriented — designed for the musician's morning check-i
 
 3. **Calendar** — month view. Booked dates show dots (one per booking). Tapping a date with one booking → booking detail. Tapping a date with multiple bookings → inline list of that day's bookings. Tapping an empty date → new booking pre-filled with that date. Today highlighted. Prev/next month navigation.
 
-**Actionable checklist items shown in Actions widget (priority order):** Send quote, Create deposit invoice, Send contract & deposit email, Create balance invoice, Send music form invite, Send thank you. Reminder windows are the same `*ReminderDays` fields on [[UserProfile]] used by [[DigestNotification]]. If `reminderDays` is null for an item type, that item type never appears in the Actions widget.
+**Actionable checklist items shown in Actions widget (priority order):** Send quote, Create deposit invoice, Send contract & deposit email, Create balance invoice, Send music form invite, Send thank you. Only USER-completedBy items with an associated action (shortcut) are shown — passive-wait items (CUSTOMER-completedBy) are omitted. Reminder windows come from each item's `reminderDays` field. Items with `reminderDays = null` never appear in the Actions widget.
 
 ### PerformanceFormat
 A named template defining what a musician offers for a specific type of performance engagement. Per-user — seeded from system defaults on first access (on-demand); user-defined formats are a P2 feature.
@@ -322,10 +378,10 @@ A named template defining what a musician offers for a specific type of performa
 | Background Music | — | Background Music, 60 min | — |
 | Solo Piano | — | Solo Piano, 60 min | — |
 
-**Known technical debt:** `UserProfile.*ReminderDays` fields are hard-coded columns — adding a new reminder type requires a DB migration. Parked for a future refactor to a JSON `reminderSettings` field.
+Reminder windows are configured per item in `UserProfile.preferences.checklistDefaults` — no flat `*ReminderDays` columns exist on UserProfile. Adding a new reminder type requires no DB migration.
 
 ### Contact Roles (on a Booking)
 A Booking has up to three Contact relations, each a separate FK:
 - **Customer** (required): the direct payer (e.g. a couple getting married). Rarely repeats.
 - **Venue** (optional): the location of the performance. Repeats across bookings; persistent notes (e.g. parking info) live on the Contact record.
-- **Referrer** (optional): who sourced the booking (e.g. a booking agent). Repeats across bookings.
+- **Booking agent** (optional): the professional third party who sourced the booking — a formal booking agent, a wedding planner acting in that capacity, or similar. Always someone with a commercial role in originating the booking; casual personal referrals are not recorded here. Repeats across bookings.

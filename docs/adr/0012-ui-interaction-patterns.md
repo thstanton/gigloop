@@ -98,8 +98,28 @@ This applies to both `PersonCard` (customer, referrer) and `VenueCard` on the bo
 - **Whole-card `<Link>` for contact rows:** Rejected — email and phone anchors require `stopPropagation` to work, which is a leaky abstraction. The name+chevron pattern makes the navigable target explicit without hacking event bubbling.
 - **Right-aligned status badges:** Rejected — the left-border accent loses its meaning when it appears at different x-positions across rows. Left-alignment under the item title is the only pattern that preserves the visual rhythm.
 
+### Back navigation
+
+Back links are always positioned **top-left** and always navigate **contextually** — to the page the user came from, not a hardcoded parent route. Use `useNavigate(-1)` or carry the origin as a `?from=` search param rather than hard-coding a destination path.
+
+The preview banner back link (portal preview mode) follows the same rule: it reads from the `?from=` param set at the call site and sits top-left in the banner.
+
+Never use a "back" affordance that navigates to a fixed route — if the same page is reachable from multiple places, a fixed destination will be wrong half the time.
+
+### Empty-card pattern
+
+When a card's content entity does not yet exist (no contract, no invoices, no documents), the card renders:
+
+1. **Inline muted text** in the card body: `"None created"` at `text-sm text-muted`
+2. **Contextual create action** in the card header (same `text-xs text-primary` text-link style as all other card actions)
+
+No button in the card body. No illustration or icon. Full-page empty-state treatment (icon + heading + CTA) is reserved for page-level empty states (e.g. no bookings yet), never card-level.
+
+The corresponding [[BookingChecklistItem]] for the creation step must carry a matching `shortcutAction` so the checklist item and the card header action point to the same trigger. A card that shows "None created" without a checklist shortcut is incomplete.
+
 ## Consequences
 
 - The `Card` component's `action` prop is the standard hook for card-level contextual actions. Components must not add their own header structure outside of it.
 - Any new list view that shows status badges must default to the left-aligned pattern. Right-aligning badges is a deliberate exception requiring justification.
 - `ContactEditSheet` (a controlled version of `ContactEditDrawer` without delete) is the standard way to edit a contact from a non-contact page. It invalidates both `['contact', id]` and `['booking']` queries on save.
+- Cards whose content entity may not exist must follow the empty-card pattern above. A button in the card body is never the create trigger — the card header action is.
