@@ -17,10 +17,18 @@ export class UserProfileRepository {
   }
 
   async updateByUserId(userId: string, data: UpdateUserProfileDto) {
-    const payload = { ...data };
+    const { preferences, ...rest } = data;
+    const payload: Record<string, unknown> = { ...rest };
     if (payload.bankDetails !== undefined && payload.bankDetails !== null) {
-      payload.bankDetails = encrypt(payload.bankDetails);
+      payload.bankDetails = encrypt(payload.bankDetails as string);
     }
+
+    if (preferences !== undefined) {
+      const existing = await this.prisma.userProfile.findUnique({ where: { userId } });
+      const merged = { ...(existing?.preferences as Record<string, unknown> ?? {}), ...preferences };
+      payload.preferences = merged;
+    }
+
     const profile = await this.prisma.userProfile.upsert({
       where: { userId },
       update: payload,

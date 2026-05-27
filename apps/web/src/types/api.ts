@@ -409,6 +409,26 @@ export interface UpdateTemplateInput {
 // User profile
 // ─────────────────────────────────────────
 
+export interface DueDateRule {
+  basis: 'bookingDate' | 'bookingCreation';
+  offsetDays: number;
+}
+
+export interface ChecklistDefaultItem {
+  key: string;
+  label: string;
+  completedBy: 'USER' | 'CUSTOMER' | 'BAND_MEMBER';
+  dependsOn: string[];
+  autoCompleteRule: Record<string, unknown> | null;
+  requiredForStatus: 'CONFIRMED' | 'READY' | 'COMPLETE' | null;
+  dueDateRule: DueDateRule | null;
+}
+
+export interface UserPreferences {
+  reminderLeadDays: number;
+  checklistDefaults: ChecklistDefaultItem[];
+}
+
 export interface UserProfile {
   id: string;
   createdAt: string;
@@ -423,12 +443,7 @@ export interface UserProfile {
   depositPercentage: number | null;
   digestEmailEnabled: boolean;
   songRequestFormEnabled: boolean;
-  quoteReminderDays: number | null;
-  contractReminderDays: number | null;
-  depositInvoiceReminderDays: number | null;
-  balanceInvoiceReminderDays: number | null;
-  musicFormReminderDays: number | null;
-  thankYouReminderDays: number | null;
+  preferences: Partial<UserPreferences>;
 }
 
 export interface PublicProfile {
@@ -461,12 +476,7 @@ export interface UpdateUserProfileInput {
   depositPercentage?: number;
   digestEmailEnabled?: boolean;
   songRequestFormEnabled?: boolean;
-  quoteReminderDays?: number | null;
-  contractReminderDays?: number | null;
-  depositInvoiceReminderDays?: number | null;
-  balanceInvoiceReminderDays?: number | null;
-  musicFormReminderDays?: number | null;
-  thankYouReminderDays?: number | null;
+  preferences?: Partial<UserPreferences>;
 }
 
 export type PortalTheme = 'LIGHT_MODERN' | 'LIGHT_ROMANTIC' | 'BOLD_MODERN' | 'BOLD_ROMANTIC';

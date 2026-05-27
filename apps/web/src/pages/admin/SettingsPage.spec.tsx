@@ -47,12 +47,7 @@ const mockUserProfile: UserProfile = {
   depositPercentage: null,
   digestEmailEnabled: false,
   songRequestFormEnabled: false,
-  quoteReminderDays: null,
-  contractReminderDays: null,
-  depositInvoiceReminderDays: null,
-  balanceInvoiceReminderDays: null,
-  musicFormReminderDays: null,
-  thankYouReminderDays: null,
+  preferences: { reminderLeadDays: 7, checklistDefaults: [] },
 };
 
 function renderPage() {

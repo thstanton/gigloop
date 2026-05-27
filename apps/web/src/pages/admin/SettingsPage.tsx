@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ChevronRight, ImageIcon, Trash2, Upload } from 'lucide-react';
 import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
-import type { PublicProfile, UserProfile, UpdatePublicProfileInput, UpdateUserProfileInput } from '@/types/api';
+import type { PublicProfile, UserProfile, UpdatePublicProfileInput, UpdateUserProfileInput, UserPreferences } from '@/types/api';
 import { cn } from '@/lib/utils';
 
 // ─── Schemas ─────────────────────────────────────────────────────────────────
@@ -46,12 +46,7 @@ type BusinessForm = z.infer<typeof businessSchema>;
 const notificationsSchema = z.object({
   digestEmailEnabled: z.boolean(),
   songRequestFormEnabled: z.boolean(),
-  quoteReminderDays: z.number().int().min(1).nullable(),
-  contractReminderDays: z.number().int().min(1).nullable(),
-  depositInvoiceReminderDays: z.number().int().min(1).nullable(),
-  balanceInvoiceReminderDays: z.number().int().min(1).nullable(),
-  musicFormReminderDays: z.number().int().min(1).nullable(),
-  thankYouReminderDays: z.number().int().min(1).nullable(),
+  reminderLeadDays: z.number().int().min(1).max(90),
 });
 
 type NotificationsForm = z.infer<typeof notificationsSchema>;
@@ -532,23 +527,6 @@ function BusinessDetailsSection({ profile }: { profile: UserProfile }) {
 
 // ─── Notifications section ────────────────────────────────────────────────────
 
-type ReminderKey =
-  | 'quoteReminderDays'
-  | 'contractReminderDays'
-  | 'depositInvoiceReminderDays'
-  | 'balanceInvoiceReminderDays'
-  | 'musicFormReminderDays'
-  | 'thankYouReminderDays';
-
-const REMINDERS: { name: ReminderKey; label: string; afterEvent?: true }[] = [
-  { name: 'quoteReminderDays',          label: 'Quote email' },
-  { name: 'contractReminderDays',       label: 'Contract' },
-  { name: 'depositInvoiceReminderDays', label: 'Deposit invoice' },
-  { name: 'balanceInvoiceReminderDays', label: 'Balance invoice' },
-  { name: 'musicFormReminderDays',      label: 'Music preference form' },
-  { name: 'thankYouReminderDays',       label: 'Thank you email', afterEvent: true },
-];
-
 function NotificationsSection({ profile }: { profile: UserProfile }) {
   const queryClient = useQueryClient();
   const [saved, setSaved] = useState(false);
@@ -556,15 +534,10 @@ function NotificationsSection({ profile }: { profile: UserProfile }) {
   const defaults: NotificationsForm = {
     digestEmailEnabled: profile.digestEmailEnabled,
     songRequestFormEnabled: profile.songRequestFormEnabled,
-    quoteReminderDays: profile.quoteReminderDays,
-    contractReminderDays: profile.contractReminderDays,
-    depositInvoiceReminderDays: profile.depositInvoiceReminderDays,
-    balanceInvoiceReminderDays: profile.balanceInvoiceReminderDays,
-    musicFormReminderDays: profile.musicFormReminderDays,
-    thankYouReminderDays: profile.thankYouReminderDays,
+    reminderLeadDays: (profile.preferences as UserPreferences | undefined)?.reminderLeadDays ?? 7,
   };
 
-  const { control, handleSubmit, reset } = useForm<NotificationsForm>({
+  const { control, register, handleSubmit, reset, formState: { errors } } = useForm<NotificationsForm>({
     resolver: zodResolver(notificationsSchema),
     defaultValues: defaults,
   });
@@ -572,7 +545,12 @@ function NotificationsSection({ profile }: { profile: UserProfile }) {
   useEffect(() => { reset(defaults); }, [profile]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const mutation = useMutation({
-    mutationFn: (data: UpdateUserProfileInput) => apiPatch<UserProfile>('/me', data),
+    mutationFn: ({ digestEmailEnabled, songRequestFormEnabled, reminderLeadDays }: NotificationsForm) =>
+      apiPatch<UserProfile>('/me', {
+        digestEmailEnabled,
+        songRequestFormEnabled,
+        preferences: { reminderLeadDays },
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['me'] });
       setSaved(true);
@@ -621,40 +599,25 @@ function NotificationsSection({ profile }: { profile: UserProfile }) {
       </div>
 
       <div>
-        <p className="text-sm font-medium text-foreground">Email reminders</p>
+        <p className="text-sm font-medium text-foreground">Reminder window</p>
         <p className="text-xs text-muted mt-0.5 mb-4">
-          Days before the event each email is sent. Leave blank to disable.
+          How many days before a checklist item's due date it appears in your digest and dashboard.
         </p>
-        <div className="space-y-4">
-          {REMINDERS.map(({ name, label, afterEvent }) => (
-            <Controller
-              key={name}
-              name={name}
-              control={control}
-              render={({ field }) => (
-                <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-3">
-                  <span className="text-sm text-foreground sm:w-44 sm:flex-shrink-0">{label}</span>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      type="number"
-                      min={1}
-                      placeholder="Off"
-                      value={field.value ?? ''}
-                      onChange={(e) =>
-                        field.onChange(
-                          e.target.value === '' ? null : parseInt(e.target.value, 10),
-                        )
-                      }
-                      className="w-20"
-                    />
-                    <span className="text-sm text-muted whitespace-nowrap">
-                      days {afterEvent ? 'after' : 'before'} event
-                    </span>
-                  </div>
-                </div>
-              )}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-3">
+          <span className="text-sm text-foreground">Show items</span>
+          <div className="flex items-center gap-2">
+            <Input
+              type="number"
+              min={1}
+              max={90}
+              {...register('reminderLeadDays', { valueAsNumber: true })}
+              className="w-20"
             />
-          ))}
+            <span className="text-sm text-muted">days before due date</span>
+          </div>
+          {errors.reminderLeadDays && (
+            <p className="text-sm text-status-cancelled">{errors.reminderLeadDays.message}</p>
+          )}
         </div>
       </div>
 

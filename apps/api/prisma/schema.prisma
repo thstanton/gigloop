@@ -84,12 +84,7 @@ model UserProfile {
   digestEmailEnabled         Boolean @default(true)
   songRequestFormEnabled     Boolean @default(true)
 
-  quoteReminderDays          Int?
-  contractReminderDays       Int?
-  depositInvoiceReminderDays Int?
-  balanceInvoiceReminderDays Int?
-  musicFormReminderDays      Int?
-  thankYouReminderDays       Int?
+  preferences Json @default("{}")
 }
 
 model Contact {

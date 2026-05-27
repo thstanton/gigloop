@@ -13,14 +13,6 @@ const VALID_STATUSES = new Set<string>(Object.values(BookingStatus));
 
 // ─── Actions computation ──────────────────────────────────────────────────────
 
-const REMINDER_FIELD: Record<string, string> = {
-  send_quote: 'quoteReminderDays',
-  create_deposit_invoice: 'depositInvoiceReminderDays',
-  send_contract: 'contractReminderDays',
-  create_balance_invoice: 'balanceInvoiceReminderDays',
-  music_form_invite: 'musicFormReminderDays',
-  send_thank_you: 'thankYouReminderDays',
-};
 
 function inWindow(bookingDate: Date, today: Date, days: number | null, post: boolean): boolean {
   if (days === null) return false;
@@ -62,10 +54,12 @@ function computeActionItem(booking: any, profile: any, today: Date) {
     { key: 'send_thank_you', label: 'Send thank you', done: hasSent('thank_you'), failed: lastFailed('thank_you'), irrelevant: !bookingDatePassed },
   ];
 
+  const prefs = profile?.preferences as { reminderLeadDays?: number } | null;
+  const reminderLeadDays = prefs?.reminderLeadDays ?? 7;
+
   for (const c of candidates) {
     if (c.irrelevant || c.done) continue;
-    const days = (profile?.[REMINDER_FIELD[c.key]] as number | null) ?? null;
-    if (!inWindow(bookingDate, today, days, c.key === 'send_thank_you')) continue;
+    if (!inWindow(bookingDate, today, reminderLeadDays, c.key === 'send_thank_you')) continue;
     return { key: c.key, label: c.label, state: (c.failed ? 'failed' : 'outstanding') as 'failed' | 'outstanding' };
   }
 
