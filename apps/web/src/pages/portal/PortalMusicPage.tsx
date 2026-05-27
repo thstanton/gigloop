@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { PreviewBanner } from './PreviewBanner';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Search, Check, Music } from 'lucide-react';
 import { getMusicFormData, getPortalData, submitMusicForm } from '../../lib/portalApi';
@@ -112,6 +113,9 @@ function SongAutocomplete({
 export default function PortalMusicPage() {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const isPreview = searchParams.get('preview') === 'admin';
+  const previewFrom = searchParams.get('from') ?? '/admin/bookings';
 
   const { data: portalData } = useQuery({
     queryKey: ['portal', token],
@@ -242,7 +246,9 @@ export default function PortalMusicPage() {
   } outline-none`;
 
   return (
-    <PortalLayout profile={profile}>
+    <>
+      {isPreview && <PreviewBanner customerName="" backHref={previewFrom} />}
+      <PortalLayout profile={profile}>
       <div className="space-y-8">
         <div>
           <h1 className={`${displayFont} text-3xl mb-1 ${bold ? 'text-white' : 'text-[#1a1a1a]'}`}>
@@ -388,21 +394,27 @@ export default function PortalMusicPage() {
         </section>
 
         {/* Submit */}
-        {submit.isError && (
+        {!isPreview && submit.isError && (
           <p className={`text-sm ${bold ? 'text-red-400' : 'text-red-600'}`}>
             Something went wrong. Please try again.
           </p>
         )}
         <button
           type="button"
-          onClick={() => submit.mutate()}
-          disabled={submit.isPending}
+          onClick={isPreview ? undefined : () => submit.mutate()}
+          disabled={submit.isPending || isPreview}
           className="w-full rounded-lg px-5 py-3 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
           style={{ backgroundColor: profile.brandColour ?? '#1a1a1a' }}
         >
           {submit.isPending ? 'Submitting…' : data.existingResponse ? 'Update requests' : 'Submit requests'}
         </button>
+        {isPreview && (
+          <p className={`text-sm text-center ${bold ? 'text-white/40' : 'text-[#9ca3af]'}`}>
+            Preview only — submission disabled
+          </p>
+        )}
       </div>
-    </PortalLayout>
+      </PortalLayout>
+    </>
   );
 }

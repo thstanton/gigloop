@@ -4,15 +4,16 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@clerk/react';
+import { Link } from 'react-router-dom';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ImageIcon, Trash2, Upload } from 'lucide-react';
+import { ChevronRight, ImageIcon, Trash2, Upload } from 'lucide-react';
 import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
-import type { PublicProfile, UserProfile, UpdatePublicProfileInput, UpdateUserProfileInput, PortalTheme } from '@/types/api';
+import type { PublicProfile, UserProfile, UpdatePublicProfileInput, UpdateUserProfileInput } from '@/types/api';
 import { cn } from '@/lib/utils';
 
 // ─── Schemas ─────────────────────────────────────────────────────────────────
@@ -24,8 +25,6 @@ const publicSchema = z.object({
   phone: z.string(),
   bio: z.string(),
   website: z.string().url('Invalid URL').or(z.literal('')),
-  brandColour: z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'Must be a 6-digit hex colour'),
-  portalTheme: z.enum(['LIGHT_MODERN', 'LIGHT_ROMANTIC', 'BOLD_MODERN', 'BOLD_ROMANTIC']),
 });
 
 type PublicForm = z.infer<typeof publicSchema>;
@@ -255,16 +254,12 @@ function PublicProfileSection({ profile }: { profile: PublicProfile }) {
     phone: profile.phone ?? '',
     bio: profile.bio ?? '',
     website: profile.website ?? '',
-    brandColour: profile.brandColour ?? '#000000',
-    portalTheme: (profile.portalTheme ?? 'LIGHT_MODERN') as PublicForm['portalTheme'],
   };
 
   const {
     register,
-    control,
     handleSubmit,
     reset,
-    watch,
     formState: { errors },
   } = useForm<PublicForm>({ resolver: zodResolver(publicSchema), defaultValues: defaults });
 
@@ -325,12 +320,8 @@ function PublicProfileSection({ profile }: { profile: PublicProfile }) {
       phone: values.phone || null,
       bio: values.bio || null,
       website: values.website || null,
-      brandColour: values.brandColour,
-      portalTheme: values.portalTheme as PortalTheme,
     });
   }
-
-  const brandColour = watch('brandColour');
 
   return (
     <div className="space-y-5">
@@ -394,49 +385,28 @@ function PublicProfileSection({ profile }: { profile: PublicProfile }) {
         <Input type="url" {...register('website')} placeholder="https://" />
       </Field>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Field label="Brand colour" error={errors.brandColour?.message}>
-          <div className="flex items-center gap-2">
-            <Controller
-              name="brandColour"
-              control={control}
-              render={({ field }) => (
-                <input
-                  type="color"
-                  value={field.value}
-                  onChange={(e) => field.onChange(e.target.value)}
-                  className="h-9 w-10 rounded border border-border cursor-pointer p-0.5 bg-background flex-shrink-0"
-                  style={{ accentColor: brandColour }}
-                />
-              )}
-            />
-            <Input {...register('brandColour')} className="font-mono text-sm" />
-          </div>
-        </Field>
-
-        <Field label="Portal theme" error={errors.portalTheme?.message}>
-          <Controller
-            name="portalTheme"
-            control={control}
-            render={({ field }) => (
-              <Select value={field.value} onValueChange={field.onChange}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="LIGHT_MODERN">Light Modern</SelectItem>
-                  <SelectItem value="LIGHT_ROMANTIC">Light Romantic</SelectItem>
-                  <SelectItem value="BOLD_MODERN">Bold Modern</SelectItem>
-                  <SelectItem value="BOLD_ROMANTIC">Bold Romantic</SelectItem>
-                </SelectContent>
-              </Select>
-            )}
-          />
-        </Field>
-      </div>
-
       <SaveBar isPending={mutation.isPending} saved={saved} isError={mutation.isError} />
     </form>
+    </div>
+  );
+}
+
+// ─── Portal section ───────────────────────────────────────────────────────────
+
+function PortalSection() {
+  return (
+    <div>
+      <SectionHeader
+        title="Portal"
+        description="Customise your client portal's appearance and branding."
+      />
+      <Link
+        to="/admin/portal-preview"
+        className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-3 text-sm text-foreground hover:bg-accent transition-colors"
+      >
+        Configure portal
+        <ChevronRight size={14} className="text-muted" />
+      </Link>
     </div>
   );
 }
@@ -735,6 +705,8 @@ export default function SettingsPage() {
       <h1 className="font-display text-2xl font-semibold text-foreground mb-10">Settings</h1>
       <div className="space-y-12">
         <PublicProfileSection profile={publicProfile} />
+        <div className="border-t border-border" />
+        <PortalSection />
         <div className="border-t border-border" />
         <BusinessDetailsSection profile={userProfile} />
         <div className="border-t border-border" />

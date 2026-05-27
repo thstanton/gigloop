@@ -1,4 +1,5 @@
 import { useParams, Link, useSearchParams } from 'react-router-dom';
+import { PreviewBanner } from './PreviewBanner';
 import { useQuery } from '@tanstack/react-query';
 import { FileText, Download, CheckCircle, Clock, Music, Music2, ClipboardCheck, Mail, Phone, Heart, GlassWater, Utensils, Moon, Briefcase } from 'lucide-react';
 import { getPortalData } from '../../lib/portalApi';
@@ -28,7 +29,7 @@ function relativeLuminance(hex: string): number {
 // Returns the text colour (white or near-black) with the better WCAG contrast
 // against the given background hex. Threshold ~0.208 is the crossover point
 // where white and #1a1a1a have equal contrast ratios.
-function pickTextColour(bgHex: string): '#ffffff' | '#1a1a1a' {
+export function pickTextColour(bgHex: string): '#ffffff' | '#1a1a1a' {
   return relativeLuminance(bgHex) < 0.208 ? '#ffffff' : '#1a1a1a';
 }
 
@@ -47,7 +48,7 @@ const FORMAT_ICON_MAP: Record<string, React.ComponentType<any>> = {
 
 // ─── Status message ───────────────────────────────────────────────────────────
 
-function bookingStatusMessage(status: string): string {
+export function bookingStatusMessage(status: string): string {
   switch (status) {
     case 'ENQUIRY':   return 'Confirm your booking';
     case 'CONFIRMED': return 'Your booking is confirmed';
@@ -61,7 +62,7 @@ function bookingStatusMessage(status: string): string {
 
 // ─── Contact card ─────────────────────────────────────────────────────────────
 
-function ContactCard({ profile, bold }: { profile: PortalPublicProfile; bold: boolean }) {
+export function ContactCard({ profile, bold }: { profile: PortalPublicProfile; bold: boolean }) {
   return (
     <div className={`rounded-lg p-5 space-y-3 ${bold ? 'bg-white/15' : 'bg-[#f5f2ed]'}`}>
       <p className={`text-xs font-medium uppercase tracking-wide ${bold ? 'text-white/50' : 'text-[#a39e97]'}`}>
@@ -97,7 +98,7 @@ function ContactCard({ profile, bold }: { profile: PortalPublicProfile; bold: bo
 
 // ─── LIGHT greeting (full-width, above the two-column grid) ───────────────────
 
-function LightGreeting({ greetingName, title, statusMessage, theme }: {
+export function LightGreeting({ greetingName, title, statusMessage, theme }: {
   greetingName: string;
   title: string | null;
   statusMessage: string;
@@ -123,7 +124,7 @@ function LightGreeting({ greetingName, title, statusMessage, theme }: {
 
 // ─── BOLD hero ────────────────────────────────────────────────────────────────
 
-function BoldHero({ greetingName, title, formattedDate, statusMessage, portalHeroImage, theme, brand }: {
+export function BoldHero({ greetingName, title, formattedDate, statusMessage, portalHeroImage, theme, brand }: {
   greetingName: string;
   title: string | null;
   formattedDate: string;
@@ -173,7 +174,7 @@ function BoldHero({ greetingName, title, formattedDate, statusMessage, portalHer
 
 // ─── Sets card ────────────────────────────────────────────────────────────────
 
-function SetsCard({ sets, formats, bold }: { sets: PortalBookingSet[]; formats: PortalBookingFormat[]; bold: boolean }) {
+export function SetsCard({ sets, formats, bold }: { sets: PortalBookingSet[]; formats: PortalBookingFormat[]; bold: boolean }) {
   if (sets.length === 0) return null;
 
   const setsByFormatId = new Map<string | null, PortalBookingSet[]>();
@@ -270,7 +271,12 @@ function SetsCard({ sets, formats, bold }: { sets: PortalBookingSet[]; formats: 
 
 // ─── Booking summary ──────────────────────────────────────────────────────────
 
-function BookingSummary({ data, musicSuccess }: { data: PortalData; musicSuccess: boolean }) {
+function BookingSummary({ data, musicSuccess, isPreview, previewFrom }: {
+  data: PortalData;
+  musicSuccess: boolean;
+  isPreview?: boolean;
+  previewFrom?: string;
+}) {
   const { booking, publicProfile } = data;
   const brand = publicProfile.brandColour ?? '#1a1a1a';
   const bold = publicProfile.portalTheme === 'BOLD_MODERN' || publicProfile.portalTheme === 'BOLD_ROMANTIC';
@@ -346,7 +352,7 @@ function BookingSummary({ data, musicSuccess }: { data: PortalData; musicSuccess
         </div>
       ) : data.hasContractEmail ? (
         <Link
-          to="contract"
+          to={isPreview ? `contract?preview=admin&from=${encodeURIComponent(previewFrom ?? '')}` : 'contract'}
           className={ctaClass}
           style={ctaStyle}
         >
@@ -374,7 +380,7 @@ function BookingSummary({ data, musicSuccess }: { data: PortalData; musicSuccess
               Song requests submitted
             </span>
             <Link
-              to="music"
+              to={isPreview ? `music?preview=admin&from=${encodeURIComponent(previewFrom ?? '')}` : 'music'}
               className={`ml-auto text-xs underline underline-offset-2 ${bold ? 'text-white/45 hover:text-white' : 'text-[#a39e97] hover:text-[#1a1a1a]'}`}
             >
               Update
@@ -382,7 +388,7 @@ function BookingSummary({ data, musicSuccess }: { data: PortalData; musicSuccess
           </div>
         ) : !data.hasMusicFormResponse ? (
           <Link
-            to="music"
+            to={isPreview ? `music?preview=admin&from=${encodeURIComponent(previewFrom ?? '')}` : 'music'}
             className={ctaClass}
             style={ctaStyle}
           >
@@ -425,6 +431,8 @@ export default function PortalPage() {
   const { token } = useParams<{ token: string }>();
   const [searchParams] = useSearchParams();
   const musicSuccess = searchParams.get('music') === '1';
+  const isPreview = searchParams.get('preview') === 'admin';
+  const previewFrom = searchParams.get('from') ?? '/admin/bookings';
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['portal', token],
@@ -482,22 +490,25 @@ export default function PortalPage() {
   ) : undefined;
 
   return (
-    <PortalLayout profile={publicProfile} wide hero={hero}>
-      {/* LIGHT: greeting spans full width above the two-column grid */}
-      {!boldTheme && (
-        <LightGreeting
-          greetingName={greetingName}
-          title={booking.title}
-          statusMessage={statusMessage}
-          theme={publicProfile.portalTheme}
-        />
-      )}
-      <div className="md:grid md:grid-cols-[1fr_280px] md:gap-8 md:items-start">
-        <BookingSummary data={data} musicSuccess={musicSuccess} />
-        <div className="mt-8 md:mt-0 md:sticky md:top-8">
-          <ContactCard profile={publicProfile} bold={boldTheme} />
+    <>
+      {isPreview && <PreviewBanner customerName={booking.customerName} backHref={previewFrom} />}
+      <PortalLayout profile={publicProfile} wide hero={hero}>
+        {/* LIGHT: greeting spans full width above the two-column grid */}
+        {!boldTheme && (
+          <LightGreeting
+            greetingName={greetingName}
+            title={booking.title}
+            statusMessage={statusMessage}
+            theme={publicProfile.portalTheme}
+          />
+        )}
+        <div className="md:grid md:grid-cols-[1fr_280px] md:gap-8 md:items-start">
+          <BookingSummary data={data} musicSuccess={musicSuccess} isPreview={isPreview} previewFrom={previewFrom} />
+          <div className="mt-8 md:mt-0 md:sticky md:top-8">
+            <ContactCard profile={publicProfile} bold={boldTheme} />
+          </div>
         </div>
-      </div>
-    </PortalLayout>
+      </PortalLayout>
+    </>
   );
 }

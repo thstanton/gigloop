@@ -1,4 +1,5 @@
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { PreviewBanner } from './PreviewBanner';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -250,6 +251,9 @@ function SignatureSection({
 export default function PortalContractPage() {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const isPreview = searchParams.get('preview') === 'admin';
+  const previewFrom = searchParams.get('from') ?? '/admin/bookings';
   const [agreed, setAgreed] = useState(false);
   const [signature, setSignature] = useState('');
   const [submitted, setSubmitted] = useState(false);
@@ -358,63 +362,72 @@ export default function PortalContractPage() {
   const canSubmit = agreed && signature.length > 0 && !signMutation.isPending;
 
   return (
-    <PortalLayout profile={profile}>
-      <div className="space-y-8">
-        <div>
-          <h1 className={`${displayFont} text-3xl mb-1 ${isBold ? 'text-white' : 'text-[#1a1a1a]'}`}>
-            {contractQuery.data.title}
-          </h1>
-          <p className={`text-sm ${isBold ? 'text-white/60' : 'text-[#6b7280]'}`}>
-            Please read carefully before signing
-          </p>
-        </div>
+    <>
+      {isPreview && <PreviewBanner customerName="" backHref={previewFrom} />}
+      <PortalLayout profile={profile}>
+        <div className="space-y-8">
+          <div>
+            <h1 className={`${displayFont} text-3xl mb-1 ${isBold ? 'text-white' : 'text-[#1a1a1a]'}`}>
+              {contractQuery.data.title}
+            </h1>
+            <p className={`text-sm ${isBold ? 'text-white/60' : 'text-[#6b7280]'}`}>
+              Please read carefully before signing
+            </p>
+          </div>
 
-        <div className={`rounded-lg p-6 ${isBold ? 'bg-white/10' : 'bg-white border border-[#e5e5e5]'}`}>
-          <EditorContent
-            editor={editor}
-            className={`prose prose-sm max-w-none ${isBold ? 'prose-invert' : ''}`}
-          />
-        </div>
-
-        <div className="space-y-6">
-          <label className="flex items-start gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={agreed}
-              onChange={(e) => setAgreed(e.target.checked)}
-              className="mt-0.5 h-4 w-4 rounded border-[#e5e5e5] flex-shrink-0"
+          <div className={`rounded-lg p-6 ${isBold ? 'bg-white/10' : 'bg-white border border-[#e5e5e5]'}`}>
+            <EditorContent
+              editor={editor}
+              className={`prose prose-sm max-w-none ${isBold ? 'prose-invert' : ''}`}
             />
-            <span className={`text-sm ${isBold ? 'text-white/80' : 'text-[#374151]'}`}>
-              I have read and agree to the terms above
-            </span>
-          </label>
+          </div>
 
-          {agreed && (
-            <div className="space-y-3">
-              <p className={`text-sm font-medium ${isBold ? 'text-white' : 'text-[#1a1a1a]'}`}>
-                Sign below
-              </p>
-              <SignatureSection onSign={setSignature} brand={brand} isBold={isBold} />
+          {isPreview ? (
+            <p className={`text-sm text-center rounded-lg border border-dashed p-4 ${isBold ? 'border-white/20 text-white/40' : 'border-[#e5e5e5] text-[#9ca3af]'}`}>
+              Signature form — preview only
+            </p>
+          ) : (
+            <div className="space-y-6">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={agreed}
+                  onChange={(e) => setAgreed(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-[#e5e5e5] flex-shrink-0"
+                />
+                <span className={`text-sm ${isBold ? 'text-white/80' : 'text-[#374151]'}`}>
+                  I have read and agree to the terms above
+                </span>
+              </label>
+
+              {agreed && (
+                <div className="space-y-3">
+                  <p className={`text-sm font-medium ${isBold ? 'text-white' : 'text-[#1a1a1a]'}`}>
+                    Sign below
+                  </p>
+                  <SignatureSection onSign={setSignature} brand={brand} isBold={isBold} />
+                </div>
+              )}
+
+              {signMutation.isError && (
+                <p className="text-sm text-red-500">
+                  Something went wrong. Please try again.
+                </p>
+              )}
+
+              <button
+                type="button"
+                onClick={() => signMutation.mutate()}
+                disabled={!canSubmit}
+                className="w-full rounded-lg px-5 py-3 text-sm font-medium text-white transition-opacity disabled:opacity-40"
+                style={{ backgroundColor: brand }}
+              >
+                {signMutation.isPending ? 'Signing…' : 'Sign contract'}
+              </button>
             </div>
           )}
-
-          {signMutation.isError && (
-            <p className="text-sm text-red-500">
-              Something went wrong. Please try again.
-            </p>
-          )}
-
-          <button
-            type="button"
-            onClick={() => signMutation.mutate()}
-            disabled={!canSubmit}
-            className="w-full rounded-lg px-5 py-3 text-sm font-medium text-white transition-opacity disabled:opacity-40"
-            style={{ backgroundColor: brand }}
-          >
-            {signMutation.isPending ? 'Signing…' : 'Sign contract'}
-          </button>
         </div>
-      </div>
-    </PortalLayout>
+      </PortalLayout>
+    </>
   );
 }

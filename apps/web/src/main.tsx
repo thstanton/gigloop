@@ -22,6 +22,7 @@ import TemplateEditPage from './pages/admin/TemplateEditPage';
 import PortalPage from './pages/portal/PortalPage';
 import PortalContractPage from './pages/portal/PortalContractPage';
 import PortalMusicPage from './pages/portal/PortalMusicPage';
+import PortalPreviewPage from './pages/admin/PortalPreviewPage';
 
 const queryClient = new QueryClient();
 
@@ -49,6 +50,10 @@ const router = createBrowserRouter([
   {
     path: '/booking/:token/music',
     element: <PortalMusicPage />,
+  },
+  {
+    path: '/admin/portal-preview',
+    element: <PortalPreviewPage />,
   },
   {
     path: '/admin',

@@ -1121,9 +1121,7 @@ export default function BookingDetailPage() {
               <h1 className="font-display text-2xl font-semibold text-foreground">{title}</h1>
               <div className="flex items-center gap-2 flex-shrink-0">
                 <a
-                  href={`/booking/${booking.portalToken}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  href={`/booking/${booking.portalToken}?preview=admin&from=${encodeURIComponent(`/admin/bookings/${booking.id}`)}`}
                   className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-foreground transition-colors border border-border rounded px-3 py-1.5"
                 >
                   Client portal
