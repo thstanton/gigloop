@@ -59,8 +59,8 @@ const PREVIEW_VENUE = 'The Grand Ballroom';
 const PREVIEW_FEE = '1,500';
 
 const PREVIEW_DOCUMENTS = [
-  { label: 'Event timeline' },
-  { label: 'Parking & access guide' },
+  { label: 'Performance contract' },
+  { label: 'Deposit invoice' },
 ];
 
 // ─── Local overrides state ────────────────────────────────────────────────────
