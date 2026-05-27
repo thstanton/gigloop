@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Search, Check, Music } from 'lucide-react';
 import { getMusicFormData, getPortalData, submitMusicForm } from '../../lib/portalApi';
-import { PortalLayout } from '../../layouts/PortalLayout';
+import { PortalLayout, getDisplayFontClass } from '../../layouts/PortalLayout';
 import type { PortalSong, PortalSpecialRequest } from '../../types/api';
 
 // ─── Song picker for key moments ──────────────────────────────────────────────
@@ -165,6 +165,7 @@ export default function PortalMusicPage() {
 
   const profile = portalData?.publicProfile;
   const bold = profile?.portalTheme === 'BOLD_MODERN' || profile?.portalTheme === 'BOLD_ROMANTIC';
+  const displayFont = getDisplayFontClass(profile?.portalTheme ?? null);
 
   if (isLoading || !profile) {
     return (
@@ -244,7 +245,7 @@ export default function PortalMusicPage() {
     <PortalLayout profile={profile}>
       <div className="space-y-8">
         <div>
-          <h1 className={`text-2xl font-semibold mb-1 ${bold ? 'text-white' : 'text-[#1a1a1a]'}`}>
+          <h1 className={`${displayFont} text-3xl mb-1 ${bold ? 'text-white' : 'text-[#1a1a1a]'}`}>
             Song requests
           </h1>
           <p className={`text-sm ${bold ? 'text-white/60' : 'text-[#6b7280]'}`}>

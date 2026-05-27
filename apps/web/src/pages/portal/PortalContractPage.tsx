@@ -7,7 +7,7 @@ import { VariableNode } from '../../features/templates/VariableNode';
 import { useRef, useState, useEffect } from 'react';
 import { FileText, PenLine, RotateCcw } from 'lucide-react';
 import { getPortalData, getContractContent, signContract } from '../../lib/portalApi';
-import { PortalLayout } from '../../layouts/PortalLayout';
+import { PortalLayout, getDisplayFontClass } from '../../layouts/PortalLayout';
 
 // ─── Typed signature ─────────────────────────────────────────────────────────
 
@@ -298,6 +298,7 @@ export default function PortalContractPage() {
   const profile = portalQuery.data?.publicProfile;
   const brand = profile?.brandColour ?? '#1a1a1a';
   const isBold = profile?.portalTheme === 'BOLD_MODERN' || profile?.portalTheme === 'BOLD_ROMANTIC';
+  const displayFont = getDisplayFontClass(profile?.portalTheme ?? null);
 
   const contractError = contractQuery.error;
   const alreadySigned = contractError instanceof Response && contractError.status === 400;
@@ -343,7 +344,7 @@ export default function PortalContractPage() {
           <div className="mx-auto w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
             <FileText className="h-6 w-6 text-green-600" />
           </div>
-          <h2 className={`text-xl font-semibold ${isBold ? 'text-white' : 'text-[#1a1a1a]'}`}>
+          <h2 className={`${displayFont} text-2xl ${isBold ? 'text-white' : 'text-[#1a1a1a]'}`}>
             Contract signed
           </h2>
           <p className={`text-sm ${isBold ? 'text-white/60' : 'text-[#6b7280]'}`}>
@@ -360,7 +361,7 @@ export default function PortalContractPage() {
     <PortalLayout profile={profile}>
       <div className="space-y-8">
         <div>
-          <h1 className={`text-2xl font-semibold mb-1 ${isBold ? 'text-white' : 'text-[#1a1a1a]'}`}>
+          <h1 className={`${displayFont} text-3xl mb-1 ${isBold ? 'text-white' : 'text-[#1a1a1a]'}`}>
             {contractQuery.data.title}
           </h1>
           <p className={`text-sm ${isBold ? 'text-white/60' : 'text-[#6b7280]'}`}>
