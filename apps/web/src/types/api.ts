@@ -496,6 +496,14 @@ export interface PortalBookingSet {
   label: string | null;
   startTime: string | null;
   duration: number | null;
+  performanceFormatId: string | null;
+}
+
+export interface PortalBookingFormat {
+  id: string;
+  label: string;
+  icon: string;
+  order: number;
 }
 
 export interface PortalBooking {
@@ -507,6 +515,7 @@ export interface PortalBooking {
   customerName: string;
   venueName: string | null;
   sets: PortalBookingSet[];
+  formats: PortalBookingFormat[];
   contractSignedAt: string | null;
 }
 

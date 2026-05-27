@@ -1,9 +1,22 @@
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { FileText, Download, CheckCircle, Clock, Music, ClipboardCheck, Mail, Phone } from 'lucide-react';
+import { FileText, Download, CheckCircle, Clock, Music, Music2, ClipboardCheck, Mail, Phone, Heart, GlassWater, Utensils, Moon, Briefcase } from 'lucide-react';
 import { getPortalData } from '../../lib/portalApi';
 import { PortalLayout, getDisplayFontClass, isRomantic } from '../../layouts/PortalLayout';
-import type { PortalData, PortalDocument, PortalPublicProfile, PortalBookingSet } from '../../types/api';
+import type { PortalData, PortalDocument, PortalPublicProfile, PortalBookingSet, PortalBookingFormat } from '../../types/api';
+
+// ─── Format icon map (mirrors admin PerformanceSection) ───────────────────────
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const FORMAT_ICON_MAP: Record<string, React.ComponentType<any>> = {
+  heart: Heart,
+  'glass-water': GlassWater,
+  utensils: Utensils,
+  moon: Moon,
+  briefcase: Briefcase,
+  music: Music,
+  'music-2': Music2,
+};
 
 // ─── Contact card ─────────────────────────────────────────────────────────────
 
@@ -110,8 +123,37 @@ function BoldHero({ firstName, title, formattedDate, portalHeroImage, theme }: {
 
 // ─── Sets card ────────────────────────────────────────────────────────────────
 
-function SetsCard({ sets, bold }: { sets: PortalBookingSet[]; bold: boolean }) {
+function SetRow({ set, bold, indented = false }: { set: PortalBookingSet; bold: boolean; indented?: boolean }) {
+  return (
+    <div className={`flex items-center justify-between gap-4 py-2.5 ${indented ? 'pl-9 pr-5' : 'px-5'}`}>
+      <span className={`text-sm ${bold ? 'text-white' : 'text-[#1a1a1a]'}`}>
+        {set.label ?? `Set ${set.order + 1}`}
+        {set.duration != null && (
+          <span className={`ml-1.5 ${bold ? 'text-white/50' : 'text-[#a39e97]'}`}>
+            · {set.duration} min
+          </span>
+        )}
+      </span>
+      {set.startTime && (
+        <span className={`text-sm flex-shrink-0 ${bold ? 'text-white/50' : 'text-[#a39e97]'}`}>
+          {set.startTime}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function SetsCard({ sets, formats, bold }: { sets: PortalBookingSet[]; formats: PortalBookingFormat[]; bold: boolean }) {
   if (sets.length === 0) return null;
+
+  const setsByFormatId = new Map<string | null, PortalBookingSet[]>();
+  for (const s of sets) {
+    const key = s.performanceFormatId ?? null;
+    if (!setsByFormatId.has(key)) setsByFormatId.set(key, []);
+    setsByFormatId.get(key)!.push(s);
+  }
+  const unassigned = setsByFormatId.get(null) ?? [];
+  const divideClass = bold ? 'divide-white/10' : 'divide-[#ede9e4]';
 
   return (
     <div className={`rounded-lg overflow-hidden ${bold ? 'bg-white/15' : 'bg-[#f5f2ed]'}`}>
@@ -120,24 +162,28 @@ function SetsCard({ sets, bold }: { sets: PortalBookingSet[]; bold: boolean }) {
           Programme
         </p>
       </div>
-      <div className={`divide-y ${bold ? 'divide-white/10' : 'divide-[#ede9e4]'}`}>
-        {sets.map((s) => (
-          <div key={s.order} className="flex items-center justify-between px-5 py-3 gap-4">
-            <span className={`text-sm ${bold ? 'text-white' : 'text-[#1a1a1a]'}`}>
-              {s.label ?? `Set ${s.order + 1}`}
-              {s.duration != null && (
-                <span className={`ml-1.5 ${bold ? 'text-white/50' : 'text-[#a39e97]'}`}>
-                  · {s.duration} min
+
+      <div className={`divide-y ${divideClass}`}>
+        {formats.map((fmt) => {
+          const fmtSets = setsByFormatId.get(fmt.id) ?? [];
+          if (fmtSets.length === 0) return null;
+          const Icon = FORMAT_ICON_MAP[fmt.icon] ?? Music;
+          return (
+            <div key={fmt.id}>
+              <div className={`flex items-center gap-2.5 px-5 py-2.5 ${bold ? 'border-b border-white/10' : 'border-b border-[#ede9e4]'}`}>
+                <Icon size={14} className={bold ? 'text-white/55 flex-shrink-0' : 'text-[#9a9189] flex-shrink-0'} />
+                <span className={`text-sm font-medium ${bold ? 'text-white/80' : 'text-[#5a544e]'}`}>
+                  {fmt.label}
                 </span>
-              )}
-            </span>
-            {s.startTime && (
-              <span className={`text-sm flex-shrink-0 ${bold ? 'text-white/50' : 'text-[#a39e97]'}`}>
-                {s.startTime}
-              </span>
-            )}
-          </div>
-        ))}
+              </div>
+              <div className={`divide-y ${divideClass}`}>
+                {fmtSets.map((s) => <SetRow key={s.order} set={s} bold={bold} indented />)}
+              </div>
+            </div>
+          );
+        })}
+
+        {unassigned.map((s) => <SetRow key={s.order} set={s} bold={bold} />)}
       </div>
     </div>
   );
@@ -190,8 +236,8 @@ function BookingSummary({ data, musicSuccess }: { data: PortalData; musicSuccess
         )}
       </div>
 
-      {/* Sets — separate card, row-per-set design */}
-      <SetsCard sets={booking.sets} bold={bold} />
+      {/* Sets — separate card, grouped by format with icons */}
+      <SetsCard sets={booking.sets} formats={booking.formats} bold={bold} />
 
       {/* Deposit due banner */}
       {data.depositInvoiceDueDate && !booking.contractSignedAt && (

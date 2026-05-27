@@ -13,7 +13,18 @@ export class PortalRepository {
       include: {
         customer: true,
         venue: true,
-        sets: { orderBy: { order: 'asc' } },
+        sets: {
+          orderBy: { order: 'asc' },
+          include: {
+            performanceFormat: { select: { id: true, label: true, icon: true } },
+          },
+        },
+        performanceFormats: {
+          orderBy: { order: 'asc' },
+          include: {
+            performanceFormat: { select: { id: true, label: true, icon: true } },
+          },
+        },
         invoices: {
           where: { status: 'SENT', isDeposit: true },
           include: { lineItems: true },

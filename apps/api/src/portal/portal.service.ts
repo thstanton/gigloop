@@ -68,6 +68,13 @@ export class PortalService {
           label: s.label,
           startTime: s.startTime,
           duration: s.duration,
+          performanceFormatId: s.performanceFormatId,
+        })),
+        formats: booking.performanceFormats.map((bpf) => ({
+          id: bpf.performanceFormatId,
+          label: bpf.performanceFormat.label,
+          icon: bpf.performanceFormat.icon,
+          order: bpf.order,
         })),
         contractSignedAt: booking.contractSignedAt?.toISOString() ?? null,
       },
