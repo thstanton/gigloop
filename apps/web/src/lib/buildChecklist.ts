@@ -97,7 +97,7 @@ export function buildChecklist(
       label: 'Contract signed',
       done: !!booking.contractSignedAt,
       failed: false,
-      irrelevant: booking.status === 'ENQUIRY' || statusGte(booking.status, 'SETTLED'),
+      irrelevant: booking.status === 'ENQUIRY' || statusGte(booking.status, 'READY'),
       shortcutMarkDone: 'mark_contract_signed',
     },
     {

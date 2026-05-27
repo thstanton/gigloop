@@ -24,7 +24,7 @@ export const bookingFormSchema = z.object({
     'WEDDING', 'CORPORATE', 'PRIVATE', 'RESIDENCY', 'FESTIVAL', 'OUTDOOR', 'FUNCTION', 'OTHER',
   ] as const),
   date: z.string().min(1, 'Date is required'),
-  status: z.enum(['ENQUIRY', 'CONFIRMED', 'INVOICED', 'SETTLED', 'COMPLETED', 'CANCELLED'] as const),
+  status: z.enum(['ENQUIRY', 'CONFIRMED', 'READY', 'COMPLETE', 'CANCELLED'] as const),
   title: z.string(),
   fee: z.string(),
   notes: z.string(),
@@ -220,9 +220,8 @@ export function BookingFormFields({
                 <SelectContent>
                   <SelectItem value="ENQUIRY">Enquiry</SelectItem>
                   <SelectItem value="CONFIRMED">Confirmed</SelectItem>
-                  <SelectItem value="INVOICED">Invoiced</SelectItem>
-                  <SelectItem value="SETTLED">Settled</SelectItem>
-                  <SelectItem value="COMPLETED">Completed</SelectItem>
+                  <SelectItem value="READY">Ready</SelectItem>
+                  <SelectItem value="COMPLETE">Complete</SelectItem>
                   <SelectItem value="CANCELLED">Cancelled</SelectItem>
                 </SelectContent>
               </Select>

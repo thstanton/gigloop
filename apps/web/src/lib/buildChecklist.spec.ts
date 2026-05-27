@@ -98,7 +98,7 @@ describe('send_quote', () => {
   });
 
   it('is irrelevant (hidden) when booking is CONFIRMED or beyond', () => {
-    for (const status of ['CONFIRMED', 'INVOICED', 'SETTLED', 'COMPLETED', 'CANCELLED'] as const) {
+    for (const status of ['CONFIRMED', 'READY', 'COMPLETE', 'CANCELLED'] as const) {
       const items = buildChecklist(makeBooking({ status }), []);
       expect(getItem(items, 'send_quote')).toBeUndefined();
     }
@@ -181,8 +181,8 @@ describe('contract_signed', () => {
     expect(getItem(items, 'contract_signed')).toBeUndefined();
   });
 
-  it('is irrelevant at SETTLED status and beyond', () => {
-    for (const status of ['SETTLED', 'COMPLETED', 'CANCELLED'] as const) {
+  it('is irrelevant at READY status and beyond', () => {
+    for (const status of ['READY', 'COMPLETE', 'CANCELLED'] as const) {
       const items = buildChecklist(makeBooking({ status }), []);
       expect(getItem(items, 'contract_signed')).toBeUndefined();
     }

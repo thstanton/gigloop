@@ -49,8 +49,8 @@ function computeActionItem(booking: any, profile: any, today: Date) {
   };
 
   const gtEq = (s: string, target: string) =>
-    ['CONFIRMED', 'INVOICED', 'SETTLED', 'COMPLETED', 'CANCELLED'].slice(
-      ['CONFIRMED', 'INVOICED', 'SETTLED', 'COMPLETED', 'CANCELLED'].indexOf(target),
+    ['CONFIRMED', 'READY', 'COMPLETE', 'CANCELLED'].slice(
+      ['CONFIRMED', 'READY', 'COMPLETE', 'CANCELLED'].indexOf(target),
     ).includes(s);
 
   const candidates = [

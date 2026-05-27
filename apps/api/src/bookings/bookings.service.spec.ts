@@ -192,10 +192,10 @@ describe('BookingsService', () => {
   describe('update', () => {
     it('updates and returns result when booking exists', async () => {
       repo.findOne.mockResolvedValue(booking);
-      const updated = { ...booking, status: BookingStatus.INVOICED };
+      const updated = { ...booking, status: BookingStatus.CONFIRMED };
       repo.update.mockResolvedValue(updated);
-      const result = await service.update('u1', 'b1', { status: BookingStatus.INVOICED });
-      expect(repo.update).toHaveBeenCalledWith('b1', { status: BookingStatus.INVOICED });
+      const result = await service.update('u1', 'b1', { status: BookingStatus.CONFIRMED });
+      expect(repo.update).toHaveBeenCalledWith('b1', { status: BookingStatus.CONFIRMED });
       expect(result).toBe(updated);
     });
 

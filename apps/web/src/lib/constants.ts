@@ -25,9 +25,8 @@ export const EVENT_TYPE_LABELS: Record<EventType, string> = {
 export const STATUS_ORDER: BookingStatus[] = [
   'ENQUIRY',
   'CONFIRMED',
-  'INVOICED',
-  'SETTLED',
-  'COMPLETED',
+  'READY',
+  'COMPLETE',
   'CANCELLED',
 ];
 

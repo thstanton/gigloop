@@ -7,9 +7,8 @@ const STATUS_CONFIG: Record<
 > = {
   ENQUIRY:   { label: 'Enquiry',   bg: 'bg-status-enquiry/12',   text: 'text-status-enquiry',   border: 'border-l-status-enquiry'   },
   CONFIRMED: { label: 'Confirmed', bg: 'bg-status-confirmed/12', text: 'text-status-confirmed', border: 'border-l-status-confirmed' },
-  INVOICED:  { label: 'Invoiced',  bg: 'bg-status-invoiced/12',  text: 'text-status-invoiced',  border: 'border-l-status-invoiced'  },
-  SETTLED:   { label: 'Settled',   bg: 'bg-status-settled/12',   text: 'text-status-settled',   border: 'border-l-status-settled'   },
-  COMPLETED: { label: 'Completed', bg: 'bg-status-completed/12', text: 'text-status-completed', border: 'border-l-status-completed' },
+  READY:     { label: 'Ready',     bg: 'bg-status-ready/12',     text: 'text-status-ready',     border: 'border-l-status-ready'     },
+  COMPLETE:  { label: 'Complete',  bg: 'bg-status-complete/12',  text: 'text-status-complete',  border: 'border-l-status-complete'  },
   CANCELLED: { label: 'Cancelled', bg: 'bg-status-cancelled/12', text: 'text-status-cancelled', border: 'border-l-status-cancelled' },
 };
 

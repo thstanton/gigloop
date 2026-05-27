@@ -52,9 +52,8 @@ export function bookingStatusMessage(status: string): string {
   switch (status) {
     case 'ENQUIRY':   return 'Confirm your booking';
     case 'CONFIRMED': return 'Your booking is confirmed';
-    case 'INVOICED':  return 'Your booking is confirmed';
-    case 'SETTLED':   return "You're all set";
-    case 'COMPLETED': return 'Thanks for your booking!';
+    case 'READY':     return "You're all set";
+    case 'COMPLETE':  return 'Thanks for your booking!';
     case 'CANCELLED': return 'This booking has been cancelled';
     default:          return '';
   }

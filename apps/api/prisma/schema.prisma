@@ -14,9 +14,8 @@ datasource db {
 enum BookingStatus {
   ENQUIRY
   CONFIRMED
-  INVOICED
-  SETTLED
-  COMPLETED
+  READY
+  COMPLETE
   CANCELLED
 }
 

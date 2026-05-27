@@ -42,9 +42,8 @@
     /* Status — used only for status badges, never decorative */
     --status-enquiry: 38 92% 50%;
     --status-confirmed: 172 55% 40%;
-    --status-invoiced: 222 89% 55%;
-    --status-settled: 262 83% 58%;
-    --status-completed: 30 8% 48%;
+    --status-ready: 262 83% 58%;
+    --status-complete: 30 8% 48%;
     --status-cancelled: 0 84% 60%;
   }
 
@@ -82,9 +81,8 @@
   /* Status badge left-border accent colours */
   .border-l-status-enquiry   { border-left-color: hsl(var(--status-enquiry)); }
   .border-l-status-confirmed { border-left-color: hsl(var(--status-confirmed)); }
-  .border-l-status-invoiced  { border-left-color: hsl(var(--status-invoiced)); }
-  .border-l-status-settled   { border-left-color: hsl(var(--status-settled)); }
-  .border-l-status-completed { border-left-color: hsl(var(--status-completed)); }
+  .border-l-status-ready     { border-left-color: hsl(var(--status-ready)); }
+  .border-l-status-complete  { border-left-color: hsl(var(--status-complete)); }
   .border-l-status-cancelled { border-left-color: hsl(var(--status-cancelled)); }
 }
 

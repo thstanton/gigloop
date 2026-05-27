@@ -14,9 +14,8 @@ const FILTERS: { label: string; value: Filter }[] = [
   { label: 'All',       value: 'ALL'       },
   { label: 'Enquiry',   value: 'ENQUIRY'   },
   { label: 'Confirmed', value: 'CONFIRMED' },
-  { label: 'Invoiced',  value: 'INVOICED'  },
-  { label: 'Settled',   value: 'SETTLED'   },
-  { label: 'Completed', value: 'COMPLETED' },
+  { label: 'Ready',     value: 'READY'     },
+  { label: 'Complete',  value: 'COMPLETE'  },
   { label: 'Cancelled', value: 'CANCELLED' },
 ];
 

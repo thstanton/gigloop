@@ -10,9 +10,8 @@
 export type BookingStatus =
   | 'ENQUIRY'
   | 'CONFIRMED'
-  | 'INVOICED'
-  | 'SETTLED'
-  | 'COMPLETED'
+  | 'READY'
+  | 'COMPLETE'
   | 'CANCELLED';
 
 export type EventType =

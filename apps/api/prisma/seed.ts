@@ -511,7 +511,7 @@ async function main() {
   const booking4 = await prisma.booking.create({
     data: {
       userId: USER_ID,
-      status: 'INVOICED',
+      status: 'CONFIRMED',
       eventType: 'CORPORATE',
       title: 'Meridian Summer Party 2026',
       date: new Date('2026-07-18T19:00:00'),
@@ -585,7 +585,7 @@ async function main() {
   const booking5 = await prisma.booking.create({
     data: {
       userId: USER_ID,
-      status: 'COMPLETED',
+      status: 'COMPLETE',
       eventType: 'WEDDING',
       date: new Date('2026-02-14T13:00:00'),
       fee: 1950,

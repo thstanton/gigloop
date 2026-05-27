@@ -71,18 +71,16 @@ function invoiceLineTotal(invoice: Invoice): number {
 const STATUS_PILL_CLASSES: Record<BookingStatus, string> = {
   ENQUIRY:   'bg-status-enquiry/12 text-status-enquiry border-l-status-enquiry',
   CONFIRMED: 'bg-status-confirmed/12 text-status-confirmed border-l-status-confirmed',
-  INVOICED:  'bg-status-invoiced/12 text-status-invoiced border-l-status-invoiced',
-  SETTLED:   'bg-status-settled/12 text-status-settled border-l-status-settled',
-  COMPLETED: 'bg-status-completed/12 text-status-completed border-l-status-completed',
+  READY:     'bg-status-ready/12 text-status-ready border-l-status-ready',
+  COMPLETE:  'bg-status-complete/12 text-status-complete border-l-status-complete',
   CANCELLED: 'bg-status-cancelled/12 text-status-cancelled border-l-status-cancelled',
 };
 
 const STATUS_LABELS: Record<BookingStatus, string> = {
   ENQUIRY:   'Enquiry',
   CONFIRMED: 'Confirmed',
-  INVOICED:  'Invoiced',
-  SETTLED:   'Settled',
-  COMPLETED: 'Completed',
+  READY:     'Ready',
+  COMPLETE:  'Complete',
   CANCELLED: 'Cancelled',
 };
 

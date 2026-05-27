@@ -70,9 +70,8 @@ const config: Config = {
         status: {
           enquiry: 'hsl(var(--status-enquiry) / <alpha-value>)',
           confirmed: 'hsl(var(--status-confirmed) / <alpha-value>)',
-          invoiced: 'hsl(var(--status-invoiced) / <alpha-value>)',
-          settled: 'hsl(var(--status-settled) / <alpha-value>)',
-          completed: 'hsl(var(--status-completed) / <alpha-value>)',
+          ready: 'hsl(var(--status-ready) / <alpha-value>)',
+          complete: 'hsl(var(--status-complete) / <alpha-value>)',
           cancelled: 'hsl(var(--status-cancelled) / <alpha-value>)',
         },
       },
