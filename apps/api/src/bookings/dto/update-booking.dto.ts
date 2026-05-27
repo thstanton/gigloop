@@ -70,16 +70,5 @@ export class UpdateBookingDto {
   @IsOptional()
   @ValidateIf((_, v) => v !== null)
   @IsDateString()
-  contractSignedAt?: string | null;
-
-  @ApiPropertyOptional({ example: '2026-06-15T10:00:00.000Z', nullable: true })
-  @IsOptional()
-  @ValidateIf((_, v) => v !== null)
-  @IsDateString()
   depositReceivedAt?: string | null;
-
-  @ApiPropertyOptional({ description: 'Tiptap JSON contract content', nullable: true })
-  @IsOptional()
-  @Allow()
-  contractContent?: unknown | null;
 }

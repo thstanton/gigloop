@@ -43,6 +43,7 @@ import type {
   BookingDetail,
   BookingStatus,
   Contact,
+  Contract,
   Document,
   KeyMoment,
   MusicFormConfig,
@@ -690,21 +691,21 @@ function VenueCard({ venue, linkState, onEdit }: { venue: Contact; linkState?: R
 type ContractState = 'not_started' | 'draft' | 'sent' | 'signed';
 
 function deriveContractState(booking: BookingDetail, communications: Communication[]): ContractState {
-  if (booking.contractSignedAt) return 'signed';
+  if (booking.activeContract?.status === 'SIGNED') return 'signed';
   const contractSent = communications.some(
     (c) =>
       c.status === 'SENT' &&
       (c.template?.builtInType === 'contract_cover' || c.template?.builtInType === 'contract_and_deposit_cover'),
   );
   if (contractSent) return 'sent';
-  if (booking.contractContent !== null) return 'draft';
+  if (booking.activeContract !== null) return 'draft';
   return 'not_started';
 }
 
 const CONTRACT_PILL_CLASSES: Record<Exclude<ContractState, 'not_started'>, string> = {
-  draft:  'bg-status-invoiced/12 text-status-invoiced border-l-status-invoiced',
+  draft:  'bg-status-enquiry/12 text-status-enquiry border-l-status-enquiry',
   sent:   'bg-status-confirmed/12 text-status-confirmed border-l-status-confirmed',
-  signed: 'bg-status-settled/12 text-status-settled border-l-status-settled',
+  signed: 'bg-status-ready/12 text-status-ready border-l-status-ready',
 };
 
 const CONTRACT_PILL_LABELS: Record<Exclude<ContractState, 'not_started'>, string> = {
@@ -1001,7 +1002,7 @@ export default function BookingDetailPage() {
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [contractSheetOpen, setContractSheetOpen] = useState(false);
   const [contractSheetReadOnly, setContractSheetReadOnly] = useState(false);
-  const [pendingContractContent, setPendingContractContent] = useState<unknown | null>(null);
+  const [pendingContract, setPendingContract] = useState<Contract | null>(null);
 
   const { isLoaded } = useAuth();
   const { data: booking, isLoading, isError } = useBooking(id!);
@@ -1018,9 +1019,9 @@ export default function BookingDetailPage() {
   const queryClient = useQueryClient();
 
   const createContract = useMutation({
-    mutationFn: () => apiPost<{ contractContent: unknown }>(`/bookings/${id}/contract/create`, {}),
+    mutationFn: () => apiPost<Contract>(`/bookings/${id}/contracts`, {}),
     onSuccess: (data) => {
-      setPendingContractContent(data.contractContent);
+      setPendingContract(data);
       queryClient.invalidateQueries({ queryKey: ['booking', id] });
       setContractSheetReadOnly(false);
       setContractSheetOpen(true);
@@ -1244,7 +1245,7 @@ export default function BookingDetailPage() {
                       <button
                         onClick={() => {
                           if (item.shortcutMarkDone === 'mark_contract_signed') {
-                            actions.markContractSigned();
+                            if (booking.activeContract) actions.markContractSigned(booking.activeContract.id);
                           } else {
                             const sentDepositInvoice = invoices.find(
                               (inv) => inv.isDeposit && inv.status === 'SENT',
@@ -1427,10 +1428,10 @@ export default function BookingDetailPage() {
 
       <ContractSheet
         bookingId={id!}
-        content={pendingContractContent ?? booking.contractContent}
+        contract={pendingContract ?? booking.activeContract}
         readOnly={contractSheetReadOnly}
         open={contractSheetOpen}
-        onClose={() => { setContractSheetOpen(false); setPendingContractContent(null); }}
+        onClose={() => { setContractSheetOpen(false); setPendingContract(null); }}
       />
       <BookingEditDrawer booking={booking} />
       <ContactEditSheet contact={editingContact} onClose={() => setEditingContact(null)} />

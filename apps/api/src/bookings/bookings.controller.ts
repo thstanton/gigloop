@@ -20,6 +20,7 @@ import { CreateSetDto } from './dto/create-set.dto';
 import { UpdateSetDto } from './dto/update-set.dto';
 import { ApplyFormatDto } from './dto/apply-format.dto';
 import { UpsertMusicFormConfigDto } from './dto/upsert-music-form-config.dto';
+import { UpdateContractDto } from './dto/update-contract.dto';
 import type { Request } from 'express';
 
 type AuthedRequest = Request & { userId: string };
@@ -72,11 +73,21 @@ export class BookingsController {
     return this.service.delete(req.userId, id);
   }
 
-  @ApiOperation({ summary: 'Create contract content for a booking from the contract template' })
-  @Post(':id/contract/create')
-  @HttpCode(200)
+  @ApiOperation({ summary: 'Create a new contract for a booking from the contract template' })
+  @Post(':id/contracts')
   createContract(@Req() req: AuthedRequest, @Param('id') id: string) {
     return this.service.createContract(req.userId, id);
+  }
+
+  @ApiOperation({ summary: 'Update a contract (edit content, void, or manually mark signed)' })
+  @Patch(':id/contracts/:contractId')
+  updateContract(
+    @Req() req: AuthedRequest,
+    @Param('id') id: string,
+    @Param('contractId') contractId: string,
+    @Body() dto: UpdateContractDto,
+  ) {
+    return this.service.updateContract(req.userId, id, contractId, dto);
   }
 
   @ApiOperation({ summary: 'Get the music form config for a booking' })

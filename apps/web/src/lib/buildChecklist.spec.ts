@@ -16,7 +16,7 @@ function makeBooking(overrides: Partial<BookingDetail> = {}): BookingDetail {
     eventType: 'WEDDING',
     fee: null,
     notes: null,
-    contractSignedAt: null,
+    activeContract: null,
     depositReceivedAt: null,
     depositTrackingMode: 'INVOICE',
     portalToken: 'tok',
@@ -33,6 +33,10 @@ function makeBooking(overrides: Partial<BookingDetail> = {}): BookingDetail {
     sets: [],
     ...overrides,
   } as unknown as BookingDetail;
+}
+
+function makeContract(status: 'DRAFT' | 'SENT' | 'SIGNED' | 'VOID' = 'DRAFT') {
+  return { id: 'contract-1', createdAt: '2025-01-01', updatedAt: '2025-01-01', status, content: {}, signedAt: status === 'SIGNED' ? '2025-06-01' : null };
 }
 
 let commCounter = 0;
@@ -134,19 +138,19 @@ describe('send_contract', () => {
   });
 
   it('is irrelevant when contract signed and deposit received', () => {
-    const booking = makeBooking({ contractSignedAt: '2025-06-01', depositReceivedAt: '2025-06-02' });
+    const booking = makeBooking({ activeContract: makeContract('SIGNED'), depositReceivedAt: '2025-06-02' });
     const items = buildChecklist(booking, []);
     expect(getItem(items, 'send_contract')).toBeUndefined();
   });
 
   it('is irrelevant when contract signed and deposit tracking is NONE', () => {
-    const booking = makeBooking({ contractSignedAt: '2025-06-01', depositTrackingMode: 'NONE' });
+    const booking = makeBooking({ activeContract: makeContract('SIGNED'), depositTrackingMode: 'NONE' });
     const items = buildChecklist(booking, []);
     expect(getItem(items, 'send_contract')).toBeUndefined();
   });
 
   it('is still visible when contract signed but deposit not yet received and tracking is active', () => {
-    const booking = makeBooking({ contractSignedAt: '2025-06-01', depositTrackingMode: 'INVOICE' });
+    const booking = makeBooking({ activeContract: makeContract('SIGNED'), depositTrackingMode: 'INVOICE' });
     const items = buildChecklist(booking, []);
     expect(getItem(items, 'send_contract')).toBeDefined();
   });
@@ -165,13 +169,13 @@ describe('send_contract', () => {
 // ─── contract_signed ─────────────────────────────────────────────────────────
 
 describe('contract_signed', () => {
-  it('is outstanding when contractSignedAt is null', () => {
+  it('is outstanding when activeContract is null', () => {
     const items = buildChecklist(makeBooking({ status: 'CONFIRMED' }), []);
     expect(getItem(items, 'contract_signed')?.state).toBe('outstanding');
   });
 
-  it('is done when contractSignedAt is set', () => {
-    const booking = makeBooking({ status: 'CONFIRMED', contractSignedAt: '2025-06-01' });
+  it('is done when activeContract status is SIGNED', () => {
+    const booking = makeBooking({ status: 'CONFIRMED', activeContract: makeContract('SIGNED') });
     const items = buildChecklist(booking, []);
     expect(getItem(items, 'contract_signed')?.state).toBe('done');
   });

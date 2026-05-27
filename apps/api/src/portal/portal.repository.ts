@@ -45,6 +45,11 @@ export class PortalRepository {
             template: { select: { builtInType: true } },
           },
         },
+        contracts: {
+          where: { status: { not: 'VOID' } },
+          orderBy: { createdAt: 'desc' as const },
+          take: 1,
+        },
       },
     });
   }
@@ -122,10 +127,10 @@ export class PortalRepository {
     return this.prisma.publicProfile.findUnique({ where: { userId } });
   }
 
-  markContractSigned(bookingId: string, signedFromIp: string, signatureDataUrl: string) {
-    return this.prisma.booking.update({
-      where: { id: bookingId },
-      data: { contractSignedAt: new Date(), contractSignedFromIp: signedFromIp, signatureDataUrl },
+  markContractSigned(contractId: string, signedFromIp: string, signatureDataUrl: string) {
+    return this.prisma.contract.update({
+      where: { id: contractId },
+      data: { status: 'SIGNED', signedAt: new Date(), signedFromIp, signatureDataUrl },
     });
   }
 

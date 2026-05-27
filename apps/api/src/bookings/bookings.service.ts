@@ -3,6 +3,7 @@ import { BookingStatus } from '@prisma/client';
 import { BookingsRepository } from './bookings.repository';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
+import { UpdateContractDto } from './dto/update-contract.dto';
 import { CreateSetDto } from './dto/create-set.dto';
 import { UpdateSetDto } from './dto/update-set.dto';
 import { UpsertMusicFormConfigDto } from './dto/upsert-music-form-config.dto';
@@ -32,6 +33,7 @@ function computeActionItem(booking: any, profile: any, today: Date) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const comms: Array<{ status: string; template: { builtInType: string | null } | null }> = booking.communications;
   const invoices: Array<{ isDeposit: boolean; status: string }> = booking.invoices;
+  const activeContract: { status: string; signedAt: Date | null } | null = booking.contracts?.[0] ?? null;
 
   const hasSent = (...types: string[]) =>
     comms.some((c) => types.includes(c.template?.builtInType ?? '') && c.status === 'SENT');
@@ -45,10 +47,12 @@ function computeActionItem(booking: any, profile: any, today: Date) {
       ['CONFIRMED', 'READY', 'COMPLETE', 'CANCELLED'].indexOf(target),
     ).includes(s);
 
+  const contractSigned = activeContract?.status === 'SIGNED';
+
   const candidates = [
     { key: 'send_quote', label: 'Send quote', done: hasSent('quote'), failed: lastFailed('quote'), irrelevant: gtEq(booking.status, 'CONFIRMED') },
     { key: 'create_deposit_invoice', label: 'Create deposit invoice', done: invoices.some((i) => i.isDeposit), failed: false, irrelevant: !trackDeposit },
-    { key: 'send_contract', label: 'Send contract & deposit email', done: hasSent('contract_cover', 'contract_and_deposit_cover'), failed: lastFailed('contract_cover', 'contract_and_deposit_cover'), irrelevant: !!booking.contractSignedAt && (!!booking.depositReceivedAt || !trackDeposit) },
+    { key: 'send_contract', label: 'Send contract & deposit email', done: hasSent('contract_cover', 'contract_and_deposit_cover'), failed: lastFailed('contract_cover', 'contract_and_deposit_cover'), irrelevant: contractSigned && (!!booking.depositReceivedAt || !trackDeposit) },
     { key: 'create_balance_invoice', label: 'Create balance invoice', done: invoices.some((i) => !i.isDeposit), failed: false, irrelevant: booking.status === 'ENQUIRY' },
     { key: 'music_form_invite', label: 'Send music form invite', done: hasSent('music_form_invite'), failed: lastFailed('music_form_invite'), irrelevant: !booking.musicFormConfig || booking.status === 'ENQUIRY' },
     { key: 'send_thank_you', label: 'Send thank you', done: hasSent('thank_you'), failed: lastFailed('thank_you'), irrelevant: !bookingDatePassed },
@@ -83,11 +87,23 @@ export class BookingsService {
   async findOne(userId: string, id: string) {
     const booking = await this.repo.findOne(userId, id);
     if (!booking) throw new NotFoundException('Booking not found');
-    const { musicFormConfig, musicFormResponse, ...rest } = booking;
+    const { musicFormConfig, musicFormResponse, contracts, ...rest } = booking;
+    const raw = contracts?.[0] ?? null;
+    const activeContract = raw
+      ? {
+          id: raw.id,
+          createdAt: raw.createdAt.toISOString(),
+          updatedAt: raw.updatedAt.toISOString(),
+          status: raw.status,
+          content: raw.content,
+          signedAt: raw.signedAt?.toISOString() ?? null,
+        }
+      : null;
     return {
       ...rest,
       hasMusicFormConfig: !!musicFormConfig,
       hasMusicFormResponse: !!musicFormResponse,
+      activeContract,
     };
   }
 
@@ -152,8 +168,7 @@ export class BookingsService {
     const formats = await this.repo.findFormats(userId, [formatId]);
     if (!formats.length) throw new NotFoundException('Format not found');
     const booking = await this.repo.applyFormat(userId, bookingId, formats[0]);
-    const { musicFormConfig, musicFormResponse, ...rest } = booking!;
-    return { ...rest, hasMusicFormConfig: !!musicFormConfig, hasMusicFormResponse: !!musicFormResponse };
+    return this.mapBooking(booking!);
   }
 
   async removeFormat(userId: string, bookingId: string, bookingFormatId: string) {
@@ -161,8 +176,24 @@ export class BookingsService {
     const bookingFormat = await this.repo.findBookingFormat(userId, bookingId, bookingFormatId);
     if (!bookingFormat) throw new NotFoundException('Applied format not found');
     const booking = await this.repo.removeFormat(bookingId, bookingFormatId, bookingFormat.performanceFormatId);
-    const { musicFormConfig, musicFormResponse, ...rest } = booking!;
-    return { ...rest, hasMusicFormConfig: !!musicFormConfig, hasMusicFormResponse: !!musicFormResponse };
+    return this.mapBooking(booking!);
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private mapBooking(booking: any) {
+    const { musicFormConfig, musicFormResponse, contracts, ...rest } = booking;
+    const raw = contracts?.[0] ?? null;
+    const activeContract = raw
+      ? {
+          id: raw.id,
+          createdAt: raw.createdAt.toISOString(),
+          updatedAt: raw.updatedAt.toISOString(),
+          status: raw.status,
+          content: raw.content,
+          signedAt: raw.signedAt?.toISOString() ?? null,
+        }
+      : null;
+    return { ...rest, hasMusicFormConfig: !!musicFormConfig, hasMusicFormResponse: !!musicFormResponse, activeContract };
   }
 
   async getMusicFormResponse(userId: string, bookingId: string) {
@@ -202,9 +233,34 @@ export class BookingsService {
     const context = await this.mail.buildContext(userId, bookingId);
     const substituted = substituteTiptapVariables(template.content, context);
 
-    await this.repo.saveContractContent(bookingId, substituted);
+    // Void any existing active contract before creating the new one
+    const existing = await this.repo.findActiveContract(bookingId);
+    if (existing) await this.repo.voidContract(existing.id);
 
-    return { contractContent: substituted };
+    const contract = await this.repo.createContractRecord(userId, bookingId, substituted);
+    return {
+      id: contract.id,
+      createdAt: contract.createdAt.toISOString(),
+      updatedAt: contract.updatedAt.toISOString(),
+      status: contract.status,
+      content: contract.content,
+      signedAt: null,
+    };
+  }
+
+  async updateContract(userId: string, bookingId: string, contractId: string, dto: UpdateContractDto) {
+    await this.findOne(userId, bookingId);
+    const contract = await this.repo.findContractById(userId, bookingId, contractId);
+    if (!contract) throw new NotFoundException('Contract not found');
+    const updated = await this.repo.updateContract(contractId, dto);
+    return {
+      id: updated.id,
+      createdAt: updated.createdAt.toISOString(),
+      updatedAt: updated.updatedAt.toISOString(),
+      status: updated.status,
+      content: updated.content,
+      signedAt: updated.signedAt?.toISOString() ?? null,
+    };
   }
 
   async getActions(userId: string) {

@@ -25,7 +25,11 @@ type MockRepo = {
   findBookingsForActions: jest.Mock;
   findUserProfile: jest.Mock;
   findContractTemplate: jest.Mock;
-  saveContractContent: jest.Mock;
+  findActiveContract: jest.Mock;
+  createContractRecord: jest.Mock;
+  voidContract: jest.Mock;
+  updateContract: jest.Mock;
+  findContractById: jest.Mock;
 };
 
 type MockMail = { buildContext: jest.Mock };
@@ -51,7 +55,11 @@ function makeRepo(): MockRepo {
     findBookingsForActions: jest.fn(),
     findUserProfile: jest.fn(),
     findContractTemplate: jest.fn(),
-    saveContractContent: jest.fn(),
+    findActiveContract: jest.fn(),
+    createContractRecord: jest.fn(),
+    voidContract: jest.fn(),
+    updateContract: jest.fn(),
+    findContractById: jest.fn(),
   };
 }
 
@@ -382,7 +390,8 @@ describe('BookingsService', () => {
   });
 
   describe('createContract', () => {
-    const rawBooking = { ...booking, musicFormConfig: null, musicFormResponse: null };
+    const rawBooking = { ...booking, musicFormConfig: null, musicFormResponse: null, contracts: [] };
+    const now = new Date('2026-05-27T12:00:00Z');
 
     const contractTemplate = {
       content: {
@@ -402,55 +411,74 @@ describe('BookingsService', () => {
       },
     };
 
+    const mockContract = {
+      id: 'c1',
+      userId: 'u1',
+      bookingId: 'b1',
+      status: 'DRAFT',
+      content: {},
+      createdAt: now,
+      updatedAt: now,
+      signedAt: null,
+    };
+
     beforeEach(() => {
       repo.findOne.mockResolvedValue(rawBooking);
       repo.findContractTemplate.mockResolvedValue(contractTemplate);
       mail.buildContext.mockResolvedValue(baseContext);
-      repo.saveContractContent.mockResolvedValue({ id: 'b1' });
+      repo.findActiveContract.mockResolvedValue(null);
+      repo.createContractRecord.mockResolvedValue(mockContract);
     });
 
-    it('substitutes variables and saves the result', async () => {
+    it('substitutes variables and creates a Contract record', async () => {
       const result = await service.createContract('u1', 'b1');
 
       expect(repo.findContractTemplate).toHaveBeenCalledWith('u1');
       expect(mail.buildContext).toHaveBeenCalledWith('u1', 'b1');
-      expect(repo.saveContractContent).toHaveBeenCalledWith('b1', expect.any(Object));
-      expect(result.contractContent).toBeDefined();
+      expect(repo.createContractRecord).toHaveBeenCalledWith('u1', 'b1', expect.any(Object));
+      expect(result.content).toBeDefined();
     });
 
     it('replaces variable chip nodes with plain text in the stored content', async () => {
+      repo.createContractRecord.mockImplementation((_u, _b, content) =>
+        Promise.resolve({ ...mockContract, content }),
+      );
       const result = await service.createContract('u1', 'b1');
 
-      // Walk the Tiptap JSON and assert no variable nodes remain
-      const json = JSON.stringify(result.contractContent);
+      const json = JSON.stringify(result.content);
       expect(json).not.toContain('"type":"variable"');
       expect(json).toContain('Jane Smith');
       expect(json).toContain('Tim Stanton');
+    });
+
+    it('voids existing active contract before creating new one', async () => {
+      const existing = { id: 'old-contract' };
+      repo.findActiveContract.mockResolvedValue(existing);
+      repo.voidContract.mockResolvedValue({});
+
+      await service.createContract('u1', 'b1');
+
+      expect(repo.voidContract).toHaveBeenCalledWith('old-contract');
+      expect(repo.createContractRecord).toHaveBeenCalled();
     });
 
     it('throws NotFoundException when the booking does not exist', async () => {
       repo.findOne.mockResolvedValue(null);
       await expect(service.createContract('u1', 'missing')).rejects.toThrow(NotFoundException);
       expect(repo.findContractTemplate).not.toHaveBeenCalled();
-      expect(repo.saveContractContent).not.toHaveBeenCalled();
+      expect(repo.createContractRecord).not.toHaveBeenCalled();
     });
 
     it('throws NotFoundException when no contract template exists', async () => {
       repo.findContractTemplate.mockResolvedValue(null);
       await expect(service.createContract('u1', 'b1')).rejects.toThrow(NotFoundException);
-      expect(repo.saveContractContent).not.toHaveBeenCalled();
+      expect(repo.createContractRecord).not.toHaveBeenCalled();
     });
 
     it('does not mutate the original template content', async () => {
       const originalContent = JSON.parse(JSON.stringify(contractTemplate.content));
       await service.createContract('u1', 'b1');
       expect(contractTemplate.content).toEqual(originalContent);
-    });
-
-    it('overwrites existing contractContent when called again', async () => {
-      await service.createContract('u1', 'b1');
-      await service.createContract('u1', 'b1');
-      expect(repo.saveContractContent).toHaveBeenCalledTimes(2);
     });
   });
 });

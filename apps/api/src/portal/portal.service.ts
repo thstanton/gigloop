@@ -77,7 +77,7 @@ export class PortalService {
           icon: bpf.performanceFormat.icon,
           order: bpf.order,
         })),
-        contractSignedAt: booking.contractSignedAt?.toISOString() ?? null,
+        contractSignedAt: booking.contracts?.[0]?.signedAt?.toISOString() ?? null,
       },
       publicProfile: {
         businessName: publicProfile.businessName,
@@ -107,21 +107,22 @@ export class PortalService {
     const booking = await this.repo.findBookingByToken(token);
     if (!booking) throw new NotFoundException('Booking not found');
 
-    if (booking.contractSignedAt) throw new BadRequestException('already_signed');
-
-    if (!booking.contractContent) throw new NotFoundException('Contract not found');
+    const contract = booking.contracts?.[0] ?? null;
+    if (!contract) throw new NotFoundException('Contract not found');
+    if (contract.status === 'SIGNED') throw new BadRequestException('already_signed');
 
     const title = booking.title ?? `${booking.customer.name} · ${booking.date.toISOString().split('T')[0]}`;
 
-    return { content: booking.contractContent, title };
+    return { content: contract.content, title };
   }
 
   async signContract(token: string, signatureBase64: string, req: Request) {
     const booking = await this.repo.findBookingByToken(token);
     if (!booking) throw new NotFoundException('Booking not found');
-    if (booking.contractSignedAt) throw new BadRequestException('Contract already signed');
 
-    if (!booking.contractContent) throw new NotFoundException('Contract not found');
+    const contract = booking.contracts?.[0] ?? null;
+    if (!contract) throw new NotFoundException('Contract not found');
+    if (contract.status === 'SIGNED') throw new BadRequestException('Contract already signed');
 
     const publicProfile = await this.repo.findPublicProfile(booking.userId);
     if (!publicProfile) throw new NotFoundException('Booking not found');
@@ -136,7 +137,7 @@ export class PortalService {
     await this.documents.generateAndStoreSignedContractPdf(
       booking.userId,
       booking.id,
-      booking.contractContent,
+      contract.content,
       context,
       publicProfile.displayName ?? publicProfile.businessName,
       booking.customer.name,
@@ -145,7 +146,7 @@ export class PortalService {
       ip,
     );
 
-    await this.repo.markContractSigned(booking.id, ip, signatureBase64);
+    await this.repo.markContractSigned(contract.id, ip, signatureBase64);
 
     await this.sendSigningNotification(booking, publicProfile, signedAt);
   }

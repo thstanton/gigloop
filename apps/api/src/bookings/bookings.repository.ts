@@ -3,6 +3,7 @@ import { BookingStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
+import { UpdateContractDto } from './dto/update-contract.dto';
 import { CreateSetDto } from './dto/create-set.dto';
 import { UpdateSetDto } from './dto/update-set.dto';
 import { UpsertMusicFormConfigDto } from './dto/upsert-music-form-config.dto';
@@ -14,6 +15,12 @@ type FormatWithSlots = {
   defaultGenreSelection: string[];
   slots: Array<{ label: string | null; duration: number; order: number }>;
 };
+
+const contractInclude = {
+  where: { status: { not: 'VOID' } },
+  orderBy: { createdAt: 'desc' as const },
+  take: 1,
+} as const;
 
 const bookingIncludes = {
   customer: true,
@@ -28,6 +35,7 @@ const bookingIncludes = {
   },
   musicFormConfig: { select: { id: true } },
   musicFormResponse: { select: { id: true } },
+  contracts: contractInclude,
 } as const;
 
 const listIncludes = {
@@ -126,13 +134,12 @@ export class BookingsRepository {
   }
 
   update(id: string, dto: UpdateBookingDto) {
-    const { date, contractContent, ...rest } = dto;
+    const { date, ...rest } = dto;
     return this.prisma.booking.update({
       where: { id },
       data: {
         ...rest,
         ...(date !== undefined ? { date: new Date(date) } : {}),
-        ...(contractContent !== undefined ? { contractContent: contractContent as Prisma.InputJsonValue } : {}),
       },
       include: bookingIncludes,
     });
@@ -186,6 +193,12 @@ export class BookingsRepository {
         },
         musicFormConfig: { select: { id: true } },
         musicFormResponse: { select: { id: true } },
+        contracts: {
+          where: { status: { not: 'VOID' } },
+          orderBy: { createdAt: 'desc' as const },
+          take: 1,
+          select: { status: true, signedAt: true },
+        },
       },
       orderBy: { date: 'asc' },
     });
@@ -281,10 +294,44 @@ export class BookingsRepository {
     });
   }
 
-  saveContractContent(id: string, content: unknown) {
-    return this.prisma.booking.update({
-      where: { id },
-      data: { contractContent: content as Prisma.InputJsonValue },
+  findActiveContract(bookingId: string) {
+    return this.prisma.contract.findFirst({
+      where: { bookingId, status: { not: 'VOID' } },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  createContractRecord(userId: string, bookingId: string, content: unknown) {
+    return this.prisma.contract.create({
+      data: {
+        userId,
+        bookingId,
+        status: 'DRAFT',
+        content: content as Prisma.InputJsonValue,
+      },
+    });
+  }
+
+  voidContract(contractId: string) {
+    return this.prisma.contract.update({
+      where: { id: contractId },
+      data: { status: 'VOID', voidedAt: new Date() },
+    });
+  }
+
+  updateContract(contractId: string, dto: UpdateContractDto) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const data: Record<string, any> = {};
+    if (dto.content !== undefined) data.content = dto.content as Prisma.InputJsonValue;
+    if (dto.status !== undefined) data.status = dto.status;
+    if (dto.signedAt !== undefined) data.signedAt = new Date(dto.signedAt);
+    if (dto.status === 'VOID') data.voidedAt = new Date();
+    return this.prisma.contract.update({ where: { id: contractId }, data });
+  }
+
+  findContractById(userId: string, bookingId: string, contractId: string) {
+    return this.prisma.contract.findFirst({
+      where: { id: contractId, bookingId, userId },
     });
   }
 }

@@ -161,14 +161,24 @@ export interface BookingListItem {
   referrer: ContactSummary | null;
 }
 
+export type ContractStatus = 'DRAFT' | 'SENT' | 'SIGNED' | 'VOID';
+
+export interface Contract {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  status: ContractStatus;
+  content: unknown;
+  signedAt: string | null;
+}
+
 export interface BookingDetail extends Omit<BookingListItem, 'customer' | 'venue' | 'referrer'> {
   customer: Contact;
   venue: Contact | null;
   referrer: Contact | null;
   sets: PerformanceSet[];
   performanceFormats: BookingPerformanceFormatSummary[];
-  contractSignedAt: string | null;
-  contractContent: unknown | null;
+  activeContract: Contract | null;
   depositReceivedAt: string | null;
   depositTrackingMode: string | null;
   portalToken: string;

@@ -1,13 +1,16 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiPatch, apiPost, apiDelete } from '@/lib/api';
-import type { BookingDetail, Invoice } from '@/types/api';
+import type { Invoice } from '@/types/api';
 
 export function useBookingActions(bookingId: string) {
   const queryClient = useQueryClient();
 
   const contractMutation = useMutation({
-    mutationFn: () =>
-      apiPatch<BookingDetail>(`/bookings/${bookingId}`, { contractSignedAt: new Date().toISOString() }),
+    mutationFn: (contractId: string) =>
+      apiPatch(`/bookings/${bookingId}/contracts/${contractId}`, {
+        status: 'SIGNED',
+        signedAt: new Date().toISOString(),
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['booking', bookingId] });
     },
@@ -15,7 +18,7 @@ export function useBookingActions(bookingId: string) {
 
   const depositMutation = useMutation({
     mutationFn: () =>
-      apiPatch<BookingDetail>(`/bookings/${bookingId}`, { depositReceivedAt: new Date().toISOString() }),
+      apiPatch(`/bookings/${bookingId}`, { depositReceivedAt: new Date().toISOString() }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['booking', bookingId] });
     },
@@ -41,7 +44,7 @@ export function useBookingActions(bookingId: string) {
   });
 
   return {
-    markContractSigned: () => contractMutation.mutate(),
+    markContractSigned: (contractId: string) => contractMutation.mutate(contractId),
     markDepositReceived: () => depositMutation.mutate(),
     autoCreateInvoice: (args: { isDeposit: boolean; amount: number }) =>
       autoCreateInvoiceMutation.mutate(args),

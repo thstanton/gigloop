@@ -76,9 +76,9 @@ export function buildChecklist(
     {
       key: 'create_contract',
       label: 'Create contract',
-      done: booking.contractContent !== null,
+      done: booking.activeContract !== null,
       failed: false,
-      irrelevant: !!booking.contractSignedAt,
+      irrelevant: booking.activeContract?.status === 'SIGNED',
     },
     {
       key: 'send_contract',
@@ -86,16 +86,16 @@ export function buildChecklist(
       done: hasSent('contract_cover', 'contract_and_deposit_cover'),
       failed: mostRecentFailed('contract_cover', 'contract_and_deposit_cover'),
       irrelevant:
-        !!booking.contractSignedAt &&
+        booking.activeContract?.status === 'SIGNED' &&
         (!!booking.depositReceivedAt || !trackDeposit),
-      blocked: booking.contractContent === null,
+      blocked: booking.activeContract === null,
       hint: 'Create a contract first',
       shortcutType: contractShortcutType,
     },
     {
       key: 'contract_signed',
       label: 'Contract signed',
-      done: !!booking.contractSignedAt,
+      done: booking.activeContract?.status === 'SIGNED',
       failed: false,
       irrelevant: booking.status === 'ENQUIRY' || statusGte(booking.status, 'READY'),
       shortcutMarkDone: 'mark_contract_signed',

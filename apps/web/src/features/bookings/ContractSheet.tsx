@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { VariableNode } from '@/features/templates/VariableNode';
 import { apiPatch } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import type { Contract } from '@/types/api';
 
 // ─── Toolbar ─────────────────────────────────────────────────────────────────
 
@@ -78,14 +79,15 @@ function Toolbar({ editor }: { editor: ReturnType<typeof useEditor> }) {
 
 interface Props {
   bookingId: string;
-  content: unknown | null;
+  contract: Contract | null;
   readOnly: boolean;
   open: boolean;
   onClose: () => void;
 }
 
-export default function ContractSheet({ bookingId, content, readOnly, open, onClose }: Props) {
+export default function ContractSheet({ bookingId, contract, readOnly, open, onClose }: Props) {
   const queryClient = useQueryClient();
+  const content = contract?.content ?? null;
 
   const editor = useEditor({
     extensions: [
@@ -117,7 +119,7 @@ export default function ContractSheet({ bookingId, content, readOnly, open, onCl
 
   const saveMutation = useMutation({
     mutationFn: () =>
-      apiPatch(`/bookings/${bookingId}`, { contractContent: editor?.getJSON() }),
+      apiPatch(`/bookings/${bookingId}/contracts/${contract!.id}`, { content: editor?.getJSON() }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['booking', bookingId] });
       onClose();

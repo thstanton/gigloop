@@ -63,11 +63,6 @@ async function main() {
       depositTrackingMode: 'INVOICE',
       digestEmailEnabled: true,
       songRequestFormEnabled: true,
-      contractReminderDays: 21,
-      depositInvoiceReminderDays: 21,
-      balanceInvoiceReminderDays: 30,
-      musicFormReminderDays: 60,
-      thankYouReminderDays: 2,
     },
   });
 
@@ -444,7 +439,6 @@ async function main() {
       fee: 1500,
       customerId: charlotte.id,
       venueId: stMarys.id,
-      contractSignedAt: new Date('2026-04-20T14:22:00'),
       depositReceivedAt: new Date('2026-04-22'),
       notes: 'Acoustic only. Wants Canon in D for the processional.',
     },
@@ -460,6 +454,16 @@ async function main() {
     data: [
       { userId: USER_ID, bookingId: booking3.id, performanceFormatId: fmt['Wedding Ceremony'], order: 1 },
     ],
+  });
+
+  await prisma.contract.create({
+    data: {
+      userId: USER_ID,
+      bookingId: booking3.id,
+      status: 'SIGNED',
+      content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Contract for Charlotte & Oliver.' }] }] },
+      signedAt: new Date('2026-04-20T14:22:00'),
+    },
   });
 
   await prisma.invoice.create({
@@ -518,7 +522,6 @@ async function main() {
       fee: 1200,
       customerId: meridian.id,
       venueId: theNed.id,
-      contractSignedAt: new Date('2026-03-15T11:00:00'),
       depositReceivedAt: new Date('2026-03-20'),
     },
   });
@@ -533,6 +536,16 @@ async function main() {
     data: [
       { userId: USER_ID, bookingId: booking4.id, performanceFormatId: fmt['Corporate Dinner'], order: 1 },
     ],
+  });
+
+  await prisma.contract.create({
+    data: {
+      userId: USER_ID,
+      bookingId: booking4.id,
+      status: 'SIGNED',
+      content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Contract for Meridian Summer Party.' }] }] },
+      signedAt: new Date('2026-03-15T11:00:00'),
+    },
   });
 
   await prisma.invoice.create({
@@ -592,7 +605,6 @@ async function main() {
       customerId: emma.id,
       venueId: barnsleyHouse.id,
       referrerId: cellarSociety.id,
-      contractSignedAt: new Date('2025-11-20T15:40:00'),
       depositReceivedAt: new Date('2025-11-22'),
       notes: "Valentine's Day wedding. Went very well — great feedback from the couple.",
     },
@@ -610,6 +622,16 @@ async function main() {
       { userId: USER_ID, bookingId: booking5.id, performanceFormatId: fmt['Wedding Ceremony'], order: 1 },
       { userId: USER_ID, bookingId: booking5.id, performanceFormatId: fmt['Drinks Reception'], order: 2 },
     ],
+  });
+
+  await prisma.contract.create({
+    data: {
+      userId: USER_ID,
+      bookingId: booking5.id,
+      status: 'SIGNED',
+      content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: "Contract for Emma & Oliver's Valentine's Day Wedding." }] }] },
+      signedAt: new Date('2025-11-20T15:40:00'),
+    },
   });
 
   await prisma.invoice.create({
