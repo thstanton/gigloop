@@ -63,16 +63,23 @@ export function bookingStatusMessage(status: string): string {
 // ─── Contact card ─────────────────────────────────────────────────────────────
 
 export function ContactCard({ profile, bold }: { profile: PortalPublicProfile; bold: boolean }) {
+  const contactName = profile.displayName ?? profile.businessName;
+  const showPhoto = profile.showContactPhoto && !!profile.photo;
+
   return (
     <div className={`rounded-lg p-5 space-y-3 ${bold ? 'bg-white/15' : 'bg-[#f5f2ed]'}`}>
       <p className={`text-xs font-medium uppercase tracking-wide ${bold ? 'text-white/50' : 'text-[#a39e97]'}`}>
         Get in touch
       </p>
-      {profile.showContactPhoto && profile.photo && (
-        <img src={profile.photo} alt={profile.businessName} className="w-16 h-16 rounded-full object-cover" />
-      )}
-      <div>
-        <p className={`font-semibold ${bold ? 'text-white' : 'text-[#1a1a1a]'}`}>{profile.businessName}</p>
+      <div className="flex items-center gap-3">
+        {showPhoto && (
+          <img
+            src={profile.photo!}
+            alt={contactName}
+            className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+          />
+        )}
+        <p className={`font-semibold ${bold ? 'text-white' : 'text-[#1a1a1a]'}`}>{contactName}</p>
       </div>
       {profile.showContactEmail && profile.email && (
         <a

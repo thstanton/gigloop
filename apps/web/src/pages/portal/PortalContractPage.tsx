@@ -382,50 +382,44 @@ export default function PortalContractPage() {
             />
           </div>
 
-          {isPreview ? (
-            <p className={`text-sm text-center rounded-lg border border-dashed p-4 ${isBold ? 'border-white/20 text-white/40' : 'border-[#e5e5e5] text-[#9ca3af]'}`}>
-              Signature form — preview only
-            </p>
-          ) : (
-            <div className="space-y-6">
-              <label className="flex items-start gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={agreed}
-                  onChange={(e) => setAgreed(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 rounded border-[#e5e5e5] flex-shrink-0"
-                />
-                <span className={`text-sm ${isBold ? 'text-white/80' : 'text-[#374151]'}`}>
-                  I have read and agree to the terms above
-                </span>
-              </label>
+          <div className="space-y-6">
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={agreed}
+                onChange={(e) => !isPreview && setAgreed(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-[#e5e5e5] flex-shrink-0"
+              />
+              <span className={`text-sm ${isBold ? 'text-white/80' : 'text-[#374151]'}`}>
+                I have read and agree to the terms above
+              </span>
+            </label>
 
-              {agreed && (
-                <div className="space-y-3">
-                  <p className={`text-sm font-medium ${isBold ? 'text-white' : 'text-[#1a1a1a]'}`}>
-                    Sign below
-                  </p>
-                  <SignatureSection onSign={setSignature} brand={brand} isBold={isBold} />
-                </div>
-              )}
-
-              {signMutation.isError && (
-                <p className="text-sm text-red-500">
-                  Something went wrong. Please try again.
+            {agreed && (
+              <div className="space-y-3">
+                <p className={`text-sm font-medium ${isBold ? 'text-white' : 'text-[#1a1a1a]'}`}>
+                  Sign below
                 </p>
-              )}
+                <SignatureSection onSign={setSignature} brand={brand} isBold={isBold} />
+              </div>
+            )}
 
-              <button
-                type="button"
-                onClick={() => signMutation.mutate()}
-                disabled={!canSubmit}
-                className="w-full rounded-lg px-5 py-3 text-sm font-medium text-white transition-opacity disabled:opacity-40"
-                style={{ backgroundColor: brand }}
-              >
-                {signMutation.isPending ? 'Signing…' : 'Sign contract'}
-              </button>
-            </div>
-          )}
+            {!isPreview && signMutation.isError && (
+              <p className="text-sm text-red-500">
+                Something went wrong. Please try again.
+              </p>
+            )}
+
+            <button
+              type="button"
+              onClick={isPreview ? undefined : () => signMutation.mutate()}
+              disabled={isPreview || !canSubmit}
+              className="w-full rounded-lg px-5 py-3 text-sm font-medium text-white transition-opacity disabled:opacity-40"
+              style={{ backgroundColor: brand }}
+            >
+              {signMutation.isPending ? 'Signing…' : 'Sign contract'}
+            </button>
+          </div>
         </div>
       </PortalLayout>
     </>
