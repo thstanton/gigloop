@@ -2,6 +2,8 @@
 
 A CRM for musicians. The central workflow is managing Bookings with Contacts.
 
+**Design principle — booking as epic:** A Booking is a project. Lifecycle stages (Enquiry, Confirmed, Ready, Complete) are the phases of that project. [[BookingChecklistItem]] records are the subtasks within each phase. Stages inform the musician of overall progress; checklist items define the specific work needed to reach each stage. This is the mental model that governs how the checklist, lifecycle, and dashboard interact.
+
 **Design principle — contextual actions:** The [[BookingChecklist]] is the primary interface for progressing a booking. The happy path is: musician opens a booking, sees what needs doing, and completes it from the checklist without navigating elsewhere. Other panels (Invoices, Communications, Documents) exist for specificity and historical detail — not for primary workflow. Every outstanding checklist item should, where possible, carry an inline action that resolves it in one tap. This is the core differentiator: a smart management system that surfaces the right action at the right time, rather than a passive record-keeper the musician has to manually interrogate. Checklist intelligence is scoped to a single booking — cross-booking awareness (e.g. double-booking detection, band member coordination) is explicitly deferred.
 
 **Design principle — template + overrides:** System-provided defaults (seeded [[PerformanceFormat]]s, built-in [[Template]]s, [[UserProfile]] reminder offsets) act as templates. Per-booking configuration is always a copy of that template, editable by the musician without touching the original. Further customisation of templates and user-defined defaults is a P2 concern — MVP ships sensible system defaults only.
@@ -15,12 +17,15 @@ A CRM for musicians. The central workflow is managing Bookings with Contacts.
 ### Booking
 The central entity. Represents a performance engagement — confirmed or in-progress. Connects a Contact to a body of work (sets, song list, documents, communications).  There is no separate concept of "Gig"; Booking covers the full lifecycle of a performance engagement.
 
-**Lifecycle (ordered):** `Enquiry → Confirmed → Invoiced → Settled → Completed`
+**Lifecycle (ordered):** `Enquiry → Confirmed → Ready → Complete`  (plus `Cancelled` at any point). See ADR-0018.
+
+The lifecycle represents the musician's genuine assessment of readiness — not a record of which tasks have been completed. [[BookingChecklistItem]] tasks inform that assessment (via advisory prompts and warnings), but the musician always advances status manually. No status transition is mechanically triggered by task completion.
+
 - *Enquiry*: initial interest, not yet confirmed. In current practice, musicians tend to create bookings after the client has agreed to proceed, so this status sees limited use in MVP. Its full value arrives with the P2 email ingestion feature, which will create Enquiry-stage bookings automatically from inbound emails. An embeddable website enquiry form is explicitly out of scope — a previous implementation in Giggio was removed due to poor UX and inability to match the musician's site styling. P2 strategy is email ingestion, not a web widget.
-- *Confirmed*: engagement is agreed; contract signed and deposit received (musician moves manually once both pre-conditions are met).
-- *Invoiced*: the final balance invoice has been sent; typically occurs before the performance date.
-- *Settled*: the balance invoice has been paid in full; typically also before the performance date.
-- *Completed*: post-gig admin is done. For MVP this is a simple manual flag set by the musician. A configurable per-user post-gig checklist is a future feature.
+- *Confirmed*: the engagement is committed — contract signed and deposit received. The musician moves here manually; the checklist items with `requiredForStatus: CONFIRMED` (contract signed, deposit received) provide advisory prompts.
+- *Ready*: all pre-gig preparation is done — balance invoiced, music form in, logistics resolved. The musician moves here manually when they feel genuinely prepared. Checklist items with `requiredForStatus: READY` provide the advisory gate.
+- *Complete*: post-gig admin is done — thank you sent, any outstanding items resolved. The musician moves here manually.
+- *Cancelled*: booking cancelled at any point in the lifecycle. The portal remains accessible (token still valid); a cancellation notice is shown. The [[BookingChecklist]] is hidden for cancelled bookings.
 
 **Pre-confirmation tracking:** two nullable timestamp fields — `contractSignedAt` and `depositReceivedAt` — record when each arrived.
 
@@ -190,7 +195,8 @@ The private, authenticated-only half of the musician's settings (one per `userId
 **Business fields (explicit columns):** address, bankDetails (encrypted at rest — see ADR-0003), vatNumber, defaultPaymentTermsDays, invoiceNumberSequence, invoiceSequenceYear, depositTrackingMode, depositPercentage (nullable integer 1–100 — the default deposit % of the booking fee; null means no default set), digestEmailEnabled, songRequestFormEnabled.
 
 **`preferences` (JSON column):** all workflow and behaviour preferences, gated by subscription tier at write time. See ADR-0015. Contains:
-- `checklistDefaults` — the musician's default [[BookingChecklistItem]] template; an ordered array of item definitions (key, label, completedBy, dependsOn, autoCompleteRule, requiredForStatus, reminderDays). Seeded from system defaults on first access. The system defaults represent the current 10-item workflow. Custom items (no `key`) can be appended. Per-item `reminderDays` replaces the former flat `*ReminderDays` columns — null means no reminder, positive integer = days before booking date (days after for `send_thank_you`).
+- `checklistDefaults` — the musician's default [[BookingChecklistItem]] template; an ordered array of item definitions (key, label, completedBy, dependsOn, autoCompleteRule, requiredForStatus, dueDateRule). Seeded from system defaults on first access. The system defaults represent the current 10-item workflow. Custom items (no `key`) can be appended.
+- `reminderLeadDays` — global integer; how many days before an item's `dueDate` it starts surfacing in the [[DigestNotification]] and Dashboard Actions widget (e.g. 7 = surface tasks in the 7 days leading up to their due date). Default: 7. Replaces the former flat `*ReminderDays` columns and per-item `reminderDays` field.
 - Future preference domains (dashboard widget config, feature toggles, etc.) are added as sibling keys.
 
 **Invoice numbering:** format `INV-{year}-{NNN}` (e.g. `INV-2025-001`). `invoiceNumberSequence` is a per-year counter; `invoiceSequenceYear` records the year it was last reset. Both reset each January. Subject to revision.
@@ -237,7 +243,8 @@ Items are **seeded at booking creation** from the musician's `checklistDefaults`
 - `autoCompleteRule` — optional JSON; when present, the system evaluates the rule on relevant business events and sets state to DONE automatically. When absent, the item is manual-only. Rule types: `bookingField` (done when a named Booking field is non-null), `communicationSent` (done when a SENT Communication of a given template type exists), `invoiceExists` (done when an invoice of the given kind exists), `musicFormResponse` (done when a MusicFormResponse exists).
 - `requiredForStatus` — optional `BookingStatus`; advisory association — the UI warns the musician if they attempt to advance the booking to this status while this item is PENDING or FAILED, and prompts them to advance when all items for this status become DONE. The API does not enforce this gate.
 - `completedAt` — timestamp set when state transitions to DONE
-- `reminderDays` — how many days before the booking date this item surfaces in the [[DigestNotification]] and Dashboard Actions widget; null = no reminder
+- `dueDate` — optional absolute DateTime; when this task should be done. Computed at seeding time from `dueDateRule` + the booking's relevant date. Overrideable by the musician; clearing the override restores rule-based calculation. Items without a `dueDate` do not surface in the [[DigestNotification]] or Dashboard Actions widget except when they are the last PENDING/FAILED item gating a `requiredForStatus` transition.
+- `dueDateRule` — optional JSON: `{ basis: 'bookingDate' | 'bookingCreation', offsetDays: number }`. The rule used to compute `dueDate` at seeding time. When null, `dueDate` is manually set (or absent). When the booking date changes, all non-completed items with `basis: 'bookingDate'` have their `dueDate` recomputed. `offsetDays` is negative for "before booking date" (e.g. -14 = 14 days before) and positive for "after booking creation" (e.g. 3 = 3 days after creation).
 
 **States:**
 - **PENDING** — not yet done, applicable, unblocked
@@ -250,7 +257,7 @@ Items in the FAILED state carry a **Retry** shortcut consistent with the context
 
 **System item keys and their auto-complete rules:**
 
-| Key | completedBy | autoCompleteRule | requiredForStatus |
+| Key | completedBy | autoCompleteRule | requiredForStatus (default) |
 |---|---|---|---|
 | `send_quote` | USER | communicationSent: quote | — |
 | `create_deposit_invoice` | USER | invoiceExists: isDeposit=true | — |
@@ -258,16 +265,21 @@ Items in the FAILED state carry a **Retry** shortcut consistent with the context
 | `send_contract` | USER | communicationSent: contract_cover \| contract_and_deposit_cover | — |
 | `contract_signed` | CUSTOMER | bookingField: contractSignedAt | CONFIRMED |
 | `deposit_received` | CUSTOMER | bookingField: depositReceivedAt | CONFIRMED |
-| `create_balance_invoice` | USER | invoiceExists: isDeposit=false | — |
+| `create_balance_invoice` | USER | invoiceExists: isDeposit=false | READY |
 | `send_music_form_invite` | USER | communicationSent: music_form_invite | — |
-| `song_requests` | CUSTOMER | musicFormResponse | — |
-| `send_thank_you` | USER | communicationSent: thank_you | — |
+| `song_requests` | CUSTOMER | musicFormResponse | READY |
+| `send_thank_you` | USER | communicationSent: thank_you | COMPLETE |
 
 ### BookingChecklist
-The ordered collection of [[BookingChecklistItem]] records for a given [[Booking]]. Not a separate model — a logical grouping term. Displayed on the Booking detail page; outstanding items feed the [[DigestNotification]] and Dashboard Actions widget filtered by each item's `reminderDays` window.
+The ordered collection of [[BookingChecklistItem]] records for a given [[Booking]]. Not a separate model — a logical grouping term. Displayed on the Booking detail page; outstanding items feed the [[DigestNotification]] and Dashboard Actions widget. Items are sorted by `dueDate` ascending; undated items appear last.
 
 ### DigestNotification
-A daily summary email sent to the musician via Resend. MVP scope. Contains upcoming Bookings and their outstanding [[BookingChecklistItem]] records — filtered to items where today falls within the item's `reminderDays` window (e.g. `reminderDays = 14` on the `send_contract` item means it appears in the digest from 14 days before the booking date). Items with `reminderDays = null` never appear in the digest.
+A daily summary email sent to the musician via Resend. MVP scope. Contains upcoming Bookings and their outstanding [[BookingChecklistItem]] records. Two surfacing rules:
+
+1. **Dated items:** `dueDate` is set and `today >= dueDate - reminderLeadDays` (from `UserProfile.preferences.reminderLeadDays`).
+2. **Undated status-gate items:** `dueDate` is null, `requiredForStatus` is set, and this is the last PENDING or FAILED item for that status (all others with the same `requiredForStatus` are DONE). Surfaces as "This booking could move to [status] if this task was done."
+
+Items sorted by `dueDate` ascending within each booking; undated status-gate items follow dated items.
 
 ### MusicFormConfig
 The per-booking configuration for a [[MusicForm]]. Created at booking creation (if [[PerformanceFormat]]s are applied) or from the Music Form section on the booking detail page. Independent of the send invite action — the config may exist before the invite is sent.
@@ -346,7 +358,7 @@ The home screen. Action-oriented — designed for the musician's morning check-i
 
 3. **Calendar** — month view. Booked dates show dots (one per booking). Tapping a date with one booking → booking detail. Tapping a date with multiple bookings → inline list of that day's bookings. Tapping an empty date → new booking pre-filled with that date. Today highlighted. Prev/next month navigation.
 
-**Actionable checklist items shown in Actions widget (priority order):** Send quote, Create deposit invoice, Send contract & deposit email, Create balance invoice, Send music form invite, Send thank you. Only USER-completedBy items with an associated action (shortcut) are shown — passive-wait items (CUSTOMER-completedBy) are omitted. Reminder windows come from each item's `reminderDays` field. Items with `reminderDays = null` never appear in the Actions widget.
+**Actionable checklist items shown in Actions widget:** USER-completedBy items with an associated shortcut action, surfaced by the same two rules as [[DigestNotification]] (dated items within `reminderLeadDays` of their `dueDate`; undated items that are the last status gate). Passive-wait items (CUSTOMER-completedBy) are omitted. Items sorted by `dueDate` ascending; undated status-gate items follow.
 
 ### PerformanceFormat
 A named template defining what a musician offers for a specific type of performance engagement. Per-user — seeded from system defaults on first access (on-demand); user-defined formats are a P2 feature.
@@ -378,7 +390,7 @@ A named template defining what a musician offers for a specific type of performa
 | Background Music | — | Background Music, 60 min | — |
 | Solo Piano | — | Solo Piano, 60 min | — |
 
-Reminder windows are configured per item in `UserProfile.preferences.checklistDefaults` — no flat `*ReminderDays` columns exist on UserProfile. Adding a new reminder type requires no DB migration.
+Due dates are configured per item via `dueDateRule` in `UserProfile.preferences.checklistDefaults`. The global reminder lead time is `UserProfile.preferences.reminderLeadDays`. No flat `*ReminderDays` columns exist on UserProfile — adding a new item type requires no DB migration.
 
 ### Contact Roles (on a Booking)
 A Booking has up to three Contact relations, each a separate FK:
