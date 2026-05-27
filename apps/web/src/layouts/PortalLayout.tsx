@@ -3,13 +3,14 @@ import type { PortalPublicProfile } from '../types/api';
 interface PortalLayoutProps {
   profile: PortalPublicProfile;
   children: React.ReactNode;
+  wide?: boolean;
 }
 
-function getThemeFonts(theme: PortalPublicProfile['portalTheme']): string {
+function getDisplayFontClass(theme: PortalPublicProfile['portalTheme']): string {
   if (theme === 'BOLD_ROMANTIC' || theme === 'LIGHT_ROMANTIC') {
-    return "font-['Cormorant_Garamond',Georgia,serif]";
+    return "font-['Caveat',cursive]";
   }
-  return "font-['DM_Sans',system-ui,sans-serif]";
+  return "font-['Lexend_Deca',sans-serif]";
 }
 
 function isRomantic(theme: PortalPublicProfile['portalTheme']): boolean {
@@ -20,15 +21,15 @@ function isBold(theme: PortalPublicProfile['portalTheme']): boolean {
   return theme === 'BOLD_MODERN' || theme === 'BOLD_ROMANTIC';
 }
 
-export function PortalLayout({ profile, children }: PortalLayoutProps) {
+export function PortalLayout({ profile, children, wide = false }: PortalLayoutProps) {
   const theme = profile.portalTheme ?? 'LIGHT_MODERN';
-  const fontClass = getThemeFonts(theme);
+  const displayFontClass = getDisplayFontClass(theme);
   const romantic = isRomantic(theme);
   const bold = isBold(theme);
   const brand = profile.brandColour ?? '#1a1a1a';
 
   return (
-    <div className={`min-h-screen ${fontClass} ${bold ? 'bg-[#1a1a1a] text-white' : 'bg-white text-[#1a1a1a]'}`}>
+    <div className={`min-h-screen font-['Commissioner',sans-serif] ${bold ? 'bg-[#1a1a1a] text-white' : 'bg-white text-[#1a1a1a]'}`}>
       <header className={`${bold ? 'bg-[#1a1a1a]' : 'bg-white border-b border-[#e5e5e5]'} px-6 py-5`}>
         <div className="max-w-2xl mx-auto flex items-center gap-4">
           {profile.logoUrl && (
@@ -40,7 +41,7 @@ export function PortalLayout({ profile, children }: PortalLayoutProps) {
           )}
           <div>
             <p
-              className={`font-semibold ${romantic ? 'text-xl tracking-wide' : 'text-base'} ${bold ? 'text-white' : 'text-[#1a1a1a]'}`}
+              className={`font-semibold ${displayFontClass} ${romantic ? 'text-xl tracking-wide' : 'text-base'} ${bold ? 'text-white' : 'text-[#1a1a1a]'}`}
               style={!bold ? { color: brand } : undefined}
             >
               {profile.displayName ?? profile.businessName}
@@ -49,7 +50,7 @@ export function PortalLayout({ profile, children }: PortalLayoutProps) {
         </div>
       </header>
 
-      <main className="max-w-2xl mx-auto px-6 py-8">
+      <main className={`${wide ? 'max-w-4xl' : 'max-w-2xl'} mx-auto px-6 py-8`}>
         {children}
       </main>
 
@@ -60,4 +61,4 @@ export function PortalLayout({ profile, children }: PortalLayoutProps) {
   );
 }
 
-export { getThemeFonts, isRomantic, isBold };
+export { getDisplayFontClass, isRomantic, isBold };

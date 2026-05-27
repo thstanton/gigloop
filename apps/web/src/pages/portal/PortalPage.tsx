@@ -1,9 +1,50 @@
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { FileText, Download, CheckCircle, Clock, Music, ClipboardCheck } from 'lucide-react';
+import { FileText, Download, CheckCircle, Clock, Music, ClipboardCheck, Mail, Phone } from 'lucide-react';
 import { getPortalData } from '../../lib/portalApi';
 import { PortalLayout } from '../../layouts/PortalLayout';
-import type { PortalData, PortalDocument } from '../../types/api';
+import type { PortalData, PortalDocument, PortalPublicProfile } from '../../types/api';
+
+function ContactCard({ profile, isBold }: { profile: PortalPublicProfile; isBold: boolean }) {
+  const name = profile.displayName ?? profile.businessName;
+  const showBusiness = profile.displayName != null && profile.displayName !== profile.businessName;
+
+  return (
+    <div className={`rounded-lg p-5 space-y-3 ${isBold ? 'bg-white/10' : 'bg-[#f9fafb] border border-[#e5e5e5]'}`}>
+      {profile.showContactPhoto && profile.photo && (
+        <img
+          src={profile.photo}
+          alt={name}
+          className="w-16 h-16 rounded-full object-cover"
+        />
+      )}
+      <div>
+        <p className={`font-semibold ${isBold ? 'text-white' : 'text-[#1a1a1a]'}`}>{name}</p>
+        {showBusiness && (
+          <p className={`text-sm ${isBold ? 'text-white/60' : 'text-[#6b7280]'}`}>{profile.businessName}</p>
+        )}
+      </div>
+      {profile.showContactEmail && profile.email && (
+        <a
+          href={`mailto:${profile.email}`}
+          className={`flex items-center gap-2 text-sm transition-colors ${isBold ? 'text-white/80 hover:text-white' : 'text-[#374151] hover:text-[#1a1a1a]'}`}
+        >
+          <Mail className="h-3.5 w-3.5 flex-shrink-0" />
+          {profile.email}
+        </a>
+      )}
+      {profile.showContactPhone && profile.phone && (
+        <a
+          href={`tel:${profile.phone}`}
+          className={`flex items-center gap-2 text-sm transition-colors ${isBold ? 'text-white/80 hover:text-white' : 'text-[#374151] hover:text-[#1a1a1a]'}`}
+        >
+          <Phone className="h-3.5 w-3.5 flex-shrink-0" />
+          {profile.phone}
+        </a>
+      )}
+    </div>
+  );
+}
 
 function BookingSummary({ data, musicSuccess }: { data: PortalData; musicSuccess: boolean }) {
   const { booking, publicProfile } = data;
@@ -188,9 +229,16 @@ export default function PortalPage() {
     );
   }
 
+  const isBold = data.publicProfile.portalTheme === 'BOLD_MODERN' || data.publicProfile.portalTheme === 'BOLD_ROMANTIC';
+
   return (
-    <PortalLayout profile={data.publicProfile}>
-      <BookingSummary data={data} musicSuccess={musicSuccess} />
+    <PortalLayout profile={data.publicProfile} wide>
+      <div className="md:grid md:grid-cols-[1fr_280px] md:gap-8 md:items-start">
+        <BookingSummary data={data} musicSuccess={musicSuccess} />
+        <div className="mt-8 md:mt-0 md:sticky md:top-8">
+          <ContactCard profile={data.publicProfile} isBold={isBold} />
+        </div>
+      </div>
     </PortalLayout>
   );
 }

@@ -51,7 +51,6 @@ function usePublicProfileData() {
   });
   return {
     businessName: data?.businessName ?? '',
-    logoUrl: data?.logoUrl ?? null,
     photo: data?.photo ?? null,
     isLoading: !isLoaded || isPending,
   };
@@ -197,16 +196,14 @@ function Sidebar() {
 
 // ─── Desktop: top bar ─────────────────────────────────────────────────────────
 
-function DesktopTopBar({ businessName, logoUrl, isLoading }: { businessName: string; logoUrl: string | null; isLoading: boolean }) {
+function DesktopTopBar({ businessName, isLoading }: { businessName: string; isLoading: boolean }) {
   return (
     <header className="hidden md:flex fixed top-0 inset-x-0 h-14 bg-chrome items-center px-6 z-30">
       <span className="text-xl font-display font-semibold text-chrome-foreground tracking-wide">GigMan</span>
       <div className="ml-auto">
         {isLoading
           ? <div className="h-3 w-28 bg-chrome-muted/40 rounded animate-pulse" />
-          : logoUrl
-            ? <img src={logoUrl} alt={businessName} className="h-8 max-w-32 object-contain" />
-            : <span className="text-sm text-chrome-muted">{businessName}</span>
+          : <span className="text-sm text-chrome-muted">{businessName}</span>
         }
       </div>
     </header>
@@ -320,7 +317,7 @@ function BottomTabBar() {
 // ─── AppShell ────────────────────────────────────────────────────────────────
 
 export default function AppShell() {
-  const { businessName, logoUrl, isLoading } = usePublicProfileData();
+  const { businessName, isLoading } = usePublicProfileData();
 
   return (
     <div className="min-h-screen bg-surface">
@@ -332,7 +329,7 @@ export default function AppShell() {
 
       {/* Content — offset for sidebar on desktop, top bar on mobile */}
       <div className="md:ml-60 flex flex-col min-h-screen pt-14 pb-16 md:pb-0">
-        <DesktopTopBar businessName={businessName} logoUrl={logoUrl} isLoading={isLoading} />
+        <DesktopTopBar businessName={businessName} isLoading={isLoading} />
         <main className="flex-1 md:overflow-y-auto">
           <Outlet />
         </main>

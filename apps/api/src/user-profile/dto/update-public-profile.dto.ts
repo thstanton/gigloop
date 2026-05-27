@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsIn, IsObject, IsOptional, IsString, IsUrl, ValidateIf } from 'class-validator';
+import { IsBoolean, IsIn, IsObject, IsOptional, IsString, IsUrl, ValidateIf } from 'class-validator';
 
 export class UpdatePublicProfileDto {
   @ApiPropertyOptional({ nullable: true })
@@ -66,4 +66,25 @@ export class UpdatePublicProfileDto {
   @IsOptional()
   @IsIn(['LIGHT_MODERN', 'LIGHT_ROMANTIC', 'BOLD_MODERN', 'BOLD_ROMANTIC'])
   portalTheme?: string;
+
+  @ApiPropertyOptional({ nullable: true, enum: ['piano', 'stage'] })
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsIn(['piano', 'stage'])
+  portalHeroImage?: string | null;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  showContactPhoto?: boolean;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  showContactEmail?: boolean;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  showContactPhone?: boolean;
 }

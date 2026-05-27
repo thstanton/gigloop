@@ -27,6 +27,10 @@ const mockPublicProfile: PublicProfile = {
   website: null,
   socials: null,
   portalTheme: 'LIGHT_MODERN',
+  portalHeroImage: null,
+  showContactPhoto: false,
+  showContactEmail: true,
+  showContactPhone: false,
 };
 
 const mockUserProfile: UserProfile = {

@@ -444,6 +444,10 @@ export interface PublicProfile {
   website: string | null;
   socials: Record<string, string> | null;
   portalTheme: string;
+  portalHeroImage: string | null;
+  showContactPhoto: boolean;
+  showContactEmail: boolean;
+  showContactPhone: boolean;
 }
 
 export interface UpdateUserProfileInput {
@@ -477,6 +481,10 @@ export interface UpdatePublicProfileInput {
   website?: string | null;
   socials?: Record<string, string> | null;
   portalTheme?: PortalTheme;
+  portalHeroImage?: 'piano' | 'stage' | null;
+  showContactPhoto?: boolean;
+  showContactEmail?: boolean;
+  showContactPhone?: boolean;
 }
 
 // ─────────────────────────────────────────
@@ -512,6 +520,10 @@ export interface PortalPublicProfile {
   brandColour: string;
   photo: string | null;
   portalTheme: PortalTheme | null;
+  portalHeroImage: string | null;
+  showContactPhoto: boolean;
+  showContactEmail: boolean;
+  showContactPhone: boolean;
 }
 
 export interface PortalDocument {

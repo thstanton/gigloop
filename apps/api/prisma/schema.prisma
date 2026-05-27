@@ -48,17 +48,21 @@ model PublicProfile {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  businessName String  @default("")
-  displayName  String?
-  bio          String?
-  email        String?
-  phone        String?
-  logoUrl      String?
-  brandColour  String?
-  photo        String?
-  website      String?
-  socials      Json?
-  portalTheme  String  @default("LIGHT_MODERN")
+  businessName      String  @default("")
+  displayName       String?
+  bio               String?
+  email             String?
+  phone             String?
+  logoUrl           String?
+  brandColour       String?
+  photo             String?
+  website           String?
+  socials           Json?
+  portalTheme       String  @default("LIGHT_MODERN")
+  portalHeroImage   String?
+  showContactPhoto  Boolean @default(false)
+  showContactEmail  Boolean @default(true)
+  showContactPhone  Boolean @default(false)
 
   @@index([userId])
 }
