@@ -165,6 +165,7 @@ export default function ContactPicker({
           <ContactForm
             defaultValues={{
               name: pendingName,
+              greetingName: pendingName.trim().split(/\s+/)[0] ?? '',
               email: '', phone: '', website: '',
               address: '', notes: '', parkingInfo: '',
               accessInfo: '', equipmentAvailable: '', commissionArrangement: '',
@@ -174,6 +175,7 @@ export default function ContactPicker({
             isError={createMutation.isError}
             submitLabel="Create"
             onCancel={() => setCreateOpen(false)}
+            autoSuggestGreetingName
           />
         </DialogContent>
       </Dialog>

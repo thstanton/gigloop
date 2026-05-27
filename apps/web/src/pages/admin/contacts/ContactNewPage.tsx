@@ -38,6 +38,7 @@ export default function ContactNewPage() {
         isError={mutation.isError}
         submitLabel="Create contact"
         onCancel={() => navigate('/admin/contacts')}
+        autoSuggestGreetingName
       />
     </div>
   );

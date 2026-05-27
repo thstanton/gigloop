@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -12,6 +13,7 @@ import { cn } from '@/lib/utils';
 
 const schema = z.object({
   name: z.string().min(1, 'Name is required'),
+  greetingName: z.string(),
   email: z.string().email('Invalid email').or(z.literal('')),
   phone: z.string(),
   website: z.string().url('Invalid URL').or(z.literal('')),
@@ -30,6 +32,7 @@ export function toContactPayload(
 ): CreateContactInput | UpdateContactInput {
   return {
     name: values.name,
+    greetingName: values.greetingName || null,
     email: values.email || null,
     phone: values.phone || null,
     website: values.website || null,
@@ -45,6 +48,7 @@ export function toContactPayload(
 export function contactToFormValues(c: Contact): ContactFormValues {
   return {
     name: c.name,
+    greetingName: c.greetingName ?? '',
     email: c.email ?? '',
     phone: c.phone ?? '',
     website: c.website ?? '',
@@ -93,6 +97,7 @@ interface ContactFormProps {
   isError: boolean;
   submitLabel?: string;
   onCancel?: () => void;
+  autoSuggestGreetingName?: boolean;
 }
 
 export default function ContactForm({
@@ -102,18 +107,36 @@ export default function ContactForm({
   isError,
   submitLabel = 'Save',
   onCancel,
+  autoSuggestGreetingName = false,
 }: ContactFormProps) {
   const {
     register,
     handleSubmit,
+    watch,
+    setValue,
     formState: { errors },
   } = useForm<ContactFormValues>({
     resolver: zodResolver(schema),
     defaultValues: defaultValues ?? {
-      name: '', email: '', phone: '', website: '',
+      name: '', greetingName: '', email: '', phone: '', website: '',
       address: '', notes: '', parkingInfo: '',
       accessInfo: '', equipmentAvailable: '', commissionArrangement: '',
     },
+  });
+
+  // Track whether the user has manually edited greetingName so we stop suggesting.
+  const greetingNameEdited = useRef(false);
+
+  const watchedName = watch('name');
+
+  useEffect(() => {
+    if (!autoSuggestGreetingName || greetingNameEdited.current) return;
+    const suggested = watchedName.trim().split(/\s+/)[0] ?? '';
+    setValue('greetingName', suggested, { shouldDirty: false });
+  }, [watchedName, autoSuggestGreetingName, setValue]);
+
+  const greetingNameRegistration = register('greetingName', {
+    onChange: () => { greetingNameEdited.current = true; },
   });
 
   return (
@@ -121,9 +144,17 @@ export default function ContactForm({
 
       {/* Core */}
       <div className="space-y-4">
-        <Field label="Name" required error={errors.name?.message}>
-          <Input {...register('name')} autoFocus />
-        </Field>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label="Name" required error={errors.name?.message}>
+            <Input {...register('name')} autoFocus />
+          </Field>
+          <Field label="Greeting name" error={errors.greetingName?.message}>
+            <Input
+              {...greetingNameRegistration}
+              placeholder="e.g. Jane"
+            />
+          </Field>
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="Email" error={errors.email?.message}>
             <Input type="email" {...register('email')} />
