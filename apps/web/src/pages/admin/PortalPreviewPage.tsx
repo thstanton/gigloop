@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@clerk/react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Check, ChevronLeft, Download, FileText, Music } from 'lucide-react';
+import { Check, ChevronLeft, Download, FileText, Music, Search } from 'lucide-react';
 import { apiGet, apiPatch } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,6 +22,7 @@ import {
   bookingStatusMessage,
   pickTextColour,
 } from '@/pages/portal/PortalPage';
+import { SignatureSection } from '@/pages/portal/PortalContractPage';
 import type { PublicProfile, PortalPublicProfile, PortalTheme, UpdatePublicProfileInput } from '@/types/api';
 import { cn } from '@/lib/utils';
 
@@ -46,17 +47,25 @@ const PREVIEW_FORMATS = [
 ];
 
 const PREVIEW_SONGS = [
-  { title: 'A Thousand Years', artist: 'Christina Perri' },
-  { title: "Can't Help Falling in Love", artist: 'Elvis Presley' },
-  { title: 'Perfect', artist: 'Ed Sheeran' },
-  { title: 'All of Me', artist: 'John Legend' },
-  { title: 'Unchained Melody', artist: 'Righteous Brothers' },
+  { title: 'A Thousand Years', artist: 'Christina Perri', genre: 'Pop' },
+  { title: "Can't Help Falling in Love", artist: 'Elvis Presley', genre: 'Pop' },
+  { title: 'Perfect', artist: 'Ed Sheeran', genre: 'Pop' },
+  { title: 'Fly Me to the Moon', artist: 'Frank Sinatra', genre: 'Jazz' },
+  { title: 'At Last', artist: 'Etta James', genre: 'Jazz' },
+  { title: 'Clair de Lune', artist: 'Debussy', genre: 'Classical' },
+  { title: 'Gymnopédie No. 1', artist: 'Satie', genre: 'Classical' },
 ];
 
 const PREVIEW_GREETING_NAME = 'Sarah';
 const PREVIEW_TITLE = 'The Anderson Wedding';
 const PREVIEW_VENUE = 'The Grand Ballroom';
 const PREVIEW_FEE = '1,500';
+
+const PREVIEW_KEY_MOMENTS = [
+  { section: 'Ceremony', label: 'Processional' },
+  { section: 'Ceremony', label: 'First dance' },
+  { section: 'Reception', label: 'Cake cutting' },
+];
 
 const PREVIEW_DOCUMENTS = [
   { label: 'Performance contract' },
@@ -237,21 +246,7 @@ function PreviewContractView({
               <p className={`text-sm font-medium ${bold ? 'text-white' : 'text-[#1a1a1a]'}`}>
                 Sign below
               </p>
-              <div className={`border rounded-lg min-h-[88px] flex items-center px-5 overflow-hidden ${bold ? 'border-white/20 bg-white/5' : 'border-[#e5e5e5] bg-white'}`}>
-                <span
-                  style={{
-                    fontFamily: '"Dancing Script", cursive',
-                    fontSize: '48px',
-                    color: bold ? 'rgba(255,255,255,0.85)' : '#1a1a1a',
-                    lineHeight: 1.2,
-                  }}
-                >
-                  Sarah Anderson
-                </span>
-              </div>
-              <p className={`text-xs ${bold ? 'text-white/40' : 'text-[#9ca3af]'}`}>
-                By submitting, you confirm this constitutes your electronic signature.
-              </p>
+              <SignatureSection onSign={() => {}} brand={brand} isBold={bold} />
             </div>
           )}
 
@@ -281,13 +276,40 @@ function PreviewMusicView({
   const brand = profile.brandColour ?? '#1a1a1a';
   const displayFont = getDisplayFontClass(profile.portalTheme);
   const [selected, setSelected] = useState(new Set(['0']));
+  const [search, setSearch] = useState('');
+  const [activeGenre, setActiveGenre] = useState('Pop');
+
+  const genres = ['Pop', 'Jazz', 'Classical'];
+
+  const displaySongs = search.trim()
+    ? PREVIEW_SONGS.filter(
+        (s) =>
+          s.title.toLowerCase().includes(search.toLowerCase()) ||
+          s.artist.toLowerCase().includes(search.toLowerCase()),
+      )
+    : PREVIEW_SONGS.filter((s) => s.genre === activeGenre);
+
+  const inputClass = `w-full rounded-lg border px-3 py-2.5 text-sm outline-none ${
+    bold
+      ? 'bg-white/10 border-white/20 text-white placeholder-white/40 focus:border-white/60'
+      : 'bg-white border-[#e5e5e5] text-[#1a1a1a] placeholder-[#9ca3af] focus:border-[#1a1a1a]'
+  }`;
 
   const genreClass = (active: boolean) =>
     `px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
       active
         ? bold ? 'bg-white text-[#1a1a1a]' : 'bg-[#1a1a1a] text-white'
-        : bold ? 'bg-white/10 text-white/70' : 'bg-[#f3f4f6] text-[#6b7280]'
+        : bold ? 'bg-white/10 text-white/70 hover:bg-white/20' : 'bg-[#f3f4f6] text-[#6b7280] hover:bg-[#e5e7eb]'
     }`;
+
+  const sectionHeadingClass = `text-xs font-medium uppercase tracking-wide mb-3 ${bold ? 'text-white/50' : 'text-[#9ca3af]'}`;
+
+  // Group key moments by section
+  const sectionMap = new Map<string, typeof PREVIEW_KEY_MOMENTS>();
+  for (const km of PREVIEW_KEY_MOMENTS) {
+    if (!sectionMap.has(km.section)) sectionMap.set(km.section, []);
+    sectionMap.get(km.section)!.push(km);
+  }
 
   return (
     <PortalLayout profile={profile}>
@@ -301,28 +323,51 @@ function PreviewMusicView({
           </p>
         </div>
 
+        {/* 1. General requests */}
         <section className="space-y-4">
           <h2 className={`text-base font-semibold ${bold ? 'text-white' : 'text-[#1a1a1a]'}`}>
             General requests
           </h2>
 
-          <div className="flex flex-wrap gap-2">
-            {['Pop', 'Jazz', 'Classical'].map((g, i) => (
-              <span key={g} className={genreClass(i === 0)}>{g}</span>
-            ))}
+          {/* Search */}
+          <div className="relative">
+            <Search className={`absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 ${bold ? 'text-white/40' : 'text-[#9ca3af]'}`} />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search all songs…"
+              className={`${inputClass} pl-9`}
+            />
           </div>
 
+          {/* Genre tabs */}
+          {!search.trim() && (
+            <div className="flex flex-wrap gap-2">
+              {genres.map((g) => (
+                <button key={g} type="button" onClick={() => setActiveGenre(g)} className={genreClass(g === activeGenre)}>
+                  {g}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Song list */}
           <div className={`rounded-lg divide-y overflow-hidden ${bold ? 'divide-white/10 bg-white/5' : 'divide-[#e5e5e5] border border-[#e5e5e5]'}`}>
-            {PREVIEW_SONGS.map((song, i) => {
-              const isSelected = selected.has(String(i));
+            {displaySongs.length === 0 ? (
+              <p className={`px-4 py-6 text-sm text-center ${bold ? 'text-white/40' : 'text-[#9ca3af]'}`}>
+                No songs found.
+              </p>
+            ) : displaySongs.map((song, i) => {
+              const key = `${song.title}-${i}`;
+              const isSelected = selected.has(key);
               return (
                 <button
-                  key={song.title}
+                  key={key}
                   type="button"
                   onClick={() => setSelected((prev) => {
                     const next = new Set(prev);
-                    if (next.has(String(i))) next.delete(String(i));
-                    else next.add(String(i));
+                    if (next.has(key)) next.delete(key); else next.add(key);
                     return next;
                   })}
                   className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${bold ? 'hover:bg-white/10' : 'hover:bg-[#f9fafb]'}`}
@@ -338,17 +383,48 @@ function PreviewMusicView({
               );
             })}
           </div>
-          <p className={`text-sm ${bold ? 'text-white/60' : 'text-[#6b7280]'}`}>
-            {selected.size} song{selected.size !== 1 ? 's' : ''} selected
-          </p>
+          {selected.size > 0 && (
+            <p className={`text-sm ${bold ? 'text-white/60' : 'text-[#6b7280]'}`}>
+              {selected.size} song{selected.size !== 1 ? 's' : ''} selected
+            </p>
+          )}
         </section>
 
+        {/* 2. Key moments */}
+        <section className="space-y-4">
+          <h2 className={`text-base font-semibold ${bold ? 'text-white' : 'text-[#1a1a1a]'}`}>
+            Key moments
+          </h2>
+          <div className="space-y-5">
+            {Array.from(sectionMap.entries()).map(([section, items]) => (
+              <div key={section}>
+                <p className={sectionHeadingClass}>{section}</p>
+                <div className="space-y-3">
+                  {items.map((km) => (
+                    <div key={km.label}>
+                      <label className={`block text-sm mb-1.5 ${bold ? 'text-white/80' : 'text-[#374151]'}`}>
+                        {km.label}
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Search songs or type a request…"
+                        className={inputClass}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* 3. Notes */}
         <section className="space-y-2">
           <h2 className={`text-base font-semibold ${bold ? 'text-white' : 'text-[#1a1a1a]'}`}>Notes</h2>
           <textarea
             rows={3}
             placeholder="Any other requests or special instructions…"
-            className={`w-full rounded-lg border px-3 py-2.5 text-sm outline-none ${bold ? 'bg-white/10 border-white/20 text-white placeholder-white/40' : 'bg-white border-[#e5e5e5] text-[#1a1a1a] placeholder-[#9ca3af]'}`}
+            className={inputClass}
           />
         </section>
 

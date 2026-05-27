@@ -198,7 +198,7 @@ function DrawnSignature({ onSign }: { onSign: (dataUrl: string) => void }) {
 
 // ─── Signature section (tabbed) ───────────────────────────────────────────────
 
-function SignatureSection({
+export function SignatureSection({
   onSign,
   brand,
   isBold,
