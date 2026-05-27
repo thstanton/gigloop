@@ -5,6 +5,33 @@ import { getPortalData } from '../../lib/portalApi';
 import { PortalLayout, getDisplayFontClass, isRomantic } from '../../layouts/PortalLayout';
 import type { PortalData, PortalDocument, PortalPublicProfile, PortalBookingSet, PortalBookingFormat } from '../../types/api';
 
+// ─── Colour utilities ─────────────────────────────────────────────────────────
+
+function hexToRgb(hex: string): [number, number, number] | null {
+  const h = hex.replace('#', '');
+  const full = h.length === 3 ? h.split('').map(c => c + c).join('') : h;
+  if (!/^[0-9a-f]{6}$/i.test(full)) return null;
+  const n = parseInt(full, 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+function relativeLuminance(hex: string): number {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return 0;
+  const [r, g, b] = rgb.map(c => {
+    const s = c / 255;
+    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+// Returns the text colour (white or near-black) with the better WCAG contrast
+// against the given background hex. Threshold ~0.208 is the crossover point
+// where white and #1a1a1a have equal contrast ratios.
+function pickTextColour(bgHex: string): '#ffffff' | '#1a1a1a' {
+  return relativeLuminance(bgHex) < 0.208 ? '#ffffff' : '#1a1a1a';
+}
+
 // ─── Format icon map (mirrors admin PerformanceSection) ───────────────────────
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -81,18 +108,22 @@ function LightGreeting({ firstName, title, theme }: {
 
 // ─── BOLD hero ────────────────────────────────────────────────────────────────
 
-function BoldHero({ firstName, title, formattedDate, portalHeroImage, theme }: {
+function BoldHero({ firstName, title, formattedDate, portalHeroImage, theme, brand }: {
   firstName: string;
   title: string | null;
   formattedDate: string;
   portalHeroImage: string | null;
   theme: string | null;
+  brand: string;
 }) {
   const displayFont = getDisplayFontClass(theme);
   const romantic = isRomantic(theme);
 
   return (
-    <div className="relative overflow-hidden min-h-[280px] md:min-h-[320px]">
+    <div
+      className="relative overflow-hidden min-h-[280px] md:min-h-[320px]"
+      style={!portalHeroImage ? { backgroundColor: brand } : undefined}
+    >
       {portalHeroImage && (
         <img
           src={`/${portalHeroImage}.png`}
@@ -105,7 +136,7 @@ function BoldHero({ firstName, title, formattedDate, portalHeroImage, theme }: {
         style={{
           background: portalHeroImage
             ? `linear-gradient(to bottom, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.5) 50%, rgba(0,0,0,0.15) 100%)`
-            : `linear-gradient(to bottom, rgba(255,255,255,0.1) 0%, rgba(0,0,0,0.2) 100%)`,
+            : `linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.65) 100%)`,
         }}
       />
       <div className="relative z-10 max-w-4xl mx-auto px-6 pt-12 pb-10">
@@ -240,8 +271,12 @@ function BookingSummary({ data, musicSuccess }: { data: PortalData; musicSuccess
   const bannerBase = 'flex items-start gap-3 rounded-lg p-4 text-sm';
 
   const ctaClass = bold
-    ? 'flex items-center justify-center gap-2 w-full rounded-lg px-5 py-3.5 text-sm font-medium text-white transition-opacity hover:opacity-90'
+    ? 'flex items-center justify-center gap-2 w-full rounded-lg px-5 py-3.5 text-sm font-medium transition-opacity hover:opacity-90'
     : 'flex items-center justify-center gap-2 w-full rounded-lg px-5 py-3.5 text-sm font-medium transition-colors border hover:bg-[#f5f2ed]';
+
+  const ctaStyle = bold
+    ? { backgroundColor: brand, color: pickTextColour(brand) }
+    : { borderColor: brand, color: brand };
 
   return (
     <div className="space-y-5">
@@ -294,7 +329,7 @@ function BookingSummary({ data, musicSuccess }: { data: PortalData; musicSuccess
         <Link
           to="contract"
           className={ctaClass}
-          style={bold ? { backgroundColor: 'rgba(255,255,255,0.2)' } : { borderColor: brand, color: brand }}
+          style={ctaStyle}
         >
           <FileText className="h-4 w-4" />
           Review &amp; sign contract
@@ -330,7 +365,7 @@ function BookingSummary({ data, musicSuccess }: { data: PortalData; musicSuccess
           <Link
             to="music"
             className={ctaClass}
-            style={bold ? { backgroundColor: 'rgba(255,255,255,0.2)' } : { borderColor: brand, color: brand }}
+            style={ctaStyle}
           >
             <Music className="h-4 w-4" />
             Choose your songs
@@ -412,6 +447,8 @@ export default function PortalPage() {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
   });
 
+  const brand = publicProfile.brandColour ?? '#1a1a1a';
+
   const hero = boldTheme ? (
     <BoldHero
       firstName={firstName}
@@ -419,6 +456,7 @@ export default function PortalPage() {
       formattedDate={formattedDate}
       portalHeroImage={publicProfile.portalHeroImage}
       theme={publicProfile.portalTheme}
+      brand={brand}
     />
   ) : undefined;
 
