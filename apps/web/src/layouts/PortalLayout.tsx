@@ -31,12 +31,10 @@ export function PortalLayout({ profile, children, wide = false, hero }: PortalLa
 
   return (
     <div
-      className={`min-h-screen font-['Commissioner',sans-serif] ${bold ? 'text-white' : 'bg-white text-[#1a1a1a]'}`}
-      style={bold ? { backgroundColor: brand } : undefined}
+      className={`min-h-screen font-['Commissioner',sans-serif] ${bold ? "bg-[#2a2a2a] text-white" : 'bg-white text-[#1a1a1a]'}`}
     >
       <header
-        className={`${bold ? 'py-4 border-b border-white/15' : 'py-5 bg-white border-b border-[#ede9e4]'}`}
-        style={bold ? { backgroundColor: brand } : undefined}
+        className={`${bold ? 'py-4 bg-[#2a2a2a] border-b border-white/15' : 'py-5 bg-white border-b border-[#ede9e4]'}`}
       >
         <div className={`${wide ? 'max-w-4xl' : 'max-w-2xl'} mx-auto px-6 flex items-center gap-4`}>
           {profile.logoUrl && (
