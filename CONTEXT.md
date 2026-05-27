@@ -126,17 +126,23 @@ A log entry for a communication associated with a Booking. For MVP: outbound onl
 ### PublicProfile
 The public, portal-visible half of the musician's settings (one per `userId`). Safe to return to unauthenticated portal clients — contains no sensitive data. See ADR-0002.
 
-**Fields:** businessName, displayName, bio, email, phone, logoUrl (R2 URL), brandColour (hex), photo (R2 URL), website, socials (JSON — platform → URL), portalTheme.
+**Fields:** businessName, displayName, bio, email, phone, logoUrl (R2 URL — client-facing only; see ADR-0014), brandColour (hex), portalHeroImage (string? — predefined key: `'piano'` | `'stage'` | null), showContactPhoto (bool, default false), showContactEmail (bool, default true), showContactPhone (bool, default false), photo (R2 URL), website, socials (JSON — platform → URL), portalTheme.
 
-**`portalTheme` enum:** `BOLD_ROMANTIC | BOLD_MODERN | LIGHT_ROMANTIC | LIGHT_MODERN`. Each preset bundles a layout style (Bold = full-bleed photo hero; Light = clean white with contained photo) with a font pairing (Romantic = Cormorant Garamond/Lato; Modern = DM Sans). Four themes cover the full matrix.
+**`portalTheme` enum:** `BOLD_ROMANTIC | BOLD_MODERN | LIGHT_ROMANTIC | LIGHT_MODERN`. Each preset bundles a layout style (Bold = hero section + dark background; Light = clean white, spacious) with a font pairing (Romantic = Caveat display + Commissioner body; Modern = Lexend Deca display + Commissioner body). Four themes cover the full matrix.
 
-The client-facing [[Portal]] is musician-branded: displays the musician's logo, photo, name, and chosen theme. It is not GigMan-branded. Design reference: WithJoy — photo-forward, elegant typography, premium and personal in feel, mobile-first.
+**BOLD hero section:** full-width block at the top of the portal. If `portalHeroImage` is set, the image fills the block with a dark gradient overlay and the booking title/date are reversed out. If `portalHeroImage` is null, a solid `brandColour` block is used instead. LIGHT themes have no hero section.
 
-**Graceful degradation:** `publicProfile` always exists by the time emails are sent (API enforces this). Missing optional fields degrade gracefully: no photo/logo → layout renders without them (no broken images). No `brandColour` → neutral fallback (`#1a1a1a`). The portal must never look broken due to incomplete profile setup.
+**Predefined hero images:** a small curated set of photographic assets (`/piano.png` — intimate black-and-white piano scene; `/stage.png` — atmospheric lit stage) stored in the web `public/` folder. Custom image upload is deferred to P2.
 
-**Theme implementation:** two layout components (`BoldPortalLayout` / `LightPortalLayout`) × two CSS font variants (`romantic` / `modern`) applied within each — four combinations total. Bold = full-bleed photo hero (photo fills viewport width). Light = clean white with contained photo. Romantic = Cormorant Garamond/Lato font pairing. Modern = DM Sans.
+The client-facing [[Portal]] is musician-branded: displays the musician's logo, name, and chosen theme. It is not GigMan-branded. Design reference: WithJoy — elegant typography, premium and personal in feel, mobile-first.
 
-`brandColour` is applied to buttons and links only — everything else uses neutral colours (white/near-white backgrounds, dark text).
+**Graceful degradation:** `publicProfile` always exists by the time emails are sent (API enforces this). Missing optional fields degrade gracefully: no logo → layout renders without it. No `brandColour` → neutral fallback (`#1a1a1a`). No `portalHeroImage` on a BOLD theme → solid brand colour hero block. The portal must never look broken due to incomplete profile setup.
+
+`brandColour` is applied to hero overlays, CTAs, and links. Admin top bar always uses `businessName` as text — `logoUrl` is not rendered in the admin UI. See ADR-0014.
+
+**Portal configuration:** managed via the Portal Preview page (`/admin/portal-preview`). Settings page "Business" section owns the logo upload; settings page "Portal" section is a single link to the Portal Preview. Theme, hero image, brand colour, and contact card visibility are all configured via a sheet within the Portal Preview.
+
+**Contact card:** displayed on the main portal page — bottom of the page on mobile; sticky right panel on desktop (main page only; contract and music form pages stay single-column). Shows the musician's name, business name, and optionally photo, email, and phone. Name and business name are always visible when the card renders. Photo, email, and phone each have a per-field visibility toggle (`showContactPhoto`, `showContactEmail`, `showContactPhone` on PublicProfile). Defaults: email shown, photo and phone hidden. Toggles live in the Customise sheet; actual field values (email, phone, photo) are set in the settings Business section. The sheet shows current values as read-only context.
 
 ### UserProfile
 The private, authenticated-only half of the musician's settings (one per `userId`). Never returned to portal clients. See ADR-0002.
@@ -249,6 +255,10 @@ The client-facing public interface at `/booking/:token`. Bypasses Clerk auth —
 No payment functionality on the portal for MVP.
 
 **Footer:** "Powered by GigMan" — small, tasteful, at the bottom of every portal page.
+
+**Portal preview mode:** the musician can preview their portal without performing client actions. Two entry points:
+- **From booking detail** — "Client portal" link becomes `/booking/:token?preview=admin`. The portal detects `?preview=admin` in search params, disables all mutations (contract signing, music form submit), and renders a sticky banner at the top: "Preview — [back link to booking]". No Clerk auth check needed since the token is still valid.
+- **From settings** — "Configure portal →" link opens `/admin/portal-preview` (Clerk-authenticated admin route). This page renders the portal layout and [[BookingSummary]] using the musician's real profile + placeholder booking data (same approach as `PREVIEW_SAMPLES` in the email template editor). A sticky banner at the top has a "Customise" button that opens a sheet for editing portal appearance settings (theme, hero image, brand colour) live; changes are reflected immediately in the preview below. A "Save" button in the sheet commits via `PATCH /me/public`.
 
 **Signing notification:** when the client signs, the API sends a notification email to the musician (via Resend). Subject: "[CustomerName] has signed your contract for [booking title]". Body is plain text: customer name, booking date, venue (if set), link to `/admin/bookings/:id`. Context-aware deposit section:
 - If `depositTrackingMode` resolves to `NONE`: no deposit mention.

@@ -123,26 +123,6 @@ function BoldHero({ firstName, title, formattedDate, portalHeroImage, theme }: {
 
 // ─── Sets card ────────────────────────────────────────────────────────────────
 
-function SetRow({ set, bold, indented = false }: { set: PortalBookingSet; bold: boolean; indented?: boolean }) {
-  return (
-    <div className={`flex items-center justify-between gap-4 py-2.5 ${indented ? 'pl-9 pr-5' : 'px-5'}`}>
-      <span className={`text-sm ${bold ? 'text-white' : 'text-[#1a1a1a]'}`}>
-        {set.label ?? `Set ${set.order + 1}`}
-        {set.duration != null && (
-          <span className={`ml-1.5 ${bold ? 'text-white/50' : 'text-[#a39e97]'}`}>
-            · {set.duration} min
-          </span>
-        )}
-      </span>
-      {set.startTime && (
-        <span className={`text-sm flex-shrink-0 ${bold ? 'text-white/50' : 'text-[#a39e97]'}`}>
-          {set.startTime}
-        </span>
-      )}
-    </div>
-  );
-}
-
 function SetsCard({ sets, formats, bold }: { sets: PortalBookingSet[]; formats: PortalBookingFormat[]; bold: boolean }) {
   if (sets.length === 0) return null;
 
@@ -153,37 +133,86 @@ function SetsCard({ sets, formats, bold }: { sets: PortalBookingSet[]; formats: 
     setsByFormatId.get(key)!.push(s);
   }
   const unassigned = setsByFormatId.get(null) ?? [];
-  const divideClass = bold ? 'divide-white/10' : 'divide-[#ede9e4]';
+
+  const mutedClass = bold ? 'text-white/50' : 'text-[#a39e97]';
+  const labelClass = bold ? 'text-white' : 'text-[#1a1a1a]';
+  const headingClass = bold ? 'text-white/85' : 'text-[#5a544e]';
+  const iconClass = bold ? 'text-white/55 flex-shrink-0' : 'text-[#9a9189] flex-shrink-0';
+  const dividerClass = bold ? 'divide-white/10' : 'divide-[#ede9e4]';
+  const borderClass = bold ? 'border-white/10' : 'border-[#ede9e4]';
 
   return (
     <div className={`rounded-lg overflow-hidden ${bold ? 'bg-white/15' : 'bg-[#f5f2ed]'}`}>
-      <div className={`px-5 py-3 border-b ${bold ? 'border-white/10' : 'border-[#ede9e4]'}`}>
-        <p className={`text-xs font-medium uppercase tracking-wide ${bold ? 'text-white/40' : 'text-[#a39e97]'}`}>
+      <div className={`px-5 py-3 border-b ${borderClass}`}>
+        <p className={`text-xs font-medium uppercase tracking-wide ${mutedClass}`}>
           Programme
         </p>
       </div>
 
-      <div className={`divide-y ${divideClass}`}>
+      <div className={`divide-y ${dividerClass}`}>
         {formats.map((fmt) => {
           const fmtSets = setsByFormatId.get(fmt.id) ?? [];
           if (fmtSets.length === 0) return null;
           const Icon = FORMAT_ICON_MAP[fmt.icon] ?? Music;
+
+          if (fmtSets.length === 1) {
+            // Single set: merge into one row — icon + format label + duration, time on right
+            const s = fmtSets[0];
+            return (
+              <div key={fmt.id} className="flex items-center justify-between px-5 py-3 gap-4">
+                <span className="flex items-center gap-2.5 min-w-0">
+                  <Icon size={14} className={iconClass} />
+                  <span className={`text-sm font-medium ${headingClass}`}>{fmt.label}</span>
+                  {s.duration != null && (
+                    <span className={`text-sm ${mutedClass}`}>· {s.duration} min</span>
+                  )}
+                </span>
+                {s.startTime && (
+                  <span className={`text-sm flex-shrink-0 ${mutedClass}`}>{s.startTime}</span>
+                )}
+              </div>
+            );
+          }
+
+          // Multiple sets: header row then tightly-spaced set rows, no internal borders
           return (
             <div key={fmt.id}>
-              <div className={`flex items-center gap-2.5 px-5 py-2.5 ${bold ? 'border-b border-white/10' : 'border-b border-[#ede9e4]'}`}>
-                <Icon size={14} className={bold ? 'text-white/55 flex-shrink-0' : 'text-[#9a9189] flex-shrink-0'} />
-                <span className={`text-sm font-medium ${bold ? 'text-white/80' : 'text-[#5a544e]'}`}>
-                  {fmt.label}
-                </span>
+              <div className="flex items-center gap-2.5 px-5 pt-3 pb-1">
+                <Icon size={14} className={iconClass} />
+                <span className={`text-sm font-medium ${headingClass}`}>{fmt.label}</span>
               </div>
-              <div className={`divide-y ${divideClass}`}>
-                {fmtSets.map((s) => <SetRow key={s.order} set={s} bold={bold} indented />)}
+              <div className="pb-2">
+                {fmtSets.map((s) => (
+                  <div key={s.order} className="flex items-center justify-between pl-9 pr-5 py-1.5 gap-4">
+                    <span className={`text-sm ${labelClass}`}>
+                      {s.label ?? `Set ${s.order + 1}`}
+                      {s.duration != null && (
+                        <span className={`ml-1.5 ${mutedClass}`}>· {s.duration} min</span>
+                      )}
+                    </span>
+                    {s.startTime && (
+                      <span className={`text-sm flex-shrink-0 ${mutedClass}`}>{s.startTime}</span>
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
           );
         })}
 
-        {unassigned.map((s) => <SetRow key={s.order} set={s} bold={bold} />)}
+        {unassigned.map((s) => (
+          <div key={s.order} className="flex items-center justify-between px-5 py-3 gap-4">
+            <span className={`text-sm ${labelClass}`}>
+              {s.label ?? `Set ${s.order + 1}`}
+              {s.duration != null && (
+                <span className={`ml-1.5 ${mutedClass}`}>· {s.duration} min</span>
+              )}
+            </span>
+            {s.startTime && (
+              <span className={`text-sm flex-shrink-0 ${mutedClass}`}>{s.startTime}</span>
+            )}
+          </div>
+        ))}
       </div>
     </div>
   );
