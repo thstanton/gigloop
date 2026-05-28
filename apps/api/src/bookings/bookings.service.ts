@@ -10,6 +10,7 @@ import { UpsertMusicFormConfigDto } from './dto/upsert-music-form-config.dto';
 import { MailService } from '../mail/mail.service';
 import { substituteTiptapVariables } from '../mail/tiptap-portal';
 import { getChecklistDefaults } from './checklist-defaults';
+import { ChecklistEvaluatorService } from '../checklist/checklist-evaluator.service';
 
 const VALID_STATUSES = new Set<string>(Object.values(BookingStatus));
 
@@ -76,6 +77,7 @@ export class BookingsService {
   constructor(
     private repo: BookingsRepository,
     private mail: MailService,
+    private evaluator: ChecklistEvaluatorService,
   ) {}
 
   findAll(userId: string, status?: string) {
@@ -133,6 +135,9 @@ export class BookingsService {
     const updated = await this.repo.update(id, dto);
     if (dto.date !== undefined) {
       await this.repo.recomputeChecklistDueDates(id, updated.date, updated.createdAt);
+    }
+    if (dto.status !== undefined) {
+      await this.evaluator.evaluate(id).catch(() => {});
     }
     return updated;
   }
@@ -248,6 +253,7 @@ export class BookingsService {
     if (existing) await this.repo.voidContract(existing.id);
 
     const contract = await this.repo.createContractRecord(userId, bookingId, substituted);
+    await this.evaluator.evaluate(bookingId).catch(() => {});
     return {
       id: contract.id,
       createdAt: contract.createdAt.toISOString(),

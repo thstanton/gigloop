@@ -10,10 +10,10 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ChevronRight, ImageIcon, Trash2, Upload } from 'lucide-react';
+import { ChevronRight, ImageIcon, Plus, Trash2, Upload } from 'lucide-react';
 import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
-import type { PublicProfile, UserProfile, UpdatePublicProfileInput, UpdateUserProfileInput, UserPreferences } from '@/types/api';
+import type { PublicProfile, UserProfile, UpdatePublicProfileInput, UpdateUserProfileInput, UserPreferences, DueDateRule, ChecklistDefaultItem } from '@/types/api';
 import { cn } from '@/lib/utils';
 
 // ─── Schemas ─────────────────────────────────────────────────────────────────
@@ -91,14 +91,16 @@ function SaveBar({
   isPending,
   saved,
   isError,
+  onSave,
 }: {
   isPending: boolean;
   saved: boolean;
   isError: boolean;
+  onSave?: () => void;
 }) {
   return (
     <div className="flex items-center gap-4 pt-2">
-      <Button type="submit" disabled={isPending}>
+      <Button type={onSave ? 'button' : 'submit'} onClick={onSave} disabled={isPending}>
         {isPending ? 'Saving…' : 'Save changes'}
       </Button>
       {saved && !isPending && <span className="text-sm text-muted">Saved</span>}
@@ -626,6 +628,208 @@ function NotificationsSection({ profile }: { profile: UserProfile }) {
   );
 }
 
+// ─── Checklist defaults section ───────────────────────────────────────────────
+
+const SYSTEM_CHECKLIST_ITEMS: Array<{ key: string; label: string; defaultDueDateRule: DueDateRule | null }> = [
+  { key: 'send_quote', label: 'Send quote', defaultDueDateRule: null },
+  { key: 'create_deposit_invoice', label: 'Create deposit invoice', defaultDueDateRule: null },
+  { key: 'create_contract', label: 'Create contract', defaultDueDateRule: null },
+  { key: 'send_contract', label: 'Send contract & deposit email', defaultDueDateRule: { basis: 'bookingDate', offsetDays: -60 } },
+  { key: 'contract_signed', label: 'Contract signed', defaultDueDateRule: { basis: 'bookingDate', offsetDays: -45 } },
+  { key: 'deposit_received', label: 'Deposit received', defaultDueDateRule: { basis: 'bookingDate', offsetDays: -30 } },
+  { key: 'create_balance_invoice', label: 'Create balance invoice', defaultDueDateRule: { basis: 'bookingDate', offsetDays: -14 } },
+  { key: 'music_form_invite', label: 'Send music form invite', defaultDueDateRule: { basis: 'bookingDate', offsetDays: -30 } },
+  { key: 'song_requests', label: 'Song requests received', defaultDueDateRule: { basis: 'bookingDate', offsetDays: -14 } },
+  { key: 'send_thank_you', label: 'Send thank you', defaultDueDateRule: { basis: 'bookingDate', offsetDays: 7 } },
+];
+
+function formatDueDateRule(rule: DueDateRule | null): string {
+  if (!rule) return 'No due date';
+  const days = Math.abs(rule.offsetDays);
+  const direction = rule.offsetDays < 0 ? 'before' : rule.offsetDays > 0 ? 'after' : 'on';
+  const basis = rule.basis === 'bookingDate' ? 'booking date' : 'booking creation';
+  if (direction === 'on') return `On ${basis}`;
+  return `${days} day${days !== 1 ? 's' : ''} ${direction} ${basis}`;
+}
+
+type CustomItemForm = { label: string; completedBy: 'USER' | 'CUSTOMER'; requiredForStatus: '' | 'CONFIRMED' | 'READY' | 'COMPLETE' };
+
+function ChecklistDefaultsSection({ profile }: { profile: UserProfile }) {
+  const queryClient = useQueryClient();
+  const [saved, setSaved] = useState(false);
+
+  const prefs = profile.preferences as UserPreferences | undefined;
+  const savedDefaults = prefs?.checklistDefaults ?? [];
+
+  // System item dueDateRule overrides (key → rule | null)
+  const initialOverrides: Record<string, DueDateRule | null> = {};
+  for (const item of SYSTEM_CHECKLIST_ITEMS) {
+    const saved = savedDefaults.find((d) => d.key === item.key);
+    initialOverrides[item.key] = saved?.dueDateRule !== undefined ? saved.dueDateRule : item.defaultDueDateRule;
+  }
+  const [overrides, setOverrides] = useState<Record<string, DueDateRule | null>>(initialOverrides);
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [editBasis, setEditBasis] = useState<'bookingDate' | 'bookingCreation'>('bookingDate');
+  const [editOffset, setEditOffset] = useState(0);
+
+  // Custom items
+  const initialCustom: ChecklistDefaultItem[] = savedDefaults.filter((d) => !SYSTEM_CHECKLIST_ITEMS.find((s) => s.key === d.key));
+  const [customItems, setCustomItems] = useState<ChecklistDefaultItem[]>(initialCustom);
+  const [newItem, setNewItem] = useState<CustomItemForm>({ label: '', completedBy: 'USER', requiredForStatus: '' });
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      apiPatch<UserProfile>('/me/preferences/checklist-defaults', {
+        systemItemOverrides: SYSTEM_CHECKLIST_ITEMS.map((item) => ({
+          key: item.key,
+          dueDateRule: overrides[item.key] ?? null,
+        })),
+        customItems: customItems.map((item) => ({
+          label: item.label,
+          completedBy: item.completedBy,
+          requiredForStatus: item.requiredForStatus ?? null,
+          dueDateRule: item.dueDateRule ?? null,
+        })),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['me'] });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    },
+    onError: () => toast({ title: 'Failed to save checklist defaults', variant: 'destructive' }),
+  });
+
+  const startEdit = (key: string) => {
+    const current = overrides[key];
+    setEditBasis(current?.basis ?? 'bookingDate');
+    setEditOffset(current?.offsetDays ?? 0);
+    setEditingKey(key);
+  };
+
+  const saveEdit = (key: string, enabled: boolean) => {
+    setOverrides((prev) => ({ ...prev, [key]: enabled ? { basis: editBasis, offsetDays: editOffset } : null }));
+    setEditingKey(null);
+  };
+
+  const addCustomItem = () => {
+    if (!newItem.label.trim()) return;
+    setCustomItems((prev) => [
+      ...prev,
+      {
+        key: '',
+        label: newItem.label.trim(),
+        completedBy: newItem.completedBy,
+        dependsOn: [],
+        autoCompleteRule: null,
+        requiredForStatus: (newItem.requiredForStatus || null) as ChecklistDefaultItem['requiredForStatus'],
+        dueDateRule: null,
+      },
+    ]);
+    setNewItem({ label: '', completedBy: 'USER', requiredForStatus: '' });
+  };
+
+  return (
+    <div className="space-y-6">
+      <SectionHeader
+        title="Checklist defaults"
+        description="Customise the due dates for system checklist items and add your own items to every new booking."
+      />
+
+      <div className="space-y-3">
+        {SYSTEM_CHECKLIST_ITEMS.map((item) => (
+          <div key={item.key} className="space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm text-foreground">{item.label}</span>
+              {editingKey === item.key ? (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <select
+                    value={editBasis}
+                    onChange={(e) => setEditBasis(e.target.value as 'bookingDate' | 'bookingCreation')}
+                    className="text-xs border border-border rounded px-2 py-1 bg-background"
+                  >
+                    <option value="bookingDate">booking date</option>
+                    <option value="bookingCreation">booking creation</option>
+                  </select>
+                  <input
+                    type="number"
+                    value={editOffset}
+                    onChange={(e) => setEditOffset(Number(e.target.value))}
+                    className="w-16 text-xs border border-border rounded px-2 py-1 bg-background"
+                    placeholder="days"
+                  />
+                  <span className="text-xs text-muted">days offset</span>
+                  <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => saveEdit(item.key, true)}>Save</Button>
+                  <Button size="sm" variant="ghost" className="text-xs h-7" onClick={() => saveEdit(item.key, false)}>No date</Button>
+                  <Button size="sm" variant="ghost" className="text-xs h-7" onClick={() => setEditingKey(null)}>Cancel</Button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => startEdit(item.key)}
+                  className="text-xs text-primary hover:underline flex-shrink-0"
+                >
+                  {formatDueDateRule(overrides[item.key] ?? null)}
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {customItems.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-muted uppercase tracking-wide">Custom items</p>
+          {customItems.map((item, idx) => (
+            <div key={idx} className="flex items-center justify-between gap-2">
+              <span className="text-sm text-foreground">{item.label}</span>
+              <button
+                onClick={() => setCustomItems((prev) => prev.filter((_, i) => i !== idx))}
+                className="text-muted hover:text-status-cancelled transition-colors"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="border border-border rounded-lg p-4 space-y-3">
+        <p className="text-xs font-medium text-muted uppercase tracking-wide">Add custom item</p>
+        <div className="space-y-2">
+          <Input
+            placeholder="Item label"
+            value={newItem.label}
+            onChange={(e) => setNewItem((p) => ({ ...p, label: e.target.value }))}
+          />
+          <div className="flex gap-2 flex-wrap">
+            <Select value={newItem.completedBy} onValueChange={(v) => setNewItem((p) => ({ ...p, completedBy: v as 'USER' | 'CUSTOMER' }))}>
+              <SelectTrigger className="w-36 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="USER">By me</SelectItem>
+                <SelectItem value="CUSTOMER">By client</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={newItem.requiredForStatus} onValueChange={(v) => setNewItem((p) => ({ ...p, requiredForStatus: v as CustomItemForm['requiredForStatus'] }))}>
+              <SelectTrigger className="w-44 text-xs"><SelectValue placeholder="Required for status" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">Not required</SelectItem>
+                <SelectItem value="CONFIRMED">Required for Confirmed</SelectItem>
+                <SelectItem value="READY">Required for Ready</SelectItem>
+                <SelectItem value="COMPLETE">Required for Complete</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button size="sm" variant="outline" onClick={addCustomItem} disabled={!newItem.label.trim()}>
+              <Plus size={14} className="mr-1" />
+              Add
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <SaveBar isPending={mutation.isPending} saved={saved} isError={mutation.isError} onSave={() => mutation.mutate()} />
+    </div>
+  );
+}
+
 // ─── Skeleton ─────────────────────────────────────────────────────────────────
 
 function SettingsSkeleton() {
@@ -674,6 +878,8 @@ export default function SettingsPage() {
         <BusinessDetailsSection profile={userProfile} />
         <div className="border-t border-border" />
         <NotificationsSection profile={userProfile} />
+        <div className="border-t border-border" />
+        <ChecklistDefaultsSection profile={userProfile} />
       </div>
     </div>
   );

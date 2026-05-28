@@ -3,6 +3,7 @@ import { BookingStatus } from '@prisma/client';
 import { BookingsService } from './bookings.service';
 import { BookingsRepository } from './bookings.repository';
 import { MailService } from '../mail/mail.service';
+import { ChecklistEvaluatorService } from '../checklist/checklist-evaluator.service';
 import type { EmailContext } from '../mail/mail.service';
 
 type MockRepo = {
@@ -36,6 +37,7 @@ type MockRepo = {
 };
 
 type MockMail = { buildContext: jest.Mock };
+type MockEvaluator = { evaluate: jest.Mock };
 
 function makeRepo(): MockRepo {
   return {
@@ -73,6 +75,10 @@ function makeMail(): MockMail {
   return { buildContext: jest.fn() };
 }
 
+function makeEvaluator(): MockEvaluator {
+  return { evaluate: jest.fn().mockResolvedValue(undefined) };
+}
+
 const booking = { id: 'b1', userId: 'u1', status: BookingStatus.CONFIRMED };
 const set = { id: 's1', bookingId: 'b1', userId: 'u1' };
 
@@ -95,13 +101,16 @@ describe('BookingsService', () => {
   let service: BookingsService;
   let repo: MockRepo;
   let mail: MockMail;
+  let evaluator: MockEvaluator;
 
   beforeEach(() => {
     repo = makeRepo();
     mail = makeMail();
+    evaluator = makeEvaluator();
     service = new BookingsService(
       repo as unknown as BookingsRepository,
       mail as unknown as MailService,
+      evaluator as unknown as ChecklistEvaluatorService,
     );
   });
 

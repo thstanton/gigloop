@@ -55,7 +55,8 @@ describe('InvoicesService', () => {
 
   beforeEach(() => {
     repo = makeRepo();
-    service = new InvoicesService(repo as unknown as InvoicesRepository, mockComms, mockDocuments);
+    const mockEvaluator = { evaluate: jest.fn().mockResolvedValue(undefined) } as unknown as import('../checklist/checklist-evaluator.service').ChecklistEvaluatorService;
+    service = new InvoicesService(repo as unknown as InvoicesRepository, mockComms, mockDocuments, mockEvaluator);
   });
 
   describe('findAll', () => {

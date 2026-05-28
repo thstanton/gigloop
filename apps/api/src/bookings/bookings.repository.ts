@@ -366,7 +366,7 @@ export class BookingsRepository {
 
   findChecklistItems(userId: string, bookingId: string) {
     return this.prisma.bookingChecklistItem.findMany({
-      where: { bookingId, userId },
+      where: { bookingId, userId, state: { not: 'SKIPPED' } },
       orderBy: { order: 'asc' },
     });
   }

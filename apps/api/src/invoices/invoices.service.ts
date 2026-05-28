@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { InvoicesRepository } from './invoices.repository';
 import { CommunicationsService } from '../communications/communications.service';
 import { DocumentsService } from '../documents/documents.service';
+import { ChecklistEvaluatorService } from '../checklist/checklist-evaluator.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { SendInvoiceDto } from './dto/send-invoice.dto';
@@ -15,6 +16,7 @@ export class InvoicesService {
     private repo: InvoicesRepository,
     private comms: CommunicationsService,
     private documents: DocumentsService,
+    private evaluator: ChecklistEvaluatorService,
   ) {}
 
   findAll(userId: string, bookingId: string) {
@@ -31,7 +33,9 @@ export class InvoicesService {
     const customerId = await this.repo.findBookingCustomerId(userId, bookingId);
     if (customerId === null) throw new NotFoundException('Booking not found');
     const billToContactId = dto.billToContactId ?? customerId;
-    return this.repo.create(userId, bookingId, billToContactId, dto);
+    const result = await this.repo.create(userId, bookingId, billToContactId, dto);
+    await this.evaluator.evaluate(bookingId).catch(() => {});
+    return result;
   }
 
   async update(userId: string, bookingId: string, id: string, dto: UpdateInvoiceDto) {
@@ -93,7 +97,9 @@ export class InvoicesService {
     if (invoice.status !== 'SENT') {
       throw new BadRequestException('Only sent invoices can be marked as paid');
     }
-    return this.repo.markPaid(userId, bookingId, id);
+    const result = await this.repo.markPaid(userId, bookingId, id);
+    await this.evaluator.evaluate(bookingId).catch(() => {});
+    return result;
   }
 
   async addLineItem(

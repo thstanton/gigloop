@@ -38,6 +38,12 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import type {
   BookingDetail,
   BookingStatus,
@@ -85,8 +91,9 @@ const STATUS_LABELS: Record<BookingStatus, string> = {
   CANCELLED: 'Cancelled',
 };
 
-function StatusDropdown({ booking }: { booking: BookingDetail }) {
+function StatusDropdown({ booking, checklist }: { booking: BookingDetail; checklist: ChecklistItem[] }) {
   const queryClient = useQueryClient();
+  const [pendingStatus, setPendingStatus] = useState<BookingStatus | null>(null);
 
   const mutation = useMutation({
     mutationFn: (status: BookingStatus) =>
@@ -94,37 +101,92 @@ function StatusDropdown({ booking }: { booking: BookingDetail }) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['booking', booking.id] });
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['bookingChecklist', booking.id] });
     },
   });
 
+  const outstandingFor = (status: BookingStatus) =>
+    checklist.filter(
+      (item) => item.requiredForStatus === status && (item.state === 'PENDING' || item.state === 'FAILED'),
+    );
+
+  const handleSelect = (s: BookingStatus) => {
+    if (s === booking.status) return;
+    const outstanding = outstandingFor(s);
+    if (outstanding.length > 0) {
+      setPendingStatus(s);
+    } else {
+      mutation.mutate(s);
+    }
+  };
+
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          className={cn(
-            'inline-flex items-center gap-1 border-l-[3px] pl-2 pr-2.5 py-0.5 text-xs font-medium cursor-pointer',
-            STATUS_PILL_CLASSES[booking.status],
-          )}
-        >
-          {STATUS_LABELS[booking.status]}
-          <ChevronDown size={10} className="opacity-60" />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start">
-        {STATUS_ORDER.map((s) => (
-          <DropdownMenuItem
-            key={s}
-            onSelect={() => { if (s !== booking.status) mutation.mutate(s); }}
-            className="gap-2"
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            className={cn(
+              'inline-flex items-center gap-1 border-l-[3px] pl-2 pr-2.5 py-0.5 text-xs font-medium cursor-pointer',
+              STATUS_PILL_CLASSES[booking.status],
+            )}
           >
-            <span className={cn('inline-flex items-center border-l-[3px] pl-2 pr-2.5 py-0.5 text-xs font-medium', STATUS_PILL_CLASSES[s])}>
-              {STATUS_LABELS[s]}
-            </span>
-            {s === booking.status && <Check size={12} className="ml-auto" />}
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+            {STATUS_LABELS[booking.status]}
+            <ChevronDown size={10} className="opacity-60" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start">
+          {STATUS_ORDER.map((s) => {
+            const outstanding = outstandingFor(s);
+            return (
+              <DropdownMenuItem
+                key={s}
+                onSelect={() => handleSelect(s)}
+                className="gap-2"
+              >
+                <span className={cn('inline-flex items-center border-l-[3px] pl-2 pr-2.5 py-0.5 text-xs font-medium', STATUS_PILL_CLASSES[s])}>
+                  {STATUS_LABELS[s]}
+                </span>
+                {outstanding.length > 0 && (
+                  <span className="ml-auto text-xs text-status-cancelled">{outstanding.length} outstanding</span>
+                )}
+                {s === booking.status && outstanding.length === 0 && <Check size={12} className="ml-auto" />}
+              </DropdownMenuItem>
+            );
+          })}
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      {pendingStatus && (
+        <Dialog open onOpenChange={() => setPendingStatus(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Outstanding checklist items</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted">
+              {outstandingFor(pendingStatus).length} item{outstandingFor(pendingStatus).length !== 1 ? 's' : ''} still outstanding for{' '}
+              <span className="font-medium text-foreground">{STATUS_LABELS[pendingStatus]}</span>:
+            </p>
+            <ul className="text-sm space-y-1 list-disc list-inside text-foreground">
+              {outstandingFor(pendingStatus).map((item) => (
+                <li key={item.id}>{item.label}</li>
+              ))}
+            </ul>
+            <p className="text-sm text-muted">Mark as {STATUS_LABELS[pendingStatus]} anyway?</p>
+            <div className="flex gap-2 justify-end mt-2">
+              <Button variant="outline" onClick={() => setPendingStatus(null)}>Cancel</Button>
+              <Button
+                onClick={() => {
+                  mutation.mutate(pendingStatus);
+                  setPendingStatus(null);
+                }}
+              >
+                Mark as {STATUS_LABELS[pendingStatus]}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+    </>
   );
 }
 
@@ -1156,7 +1218,7 @@ export default function BookingDetailPage() {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2">
-              <StatusDropdown booking={booking} />
+              <StatusDropdown booking={booking} checklist={checklist} />
               <span className="text-sm text-muted">{formatDate(booking.date)}</span>
               {fee && <span className="text-sm text-muted">{fee}</span>}
             </div>
@@ -1207,12 +1269,15 @@ export default function BookingDetailPage() {
                 {checklist.map((item) => {
                   const isDone = item.state === 'COMPLETE';
                   const isBlocked = item.state === 'BLOCKED';
+                  const isFailed = item.state === 'FAILED';
                   const shortcuts = item.key ? (CHECKLIST_SHORTCUTS[item.key] ?? {}) : {};
                   return (
                     <div key={item.id} className="flex items-center justify-between gap-2.5">
                       <div className="flex items-center gap-2.5 min-w-0">
                         {isDone ? (
                           <CheckCircle2 size={16} className="text-status-confirmed flex-shrink-0" />
+                        ) : isFailed ? (
+                          <AlertTriangle size={16} className="text-status-cancelled flex-shrink-0" />
                         ) : isBlocked ? (
                           <Lock size={16} className="text-muted flex-shrink-0" />
                         ) : (
@@ -1222,6 +1287,8 @@ export default function BookingDetailPage() {
                           className={
                             isDone
                               ? 'text-sm text-muted line-through'
+                              : isFailed
+                              ? 'text-sm text-status-cancelled'
                               : isBlocked
                               ? 'text-sm text-muted'
                               : 'text-sm text-foreground'
@@ -1271,6 +1338,21 @@ export default function BookingDetailPage() {
                     </div>
                   );
                 })}
+                {/* Ready to mark as X? contextual prompts */}
+                {(['CONFIRMED', 'READY', 'COMPLETE'] as const)
+                  .filter((targetStatus) => {
+                    const idx = STATUS_ORDER.indexOf(booking.status);
+                    const targetIdx = STATUS_ORDER.indexOf(targetStatus);
+                    if (targetIdx <= idx) return false; // already at or past this status
+                    const forStatus = checklist.filter((i) => i.requiredForStatus === targetStatus);
+                    return forStatus.length > 0 && forStatus.every((i) => i.state === 'COMPLETE');
+                  })
+                  .map((targetStatus) => (
+                    <div key={targetStatus} className="mt-3 flex items-center gap-2 text-xs text-status-confirmed">
+                      <CheckCircle2 size={13} />
+                      <span>Ready to mark as <span className="font-medium">{STATUS_LABELS[targetStatus]}</span>?</span>
+                    </div>
+                  ))}
               </div>
             </section>
           )}

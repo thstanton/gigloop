@@ -50,7 +50,8 @@ describe('CommunicationsService', () => {
 
   beforeEach(() => {
     repo = makeRepo();
-    service = new CommunicationsService(repo as unknown as CommunicationsRepository, mockMail);
+    const mockEvaluator = { evaluate: jest.fn().mockResolvedValue(undefined) } as unknown as import('../checklist/checklist-evaluator.service').ChecklistEvaluatorService;
+    service = new CommunicationsService(repo as unknown as CommunicationsRepository, mockMail, mockEvaluator);
     (mockMail.send as jest.Mock).mockReset().mockResolvedValue(undefined);
   });
 

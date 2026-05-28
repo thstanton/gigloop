@@ -3,6 +3,7 @@ import { PortalRepository } from './portal.repository';
 import { MailService } from '../mail/mail.service';
 import { DocumentsService } from '../documents/documents.service';
 import { StorageService } from '../storage/storage.service';
+import { ChecklistEvaluatorService } from '../checklist/checklist-evaluator.service';
 import type { Request } from 'express';
 import type { SubmitMusicFormDto } from './dto/submit-music-form.dto';
 
@@ -13,6 +14,7 @@ export class PortalService {
     private mail: MailService,
     private documents: DocumentsService,
     private storage: StorageService,
+    private evaluator: ChecklistEvaluatorService,
   ) {}
 
   async getBookingData(token: string) {
@@ -147,6 +149,7 @@ export class PortalService {
     );
 
     await this.repo.markContractSigned(contract.id, ip, signatureBase64);
+    await this.evaluator.evaluate(booking.id).catch(() => {});
 
     await this.sendSigningNotification(booking, publicProfile, signedAt);
   }
@@ -192,6 +195,8 @@ export class PortalService {
       dto.specialRequests,
       dto.notes,
     );
+
+    await this.evaluator.evaluate(data.id).catch(() => {});
 
     // Fire-and-forget: PDF generation + email (do not fail the submission)
     this.generateSongListAndNotify(data, dto, submittedAt).catch(() => {});
