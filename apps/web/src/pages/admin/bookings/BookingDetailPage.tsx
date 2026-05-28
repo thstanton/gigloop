@@ -1065,6 +1065,7 @@ export default function BookingDetailPage() {
   const [contractSheetOpen, setContractSheetOpen] = useState(false);
   const [contractSheetReadOnly, setContractSheetReadOnly] = useState(false);
   const [pendingContract, setPendingContract] = useState<Contract | null>(null);
+  const [showAllChecklist, setShowAllChecklist] = useState(false);
 
   const { isLoaded } = useAuth();
   const { data: booking, isLoading, isError } = useBooking(id!);
@@ -1104,6 +1105,15 @@ export default function BookingDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['booking', id] });
     },
     onError: () => toast({ title: 'Failed to mark invoice as paid', variant: 'destructive' }),
+  });
+
+  const toggleChecklistItem = useMutation({
+    mutationFn: ({ itemId, state }: { itemId: string; state: 'COMPLETE' | 'PENDING' }) =>
+      apiPatch(`/bookings/${id}/checklist/${itemId}`, { state }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bookingChecklist', id] });
+    },
+    onError: () => toast({ title: 'Failed to update checklist item', variant: 'destructive' }),
   });
 
   function openCompose(templateType?: string) {
@@ -1262,100 +1272,135 @@ export default function BookingDetailPage() {
         <div className="mt-8 md:mt-0 space-y-6 md:sticky md:top-20 md:max-h-[calc(100vh-5rem)] md:overflow-y-auto md:overflow-x-hidden md:pb-6">
 
           {/* Checklist */}
-          {booking.status !== 'CANCELLED' && checklist.length > 0 && (
-            <section>
-              <SectionHeader label="Checklist" />
-              <div className="space-y-2.5">
-                {checklist.map((item) => {
-                  const isDone = item.state === 'COMPLETE';
-                  const isBlocked = item.state === 'BLOCKED';
-                  const isFailed = item.state === 'FAILED';
-                  const shortcuts = item.key ? (CHECKLIST_SHORTCUTS[item.key] ?? {}) : {};
-                  return (
-                    <div key={item.id} className="flex items-center justify-between gap-2.5">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        {isDone ? (
-                          <CheckCircle2 size={16} className="text-status-confirmed flex-shrink-0" />
-                        ) : isFailed ? (
-                          <AlertTriangle size={16} className="text-status-cancelled flex-shrink-0" />
-                        ) : isBlocked ? (
-                          <Lock size={16} className="text-muted flex-shrink-0" />
-                        ) : (
-                          <Circle size={16} className="text-muted flex-shrink-0" />
+          {booking.status !== 'CANCELLED' && checklist.length > 0 && (() => {
+            const nonComplete = checklist.filter((i) => i.state !== 'COMPLETE');
+            const visibleItems = (showAllChecklist || nonComplete.length === 0) ? checklist : nonComplete;
+            const hiddenCount = checklist.length - visibleItems.length;
+            return (
+              <section>
+                <SectionHeader label="Checklist" />
+                <div className="space-y-2.5">
+                  {visibleItems.map((item) => {
+                    const isDone = item.state === 'COMPLETE';
+                    const isBlocked = item.state === 'BLOCKED';
+                    const isFailed = item.state === 'FAILED';
+                    const shortcuts = item.key ? (CHECKLIST_SHORTCUTS[item.key] ?? {}) : {};
+                    const canToggle = !isBlocked && !isFailed;
+                    return (
+                      <div key={item.id} className="flex items-center justify-between gap-2.5">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          {isDone ? (
+                            <button
+                              onClick={() => toggleChecklistItem.mutate({ itemId: item.id, state: 'PENDING' })}
+                              className="flex-shrink-0 text-status-confirmed hover:text-status-confirmed/70 transition-colors"
+                              aria-label="Mark as incomplete"
+                            >
+                              <CheckCircle2 size={16} />
+                            </button>
+                          ) : isFailed ? (
+                            <AlertTriangle size={16} className="text-status-cancelled flex-shrink-0" />
+                          ) : isBlocked ? (
+                            <Lock size={16} className="text-muted flex-shrink-0" />
+                          ) : (
+                            <button
+                              onClick={() => toggleChecklistItem.mutate({ itemId: item.id, state: 'COMPLETE' })}
+                              className="flex-shrink-0 text-muted hover:text-status-confirmed transition-colors"
+                              aria-label="Mark as complete"
+                            >
+                              <Circle size={16} />
+                            </button>
+                          )}
+                          <span
+                            className={cn(
+                              'text-sm',
+                              isDone ? 'text-muted line-through' :
+                              isFailed ? 'text-status-cancelled' :
+                              isBlocked ? 'text-muted' : 'text-foreground',
+                            )}
+                          >
+                            {item.label}
+                          </span>
+                        </div>
+                        {canToggle && !isDone && (
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            {shortcuts.shortcutTemplateType && (
+                              <button
+                                onClick={() => openCompose(shortcuts.shortcutTemplateType)}
+                                className="text-xs text-primary hover:underline"
+                              >
+                                Send
+                              </button>
+                            )}
+                            {shortcuts.shortcutAction && (
+                              <button
+                                onClick={() => handleInvoiceAction(shortcuts.shortcutAction!)}
+                                className="text-xs text-primary hover:underline"
+                              >
+                                Create
+                              </button>
+                            )}
+                            {shortcuts.shortcutMarkDone && (
+                              <button
+                                onClick={() => {
+                                  if (shortcuts.shortcutMarkDone === 'mark_contract_signed') {
+                                    if (booking.activeContract) actions.markContractSigned(booking.activeContract.id);
+                                  } else {
+                                    const sentDepositInvoice = invoices.find(
+                                      (inv) => inv.isDeposit && inv.status === 'SENT',
+                                    );
+                                    if (sentDepositInvoice) {
+                                      markPaid.mutate(sentDepositInvoice.id);
+                                    } else {
+                                      actions.markDepositReceived();
+                                    }
+                                  }
+                                }}
+                                disabled={actions.isPending || markPaid.isPending}
+                                className="text-xs text-primary hover:underline disabled:opacity-50"
+                              >
+                                Mark done
+                              </button>
+                            )}
+                          </div>
                         )}
-                        <span
-                          className={
-                            isDone
-                              ? 'text-sm text-muted line-through'
-                              : isFailed
-                              ? 'text-sm text-status-cancelled'
-                              : isBlocked
-                              ? 'text-sm text-muted'
-                              : 'text-sm text-foreground'
-                          }
-                        >
-                          {item.label}
-                        </span>
                       </div>
-                      {shortcuts.shortcutTemplateType && !isDone && !isBlocked && (
-                        <button
-                          onClick={() => openCompose(shortcuts.shortcutTemplateType)}
-                          className="text-xs text-primary hover:underline flex-shrink-0"
-                        >
-                          Send
-                        </button>
-                      )}
-                      {shortcuts.shortcutAction && !isDone && !isBlocked && (
-                        <button
-                          onClick={() => handleInvoiceAction(shortcuts.shortcutAction!)}
-                          className="text-xs text-primary hover:underline flex-shrink-0"
-                        >
-                          Create
-                        </button>
-                      )}
-                      {shortcuts.shortcutMarkDone && !isDone && !isBlocked && (
-                        <button
-                          onClick={() => {
-                            if (shortcuts.shortcutMarkDone === 'mark_contract_signed') {
-                              if (booking.activeContract) actions.markContractSigned(booking.activeContract.id);
-                            } else {
-                              const sentDepositInvoice = invoices.find(
-                                (inv) => inv.isDeposit && inv.status === 'SENT',
-                              );
-                              if (sentDepositInvoice) {
-                                markPaid.mutate(sentDepositInvoice.id);
-                              } else {
-                                actions.markDepositReceived();
-                              }
-                            }
-                          }}
-                          disabled={actions.isPending || markPaid.isPending}
-                          className="text-xs text-primary hover:underline flex-shrink-0 disabled:opacity-50"
-                        >
-                          Mark done
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-                {/* Ready to mark as X? contextual prompts */}
-                {(['CONFIRMED', 'READY', 'COMPLETE'] as const)
-                  .filter((targetStatus) => {
-                    const idx = STATUS_ORDER.indexOf(booking.status);
-                    const targetIdx = STATUS_ORDER.indexOf(targetStatus);
-                    if (targetIdx <= idx) return false; // already at or past this status
-                    const forStatus = checklist.filter((i) => i.requiredForStatus === targetStatus);
-                    return forStatus.length > 0 && forStatus.every((i) => i.state === 'COMPLETE');
-                  })
-                  .map((targetStatus) => (
-                    <div key={targetStatus} className="mt-3 flex items-center gap-2 text-xs text-status-confirmed">
-                      <CheckCircle2 size={13} />
-                      <span>Ready to mark as <span className="font-medium">{STATUS_LABELS[targetStatus]}</span>?</span>
-                    </div>
-                  ))}
-              </div>
-            </section>
-          )}
+                    );
+                  })}
+                  {hiddenCount > 0 && (
+                    <button
+                      onClick={() => setShowAllChecklist(true)}
+                      className="text-xs text-muted hover:text-foreground transition-colors"
+                    >
+                      Show {hiddenCount} completed {hiddenCount === 1 ? 'item' : 'items'}
+                    </button>
+                  )}
+                  {showAllChecklist && checklist.some((i) => i.state === 'COMPLETE') && (
+                    <button
+                      onClick={() => setShowAllChecklist(false)}
+                      className="text-xs text-muted hover:text-foreground transition-colors"
+                    >
+                      Hide completed
+                    </button>
+                  )}
+                  {/* Ready to mark as X? contextual prompts */}
+                  {(['CONFIRMED', 'READY', 'COMPLETE'] as const)
+                    .filter((targetStatus) => {
+                      const idx = STATUS_ORDER.indexOf(booking.status);
+                      const targetIdx = STATUS_ORDER.indexOf(targetStatus);
+                      if (targetIdx <= idx) return false;
+                      const forStatus = checklist.filter((i) => i.requiredForStatus === targetStatus);
+                      return forStatus.length > 0 && forStatus.every((i) => i.state === 'COMPLETE');
+                    })
+                    .map((targetStatus) => (
+                      <div key={targetStatus} className="mt-3 flex items-center gap-2 text-xs text-status-confirmed">
+                        <CheckCircle2 size={13} />
+                        <span>Ready to mark as <span className="font-medium">{STATUS_LABELS[targetStatus]}</span>?</span>
+                      </div>
+                    ))}
+                </div>
+              </section>
+            );
+          })()}
 
           {/* Contract */}
           {booking.status !== 'CANCELLED' && (

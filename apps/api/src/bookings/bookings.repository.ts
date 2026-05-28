@@ -371,6 +371,16 @@ export class BookingsRepository {
     });
   }
 
+  updateChecklistItemState(userId: string, bookingId: string, itemId: string, state: 'COMPLETE' | 'PENDING') {
+    return this.prisma.bookingChecklistItem.updateMany({
+      where: { id: itemId, bookingId, userId },
+      data: {
+        state,
+        completedAt: state === 'COMPLETE' ? new Date() : null,
+      },
+    });
+  }
+
   async recomputeChecklistDueDates(bookingId: string, bookingDate: Date, bookingCreatedAt: Date) {
     const items = await this.prisma.bookingChecklistItem.findMany({
       where: { bookingId },

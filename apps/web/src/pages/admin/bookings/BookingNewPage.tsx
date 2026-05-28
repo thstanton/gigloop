@@ -1,8 +1,8 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, CheckCircle2, Circle, Lock } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@clerk/react';
 import { Button } from '@/components/ui/button';
@@ -12,13 +12,14 @@ import {
   type BookingFormValues,
 } from '@/features/bookings/BookingFormFields';
 import { apiGet, apiPost } from '@/lib/api';
-import type { BookingDetail, EventType, BookingStatus, UserProfile, PerformanceFormat } from '@/types/api';
+import type { BookingDetail, ChecklistItem, EventType, BookingStatus, UserProfile, PerformanceFormat } from '@/types/api';
 
 export default function BookingNewPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
   const { isLoaded } = useAuth();
+  const [createdBookingId, setCreatedBookingId] = useState<string | null>(null);
 
   const locationState = location.state as { customerId?: string; date?: string } | null;
 
@@ -65,6 +66,12 @@ export default function BookingNewPage() {
     }
   }, [locationState?.customerId, locationState?.date, setValue]);
 
+  const { data: checklist = [] } = useQuery({
+    queryKey: ['bookingChecklist', createdBookingId],
+    queryFn: () => apiGet<ChecklistItem[]>(`/bookings/${createdBookingId}/checklist`),
+    enabled: isLoaded && !!createdBookingId,
+  });
+
   const mutation = useMutation({
     mutationFn: (values: BookingFormValues) =>
       apiPost<BookingDetail>('/bookings', {
@@ -81,9 +88,47 @@ export default function BookingNewPage() {
       }),
     onSuccess: (created) => {
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
-      navigate(`/admin/bookings/${created.id}`);
+      setCreatedBookingId(created.id);
     },
   });
+
+  if (createdBookingId) {
+    return (
+      <div className="px-6 py-8 max-w-3xl mx-auto">
+        <div className="flex items-center gap-2 mb-6 text-status-confirmed">
+          <CheckCircle2 size={20} />
+          <h1 className="font-display text-2xl font-semibold text-foreground">Booking created</h1>
+        </div>
+
+        <p className="text-muted mb-6">Here's the checklist for this booking. You can work through it on the booking page.</p>
+
+        <div className="space-y-2.5 mb-8">
+          {checklist.map((item) => {
+            const isDone = item.state === 'COMPLETE';
+            const isBlocked = item.state === 'BLOCKED';
+            return (
+              <div key={item.id} className="flex items-center gap-2.5">
+                {isDone ? (
+                  <CheckCircle2 size={16} className="text-status-confirmed flex-shrink-0" />
+                ) : isBlocked ? (
+                  <Lock size={16} className="text-muted flex-shrink-0" />
+                ) : (
+                  <Circle size={16} className="text-muted flex-shrink-0" />
+                )}
+                <span className={isDone ? 'text-sm text-muted line-through' : isBlocked ? 'text-sm text-muted' : 'text-sm text-foreground'}>
+                  {item.label}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+
+        <Button onClick={() => navigate(`/admin/bookings/${createdBookingId}`)}>
+          Go to booking
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="px-6 py-8 max-w-3xl mx-auto">

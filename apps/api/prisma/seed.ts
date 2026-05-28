@@ -1,7 +1,94 @@
 import { PrismaClient } from '@prisma/client';
+import { CHECKLIST_DEFAULTS, computeDueDate, type ChecklistDefaultItem } from '../src/bookings/checklist-defaults';
 
 const prisma = new PrismaClient();
 const USER_ID = 'user_3E0gEsNgpVB2KnlKfWD6vFw6G7d';
+
+// Simplified evaluator for seed — replicates core state machine without NestJS DI
+function seedChecklistStates(
+  defaults: ChecklistDefaultItem[],
+  opts: {
+    bookingStatus: string;
+    hasDepositInvoice: boolean;
+    hasBalanceInvoice: boolean;
+    hasContract: boolean;
+    contractSigned: boolean;
+    depositReceived: boolean;
+    hasMusicFormResponse: boolean;
+    commBuiltInTypes: string[];
+  },
+): Array<{ item: ChecklistDefaultItem; state: string }> {
+  const SKIP_RULES: Record<string, string[]> = {
+    send_quote: ['CONFIRMED', 'READY', 'COMPLETE'],
+    contract_signed: ['READY', 'COMPLETE'],
+  };
+  const stateMap = new Map<string, string>();
+
+  for (const item of defaults) {
+    const skipAt = SKIP_RULES[item.key];
+    if (skipAt?.includes(opts.bookingStatus)) {
+      stateMap.set(item.key, 'SKIPPED');
+      continue;
+    }
+
+    const depsComplete = item.dependsOn.every((dep) => stateMap.get(dep) === 'COMPLETE');
+    if (!depsComplete) {
+      stateMap.set(item.key, 'BLOCKED');
+      continue;
+    }
+
+    let complete = false;
+    if (item.autoCompleteRule) {
+      const rule = item.autoCompleteRule as Record<string, unknown>;
+      switch (rule.type) {
+        case 'bookingField':
+          if (rule.field === 'depositReceivedAt') complete = opts.depositReceived;
+          else if (rule.field === 'activeContract') complete = opts.hasContract;
+          break;
+        case 'invoiceExists':
+          complete = rule.isDeposit ? opts.hasDepositInvoice : opts.hasBalanceInvoice;
+          break;
+        case 'communicationSent':
+          complete = (rule.templateTypes as string[]).some((t) => opts.commBuiltInTypes.includes(t));
+          break;
+        case 'contractSigned':
+          complete = opts.contractSigned;
+          break;
+        case 'musicFormResponse':
+          complete = opts.hasMusicFormResponse;
+          break;
+      }
+    }
+    stateMap.set(item.key, complete ? 'COMPLETE' : 'PENDING');
+  }
+
+  return defaults.map((item) => ({ item, state: stateMap.get(item.key) ?? 'PENDING' }));
+}
+
+async function seedChecklist(
+  bookingId: string,
+  bookingDate: Date,
+  bookingCreatedAt: Date,
+  opts: Parameters<typeof seedChecklistStates>[1],
+) {
+  const states = seedChecklistStates(CHECKLIST_DEFAULTS, opts);
+  const data = states.map(({ item, state }, idx) => ({
+    userId: USER_ID,
+    bookingId,
+    key: item.key,
+    label: item.label,
+    completedBy: item.completedBy,
+    state,
+    order: idx + 1,
+    dependsOn: item.dependsOn,
+    ...(item.autoCompleteRule !== null ? { autoCompleteRule: item.autoCompleteRule as object } : {}),
+    requiredForStatus: item.requiredForStatus,
+    dueDate: computeDueDate(item.dueDateRule, bookingDate, bookingCreatedAt),
+    ...(item.dueDateRule !== null ? { dueDateRule: item.dueDateRule as object } : {}),
+    completedAt: state === 'COMPLETE' ? new Date() : null,
+  }));
+  await prisma.bookingChecklistItem.createMany({ data });
+}
 
 function doc(...paragraphs: string[]) {
   return {
@@ -22,6 +109,7 @@ async function main() {
   await prisma.document.deleteMany({ where: { userId: USER_ID } });
   await prisma.invoiceLineItem.deleteMany({ where: { userId: USER_ID } });
   await prisma.invoice.deleteMany({ where: { userId: USER_ID } });
+  await prisma.bookingChecklistItem.deleteMany({ where: { userId: USER_ID } });
   await prisma.performanceSet.deleteMany({ where: { userId: USER_ID } });
   await prisma.bookingPerformanceFormat.deleteMany({ where: { userId: USER_ID } });
   await prisma.booking.deleteMany({ where: { userId: USER_ID } });
@@ -356,7 +444,7 @@ async function main() {
   console.log('Seeding bookings...');
 
   // 1. ENQUIRY — Sophie & Daniel, no venue yet, nothing done
-  await prisma.booking.create({
+  const booking1 = await prisma.booking.create({
     data: {
       userId: USER_ID,
       status: 'ENQUIRY',
@@ -366,6 +454,16 @@ async function main() {
       customerId: sophie.id,
       notes: 'Outdoor ceremony if weather permits. Will confirm venue by end of month.',
     },
+  });
+  await seedChecklist(booking1.id, booking1.date, booking1.createdAt, {
+    bookingStatus: 'ENQUIRY',
+    hasDepositInvoice: false,
+    hasBalanceInvoice: false,
+    hasContract: false,
+    contractSigned: false,
+    depositReceived: false,
+    hasMusicFormResponse: false,
+    commBuiltInTypes: [],
   });
 
   // 2. CONFIRMED — Emma & James at Barnsley House
@@ -426,6 +524,16 @@ async function main() {
       body: '<p>Dear Emma & James,</p><p>I\'m so pleased to confirm your booking for 23 August 2026...</p>',
       sentAt: new Date('2026-05-10T10:30:00'),
     },
+  });
+  await seedChecklist(booking2.id, booking2.date, booking2.createdAt, {
+    bookingStatus: 'CONFIRMED',
+    hasDepositInvoice: true,
+    hasBalanceInvoice: false,
+    hasContract: false,
+    contractSigned: false,
+    depositReceived: false,
+    hasMusicFormResponse: false,
+    commBuiltInTypes: ['contract_and_invoice_cover'],
   });
 
   // 3. CONFIRMED — Charlotte & Oliver at St Mary's
@@ -508,6 +616,16 @@ async function main() {
       body: "<p>Dear Charlotte & Oliver,</p><p>As your big day approaches, I'd love to start tailoring the music...</p>",
       sentAt: new Date('2026-05-01T09:15:00'),
     },
+  });
+  await seedChecklist(booking3.id, booking3.date, booking3.createdAt, {
+    bookingStatus: 'CONFIRMED',
+    hasDepositInvoice: true,
+    hasBalanceInvoice: false,
+    hasContract: true,
+    contractSigned: true,
+    depositReceived: true,
+    hasMusicFormResponse: false,
+    commBuiltInTypes: ['music_form_invite'],
   });
 
   // 4. INVOICED — Meridian Financial summer party at The Ned
@@ -593,6 +711,16 @@ async function main() {
       sentAt: new Date('2026-05-15T09:00:00'),
     },
   });
+  await seedChecklist(booking4.id, booking4.date, booking4.createdAt, {
+    bookingStatus: 'CONFIRMED',
+    hasDepositInvoice: true,
+    hasBalanceInvoice: true,
+    hasContract: true,
+    contractSigned: true,
+    depositReceived: true,
+    hasMusicFormResponse: false,
+    commBuiltInTypes: ['invoice_cover'],
+  });
 
   // 5. COMPLETED — past wedding, all wrapped up
   const booking5 = await prisma.booking.create({
@@ -676,6 +804,16 @@ async function main() {
       body: "<p>Dear Emma & James,</p><p>It was an absolute pleasure performing at your wedding yesterday...</p>",
       sentAt: new Date('2026-02-15T10:00:00'),
     },
+  });
+  await seedChecklist(booking5.id, booking5.date, booking5.createdAt, {
+    bookingStatus: 'COMPLETE',
+    hasDepositInvoice: true,
+    hasBalanceInvoice: true,
+    hasContract: true,
+    contractSigned: true,
+    depositReceived: true,
+    hasMusicFormResponse: false,
+    commBuiltInTypes: ['thank_you'],
   });
 
   // 6. CANCELLED — Harrington Christmas party, fell through

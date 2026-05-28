@@ -21,6 +21,7 @@ import { UpdateSetDto } from './dto/update-set.dto';
 import { ApplyFormatDto } from './dto/apply-format.dto';
 import { UpsertMusicFormConfigDto } from './dto/upsert-music-form-config.dto';
 import { UpdateContractDto } from './dto/update-contract.dto';
+import { UpdateChecklistItemDto } from './dto/update-checklist-item.dto';
 import type { Request } from 'express';
 
 type AuthedRequest = Request & { userId: string };
@@ -94,6 +95,17 @@ export class BookingsController {
   @Get(':id/checklist')
   getChecklist(@Req() req: AuthedRequest, @Param('id') id: string) {
     return this.service.getChecklist(req.userId, id);
+  }
+
+  @ApiOperation({ summary: 'Update a checklist item state' })
+  @Patch(':id/checklist/:itemId')
+  updateChecklistItem(
+    @Req() req: AuthedRequest,
+    @Param('id') id: string,
+    @Param('itemId') itemId: string,
+    @Body() dto: UpdateChecklistItemDto,
+  ) {
+    return this.service.updateChecklistItem(req.userId, id, itemId, dto.state);
   }
 
   @ApiOperation({ summary: 'Get the music form config for a booking' })

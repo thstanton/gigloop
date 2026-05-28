@@ -291,6 +291,13 @@ export class BookingsService {
     }));
   }
 
+  async updateChecklistItem(userId: string, bookingId: string, itemId: string, state: 'COMPLETE' | 'PENDING') {
+    await this.findOne(userId, bookingId);
+    const result = await this.repo.updateChecklistItemState(userId, bookingId, itemId, state);
+    if (result.count === 0) throw new NotFoundException('Checklist item not found');
+    return { success: true };
+  }
+
   async getActions(userId: string) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
