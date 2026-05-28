@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateUserProfileDto } from './dto/update-user-profile.dto';
 import { encrypt, decrypt } from '../common/crypto';
+import type { ChecklistDefaultItem } from '../bookings/checklist-defaults';
 
 @Injectable()
 export class UserProfileRepository {
@@ -33,6 +34,52 @@ export class UserProfileRepository {
       where: { userId },
       update: payload,
       create: { userId, ...payload },
+    });
+    return this.decryptProfile(profile);
+  }
+
+  async updateChecklistDefaults(
+    userId: string,
+    systemItemOverrides: Array<{ key: string; dueDateRule: unknown }>,
+    customItems: ChecklistDefaultItem[],
+    reminderLeadDays?: number,
+  ) {
+    const existing = await this.prisma.userProfile.findUnique({ where: { userId } });
+    const prefs = (existing?.preferences ?? {}) as Record<string, unknown>;
+
+    // Merge systemItemOverrides into existing checklistDefaults
+    const { CHECKLIST_DEFAULTS } = await import('../bookings/checklist-defaults');
+    const existingDefaults = Array.isArray(prefs.checklistDefaults)
+      ? (prefs.checklistDefaults as ChecklistDefaultItem[])
+      : CHECKLIST_DEFAULTS;
+
+    const overrideMap = new Map(systemItemOverrides.map((o) => [o.key, o.dueDateRule]));
+
+    const updatedSystemItems = CHECKLIST_DEFAULTS.map((defaultItem) => {
+      const existingItem = existingDefaults.find((d) => d.key === defaultItem.key) ?? defaultItem;
+      const override = overrideMap.get(defaultItem.key);
+      return {
+        ...existingItem,
+        dueDateRule: override !== undefined ? (override as ChecklistDefaultItem['dueDateRule']) : existingItem.dueDateRule,
+      };
+    });
+
+    const newDefaults = [...updatedSystemItems, ...customItems];
+
+    const newPrefs: Record<string, unknown> = {
+      ...prefs,
+      checklistDefaults: newDefaults,
+    };
+    if (reminderLeadDays !== undefined) {
+      newPrefs.reminderLeadDays = reminderLeadDays;
+    }
+
+    const profile = await this.prisma.userProfile.upsert({
+      where: { userId },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      update: { preferences: newPrefs as any },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      create: { userId, preferences: newPrefs as any },
     });
     return this.decryptProfile(profile);
   }

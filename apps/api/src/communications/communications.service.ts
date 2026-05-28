@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { CommunicationsRepository } from './communications.repository';
 import { MailService } from '../mail/mail.service';
 import { CreateCommunicationDto } from './dto/create-communication.dto';
+import { ChecklistEvaluatorService } from '../checklist/checklist-evaluator.service';
 
 export interface SendEmailOptions {
   userId: string;
@@ -19,6 +20,7 @@ export class CommunicationsService {
   constructor(
     private repo: CommunicationsRepository,
     private mail: MailService,
+    private evaluator: ChecklistEvaluatorService,
   ) {}
 
   findAll(userId: string, bookingId: string) {
@@ -34,7 +36,9 @@ export class CommunicationsService {
   async create(userId: string, bookingId: string, dto: CreateCommunicationDto) {
     const booking = await this.repo.findBookingById(userId, bookingId);
     if (!booking) throw new NotFoundException('Booking not found');
-    return this.repo.create(userId, bookingId, dto);
+    const result = await this.repo.create(userId, bookingId, dto);
+    await this.evaluator.evaluate(bookingId).catch(() => {});
+    return result;
   }
 
   findTemplate(userId: string, templateId: string) {
@@ -47,8 +51,10 @@ export class CommunicationsService {
     try {
       await this.mail.send({ to, subject, body, attachments });
       await this.repo.markSent(communication.id);
+      await this.evaluator.evaluate(bookingId).catch(() => {});
     } catch (err) {
       await this.repo.markFailed(communication.id);
+      await this.evaluator.evaluate(bookingId).catch(() => {});
       throw err;
     }
   }

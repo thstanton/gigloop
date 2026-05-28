@@ -172,7 +172,7 @@ export interface Contract {
   signedAt: string | null;
 }
 
-export type ChecklistItemState = 'PENDING' | 'BLOCKED' | 'COMPLETE' | 'SKIPPED';
+export type ChecklistItemState = 'PENDING' | 'BLOCKED' | 'COMPLETE' | 'FAILED' | 'SKIPPED';
 
 export interface ChecklistItem {
   id: string;

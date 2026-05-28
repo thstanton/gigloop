@@ -4,6 +4,7 @@ import { UserProfileService } from './user-profile.service';
 import { PublicProfileService } from './public-profile.service';
 import { UpdateUserProfileDto } from './dto/update-user-profile.dto';
 import { UpdatePublicProfileDto } from './dto/update-public-profile.dto';
+import { UpdateChecklistDefaultsDto } from './dto/update-checklist-defaults.dto';
 import type { Request } from 'express';
 
 type AuthedRequest = Request & { userId: string };
@@ -27,6 +28,13 @@ export class UserProfileController {
   @Patch()
   updateMe(@Req() req: AuthedRequest, @Body() dto: UpdateUserProfileDto) {
     return this.userProfileService.update(req.userId, dto);
+  }
+
+  @ApiOperation({ summary: 'Update checklist defaults (system item dueDateRules, reminderLeadDays, and custom items)' })
+  @ApiResponse({ status: 200, description: 'Updated user profile' })
+  @Patch('preferences/checklist-defaults')
+  updateChecklistDefaults(@Req() req: AuthedRequest, @Body() dto: UpdateChecklistDefaultsDto) {
+    return this.userProfileService.updateChecklistDefaults(req.userId, dto);
   }
 
   @ApiOperation({ summary: 'Get the public profile (creates if not exists)' })

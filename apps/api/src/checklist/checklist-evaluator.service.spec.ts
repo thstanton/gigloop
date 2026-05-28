@@ -1,0 +1,388 @@
+import { ChecklistEvaluatorService } from './checklist-evaluator.service';
+import { ChecklistRepository } from './checklist.repository';
+
+type MockRepo = {
+  findItemsWithContext: jest.Mock;
+  updateItemStates: jest.Mock;
+};
+
+function makeRepo(): MockRepo {
+  return {
+    findItemsWithContext: jest.fn(),
+    updateItemStates: jest.fn().mockResolvedValue(undefined),
+  };
+}
+
+function makeBooking(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'b1',
+    userId: 'u1',
+    status: 'ENQUIRY',
+    depositReceivedAt: null,
+    communications: [],
+    invoices: [],
+    contracts: [],
+    musicFormResponse: null,
+    ...overrides,
+  };
+}
+
+function makeItem(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'ci1',
+    key: 'send_quote',
+    state: 'PENDING',
+    dependsOn: [] as string[],
+    autoCompleteRule: null as Record<string, unknown> | null,
+    completedAt: null as Date | null,
+    ...overrides,
+  };
+}
+
+describe('ChecklistEvaluatorService', () => {
+  let service: ChecklistEvaluatorService;
+  let repo: MockRepo;
+
+  beforeEach(() => {
+    repo = makeRepo();
+    service = new ChecklistEvaluatorService(repo as unknown as ChecklistRepository);
+  });
+
+  it('does nothing when booking not found', async () => {
+    repo.findItemsWithContext.mockResolvedValue({ items: [], booking: null });
+    await service.evaluate('b1');
+    expect(repo.updateItemStates).not.toHaveBeenCalled();
+  });
+
+  it('does nothing when no items', async () => {
+    repo.findItemsWithContext.mockResolvedValue({ items: [], booking: makeBooking() });
+    await service.evaluate('b1');
+    expect(repo.updateItemStates).not.toHaveBeenCalled();
+  });
+
+  describe('communicationSent rule', () => {
+    it('transitions PENDING → COMPLETE when matching SENT communication exists', async () => {
+      const item = makeItem({
+        autoCompleteRule: { type: 'communicationSent', templateTypes: ['quote'] },
+      });
+      const booking = makeBooking({
+        communications: [{ status: 'SENT', template: { builtInType: 'quote' } }],
+      });
+      repo.findItemsWithContext.mockResolvedValue({ items: [item], booking });
+
+      await service.evaluate('b1');
+
+      expect(repo.updateItemStates).toHaveBeenCalledWith([
+        expect.objectContaining({ id: 'ci1', state: 'COMPLETE' }),
+      ]);
+    });
+
+    it('transitions PENDING → FAILED when last matching communication FAILED', async () => {
+      const item = makeItem({
+        autoCompleteRule: { type: 'communicationSent', templateTypes: ['quote'] },
+      });
+      const booking = makeBooking({
+        communications: [{ status: 'FAILED', template: { builtInType: 'quote' } }],
+      });
+      repo.findItemsWithContext.mockResolvedValue({ items: [item], booking });
+
+      await service.evaluate('b1');
+
+      expect(repo.updateItemStates).toHaveBeenCalledWith([
+        expect.objectContaining({ id: 'ci1', state: 'FAILED' }),
+      ]);
+    });
+
+    it('transitions FAILED → COMPLETE when retry succeeds (SENT after FAILED)', async () => {
+      const item = makeItem({
+        state: 'FAILED',
+        autoCompleteRule: { type: 'communicationSent', templateTypes: ['quote'] },
+      });
+      const booking = makeBooking({
+        communications: [
+          { status: 'FAILED', template: { builtInType: 'quote' } },
+          { status: 'SENT', template: { builtInType: 'quote' } },
+        ],
+      });
+      repo.findItemsWithContext.mockResolvedValue({ items: [item], booking });
+
+      await service.evaluate('b1');
+
+      expect(repo.updateItemStates).toHaveBeenCalledWith([
+        expect.objectContaining({ id: 'ci1', state: 'COMPLETE' }),
+      ]);
+    });
+
+    it('does not match communication of different template type', async () => {
+      const item = makeItem({
+        autoCompleteRule: { type: 'communicationSent', templateTypes: ['quote'] },
+      });
+      const booking = makeBooking({
+        communications: [{ status: 'SENT', template: { builtInType: 'thank_you' } }],
+      });
+      repo.findItemsWithContext.mockResolvedValue({ items: [item], booking });
+
+      await service.evaluate('b1');
+
+      expect(repo.updateItemStates).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('invoiceExists rule', () => {
+    it('transitions PENDING → COMPLETE when deposit invoice exists', async () => {
+      const item = makeItem({
+        key: 'create_deposit_invoice',
+        autoCompleteRule: { type: 'invoiceExists', isDeposit: true },
+      });
+      const booking = makeBooking({ invoices: [{ isDeposit: true }] });
+      repo.findItemsWithContext.mockResolvedValue({ items: [item], booking });
+
+      await service.evaluate('b1');
+
+      expect(repo.updateItemStates).toHaveBeenCalledWith([
+        expect.objectContaining({ id: 'ci1', state: 'COMPLETE' }),
+      ]);
+    });
+
+    it('does not match when only balance invoice exists for deposit rule', async () => {
+      const item = makeItem({
+        key: 'create_deposit_invoice',
+        autoCompleteRule: { type: 'invoiceExists', isDeposit: true },
+      });
+      const booking = makeBooking({ invoices: [{ isDeposit: false }] });
+      repo.findItemsWithContext.mockResolvedValue({ items: [item], booking });
+
+      await service.evaluate('b1');
+
+      expect(repo.updateItemStates).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('bookingField rule', () => {
+    it('transitions PENDING → COMPLETE when depositReceivedAt is set', async () => {
+      const item = makeItem({
+        key: 'deposit_received',
+        autoCompleteRule: { type: 'bookingField', field: 'depositReceivedAt', operator: 'notNull' },
+      });
+      const booking = makeBooking({ depositReceivedAt: new Date() });
+      repo.findItemsWithContext.mockResolvedValue({ items: [item], booking });
+
+      await service.evaluate('b1');
+
+      expect(repo.updateItemStates).toHaveBeenCalledWith([
+        expect.objectContaining({ id: 'ci1', state: 'COMPLETE' }),
+      ]);
+    });
+
+    it('transitions PENDING → COMPLETE when activeContract exists', async () => {
+      const item = makeItem({
+        key: 'create_contract',
+        autoCompleteRule: { type: 'bookingField', field: 'activeContract', operator: 'notNull' },
+      });
+      const booking = makeBooking({ contracts: [{ status: 'DRAFT' }] });
+      repo.findItemsWithContext.mockResolvedValue({ items: [item], booking });
+
+      await service.evaluate('b1');
+
+      expect(repo.updateItemStates).toHaveBeenCalledWith([
+        expect.objectContaining({ id: 'ci1', state: 'COMPLETE' }),
+      ]);
+    });
+  });
+
+  describe('contractSigned rule', () => {
+    it('transitions PENDING → COMPLETE when contract is SIGNED', async () => {
+      const item = makeItem({
+        key: 'contract_signed',
+        autoCompleteRule: { type: 'contractSigned' },
+      });
+      const booking = makeBooking({ contracts: [{ status: 'SIGNED' }] });
+      repo.findItemsWithContext.mockResolvedValue({ items: [item], booking });
+
+      await service.evaluate('b1');
+
+      expect(repo.updateItemStates).toHaveBeenCalledWith([
+        expect.objectContaining({ id: 'ci1', state: 'COMPLETE' }),
+      ]);
+    });
+  });
+
+  describe('musicFormResponse rule', () => {
+    it('transitions PENDING → COMPLETE when music form response exists', async () => {
+      const item = makeItem({
+        key: 'song_requests',
+        autoCompleteRule: { type: 'musicFormResponse' },
+      });
+      const booking = makeBooking({ musicFormResponse: { id: 'mfr1' } });
+      repo.findItemsWithContext.mockResolvedValue({ items: [item], booking });
+
+      await service.evaluate('b1');
+
+      expect(repo.updateItemStates).toHaveBeenCalledWith([
+        expect.objectContaining({ id: 'ci1', state: 'COMPLETE' }),
+      ]);
+    });
+  });
+
+  describe('dependsOn unblocking', () => {
+    it('unblocks BLOCKED item when its dependency transitions to COMPLETE in the same pass', async () => {
+      const depItem = makeItem({
+        id: 'ci1',
+        key: 'create_contract',
+        state: 'PENDING',
+        dependsOn: [],
+        autoCompleteRule: { type: 'bookingField', field: 'activeContract', operator: 'notNull' },
+      });
+      const blockedItem = makeItem({
+        id: 'ci2',
+        key: 'send_contract',
+        state: 'BLOCKED',
+        dependsOn: ['create_contract'],
+        autoCompleteRule: { type: 'communicationSent', templateTypes: ['contract_cover'] },
+      });
+      const booking = makeBooking({ contracts: [{ status: 'DRAFT' }] });
+      repo.findItemsWithContext.mockResolvedValue({ items: [depItem, blockedItem], booking });
+
+      await service.evaluate('b1');
+
+      const updates = repo.updateItemStates.mock.calls[0][0];
+      const contractUpdate = updates.find((u: { id: string }) => u.id === 'ci1');
+      const sendUpdate = updates.find((u: { id: string }) => u.id === 'ci2');
+      expect(contractUpdate).toMatchObject({ state: 'COMPLETE' });
+      expect(sendUpdate).toMatchObject({ state: 'PENDING' });
+    });
+
+    it('keeps item BLOCKED when not all dependencies are COMPLETE', async () => {
+      const item = makeItem({
+        id: 'ci2',
+        key: 'send_contract',
+        state: 'BLOCKED',
+        dependsOn: ['create_contract'],
+        autoCompleteRule: null,
+      });
+      const booking = makeBooking();
+      // create_contract not in items list — not complete
+      repo.findItemsWithContext.mockResolvedValue({ items: [item], booking });
+
+      await service.evaluate('b1');
+
+      expect(repo.updateItemStates).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('SKIPPED transitions (#50)', () => {
+    it('skips send_quote when booking status is CONFIRMED', async () => {
+      const item = makeItem({ key: 'send_quote', state: 'PENDING' });
+      const booking = makeBooking({ status: 'CONFIRMED' });
+      repo.findItemsWithContext.mockResolvedValue({ items: [item], booking });
+
+      await service.evaluate('b1');
+
+      expect(repo.updateItemStates).toHaveBeenCalledWith([
+        expect.objectContaining({ id: 'ci1', state: 'SKIPPED' }),
+      ]);
+    });
+
+    it('skips send_quote when booking status is READY', async () => {
+      const item = makeItem({ key: 'send_quote', state: 'PENDING' });
+      const booking = makeBooking({ status: 'READY' });
+      repo.findItemsWithContext.mockResolvedValue({ items: [item], booking });
+
+      await service.evaluate('b1');
+
+      expect(repo.updateItemStates).toHaveBeenCalledWith([
+        expect.objectContaining({ state: 'SKIPPED' }),
+      ]);
+    });
+
+    it('does not skip send_quote when booking status is ENQUIRY', async () => {
+      const item = makeItem({ key: 'send_quote', state: 'PENDING' });
+      const booking = makeBooking({ status: 'ENQUIRY' });
+      repo.findItemsWithContext.mockResolvedValue({ items: [item], booking });
+
+      await service.evaluate('b1');
+
+      expect(repo.updateItemStates).not.toHaveBeenCalled();
+    });
+
+    it('skips contract_signed when booking status is READY', async () => {
+      const item = makeItem({ key: 'contract_signed', state: 'PENDING' });
+      const booking = makeBooking({ status: 'READY' });
+      repo.findItemsWithContext.mockResolvedValue({ items: [item], booking });
+
+      await service.evaluate('b1');
+
+      expect(repo.updateItemStates).toHaveBeenCalledWith([
+        expect.objectContaining({ state: 'SKIPPED' }),
+      ]);
+    });
+
+    it('does not skip contract_signed when booking status is CONFIRMED', async () => {
+      const item = makeItem({ key: 'contract_signed', state: 'PENDING' });
+      const booking = makeBooking({ status: 'CONFIRMED' });
+      repo.findItemsWithContext.mockResolvedValue({ items: [item], booking });
+
+      await service.evaluate('b1');
+
+      expect(repo.updateItemStates).not.toHaveBeenCalled();
+    });
+
+    it('never skips an already-COMPLETE item', async () => {
+      const item = makeItem({ key: 'send_quote', state: 'COMPLETE' });
+      const booking = makeBooking({ status: 'CONFIRMED' });
+      repo.findItemsWithContext.mockResolvedValue({ items: [item], booking });
+
+      await service.evaluate('b1');
+
+      expect(repo.updateItemStates).not.toHaveBeenCalled();
+    });
+
+    it('never changes an already-SKIPPED item', async () => {
+      const item = makeItem({ key: 'send_quote', state: 'SKIPPED' });
+      const booking = makeBooking({ status: 'ENQUIRY' });
+      repo.findItemsWithContext.mockResolvedValue({ items: [item], booking });
+
+      await service.evaluate('b1');
+
+      expect(repo.updateItemStates).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('COMPLETE stickiness', () => {
+    it('does not update items already in COMPLETE state', async () => {
+      const item = makeItem({
+        state: 'COMPLETE',
+        autoCompleteRule: { type: 'communicationSent', templateTypes: ['quote'] },
+      });
+      const booking = makeBooking({ communications: [] }); // rule no longer met
+      repo.findItemsWithContext.mockResolvedValue({ items: [item], booking });
+
+      await service.evaluate('b1');
+
+      expect(repo.updateItemStates).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('full contract-sign integration (#49)', () => {
+    it('marks create_contract COMPLETE then unblocks send_contract then marks contract_signed when signed', async () => {
+      const items = [
+        makeItem({ id: 'i1', key: 'create_contract', state: 'PENDING', dependsOn: [], autoCompleteRule: { type: 'bookingField', field: 'activeContract', operator: 'notNull' } }),
+        makeItem({ id: 'i2', key: 'send_contract', state: 'BLOCKED', dependsOn: ['create_contract'], autoCompleteRule: { type: 'communicationSent', templateTypes: ['contract_cover'] } }),
+        makeItem({ id: 'i3', key: 'contract_signed', state: 'BLOCKED', dependsOn: ['send_contract'], autoCompleteRule: { type: 'contractSigned' } }),
+      ];
+      const booking = makeBooking({
+        status: 'ENQUIRY',
+        contracts: [{ status: 'SIGNED' }],
+        communications: [{ status: 'SENT', template: { builtInType: 'contract_cover' } }],
+      });
+      repo.findItemsWithContext.mockResolvedValue({ items, booking });
+
+      await service.evaluate('b1');
+
+      const updates = repo.updateItemStates.mock.calls[0][0];
+      expect(updates.find((u: { id: string }) => u.id === 'i1')).toMatchObject({ state: 'COMPLETE' });
+      expect(updates.find((u: { id: string }) => u.id === 'i2')).toMatchObject({ state: 'COMPLETE' });
+      expect(updates.find((u: { id: string }) => u.id === 'i3')).toMatchObject({ state: 'COMPLETE' });
+    });
+  });
+});

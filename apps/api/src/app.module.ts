@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from './auth/auth.module';
 import { BookingsModule } from './bookings/bookings.module';
+import { ChecklistModule } from './checklist/checklist.module';
 import { CommunicationsModule } from './communications/communications.module';
 import { ContactsModule } from './contacts/contacts.module';
 import { DocumentsModule } from './documents/documents.module';
@@ -16,6 +17,6 @@ import { PerformanceFormatsModule } from './performance-formats/performance-form
 import { PortalModule } from './portal/portal.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, HealthModule, StorageModule, MailModule, UserProfileModule, ContactsModule, BookingsModule, SongsModule, InvoicesModule, TemplatesModule, CommunicationsModule, DocumentsModule, PortalModule, PerformanceFormatsModule],
+  imports: [PrismaModule, AuthModule, HealthModule, StorageModule, MailModule, UserProfileModule, ContactsModule, BookingsModule, ChecklistModule, SongsModule, InvoicesModule, TemplatesModule, CommunicationsModule, DocumentsModule, PortalModule, PerformanceFormatsModule],
 })
 export class AppModule {}
