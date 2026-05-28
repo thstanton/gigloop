@@ -17,13 +17,14 @@ A CRM for musicians. The central workflow is managing Bookings with Contacts.
 ### Booking
 The central entity. Represents a performance engagement — confirmed or in-progress. Connects a Contact to a body of work (sets, song list, documents, communications).  There is no separate concept of "Gig"; Booking covers the full lifecycle of a performance engagement.
 
-**Lifecycle (ordered):** `Enquiry → Confirmed → Ready → Complete`  (plus `Cancelled` at any point). See ADR-0018.
+**Lifecycle (ordered):** `Enquiry → Provisional → Confirmed → Ready → Complete` (plus `Cancelled` at any point). See ADR-0018.
 
-The lifecycle represents the musician's genuine assessment of readiness — not a record of which tasks have been completed. [[BookingChecklistItem]] tasks inform that assessment (via advisory prompts and warnings), but the musician always advances status manually. No status transition is mechanically triggered by task completion.
+The lifecycle represents the musician's genuine assessment of readiness — not a record of which tasks have been completed. [[BookingChecklistItem]] tasks inform that assessment via the status-change confirmation dialog (which lists outstanding required items if any exist), but the musician always advances status manually. No status transition is mechanically triggered by task completion. The status dropdown does not show outstanding item counts inline — the dialog advisory is the only mechanism for this signal.
 
-- *Enquiry*: initial interest, not yet confirmed. In current practice, musicians tend to create bookings after the client has agreed to proceed, so this status sees limited use in MVP. Its full value arrives with the P2 email ingestion feature, which will create Enquiry-stage bookings automatically from inbound emails. An embeddable website enquiry form is explicitly out of scope — a previous implementation in Giggio was removed due to poor UX and inability to match the musician's site styling. P2 strategy is email ingestion, not a web widget.
-- *Confirmed*: the engagement is committed — contract signed and deposit received. The musician moves here manually; the checklist items with `requiredForStatus: CONFIRMED` (contract signed, deposit received) provide advisory prompts.
-- *Ready*: all pre-gig preparation is done — balance invoiced, music form in, logistics resolved. The musician moves here manually when they feel genuinely prepared. Checklist items with `requiredForStatus: READY` provide the advisory gate.
+- *Enquiry*: initial interest, quote not yet sent or accepted. Its full value arrives with the P2 email ingestion feature, which will create Enquiry-stage bookings automatically from inbound emails. Enquiry bookings are excluded from the dashboard calendar and Upcoming Gigs widget — they are not committed enough to occupy a date slot.
+- *Provisional*: the client has agreed the quote in principle — the musician has sent a quote and the client has said yes. Formalities (contract, deposit) are still outstanding. This is the standard entry point for most bookings in practice: the musician creates the booking once verbal agreement is reached. The portal is accessible at this stage. Status pill colour: blue.
+- *Confirmed*: the engagement is locked in — contract signed and deposit received. The musician moves here manually; `requiredForStatus: CONFIRMED` checklist items (contract signed, deposit received) provide the advisory gate.
+- *Ready*: all pre-gig preparation is done — balance invoiced, music form in, logistics resolved. The musician moves here manually when they feel genuinely prepared. Status pill colour: purple.
 - *Complete*: post-gig admin is done — thank you sent, any outstanding items resolved. The musician moves here manually.
 - *Cancelled*: booking cancelled at any point in the lifecycle. The portal remains accessible (token still valid); a cancellation notice is shown. The [[BookingChecklist]] is hidden for cancelled bookings.
 
@@ -41,7 +42,7 @@ The lifecycle represents the musician's genuine assessment of readiness — not 
 Status transitions are not enforced by the API — a Booking can move freely between any statuses.
 
 **Top-level fields:**
-- **status**: see lifecycle above
+- **status**: see lifecycle above; defaults to PROVISIONAL on creation
 - **date**: the date (and optionally time) of the performance
 - **title** (optional): human-readable label; useful when the booking is for a named event (e.g. a festival) not easily derived from the customer name
 - **fee**: the agreed total amount (Option A — independent of invoice line items; represents what was verbally agreed, used in the contract)
@@ -237,47 +238,69 @@ Items are **seeded at booking creation** from the musician's `checklistDefaults`
 - `key` — string identifier for system items (e.g. `create_contract`, `contract_signed`); null for user-defined custom items
 - `label` — display label; system items have a default, custom items are user-defined
 - `completedBy` — `USER | CUSTOMER | BAND_MEMBER`; declares which actor resolves this item
-- `state` — `PENDING | DONE | FAILED | BLOCKED | SKIPPED`
+- `state` — `PENDING | COMPLETE | FAILED | BLOCKED | SKIPPED`
 - `order` — integer preserving display sequence
-- `dependsOn` — `string[]`; keys of items that must be DONE before this item unblocks (transitions from BLOCKED → PENDING automatically)
-- `autoCompleteRule` — optional JSON; when present, the system evaluates the rule on relevant business events and sets state to DONE automatically. When absent, the item is manual-only. Rule types: `bookingField` (done when a named Booking field is non-null), `communicationSent` (done when a SENT Communication of a given template type exists), `invoiceExists` (done when an invoice of the given kind exists), `musicFormResponse` (done when a MusicFormResponse exists).
-- `requiredForStatus` — optional `BookingStatus`; advisory association — the UI warns the musician if they attempt to advance the booking to this status while this item is PENDING or FAILED, and prompts them to advance when all items for this status become DONE. The API does not enforce this gate.
-- `completedAt` — timestamp set when state transitions to DONE
-- `dueDate` — optional absolute DateTime; when this task should be done. Computed at seeding time from `dueDateRule` + the booking's relevant date. Overrideable by the musician; clearing the override restores rule-based calculation. Items without a `dueDate` do not surface in the [[DigestNotification]] or Dashboard Actions widget except when they are the last PENDING/FAILED item gating a `requiredForStatus` transition.
+- `dependsOn` — `string[]`; keys of items that must be COMPLETE before this item unblocks (transitions from BLOCKED → PENDING automatically)
+- `autoCompleteRule` — optional JSON; when present, the system evaluates the rule on relevant business events and sets state to COMPLETE automatically. When absent, the item is manual-only. Rule types: `bookingField` (complete when a named Booking field is non-null), `communicationSent` (complete when a SENT Communication of a given template type exists), `invoiceExists` (complete when an invoice of the given kind exists), `musicFormResponse` (complete when a MusicFormResponse exists). The musician can always manually override the state of any item regardless of whether an `autoCompleteRule` is present — the rule assists, it does not dictate. COMPLETE is sticky: the evaluator will not revert a manually-completed item.
+- `requiredForStatus` — optional `BookingStatus`; advisory association — the UI warns the musician if they attempt to advance the booking to this status while this item is PENDING or FAILED, and prompts them to advance when all items for this status become COMPLETE. The API does not enforce this gate.
+- `completedAt` — timestamp set when state transitions to COMPLETE
+- `dueDate` — optional absolute DateTime; when this task should be done. Computed at seeding time from `dueDateRule` + the booking's relevant date. Overrideable by the musician; clearing the override restores rule-based calculation. Items without a `dueDate` do not surface in the [[DigestNotification]] or Dashboard Actions widget except when they are the last PENDING/FAILED item gating a `requiredForStatus` transition. Displayed inline on the checklist row using a hybrid format: relative ("today", "tomorrow", "in 3 days", "2 days ago") when within 7 days of today; absolute ("15 Jun") beyond that. Colour: muted by default; amber when within `reminderLeadDays` of the due date; red when overdue.
 - `dueDateRule` — optional JSON: `{ basis: 'bookingDate' | 'bookingCreation', offsetDays: number }`. The rule used to compute `dueDate` at seeding time. When null, `dueDate` is manually set (or absent). When the booking date changes, all non-completed items with `basis: 'bookingDate'` have their `dueDate` recomputed. `offsetDays` is negative for "before booking date" (e.g. -14 = 14 days before) and positive for "after booking creation" (e.g. 3 = 3 days after creation).
 
 **States:**
 - **PENDING** — not yet done, applicable, unblocked
-- **DONE** — completed (auto or manual); shown with a tick
+- **COMPLETE** — completed (auto or manual); shown with a tick
 - **FAILED** — a system action associated with this item was attempted and failed (e.g. email send failed); shown with a warning
-- **BLOCKED** — one or more `dependsOn` items are not yet DONE; shown as inactive
+- **BLOCKED** — one or more `dependsOn` items are not yet COMPLETE; shown as inactive
 - **SKIPPED** — was applicable but is no longer relevant (e.g. booking advanced past the point where this item applied); hidden from the active checklist
 
-Items in the FAILED state carry a **Retry** shortcut consistent with the contextual actions design principle. The checklist is hidden entirely for CANCELLED bookings. CUSTOMER-completedBy items (e.g. contract signed, music form submitted) are resolved by portal actions — their `autoCompleteRule` fires when the corresponding booking field is set.
+Items in the FAILED state: (1) the warning triangle is clickable — clicking it resets the item to PENDING; (2) shortcut buttons (Send, Create, Mark done) remain visible on FAILED items with the action label prefixed with "Retry " (e.g. "Retry Send", "Retry Create"). COMPLETE items: clicking the tick resets the item to PENDING. The `play_the_gig` item is visually distinguished on the checklist (Lucide `Sparkles` icon instead of the standard circle/tick; a `canvas-confetti` burst fires when it is marked COMPLETE — this is the most important moment in the booking lifecycle). It is reversible like all other items.
+
+**Ad-hoc items:** the checklist section's contextual action (in the section header, consistent with other section CTAs) is "+ Add item". This opens an inline form to add a one-off [[BookingChecklistItem]] to this booking only — no `key`, no `autoCompleteRule`, the musician sets the label, optional `requiredForStatus`, and optional due date. Does not affect the musician's template in [[UserProfile]] preferences.
+
+**New booking checklist step:** after filling in the booking details form, the musician sees a checklist customisation screen before the booking is created. The screen shows all default items from the booking's starting stage onwards (items from stages before the selected status are excluded, per the seeding rule). The musician can: toggle any item off (it won't be seeded), toggle any item back on, or add custom one-off items. Confirming this screen creates the booking and seeds the final item set in a single operation. The `checklistItems` array is a required field on `POST /bookings` — the server always seeds exactly what the client sends, never auto-derives from the template. The frontend fetches the musician's defaults from `GET /me` (`preferences.checklistDefaults`), filters by starting stage, and sends the final set (after any musician customisation) in the creation payload. The checklist is hidden entirely for CANCELLED bookings. CUSTOMER-completedBy items (e.g. contract signed, music form submitted) are resolved by portal actions — their `autoCompleteRule` fires when the corresponding booking field is set. COMPLETE items are hidden from the active checklist by default; a "Show X completed items" control reveals them.
 
 **System item keys and their auto-complete rules:**
 
-| Key | completedBy | autoCompleteRule | requiredForStatus (default) |
-|---|---|---|---|
-| `send_quote` | USER | communicationSent: quote | — |
-| `create_deposit_invoice` | USER | invoiceExists: isDeposit=true | — |
-| `create_contract` | USER | bookingField: contractContent | — |
-| `send_contract` | USER | communicationSent: contract_cover \| contract_and_deposit_cover | — |
-| `contract_signed` | CUSTOMER | bookingField: contractSignedAt | CONFIRMED |
-| `deposit_received` | CUSTOMER | bookingField: depositReceivedAt | CONFIRMED |
-| `create_balance_invoice` | USER | invoiceExists: isDeposit=false | READY |
-| `send_music_form_invite` | USER | communicationSent: music_form_invite | — |
-| `song_requests` | CUSTOMER | musicFormResponse | READY |
-| `send_thank_you` | USER | communicationSent: thank_you | COMPLETE |
+| Key | completedBy | autoCompleteRule | requiredForStatus | dueDateRule | dependsOn |
+|---|---|---|---|---|---|
+| `send_quote` | USER | communicationSent: quote | PROVISIONAL | bookingCreation +2 | — |
+| `confirm_quote` | USER | — (manual) | PROVISIONAL | — | send_quote |
+| `create_deposit_invoice` | USER | invoiceExists: isDeposit=true | CONFIRMED | — | confirm_quote |
+| `create_contract` | USER | bookingField: activeContract | CONFIRMED | — | confirm_quote |
+| `send_contract` | USER | communicationSent: contract_cover \| contract_and_deposit_cover | CONFIRMED | bookingDate −60 | create_contract |
+| `contract_signed` | CUSTOMER | contractSigned | CONFIRMED | bookingDate −45 | send_contract |
+| `deposit_received` | CUSTOMER | bookingField: depositReceivedAt | CONFIRMED | bookingDate −30 | send_contract |
+| `create_balance_invoice` | USER | invoiceExists: isDeposit=false | READY | bookingDate −14 | — |
+| `music_form_invite` | USER | communicationSent: music_form_invite | READY | bookingDate −30 | — |
+| `song_requests` | CUSTOMER | musicFormResponse | READY | bookingDate −14 | music_form_invite |
+| `play_the_gig` | USER | — (manual) | COMPLETE | bookingDate ±0 | — |
+| `send_thank_you` | USER | communicationSent: thank_you | COMPLETE | bookingDate +7 | play_the_gig |
+
+**Checklist seeding rule:** items belonging to stages before the booking's creation status are not seeded. Stage order for seeding purposes: `Enquiry → Provisional → Confirmed → Ready → Complete`. A booking created at PROVISIONAL skips ENQUIRY-stage items (`send_quote`, `confirm_quote`). A booking created at CONFIRMED skips ENQUIRY and PROVISIONAL items — the checklist starts at READY prep. This means `dependsOn` chains are never broken by missing items: all seeded items have their dependencies also seeded.
 
 ### BookingChecklist
-The ordered collection of [[BookingChecklistItem]] records for a given [[Booking]]. Not a separate model — a logical grouping term. Displayed on the Booking detail page; outstanding items feed the [[DigestNotification]] and Dashboard Actions widget. Items are sorted by `dueDate` ascending; undated items appear last.
+The ordered collection of [[BookingChecklistItem]] records for a given [[Booking]]. Not a separate model — a logical grouping term. Displayed on the Booking detail page; outstanding items feed the [[DigestNotification]] and Dashboard Actions widget.
+
+**Default filter — single-booking view:** items are grouped by `requiredForStatus` and rendered with a stage divider (label + colour matching the booking lifecycle stage). The default view shows only the current stage group and the next stage group; BLOCKED items are always hidden in the default view. COMPLETE items within visible stage groups are shown — they provide stage-level progress context. Custom items with no `requiredForStatus` appear at the top in an unlabelled group. A "Show all" control reveals all groups and BLOCKED items. Stage divider labels use the canonical booking status label: "Confirmed", "Ready", "Complete" (matching the status pill labels already used in the UI).
+
+Stage visibility by booking status:
+- ENQUIRY → PROVISIONAL group only (no items have requiredForStatus: ENQUIRY)
+- PROVISIONAL → PROVISIONAL + CONFIRMED groups
+- CONFIRMED → CONFIRMED + READY groups
+- READY → READY + COMPLETE groups
+- COMPLETE → COMPLETE group only
+- CANCELLED → checklist hidden entirely
+
+**Sort order — single-booking view (Booking detail page):** `order` ascending within each group. This preserves the workflow narrative (contract → deposit → balance invoice → music form…) and is stable regardless of dates.
+
+**Sort order — cross-booking surfaces (Dashboard Actions widget, [[DigestNotification]]):** `dueDate` ascending; undated items appear after dated items. Surfaces the most urgent items first across all bookings.
 
 ### DigestNotification
 A daily summary email sent to the musician via Resend. MVP scope. Contains upcoming Bookings and their outstanding [[BookingChecklistItem]] records. Two surfacing rules:
 
 1. **Dated items:** `dueDate` is set and `today >= dueDate - reminderLeadDays` (from `UserProfile.preferences.reminderLeadDays`).
-2. **Undated status-gate items:** `dueDate` is null, `requiredForStatus` is set, and this is the last PENDING or FAILED item for that status (all others with the same `requiredForStatus` are DONE). Surfaces as "This booking could move to [status] if this task was done."
+2. **Undated status-gate items:** `dueDate` is null, `requiredForStatus` is set, and this is the last PENDING or FAILED item for that status (all others with the same `requiredForStatus` are COMPLETE). Surfaces as "This booking could move to [status] if this task was done."
 
 Items sorted by `dueDate` ascending within each booking; undated status-gate items follow dated items.
 

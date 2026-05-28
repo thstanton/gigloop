@@ -271,33 +271,19 @@ describe('ChecklistEvaluatorService', () => {
   });
 
   describe('SKIPPED transitions (#50)', () => {
-    it('skips send_quote when booking status is CONFIRMED', async () => {
+    it('does not skip send_quote when booking status is CONFIRMED (seeding rule handles this)', async () => {
       const item = makeItem({ key: 'send_quote', state: 'PENDING' });
       const booking = makeBooking({ status: 'CONFIRMED' });
       repo.findItemsWithContext.mockResolvedValue({ items: [item], booking });
 
       await service.evaluate('b1');
 
-      expect(repo.updateItemStates).toHaveBeenCalledWith([
-        expect.objectContaining({ id: 'ci1', state: 'SKIPPED' }),
-      ]);
+      expect(repo.updateItemStates).not.toHaveBeenCalled();
     });
 
-    it('skips send_quote when booking status is READY', async () => {
+    it('does not skip send_quote when booking status is PROVISIONAL', async () => {
       const item = makeItem({ key: 'send_quote', state: 'PENDING' });
-      const booking = makeBooking({ status: 'READY' });
-      repo.findItemsWithContext.mockResolvedValue({ items: [item], booking });
-
-      await service.evaluate('b1');
-
-      expect(repo.updateItemStates).toHaveBeenCalledWith([
-        expect.objectContaining({ state: 'SKIPPED' }),
-      ]);
-    });
-
-    it('does not skip send_quote when booking status is ENQUIRY', async () => {
-      const item = makeItem({ key: 'send_quote', state: 'PENDING' });
-      const booking = makeBooking({ status: 'ENQUIRY' });
+      const booking = makeBooking({ status: 'PROVISIONAL' });
       repo.findItemsWithContext.mockResolvedValue({ items: [item], booking });
 
       await service.evaluate('b1');

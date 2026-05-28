@@ -9,7 +9,6 @@ import { UpdateSetDto } from './dto/update-set.dto';
 import { UpsertMusicFormConfigDto } from './dto/upsert-music-form-config.dto';
 import { MailService } from '../mail/mail.service';
 import { substituteTiptapVariables } from '../mail/tiptap-portal';
-import { getChecklistDefaults } from './checklist-defaults';
 import { ChecklistEvaluatorService } from '../checklist/checklist-evaluator.service';
 
 const VALID_STATUSES = new Set<string>(Object.values(BookingStatus));
@@ -111,14 +110,14 @@ export class BookingsService {
   }
 
   async create(userId: string, dto: CreateBookingDto) {
-    const profile = await this.repo.findUserProfile(userId);
-    const checklistDefaults = getChecklistDefaults(profile?.preferences as Record<string, unknown> | null);
-
     let booking;
     if (!dto.formatIds?.length) {
       booking = await this.repo.create(userId, dto);
     } else {
-      const formats = await this.repo.findFormats(userId, dto.formatIds);
+      const [formats, profile] = await Promise.all([
+        this.repo.findFormats(userId, dto.formatIds),
+        this.repo.findUserProfile(userId),
+      ]);
       const orderedFormats = dto.formatIds
         .map((id) => formats.find((f) => f.id === id))
         .filter((f): f is NonNullable<typeof f> => f !== null && f !== undefined);
@@ -126,7 +125,9 @@ export class BookingsService {
       booking = await this.repo.createWithFormats(userId, dto, orderedFormats, songRequestFormEnabled);
     }
 
-    await this.repo.seedChecklistItems(userId, booking.id, checklistDefaults, booking.date, booking.createdAt);
+    if (dto.checklistItems.length > 0) {
+      await this.repo.seedChecklistItems(userId, booking.id, dto.checklistItems, booking.date, booking.createdAt);
+    }
     return booking;
   }
 
@@ -296,6 +297,32 @@ export class BookingsService {
     const result = await this.repo.updateChecklistItemState(userId, bookingId, itemId, state);
     if (result.count === 0) throw new NotFoundException('Checklist item not found');
     return { success: true };
+  }
+
+  async addChecklistItem(
+    userId: string,
+    bookingId: string,
+    label: string,
+    requiredForStatus: string | null,
+    dueDate: string | null,
+  ) {
+    await this.findOne(userId, bookingId);
+    const maxOrder = await this.repo.getMaxChecklistOrder(bookingId);
+    const item = await this.repo.createChecklistItem(
+      userId,
+      bookingId,
+      label,
+      requiredForStatus ?? null,
+      dueDate ? new Date(dueDate) : null,
+      maxOrder + 1,
+    );
+    return {
+      ...item,
+      createdAt: item.createdAt.toISOString(),
+      updatedAt: item.updatedAt.toISOString(),
+      completedAt: null,
+      dueDate: item.dueDate?.toISOString() ?? null,
+    };
   }
 
   async getActions(userId: string) {

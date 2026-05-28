@@ -9,7 +9,7 @@ export interface ChecklistDefaultItem {
   completedBy: 'USER' | 'CUSTOMER' | 'BAND_MEMBER';
   dependsOn: string[];
   autoCompleteRule: Record<string, unknown> | null;
-  requiredForStatus: 'CONFIRMED' | 'READY' | 'COMPLETE' | null;
+  requiredForStatus: 'PROVISIONAL' | 'CONFIRMED' | 'READY' | 'COMPLETE' | null;
   dueDateRule: DueDateRule | null;
 }
 
@@ -20,14 +20,23 @@ export const CHECKLIST_DEFAULTS: ChecklistDefaultItem[] = [
     completedBy: 'USER',
     dependsOn: [],
     autoCompleteRule: { type: 'communicationSent', templateTypes: ['quote'] },
-    requiredForStatus: null,
+    requiredForStatus: 'PROVISIONAL',
+    dueDateRule: { basis: 'bookingCreation', offsetDays: 2 },
+  },
+  {
+    key: 'confirm_quote',
+    label: 'Quote confirmed',
+    completedBy: 'USER',
+    dependsOn: ['send_quote'],
+    autoCompleteRule: null,
+    requiredForStatus: 'PROVISIONAL',
     dueDateRule: null,
   },
   {
     key: 'create_deposit_invoice',
     label: 'Create deposit invoice',
     completedBy: 'USER',
-    dependsOn: [],
+    dependsOn: ['confirm_quote'],
     autoCompleteRule: { type: 'invoiceExists', isDeposit: true },
     requiredForStatus: 'CONFIRMED',
     dueDateRule: null,
@@ -36,7 +45,7 @@ export const CHECKLIST_DEFAULTS: ChecklistDefaultItem[] = [
     key: 'create_contract',
     label: 'Create contract',
     completedBy: 'USER',
-    dependsOn: [],
+    dependsOn: ['confirm_quote'],
     autoCompleteRule: { type: 'bookingField', field: 'activeContract', operator: 'notNull' },
     requiredForStatus: 'CONFIRMED',
     dueDateRule: null,
@@ -83,7 +92,7 @@ export const CHECKLIST_DEFAULTS: ChecklistDefaultItem[] = [
     completedBy: 'USER',
     dependsOn: [],
     autoCompleteRule: { type: 'communicationSent', templateTypes: ['music_form_invite'] },
-    requiredForStatus: null,
+    requiredForStatus: 'READY',
     dueDateRule: { basis: 'bookingDate', offsetDays: -30 },
   },
   {
@@ -96,10 +105,19 @@ export const CHECKLIST_DEFAULTS: ChecklistDefaultItem[] = [
     dueDateRule: { basis: 'bookingDate', offsetDays: -14 },
   },
   {
+    key: 'play_the_gig',
+    label: 'Play the gig',
+    completedBy: 'USER',
+    dependsOn: [],
+    autoCompleteRule: null,
+    requiredForStatus: 'COMPLETE',
+    dueDateRule: { basis: 'bookingDate', offsetDays: 0 },
+  },
+  {
     key: 'send_thank_you',
     label: 'Send thank you',
     completedBy: 'USER',
-    dependsOn: [],
+    dependsOn: ['play_the_gig'],
     autoCompleteRule: { type: 'communicationSent', templateTypes: ['thank_you'] },
     requiredForStatus: 'COMPLETE',
     dueDateRule: { basis: 'bookingDate', offsetDays: 7 },
@@ -124,4 +142,39 @@ export function getChecklistDefaults(
     ?.checklistDefaults;
   if (Array.isArray(defaults) && defaults.length > 0) return defaults;
   return CHECKLIST_DEFAULTS;
+}
+
+// Stage order for seeding rule: items at stages AT OR BEFORE the booking's starting
+// status are not seeded (they've already happened outside the system).
+const STAGE_ORDER: Array<ChecklistDefaultItem['requiredForStatus']> = [
+  null,
+  'PROVISIONAL',
+  'CONFIRMED',
+  'READY',
+  'COMPLETE',
+];
+
+// Map BookingStatus to its checklist stage equivalent
+const BOOKING_STATUS_TO_STAGE: Record<string, ChecklistDefaultItem['requiredForStatus']> = {
+  ENQUIRY: null,
+  PROVISIONAL: 'PROVISIONAL',
+  CONFIRMED: 'CONFIRMED',
+  READY: 'READY',
+  COMPLETE: 'COMPLETE',
+  CANCELLED: 'COMPLETE',
+};
+
+export function filterItemsByStartingStatus(
+  items: ChecklistDefaultItem[],
+  startingStatus: string,
+): ChecklistDefaultItem[] {
+  const startingStage = BOOKING_STATUS_TO_STAGE[startingStatus] ?? null;
+  const startingIndex = STAGE_ORDER.indexOf(startingStage);
+
+  return items.filter((item) => {
+    const itemStageIndex = STAGE_ORDER.indexOf(item.requiredForStatus);
+    // Keep items from stages AFTER the starting stage
+    // Items at the starting stage or before are skipped (already handled)
+    return itemStageIndex > startingIndex;
+  });
 }

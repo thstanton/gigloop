@@ -171,23 +171,29 @@ describe('BookingsService', () => {
     const createdBooking = { ...booking, date: new Date('2026-06-01'), createdAt: new Date('2026-01-01') };
 
     it('delegates to repo.create when no formatIds provided', async () => {
-      repo.findUserProfile.mockResolvedValue(null);
       repo.create.mockResolvedValue(createdBooking);
-      const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1' };
+      const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', checklistItems: [] };
       const result = await service.create('u1', dto);
       expect(repo.create).toHaveBeenCalledWith('u1', dto);
       expect(repo.findFormats).not.toHaveBeenCalled();
       expect(result).toBe(createdBooking);
     });
 
-    it('seeds checklist items after creation', async () => {
-      repo.findUserProfile.mockResolvedValue(null);
+    it('seeds checklist items from dto.checklistItems', async () => {
       repo.create.mockResolvedValue(createdBooking);
-      const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1' };
+      const checklistItems = [{ label: 'Send quote', key: 'send_quote', completedBy: 'USER' as const, dependsOn: [], autoCompleteRule: null, requiredForStatus: 'PROVISIONAL' as const, dueDateRule: null }];
+      const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', checklistItems };
       await service.create('u1', dto);
       expect(repo.seedChecklistItems).toHaveBeenCalledWith(
-        'u1', createdBooking.id, expect.any(Array), createdBooking.date, createdBooking.createdAt,
+        'u1', createdBooking.id, checklistItems, createdBooking.date, createdBooking.createdAt,
       );
+    });
+
+    it('skips seeding when checklistItems is empty', async () => {
+      repo.create.mockResolvedValue(createdBooking);
+      const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', checklistItems: [] };
+      await service.create('u1', dto);
+      expect(repo.seedChecklistItems).not.toHaveBeenCalled();
     });
 
     it('fetches formats and calls createWithFormats when formatIds provided', async () => {
@@ -195,7 +201,7 @@ describe('BookingsService', () => {
       repo.findFormats.mockResolvedValue([fmt]);
       repo.findUserProfile.mockResolvedValue(null);
       repo.createWithFormats.mockResolvedValue(createdBooking);
-      const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', formatIds: ['f1'] };
+      const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', formatIds: ['f1'], checklistItems: [] };
       const result = await service.create('u1', dto);
       expect(repo.findFormats).toHaveBeenCalledWith('u1', ['f1']);
       expect(repo.createWithFormats).toHaveBeenCalledWith('u1', dto, [fmt], false);
@@ -207,7 +213,7 @@ describe('BookingsService', () => {
       repo.findFormats.mockResolvedValue([fmt]);
       repo.findUserProfile.mockResolvedValue({ songRequestFormEnabled: true });
       repo.createWithFormats.mockResolvedValue(createdBooking);
-      const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', formatIds: ['f1'] };
+      const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', formatIds: ['f1'], checklistItems: [] };
       await service.create('u1', dto);
       expect(repo.createWithFormats).toHaveBeenCalledWith('u1', dto, [fmt], true);
     });
@@ -218,25 +224,11 @@ describe('BookingsService', () => {
       repo.findFormats.mockResolvedValue([fmt2, fmt1]); // reversed from DB
       repo.findUserProfile.mockResolvedValue(null);
       repo.createWithFormats.mockResolvedValue(createdBooking);
-      const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', formatIds: ['f1', 'f2'] };
+      const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', formatIds: ['f1', 'f2'], checklistItems: [] };
       await service.create('u1', dto);
       const orderedFormats = repo.createWithFormats.mock.calls[0][2];
       expect(orderedFormats[0].id).toBe('f1');
       expect(orderedFormats[1].id).toBe('f2');
-    });
-
-    it('uses custom checklist defaults from preferences', async () => {
-      const customDefault = [{
-        key: 'custom_task', label: 'Custom task', completedBy: 'USER' as const,
-        dependsOn: [], autoCompleteRule: null, requiredForStatus: null, dueDateRule: null,
-      }];
-      repo.findUserProfile.mockResolvedValue({ preferences: { checklistDefaults: customDefault } });
-      repo.create.mockResolvedValue(createdBooking);
-      const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1' };
-      await service.create('u1', dto);
-      expect(repo.seedChecklistItems).toHaveBeenCalledWith(
-        'u1', createdBooking.id, customDefault, createdBooking.date, createdBooking.createdAt,
-      );
     });
   });
 

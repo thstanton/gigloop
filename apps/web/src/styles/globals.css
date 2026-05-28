@@ -41,6 +41,7 @@
 
     /* Status — used only for status badges, never decorative */
     --status-enquiry: 38 92% 50%;
+    --status-provisional: 220 83% 55%;
     --status-confirmed: 172 55% 40%;
     --status-ready: 262 83% 58%;
     --status-complete: 30 8% 48%;
@@ -79,11 +80,12 @@
   .bg-chrome-muted\/40       { background-color: hsl(var(--chrome-muted) / 0.40); }
 
   /* Status badge left-border accent colours */
-  .border-l-status-enquiry   { border-left-color: hsl(var(--status-enquiry)); }
-  .border-l-status-confirmed { border-left-color: hsl(var(--status-confirmed)); }
-  .border-l-status-ready     { border-left-color: hsl(var(--status-ready)); }
-  .border-l-status-complete  { border-left-color: hsl(var(--status-complete)); }
-  .border-l-status-cancelled { border-left-color: hsl(var(--status-cancelled)); }
+  .border-l-status-enquiry     { border-left-color: hsl(var(--status-enquiry)); }
+  .border-l-status-provisional { border-left-color: hsl(var(--status-provisional)); }
+  .border-l-status-confirmed   { border-left-color: hsl(var(--status-confirmed)); }
+  .border-l-status-ready       { border-left-color: hsl(var(--status-ready)); }
+  .border-l-status-complete    { border-left-color: hsl(var(--status-complete)); }
+  .border-l-status-cancelled   { border-left-color: hsl(var(--status-cancelled)); }
 }
 
 /* ─── Tiptap editor content ─────────────────────────────────────────── */

@@ -22,6 +22,7 @@ import { ApplyFormatDto } from './dto/apply-format.dto';
 import { UpsertMusicFormConfigDto } from './dto/upsert-music-form-config.dto';
 import { UpdateContractDto } from './dto/update-contract.dto';
 import { UpdateChecklistItemDto } from './dto/update-checklist-item.dto';
+import { CreateChecklistItemDto } from './dto/create-checklist-item.dto';
 import type { Request } from 'express';
 
 type AuthedRequest = Request & { userId: string };
@@ -95,6 +96,22 @@ export class BookingsController {
   @Get(':id/checklist')
   getChecklist(@Req() req: AuthedRequest, @Param('id') id: string) {
     return this.service.getChecklist(req.userId, id);
+  }
+
+  @ApiOperation({ summary: 'Add a custom ad-hoc checklist item to a booking' })
+  @Post(':id/checklist')
+  addChecklistItem(
+    @Req() req: AuthedRequest,
+    @Param('id') id: string,
+    @Body() dto: CreateChecklistItemDto,
+  ) {
+    return this.service.addChecklistItem(
+      req.userId,
+      id,
+      dto.label,
+      dto.requiredForStatus ?? null,
+      dto.dueDate ?? null,
+    );
   }
 
   @ApiOperation({ summary: 'Update a checklist item state' })

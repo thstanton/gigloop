@@ -13,6 +13,7 @@ datasource db {
 
 enum BookingStatus {
   ENQUIRY
+  PROVISIONAL
   CONFIRMED
   READY
   COMPLETE

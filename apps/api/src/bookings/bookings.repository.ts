@@ -7,7 +7,17 @@ import { UpdateContractDto } from './dto/update-contract.dto';
 import { CreateSetDto } from './dto/create-set.dto';
 import { UpdateSetDto } from './dto/update-set.dto';
 import { UpsertMusicFormConfigDto } from './dto/upsert-music-form-config.dto';
-import { ChecklistDefaultItem, computeDueDate } from './checklist-defaults';
+import { computeDueDate } from './checklist-defaults';
+
+type ChecklistItemSeed = {
+  key?: string | null;
+  label: string;
+  completedBy?: 'USER' | 'CUSTOMER' | 'BAND_MEMBER';
+  dependsOn?: string[];
+  autoCompleteRule?: Record<string, unknown> | null;
+  requiredForStatus?: string | null;
+  dueDateRule?: { basis: 'bookingDate' | 'bookingCreation'; offsetDays: number } | null;
+};
 
 type FormatWithSlots = {
   id: string;
@@ -70,7 +80,7 @@ export class BookingsRepository {
   }
 
   create(userId: string, dto: CreateBookingDto) {
-    const { formatIds: _, fee, date, ...fields } = dto;
+    const { formatIds: _, fee, date, checklistItems: __, ...fields } = dto;
     return this.prisma.booking.create({
       data: {
         userId,
@@ -90,7 +100,7 @@ export class BookingsRepository {
   }
 
   createWithFormats(userId: string, dto: CreateBookingDto, orderedFormats: FormatWithSlots[], songRequestFormEnabled: boolean) {
-    const { formatIds: _, fee, date, ...fields } = dto;
+    const { formatIds: _, fee, date, checklistItems: __, ...fields } = dto;
 
     let slotOrder = 1;
     const setRecords = orderedFormats.flatMap((fmt) =>
@@ -339,28 +349,33 @@ export class BookingsRepository {
   seedChecklistItems(
     userId: string,
     bookingId: string,
-    defaults: ChecklistDefaultItem[],
+    defaults: ChecklistItemSeed[],
     bookingDate: Date,
     bookingCreatedAt: Date,
   ) {
-    const data = defaults.map((item, idx) => ({
-      userId,
-      bookingId,
-      key: item.key,
-      label: item.label,
-      completedBy: item.completedBy,
-      state: item.dependsOn.length > 0 ? 'BLOCKED' : 'PENDING',
-      order: idx + 1,
-      dependsOn: item.dependsOn,
-      ...(item.autoCompleteRule !== null
-        ? { autoCompleteRule: item.autoCompleteRule as Prisma.InputJsonValue }
-        : {}),
-      requiredForStatus: item.requiredForStatus,
-      dueDate: computeDueDate(item.dueDateRule, bookingDate, bookingCreatedAt),
-      ...(item.dueDateRule !== null
-        ? { dueDateRule: item.dueDateRule as unknown as Prisma.InputJsonValue }
-        : {}),
-    }));
+    const data = defaults.map((item, idx) => {
+      const dependsOn = item.dependsOn ?? [];
+      const autoCompleteRule = item.autoCompleteRule ?? null;
+      const dueDateRule = item.dueDateRule ?? null;
+      return {
+        userId,
+        bookingId,
+        key: item.key ?? null,
+        label: item.label,
+        completedBy: item.completedBy ?? 'USER',
+        state: dependsOn.length > 0 ? 'BLOCKED' : 'PENDING',
+        order: idx + 1,
+        dependsOn,
+        ...(autoCompleteRule !== null
+          ? { autoCompleteRule: autoCompleteRule as Prisma.InputJsonValue }
+          : {}),
+        requiredForStatus: item.requiredForStatus ?? null,
+        dueDate: computeDueDate(dueDateRule, bookingDate, bookingCreatedAt),
+        ...(dueDateRule !== null
+          ? { dueDateRule: dueDateRule as unknown as Prisma.InputJsonValue }
+          : {}),
+      };
+    });
     return this.prisma.bookingChecklistItem.createMany({ data });
   }
 
@@ -368,6 +383,38 @@ export class BookingsRepository {
     return this.prisma.bookingChecklistItem.findMany({
       where: { bookingId, userId, state: { not: 'SKIPPED' } },
       orderBy: { order: 'asc' },
+    });
+  }
+
+  async getMaxChecklistOrder(bookingId: string): Promise<number> {
+    const result = await this.prisma.bookingChecklistItem.aggregate({
+      where: { bookingId },
+      _max: { order: true },
+    });
+    return result._max.order ?? 0;
+  }
+
+  createChecklistItem(
+    userId: string,
+    bookingId: string,
+    label: string,
+    requiredForStatus: string | null,
+    dueDate: Date | null,
+    order: number,
+  ) {
+    return this.prisma.bookingChecklistItem.create({
+      data: {
+        userId,
+        bookingId,
+        key: null,
+        label,
+        completedBy: 'USER',
+        state: 'PENDING',
+        order,
+        dependsOn: [],
+        requiredForStatus,
+        dueDate,
+      },
     });
   }
 

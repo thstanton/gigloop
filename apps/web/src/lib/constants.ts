@@ -24,10 +24,20 @@ export const EVENT_TYPE_LABELS: Record<EventType, string> = {
 
 export const STATUS_ORDER: BookingStatus[] = [
   'ENQUIRY',
+  'PROVISIONAL',
   'CONFIRMED',
   'READY',
   'COMPLETE',
   'CANCELLED',
+];
+
+export const CHECKLIST_STAGE_ORDER: Array<BookingStatus | null> = [
+  null,
+  'ENQUIRY',
+  'PROVISIONAL',
+  'CONFIRMED',
+  'READY',
+  'COMPLETE',
 ];
 
 export function statusGte(current: BookingStatus, threshold: BookingStatus): boolean {

@@ -50,8 +50,9 @@ const FORMAT_ICON_MAP: Record<string, React.ComponentType<any>> = {
 
 export function bookingStatusMessage(status: string): string {
   switch (status) {
-    case 'ENQUIRY':   return 'Confirm your booking';
-    case 'CONFIRMED': return 'Your booking is confirmed';
+    case 'ENQUIRY':      return 'Confirm your booking';
+    case 'PROVISIONAL':  return 'Your booking is provisional';
+    case 'CONFIRMED':    return 'Your booking is confirmed';
     case 'READY':     return "You're all set";
     case 'COMPLETE':  return 'Thanks for your booking!';
     case 'CANCELLED': return 'This booking has been cancelled';

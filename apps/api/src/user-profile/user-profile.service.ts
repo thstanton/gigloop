@@ -2,7 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { UserProfileRepository } from './user-profile.repository';
 import { UpdateUserProfileDto } from './dto/update-user-profile.dto';
 import { UpdateChecklistDefaultsDto } from './dto/update-checklist-defaults.dto';
-import { CHECKLIST_DEFAULTS } from '../bookings/checklist-defaults';
+import { CHECKLIST_DEFAULTS, getChecklistDefaults } from '../bookings/checklist-defaults';
 import type { ChecklistDefaultItem } from '../bookings/checklist-defaults';
 
 const SYSTEM_KEYS = new Set(CHECKLIST_DEFAULTS.map((d) => d.key));
@@ -11,8 +11,17 @@ const SYSTEM_KEYS = new Set(CHECKLIST_DEFAULTS.map((d) => d.key));
 export class UserProfileService {
   constructor(private repo: UserProfileRepository) {}
 
-  findOrCreate(userId: string) {
-    return this.repo.upsertByUserId(userId);
+  async findOrCreate(userId: string) {
+    const profile = await this.repo.upsertByUserId(userId);
+    const prefs = (profile.preferences ?? {}) as Record<string, unknown>;
+    const checklistDefaults = getChecklistDefaults(prefs);
+    return {
+      ...profile,
+      preferences: {
+        ...prefs,
+        checklistDefaults,
+      },
+    };
   }
 
   update(userId: string, dto: UpdateUserProfileDto) {

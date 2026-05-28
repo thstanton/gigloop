@@ -2,24 +2,69 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ChevronLeft, CheckCircle2, Circle, Lock } from 'lucide-react';
+import { ChevronLeft, CheckSquare, Square, X } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@clerk/react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   BookingFormFields,
   bookingFormSchema,
   type BookingFormValues,
 } from '@/features/bookings/BookingFormFields';
 import { apiGet, apiPost } from '@/lib/api';
-import type { BookingDetail, ChecklistItem, EventType, BookingStatus, UserProfile, PerformanceFormat } from '@/types/api';
+import type {
+  BookingDetail,
+  BookingStatus,
+  ChecklistDefaultItem,
+  EventType,
+  PerformanceFormat,
+  UserProfile,
+} from '@/types/api';
+
+const STAGE_LABELS: Record<string, string> = {
+  PROVISIONAL: 'Provisional',
+  CONFIRMED: 'Confirmed',
+  READY: 'Ready',
+  COMPLETE: 'Complete',
+};
+
+const STAGE_ORDER: Array<BookingStatus | null> = [
+  null, 'ENQUIRY', 'PROVISIONAL', 'CONFIRMED', 'READY', 'COMPLETE',
+];
+const STATUS_TO_STAGE: Record<string, BookingStatus | null> = {
+  ENQUIRY: null, PROVISIONAL: 'PROVISIONAL', CONFIRMED: 'CONFIRMED',
+  READY: 'READY', COMPLETE: 'COMPLETE', CANCELLED: 'COMPLETE',
+};
+
+function filterByStartingStatus(
+  items: ChecklistDefaultItem[],
+  startingStatus: BookingStatus,
+): ChecklistDefaultItem[] {
+  const startStage = STATUS_TO_STAGE[startingStatus] ?? null;
+  const startIdx = STAGE_ORDER.indexOf(startStage);
+  return items.filter((item) => STAGE_ORDER.indexOf(item.requiredForStatus ?? null) > startIdx);
+}
 
 export default function BookingNewPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
   const { isLoaded } = useAuth();
-  const [createdBookingId, setCreatedBookingId] = useState<string | null>(null);
+
+  const [step, setStep] = useState<1 | 2>(1);
+  const [pendingValues, setPendingValues] = useState<BookingFormValues | null>(null);
+  const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
+  const [customItems, setCustomItems] = useState<Array<{ label: string; stage: string }>>([]);
+  const [newLabel, setNewLabel] = useState('');
+  const [newStage, setNewStage] = useState('CONFIRMED');
 
   const locationState = location.state as { customerId?: string; date?: string } | null;
 
@@ -35,18 +80,12 @@ export default function BookingNewPage() {
     enabled: isLoaded && (userProfile?.songRequestFormEnabled ?? false),
   });
 
-  const {
-    register,
-    control,
-    handleSubmit,
-    setValue,
-    formState: { errors },
-  } = useForm<BookingFormValues>({
+  const { register, control, handleSubmit, setValue, formState: { errors } } = useForm<BookingFormValues>({
     resolver: zodResolver(bookingFormSchema),
     defaultValues: {
       eventType: 'WEDDING',
       date: locationState?.date ?? '',
-      status: 'CONFIRMED',
+      status: 'PROVISIONAL',
       title: '',
       fee: '',
       notes: '',
@@ -58,23 +97,14 @@ export default function BookingNewPage() {
   });
 
   useEffect(() => {
-    if (locationState?.customerId) {
-      setValue('customerId', locationState.customerId);
-    }
-    if (locationState?.date) {
-      setValue('date', locationState.date);
-    }
+    if (locationState?.customerId) setValue('customerId', locationState.customerId);
+    if (locationState?.date) setValue('date', locationState.date);
   }, [locationState?.customerId, locationState?.date, setValue]);
 
-  const { data: checklist = [] } = useQuery({
-    queryKey: ['bookingChecklist', createdBookingId],
-    queryFn: () => apiGet<ChecklistItem[]>(`/bookings/${createdBookingId}/checklist`),
-    enabled: isLoaded && !!createdBookingId,
-  });
-
   const mutation = useMutation({
-    mutationFn: (values: BookingFormValues) =>
-      apiPost<BookingDetail>('/bookings', {
+    mutationFn: (payload: { values: BookingFormValues; checklistItems: ChecklistDefaultItem[] }) => {
+      const { values, checklistItems } = payload;
+      return apiPost<BookingDetail>('/bookings', {
         eventType: values.eventType as EventType,
         date: values.date,
         customerId: values.customerId,
@@ -85,50 +115,186 @@ export default function BookingNewPage() {
         venueId: values.venueId ?? undefined,
         referrerId: values.referrerId ?? undefined,
         formatIds: values.formatIds.length ? values.formatIds : undefined,
-      }),
+        checklistItems,
+      });
+    },
     onSuccess: (created) => {
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
-      setCreatedBookingId(created.id);
+      navigate(`/admin/bookings/${created.id}`);
     },
   });
 
-  if (createdBookingId) {
+  function advanceToStep2(values: BookingFormValues) {
+    const defaults = userProfile?.preferences?.checklistDefaults ?? [];
+    const filtered = filterByStartingStatus(defaults, values.status as BookingStatus);
+    setPendingValues(values);
+    setSelectedIndices(new Set(filtered.map((_, i) => i)));
+    setCustomItems([]);
+    setStep(2);
+  }
+
+  function toggleIndex(idx: number) {
+    setSelectedIndices((prev) => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx);
+      else next.add(idx);
+      return next;
+    });
+  }
+
+  function addCustomItem() {
+    if (!newLabel.trim()) return;
+    setCustomItems((prev) => [...prev, { label: newLabel.trim(), stage: newStage }]);
+    setNewLabel('');
+  }
+
+  function handleCreate() {
+    if (!pendingValues) return;
+    const defaults = userProfile?.preferences?.checklistDefaults ?? [];
+    const filtered = filterByStartingStatus(defaults, pendingValues.status as BookingStatus);
+    const selected = filtered.filter((_, i) => selectedIndices.has(i));
+    const custom: ChecklistDefaultItem[] = customItems
+      .filter((ci) => ci.label.trim())
+      .map((ci) => ({
+        key: null,
+        label: ci.label.trim(),
+        completedBy: 'USER' as const,
+        dependsOn: [],
+        autoCompleteRule: null,
+        requiredForStatus: ci.stage as ChecklistDefaultItem['requiredForStatus'],
+        dueDateRule: null,
+      }));
+    mutation.mutate({ values: pendingValues, checklistItems: [...selected, ...custom] });
+  }
+
+  // ─── Step 2: Checklist customisation ─────────────────────────────────────────
+
+  if (step === 2 && pendingValues) {
+    const defaults = userProfile?.preferences?.checklistDefaults ?? [];
+    const filtered = filterByStartingStatus(defaults, pendingValues.status as BookingStatus);
+
+    const grouped = (['PROVISIONAL', 'CONFIRMED', 'READY', 'COMPLETE'] as const)
+      .map((stage) => ({
+        stage,
+        entries: filtered
+          .map((item, idx) => ({ item, idx }))
+          .filter(({ item }) => item.requiredForStatus === stage),
+      }))
+      .filter(({ entries }) => entries.length > 0);
+
     return (
       <div className="px-6 py-8 max-w-3xl mx-auto">
-        <div className="flex items-center gap-2 mb-6 text-status-confirmed">
-          <CheckCircle2 size={20} />
-          <h1 className="font-display text-2xl font-semibold text-foreground">Booking created</h1>
-        </div>
+        <button
+          type="button"
+          onClick={() => setStep(1)}
+          className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground transition-colors mb-6"
+        >
+          <ChevronLeft size={14} />
+          Back
+        </button>
 
-        <p className="text-muted mb-6">Here's the checklist for this booking. You can work through it on the booking page.</p>
+        <h1 className="font-display text-2xl font-semibold text-foreground mb-1">Checklist</h1>
+        <p className="text-sm text-muted mb-6">
+          Choose which items to include. You can adjust these on the booking page later.
+        </p>
 
-        <div className="space-y-2.5 mb-8">
-          {checklist.map((item) => {
-            const isDone = item.state === 'COMPLETE';
-            const isBlocked = item.state === 'BLOCKED';
-            return (
-              <div key={item.id} className="flex items-center gap-2.5">
-                {isDone ? (
-                  <CheckCircle2 size={16} className="text-status-confirmed flex-shrink-0" />
-                ) : isBlocked ? (
-                  <Lock size={16} className="text-muted flex-shrink-0" />
-                ) : (
-                  <Circle size={16} className="text-muted flex-shrink-0" />
-                )}
-                <span className={isDone ? 'text-sm text-muted line-through' : isBlocked ? 'text-sm text-muted' : 'text-sm text-foreground'}>
-                  {item.label}
-                </span>
+        {grouped.length > 0 ? (
+          <div className="space-y-5 mb-6">
+            {grouped.map(({ stage, entries }) => (
+              <div key={stage}>
+                <p className="text-xs font-medium text-muted uppercase tracking-wide border-b border-border pb-1 mb-2">
+                  {STAGE_LABELS[stage]}
+                </p>
+                <div className="space-y-1">
+                  {entries.map(({ item, idx }) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => toggleIndex(idx)}
+                      className="flex items-center gap-2.5 w-full text-left py-1 group"
+                    >
+                      {selectedIndices.has(idx) ? (
+                        <CheckSquare size={16} className="flex-shrink-0 text-primary" />
+                      ) : (
+                        <Square size={16} className="flex-shrink-0 text-muted" />
+                      )}
+                      <span className={`text-sm ${selectedIndices.has(idx) ? 'text-foreground' : 'text-muted'}`}>
+                        {item.label}
+                      </span>
+                    </button>
+                  ))}
+                </div>
               </div>
-            );
-          })}
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted mb-6">No default checklist items for this booking stage.</p>
+        )}
+
+        {/* Custom items */}
+        <div className="border-t border-border pt-4 mb-6">
+          <p className="text-xs font-medium text-muted uppercase tracking-wide mb-3">Add a custom item</p>
+          <div className="flex gap-2">
+            <Input
+              value={newLabel}
+              onChange={(e) => setNewLabel(e.target.value)}
+              placeholder="Item label"
+              className="flex-1"
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomItem(); } }}
+            />
+            <Select value={newStage} onValueChange={setNewStage}>
+              <SelectTrigger className="w-36">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="PROVISIONAL">Provisional</SelectItem>
+                <SelectItem value="CONFIRMED">Confirmed</SelectItem>
+                <SelectItem value="READY">Ready</SelectItem>
+                <SelectItem value="COMPLETE">Complete</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button type="button" variant="outline" onClick={addCustomItem} disabled={!newLabel.trim()}>
+              Add
+            </Button>
+          </div>
+          {customItems.length > 0 && (
+            <div className="mt-2 space-y-1">
+              {customItems.map((ci, i) => (
+                <div key={i} className="flex items-center gap-2 py-1">
+                  <CheckSquare size={16} className="flex-shrink-0 text-primary" />
+                  <span className="text-sm text-foreground flex-1">{ci.label}</span>
+                  <span className="text-xs text-muted">{STAGE_LABELS[ci.stage] ?? ci.stage}</span>
+                  <button
+                    type="button"
+                    onClick={() => setCustomItems((prev) => prev.filter((_, j) => j !== i))}
+                    className="text-muted hover:text-foreground transition-colors"
+                    aria-label="Remove item"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
-        <Button onClick={() => navigate(`/admin/bookings/${createdBookingId}`)}>
-          Go to booking
-        </Button>
+        {mutation.isError && (
+          <p className="text-sm text-status-cancelled mb-4">Failed to create booking. Please try again.</p>
+        )}
+
+        <div className="flex gap-3">
+          <Button onClick={handleCreate} disabled={mutation.isPending}>
+            {mutation.isPending ? 'Creating…' : 'Create booking'}
+          </Button>
+          <Button type="button" variant="outline" onClick={() => navigate('/admin/bookings')}>
+            Cancel
+          </Button>
+        </div>
       </div>
     );
   }
+
+  // ─── Step 1: Booking form ─────────────────────────────────────────────────────
 
   return (
     <div className="px-6 py-8 max-w-3xl mx-auto">
@@ -142,10 +308,7 @@ export default function BookingNewPage() {
 
       <h1 className="font-display text-2xl font-semibold text-foreground mb-8">New booking</h1>
 
-      <form
-        onSubmit={handleSubmit((values) => mutation.mutate(values))}
-        className="space-y-6"
-      >
+      <form onSubmit={handleSubmit(advanceToStep2)} className="space-y-6">
         <BookingFormFields
           control={control}
           register={register}
@@ -154,20 +317,11 @@ export default function BookingNewPage() {
           formats={formats}
         />
 
-        {mutation.isError && (
-          <p className="text-sm text-status-cancelled">
-            Failed to create booking. Please try again.
-          </p>
-        )}
         <div className="flex gap-3">
-          <Button type="submit" disabled={mutation.isPending}>
-            {mutation.isPending ? 'Creating...' : 'Create booking'}
+          <Button type="submit">
+            Next: Checklist
           </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => navigate('/admin/bookings')}
-          >
+          <Button type="button" variant="outline" onClick={() => navigate('/admin/bookings')}>
             Cancel
           </Button>
         </div>

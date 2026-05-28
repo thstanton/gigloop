@@ -10,8 +10,50 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import { EVENT_TYPES } from '../../common/constants';
+import type { DueDateRule } from '../checklist-defaults';
+
+export class ChecklistItemInput {
+  @ApiProperty({ example: 'send_quote', nullable: true })
+  @IsOptional()
+  @IsString()
+  key?: string | null;
+
+  @ApiProperty({ example: 'Send quote' })
+  @IsString()
+  @IsNotEmpty()
+  label!: string;
+
+  @ApiPropertyOptional({ enum: ['USER', 'CUSTOMER', 'BAND_MEMBER'], default: 'USER' })
+  @IsOptional()
+  @IsIn(['USER', 'CUSTOMER', 'BAND_MEMBER'])
+  completedBy?: 'USER' | 'CUSTOMER' | 'BAND_MEMBER';
+
+  @ApiPropertyOptional({ type: [String] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  dependsOn?: string[];
+
+  @ApiPropertyOptional({ nullable: true })
+  @IsOptional()
+  autoCompleteRule?: Record<string, unknown> | null;
+
+  @ApiPropertyOptional({
+    enum: ['PROVISIONAL', 'CONFIRMED', 'READY', 'COMPLETE'],
+    nullable: true,
+  })
+  @IsOptional()
+  @IsIn(['PROVISIONAL', 'CONFIRMED', 'READY', 'COMPLETE', null])
+  requiredForStatus?: 'PROVISIONAL' | 'CONFIRMED' | 'READY' | 'COMPLETE' | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  @IsOptional()
+  dueDateRule?: DueDateRule | null;
+}
 
 export class CreateBookingDto {
   @ApiProperty({ enum: EVENT_TYPES })
@@ -26,7 +68,7 @@ export class CreateBookingDto {
   @IsUUID()
   customerId!: string;
 
-  @ApiPropertyOptional({ enum: BookingStatus, default: 'ENQUIRY' })
+  @ApiPropertyOptional({ enum: BookingStatus, default: 'PROVISIONAL' })
   @IsOptional()
   @IsEnum(BookingStatus)
   status?: BookingStatus;
@@ -62,4 +104,10 @@ export class CreateBookingDto {
   @IsArray()
   @IsUUID('all', { each: true })
   formatIds?: string[];
+
+  @ApiProperty({ type: [ChecklistItemInput], description: 'Checklist items to seed for this booking' })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ChecklistItemInput)
+  checklistItems!: ChecklistItemInput[];
 }

@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
+import confetti from 'canvas-confetti';
 import { useAuth } from '@clerk/react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, CheckCircle2, Circle, AlertTriangle, Mail, Music, FileText, DollarSign, FolderOpen, ChevronDown, Check, Pencil, Plus, Send, Download, Eye, Lock, Heart, GlassWater, Utensils, Moon, Briefcase, Music2, Car, KeyRound, Speaker } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckCircle2, Circle, AlertTriangle, Mail, Music, FileText, DollarSign, FolderOpen, ChevronDown, Check, Pencil, Plus, Send, Download, Eye, Heart, GlassWater, Utensils, Moon, Briefcase, Music2, Car, KeyRound, Speaker, Sparkles } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import {
   DropdownMenu,
@@ -11,6 +13,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import InvoiceStatusPill from '@/components/InvoiceStatusPill';
 import { useBooking } from '@/lib/hooks/useBooking';
 import { useBookingActions } from '@/lib/hooks/useBookingActions';
@@ -73,22 +82,52 @@ function invoiceLineTotal(invoice: Invoice): number {
   return invoice.lineItems.reduce((sum, item) => sum + parseFloat(item.amount), 0);
 }
 
+function dueDateDisplay(dueDate: string | null | undefined): { text: string; className: string } | null {
+  if (!dueDate) return null;
+  const due = new Date(dueDate);
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  due.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((due.getTime() - now.getTime()) / 86400000);
+  if (diffDays < 0) {
+    const n = Math.abs(diffDays);
+    return { text: n === 1 ? '1 day overdue' : `${n} days overdue`, className: 'text-status-cancelled' };
+  }
+  if (diffDays === 0) return { text: 'Due today', className: 'text-amber-600' };
+  if (diffDays === 1) return { text: 'Due tomorrow', className: 'text-amber-600' };
+  if (diffDays <= 7) return { text: `Due in ${diffDays} days`, className: 'text-amber-600' };
+  return {
+    text: `Due ${due.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`,
+    className: 'text-muted',
+  };
+}
+
+const STAGE_LABELS: Record<string, string> = {
+  ENQUIRY: 'Enquiry',
+  PROVISIONAL: 'Provisional',
+  CONFIRMED: 'Confirmed',
+  READY: 'Ready',
+  COMPLETE: 'Complete',
+};
+
 // ─── Status dropdown ──────────────────────────────────────────────────────────
 
 const STATUS_PILL_CLASSES: Record<BookingStatus, string> = {
-  ENQUIRY:   'bg-status-enquiry/12 text-status-enquiry border-l-status-enquiry',
-  CONFIRMED: 'bg-status-confirmed/12 text-status-confirmed border-l-status-confirmed',
-  READY:     'bg-status-ready/12 text-status-ready border-l-status-ready',
-  COMPLETE:  'bg-status-complete/12 text-status-complete border-l-status-complete',
-  CANCELLED: 'bg-status-cancelled/12 text-status-cancelled border-l-status-cancelled',
+  ENQUIRY:      'bg-status-enquiry/12 text-status-enquiry border-l-status-enquiry',
+  PROVISIONAL:  'bg-status-provisional/12 text-status-provisional border-l-status-provisional',
+  CONFIRMED:    'bg-status-confirmed/12 text-status-confirmed border-l-status-confirmed',
+  READY:        'bg-status-ready/12 text-status-ready border-l-status-ready',
+  COMPLETE:     'bg-status-complete/12 text-status-complete border-l-status-complete',
+  CANCELLED:    'bg-status-cancelled/12 text-status-cancelled border-l-status-cancelled',
 };
 
 const STATUS_LABELS: Record<BookingStatus, string> = {
-  ENQUIRY:   'Enquiry',
-  CONFIRMED: 'Confirmed',
-  READY:     'Ready',
-  COMPLETE:  'Complete',
-  CANCELLED: 'Cancelled',
+  ENQUIRY:      'Enquiry',
+  PROVISIONAL:  'Provisional',
+  CONFIRMED:    'Confirmed',
+  READY:        'Ready',
+  COMPLETE:     'Complete',
+  CANCELLED:    'Cancelled',
 };
 
 function StatusDropdown({ booking, checklist }: { booking: BookingDetail; checklist: ChecklistItem[] }) {
@@ -135,24 +174,18 @@ function StatusDropdown({ booking, checklist }: { booking: BookingDetail; checkl
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start">
-          {STATUS_ORDER.map((s) => {
-            const outstanding = outstandingFor(s);
-            return (
-              <DropdownMenuItem
-                key={s}
-                onSelect={() => handleSelect(s)}
-                className="gap-2"
-              >
-                <span className={cn('inline-flex items-center border-l-[3px] pl-2 pr-2.5 py-0.5 text-xs font-medium', STATUS_PILL_CLASSES[s])}>
-                  {STATUS_LABELS[s]}
-                </span>
-                {outstanding.length > 0 && (
-                  <span className="ml-auto text-xs text-status-cancelled">{outstanding.length} outstanding</span>
-                )}
-                {s === booking.status && outstanding.length === 0 && <Check size={12} className="ml-auto" />}
-              </DropdownMenuItem>
-            );
-          })}
+          {STATUS_ORDER.map((s) => (
+            <DropdownMenuItem
+              key={s}
+              onSelect={() => handleSelect(s)}
+              className="gap-2"
+            >
+              <span className={cn('inline-flex items-center border-l-[3px] pl-2 pr-2.5 py-0.5 text-xs font-medium', STATUS_PILL_CLASSES[s])}>
+                {STATUS_LABELS[s]}
+              </span>
+              {s === booking.status && <Check size={12} className="ml-auto" />}
+            </DropdownMenuItem>
+          ))}
         </DropdownMenuContent>
       </DropdownMenu>
 
@@ -1028,6 +1061,72 @@ function CommunicationRow({ comm }: { comm: Communication }) {
   );
 }
 
+// ─── Add checklist item form ──────────────────────────────────────────────────
+
+function AddChecklistItemForm({ bookingId, onDone }: { bookingId: string; onDone: () => void }) {
+  const queryClient = useQueryClient();
+  const [label, setLabel] = useState('');
+  const [stage, setStage] = useState('CONFIRMED');
+  const [dueDate, setDueDate] = useState('');
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      apiPost(`/bookings/${bookingId}/checklist`, {
+        label: label.trim(),
+        requiredForStatus: stage || null,
+        dueDate: dueDate || null,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bookingChecklist', bookingId] });
+      onDone();
+    },
+    onError: () => toast({ title: 'Failed to add item', variant: 'destructive' }),
+  });
+
+  return (
+    <div className="mb-4 p-3 bg-surface border border-border rounded-md space-y-2.5">
+      <Input
+        value={label}
+        onChange={(e) => setLabel(e.target.value)}
+        placeholder="Item label"
+        className="text-sm"
+        autoFocus
+      />
+      <div className="grid grid-cols-2 gap-2">
+        <Select value={stage} onValueChange={setStage}>
+          <SelectTrigger className="text-sm h-8">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="PROVISIONAL">Provisional</SelectItem>
+            <SelectItem value="CONFIRMED">Confirmed</SelectItem>
+            <SelectItem value="READY">Ready</SelectItem>
+            <SelectItem value="COMPLETE">Complete</SelectItem>
+          </SelectContent>
+        </Select>
+        <Input
+          type="date"
+          value={dueDate}
+          onChange={(e) => setDueDate(e.target.value)}
+          className="text-sm h-8"
+        />
+      </div>
+      <div className="flex gap-2">
+        <Button
+          size="sm"
+          onClick={() => mutation.mutate()}
+          disabled={!label.trim() || mutation.isPending}
+        >
+          {mutation.isPending ? 'Adding…' : 'Add'}
+        </Button>
+        <Button size="sm" variant="outline" onClick={onDone}>
+          Cancel
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Skeleton ─────────────────────────────────────────────────────────────────
 
 function PageSkeleton() {
@@ -1066,6 +1165,7 @@ export default function BookingDetailPage() {
   const [contractSheetReadOnly, setContractSheetReadOnly] = useState(false);
   const [pendingContract, setPendingContract] = useState<Contract | null>(null);
   const [showAllChecklist, setShowAllChecklist] = useState(false);
+  const [showAddItem, setShowAddItem] = useState(false);
 
   const { isLoaded } = useAuth();
   const { data: booking, isLoading, isError } = useBooking(id!);
@@ -1190,6 +1290,89 @@ export default function BookingDetailPage() {
 
   const backState = { from: `/admin/bookings/${id}`, label: title };
 
+  function renderChecklistItem(item: ChecklistItem) {
+    const isDone = item.state === 'COMPLETE';
+    const isFailed = item.state === 'FAILED';
+    const isPlayTheGig = item.key === 'play_the_gig';
+    const shortcuts = item.key ? (CHECKLIST_SHORTCUTS[item.key] ?? {}) : {};
+    const due = dueDateDisplay(item.dueDate);
+    return (
+      <div key={item.id} className="flex items-center justify-between gap-2.5 py-1.5">
+        <div className="flex items-start gap-2.5 min-w-0">
+          {isDone ? (
+            <button
+              onClick={() => toggleChecklistItem.mutate({ itemId: item.id, state: 'PENDING' })}
+              className={cn('flex-shrink-0 transition-colors', isPlayTheGig ? 'text-status-ready hover:text-status-ready/70' : 'text-status-confirmed hover:text-status-confirmed/70')}
+              aria-label="Mark as incomplete"
+            >
+              {isPlayTheGig ? <Sparkles size={16} /> : <CheckCircle2 size={16} />}
+            </button>
+          ) : isFailed ? (
+            <button
+              onClick={() => toggleChecklistItem.mutate({ itemId: item.id, state: 'PENDING' })}
+              className="flex-shrink-0 text-status-cancelled hover:text-status-cancelled/70 transition-colors"
+              aria-label="Retry"
+            >
+              <AlertTriangle size={16} />
+            </button>
+          ) : (
+            <button
+              onClick={() => {
+                if (isPlayTheGig) {
+                  confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+                }
+                toggleChecklistItem.mutate({ itemId: item.id, state: 'COMPLETE' });
+              }}
+              className={cn('flex-shrink-0 transition-colors', isPlayTheGig ? 'text-muted hover:text-status-ready' : 'text-muted hover:text-status-confirmed')}
+              aria-label="Mark as complete"
+            >
+              {isPlayTheGig ? <Sparkles size={16} /> : <Circle size={16} />}
+            </button>
+          )}
+          <div className="min-w-0">
+            <span className={cn('text-sm', isDone ? 'text-muted line-through' : isFailed ? 'text-status-cancelled' : 'text-foreground')}>
+              {item.label}
+            </span>
+            {due && !isDone && (
+              <p className={cn('text-xs', due.className)}>{due.text}</p>
+            )}
+          </div>
+        </div>
+        {!isDone && (
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {shortcuts.shortcutTemplateType && (
+              <button onClick={() => openCompose(shortcuts.shortcutTemplateType)} className="text-xs text-primary hover:underline">
+                {isFailed ? 'Retry' : 'Send'}
+              </button>
+            )}
+            {shortcuts.shortcutAction && (
+              <button onClick={() => handleInvoiceAction(shortcuts.shortcutAction!)} className="text-xs text-primary hover:underline">
+                {isFailed ? 'Retry' : 'Create'}
+              </button>
+            )}
+            {shortcuts.shortcutMarkDone && (
+              <button
+                onClick={() => {
+                  if (shortcuts.shortcutMarkDone === 'mark_contract_signed') {
+                    if (booking?.activeContract) actions.markContractSigned(booking.activeContract.id);
+                  } else {
+                    const sentDeposit = invoices.find((inv) => inv.isDeposit && inv.status === 'SENT');
+                    if (sentDeposit) markPaid.mutate(sentDeposit.id);
+                    else actions.markDepositReceived();
+                  }
+                }}
+                disabled={actions.isPending || markPaid.isPending}
+                className="text-xs text-primary hover:underline disabled:opacity-50"
+              >
+                {isFailed ? 'Retry' : 'Mark done'}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="px-4 md:px-6 py-6 max-w-7xl mx-auto">
 
@@ -1272,127 +1455,92 @@ export default function BookingDetailPage() {
         <div className="mt-8 md:mt-0 space-y-6 md:sticky md:top-20 md:max-h-[calc(100vh-5rem)] md:overflow-y-auto md:overflow-x-hidden md:pb-6">
 
           {/* Checklist */}
-          {booking.status !== 'CANCELLED' && checklist.length > 0 && (() => {
-            const nonComplete = checklist.filter((i) => i.state !== 'COMPLETE');
-            const visibleItems = (showAllChecklist || nonComplete.length === 0) ? checklist : nonComplete;
-            const hiddenCount = checklist.length - visibleItems.length;
+          {booking.status !== 'CANCELLED' && (() => {
+            const nonBlocked = checklist.filter((i) => i.state !== 'BLOCKED');
+            if (nonBlocked.length === 0 && !showAddItem) return null;
+
+            const STAGE_LIST = ['ENQUIRY', 'PROVISIONAL', 'CONFIRMED', 'READY', 'COMPLETE'] as const;
+            const bookingIdx = STAGE_LIST.indexOf(booking.status as typeof STAGE_LIST[number]);
+            const defaultStageSet = new Set<string | null>([null]);
+            if (bookingIdx >= 0) defaultStageSet.add(STAGE_LIST[bookingIdx]!);
+            if (bookingIdx >= 0 && bookingIdx + 1 < STAGE_LIST.length) defaultStageSet.add(STAGE_LIST[bookingIdx + 1]!);
+
+            const filtered = showAllChecklist
+              ? nonBlocked
+              : nonBlocked.filter((i) => defaultStageSet.has(i.requiredForStatus));
+            const hiddenCount = nonBlocked.length - filtered.length;
+
+            const STAGE_DISPLAY_ORDER = ['PROVISIONAL', 'CONFIRMED', 'READY', 'COMPLETE'];
+            const itemsByStage = new Map<string | null, ChecklistItem[]>();
+            for (const item of filtered) {
+              const k = item.requiredForStatus ?? null;
+              if (!itemsByStage.has(k)) itemsByStage.set(k, []);
+              itemsByStage.get(k)!.push(item);
+            }
+
             return (
               <section>
-                <SectionHeader label="Checklist" />
-                <div className="space-y-2.5">
-                  {visibleItems.map((item) => {
-                    const isDone = item.state === 'COMPLETE';
-                    const isBlocked = item.state === 'BLOCKED';
-                    const isFailed = item.state === 'FAILED';
-                    const shortcuts = item.key ? (CHECKLIST_SHORTCUTS[item.key] ?? {}) : {};
-                    const canToggle = !isBlocked && !isFailed;
-                    return (
-                      <div key={item.id} className="flex items-center justify-between gap-2.5">
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          {isDone ? (
-                            <button
-                              onClick={() => toggleChecklistItem.mutate({ itemId: item.id, state: 'PENDING' })}
-                              className="flex-shrink-0 text-status-confirmed hover:text-status-confirmed/70 transition-colors"
-                              aria-label="Mark as incomplete"
-                            >
-                              <CheckCircle2 size={16} />
-                            </button>
-                          ) : isFailed ? (
-                            <AlertTriangle size={16} className="text-status-cancelled flex-shrink-0" />
-                          ) : isBlocked ? (
-                            <Lock size={16} className="text-muted flex-shrink-0" />
-                          ) : (
-                            <button
-                              onClick={() => toggleChecklistItem.mutate({ itemId: item.id, state: 'COMPLETE' })}
-                              className="flex-shrink-0 text-muted hover:text-status-confirmed transition-colors"
-                              aria-label="Mark as complete"
-                            >
-                              <Circle size={16} />
-                            </button>
-                          )}
-                          <span
-                            className={cn(
-                              'text-sm',
-                              isDone ? 'text-muted line-through' :
-                              isFailed ? 'text-status-cancelled' :
-                              isBlocked ? 'text-muted' : 'text-foreground',
-                            )}
-                          >
-                            {item.label}
-                          </span>
-                        </div>
-                        {canToggle && !isDone && (
-                          <div className="flex items-center gap-2 flex-shrink-0">
-                            {shortcuts.shortcutTemplateType && (
-                              <button
-                                onClick={() => openCompose(shortcuts.shortcutTemplateType)}
-                                className="text-xs text-primary hover:underline"
-                              >
-                                Send
-                              </button>
-                            )}
-                            {shortcuts.shortcutAction && (
-                              <button
-                                onClick={() => handleInvoiceAction(shortcuts.shortcutAction!)}
-                                className="text-xs text-primary hover:underline"
-                              >
-                                Create
-                              </button>
-                            )}
-                            {shortcuts.shortcutMarkDone && (
-                              <button
-                                onClick={() => {
-                                  if (shortcuts.shortcutMarkDone === 'mark_contract_signed') {
-                                    if (booking.activeContract) actions.markContractSigned(booking.activeContract.id);
-                                  } else {
-                                    const sentDepositInvoice = invoices.find(
-                                      (inv) => inv.isDeposit && inv.status === 'SENT',
-                                    );
-                                    if (sentDepositInvoice) {
-                                      markPaid.mutate(sentDepositInvoice.id);
-                                    } else {
-                                      actions.markDepositReceived();
-                                    }
-                                  }
-                                }}
-                                disabled={actions.isPending || markPaid.isPending}
-                                className="text-xs text-primary hover:underline disabled:opacity-50"
-                              >
-                                Mark done
-                              </button>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                  {hiddenCount > 0 && (
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-sm font-semibold text-foreground">Checklist</h2>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddItem((v) => !v)}
+                    className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors"
+                  >
+                    <Plus size={12} />
+                    Add item
+                  </button>
+                </div>
+
+                {showAddItem && (
+                  <AddChecklistItemForm bookingId={booking.id} onDone={() => setShowAddItem(false)} />
+                )}
+
+                {/* Null-stage items */}
+                {(itemsByStage.get(null) ?? []).map((item) => renderChecklistItem(item))}
+
+                {/* Stage-grouped items */}
+                {STAGE_DISPLAY_ORDER.map((stage) => {
+                  const stageItems = itemsByStage.get(stage) ?? [];
+                  if (!stageItems.length) return null;
+                  return (
+                    <div key={stage} className="mt-3">
+                      <p className="text-xs font-medium text-muted uppercase tracking-wide border-b border-border pb-1 mb-1.5">
+                        {STAGE_LABELS[stage]}
+                      </p>
+                      {stageItems.map((item) => renderChecklistItem(item))}
+                    </div>
+                  );
+                })}
+
+                <div className="mt-2 space-y-1.5">
+                  {hiddenCount > 0 && !showAllChecklist && (
                     <button
                       onClick={() => setShowAllChecklist(true)}
                       className="text-xs text-muted hover:text-foreground transition-colors"
                     >
-                      Show {hiddenCount} completed {hiddenCount === 1 ? 'item' : 'items'}
+                      Show {hiddenCount} more {hiddenCount === 1 ? 'item' : 'items'}
                     </button>
                   )}
-                  {showAllChecklist && checklist.some((i) => i.state === 'COMPLETE') && (
+                  {showAllChecklist && nonBlocked.length > 0 && (
                     <button
                       onClick={() => setShowAllChecklist(false)}
                       className="text-xs text-muted hover:text-foreground transition-colors"
                     >
-                      Hide completed
+                      Show fewer
                     </button>
                   )}
-                  {/* Ready to mark as X? contextual prompts */}
-                  {(['CONFIRMED', 'READY', 'COMPLETE'] as const)
+
+                  {(['PROVISIONAL', 'CONFIRMED', 'READY', 'COMPLETE'] as const)
                     .filter((targetStatus) => {
-                      const idx = STATUS_ORDER.indexOf(booking.status);
                       const targetIdx = STATUS_ORDER.indexOf(targetStatus);
-                      if (targetIdx <= idx) return false;
+                      const currentIdx = STATUS_ORDER.indexOf(booking.status);
+                      if (targetIdx <= currentIdx) return false;
                       const forStatus = checklist.filter((i) => i.requiredForStatus === targetStatus);
                       return forStatus.length > 0 && forStatus.every((i) => i.state === 'COMPLETE');
                     })
                     .map((targetStatus) => (
-                      <div key={targetStatus} className="mt-3 flex items-center gap-2 text-xs text-status-confirmed">
+                      <div key={targetStatus} className="flex items-center gap-2 text-xs text-status-confirmed">
                         <CheckCircle2 size={13} />
                         <span>Ready to mark as <span className="font-medium">{STATUS_LABELS[targetStatus]}</span>?</span>
                       </div>

@@ -69,6 +69,7 @@ const config: Config = {
         ring: 'hsl(var(--ring))',
         status: {
           enquiry: 'hsl(var(--status-enquiry) / <alpha-value>)',
+          provisional: 'hsl(var(--status-provisional) / <alpha-value>)',
           confirmed: 'hsl(var(--status-confirmed) / <alpha-value>)',
           ready: 'hsl(var(--status-ready) / <alpha-value>)',
           complete: 'hsl(var(--status-complete) / <alpha-value>)',

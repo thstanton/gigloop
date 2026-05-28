@@ -11,9 +11,10 @@ import { cn } from '@/lib/utils';
 type Filter = BookingStatus | 'ALL';
 
 const FILTERS: { label: string; value: Filter }[] = [
-  { label: 'All',       value: 'ALL'       },
-  { label: 'Enquiry',   value: 'ENQUIRY'   },
-  { label: 'Confirmed', value: 'CONFIRMED' },
+  { label: 'All',         value: 'ALL'         },
+  { label: 'Enquiry',     value: 'ENQUIRY'     },
+  { label: 'Provisional', value: 'PROVISIONAL' },
+  { label: 'Confirmed',   value: 'CONFIRMED'   },
   { label: 'Ready',     value: 'READY'     },
   { label: 'Complete',  value: 'COMPLETE'  },
   { label: 'Cancelled', value: 'CANCELLED' },

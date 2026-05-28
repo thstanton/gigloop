@@ -9,6 +9,7 @@
 
 export type BookingStatus =
   | 'ENQUIRY'
+  | 'PROVISIONAL'
   | 'CONFIRMED'
   | 'READY'
   | 'COMPLETE'
@@ -186,7 +187,7 @@ export interface ChecklistItem {
   order: number;
   dependsOn: string[];
   autoCompleteRule: Record<string, unknown> | null;
-  requiredForStatus: 'CONFIRMED' | 'READY' | 'COMPLETE' | null;
+  requiredForStatus: 'PROVISIONAL' | 'CONFIRMED' | 'READY' | 'COMPLETE' | null;
   completedAt: string | null;
   dueDate: string | null;
   dueDateRule: DueDateRule | null;
@@ -232,6 +233,7 @@ export interface CreateBookingInput {
   venueId?: string;
   referrerId?: string;
   formatIds?: string[];
+  checklistItems: ChecklistDefaultItem[];
 }
 
 export interface UpdateBookingInput {
@@ -445,13 +447,19 @@ export interface DueDateRule {
 }
 
 export interface ChecklistDefaultItem {
-  key: string;
+  key: string | null;
   label: string;
   completedBy: 'USER' | 'CUSTOMER' | 'BAND_MEMBER';
   dependsOn: string[];
   autoCompleteRule: Record<string, unknown> | null;
-  requiredForStatus: 'CONFIRMED' | 'READY' | 'COMPLETE' | null;
+  requiredForStatus: 'PROVISIONAL' | 'CONFIRMED' | 'READY' | 'COMPLETE' | null;
   dueDateRule: DueDateRule | null;
+}
+
+export interface CreateChecklistItemInput {
+  label: string;
+  requiredForStatus?: 'PROVISIONAL' | 'CONFIRMED' | 'READY' | 'COMPLETE' | null;
+  dueDate?: string | null;
 }
 
 export interface UserPreferences {

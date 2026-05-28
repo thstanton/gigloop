@@ -1,0 +1,11 @@
+-- AlterEnum
+ALTER TYPE "BookingStatus" ADD VALUE 'PROVISIONAL';
+
+-- AlterTable
+ALTER TABLE "BookingChecklistItem" ALTER COLUMN "id" DROP DEFAULT,
+ALTER COLUMN "updatedAt" DROP DEFAULT,
+ALTER COLUMN "dependsOn" DROP DEFAULT;
+
+-- AlterTable
+ALTER TABLE "Contract" ALTER COLUMN "id" DROP DEFAULT,
+ALTER COLUMN "updatedAt" DROP DEFAULT;

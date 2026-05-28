@@ -17,7 +17,7 @@ interface BookingContext {
   musicFormResponse: { id: string } | null;
 }
 
-const STATUS_ORDER = ['ENQUIRY', 'CONFIRMED', 'READY', 'COMPLETE', 'CANCELLED'];
+const STATUS_ORDER = ['ENQUIRY', 'PROVISIONAL', 'CONFIRMED', 'READY', 'COMPLETE', 'CANCELLED'];
 
 function statusGte(current: string, threshold: string): boolean {
   return STATUS_ORDER.indexOf(current) >= STATUS_ORDER.indexOf(threshold);
@@ -25,7 +25,6 @@ function statusGte(current: string, threshold: string): boolean {
 
 // Items that become SKIPPED when booking status reaches a threshold
 const SKIP_RULES: Array<{ keys: string[]; threshold: string }> = [
-  { keys: ['send_quote'], threshold: 'CONFIRMED' },
   { keys: ['contract_signed'], threshold: 'READY' },
 ];
 

@@ -21,7 +21,7 @@ function upcomingGigs(bookings: BookingListItem[]): BookingListItem[] {
 
   return bookings
     .filter((b) => {
-      if (b.status === 'CANCELLED') return false;
+      if (b.status === 'CANCELLED' || b.status === 'ENQUIRY') return false;
       const d = new Date(b.date);
       return d >= today && d <= cutoff;
     })
@@ -173,7 +173,7 @@ function CalendarWidget({ bookings }: { bookings: BookingListItem[] }) {
 
   const byDate = new Map<string, BookingListItem[]>();
   for (const b of bookings) {
-    if (b.status === 'CANCELLED') continue;
+    if (b.status === 'CANCELLED' || b.status === 'ENQUIRY') continue;
     const key = b.date.slice(0, 10);
     const existing = byDate.get(key) ?? [];
     existing.push(b);
@@ -346,7 +346,7 @@ function nextUpcomingGig(bookings: BookingListItem[]): BookingListItem | null {
   today.setHours(0, 0, 0, 0);
   return (
     bookings
-      .filter((b) => b.status !== 'CANCELLED' && new Date(b.date) >= today)
+      .filter((b) => b.status !== 'CANCELLED' && b.status !== 'ENQUIRY' && new Date(b.date) >= today)
       .sort((a, b) => a.date.localeCompare(b.date))[0] ?? null
   );
 }

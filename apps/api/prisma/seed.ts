@@ -1,12 +1,17 @@
 import { PrismaClient } from '@prisma/client';
-import { CHECKLIST_DEFAULTS, computeDueDate, type ChecklistDefaultItem } from '../src/bookings/checklist-defaults';
+import {
+  CHECKLIST_DEFAULTS,
+  filterItemsByStartingStatus,
+  computeDueDate,
+  type ChecklistDefaultItem,
+} from '../src/bookings/checklist-defaults';
 
 const prisma = new PrismaClient();
 const USER_ID = 'user_3E0gEsNgpVB2KnlKfWD6vFw6G7d';
 
 // Simplified evaluator for seed — replicates core state machine without NestJS DI
 function seedChecklistStates(
-  defaults: ChecklistDefaultItem[],
+  items: ChecklistDefaultItem[],
   opts: {
     bookingStatus: string;
     hasDepositInvoice: boolean;
@@ -19,12 +24,11 @@ function seedChecklistStates(
   },
 ): Array<{ item: ChecklistDefaultItem; state: string }> {
   const SKIP_RULES: Record<string, string[]> = {
-    send_quote: ['CONFIRMED', 'READY', 'COMPLETE'],
     contract_signed: ['READY', 'COMPLETE'],
   };
   const stateMap = new Map<string, string>();
 
-  for (const item of defaults) {
+  for (const item of items) {
     const skipAt = SKIP_RULES[item.key];
     if (skipAt?.includes(opts.bookingStatus)) {
       stateMap.set(item.key, 'SKIPPED');
@@ -59,34 +63,39 @@ function seedChecklistStates(
           break;
       }
     }
+    // Manual items (no autoCompleteRule) stay PENDING unless explicitly marked
     stateMap.set(item.key, complete ? 'COMPLETE' : 'PENDING');
   }
 
-  return defaults.map((item) => ({ item, state: stateMap.get(item.key) ?? 'PENDING' }));
+  return items.map((item) => ({ item, state: stateMap.get(item.key) ?? 'PENDING' }));
 }
 
 async function seedChecklist(
   bookingId: string,
   bookingDate: Date,
   bookingCreatedAt: Date,
-  opts: Parameters<typeof seedChecklistStates>[1],
+  opts: Parameters<typeof seedChecklistStates>[1] & { startingStatus: string },
 ) {
-  const states = seedChecklistStates(CHECKLIST_DEFAULTS, opts);
-  const data = states.map(({ item, state }, idx) => ({
-    userId: USER_ID,
-    bookingId,
-    key: item.key,
-    label: item.label,
-    completedBy: item.completedBy,
-    state,
-    order: idx + 1,
-    dependsOn: item.dependsOn,
-    ...(item.autoCompleteRule !== null ? { autoCompleteRule: item.autoCompleteRule as object } : {}),
-    requiredForStatus: item.requiredForStatus,
-    dueDate: computeDueDate(item.dueDateRule, bookingDate, bookingCreatedAt),
-    ...(item.dueDateRule !== null ? { dueDateRule: item.dueDateRule as object } : {}),
-    completedAt: state === 'COMPLETE' ? new Date() : null,
-  }));
+  // Apply seeding rule: filter items to those from stages after the starting status
+  const filteredItems = filterItemsByStartingStatus(CHECKLIST_DEFAULTS, opts.startingStatus);
+  const states = seedChecklistStates(filteredItems, opts);
+  const data = states
+    .filter(({ state }) => state !== 'SKIPPED')
+    .map(({ item, state }, idx) => ({
+      userId: USER_ID,
+      bookingId,
+      key: item.key,
+      label: item.label,
+      completedBy: item.completedBy,
+      state,
+      order: idx + 1,
+      dependsOn: item.dependsOn,
+      ...(item.autoCompleteRule !== null ? { autoCompleteRule: item.autoCompleteRule as object } : {}),
+      requiredForStatus: item.requiredForStatus,
+      dueDate: computeDueDate(item.dueDateRule, bookingDate, bookingCreatedAt),
+      ...(item.dueDateRule !== null ? { dueDateRule: item.dueDateRule as object } : {}),
+      completedAt: state === 'COMPLETE' ? new Date() : null,
+    }));
   await prisma.bookingChecklistItem.createMany({ data });
 }
 
@@ -443,11 +452,11 @@ async function main() {
 
   console.log('Seeding bookings...');
 
-  // 1. ENQUIRY — Sophie & Daniel, no venue yet, nothing done
+  // 1. PROVISIONAL — Sophie & Daniel, quote sent, awaiting confirmation
   const booking1 = await prisma.booking.create({
     data: {
       userId: USER_ID,
-      status: 'ENQUIRY',
+      status: 'PROVISIONAL',
       eventType: 'WEDDING',
       date: new Date('2026-09-12T14:00:00'),
       fee: 1800,
@@ -456,14 +465,15 @@ async function main() {
     },
   });
   await seedChecklist(booking1.id, booking1.date, booking1.createdAt, {
-    bookingStatus: 'ENQUIRY',
+    startingStatus: 'PROVISIONAL',
+    bookingStatus: 'PROVISIONAL',
     hasDepositInvoice: false,
     hasBalanceInvoice: false,
     hasContract: false,
     contractSigned: false,
     depositReceived: false,
     hasMusicFormResponse: false,
-    commBuiltInTypes: [],
+    commBuiltInTypes: ['quote'],
   });
 
   // 2. CONFIRMED — Emma & James at Barnsley House
@@ -526,6 +536,7 @@ async function main() {
     },
   });
   await seedChecklist(booking2.id, booking2.date, booking2.createdAt, {
+    startingStatus: 'CONFIRMED',
     bookingStatus: 'CONFIRMED',
     hasDepositInvoice: true,
     hasBalanceInvoice: false,
@@ -618,6 +629,7 @@ async function main() {
     },
   });
   await seedChecklist(booking3.id, booking3.date, booking3.createdAt, {
+    startingStatus: 'CONFIRMED',
     bookingStatus: 'CONFIRMED',
     hasDepositInvoice: true,
     hasBalanceInvoice: false,
@@ -712,6 +724,7 @@ async function main() {
     },
   });
   await seedChecklist(booking4.id, booking4.date, booking4.createdAt, {
+    startingStatus: 'CONFIRMED',
     bookingStatus: 'CONFIRMED',
     hasDepositInvoice: true,
     hasBalanceInvoice: true,
@@ -806,6 +819,7 @@ async function main() {
     },
   });
   await seedChecklist(booking5.id, booking5.date, booking5.createdAt, {
+    startingStatus: 'CONFIRMED',
     bookingStatus: 'COMPLETE',
     hasDepositInvoice: true,
     hasBalanceInvoice: true,
@@ -834,7 +848,7 @@ async function main() {
   console.log('  Contacts: 9');
   console.log('  Songs: 33');
   console.log('  Templates: 7 built-in');
-  console.log('  Bookings: 6 (Enquiry, Confirmed ×2, Invoiced, Completed, Cancelled)');
+  console.log('  Bookings: 6 (Provisional, Confirmed ×2, Invoiced, Completed, Cancelled)');
 }
 
 main()

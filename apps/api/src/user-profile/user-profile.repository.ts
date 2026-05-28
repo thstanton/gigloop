@@ -40,7 +40,7 @@ export class UserProfileRepository {
 
   async updateChecklistDefaults(
     userId: string,
-    systemItemOverrides: Array<{ key: string; dueDateRule: unknown }>,
+    systemItemOverrides: Array<{ key: string; dueDateRule?: unknown }>,
     customItems: ChecklistDefaultItem[],
     reminderLeadDays?: number,
   ) {
