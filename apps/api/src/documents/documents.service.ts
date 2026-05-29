@@ -37,7 +37,7 @@ async function fetchAsDataUrl(url: string): Promise<string> {
   return `data:${contentType};base64,${buffer.toString('base64')}`;
 }
 
-export type DocumentWithUrl = Document & { url: string };
+export type DocumentWithUrl = Document & { url: string; contract?: { status: string } | null };
 
 // Minimal shape needed to build PDF data from an already-fetched invoice.
 // Accepts Prisma Decimal for amount (hence the any — Number() handles it).
