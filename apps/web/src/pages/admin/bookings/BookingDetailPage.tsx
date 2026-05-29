@@ -787,12 +787,14 @@ const CONTRACT_PILL_CLASSES: Record<string, string> = {
   DRAFT:  'bg-status-enquiry/12 text-status-enquiry border-l-status-enquiry',
   SENT:   'bg-status-confirmed/12 text-status-confirmed border-l-status-confirmed',
   SIGNED: 'bg-status-ready/12 text-status-ready border-l-status-ready',
+  VOID:   'bg-muted/20 text-muted border-l-muted',
 };
 
 const CONTRACT_PILL_LABELS: Record<string, string> = {
   DRAFT:  'Draft',
   SENT:   'Sent',
   SIGNED: 'Signed',
+  VOID:   'Void',
 };
 
 function ContractCard({
@@ -819,10 +821,11 @@ function ContractCard({
   const [confirmVoidOpen, setConfirmVoidOpen] = useState(false);
   const contract = booking.activeContract;
   const status = contract?.status ?? null;
-  const isEmpty = !status || status === 'VOID';
+  const isVoid = status === 'VOID';
+  const isEmpty = !contract;
   const contractDoc = documents.find((d) => d.type === 'CONTRACT' && d.contractStatus !== 'VOID');
 
-  const headerAction = isEmpty ? (
+  const headerAction = (isEmpty || isVoid) ? (
     <button
       type="button"
       onClick={onCreateContract}
@@ -852,13 +855,13 @@ function ContractCard({
         ) : (
           <div className="flex items-start justify-between gap-3 py-0.5">
             <div className="min-w-0">
-              <p className="text-sm text-foreground">Contract</p>
+              <p className={cn('text-sm', isVoid ? 'text-muted line-through' : 'text-foreground')}>Contract</p>
               {contractDate && (
                 <p className="text-xs text-muted mt-0.5">{contractDate}</p>
               )}
               <div className="mt-1">
-                <span className={cn('inline-flex items-center border-l-[3px] pl-2 pr-2.5 py-0.5 text-xs font-medium', CONTRACT_PILL_CLASSES[status] ?? '')}>
-                  {CONTRACT_PILL_LABELS[status] ?? status}
+                <span className={cn('inline-flex items-center border-l-[3px] pl-2 pr-2.5 py-0.5 text-xs font-medium', CONTRACT_PILL_CLASSES[status ?? ''] ?? '')}>
+                  {CONTRACT_PILL_LABELS[status ?? ''] ?? status}
                 </span>
               </div>
             </div>
