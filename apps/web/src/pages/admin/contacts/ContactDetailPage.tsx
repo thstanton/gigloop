@@ -50,7 +50,7 @@ function mergeBookings(
   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 }
 
-function BookingsList({ bookings }: { bookings: RoleBooking[] }) {
+function BookingsList({ bookings, fromState }: { bookings: RoleBooking[]; fromState?: { from: string; label: string } }) {
   const navigate = useNavigate();
   if (bookings.length === 0) {
     return <p className="text-sm text-muted py-4">No bookings associated with this contact.</p>;
@@ -60,7 +60,7 @@ function BookingsList({ bookings }: { bookings: RoleBooking[] }) {
       {bookings.map((b) => (
         <div
           key={`${b.role}-${b.id}`}
-          onClick={() => navigate(`/admin/bookings/${b.id}`)}
+          onClick={() => navigate(`/admin/bookings/${b.id}`, fromState ? { state: fromState } : undefined)}
           className="py-3 flex items-start justify-between gap-3 cursor-pointer hover:bg-surface active:bg-surface transition-colors duration-100 -mx-1 px-1 rounded"
         >
           <div className="flex-1 min-w-0">
@@ -191,7 +191,7 @@ export default function ContactDetailPage() {
               <span className="ml-2 text-xs font-normal text-muted">({bookings.length})</span>
             )}
           </h2>
-          <BookingsList bookings={bookings} />
+          <BookingsList bookings={bookings} fromState={{ from: `/admin/contacts/${id}`, label: contact.name }} />
         </div>
 
       </div>

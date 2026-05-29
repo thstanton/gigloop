@@ -952,6 +952,9 @@ function InvoiceRow({
           {invoice.issueDate ? formatDate(invoice.issueDate) : '—'}
           {invoice.dueDate && ` · due ${formatDate(invoice.dueDate)}`}
         </p>
+        <div className="mt-1">
+          <InvoiceStatusPill status={invoice.status} isOverdue={overdue} />
+        </div>
       </div>
       <div className="flex items-center gap-2 flex-shrink-0">
         <span className={cn('text-sm font-medium tabular-nums', isVoid ? 'text-muted' : 'text-foreground')}>
@@ -1036,7 +1039,6 @@ function InvoiceRow({
             </DropdownMenuContent>
           </DropdownMenu>
         )}
-        <InvoiceStatusPill status={invoice.status} isOverdue={overdue} />
       </div>
     </div>
   );
