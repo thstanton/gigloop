@@ -161,6 +161,7 @@ export class DocumentsService {
   async generateAndStoreSignedContractPdf(
     userId: string,
     bookingId: string,
+    contractId: string,
     tiptapContent: unknown,
     context: EmailContext,
     musicianName: string,
@@ -199,7 +200,7 @@ export class DocumentsService {
     };
 
     const buffer: Buffer = await (pdfmake.createPdf(docDef).getBuffer() as Promise<Buffer>);
-    return this.storeSignedContractPdf(userId, bookingId, buffer);
+    return this.storeSignedContractPdf(userId, bookingId, contractId, buffer);
   }
 
   // ─── Storage: public ───────────────────────────────────────────────────────
@@ -218,19 +219,13 @@ export class DocumentsService {
   async storeSignedContractPdf(
     userId: string,
     bookingId: string,
+    contractId: string,
     buffer: Buffer,
   ): Promise<DocumentWithUrl> {
-    const signedKey = `contracts/${userId}/${bookingId}-signed.pdf`;
-    const unsignedKey = `contracts/${userId}/${bookingId}.pdf`;
-
-    await this.storage.putObject(signedKey, buffer, 'application/pdf');
-
-    await this.storage.deleteObject(unsignedKey);
-    const existing = await this.repo.findContractForBooking(userId, bookingId);
-    if (existing) await this.repo.delete(existing.id);
-
-    const doc = await this.repo.create(userId, bookingId, 'CONTRACT', signedKey);
-    return { ...doc, url: this.storage.getPublicUrl(signedKey) };
+    const key = `contracts/${userId}/${bookingId}/${contractId}-signed.pdf`;
+    await this.storage.putObject(key, buffer, 'application/pdf');
+    const doc = await this.repo.create(userId, bookingId, 'CONTRACT', key, undefined, contractId);
+    return { ...doc, url: this.storage.getPublicUrl(key) };
   }
 
   async findByBooking(userId: string, bookingId: string): Promise<DocumentWithUrl[]> {

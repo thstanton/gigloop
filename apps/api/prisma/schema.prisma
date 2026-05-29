@@ -188,14 +188,16 @@ model Contract {
   updatedAt DateTime @updatedAt
 
   bookingId        String
-  booking          Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  booking          Booking    @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 
-  status           String   @default("DRAFT")
+  status           String     @default("DRAFT")
   content          Json
   signedAt         DateTime?
   signedFromIp     String?
   signatureDataUrl String?
   voidedAt         DateTime?
+
+  documents        Document[]
 
   @@index([userId])
   @@index([bookingId])
@@ -375,12 +377,17 @@ model Document {
   bookingId String
   booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 
-  // null for CONTRACT documents; set for INVOICE documents
+  // null for non-INVOICE documents; set for INVOICE documents
   invoiceId String?
-  invoice   Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  invoice   Invoice?  @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+
+  // null for non-CONTRACT documents; set when a signed contract PDF is generated
+  contractId String?
+  contract   Contract? @relation(fields: [contractId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([bookingId])
+  @@index([contractId])
 }
 
 model Song {

@@ -26,6 +26,7 @@ export class DocumentsController {
       type: d.type,
       url: d.url,
       invoiceId: d.invoiceId ?? null,
+      contractStatus: d.type === 'CONTRACT' ? (d.contract?.status ?? null) : null,
     }));
   }
 }

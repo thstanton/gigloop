@@ -372,6 +372,7 @@ export interface Document {
   type: DocumentType;
   url: string;
   invoiceId: string | null;
+  contractStatus: string | null;
 }
 
 // ─────────────────────────────────────────
@@ -626,7 +627,7 @@ export interface PortalData {
   documents: PortalDocument[];
   hasMusicForm: boolean;
   hasMusicFormResponse: boolean;
-  hasContractEmail: boolean;
+  contractStatus: 'SENT' | 'SIGNED' | null;
   depositInvoiceDueDate: string | null;
 }
 

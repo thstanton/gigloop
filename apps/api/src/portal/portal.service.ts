@@ -72,35 +72,41 @@ export class PortalService {
     if (!publicProfile) throw new NotFoundException('Booking not found');
 
     const sentDepositInvoice = booking.invoices[0] ?? null;
+    const activeContract = booking.contracts?.[0] ?? null;
+    // Only SENT and SIGNED are meaningful states for the client
+    const contractStatus = activeContract?.status === 'SENT' || activeContract?.status === 'SIGNED'
+      ? activeContract.status
+      : null;
 
-    const contractEmailTypes = new Set(['contract_cover', 'contract_and_deposit_cover']);
-    const hasContractEmail = booking.communications.some(
-      (c) => c.sentAt && c.template?.builtInType && contractEmailTypes.has(c.template.builtInType),
+    // Exclude voided contract PDFs from the portal — clients only see the active signed contract
+    const activeContractId = activeContract?.id ?? null;
+    const documents = booking.documents
+      .filter((doc) => doc.type !== 'CONTRACT' || doc.contractId === activeContractId)
+      .map((doc) => {
+        let label: string;
+        if (doc.type === 'CONTRACT') {
+          label = 'Signed contract';
+        } else if (doc.type === 'SONG_LIST') {
+          label = 'Song list';
+        } else if (doc.invoice?.isDeposit) {
+          label = `Deposit invoice${doc.invoice.invoiceNumber ? ` ${doc.invoice.invoiceNumber}` : ''}`;
+        } else {
+          label = `Invoice${doc.invoice?.invoiceNumber ? ` ${doc.invoice.invoiceNumber}` : ''}`;
+        }
+        return {
+          id: doc.id,
+          type: doc.type as 'CONTRACT' | 'INVOICE' | 'SONG_LIST',
+          label,
+          url: this.storage.getPublicUrl(doc.storageKey),
+          createdAt: doc.createdAt.toISOString(),
+        };
+      });
+
+    const signedContractDoc = booking.documents.find(
+      (d) => d.type === 'CONTRACT' && d.contractId === activeContractId,
     );
-
-    const documents = booking.documents.map((doc) => {
-      let label: string;
-      if (doc.type === 'CONTRACT') {
-        label = 'Signed contract';
-      } else if (doc.type === 'SONG_LIST') {
-        label = 'Song list';
-      } else if (doc.invoice?.isDeposit) {
-        label = `Deposit invoice${doc.invoice.invoiceNumber ? ` ${doc.invoice.invoiceNumber}` : ''}`;
-      } else {
-        label = `Invoice${doc.invoice?.invoiceNumber ? ` ${doc.invoice.invoiceNumber}` : ''}`;
-      }
-      return {
-        id: doc.id,
-        type: doc.type as 'CONTRACT' | 'INVOICE' | 'SONG_LIST',
-        label,
-        url: this.storage.getPublicUrl(doc.storageKey),
-        createdAt: doc.createdAt.toISOString(),
-      };
-    });
-
-    const signedContract = booking.documents.find((d) => d.type === 'CONTRACT');
-    const signedContractUrl = signedContract
-      ? this.storage.getPublicUrl(signedContract.storageKey)
+    const signedContractUrl = signedContractDoc
+      ? this.storage.getPublicUrl(signedContractDoc.storageKey)
       : null;
 
     return {
@@ -126,14 +132,16 @@ export class PortalService {
           icon: bpf.performanceFormat.icon,
           order: bpf.order,
         })),
-        contractSignedAt: booking.contracts?.[0]?.signedAt?.toISOString() ?? null,
+        contractSignedAt: activeContract?.status === 'SIGNED'
+          ? activeContract.signedAt?.toISOString() ?? null
+          : null,
       },
       publicProfile: buildPortalPublicProfile(publicProfile),
       signedContractUrl,
       documents,
       hasMusicForm: !!booking.musicFormConfig,
       hasMusicFormResponse: !!booking.musicFormResponse,
-      hasContractEmail,
+      contractStatus,
       depositInvoiceDueDate: sentDepositInvoice?.dueDate?.toISOString() ?? null,
     };
   }
@@ -143,8 +151,10 @@ export class PortalService {
     if (!booking) throw new NotFoundException('Booking not found');
 
     const contract = booking.contracts?.[0] ?? null;
-    if (!contract) throw new NotFoundException('Contract not found');
-    if (contract.status === 'SIGNED') throw new BadRequestException('already_signed');
+    if (!contract || contract.status !== 'SENT') {
+      if (contract?.status === 'SIGNED') throw new BadRequestException('already_signed');
+      throw new NotFoundException('Contract not found');
+    }
 
     const title = booking.title ?? `${booking.customer.name} · ${booking.date.toISOString().split('T')[0]}`;
 
@@ -173,6 +183,7 @@ export class PortalService {
     await this.documents.generateAndStoreSignedContractPdf(
       booking.userId,
       booking.id,
+      contract.id,
       contract.content,
       context,
       publicProfile.displayName ?? publicProfile.businessName,

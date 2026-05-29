@@ -33,7 +33,7 @@ import ComposeEmailSheet from '@/features/communications/ComposeEmailSheet';
 import InvoiceSheet from '@/features/invoices/InvoiceSheet';
 import MarkSentDialog from '@/features/invoices/MarkSentDialog';
 import { toast } from '@/lib/hooks/use-toast';
-import { apiGet, apiPatch, apiPost, apiPostVoid, apiPut } from '@/lib/api';
+import { apiGet, apiPatch, apiPost, apiPostVoid, apiPut, apiDelete } from '@/lib/api';
 import {
   formatDate,
   formatCurrency,
@@ -799,26 +799,28 @@ function ContractCard({
   booking,
   documents,
   isCreating,
-  isVoiding,
   onCreateContract,
   onEdit,
   onPreview,
+  onSend,
   onVoid,
+  onDelete,
 }: {
   booking: BookingDetail;
   documents: Document[];
   isCreating: boolean;
-  isVoiding: boolean;
   onCreateContract: () => void;
   onEdit: () => void;
   onPreview: () => void;
+  onSend: () => void;
   onVoid: (confirmSignedVoid: boolean) => void;
+  onDelete: () => void;
 }) {
   const [confirmVoidOpen, setConfirmVoidOpen] = useState(false);
   const contract = booking.activeContract;
   const status = contract?.status ?? null;
   const isEmpty = !status || status === 'VOID';
-  const contractDoc = documents.find((d) => d.type === 'CONTRACT');
+  const contractDoc = documents.find((d) => d.type === 'CONTRACT' && d.contractStatus !== 'VOID');
 
   const headerAction = isEmpty ? (
     <button
@@ -830,19 +832,17 @@ function ContractCard({
       <Plus size={12} />
       {isCreating ? 'Creating…' : 'Create contract'}
     </button>
-  ) : (
-    <button
-      type="button"
-      onClick={() => {
-        if (status === 'SIGNED') setConfirmVoidOpen(true);
-        else onVoid(false);
-      }}
-      disabled={isVoiding}
-      className="text-xs text-status-cancelled hover:text-status-cancelled/80 transition-colors disabled:opacity-50"
-    >
-      Void
-    </button>
-  );
+  ) : null;
+
+  const contractDate = contract
+    ? status === 'SIGNED' && contract.signedAt
+      ? formatDate(contract.signedAt)
+      : status === 'SENT' && contract.updatedAt
+        ? formatDate(contract.updatedAt)
+        : contract.createdAt
+          ? formatDate(contract.createdAt)
+          : null
+    : null;
 
   return (
     <>
@@ -850,39 +850,120 @@ function ContractCard({
         {isEmpty ? (
           <p className="text-sm text-muted">None created</p>
         ) : (
-          <div className="flex items-center gap-2">
-            {status === 'DRAFT' && (
-              <button
-                type="button"
-                onClick={onEdit}
-                className="text-muted hover:text-foreground transition-colors"
-                aria-label="Edit contract"
-              >
-                <Pencil size={14} />
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={onPreview}
-              className="text-muted hover:text-foreground transition-colors"
-              aria-label="Preview contract"
-            >
-              <Eye size={14} />
-            </button>
-            {contractDoc && (
-              <a
-                href={contractDoc.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-muted hover:text-foreground transition-colors"
-                aria-label="Download contract PDF"
-              >
-                <Download size={14} />
-              </a>
-            )}
-            <span className={cn('inline-flex items-center border-l-[3px] pl-2 pr-2.5 py-0.5 text-xs font-medium', CONTRACT_PILL_CLASSES[status] ?? '')}>
-              {CONTRACT_PILL_LABELS[status] ?? status}
-            </span>
+          <div className="flex items-start justify-between gap-3 py-0.5">
+            <div className="min-w-0">
+              <p className="text-sm text-foreground">Contract</p>
+              {contractDate && (
+                <p className="text-xs text-muted mt-0.5">{contractDate}</p>
+              )}
+              <div className="mt-1">
+                <span className={cn('inline-flex items-center border-l-[3px] pl-2 pr-2.5 py-0.5 text-xs font-medium', CONTRACT_PILL_CLASSES[status] ?? '')}>
+                  {CONTRACT_PILL_LABELS[status] ?? status}
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {status === 'DRAFT' && (
+                <>
+                  <button
+                    type="button"
+                    onClick={onSend}
+                    className="text-muted hover:text-foreground transition-colors"
+                    aria-label="Send contract"
+                  >
+                    <Send size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onEdit}
+                    className="text-muted hover:text-foreground transition-colors"
+                    aria-label="Edit contract"
+                  >
+                    <Pencil size={14} />
+                  </button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="text-muted hover:text-foreground transition-colors" aria-label="More actions">
+                        <ChevronDown size={14} />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onClick={onDelete}
+                        className="text-status-cancelled focus:text-status-cancelled"
+                      >
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </>
+              )}
+              {status === 'SENT' && (
+                <>
+                  <button
+                    type="button"
+                    onClick={onPreview}
+                    className="text-muted hover:text-foreground transition-colors"
+                    aria-label="Preview contract"
+                  >
+                    <Eye size={14} />
+                  </button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="text-muted hover:text-foreground transition-colors" aria-label="More actions">
+                        <ChevronDown size={14} />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onClick={() => onVoid(false)}
+                        className="text-status-cancelled focus:text-status-cancelled"
+                      >
+                        Void contract
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </>
+              )}
+              {status === 'SIGNED' && (
+                <>
+                  <button
+                    type="button"
+                    onClick={onPreview}
+                    className="text-muted hover:text-foreground transition-colors"
+                    aria-label="Preview contract"
+                  >
+                    <Eye size={14} />
+                  </button>
+                  {contractDoc && (
+                    <a
+                      href={contractDoc.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-muted hover:text-foreground transition-colors"
+                      aria-label="Download signed contract PDF"
+                    >
+                      <Download size={14} />
+                    </a>
+                  )}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="text-muted hover:text-foreground transition-colors" aria-label="More actions">
+                        <ChevronDown size={14} />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onClick={() => setConfirmVoidOpen(true)}
+                        className="text-status-cancelled focus:text-status-cancelled"
+                      >
+                        Void contract
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </>
+              )}
+            </div>
           </div>
         )}
       </Card>
@@ -1271,6 +1352,12 @@ export default function BookingDetailPage() {
       apiPostVoid(`/bookings/${id}/contracts/${contractId}/void`, { confirmSignedVoid }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['booking', id] }),
     onError: () => toast({ title: 'Failed to void contract', variant: 'destructive' }),
+  });
+
+  const deleteContractMutation = useMutation({
+    mutationFn: (contractId: string) => apiDelete(`/bookings/${id}/contracts/${contractId}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['booking', id] }),
+    onError: () => toast({ title: 'Failed to delete contract', variant: 'destructive' }),
   });
 
   const voidInvoiceMutation = useMutation({
@@ -1700,13 +1787,17 @@ export default function BookingDetailPage() {
               booking={booking}
               documents={documents}
               isCreating={createContract.isPending}
-              isVoiding={voidContractMutation.isPending}
               onCreateContract={() => createContract.mutate()}
               onEdit={() => { setContractSheetReadOnly(false); setContractSheetOpen(true); }}
               onPreview={() => { setContractSheetReadOnly(true); setContractSheetOpen(true); }}
+              onSend={() => openCompose(contractShortcutType)}
               onVoid={(confirmSignedVoid) => {
                 const contractId = booking.activeContract?.id;
                 if (contractId) voidContractMutation.mutate({ contractId, confirmSignedVoid });
+              }}
+              onDelete={() => {
+                const contractId = booking.activeContract?.id;
+                if (contractId) deleteContractMutation.mutate(contractId);
               }}
             />
           )}
@@ -1789,8 +1880,9 @@ export default function BookingDetailPage() {
               <div className="divide-y divide-border">
                 {documents.map((doc: Document) => {
                   const invoice = invoices.find((i) => i.id === doc.invoiceId);
+                  const isVoidContract = doc.type === 'CONTRACT' && doc.contractStatus === 'VOID';
                   const label = doc.type === 'CONTRACT'
-                    ? 'Contract'
+                    ? isVoidContract ? 'Contract [VOID]' : 'Contract'
                     : invoice?.isDeposit
                       ? 'Deposit invoice'
                       : 'Balance invoice';

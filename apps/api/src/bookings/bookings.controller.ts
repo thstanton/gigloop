@@ -105,6 +105,17 @@ export class BookingsController {
     return this.service.sendContract(req.userId, id, contractId);
   }
 
+  @ApiOperation({ summary: 'Delete a DRAFT contract (hard delete; only permitted for DRAFT status)' })
+  @Delete(':id/contracts/:contractId')
+  @HttpCode(204)
+  deleteContract(
+    @Req() req: AuthedRequest,
+    @Param('id') id: string,
+    @Param('contractId') contractId: string,
+  ) {
+    return this.service.deleteContract(req.userId, id, contractId);
+  }
+
   @ApiOperation({ summary: 'Void a contract; pass confirmSignedVoid=true to void a SIGNED contract' })
   @Post(':id/contracts/:contractId/void')
   @HttpCode(204)

@@ -357,7 +357,7 @@ function BookingSummary({ data, musicSuccess, isPreview, previewFrom }: {
             })}
           </span>
         </div>
-      ) : data.hasContractEmail ? (
+      ) : data.contractStatus === 'SENT' ? (
         <Link
           to={isPreview ? `contract?preview=admin&from=${encodeURIComponent(previewFrom ?? '')}` : 'contract'}
           className={ctaClass}

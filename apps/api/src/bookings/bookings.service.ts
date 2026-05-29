@@ -296,6 +296,14 @@ export class BookingsService {
     };
   }
 
+  async deleteContract(userId: string, bookingId: string, contractId: string) {
+    await this.findOne(userId, bookingId);
+    const contract = await this.repo.findContractById(userId, bookingId, contractId);
+    if (!contract) throw new NotFoundException('Contract not found');
+    if (contract.status !== 'DRAFT') throw new BadRequestException('Only DRAFT contracts can be deleted');
+    await this.repo.deleteContract(contractId);
+  }
+
   async voidContract(userId: string, bookingId: string, contractId: string, confirmSignedVoid?: boolean) {
     await this.findOne(userId, bookingId);
     const contract = await this.repo.findContractById(userId, bookingId, contractId);

@@ -349,6 +349,10 @@ export class BookingsRepository {
     });
   }
 
+  deleteContract(contractId: string) {
+    return this.prisma.contract.delete({ where: { id: contractId } });
+  }
+
   seedChecklistItems(
     userId: string,
     bookingId: string,
