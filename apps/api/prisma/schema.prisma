@@ -293,6 +293,7 @@ model Invoice {
   invoiceNumber String?
   issueDate     DateTime?
   dueDate       DateTime?
+  paidAt        DateTime?
 
   bookingId String
   booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)

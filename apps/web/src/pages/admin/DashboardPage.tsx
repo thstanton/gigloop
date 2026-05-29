@@ -292,12 +292,17 @@ function CalendarWidget({ bookings }: { bookings: BookingListItem[] }) {
             <li key={b.id}>
               <button
                 onClick={() => navigate(`/admin/bookings/${b.id}`, { state: { from: '/admin', label: 'Dashboard' } })}
-                className="w-full flex flex-col items-start gap-1 py-2 text-left hover:bg-muted/30 transition-colors -mx-4 px-4"
+                className="w-full flex items-start justify-between gap-3 py-2 text-left hover:bg-muted/30 transition-colors -mx-4 px-4"
               >
-                <span className="text-sm text-foreground">
-                  {b.title ?? b.customer.name}
-                </span>
-                <BookingStatusPill status={b.status} />
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-sm text-foreground">
+                    {b.title ?? b.customer.name}
+                  </span>
+                  <BookingStatusPill status={b.status} />
+                </div>
+                {b.sets[0]?.startTime && (
+                  <span className="text-xs text-muted flex-shrink-0 mt-0.5">{b.sets[0].startTime}</span>
+                )}
               </button>
             </li>
           ))}

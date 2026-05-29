@@ -53,6 +53,7 @@ const listIncludes = {
   customer: { select: { id: true, name: true, email: true } },
   venue: { select: { id: true, name: true } },
   referrer: { select: { id: true, name: true } },
+  sets: { select: { startTime: true }, orderBy: { order: 'asc' as const }, take: 1 },
 } as const;
 
 @Injectable()

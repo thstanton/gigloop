@@ -38,7 +38,7 @@ type FormValues = z.infer<typeof schema>;
 
 function buildDefaults(invoice?: Invoice, prefill?: Props['prefill']): FormValues {
   if (!invoice) {
-    const description = prefill ? (prefill.isDeposit ? 'Deposit' : 'Balance') : '';
+    const description = prefill?.description ?? '';
     const amount = prefill?.amount != null ? prefill.amount.toFixed(2) : '';
     return {
       isDeposit: prefill?.isDeposit ?? false,
@@ -70,7 +70,7 @@ interface Props {
   hasDepositInvoice: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  prefill?: { isDeposit: boolean; amount?: number };
+  prefill?: { isDeposit: boolean; amount?: number; description?: string };
 }
 
 export default function InvoiceSheet({

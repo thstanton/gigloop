@@ -132,7 +132,7 @@ export class InvoicesRepository {
 
       const updated = await tx.invoice.update({
         where: { id: invoiceId },
-        data: { status: 'PAID' },
+        data: { status: 'PAID', paidAt: new Date() },
         include: invoiceIncludes,
       });
 

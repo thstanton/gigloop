@@ -160,6 +160,7 @@ export interface BookingListItem {
   venue: ContactSummary | null;
   referrerId: string | null;
   referrer: ContactSummary | null;
+  sets: { startTime: string | null }[];
 }
 
 export type ContractStatus = 'DRAFT' | 'SENT' | 'SIGNED' | 'VOID';
@@ -269,6 +270,7 @@ export interface Invoice {
   invoiceNumber: string | null;
   issueDate: string | null;
   dueDate: string | null;
+  paidAt: string | null;
   bookingId: string;
   billToContactId: string;
   billToContact: Contact;

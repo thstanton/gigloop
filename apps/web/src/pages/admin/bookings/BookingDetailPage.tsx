@@ -951,6 +951,7 @@ function InvoiceRow({
         <p className="text-xs text-muted mt-0.5">
           {invoice.issueDate ? formatDate(invoice.issueDate) : '—'}
           {invoice.dueDate && ` · due ${formatDate(invoice.dueDate)}`}
+          {isPaid && invoice.paidAt && ` · paid ${formatDate(invoice.paidAt)}`}
         </p>
         <div className="mt-1">
           <InvoiceStatusPill status={invoice.status} isOverdue={overdue} />
@@ -1219,7 +1220,7 @@ export default function BookingDetailPage() {
   const [composeTemplateType, setComposeTemplateType] = useState<string | undefined>();
   const [invoiceSheetOpen, setInvoiceSheetOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<Invoice | undefined>();
-  const [invoiceSheetPrefill, setInvoiceSheetPrefill] = useState<{ isDeposit: boolean; amount?: number } | undefined>();
+  const [invoiceSheetPrefill, setInvoiceSheetPrefill] = useState<{ isDeposit: boolean; amount?: number; description?: string } | undefined>();
   const [markSentInvoice, setMarkSentInvoice] = useState<Invoice | undefined>();
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [contractSheetOpen, setContractSheetOpen] = useState(false);
@@ -1315,9 +1316,22 @@ export default function BookingDetailPage() {
     setComposeOpen(true);
   }
 
+  function buildSetsDescription(): string {
+    if (!booking?.sets?.length) return '';
+    const formatById = new Map(
+      (booking.performanceFormats ?? []).map((f) => [f.performanceFormatId, f.performanceFormat.label]),
+    );
+    return booking.sets
+      .map((s) => {
+        const label = s.label ?? (s.performanceFormatId ? formatById.get(s.performanceFormatId) : null) ?? null;
+        return label ? `${label} (${s.duration} min)` : `${s.duration} min`;
+      })
+      .join(', ');
+  }
+
   function openCreateInvoice(prefill?: { isDeposit: boolean; amount?: number }) {
     setEditingInvoice(undefined);
-    setInvoiceSheetPrefill(prefill);
+    setInvoiceSheetPrefill(prefill ? { ...prefill, description: buildSetsDescription() } : undefined);
     setInvoiceSheetOpen(true);
   }
 
