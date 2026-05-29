@@ -418,6 +418,13 @@ export class BookingsRepository {
     });
   }
 
+  findChecklistItemById(userId: string, bookingId: string, itemId: string) {
+    return this.prisma.bookingChecklistItem.findFirst({
+      where: { id: itemId, bookingId, userId },
+      select: { key: true },
+    });
+  }
+
   updateChecklistItemState(userId: string, bookingId: string, itemId: string, state: 'COMPLETE' | 'PENDING') {
     return this.prisma.bookingChecklistItem.updateMany({
       where: { id: itemId, bookingId, userId },
@@ -425,6 +432,13 @@ export class BookingsRepository {
         state,
         completedAt: state === 'COMPLETE' ? new Date() : null,
       },
+    });
+  }
+
+  setDepositReceivedAt(bookingId: string, date: Date) {
+    return this.prisma.booking.update({
+      where: { id: bookingId },
+      data: { depositReceivedAt: date },
     });
   }
 

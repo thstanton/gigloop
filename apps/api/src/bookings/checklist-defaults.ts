@@ -11,6 +11,7 @@ export interface ChecklistDefaultItem {
   autoCompleteRule: Record<string, unknown> | null;
   requiredForStatus: 'PROVISIONAL' | 'CONFIRMED' | 'READY' | 'COMPLETE' | null;
   dueDateRule: DueDateRule | null;
+  enabled?: boolean;
 }
 
 export const CHECKLIST_DEFAULTS: ChecklistDefaultItem[] = [
@@ -172,9 +173,8 @@ export function filterItemsByStartingStatus(
   const startingIndex = STAGE_ORDER.indexOf(startingStage);
 
   return items.filter((item) => {
+    if (item.enabled === false) return false;
     const itemStageIndex = STAGE_ORDER.indexOf(item.requiredForStatus);
-    // Keep items from stages AFTER the starting stage
-    // Items at the starting stage or before are skipped (already handled)
     return itemStageIndex > startingIndex;
   });
 }

@@ -40,7 +40,7 @@ export class UserProfileRepository {
 
   async updateChecklistDefaults(
     userId: string,
-    systemItemOverrides: Array<{ key: string; dueDateRule?: unknown }>,
+    systemItemOverrides: Array<{ key: string; enabled?: boolean; dueDateRule?: unknown }>,
     customItems: ChecklistDefaultItem[],
     reminderLeadDays?: number,
   ) {
@@ -53,15 +53,21 @@ export class UserProfileRepository {
       ? (prefs.checklistDefaults as ChecklistDefaultItem[])
       : CHECKLIST_DEFAULTS;
 
-    const overrideMap = new Map(systemItemOverrides.map((o) => [o.key, o.dueDateRule]));
+    const overrideMap = new Map(systemItemOverrides.map((o) => [o.key, o]));
 
     const updatedSystemItems = CHECKLIST_DEFAULTS.map((defaultItem) => {
       const existingItem = existingDefaults.find((d) => d.key === defaultItem.key) ?? defaultItem;
       const override = overrideMap.get(defaultItem.key);
-      return {
+      const merged: ChecklistDefaultItem = {
         ...existingItem,
-        dueDateRule: override !== undefined ? (override as ChecklistDefaultItem['dueDateRule']) : existingItem.dueDateRule,
+        dueDateRule: override?.dueDateRule !== undefined
+          ? (override.dueDateRule as ChecklistDefaultItem['dueDateRule'])
+          : existingItem.dueDateRule,
       };
+      if (override?.enabled !== undefined) {
+        merged.enabled = override.enabled === false ? false : undefined;
+      }
+      return merged;
     });
 
     const newDefaults = [...updatedSystemItems, ...customItems];

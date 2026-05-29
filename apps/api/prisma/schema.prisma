@@ -79,7 +79,6 @@ model UserProfile {
   defaultPaymentTermsDays Int     @default(14)
   invoiceNumberSequence   Int     @default(0)
   invoiceSequenceYear     Int     @default(0)
-  depositTrackingMode     String  @default("INVOICE")
   depositPercentage       Int?
 
   digestEmailEnabled         Boolean @default(true)
@@ -133,7 +132,6 @@ model Booking {
   notes               String?
   portalToken         String    @unique @default(uuid())
   depositReceivedAt     DateTime?
-  depositTrackingMode String?
 
   customerId String
   customer   Contact @relation("BookingCustomer", fields: [customerId], references: [id], onDelete: Restrict)

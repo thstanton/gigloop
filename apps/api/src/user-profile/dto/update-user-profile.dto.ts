@@ -24,11 +24,6 @@ export class UpdateUserProfileDto {
   @Min(0)
   defaultPaymentTermsDays?: number;
 
-  @ApiPropertyOptional({ enum: ['INVOICE', 'MANUAL'] })
-  @IsOptional()
-  @IsIn(['INVOICE', 'MANUAL'])
-  depositTrackingMode?: string;
-
   @ApiPropertyOptional({ example: 30, description: 'Default deposit percentage (1–100)' })
   @IsOptional()
   @IsInt()

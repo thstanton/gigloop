@@ -34,7 +34,6 @@ const businessSchema = z.object({
   bankDetails: z.string(),
   vatNumber: z.string(),
   defaultPaymentTermsDays: z.number().int().min(0, 'Must be 0 or more'),
-  depositTrackingMode: z.enum(['INVOICE', 'MANUAL']),
   depositPercentage: z.union([
     z.nan().transform((): undefined => undefined),
     z.number().int().min(1, 'Must be 1–100').max(100, 'Must be 1–100'),
@@ -45,11 +44,17 @@ type BusinessForm = z.infer<typeof businessSchema>;
 
 const notificationsSchema = z.object({
   digestEmailEnabled: z.boolean(),
-  songRequestFormEnabled: z.boolean(),
   reminderLeadDays: z.number().int().min(1).max(90),
 });
 
 type NotificationsForm = z.infer<typeof notificationsSchema>;
+
+const bookingGeneralSchema = z.object({
+  songRequestFormEnabled: z.boolean(),
+  defaultBookingStatus: z.enum(['ENQUIRY', 'PROVISIONAL', 'CONFIRMED']),
+});
+
+type BookingGeneralForm = z.infer<typeof bookingGeneralSchema>;
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
 
@@ -87,6 +92,15 @@ function SectionHeader({ title, description }: { title: string; description?: st
   );
 }
 
+function SubsectionHeader({ title, description }: { title: string; description?: string }) {
+  return (
+    <div className="mb-4">
+      <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide">{title}</h3>
+      {description && <p className="mt-1 text-sm text-muted">{description}</p>}
+    </div>
+  );
+}
+
 function SaveBar({
   isPending,
   saved,
@@ -114,20 +128,24 @@ function SaveBar({
 function Toggle({
   checked,
   onChange,
+  disabled,
 }: {
   checked: boolean;
   onChange: (v: boolean) => void;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
-      onClick={() => onChange(!checked)}
+      onClick={() => !disabled && onChange(!checked)}
+      disabled={disabled}
       className={cn(
         'relative inline-flex w-9 h-5 rounded-full transition-colors duration-150 flex-shrink-0',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-        checked ? 'bg-primary' : 'bg-border',
+        checked && !disabled ? 'bg-primary' : 'bg-border',
+        disabled && 'opacity-40 cursor-not-allowed',
       )}
     >
       <span
@@ -419,13 +437,11 @@ function BusinessDetailsSection({ profile }: { profile: UserProfile }) {
     bankDetails: profile.bankDetails ?? '',
     vatNumber: profile.vatNumber ?? '',
     defaultPaymentTermsDays: profile.defaultPaymentTermsDays,
-    depositTrackingMode: (profile.depositTrackingMode ?? 'INVOICE') as 'INVOICE' | 'MANUAL',
     depositPercentage: profile.depositPercentage ?? undefined,
   };
 
   const {
     register,
-    control,
     handleSubmit,
     reset,
     formState: { errors },
@@ -448,7 +464,6 @@ function BusinessDetailsSection({ profile }: { profile: UserProfile }) {
       bankDetails: values.bankDetails || null,
       vatNumber: values.vatNumber || undefined,
       defaultPaymentTermsDays: values.defaultPaymentTermsDays,
-      depositTrackingMode: values.depositTrackingMode,
       depositPercentage: values.depositPercentage,
     });
   }
@@ -502,26 +517,6 @@ function BusinessDetailsSection({ profile }: { profile: UserProfile }) {
         </Field>
       </div>
 
-      <Field label="Deposit tracking" error={errors.depositTrackingMode?.message}>
-        <Controller
-          name="depositTrackingMode"
-          control={control}
-          render={({ field }) => (
-            <Select value={field.value} onValueChange={field.onChange}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="INVOICE">
-                  Automatic — when deposit invoice is marked paid
-                </SelectItem>
-                <SelectItem value="MANUAL">Manual</SelectItem>
-              </SelectContent>
-            </Select>
-          )}
-        />
-      </Field>
-
       <SaveBar isPending={mutation.isPending} saved={saved} isError={mutation.isError} />
     </form>
   );
@@ -535,7 +530,6 @@ function NotificationsSection({ profile }: { profile: UserProfile }) {
 
   const defaults: NotificationsForm = {
     digestEmailEnabled: profile.digestEmailEnabled,
-    songRequestFormEnabled: profile.songRequestFormEnabled,
     reminderLeadDays: (profile.preferences as UserPreferences | undefined)?.reminderLeadDays ?? 7,
   };
 
@@ -547,10 +541,9 @@ function NotificationsSection({ profile }: { profile: UserProfile }) {
   useEffect(() => { reset(defaults); }, [profile]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const mutation = useMutation({
-    mutationFn: ({ digestEmailEnabled, songRequestFormEnabled, reminderLeadDays }: NotificationsForm) =>
+    mutationFn: ({ digestEmailEnabled, reminderLeadDays }: NotificationsForm) =>
       apiPatch<UserProfile>('/me', {
         digestEmailEnabled,
-        songRequestFormEnabled,
         preferences: { reminderLeadDays },
       }),
     onSuccess: () => {
@@ -578,21 +571,6 @@ function NotificationsSection({ profile }: { profile: UserProfile }) {
                 <p className="text-sm font-medium text-foreground">Weekly digest email</p>
                 <p className="text-xs text-muted mt-0.5">
                   Summary of upcoming bookings and outstanding actions
-                </p>
-              </div>
-            </label>
-          )}
-        />
-        <Controller
-          name="songRequestFormEnabled"
-          control={control}
-          render={({ field }) => (
-            <label className="flex items-start gap-3 cursor-pointer">
-              <Toggle checked={field.value} onChange={field.onChange} />
-              <div className="-mt-0.5">
-                <p className="text-sm font-medium text-foreground">Song request form</p>
-                <p className="text-xs text-muted mt-0.5">
-                  Allow clients to submit music preferences via their portal
                 </p>
               </div>
             </label>
@@ -628,20 +606,58 @@ function NotificationsSection({ profile }: { profile: UserProfile }) {
   );
 }
 
-// ─── Checklist defaults section ───────────────────────────────────────────────
+// ─── Booking settings section ─────────────────────────────────────────────────
 
-const SYSTEM_CHECKLIST_ITEMS: Array<{ key: string; label: string; defaultDueDateRule: DueDateRule | null }> = [
-  { key: 'send_quote', label: 'Send quote', defaultDueDateRule: null },
-  { key: 'create_deposit_invoice', label: 'Create deposit invoice', defaultDueDateRule: null },
-  { key: 'create_contract', label: 'Create contract', defaultDueDateRule: null },
-  { key: 'send_contract', label: 'Send contract & deposit email', defaultDueDateRule: { basis: 'bookingDate', offsetDays: -60 } },
-  { key: 'contract_signed', label: 'Contract signed', defaultDueDateRule: { basis: 'bookingDate', offsetDays: -45 } },
-  { key: 'deposit_received', label: 'Deposit received', defaultDueDateRule: { basis: 'bookingDate', offsetDays: -30 } },
-  { key: 'create_balance_invoice', label: 'Create balance invoice', defaultDueDateRule: { basis: 'bookingDate', offsetDays: -14 } },
-  { key: 'music_form_invite', label: 'Send music form invite', defaultDueDateRule: { basis: 'bookingDate', offsetDays: -30 } },
-  { key: 'song_requests', label: 'Song requests received', defaultDueDateRule: { basis: 'bookingDate', offsetDays: -14 } },
-  { key: 'send_thank_you', label: 'Send thank you', defaultDueDateRule: { basis: 'bookingDate', offsetDays: 7 } },
+const CHECKLIST_STAGE_GROUPS: Array<{
+  stage: 'PROVISIONAL' | 'CONFIRMED' | 'READY' | 'COMPLETE';
+  label: string;
+  items: Array<{
+    key: string;
+    label: string;
+    completedBy: 'USER' | 'CUSTOMER';
+    defaultDueDateRule: DueDateRule | null;
+    musicFormGated?: boolean;
+  }>;
+}> = [
+  {
+    stage: 'PROVISIONAL',
+    label: 'Provisional',
+    items: [
+      { key: 'send_quote', label: 'Send quote', completedBy: 'USER', defaultDueDateRule: { basis: 'bookingCreation', offsetDays: 2 } },
+      { key: 'confirm_quote', label: 'Quote confirmed', completedBy: 'USER', defaultDueDateRule: null },
+    ],
+  },
+  {
+    stage: 'CONFIRMED',
+    label: 'Confirmed',
+    items: [
+      { key: 'create_deposit_invoice', label: 'Create deposit invoice', completedBy: 'USER', defaultDueDateRule: null },
+      { key: 'create_contract', label: 'Create contract', completedBy: 'USER', defaultDueDateRule: null },
+      { key: 'send_contract', label: 'Send contract & deposit email', completedBy: 'USER', defaultDueDateRule: { basis: 'bookingDate', offsetDays: -60 } },
+      { key: 'contract_signed', label: 'Contract signed', completedBy: 'CUSTOMER', defaultDueDateRule: { basis: 'bookingDate', offsetDays: -45 } },
+      { key: 'deposit_received', label: 'Deposit received', completedBy: 'USER', defaultDueDateRule: { basis: 'bookingDate', offsetDays: -30 } },
+    ],
+  },
+  {
+    stage: 'READY',
+    label: 'Ready',
+    items: [
+      { key: 'create_balance_invoice', label: 'Create balance invoice', completedBy: 'USER', defaultDueDateRule: { basis: 'bookingDate', offsetDays: -14 } },
+      { key: 'music_form_invite', label: 'Send music form invite', completedBy: 'USER', defaultDueDateRule: { basis: 'bookingDate', offsetDays: -30 }, musicFormGated: true },
+      { key: 'song_requests', label: 'Song requests received', completedBy: 'CUSTOMER', defaultDueDateRule: { basis: 'bookingDate', offsetDays: -14 }, musicFormGated: true },
+    ],
+  },
+  {
+    stage: 'COMPLETE',
+    label: 'Complete',
+    items: [
+      { key: 'play_the_gig', label: 'Play the gig', completedBy: 'USER', defaultDueDateRule: { basis: 'bookingDate', offsetDays: 0 } },
+      { key: 'send_thank_you', label: 'Send thank you', completedBy: 'USER', defaultDueDateRule: { basis: 'bookingDate', offsetDays: 7 } },
+    ],
+  },
 ];
+
+const ALL_SYSTEM_KEYS = CHECKLIST_STAGE_GROUPS.flatMap((g) => g.items.map((i) => i.key));
 
 function formatDueDateRule(rule: DueDateRule | null): string {
   if (!rule) return 'No due date';
@@ -652,37 +668,94 @@ function formatDueDateRule(rule: DueDateRule | null): string {
   return `${days} day${days !== 1 ? 's' : ''} ${direction} ${basis}`;
 }
 
-type CustomItemForm = { label: string; completedBy: 'USER' | 'CUSTOMER'; requiredForStatus: 'NONE' | 'CONFIRMED' | 'READY' | 'COMPLETE' };
+type CustomItemForm = {
+  label: string;
+  completedBy: 'USER' | 'CUSTOMER';
+  requiredForStatus: 'NONE' | 'CONFIRMED' | 'READY' | 'COMPLETE';
+  dueDateBasis: 'bookingDate' | 'bookingCreation';
+  dueDateOffset: string;
+  hasDueDate: boolean;
+};
 
-function ChecklistDefaultsSection({ profile }: { profile: UserProfile }) {
+function BookingSettingsSection({ profile }: { profile: UserProfile }) {
   const queryClient = useQueryClient();
-  const [saved, setSaved] = useState(false);
-
   const prefs = profile.preferences as UserPreferences | undefined;
   const savedDefaults = prefs?.checklistDefaults ?? [];
 
-  // System item dueDateRule overrides (key → rule | null)
-  const initialOverrides: Record<string, DueDateRule | null> = {};
-  for (const item of SYSTEM_CHECKLIST_ITEMS) {
-    const saved = savedDefaults.find((d) => d.key === item.key);
-    initialOverrides[item.key] = saved?.dueDateRule !== undefined ? saved.dueDateRule : item.defaultDueDateRule;
+  // ── General subsection state ──
+  const [generalSaved, setGeneralSaved] = useState(false);
+
+  const generalDefaults: BookingGeneralForm = {
+    songRequestFormEnabled: profile.songRequestFormEnabled,
+    defaultBookingStatus: prefs?.defaultBookingStatus ?? 'PROVISIONAL',
+  };
+
+  const { control: generalControl, handleSubmit: handleGeneralSubmit, reset: resetGeneral } =
+    useForm<BookingGeneralForm>({
+      resolver: zodResolver(bookingGeneralSchema),
+      defaultValues: generalDefaults,
+    });
+
+  useEffect(() => { resetGeneral(generalDefaults); }, [profile]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const generalMutation = useMutation({
+    mutationFn: ({ songRequestFormEnabled, defaultBookingStatus }: BookingGeneralForm) =>
+      apiPatch<UserProfile>('/me', {
+        songRequestFormEnabled,
+        preferences: { defaultBookingStatus },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['me'] });
+      setGeneralSaved(true);
+      setTimeout(() => setGeneralSaved(false), 3000);
+    },
+    onError: () => toast({ title: 'Failed to save booking settings', variant: 'destructive' }),
+  });
+
+  // ── Checklist subsection state ──
+  const [checklistSaved, setChecklistSaved] = useState(false);
+
+  // System item overrides: key → { enabled, dueDateRule }
+  const initialOverrides: Record<string, { enabled: boolean; dueDateRule: DueDateRule | null }> = {};
+  for (const group of CHECKLIST_STAGE_GROUPS) {
+    for (const item of group.items) {
+      const saved = savedDefaults.find((d) => d.key === item.key);
+      initialOverrides[item.key] = {
+        enabled: saved?.enabled !== false,
+        dueDateRule: saved?.dueDateRule !== undefined ? saved.dueDateRule : item.defaultDueDateRule,
+      };
+    }
   }
-  const [overrides, setOverrides] = useState<Record<string, DueDateRule | null>>(initialOverrides);
+  const [overrides, setOverrides] = useState(initialOverrides);
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editBasis, setEditBasis] = useState<'bookingDate' | 'bookingCreation'>('bookingDate');
   const [editOffset, setEditOffset] = useState(0);
 
   // Custom items
-  const initialCustom: ChecklistDefaultItem[] = savedDefaults.filter((d) => !SYSTEM_CHECKLIST_ITEMS.find((s) => s.key === d.key));
+  const initialCustom: ChecklistDefaultItem[] = savedDefaults.filter(
+    (d) => !ALL_SYSTEM_KEYS.includes(d.key as string),
+  );
   const [customItems, setCustomItems] = useState<ChecklistDefaultItem[]>(initialCustom);
-  const [newItem, setNewItem] = useState<CustomItemForm>({ label: '', completedBy: 'USER', requiredForStatus: 'NONE' });
+  const [newItem, setNewItem] = useState<CustomItemForm>({
+    label: '',
+    completedBy: 'USER',
+    requiredForStatus: 'NONE',
+    dueDateBasis: 'bookingDate',
+    dueDateOffset: '',
+    hasDueDate: false,
+  });
 
-  const mutation = useMutation({
+  // Watch songRequestFormEnabled from general form to lock music items
+  const [songFormEnabled, setSongFormEnabled] = useState(profile.songRequestFormEnabled);
+  useEffect(() => { setSongFormEnabled(profile.songRequestFormEnabled); }, [profile]);
+
+  const checklistMutation = useMutation({
     mutationFn: () =>
       apiPatch<UserProfile>('/me/preferences/checklist-defaults', {
-        systemItemOverrides: SYSTEM_CHECKLIST_ITEMS.map((item) => ({
-          key: item.key,
-          dueDateRule: overrides[item.key] ?? null,
+        systemItemOverrides: ALL_SYSTEM_KEYS.map((key) => ({
+          key,
+          enabled: overrides[key]?.enabled ?? true,
+          dueDateRule: overrides[key]?.dueDateRule ?? null,
         })),
         customItems: customItems.map((item) => ({
           label: item.label,
@@ -693,139 +766,284 @@ function ChecklistDefaultsSection({ profile }: { profile: UserProfile }) {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['me'] });
-      setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
+      setChecklistSaved(true);
+      setTimeout(() => setChecklistSaved(false), 3000);
     },
     onError: () => toast({ title: 'Failed to save checklist defaults', variant: 'destructive' }),
   });
 
   const startEdit = (key: string) => {
-    const current = overrides[key];
+    const current = overrides[key]?.dueDateRule;
     setEditBasis(current?.basis ?? 'bookingDate');
     setEditOffset(current?.offsetDays ?? 0);
     setEditingKey(key);
   };
 
   const saveEdit = (key: string, enabled: boolean) => {
-    setOverrides((prev) => ({ ...prev, [key]: enabled ? { basis: editBasis, offsetDays: editOffset } : null }));
+    setOverrides((prev) => ({
+      ...prev,
+      [key]: {
+        ...prev[key],
+        dueDateRule: enabled ? { basis: editBasis, offsetDays: editOffset } : null,
+      },
+    }));
     setEditingKey(null);
+  };
+
+  const toggleItemEnabled = (key: string, value: boolean) => {
+    setOverrides((prev) => ({ ...prev, [key]: { ...prev[key], enabled: value } }));
   };
 
   const addCustomItem = () => {
     if (!newItem.label.trim()) return;
+    const dueDateRule: DueDateRule | null =
+      newItem.hasDueDate && newItem.dueDateOffset !== ''
+        ? { basis: newItem.dueDateBasis, offsetDays: Number(newItem.dueDateOffset) }
+        : null;
     setCustomItems((prev) => [
       ...prev,
       {
-        key: '',
+        key: null,
         label: newItem.label.trim(),
         completedBy: newItem.completedBy,
         dependsOn: [],
         autoCompleteRule: null,
         requiredForStatus: (newItem.requiredForStatus === 'NONE' ? null : newItem.requiredForStatus) as ChecklistDefaultItem['requiredForStatus'],
-        dueDateRule: null,
+        dueDateRule,
       },
     ]);
-    setNewItem({ label: '', completedBy: 'USER', requiredForStatus: 'NONE' });
+    setNewItem({ label: '', completedBy: 'USER', requiredForStatus: 'NONE', dueDateBasis: 'bookingDate', dueDateOffset: '', hasDueDate: false });
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-10">
       <SectionHeader
-        title="Checklist defaults"
-        description="Customise the due dates for system checklist items and add your own items to every new booking."
+        title="Booking settings"
+        description="Control how new bookings are created and what appears on their checklists."
       />
 
-      <div className="space-y-3">
-        {SYSTEM_CHECKLIST_ITEMS.map((item) => (
-          <div key={item.key} className="space-y-2">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-sm text-foreground">{item.label}</span>
-              {editingKey === item.key ? (
+      {/* ── General ── */}
+      <div>
+        <SubsectionHeader title="General" />
+        <form onSubmit={handleGeneralSubmit((v) => { generalMutation.mutate(v); setSongFormEnabled(v.songRequestFormEnabled); })} className="space-y-5">
+          <Controller
+            name="songRequestFormEnabled"
+            control={generalControl}
+            render={({ field }) => (
+              <label className="flex items-start gap-3 cursor-pointer">
+                <Toggle checked={field.value} onChange={field.onChange} />
+                <div className="-mt-0.5">
+                  <p className="text-sm font-medium text-foreground">Song request form</p>
+                  <p className="text-xs text-muted mt-0.5">
+                    Allow clients to submit music preferences via their portal
+                  </p>
+                </div>
+              </label>
+            )}
+          />
+
+          <Field label="Default booking status">
+            <Controller
+              name="defaultBookingStatus"
+              control={generalControl}
+              render={({ field }) => (
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <SelectTrigger className="w-48">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ENQUIRY">Enquiry</SelectItem>
+                    <SelectItem value="PROVISIONAL">Provisional</SelectItem>
+                    <SelectItem value="CONFIRMED">Confirmed</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
+            />
+            <p className="text-xs text-muted mt-1">Pre-selected status when creating a new booking</p>
+          </Field>
+
+          <SaveBar isPending={generalMutation.isPending} saved={generalSaved} isError={generalMutation.isError} />
+        </form>
+      </div>
+
+      <div className="border-t border-border" />
+
+      {/* ── Checklist ── */}
+      <div>
+        <SubsectionHeader
+          title="Checklist"
+          description="Customise which items appear on new bookings and set their due dates."
+        />
+
+        <div className="space-y-6 mb-6">
+          {CHECKLIST_STAGE_GROUPS.map(({ stage, label: stageLabel, items }) => (
+            <div key={stage}>
+              <p className="text-xs font-medium text-muted uppercase tracking-wide border-b border-border pb-1 mb-2">
+                {stageLabel}
+              </p>
+              <div className="space-y-2">
+                {items.map((item) => {
+                  const isGated = item.musicFormGated && !songFormEnabled;
+                  const itemEnabled = overrides[item.key]?.enabled ?? true;
+                  const effective = isGated ? false : itemEnabled;
+
+                  return (
+                    <div key={item.key} className="space-y-1.5">
+                      <div className="flex items-center gap-3">
+                        <Toggle
+                          checked={effective}
+                          onChange={(v) => !isGated && toggleItemEnabled(item.key, v)}
+                          disabled={isGated}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className={cn('text-sm', effective ? 'text-foreground' : 'text-muted')}>
+                              {item.label}
+                            </span>
+                            <span className="text-xs text-muted border border-border rounded px-1 py-0.5 leading-none">
+                              {item.completedBy === 'CUSTOMER' ? 'Client' : 'Me'}
+                            </span>
+                          </div>
+                          {isGated && (
+                            <p className="text-xs text-muted mt-0.5">Enable song request form to include this item</p>
+                          )}
+                        </div>
+                        {editingKey === item.key ? (
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <select
+                              value={editBasis}
+                              onChange={(e) => setEditBasis(e.target.value as 'bookingDate' | 'bookingCreation')}
+                              className="text-xs border border-border rounded px-2 py-1 bg-background"
+                            >
+                              <option value="bookingDate">booking date</option>
+                              <option value="bookingCreation">booking creation</option>
+                            </select>
+                            <input
+                              type="number"
+                              value={editOffset}
+                              onChange={(e) => setEditOffset(Number(e.target.value))}
+                              className="w-16 text-xs border border-border rounded px-2 py-1 bg-background"
+                              placeholder="days"
+                            />
+                            <span className="text-xs text-muted">days offset</span>
+                            <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => saveEdit(item.key, true)}>Save</Button>
+                            <Button size="sm" variant="ghost" className="text-xs h-7" onClick={() => saveEdit(item.key, false)}>No date</Button>
+                            <Button size="sm" variant="ghost" className="text-xs h-7" onClick={() => setEditingKey(null)}>Cancel</Button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => startEdit(item.key)}
+                            className="text-xs text-primary hover:underline flex-shrink-0"
+                          >
+                            {formatDueDateRule(overrides[item.key]?.dueDateRule ?? null)}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {customItems.length > 0 && (
+          <div className="space-y-2 mb-6">
+            <p className="text-xs font-medium text-muted uppercase tracking-wide">Custom items</p>
+            {customItems.map((item, idx) => (
+              <div key={idx} className="flex items-center gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-foreground">{item.label}</span>
+                    <span className="text-xs text-muted border border-border rounded px-1 py-0.5 leading-none">
+                      {item.completedBy === 'CUSTOMER' ? 'Client' : 'Me'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted mt-0.5">{formatDueDateRule(item.dueDateRule)}</p>
+                </div>
+                <button
+                  onClick={() => setCustomItems((prev) => prev.filter((_, i) => i !== idx))}
+                  className="text-muted hover:text-status-cancelled transition-colors flex-shrink-0"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="border border-border rounded-lg p-4 space-y-3 mb-6">
+          <p className="text-xs font-medium text-muted uppercase tracking-wide">Add custom item</p>
+          <div className="space-y-2">
+            <Input
+              placeholder="Item label"
+              value={newItem.label}
+              onChange={(e) => setNewItem((p) => ({ ...p, label: e.target.value }))}
+            />
+            <div className="flex gap-2 flex-wrap">
+              <Select value={newItem.completedBy} onValueChange={(v) => setNewItem((p) => ({ ...p, completedBy: v as 'USER' | 'CUSTOMER' }))}>
+                <SelectTrigger className="w-32 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="USER">By me</SelectItem>
+                  <SelectItem value="CUSTOMER">By client</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={newItem.requiredForStatus} onValueChange={(v) => setNewItem((p) => ({ ...p, requiredForStatus: v as CustomItemForm['requiredForStatus'] }))}>
+                <SelectTrigger className="w-48 text-xs"><SelectValue placeholder="Stage requirement" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="NONE">Not required for a stage</SelectItem>
+                  <SelectItem value="CONFIRMED">Required for Confirmed</SelectItem>
+                  <SelectItem value="READY">Required for Ready</SelectItem>
+                  <SelectItem value="COMPLETE">Required for Complete</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <p className="text-xs text-muted">Must be complete before advancing to this stage</p>
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={newItem.hasDueDate}
+                  onChange={(e) => setNewItem((p) => ({ ...p, hasDueDate: e.target.checked }))}
+                  className="rounded border-border"
+                />
+                <span className="text-xs text-foreground">Set due date</span>
+              </label>
+              {newItem.hasDueDate && (
                 <div className="flex items-center gap-2 flex-wrap">
+                  <input
+                    type="number"
+                    value={newItem.dueDateOffset}
+                    onChange={(e) => setNewItem((p) => ({ ...p, dueDateOffset: e.target.value }))}
+                    placeholder="days"
+                    className="w-16 text-xs border border-border rounded px-2 py-1 bg-background"
+                  />
+                  <span className="text-xs text-muted">days offset from</span>
                   <select
-                    value={editBasis}
-                    onChange={(e) => setEditBasis(e.target.value as 'bookingDate' | 'bookingCreation')}
+                    value={newItem.dueDateBasis}
+                    onChange={(e) => setNewItem((p) => ({ ...p, dueDateBasis: e.target.value as 'bookingDate' | 'bookingCreation' }))}
                     className="text-xs border border-border rounded px-2 py-1 bg-background"
                   >
                     <option value="bookingDate">booking date</option>
                     <option value="bookingCreation">booking creation</option>
                   </select>
-                  <input
-                    type="number"
-                    value={editOffset}
-                    onChange={(e) => setEditOffset(Number(e.target.value))}
-                    className="w-16 text-xs border border-border rounded px-2 py-1 bg-background"
-                    placeholder="days"
-                  />
-                  <span className="text-xs text-muted">days offset</span>
-                  <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => saveEdit(item.key, true)}>Save</Button>
-                  <Button size="sm" variant="ghost" className="text-xs h-7" onClick={() => saveEdit(item.key, false)}>No date</Button>
-                  <Button size="sm" variant="ghost" className="text-xs h-7" onClick={() => setEditingKey(null)}>Cancel</Button>
                 </div>
-              ) : (
-                <button
-                  onClick={() => startEdit(item.key)}
-                  className="text-xs text-primary hover:underline flex-shrink-0"
-                >
-                  {formatDueDateRule(overrides[item.key] ?? null)}
-                </button>
               )}
             </div>
-          </div>
-        ))}
-      </div>
-
-      {customItems.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-xs font-medium text-muted uppercase tracking-wide">Custom items</p>
-          {customItems.map((item, idx) => (
-            <div key={idx} className="flex items-center justify-between gap-2">
-              <span className="text-sm text-foreground">{item.label}</span>
-              <button
-                onClick={() => setCustomItems((prev) => prev.filter((_, i) => i !== idx))}
-                className="text-muted hover:text-status-cancelled transition-colors"
-              >
-                <Trash2 size={14} />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div className="border border-border rounded-lg p-4 space-y-3">
-        <p className="text-xs font-medium text-muted uppercase tracking-wide">Add custom item</p>
-        <div className="space-y-2">
-          <Input
-            placeholder="Item label"
-            value={newItem.label}
-            onChange={(e) => setNewItem((p) => ({ ...p, label: e.target.value }))}
-          />
-          <div className="flex gap-2 flex-wrap">
-            <Select value={newItem.completedBy} onValueChange={(v) => setNewItem((p) => ({ ...p, completedBy: v as 'USER' | 'CUSTOMER' }))}>
-              <SelectTrigger className="w-36 text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="USER">By me</SelectItem>
-                <SelectItem value="CUSTOMER">By client</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={newItem.requiredForStatus} onValueChange={(v) => setNewItem((p) => ({ ...p, requiredForStatus: v as CustomItemForm['requiredForStatus'] }))}>
-              <SelectTrigger className="w-44 text-xs"><SelectValue placeholder="Required for status" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="NONE">Not required</SelectItem>
-                <SelectItem value="CONFIRMED">Required for Confirmed</SelectItem>
-                <SelectItem value="READY">Required for Ready</SelectItem>
-                <SelectItem value="COMPLETE">Required for Complete</SelectItem>
-              </SelectContent>
-            </Select>
             <Button size="sm" variant="outline" onClick={addCustomItem} disabled={!newItem.label.trim()}>
               <Plus size={14} className="mr-1" />
               Add
             </Button>
           </div>
         </div>
-      </div>
 
-      <SaveBar isPending={mutation.isPending} saved={saved} isError={mutation.isError} onSave={() => mutation.mutate()} />
+        <SaveBar
+          isPending={checklistMutation.isPending}
+          saved={checklistSaved}
+          isError={checklistMutation.isError}
+          onSave={() => checklistMutation.mutate()}
+        />
+      </div>
     </div>
   );
 }
@@ -879,7 +1097,7 @@ export default function SettingsPage() {
         <div className="border-t border-border" />
         <NotificationsSection profile={userProfile} />
         <div className="border-t border-border" />
-        <ChecklistDefaultsSection profile={userProfile} />
+        <BookingSettingsSection profile={userProfile} />
       </div>
     </div>
   );

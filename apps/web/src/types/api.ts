@@ -201,7 +201,6 @@ export interface BookingDetail extends Omit<BookingListItem, 'customer' | 'venue
   performanceFormats: BookingPerformanceFormatSummary[];
   activeContract: Contract | null;
   depositReceivedAt: string | null;
-  depositTrackingMode: string | null;
   portalToken: string;
   hasMusicFormConfig: boolean;
   hasMusicFormResponse: boolean;
@@ -454,6 +453,7 @@ export interface ChecklistDefaultItem {
   autoCompleteRule: Record<string, unknown> | null;
   requiredForStatus: 'PROVISIONAL' | 'CONFIRMED' | 'READY' | 'COMPLETE' | null;
   dueDateRule: DueDateRule | null;
+  enabled?: boolean;
 }
 
 export interface CreateChecklistItemInput {
@@ -465,6 +465,7 @@ export interface CreateChecklistItemInput {
 export interface UserPreferences {
   reminderLeadDays: number;
   checklistDefaults: ChecklistDefaultItem[];
+  defaultBookingStatus?: 'ENQUIRY' | 'PROVISIONAL' | 'CONFIRMED';
 }
 
 export interface UserProfile {
@@ -477,7 +478,6 @@ export interface UserProfile {
   defaultPaymentTermsDays: number;
   invoiceNumberSequence: number;
   invoiceSequenceYear: number;
-  depositTrackingMode: string;
   depositPercentage: number | null;
   digestEmailEnabled: boolean;
   songRequestFormEnabled: boolean;
@@ -510,7 +510,6 @@ export interface UpdateUserProfileInput {
   bankDetails?: string | null;
   vatNumber?: string;
   defaultPaymentTermsDays?: number;
-  depositTrackingMode?: string;
   depositPercentage?: number;
   digestEmailEnabled?: boolean;
   songRequestFormEnabled?: boolean;

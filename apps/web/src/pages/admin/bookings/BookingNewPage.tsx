@@ -101,6 +101,12 @@ export default function BookingNewPage() {
     if (locationState?.date) setValue('date', locationState.date);
   }, [locationState?.customerId, locationState?.date, setValue]);
 
+  useEffect(() => {
+    if (!userProfile) return;
+    const pref = (userProfile.preferences as { defaultBookingStatus?: string } | undefined)?.defaultBookingStatus ?? 'PROVISIONAL';
+    setValue('status', pref as BookingFormValues['status']);
+  }, [userProfile?.id, setValue]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const mutation = useMutation({
     mutationFn: (payload: { values: BookingFormValues; checklistItems: ChecklistDefaultItem[] }) => {
       const { values, checklistItems } = payload;
@@ -128,7 +134,8 @@ export default function BookingNewPage() {
     const defaults = userProfile?.preferences?.checklistDefaults ?? [];
     const filtered = filterByStartingStatus(defaults, values.status as BookingStatus);
     setPendingValues(values);
-    setSelectedIndices(new Set(filtered.map((_, i) => i)));
+    // Pre-select enabled items only; disabled items appear unchecked (opt-in per booking)
+    setSelectedIndices(new Set(filtered.map((_, i) => i).filter((i) => filtered[i].enabled !== false)));
     setCustomItems([]);
     setStep(2);
   }

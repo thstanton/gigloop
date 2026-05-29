@@ -322,13 +322,13 @@ export class PortalService {
     const venueLine = booking.venue ? `\nVenue: ${booking.venue.name}` : '';
 
     let depositSection = '';
-    if (booking.depositTrackingMode !== 'NONE') {
-      if (booking.depositReceivedAt) {
-        const adminUrl = `${process.env.APP_BASE_URL}/admin/bookings/${booking.id}`;
-        depositSection = `\n\nThe deposit has also been received. Mark this booking as Confirmed:\n${adminUrl}`;
-      } else {
-        const depositInvoice = await this.repo.findDepositInvoice(booking.id, booking.userId);
-        const dueDate = depositInvoice?.dueDate
+    if (booking.depositReceivedAt) {
+      const adminUrl = `${process.env.APP_BASE_URL}/admin/bookings/${booking.id}`;
+      depositSection = `\n\nThe deposit has also been received. Mark this booking as Confirmed:\n${adminUrl}`;
+    } else {
+      const depositInvoice = await this.repo.findDepositInvoice(booking.id, booking.userId);
+      if (depositInvoice) {
+        const dueDate = depositInvoice.dueDate
           ? `Awaiting deposit — due ${depositInvoice.dueDate.toISOString().split('T')[0]}.`
           : 'Awaiting deposit.';
         depositSection = `\n\n${dueDate}`;

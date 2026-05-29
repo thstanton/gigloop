@@ -30,14 +30,13 @@ The lifecycle represents the musician's genuine assessment of readiness — not 
 
 **Pre-confirmation tracking:** two nullable timestamp fields — `contractSignedAt` and `depositReceivedAt` — record when each arrived.
 
-`depositReceivedAt` behaviour is controlled by `depositTrackingMode`:
-- `INVOICE` — automatically set when the deposit [[Invoice]] is marked Paid.
-- `MANUAL` — set directly by the musician on the Booking.
-- `NONE` — deposit not tracked.
+`depositTrackingMode` has been removed. `depositReceivedAt` is now set by two paths, in priority order:
+1. Automatically when the deposit [[Invoice]] is marked Paid.
+2. As a side effect when the musician marks the `deposit_received` [[BookingChecklistItem]] COMPLETE — set to the current timestamp at that moment.
 
-`UserProfile.depositTrackingMode` is the global default. `Booking.depositTrackingMode` is a nullable per-booking override; `null` means inherit from UserProfile. Neither triggers automatic status transitions — the musician still moves status to `Confirmed` manually.
+`depositReceivedAt` records when the deposit actually arrived — this is distinct from the checklist item being marked complete, which may happen at a different time. **P2:** allow the musician to enter the actual received date/time directly (e.g. when they receive a bank transfer and want to record the exact date). For now, the timestamp is always "now" at the point of the action that triggers it.
 
-**Planned deprecation:** `depositTrackingMode` (including the MANUAL mode) will be removed when the [[BookingChecklistItem]] model ships. Whether to track the deposit, and how, will be configured through the checklist template instead — the `deposit_received` item's presence and `autoCompleteRule` determine tracking behaviour. At that point `depositReceivedAt` on Booking becomes purely derived from the deposit [[Invoice]]'s paid state (i.e. a property of the invoice, not the booking).
+`depositReceivedAt` is not directly patchable via the booking update endpoint. It is a derived timestamp owned by the deposit flow.
 
 Status transitions are not enforced by the API — a Booking can move freely between any statuses.
 
@@ -193,10 +192,11 @@ The client-facing [[Portal]] is musician-branded: displays the musician's logo, 
 ### UserProfile
 The private, authenticated-only half of the musician's settings (one per `userId`). Never returned to portal clients. See ADR-0002.
 
-**Business fields (explicit columns):** address, bankDetails (encrypted at rest — see ADR-0003), vatNumber, defaultPaymentTermsDays, invoiceNumberSequence, invoiceSequenceYear, depositTrackingMode, depositPercentage (nullable integer 1–100 — the default deposit % of the booking fee; null means no default set), digestEmailEnabled, songRequestFormEnabled.
+**Business fields (explicit columns):** address, bankDetails (encrypted at rest — see ADR-0003), vatNumber, defaultPaymentTermsDays, invoiceNumberSequence, invoiceSequenceYear, depositPercentage (nullable integer 1–100 — the default deposit % of the booking fee; null means no default set), digestEmailEnabled, songRequestFormEnabled. `depositTrackingMode` has been removed — deposit tracking is now fully handled by the [[BookingChecklistItem]] model. `songRequestFormEnabled` remains a column but is surfaced in **Booking settings → General** (not Notifications).
 
 **`preferences` (JSON column):** all workflow and behaviour preferences, gated by subscription tier at write time. See ADR-0015. Contains:
-- `checklistDefaults` — the musician's default [[BookingChecklistItem]] template; an ordered array of item definitions (key, label, completedBy, dependsOn, autoCompleteRule, requiredForStatus, dueDateRule). Seeded from system defaults on first access. The system defaults represent the current 10-item workflow. Custom items (no `key`) can be appended.
+- `checklistDefaults` — the musician's default [[BookingChecklistItem]] template; an ordered array of item definitions (key, label, completedBy, dependsOn, autoCompleteRule, requiredForStatus, dueDateRule, enabled). Seeded from system defaults on first access. The system defaults represent the current 12-item workflow. System items carry a `key` and may be disabled (`enabled: false`) — disabled items are not seeded into new bookings, and any `dependsOn` references to missing items are stripped at seeding time. Custom items (no `key`) are always enabled and can be appended.
+- `defaultBookingStatus` — `'ENQUIRY' | 'PROVISIONAL' | 'CONFIRMED'`; the status pre-filled in the new booking form. Default: `'PROVISIONAL'`. A musician who creates bookings only after the contract and deposit are already done outside the app would set this to `'CONFIRMED'` — items for earlier stages are not seeded. Stored in `UserProfile.preferences`; surfaced in **Booking settings → General**.
 - `reminderLeadDays` — global integer; how many days before an item's `dueDate` it starts surfacing in the [[DigestNotification]] and Dashboard Actions widget (e.g. 7 = surface tasks in the 7 days leading up to their due date). Default: 7. Replaces the former flat `*ReminderDays` columns and per-item `reminderDays` field.
 - Future preference domains (dashboard widget config, feature toggles, etc.) are added as sibling keys.
 
@@ -240,7 +240,7 @@ Items are **seeded at booking creation** from the musician's `checklistDefaults`
 - `completedBy` — `USER | CUSTOMER | BAND_MEMBER`; declares which actor resolves this item
 - `state` — `PENDING | COMPLETE | FAILED | BLOCKED | SKIPPED`
 - `order` — integer preserving display sequence
-- `dependsOn` — `string[]`; keys of items that must be COMPLETE before this item unblocks (transitions from BLOCKED → PENDING automatically)
+- `dependsOn` — `string[]`; keys of items that gate this one in the UI (BLOCKED until all named items are COMPLETE). This is a workflow sequencing hint — it makes the checklist more contextual and reduces noise by hiding downstream items until the right moment. It is not a hard prerequisite: if a depended-upon item was not seeded (because the musician disabled it in their defaults), the BLOCKED state is simply skipped and the item starts as PENDING. The musician can always manually override any state regardless of `dependsOn`.
 - `autoCompleteRule` — optional JSON; when present, the system evaluates the rule on relevant business events and sets state to COMPLETE automatically. When absent, the item is manual-only. Rule types: `bookingField` (complete when a named Booking field is non-null), `communicationSent` (complete when a SENT Communication of a given template type exists), `invoiceExists` (complete when an invoice of the given kind exists), `musicFormResponse` (complete when a MusicFormResponse exists). The musician can always manually override the state of any item regardless of whether an `autoCompleteRule` is present — the rule assists, it does not dictate. COMPLETE is sticky: the evaluator will not revert a manually-completed item.
 - `requiredForStatus` — optional `BookingStatus`; advisory association — the UI warns the musician if they attempt to advance the booking to this status while this item is PENDING or FAILED, and prompts them to advance when all items for this status become COMPLETE. The API does not enforce this gate.
 - `completedAt` — timestamp set when state transitions to COMPLETE

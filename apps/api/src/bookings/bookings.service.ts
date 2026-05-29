@@ -27,8 +27,7 @@ function computeActionItem(booking: any, profile: any, today: Date) {
   const bookingDate = new Date(booking.date);
   bookingDate.setHours(0, 0, 0, 0);
 
-  const resolvedMode = booking.depositTrackingMode ?? profile?.depositTrackingMode ?? 'INVOICE';
-  const trackDeposit = resolvedMode !== 'NONE';
+  const trackDeposit = true;
   const bookingDatePassed = bookingDate < today;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -294,8 +293,12 @@ export class BookingsService {
 
   async updateChecklistItem(userId: string, bookingId: string, itemId: string, state: 'COMPLETE' | 'PENDING') {
     await this.findOne(userId, bookingId);
+    const item = await this.repo.findChecklistItemById(userId, bookingId, itemId);
     const result = await this.repo.updateChecklistItemState(userId, bookingId, itemId, state);
     if (result.count === 0) throw new NotFoundException('Checklist item not found');
+    if (state === 'COMPLETE' && item?.key === 'deposit_received') {
+      await this.repo.setDepositReceivedAt(bookingId, new Date()).catch(() => {});
+    }
     await this.evaluator.evaluate(bookingId).catch(() => {});
     return { success: true };
   }

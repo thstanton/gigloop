@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsBoolean,
   IsIn,
   IsInt,
   IsNotEmpty,
@@ -29,6 +30,11 @@ export class SystemItemOverrideDto {
   @IsString()
   @IsNotEmpty()
   key!: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  enabled?: boolean;
 
   @ApiPropertyOptional({ nullable: true, type: DueDateRuleDto })
   @IsOptional()

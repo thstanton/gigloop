@@ -1282,9 +1282,9 @@ export default function BookingDetailPage() {
 
   const title = booking.title ?? EVENT_TYPE_LABELS[booking.eventType];
   const fee = formatFee(booking.fee);
-  const resolvedDepositMode = booking.depositTrackingMode ?? 'INVOICE';
-  const trackDeposit = resolvedDepositMode !== 'NONE';
-  const contractShortcutType = trackDeposit ? 'contract_and_deposit_cover' : 'contract_cover';
+  // Use combined contract+deposit template when the deposit_received checklist item exists
+  const hasDepositItem = checklist.some((item) => item.key === 'deposit_received');
+  const contractShortcutType = hasDepositItem ? 'contract_and_deposit_cover' : 'contract_cover';
 
   const CHECKLIST_SHORTCUTS: Record<string, {
     shortcutTemplateType?: string;
