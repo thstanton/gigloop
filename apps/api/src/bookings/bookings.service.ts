@@ -296,6 +296,7 @@ export class BookingsService {
     await this.findOne(userId, bookingId);
     const result = await this.repo.updateChecklistItemState(userId, bookingId, itemId, state);
     if (result.count === 0) throw new NotFoundException('Checklist item not found');
+    await this.evaluator.evaluate(bookingId).catch(() => {});
     return { success: true };
   }
 

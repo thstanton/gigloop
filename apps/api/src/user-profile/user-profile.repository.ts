@@ -84,7 +84,7 @@ export class UserProfileRepository {
     return this.decryptProfile(profile);
   }
 
-  private decryptProfile(profile: { bankDetails: string | null;[key: string]: unknown }) {
+  private decryptProfile(profile: { bankDetails: string | null; [key: string]: unknown }): { bankDetails: string | null; [key: string]: unknown } {
     return {
       ...profile,
       bankDetails: profile.bankDetails ? decrypt(profile.bankDetails) : null,

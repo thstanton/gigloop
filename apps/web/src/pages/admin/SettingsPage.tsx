@@ -652,7 +652,7 @@ function formatDueDateRule(rule: DueDateRule | null): string {
   return `${days} day${days !== 1 ? 's' : ''} ${direction} ${basis}`;
 }
 
-type CustomItemForm = { label: string; completedBy: 'USER' | 'CUSTOMER'; requiredForStatus: '' | 'CONFIRMED' | 'READY' | 'COMPLETE' };
+type CustomItemForm = { label: string; completedBy: 'USER' | 'CUSTOMER'; requiredForStatus: 'NONE' | 'CONFIRMED' | 'READY' | 'COMPLETE' };
 
 function ChecklistDefaultsSection({ profile }: { profile: UserProfile }) {
   const queryClient = useQueryClient();
@@ -675,7 +675,7 @@ function ChecklistDefaultsSection({ profile }: { profile: UserProfile }) {
   // Custom items
   const initialCustom: ChecklistDefaultItem[] = savedDefaults.filter((d) => !SYSTEM_CHECKLIST_ITEMS.find((s) => s.key === d.key));
   const [customItems, setCustomItems] = useState<ChecklistDefaultItem[]>(initialCustom);
-  const [newItem, setNewItem] = useState<CustomItemForm>({ label: '', completedBy: 'USER', requiredForStatus: '' });
+  const [newItem, setNewItem] = useState<CustomItemForm>({ label: '', completedBy: 'USER', requiredForStatus: 'NONE' });
 
   const mutation = useMutation({
     mutationFn: () =>
@@ -721,11 +721,11 @@ function ChecklistDefaultsSection({ profile }: { profile: UserProfile }) {
         completedBy: newItem.completedBy,
         dependsOn: [],
         autoCompleteRule: null,
-        requiredForStatus: (newItem.requiredForStatus || null) as ChecklistDefaultItem['requiredForStatus'],
+        requiredForStatus: (newItem.requiredForStatus === 'NONE' ? null : newItem.requiredForStatus) as ChecklistDefaultItem['requiredForStatus'],
         dueDateRule: null,
       },
     ]);
-    setNewItem({ label: '', completedBy: 'USER', requiredForStatus: '' });
+    setNewItem({ label: '', completedBy: 'USER', requiredForStatus: 'NONE' });
   };
 
   return (
@@ -811,7 +811,7 @@ function ChecklistDefaultsSection({ profile }: { profile: UserProfile }) {
             <Select value={newItem.requiredForStatus} onValueChange={(v) => setNewItem((p) => ({ ...p, requiredForStatus: v as CustomItemForm['requiredForStatus'] }))}>
               <SelectTrigger className="w-44 text-xs"><SelectValue placeholder="Required for status" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Not required</SelectItem>
+                <SelectItem value="NONE">Not required</SelectItem>
                 <SelectItem value="CONFIRMED">Required for Confirmed</SelectItem>
                 <SelectItem value="READY">Required for Ready</SelectItem>
                 <SelectItem value="COMPLETE">Required for Complete</SelectItem>

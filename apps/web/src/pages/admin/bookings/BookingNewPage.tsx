@@ -172,7 +172,6 @@ export default function BookingNewPage() {
   if (step === 2 && pendingValues) {
     const defaults = userProfile?.preferences?.checklistDefaults ?? [];
     const filtered = filterByStartingStatus(defaults, pendingValues.status as BookingStatus);
-
     const grouped = (['PROVISIONAL', 'CONFIRMED', 'READY', 'COMPLETE'] as const)
       .map((stage) => ({
         stage,

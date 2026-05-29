@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import { useAuth } from '@clerk/react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, CheckCircle2, Circle, AlertTriangle, Mail, Music, FileText, DollarSign, FolderOpen, ChevronDown, Check, Pencil, Plus, Send, Download, Eye, Heart, GlassWater, Utensils, Moon, Briefcase, Music2, Car, KeyRound, Speaker, Sparkles } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckCircle2, Circle, AlertTriangle, Mail, Music, FileText, DollarSign, FolderOpen, ChevronDown, Check, Pencil, Plus, Send, Download, Eye, Lock, Heart, GlassWater, Utensils, Moon, Briefcase, Music2, Car, KeyRound, Speaker, Sparkles } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -1066,14 +1066,14 @@ function CommunicationRow({ comm }: { comm: Communication }) {
 function AddChecklistItemForm({ bookingId, onDone }: { bookingId: string; onDone: () => void }) {
   const queryClient = useQueryClient();
   const [label, setLabel] = useState('');
-  const [stage, setStage] = useState('CONFIRMED');
+  const [stage, setStage] = useState('NONE');
   const [dueDate, setDueDate] = useState('');
 
   const mutation = useMutation({
     mutationFn: () =>
       apiPost(`/bookings/${bookingId}/checklist`, {
         label: label.trim(),
-        requiredForStatus: stage || null,
+        requiredForStatus: stage === 'NONE' ? null : stage,
         dueDate: dueDate || null,
       }),
     onSuccess: () => {
@@ -1092,25 +1092,27 @@ function AddChecklistItemForm({ bookingId, onDone }: { bookingId: string; onDone
         className="text-sm"
         autoFocus
       />
-      <div className="grid grid-cols-2 gap-2">
+      <div className="space-y-1">
         <Select value={stage} onValueChange={setStage}>
-          <SelectTrigger className="text-sm h-8">
+          <SelectTrigger className="text-sm h-8 w-full">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="PROVISIONAL">Provisional</SelectItem>
-            <SelectItem value="CONFIRMED">Confirmed</SelectItem>
-            <SelectItem value="READY">Ready</SelectItem>
-            <SelectItem value="COMPLETE">Complete</SelectItem>
+            <SelectItem value="NONE">No stage requirement</SelectItem>
+            <SelectItem value="PROVISIONAL">Required for Provisional</SelectItem>
+            <SelectItem value="CONFIRMED">Required for Confirmed</SelectItem>
+            <SelectItem value="READY">Required for Ready</SelectItem>
+            <SelectItem value="COMPLETE">Required for Complete</SelectItem>
           </SelectContent>
         </Select>
-        <Input
-          type="date"
-          value={dueDate}
-          onChange={(e) => setDueDate(e.target.value)}
-          className="text-sm h-8"
-        />
+        <p className="text-xs text-muted">Must be complete before advancing to this stage</p>
       </div>
+      <Input
+        type="date"
+        value={dueDate}
+        onChange={(e) => setDueDate(e.target.value)}
+        className="text-sm h-8"
+      />
       <div className="flex gap-2">
         <Button
           size="sm"
@@ -1181,7 +1183,7 @@ export default function BookingDetailPage() {
   const actions = useBookingActions(id!);
   const queryClient = useQueryClient();
 
-  const { data: checklist = [] } = useQuery({
+  const { data: checklist = [], isPending: checklistLoading } = useQuery({
     queryKey: ['bookingChecklist', id],
     queryFn: () => apiGet<ChecklistItem[]>(`/bookings/${id}/checklist`),
     enabled: isLoaded && !!booking && booking.status !== 'CANCELLED',
@@ -1210,10 +1212,21 @@ export default function BookingDetailPage() {
   const toggleChecklistItem = useMutation({
     mutationFn: ({ itemId, state }: { itemId: string; state: 'COMPLETE' | 'PENDING' }) =>
       apiPatch(`/bookings/${id}/checklist/${itemId}`, { state }),
+    onMutate: async ({ itemId, state }) => {
+      await queryClient.cancelQueries({ queryKey: ['bookingChecklist', id] });
+      const previous = queryClient.getQueryData<ChecklistItem[]>(['bookingChecklist', id]);
+      queryClient.setQueryData<ChecklistItem[]>(['bookingChecklist', id], (old) =>
+        old?.map((item) => item.id === itemId ? { ...item, state } : item) ?? [],
+      );
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) queryClient.setQueryData(['bookingChecklist', id], context.previous);
+      toast({ title: 'Failed to update checklist item', variant: 'destructive' });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bookingChecklist', id] });
     },
-    onError: () => toast({ title: 'Failed to update checklist item', variant: 'destructive' }),
   });
 
   function openCompose(templateType?: string) {
@@ -1293,12 +1306,13 @@ export default function BookingDetailPage() {
   function renderChecklistItem(item: ChecklistItem) {
     const isDone = item.state === 'COMPLETE';
     const isFailed = item.state === 'FAILED';
+    const isBlocked = item.state === 'BLOCKED';
     const isPlayTheGig = item.key === 'play_the_gig';
     const shortcuts = item.key ? (CHECKLIST_SHORTCUTS[item.key] ?? {}) : {};
     const due = dueDateDisplay(item.dueDate);
     return (
-      <div key={item.id} className="flex items-center justify-between gap-2.5 py-1.5">
-        <div className="flex items-start gap-2.5 min-w-0">
+      <div key={item.id} className={cn('flex items-center justify-between gap-2.5 py-1.5', isBlocked && 'opacity-40')}>
+        <div className="flex items-center gap-2.5 min-w-0">
           {isDone ? (
             <button
               onClick={() => toggleChecklistItem.mutate({ itemId: item.id, state: 'PENDING' })}
@@ -1315,6 +1329,8 @@ export default function BookingDetailPage() {
             >
               <AlertTriangle size={16} />
             </button>
+          ) : isBlocked ? (
+            <Lock size={16} className="flex-shrink-0 text-muted" />
           ) : (
             <button
               onClick={() => {
@@ -1333,12 +1349,12 @@ export default function BookingDetailPage() {
             <span className={cn('text-sm', isDone ? 'text-muted line-through' : isFailed ? 'text-status-cancelled' : 'text-foreground')}>
               {item.label}
             </span>
-            {due && !isDone && (
+            {due && !isDone && !isBlocked && (
               <p className={cn('text-xs', due.className)}>{due.text}</p>
             )}
           </div>
         </div>
-        {!isDone && (
+        {!isDone && !isBlocked && (
           <div className="flex items-center gap-2 flex-shrink-0">
             {shortcuts.shortcutTemplateType && (
               <button onClick={() => openCompose(shortcuts.shortcutTemplateType)} className="text-xs text-primary hover:underline">
@@ -1365,6 +1381,14 @@ export default function BookingDetailPage() {
                 className="text-xs text-primary hover:underline disabled:opacity-50"
               >
                 {isFailed ? 'Retry' : 'Mark done'}
+              </button>
+            )}
+            {!shortcuts.shortcutTemplateType && !shortcuts.shortcutAction && !shortcuts.shortcutMarkDone && !isPlayTheGig && (
+              <button
+                onClick={() => toggleChecklistItem.mutate({ itemId: item.id, state: 'COMPLETE' })}
+                className="text-xs text-primary hover:underline"
+              >
+                Mark done
               </button>
             )}
           </div>
@@ -1455,9 +1479,23 @@ export default function BookingDetailPage() {
         <div className="mt-8 md:mt-0 space-y-6 md:sticky md:top-20 md:max-h-[calc(100vh-5rem)] md:overflow-y-auto md:overflow-x-hidden md:pb-6">
 
           {/* Checklist */}
-          {booking.status !== 'CANCELLED' && (() => {
-            const nonBlocked = checklist.filter((i) => i.state !== 'BLOCKED');
-            if (nonBlocked.length === 0 && !showAddItem) return null;
+          {booking.status !== 'CANCELLED' && checklistLoading && (
+            <section>
+              <div className="h-4 w-20 bg-border rounded animate-pulse mb-3" />
+              <div className="space-y-3">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="flex items-center gap-2.5 animate-pulse">
+                    <div className="w-4 h-4 bg-border rounded-full flex-shrink-0" />
+                    <div className="h-3 bg-border rounded flex-1" />
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+          {booking.status !== 'CANCELLED' && !checklistLoading && (() => {
+            // Expanded view includes BLOCKED items; default view hides them
+            const baseList = showAllChecklist ? checklist : checklist.filter((i) => i.state !== 'BLOCKED');
+            if (baseList.length === 0 && !showAddItem) return null;
 
             const STAGE_LIST = ['ENQUIRY', 'PROVISIONAL', 'CONFIRMED', 'READY', 'COMPLETE'] as const;
             const bookingIdx = STAGE_LIST.indexOf(booking.status as typeof STAGE_LIST[number]);
@@ -1466,9 +1504,9 @@ export default function BookingDetailPage() {
             if (bookingIdx >= 0 && bookingIdx + 1 < STAGE_LIST.length) defaultStageSet.add(STAGE_LIST[bookingIdx + 1]!);
 
             const filtered = showAllChecklist
-              ? nonBlocked
-              : nonBlocked.filter((i) => defaultStageSet.has(i.requiredForStatus));
-            const hiddenCount = nonBlocked.length - filtered.length;
+              ? baseList
+              : baseList.filter((i) => defaultStageSet.has(i.requiredForStatus));
+            const hiddenCount = baseList.length - filtered.length;
 
             const STAGE_DISPLAY_ORDER = ['PROVISIONAL', 'CONFIRMED', 'READY', 'COMPLETE'];
             const itemsByStage = new Map<string | null, ChecklistItem[]>();
@@ -1496,33 +1534,36 @@ export default function BookingDetailPage() {
                   <AddChecklistItemForm bookingId={booking.id} onDone={() => setShowAddItem(false)} />
                 )}
 
-                {/* Null-stage items */}
+                {/* Null-stage items (no divider) */}
                 {(itemsByStage.get(null) ?? []).map((item) => renderChecklistItem(item))}
 
-                {/* Stage-grouped items */}
+                {/* Stage-grouped items: items first, then the stage divider below */}
                 {STAGE_DISPLAY_ORDER.map((stage) => {
                   const stageItems = itemsByStage.get(stage) ?? [];
                   if (!stageItems.length) return null;
                   return (
-                    <div key={stage} className="mt-3">
-                      <p className="text-xs font-medium text-muted uppercase tracking-wide border-b border-border pb-1 mb-1.5">
-                        {STAGE_LABELS[stage]}
-                      </p>
+                    <div key={stage}>
                       {stageItems.map((item) => renderChecklistItem(item))}
+                      <div className="flex items-center gap-2 my-2">
+                        <div className="flex-1 h-px bg-border" />
+                        <span className="text-[10px] font-medium text-muted uppercase tracking-wider">
+                          {STAGE_LABELS[stage]}
+                        </span>
+                      </div>
                     </div>
                   );
                 })}
 
-                <div className="mt-2 space-y-1.5">
+                <div className="mt-1 space-y-1.5">
                   {hiddenCount > 0 && !showAllChecklist && (
                     <button
                       onClick={() => setShowAllChecklist(true)}
                       className="text-xs text-muted hover:text-foreground transition-colors"
                     >
-                      Show {hiddenCount} more {hiddenCount === 1 ? 'item' : 'items'}
+                      Show all
                     </button>
                   )}
-                  {showAllChecklist && nonBlocked.length > 0 && (
+                  {showAllChecklist && checklist.length > 0 && (
                     <button
                       onClick={() => setShowAllChecklist(false)}
                       className="text-xs text-muted hover:text-foreground transition-colors"
