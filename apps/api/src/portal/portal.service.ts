@@ -125,6 +125,7 @@ export class PortalService {
     const contract = booking.contracts?.[0] ?? null;
     if (!contract) throw new NotFoundException('Contract not found');
     if (contract.status === 'SIGNED') throw new BadRequestException('Contract already signed');
+    if (contract.status !== 'SENT') throw new BadRequestException('Contract must be in SENT status to sign');
 
     const publicProfile = await this.repo.findPublicProfile(booking.userId);
     if (!publicProfile) throw new NotFoundException('Booking not found');

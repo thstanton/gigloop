@@ -28,6 +28,7 @@ type MockRepo = {
   findContractTemplate: jest.Mock;
   findActiveContract: jest.Mock;
   createContractRecord: jest.Mock;
+  markContractSent: jest.Mock;
   voidContract: jest.Mock;
   updateContract: jest.Mock;
   findContractById: jest.Mock;
@@ -62,6 +63,7 @@ function makeRepo(): MockRepo {
     findContractTemplate: jest.fn(),
     findActiveContract: jest.fn(),
     createContractRecord: jest.fn(),
+    markContractSent: jest.fn(),
     voidContract: jest.fn(),
     updateContract: jest.fn(),
     findContractById: jest.fn(),
@@ -565,6 +567,88 @@ describe('BookingsService', () => {
       const originalContent = JSON.parse(JSON.stringify(contractTemplate.content));
       await service.createContract('u1', 'b1');
       expect(contractTemplate.content).toEqual(originalContent);
+    });
+  });
+
+  describe('sendContract', () => {
+    const now = new Date('2026-05-27T12:00:00Z');
+    const draftContract = { id: 'c1', userId: 'u1', bookingId: 'b1', status: 'DRAFT', content: {}, createdAt: now, updatedAt: now, signedAt: null };
+    const rawBooking = { ...booking, musicFormConfig: null, musicFormResponse: null, contracts: [] };
+
+    beforeEach(() => {
+      repo.findOne.mockResolvedValue(rawBooking);
+      repo.findContractById.mockResolvedValue(draftContract);
+      repo.markContractSent.mockResolvedValue({ ...draftContract, status: 'SENT' });
+    });
+
+    it('transitions a DRAFT contract to SENT', async () => {
+      const result = await service.sendContract('u1', 'b1', 'c1');
+      expect(repo.markContractSent).toHaveBeenCalledWith('c1');
+      expect(result.status).toBe('SENT');
+    });
+
+    it('throws BadRequestException when contract is not DRAFT', async () => {
+      repo.findContractById.mockResolvedValue({ ...draftContract, status: 'SENT' });
+      await expect(service.sendContract('u1', 'b1', 'c1')).rejects.toThrow(BadRequestException);
+      expect(repo.markContractSent).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException when contract does not exist', async () => {
+      repo.findContractById.mockResolvedValue(null);
+      await expect(service.sendContract('u1', 'b1', 'c1')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('voidContract', () => {
+    const now = new Date('2026-05-27T12:00:00Z');
+    const sentContract = { id: 'c1', userId: 'u1', bookingId: 'b1', status: 'SENT', content: {}, createdAt: now, updatedAt: now, signedAt: null };
+    const rawBooking = { ...booking, musicFormConfig: null, musicFormResponse: null, contracts: [] };
+
+    beforeEach(() => {
+      repo.findOne.mockResolvedValue(rawBooking);
+      repo.findContractById.mockResolvedValue(sentContract);
+      repo.voidContract.mockResolvedValue({ ...sentContract, status: 'VOID' });
+    });
+
+    it('voids a non-SIGNED contract without confirmation', async () => {
+      await service.voidContract('u1', 'b1', 'c1');
+      expect(repo.voidContract).toHaveBeenCalledWith('c1');
+    });
+
+    it('throws BadRequestException when voiding a SIGNED contract without confirmation', async () => {
+      repo.findContractById.mockResolvedValue({ ...sentContract, status: 'SIGNED' });
+      await expect(service.voidContract('u1', 'b1', 'c1')).rejects.toThrow(BadRequestException);
+      expect(repo.voidContract).not.toHaveBeenCalled();
+    });
+
+    it('voids a SIGNED contract when confirmSignedVoid is true', async () => {
+      repo.findContractById.mockResolvedValue({ ...sentContract, status: 'SIGNED' });
+      await service.voidContract('u1', 'b1', 'c1', true);
+      expect(repo.voidContract).toHaveBeenCalledWith('c1');
+    });
+
+    it('throws BadRequestException when contract is already VOID', async () => {
+      repo.findContractById.mockResolvedValue({ ...sentContract, status: 'VOID' });
+      await expect(service.voidContract('u1', 'b1', 'c1')).rejects.toThrow(BadRequestException);
+    });
+
+    it('throws NotFoundException when contract does not exist', async () => {
+      repo.findContractById.mockResolvedValue(null);
+      await expect(service.voidContract('u1', 'b1', 'c1')).rejects.toThrow(NotFoundException);
+    });
+
+    it('allows void-then-recreate flow: voiding clears the way for a new contract', async () => {
+      await service.voidContract('u1', 'b1', 'c1');
+      expect(repo.voidContract).toHaveBeenCalledWith('c1');
+
+      // New contract can now be created
+      repo.findContractTemplate.mockResolvedValue({ content: { type: 'doc', content: [] } });
+      mail.buildContext.mockResolvedValue(baseContext);
+      repo.findActiveContract.mockResolvedValue(null);
+      repo.createContractRecord.mockResolvedValue({ ...sentContract, id: 'c2', status: 'DRAFT' });
+
+      const newContract = await service.createContract('u1', 'b1');
+      expect(newContract.status).toBe('DRAFT');
     });
   });
 });

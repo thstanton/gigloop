@@ -279,6 +279,35 @@ export class BookingsService {
     };
   }
 
+  async sendContract(userId: string, bookingId: string, contractId: string) {
+    await this.findOne(userId, bookingId);
+    const contract = await this.repo.findContractById(userId, bookingId, contractId);
+    if (!contract) throw new NotFoundException('Contract not found');
+    if (contract.status !== 'DRAFT') throw new BadRequestException('Only DRAFT contracts can be sent');
+    const updated = await this.repo.markContractSent(contractId);
+    await this.evaluator.evaluate(bookingId).catch(() => {});
+    return {
+      id: updated.id,
+      createdAt: updated.createdAt.toISOString(),
+      updatedAt: updated.updatedAt.toISOString(),
+      status: updated.status,
+      content: updated.content,
+      signedAt: null,
+    };
+  }
+
+  async voidContract(userId: string, bookingId: string, contractId: string, confirmSignedVoid?: boolean) {
+    await this.findOne(userId, bookingId);
+    const contract = await this.repo.findContractById(userId, bookingId, contractId);
+    if (!contract) throw new NotFoundException('Contract not found');
+    if (contract.status === 'VOID') throw new BadRequestException('Contract is already VOID');
+    if (contract.status === 'SIGNED' && !confirmSignedVoid) {
+      throw new BadRequestException('Voiding a signed contract requires confirmSignedVoid: true');
+    }
+    await this.repo.voidContract(contractId);
+    await this.evaluator.evaluate(bookingId).catch(() => {});
+  }
+
   async getChecklist(userId: string, bookingId: string) {
     await this.findOne(userId, bookingId);
     const items = await this.repo.findChecklistItems(userId, bookingId);

@@ -33,7 +33,7 @@ import ComposeEmailSheet from '@/features/communications/ComposeEmailSheet';
 import InvoiceSheet from '@/features/invoices/InvoiceSheet';
 import MarkSentDialog from '@/features/invoices/MarkSentDialog';
 import { toast } from '@/lib/hooks/use-toast';
-import { apiGet, apiPatch, apiPost, apiPut } from '@/lib/api';
+import { apiGet, apiPatch, apiPost, apiPostVoid, apiPut } from '@/lib/api';
 import {
   formatDate,
   formatCurrency,
@@ -783,101 +783,131 @@ function VenueCard({ venue, linkState, onEdit }: { venue: Contact; linkState?: R
 
 // ─── Contract ─────────────────────────────────────────────────────────────────
 
-type ContractState = 'not_started' | 'draft' | 'sent' | 'signed';
-
-function deriveContractState(booking: BookingDetail, communications: Communication[]): ContractState {
-  if (booking.activeContract?.status === 'SIGNED') return 'signed';
-  const contractSent = communications.some(
-    (c) =>
-      c.status === 'SENT' &&
-      (c.template?.builtInType === 'contract_cover' || c.template?.builtInType === 'contract_and_deposit_cover'),
-  );
-  if (contractSent) return 'sent';
-  if (booking.activeContract !== null) return 'draft';
-  return 'not_started';
-}
-
-const CONTRACT_PILL_CLASSES: Record<Exclude<ContractState, 'not_started'>, string> = {
-  draft:  'bg-status-enquiry/12 text-status-enquiry border-l-status-enquiry',
-  sent:   'bg-status-confirmed/12 text-status-confirmed border-l-status-confirmed',
-  signed: 'bg-status-ready/12 text-status-ready border-l-status-ready',
+const CONTRACT_PILL_CLASSES: Record<string, string> = {
+  DRAFT:  'bg-status-enquiry/12 text-status-enquiry border-l-status-enquiry',
+  SENT:   'bg-status-confirmed/12 text-status-confirmed border-l-status-confirmed',
+  SIGNED: 'bg-status-ready/12 text-status-ready border-l-status-ready',
 };
 
-const CONTRACT_PILL_LABELS: Record<Exclude<ContractState, 'not_started'>, string> = {
-  draft:  'Draft',
-  sent:   'Sent',
-  signed: 'Signed',
+const CONTRACT_PILL_LABELS: Record<string, string> = {
+  DRAFT:  'Draft',
+  SENT:   'Sent',
+  SIGNED: 'Signed',
 };
 
 function ContractCard({
   booking,
-  communications,
   documents,
   isCreating,
+  isVoiding,
   onCreateContract,
   onEdit,
   onPreview,
+  onVoid,
 }: {
   booking: BookingDetail;
-  communications: Communication[];
   documents: Document[];
   isCreating: boolean;
+  isVoiding: boolean;
   onCreateContract: () => void;
   onEdit: () => void;
   onPreview: () => void;
+  onVoid: (confirmSignedVoid: boolean) => void;
 }) {
-  const state = deriveContractState(booking, communications);
+  const [confirmVoidOpen, setConfirmVoidOpen] = useState(false);
+  const contract = booking.activeContract;
+  const status = contract?.status ?? null;
+  const isEmpty = !status || status === 'VOID';
   const contractDoc = documents.find((d) => d.type === 'CONTRACT');
 
+  const headerAction = isEmpty ? (
+    <button
+      type="button"
+      onClick={onCreateContract}
+      disabled={isCreating}
+      className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors disabled:opacity-50"
+    >
+      <Plus size={12} />
+      {isCreating ? 'Creating…' : 'Create contract'}
+    </button>
+  ) : (
+    <button
+      type="button"
+      onClick={() => {
+        if (status === 'SIGNED') setConfirmVoidOpen(true);
+        else onVoid(false);
+      }}
+      disabled={isVoiding}
+      className="text-xs text-status-cancelled hover:text-status-cancelled/80 transition-colors disabled:opacity-50"
+    >
+      Void
+    </button>
+  );
+
   return (
-    <Card title="Contract">
-      {state === 'not_started' ? (
-        <button
-          type="button"
-          onClick={onCreateContract}
-          disabled={isCreating}
-          className="inline-flex items-center gap-1 text-sm text-primary hover:text-primary/80 transition-colors disabled:opacity-50"
-        >
-          <Plus size={14} />
-          {isCreating ? 'Creating…' : 'Create contract'}
-        </button>
-      ) : (
-        <div className="flex items-center gap-2">
-          {state === 'draft' && (
+    <>
+      <Card title="Contract" action={headerAction}>
+        {isEmpty ? (
+          <p className="text-sm text-muted">None created</p>
+        ) : (
+          <div className="flex items-center gap-2">
+            {status === 'DRAFT' && (
+              <button
+                type="button"
+                onClick={onEdit}
+                className="text-muted hover:text-foreground transition-colors"
+                aria-label="Edit contract"
+              >
+                <Pencil size={14} />
+              </button>
+            )}
             <button
               type="button"
-              onClick={onEdit}
+              onClick={onPreview}
               className="text-muted hover:text-foreground transition-colors"
-              aria-label="Edit contract"
+              aria-label="Preview contract"
             >
-              <Pencil size={14} />
+              <Eye size={14} />
             </button>
-          )}
-          <button
-            type="button"
-            onClick={onPreview}
-            className="text-muted hover:text-foreground transition-colors"
-            aria-label="Preview contract"
-          >
-            <Eye size={14} />
-          </button>
-          {contractDoc && (
-            <a
-              href={contractDoc.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-muted hover:text-foreground transition-colors"
-              aria-label="Download contract PDF"
-            >
-              <Download size={14} />
-            </a>
-          )}
-          <span className={cn('inline-flex items-center border-l-[3px] pl-2 pr-2.5 py-0.5 text-xs font-medium', CONTRACT_PILL_CLASSES[state as Exclude<ContractState, 'not_started'>])}>
-            {CONTRACT_PILL_LABELS[state as Exclude<ContractState, 'not_started'>]}
-          </span>
-        </div>
+            {contractDoc && (
+              <a
+                href={contractDoc.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-muted hover:text-foreground transition-colors"
+                aria-label="Download contract PDF"
+              >
+                <Download size={14} />
+              </a>
+            )}
+            <span className={cn('inline-flex items-center border-l-[3px] pl-2 pr-2.5 py-0.5 text-xs font-medium', CONTRACT_PILL_CLASSES[status] ?? '')}>
+              {CONTRACT_PILL_LABELS[status] ?? status}
+            </span>
+          </div>
+        )}
+      </Card>
+      {confirmVoidOpen && (
+        <Dialog open onOpenChange={() => setConfirmVoidOpen(false)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Void signed contract?</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted">
+              This contract has been signed by the client. Voiding it will require them to sign a new contract.
+            </p>
+            <div className="flex gap-2 justify-end mt-2">
+              <Button variant="outline" onClick={() => setConfirmVoidOpen(false)}>Cancel</Button>
+              <Button
+                variant="destructive"
+                onClick={() => { onVoid(true); setConfirmVoidOpen(false); }}
+              >
+                Void contract
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
-    </Card>
+    </>
   );
 }
 
@@ -1200,6 +1230,19 @@ export default function BookingDetailPage() {
     onError: () => toast({ title: 'Failed to create contract', variant: 'destructive' }),
   });
 
+  const sendContractMutation = useMutation({
+    mutationFn: (contractId: string) => apiPostVoid(`/bookings/${id}/contracts/${contractId}/send`, {}),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['booking', id] }),
+    onError: () => toast({ title: 'Failed to mark contract as sent', variant: 'destructive' }),
+  });
+
+  const voidContractMutation = useMutation({
+    mutationFn: ({ contractId, confirmSignedVoid }: { contractId: string; confirmSignedVoid: boolean }) =>
+      apiPostVoid(`/bookings/${id}/contracts/${contractId}/void`, { confirmSignedVoid }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['booking', id] }),
+    onError: () => toast({ title: 'Failed to void contract', variant: 'destructive' }),
+  });
+
   const markPaid = useMutation({
     mutationFn: (invoiceId: string) => apiPost(`/bookings/${id}/invoices/${invoiceId}/mark-paid`, {}),
     onSuccess: () => {
@@ -1251,7 +1294,11 @@ export default function BookingDetailPage() {
     openCompose(templateType);
   }
 
-  function handleInvoiceAction(action: 'create_deposit_invoice' | 'create_balance_invoice') {
+  function handleChecklistAction(action: 'create_deposit_invoice' | 'create_balance_invoice' | 'create_contract') {
+    if (action === 'create_contract') {
+      createContract.mutate();
+      return;
+    }
     const isDeposit = action === 'create_deposit_invoice';
     const fee = booking?.fee ? parseFloat(booking.fee) : null;
     const pct = userProfile?.depositPercentage;
@@ -1288,10 +1335,11 @@ export default function BookingDetailPage() {
 
   const CHECKLIST_SHORTCUTS: Record<string, {
     shortcutTemplateType?: string;
-    shortcutAction?: 'create_deposit_invoice' | 'create_balance_invoice';
+    shortcutAction?: 'create_deposit_invoice' | 'create_balance_invoice' | 'create_contract';
     shortcutMarkDone?: 'mark_contract_signed' | 'mark_deposit_received';
   }> = {
     send_quote: { shortcutTemplateType: 'quote' },
+    create_contract: { shortcutAction: 'create_contract' },
     create_deposit_invoice: { shortcutAction: 'create_deposit_invoice' },
     send_contract: { shortcutTemplateType: contractShortcutType },
     contract_signed: { shortcutMarkDone: 'mark_contract_signed' },
@@ -1362,7 +1410,7 @@ export default function BookingDetailPage() {
               </button>
             )}
             {shortcuts.shortcutAction && (
-              <button onClick={() => handleInvoiceAction(shortcuts.shortcutAction!)} className="text-xs text-primary hover:underline">
+              <button onClick={() => handleChecklistAction(shortcuts.shortcutAction!)} className="text-xs text-primary hover:underline">
                 {isFailed ? 'Retry' : 'Create'}
               </button>
             )}
@@ -1595,12 +1643,16 @@ export default function BookingDetailPage() {
           {booking.status !== 'CANCELLED' && (
             <ContractCard
               booking={booking}
-              communications={communications}
               documents={documents}
               isCreating={createContract.isPending}
+              isVoiding={voidContractMutation.isPending}
               onCreateContract={() => createContract.mutate()}
               onEdit={() => { setContractSheetReadOnly(false); setContractSheetOpen(true); }}
               onPreview={() => { setContractSheetReadOnly(true); setContractSheetOpen(true); }}
+              onVoid={(confirmSignedVoid) => {
+                const contractId = booking.activeContract?.id;
+                if (contractId) voidContractMutation.mutate({ contractId, confirmSignedVoid });
+              }}
             />
           )}
 
@@ -1773,6 +1825,13 @@ export default function BookingDetailPage() {
         open={composeOpen}
         onOpenChange={setComposeOpen}
         initialTemplateType={composeTemplateType}
+        onAfterSend={(templateType) => {
+          const isContractEmail = templateType === 'contract_cover' || templateType === 'contract_and_deposit_cover';
+          const contractId = booking.activeContract?.id;
+          if (isContractEmail && contractId && booking.activeContract?.status === 'DRAFT') {
+            sendContractMutation.mutate(contractId);
+          }
+        }}
       />
       {markSentInvoice && (
         <MarkSentDialog

@@ -10,6 +10,8 @@ import {
   Put,
   Query,
   Req,
+  ParseBoolPipe,
+  DefaultValuePipe,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { BookingStatus } from '@prisma/client';
@@ -81,7 +83,7 @@ export class BookingsController {
     return this.service.createContract(req.userId, id);
   }
 
-  @ApiOperation({ summary: 'Update a contract (edit content, void, or manually mark signed)' })
+  @ApiOperation({ summary: 'Update a contract (edit content or manually mark signed)' })
   @Patch(':id/contracts/:contractId')
   updateContract(
     @Req() req: AuthedRequest,
@@ -90,6 +92,29 @@ export class BookingsController {
     @Body() dto: UpdateContractDto,
   ) {
     return this.service.updateContract(req.userId, id, contractId, dto);
+  }
+
+  @ApiOperation({ summary: 'Transition a DRAFT contract to SENT' })
+  @Post(':id/contracts/:contractId/send')
+  @HttpCode(200)
+  sendContract(
+    @Req() req: AuthedRequest,
+    @Param('id') id: string,
+    @Param('contractId') contractId: string,
+  ) {
+    return this.service.sendContract(req.userId, id, contractId);
+  }
+
+  @ApiOperation({ summary: 'Void a contract; pass confirmSignedVoid=true to void a SIGNED contract' })
+  @Post(':id/contracts/:contractId/void')
+  @HttpCode(204)
+  voidContract(
+    @Req() req: AuthedRequest,
+    @Param('id') id: string,
+    @Param('contractId') contractId: string,
+    @Body('confirmSignedVoid', new DefaultValuePipe(false), ParseBoolPipe) confirmSignedVoid: boolean,
+  ) {
+    return this.service.voidContract(req.userId, id, contractId, confirmSignedVoid);
   }
 
   @ApiOperation({ summary: 'Get checklist items for a booking' })

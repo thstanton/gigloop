@@ -323,6 +323,13 @@ export class BookingsRepository {
     });
   }
 
+  markContractSent(contractId: string) {
+    return this.prisma.contract.update({
+      where: { id: contractId },
+      data: { status: 'SENT' },
+    });
+  }
+
   voidContract(contractId: string) {
     return this.prisma.contract.update({
       where: { id: contractId },

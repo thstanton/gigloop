@@ -41,6 +41,7 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialTemplateType?: string;
+  onAfterSend?: (templateType: string | null) => void;
 }
 
 
@@ -52,6 +53,7 @@ export default function ComposeEmailSheet({
   open,
   onOpenChange,
   initialTemplateType,
+  onAfterSend,
 }: Props) {
   const { isLoaded } = useAuth();
   const queryClient = useQueryClient();
@@ -188,6 +190,7 @@ export default function ComposeEmailSheet({
         queryClient.invalidateQueries({ queryKey: ['bookingInvoices', bookingId] });
         queryClient.invalidateQueries({ queryKey: ['bookingDocuments', bookingId] });
       }
+      onAfterSend?.(selectedType);
       onOpenChange(false);
       toast({ title: 'Email sent' });
     },
