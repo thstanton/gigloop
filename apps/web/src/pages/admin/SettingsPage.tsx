@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ChevronRight, ImageIcon, Plus, Trash2, Upload } from 'lucide-react';
+import { ChevronRight, ImageIcon, Pencil, Plus, Trash2, Upload } from 'lucide-react';
 import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
 import type { PublicProfile, UserProfile, UpdatePublicProfileInput, UpdateUserProfileInput, UserPreferences, DueDateRule, ChecklistDefaultItem } from '@/types/api';
@@ -688,7 +688,7 @@ type CustomItemForm = {
   completedBy: 'USER' | 'CUSTOMER';
   requiredForStatus: 'NONE' | 'CONFIRMED' | 'READY' | 'COMPLETE';
   dueDateBasis: 'bookingDate' | 'bookingCreation';
-  dueDateOffset: string;
+  dueDateOffset: string; // signed: negative = before
   hasDueDate: boolean;
 };
 
@@ -744,13 +744,18 @@ function BookingSettingsSection({ profile }: { profile: UserProfile }) {
   const [overrides, setOverrides] = useState(initialOverrides);
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editBasis, setEditBasis] = useState<'bookingDate' | 'bookingCreation'>('bookingDate');
-  const [editOffset, setEditOffset] = useState(0);
+  const [editOffset, setEditOffset] = useState(0); // signed: negative = before
 
   // Custom items
   const initialCustom: ChecklistDefaultItem[] = savedDefaults.filter(
     (d) => !ALL_SYSTEM_KEYS.includes(d.key as string),
   );
   const [customItems, setCustomItems] = useState<ChecklistDefaultItem[]>(initialCustom);
+  useEffect(() => {
+    const prefs = profile.preferences as UserPreferences | undefined;
+    const defaults = prefs?.checklistDefaults ?? [];
+    setCustomItems(defaults.filter((d) => !ALL_SYSTEM_KEYS.includes(d.key as string)));
+  }, [profile]); // eslint-disable-line react-hooks/exhaustive-deps
   const [newItem, setNewItem] = useState<CustomItemForm>({
     label: '',
     completedBy: 'USER',
@@ -759,6 +764,64 @@ function BookingSettingsSection({ profile }: { profile: UserProfile }) {
     dueDateOffset: '',
     hasDueDate: false,
   });
+
+  // Custom item editing
+  const [editingCustomIdx, setEditingCustomIdx] = useState<number | null>(null);
+  const [editCustom, setEditCustom] = useState<CustomItemForm | null>(null);
+
+  function startEditCustom(idx: number) {
+    const item = customItems[idx];
+    const days = item.dueDateRule?.offsetDays ?? 0;
+    setEditingCustomIdx(idx);
+    setEditCustom({
+      label: item.label,
+      completedBy: item.completedBy === 'BAND_MEMBER' ? 'USER' : item.completedBy,
+      requiredForStatus: (item.requiredForStatus ?? 'NONE') as CustomItemForm['requiredForStatus'],
+      hasDueDate: !!item.dueDateRule,
+      dueDateBasis: item.dueDateRule?.basis ?? 'bookingDate',
+      dueDateOffset: days.toString(),
+    });
+  }
+
+  function saveEditCustom() {
+    if (!editCustom || editingCustomIdx === null) return;
+    const dueDateRule: DueDateRule | null =
+      editCustom.hasDueDate && editCustom.dueDateOffset !== ''
+        ? { basis: editCustom.dueDateBasis, offsetDays: Number(editCustom.dueDateOffset) }
+        : null;
+    setCustomItems((prev) =>
+      prev.map((item, i) =>
+        i === editingCustomIdx
+          ? {
+              ...item,
+              label: editCustom.label.trim() || item.label,
+              completedBy: editCustom.completedBy,
+              requiredForStatus: editCustom.requiredForStatus === 'NONE'
+                ? null
+                : (editCustom.requiredForStatus as ChecklistDefaultItem['requiredForStatus']),
+              dueDateRule,
+            }
+          : item,
+      ),
+    );
+    setEditingCustomIdx(null);
+    setEditCustom(null);
+  }
+
+  function toggleCustomEnabled(idx: number, value: boolean) {
+    setCustomItems((prev) =>
+      prev.map((item, i) => (i === idx ? { ...item, enabled: value ? undefined : false } : item)),
+    );
+  }
+
+  // Group custom items by stage for merged rendering
+  const customByStage = new Map<string | null, Array<{ item: ChecklistDefaultItem; idx: number }>>();
+  customItems.forEach((item, idx) => {
+    const key = item.requiredForStatus ?? null;
+    if (!customByStage.has(key)) customByStage.set(key, []);
+    customByStage.get(key)!.push({ item, idx });
+  });
+  const nullStageCustom = customByStage.get(null) ?? [];
 
   // Watch songRequestFormEnabled from general form to lock music items
   const [songFormEnabled, setSongFormEnabled] = useState(profile.songRequestFormEnabled);
@@ -777,6 +840,7 @@ function BookingSettingsSection({ profile }: { profile: UserProfile }) {
           completedBy: item.completedBy,
           requiredForStatus: item.requiredForStatus ?? null,
           dueDateRule: item.dueDateRule ?? null,
+          ...(item.enabled === false ? { enabled: false } : {}),
         })),
       }),
     onSuccess: () => {
@@ -789,8 +853,9 @@ function BookingSettingsSection({ profile }: { profile: UserProfile }) {
 
   const startEdit = (key: string) => {
     const current = overrides[key]?.dueDateRule;
+    const days = current?.offsetDays ?? 0;
     setEditBasis(current?.basis ?? 'bookingDate');
-    setEditOffset(current?.offsetDays ?? 0);
+    setEditOffset(days);
     setEditingKey(key);
   };
 
@@ -890,104 +955,222 @@ function BookingSettingsSection({ profile }: { profile: UserProfile }) {
           description="Customise which items appear on new bookings and set their due dates."
         />
 
-        <div className="space-y-6 mb-6">
-          {CHECKLIST_STAGE_GROUPS.map(({ stage, label: stageLabel, items }) => (
-            <div key={stage}>
-              <p className="text-xs font-medium text-muted uppercase tracking-wide border-b border-border pb-1 mb-2">
-                {stageLabel}
-              </p>
-              <div className="space-y-2">
-                {items.map((item) => {
-                  const isGated = item.musicFormGated && !songFormEnabled;
-                  const itemEnabled = overrides[item.key]?.enabled ?? true;
-                  const effective = isGated ? false : itemEnabled;
+        <div className="space-y-4 mb-6">
+          {/* Enquiry start marker */}
+          <div className="flex items-center gap-2">
+            <div className="flex-1 h-px bg-border" />
+            <span className="text-[10px] font-medium text-muted uppercase tracking-wider px-2">Enquiry</span>
+            <div className="flex-1 h-px bg-border" />
+          </div>
 
-                  return (
-                    <div key={item.key} className="space-y-1.5">
-                      <div className="flex items-center gap-3">
-                        <Toggle
-                          checked={effective}
-                          onChange={(v) => !isGated && toggleItemEnabled(item.key, v)}
-                          disabled={isGated}
-                        />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className={cn('text-sm', effective ? 'text-foreground' : 'text-muted')}>
-                              {item.label}
-                            </span>
-                            <span className="text-xs text-muted border border-border rounded px-1 py-0.5 leading-none">
-                              {item.completedBy === 'CUSTOMER' ? 'Client' : 'Me'}
-                            </span>
+          {/* Null-stage custom items at top (no stage requirement) */}
+          {nullStageCustom.length > 0 && (
+            <div className="space-y-2">
+              {nullStageCustom.map(({ item, idx }) =>
+                editingCustomIdx === idx ? (
+                  <div key={`edit-${idx}`} className="rounded-lg border border-border bg-muted/20 p-3 space-y-2.5">
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="text"
+                        value={editCustom!.label}
+                        onChange={(e) => setEditCustom((p) => p && { ...p, label: e.target.value })}
+                        placeholder="Item label"
+                        className="text-sm flex-1"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => { setCustomItems((prev) => prev.filter((_, i) => i !== idx)); setEditingCustomIdx(null); setEditCustom(null); }}
+                        className="text-muted hover:text-status-cancelled transition-colors flex-shrink-0"
+                        aria-label="Delete item"
+                      >
+                        <Trash2 size={14} aria-hidden="true" />
+                      </button>
+                    </div>
+                    <div className="flex gap-2 flex-wrap">
+                      <Select value={editCustom!.completedBy} onValueChange={(v) => setEditCustom((p) => p && { ...p, completedBy: v as 'USER' | 'CUSTOMER' })}>
+                        <SelectTrigger className="w-32 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="USER">By me</SelectItem>
+                          <SelectItem value="CUSTOMER">By client</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Select value={editCustom!.requiredForStatus} onValueChange={(v) => setEditCustom((p) => p && { ...p, requiredForStatus: v as CustomItemForm['requiredForStatus'] })}>
+                        <SelectTrigger className="w-48 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="NONE">Not required for a stage</SelectItem>
+                          <SelectItem value="CONFIRMED">Required for Confirmed</SelectItem>
+                          <SelectItem value="READY">Required for Ready</SelectItem>
+                          <SelectItem value="COMPLETE">Required for Complete</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" checked={editCustom!.hasDueDate} onChange={(e) => setEditCustom((p) => p && { ...p, hasDueDate: e.target.checked })} className="rounded border-border" />
+                        <span className="text-xs text-foreground">Due date</span>
+                      </label>
+                      {editCustom!.hasDueDate && (
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <input type="number" min={0} value={Math.abs(Number(editCustom!.dueDateOffset))} onChange={(e) => setEditCustom((p) => { if (!p) return p; const sign = Number(p.dueDateOffset) < 0 ? -1 : 1; return { ...p, dueDateOffset: (sign * Number(e.target.value)).toString() }; })} placeholder="14" className="w-14 text-xs border border-border rounded px-2 py-1 bg-background" />
+                          <span className="text-xs text-muted">days</span>
+                          <select value={Number(editCustom!.dueDateOffset) < 0 ? 'before' : 'after'} onChange={(e) => setEditCustom((p) => { if (!p) return p; const abs = Math.abs(Number(p.dueDateOffset)); return { ...p, dueDateOffset: (e.target.value === 'before' ? -abs : abs).toString() }; })} className="text-xs border border-border rounded px-2 py-1 bg-background">
+                            <option value="before">before</option>
+                            <option value="after">after</option>
+                          </select>
+                          <select value={editCustom!.dueDateBasis} onChange={(e) => setEditCustom((p) => p && { ...p, dueDateBasis: e.target.value as 'bookingDate' | 'bookingCreation' })} className="text-xs border border-border rounded px-2 py-1 bg-background">
+                            <option value="bookingDate">booking date</option>
+                            <option value="bookingCreation">booking creation</option>
+                          </select>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button type="button" size="sm" variant="outline" className="text-xs h-7" onClick={saveEditCustom} disabled={!editCustom!.label.trim()}>Save</Button>
+                      <Button type="button" size="sm" variant="ghost" className="text-xs h-7" onClick={() => { setEditingCustomIdx(null); setEditCustom(null); }}>Cancel</Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div key={`custom-${idx}`} className="flex items-center gap-3">
+                    <Toggle checked={item.enabled !== false} onChange={(v) => toggleCustomEnabled(idx, v)} />
+                    <div className="flex-1 min-w-0 flex items-center gap-2 flex-wrap">
+                      <span className={cn('text-sm', item.enabled !== false ? 'text-foreground' : 'text-muted')}>{item.label}</span>
+                      <span className="text-xs text-muted border border-border rounded px-1 py-0.5 leading-none">{item.completedBy === 'CUSTOMER' ? 'Client' : 'Me'}</span>
+                      <span className="text-xs text-primary/60 border border-primary/30 rounded px-1 py-0.5 leading-none">Custom</span>
+                    </div>
+                    <button type="button" onClick={() => startEditCustom(idx)} className="flex items-center gap-1 text-xs text-primary hover:underline flex-shrink-0" aria-label={`Edit ${item.label}`}>
+                      {formatDueDateRule(item.dueDateRule)}<Pencil size={11} aria-hidden="true" />
+                    </button>
+                  </div>
+                )
+              )}
+            </div>
+          )}
+
+          {/* Stage groups: items first, then stage milestone divider below */}
+          {CHECKLIST_STAGE_GROUPS.map(({ stage, label: stageLabel, items }) => {
+            const stageCustom = customByStage.get(stage) ?? [];
+            return (
+              <div key={stage}>
+                <div className="space-y-2 mb-3">
+                  {items.map((item) => {
+                    const isGated = item.musicFormGated && !songFormEnabled;
+                    const itemEnabled = overrides[item.key]?.enabled ?? true;
+                    const effective = isGated ? false : itemEnabled;
+                    return (
+                      <div key={item.key}>
+                        <div className="flex items-center gap-3">
+                          <Toggle checked={effective} onChange={(v) => !isGated && toggleItemEnabled(item.key, v)} disabled={isGated} />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className={cn('text-sm', effective ? 'text-foreground' : 'text-muted')}>{item.label}</span>
+                              <span className="text-xs text-muted border border-border rounded px-1 py-0.5 leading-none">{item.completedBy === 'CUSTOMER' ? 'Client' : 'Me'}</span>
+                            </div>
+                            {isGated && <p className="text-xs text-muted mt-0.5">Enable song request form to include this item</p>}
                           </div>
-                          {isGated && (
-                            <p className="text-xs text-muted mt-0.5">Enable song request form to include this item</p>
+                          {editingKey === item.key ? (
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <input type="number" min={0} value={Math.abs(editOffset)} onChange={(e) => setEditOffset((editOffset < 0 ? -1 : 1) * Number(e.target.value))} className="w-14 text-xs border border-border rounded px-2 py-1 bg-background" placeholder="14" />
+                              <span className="text-xs text-muted">days</span>
+                              <select value={editOffset < 0 ? 'before' : 'after'} onChange={(e) => setEditOffset(e.target.value === 'before' ? -Math.abs(editOffset) : Math.abs(editOffset))} className="text-xs border border-border rounded px-2 py-1 bg-background">
+                                <option value="before">before</option>
+                                <option value="after">after</option>
+                              </select>
+                              <select value={editBasis} onChange={(e) => setEditBasis(e.target.value as 'bookingDate' | 'bookingCreation')} className="text-xs border border-border rounded px-2 py-1 bg-background">
+                                <option value="bookingDate">booking date</option>
+                                <option value="bookingCreation">booking creation</option>
+                              </select>
+                              <Button type="button" size="sm" variant="outline" className="text-xs h-7" onClick={() => saveEdit(item.key, true)}>Save</Button>
+                              <Button type="button" size="sm" variant="ghost" className="text-xs h-7" onClick={() => saveEdit(item.key, false)}>No date</Button>
+                              <Button type="button" size="sm" variant="ghost" className="text-xs h-7" onClick={() => setEditingKey(null)}>Cancel</Button>
+                            </div>
+                          ) : (
+                            <button type="button" onClick={() => startEdit(item.key)} className="flex items-center gap-1 text-xs text-primary hover:underline flex-shrink-0">
+                              {formatDueDateRule(overrides[item.key]?.dueDateRule ?? null)}<Pencil size={11} aria-hidden="true" />
+                            </button>
                           )}
                         </div>
-                        {editingKey === item.key ? (
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <select
-                              value={editBasis}
-                              onChange={(e) => setEditBasis(e.target.value as 'bookingDate' | 'bookingCreation')}
-                              className="text-xs border border-border rounded px-2 py-1 bg-background"
-                            >
-                              <option value="bookingDate">booking date</option>
-                              <option value="bookingCreation">booking creation</option>
-                            </select>
-                            <input
-                              type="number"
-                              value={editOffset}
-                              onChange={(e) => setEditOffset(Number(e.target.value))}
-                              className="w-16 text-xs border border-border rounded px-2 py-1 bg-background"
-                              placeholder="days"
-                            />
-                            <span className="text-xs text-muted">days offset</span>
-                            <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => saveEdit(item.key, true)}>Save</Button>
-                            <Button size="sm" variant="ghost" className="text-xs h-7" onClick={() => saveEdit(item.key, false)}>No date</Button>
-                            <Button size="sm" variant="ghost" className="text-xs h-7" onClick={() => setEditingKey(null)}>Cancel</Button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => startEdit(item.key)}
-                            className="text-xs text-primary hover:underline flex-shrink-0"
-                          >
-                            {formatDueDateRule(overrides[item.key]?.dueDateRule ?? null)}
-                          </button>
-                        )}
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {customItems.length > 0 && (
-          <div className="space-y-2 mb-6">
-            <p className="text-xs font-medium text-muted uppercase tracking-wide">Custom items</p>
-            {customItems.map((item, idx) => (
-              <div key={idx} className="flex items-center gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-foreground">{item.label}</span>
-                    <span className="text-xs text-muted border border-border rounded px-1 py-0.5 leading-none">
-                      {item.completedBy === 'CUSTOMER' ? 'Client' : 'Me'}
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted mt-0.5">{formatDueDateRule(item.dueDateRule)}</p>
+                    );
+                  })}
+                  {stageCustom.map(({ item, idx }) =>
+                    editingCustomIdx === idx ? (
+                      <div key={`edit-${idx}`} className="rounded-lg border border-border bg-muted/20 p-3 space-y-2.5">
+                        <div className="flex items-center gap-2">
+                          <Input type="text" value={editCustom!.label} onChange={(e) => setEditCustom((p) => p && { ...p, label: e.target.value })} placeholder="Item label" className="text-sm flex-1" />
+                          <button type="button" onClick={() => { setCustomItems((prev) => prev.filter((_, i) => i !== idx)); setEditingCustomIdx(null); setEditCustom(null); }} className="text-muted hover:text-status-cancelled transition-colors flex-shrink-0" aria-label="Delete item">
+                            <Trash2 size={14} aria-hidden="true" />
+                          </button>
+                        </div>
+                        <div className="flex gap-2 flex-wrap">
+                          <Select value={editCustom!.completedBy} onValueChange={(v) => setEditCustom((p) => p && { ...p, completedBy: v as 'USER' | 'CUSTOMER' })}>
+                            <SelectTrigger className="w-32 text-xs"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="USER">By me</SelectItem>
+                              <SelectItem value="CUSTOMER">By client</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Select value={editCustom!.requiredForStatus} onValueChange={(v) => setEditCustom((p) => p && { ...p, requiredForStatus: v as CustomItemForm['requiredForStatus'] })}>
+                            <SelectTrigger className="w-48 text-xs"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="NONE">Not required for a stage</SelectItem>
+                              <SelectItem value="CONFIRMED">Required for Confirmed</SelectItem>
+                              <SelectItem value="READY">Required for Ready</SelectItem>
+                              <SelectItem value="COMPLETE">Required for Complete</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" checked={editCustom!.hasDueDate} onChange={(e) => setEditCustom((p) => p && { ...p, hasDueDate: e.target.checked })} className="rounded border-border" />
+                            <span className="text-xs text-foreground">Due date</span>
+                          </label>
+                          {editCustom!.hasDueDate && (
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <input type="number" min={0} value={Math.abs(Number(editCustom!.dueDateOffset))} onChange={(e) => setEditCustom((p) => { if (!p) return p; const sign = Number(p.dueDateOffset) < 0 ? -1 : 1; return { ...p, dueDateOffset: (sign * Number(e.target.value)).toString() }; })} placeholder="14" className="w-14 text-xs border border-border rounded px-2 py-1 bg-background" />
+                              <span className="text-xs text-muted">days</span>
+                              <select value={Number(editCustom!.dueDateOffset) < 0 ? 'before' : 'after'} onChange={(e) => setEditCustom((p) => { if (!p) return p; const abs = Math.abs(Number(p.dueDateOffset)); return { ...p, dueDateOffset: (e.target.value === 'before' ? -abs : abs).toString() }; })} className="text-xs border border-border rounded px-2 py-1 bg-background">
+                                <option value="before">before</option>
+                                <option value="after">after</option>
+                              </select>
+                              <select value={editCustom!.dueDateBasis} onChange={(e) => setEditCustom((p) => p && { ...p, dueDateBasis: e.target.value as 'bookingDate' | 'bookingCreation' })} className="text-xs border border-border rounded px-2 py-1 bg-background">
+                                <option value="bookingDate">booking date</option>
+                                <option value="bookingCreation">booking creation</option>
+                              </select>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex gap-2">
+                          <Button type="button" size="sm" variant="outline" className="text-xs h-7" onClick={saveEditCustom} disabled={!editCustom!.label.trim()}>Save</Button>
+                          <Button type="button" size="sm" variant="ghost" className="text-xs h-7" onClick={() => { setEditingCustomIdx(null); setEditCustom(null); }}>Cancel</Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div key={`custom-${idx}`} className="flex items-center gap-3">
+                        <Toggle checked={item.enabled !== false} onChange={(v) => toggleCustomEnabled(idx, v)} />
+                        <div className="flex-1 min-w-0 flex items-center gap-2 flex-wrap">
+                          <span className={cn('text-sm', item.enabled !== false ? 'text-foreground' : 'text-muted')}>{item.label}</span>
+                          <span className="text-xs text-muted border border-border rounded px-1 py-0.5 leading-none">{item.completedBy === 'CUSTOMER' ? 'Client' : 'Me'}</span>
+                          <span className="text-xs text-primary/60 border border-primary/30 rounded px-1 py-0.5 leading-none">Custom</span>
+                        </div>
+                        <button type="button" onClick={() => startEditCustom(idx)} className="flex items-center gap-1 text-xs text-primary hover:underline flex-shrink-0" aria-label={`Edit ${item.label}`}>
+                          {formatDueDateRule(item.dueDateRule)}<Pencil size={11} aria-hidden="true" />
+                        </button>
+                      </div>
+                    )
+                  )}
                 </div>
-                <button
-                  type="button"
-                  aria-label={`Remove ${item.label}`}
-                  onClick={() => setCustomItems((prev) => prev.filter((_, i) => i !== idx))}
-                  className="text-muted hover:text-status-cancelled transition-colors flex-shrink-0"
-                >
-                  <Trash2 size={14} aria-hidden="true" />
-                </button>
+                {/* Stage milestone divider — below items; omitted for Complete (terminal stage) */}
+                {stage !== 'COMPLETE' && (
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-px bg-border" />
+                    <span className="text-[10px] font-medium text-muted uppercase tracking-wider px-2">{stageLabel}</span>
+                    <div className="flex-1 h-px bg-border" />
+                  </div>
+                )}
               </div>
-            ))}
-          </div>
-        )}
+            );
+          })}
+        </div>
 
         <div className="border border-border rounded-lg p-4 space-y-3 mb-6">
           <p className="text-xs font-medium text-muted uppercase tracking-wide">Add custom item</p>
@@ -1015,7 +1198,6 @@ function BookingSettingsSection({ profile }: { profile: UserProfile }) {
                 </SelectContent>
               </Select>
             </div>
-            <p className="text-xs text-muted">Must be complete before advancing to this stage</p>
             <div className="flex items-center gap-3">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -1030,12 +1212,21 @@ function BookingSettingsSection({ profile }: { profile: UserProfile }) {
                 <div className="flex items-center gap-2 flex-wrap">
                   <input
                     type="number"
-                    value={newItem.dueDateOffset}
-                    onChange={(e) => setNewItem((p) => ({ ...p, dueDateOffset: e.target.value }))}
-                    placeholder="days"
-                    className="w-16 text-xs border border-border rounded px-2 py-1 bg-background"
+                    min={0}
+                    value={Math.abs(Number(newItem.dueDateOffset))}
+                    onChange={(e) => setNewItem((p) => { const sign = Number(p.dueDateOffset) < 0 ? -1 : 1; return { ...p, dueDateOffset: (sign * Number(e.target.value)).toString() }; })}
+                    placeholder="14"
+                    className="w-14 text-xs border border-border rounded px-2 py-1 bg-background"
                   />
-                  <span className="text-xs text-muted">days offset from</span>
+                  <span className="text-xs text-muted">days</span>
+                  <select
+                    value={Number(newItem.dueDateOffset) < 0 ? 'before' : 'after'}
+                    onChange={(e) => setNewItem((p) => { const abs = Math.abs(Number(p.dueDateOffset)); return { ...p, dueDateOffset: (e.target.value === 'before' ? -abs : abs).toString() }; })}
+                    className="text-xs border border-border rounded px-2 py-1 bg-background"
+                  >
+                    <option value="before">before</option>
+                    <option value="after">after</option>
+                  </select>
                   <select
                     value={newItem.dueDateBasis}
                     onChange={(e) => setNewItem((p) => ({ ...p, dueDateBasis: e.target.value as 'bookingDate' | 'bookingCreation' }))}
@@ -1047,7 +1238,7 @@ function BookingSettingsSection({ profile }: { profile: UserProfile }) {
                 </div>
               )}
             </div>
-            <Button size="sm" variant="outline" onClick={addCustomItem} disabled={!newItem.label.trim()}>
+            <Button type="button" size="sm" variant="outline" onClick={addCustomItem} disabled={!newItem.label.trim()}>
               <Plus size={14} className="mr-1" />
               Add
             </Button>

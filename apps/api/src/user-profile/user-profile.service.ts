@@ -44,6 +44,7 @@ export class UserProfileService {
       autoCompleteRule: null,
       requiredForStatus: item.requiredForStatus ?? null,
       dueDateRule: item.dueDateRule ?? null,
+      ...(item.enabled === false ? { enabled: false } : {}),
     }));
 
     return this.repo.updateChecklistDefaults(

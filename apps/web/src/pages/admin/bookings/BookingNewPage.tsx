@@ -50,7 +50,10 @@ function filterByStartingStatus(
 ): ChecklistDefaultItem[] {
   const startStage = STATUS_TO_STAGE[startingStatus] ?? null;
   const startIdx = STAGE_ORDER.indexOf(startStage);
-  return items.filter((item) => STAGE_ORDER.indexOf(item.requiredForStatus ?? null) > startIdx);
+  return items.filter((item) => {
+    if (item.requiredForStatus === null) return true;
+    return STAGE_ORDER.indexOf(item.requiredForStatus) > startIdx;
+  });
 }
 
 export default function BookingNewPage() {

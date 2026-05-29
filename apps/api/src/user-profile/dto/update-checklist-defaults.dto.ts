@@ -55,6 +55,11 @@ export class CustomChecklistItemDto {
   @IsIn(['USER', 'CUSTOMER', 'BAND_MEMBER'])
   completedBy!: 'USER' | 'CUSTOMER' | 'BAND_MEMBER';
 
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  enabled?: boolean;
+
   @ApiPropertyOptional({ nullable: true, enum: ['CONFIRMED', 'READY', 'COMPLETE'] })
   @IsOptional()
   @ValidateIf((_, v) => v !== null)
