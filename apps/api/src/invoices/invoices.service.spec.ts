@@ -19,6 +19,8 @@ type MockRepo = {
   delete: jest.Mock;
   assignAndMarkSent: jest.Mock;
   markPaid: jest.Mock;
+  voidInvoice: jest.Mock;
+  countActiveByType: jest.Mock;
   findLineItem: jest.Mock;
   addLineItem: jest.Mock;
   updateLineItem: jest.Mock;
@@ -35,6 +37,8 @@ function makeRepo(): MockRepo {
     delete: jest.fn(),
     assignAndMarkSent: jest.fn(),
     markPaid: jest.fn(),
+    voidInvoice: jest.fn(),
+    countActiveByType: jest.fn(),
     findLineItem: jest.fn(),
     addLineItem: jest.fn(),
     updateLineItem: jest.fn(),
@@ -53,10 +57,19 @@ describe('InvoicesService', () => {
   let service: InvoicesService;
   let repo: MockRepo;
 
+  let mockChecklistRepo: { resetItemByKey: jest.Mock };
+
   beforeEach(() => {
     repo = makeRepo();
     const mockEvaluator = { evaluate: jest.fn().mockResolvedValue(undefined) } as unknown as import('../checklist/checklist-evaluator.service').ChecklistEvaluatorService;
-    service = new InvoicesService(repo as unknown as InvoicesRepository, mockComms, mockDocuments, mockEvaluator);
+    mockChecklistRepo = { resetItemByKey: jest.fn().mockResolvedValue({ count: 0 }) };
+    service = new InvoicesService(
+      repo as unknown as InvoicesRepository,
+      mockComms,
+      mockDocuments,
+      mockEvaluator,
+      mockChecklistRepo as unknown as import('../checklist/checklist.repository').ChecklistRepository,
+    );
   });
 
   describe('findAll', () => {
@@ -326,6 +339,65 @@ describe('InvoicesService', () => {
     it('returns the paid invoice', async () => {
       const result = await service.markPaid('u1', 'b1', 'i1');
       expect(result).toBe(paidInvoice);
+    });
+  });
+
+  describe('voidInvoice', () => {
+    const sentInvoice = { id: 'i1', bookingId: 'b1', userId: 'u1', status: 'SENT', isDeposit: true };
+    const voidedInvoice = { ...sentInvoice, status: 'VOID' };
+
+    beforeEach(() => {
+      repo.findOne.mockResolvedValue(sentInvoice);
+      repo.voidInvoice.mockResolvedValue(voidedInvoice);
+      repo.countActiveByType.mockResolvedValue(0);
+    });
+
+    it('voids a SENT invoice', async () => {
+      const result = await service.voidInvoice('u1', 'b1', 'i1');
+      expect(repo.voidInvoice).toHaveBeenCalledWith('i1');
+      expect(result).toBe(voidedInvoice);
+    });
+
+    it('voids a PAID invoice', async () => {
+      repo.findOne.mockResolvedValue({ ...sentInvoice, status: 'PAID' });
+      await service.voidInvoice('u1', 'b1', 'i1');
+      expect(repo.voidInvoice).toHaveBeenCalledWith('i1');
+    });
+
+    it('throws BadRequestException for a DRAFT invoice', async () => {
+      repo.findOne.mockResolvedValue({ ...sentInvoice, status: 'DRAFT' });
+      await expect(service.voidInvoice('u1', 'b1', 'i1')).rejects.toThrow(BadRequestException);
+      expect(repo.voidInvoice).not.toHaveBeenCalled();
+    });
+
+    it('throws BadRequestException for an already-VOID invoice', async () => {
+      repo.findOne.mockResolvedValue({ ...sentInvoice, status: 'VOID' });
+      await expect(service.voidInvoice('u1', 'b1', 'i1')).rejects.toThrow(BadRequestException);
+      expect(repo.voidInvoice).not.toHaveBeenCalled();
+    });
+
+    it('resets the create_deposit_invoice checklist item when no active deposit invoices remain', async () => {
+      repo.countActiveByType.mockResolvedValue(0);
+      await service.voidInvoice('u1', 'b1', 'i1');
+      expect(mockChecklistRepo.resetItemByKey).toHaveBeenCalledWith('b1', 'create_deposit_invoice');
+    });
+
+    it('resets the create_balance_invoice checklist item when no active balance invoices remain', async () => {
+      repo.findOne.mockResolvedValue({ ...sentInvoice, isDeposit: false });
+      repo.countActiveByType.mockResolvedValue(0);
+      await service.voidInvoice('u1', 'b1', 'i1');
+      expect(mockChecklistRepo.resetItemByKey).toHaveBeenCalledWith('b1', 'create_balance_invoice');
+    });
+
+    it('does not reset checklist item when other active invoices of the same type remain', async () => {
+      repo.countActiveByType.mockResolvedValue(1);
+      await service.voidInvoice('u1', 'b1', 'i1');
+      expect(mockChecklistRepo.resetItemByKey).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException when invoice does not exist', async () => {
+      repo.findOne.mockResolvedValue(null);
+      await expect(service.voidInvoice('u1', 'b1', 'missing')).rejects.toThrow(NotFoundException);
     });
   });
 });

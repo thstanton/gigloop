@@ -24,6 +24,7 @@ enum InvoiceStatus {
   DRAFT
   SENT
   PAID
+  VOID
 }
 
 enum DocumentType {

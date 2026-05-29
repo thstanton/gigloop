@@ -5,6 +5,7 @@ const STATUS_CONFIG: Record<InvoiceStatus, { label: string; bg: string; text: st
   DRAFT: { label: 'Draft', bg: 'bg-status-completed/12', text: 'text-status-completed', border: 'border-l-status-completed' },
   SENT:  { label: 'Sent',  bg: 'bg-status-invoiced/12',  text: 'text-status-invoiced',  border: 'border-l-status-invoiced'  },
   PAID:  { label: 'Paid',  bg: 'bg-status-confirmed/12', text: 'text-status-confirmed', border: 'border-l-status-confirmed' },
+  VOID:  { label: 'Void',  bg: 'bg-muted/40',            text: 'text-muted',            border: 'border-l-muted'            },
 };
 
 interface InvoiceStatusPillProps {

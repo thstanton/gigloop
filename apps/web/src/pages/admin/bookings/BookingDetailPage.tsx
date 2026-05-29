@@ -921,6 +921,7 @@ function InvoiceRow({
   onSend,
   onMarkSent,
   onMarkPaid,
+  onVoid,
 }: {
   invoice: Invoice;
   pdfUrl: string | null;
@@ -929,6 +930,7 @@ function InvoiceRow({
   onSend: (invoice: Invoice) => void;
   onMarkSent: (invoice: Invoice) => void;
   onMarkPaid: (invoice: Invoice) => void;
+  onVoid: (invoice: Invoice) => void;
 }) {
   const overdue =
     invoice.status === 'SENT' &&
@@ -938,18 +940,21 @@ function InvoiceRow({
   const isDraft = invoice.status === 'DRAFT';
   const isSent = invoice.status === 'SENT';
   const isPaid = invoice.status === 'PAID';
+  const isVoid = invoice.status === 'VOID';
 
   return (
     <div className="flex items-start justify-between gap-3 py-2.5 border-b border-border last:border-0">
       <div className="min-w-0">
-        <p className="text-sm text-foreground">{invoice.isDeposit ? 'Deposit' : 'Balance'}</p>
+        <p className={cn('text-sm', isVoid ? 'text-muted line-through' : 'text-foreground')}>
+          {invoice.isDeposit ? 'Deposit' : 'Balance'}
+        </p>
         <p className="text-xs text-muted mt-0.5">
           {invoice.issueDate ? formatDate(invoice.issueDate) : '—'}
           {invoice.dueDate && ` · due ${formatDate(invoice.dueDate)}`}
         </p>
       </div>
       <div className="flex items-center gap-2 flex-shrink-0">
-        <span className="text-sm font-medium text-foreground tabular-nums">
+        <span className={cn('text-sm font-medium tabular-nums', isVoid ? 'text-muted' : 'text-foreground')}>
           {formatCurrency(total)}
         </span>
         {isDraft && (
@@ -1010,6 +1015,26 @@ function InvoiceRow({
           >
             <Download size={14} />
           </a>
+        )}
+        {(isSent || isPaid) && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="text-muted hover:text-foreground transition-colors"
+                aria-label="More actions"
+              >
+                <ChevronDown size={14} />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onClick={() => onVoid(invoice)}
+                className="text-status-cancelled focus:text-status-cancelled"
+              >
+                Void invoice
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
         <InvoiceStatusPill status={invoice.status} isOverdue={overdue} />
       </div>
@@ -1241,6 +1266,15 @@ export default function BookingDetailPage() {
       apiPostVoid(`/bookings/${id}/contracts/${contractId}/void`, { confirmSignedVoid }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['booking', id] }),
     onError: () => toast({ title: 'Failed to void contract', variant: 'destructive' }),
+  });
+
+  const voidInvoiceMutation = useMutation({
+    mutationFn: (invoiceId: string) => apiPostVoid(`/bookings/${id}/invoices/${invoiceId}/void`, {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bookingInvoices', id] });
+      queryClient.invalidateQueries({ queryKey: ['bookingChecklist', id] });
+    },
+    onError: () => toast({ title: 'Failed to void invoice', variant: 'destructive' }),
   });
 
   const markPaid = useMutation({
@@ -1716,6 +1750,7 @@ export default function BookingDetailPage() {
                     onSend={openSendInvoice}
                     onMarkSent={setMarkSentInvoice}
                     onMarkPaid={(inv) => markPaid.mutate(inv.id)}
+                    onVoid={(inv) => voidInvoiceMutation.mutate(inv.id)}
                   />
                 ))}
               </div>

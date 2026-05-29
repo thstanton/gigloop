@@ -4,6 +4,6 @@ import { ChecklistRepository } from './checklist.repository';
 
 @Module({
   providers: [ChecklistEvaluatorService, ChecklistRepository],
-  exports: [ChecklistEvaluatorService],
+  exports: [ChecklistEvaluatorService, ChecklistRepository],
 })
 export class ChecklistModule {}

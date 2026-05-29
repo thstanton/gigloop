@@ -26,6 +26,7 @@ export class ChecklistRepository {
             orderBy: { createdAt: 'asc' },
           },
           invoices: {
+            where: { status: { not: 'VOID' } },
             select: { isDeposit: true },
           },
           contracts: {
@@ -39,6 +40,13 @@ export class ChecklistRepository {
       }),
     ]);
     return { items, booking };
+  }
+
+  resetItemByKey(bookingId: string, key: string) {
+    return this.prisma.bookingChecklistItem.updateMany({
+      where: { bookingId, key, state: 'COMPLETE' },
+      data: { state: 'PENDING', completedAt: null },
+    });
   }
 
   updateItemStates(updates: Array<{ id: string; state: string; completedAt?: Date | null }>) {

@@ -77,6 +77,20 @@ export class InvoicesRepository {
     return this.prisma.invoice.delete({ where: { id } });
   }
 
+  voidInvoice(id: string) {
+    return this.prisma.invoice.update({
+      where: { id },
+      data: { status: 'VOID' },
+      include: invoiceIncludes,
+    });
+  }
+
+  countActiveByType(bookingId: string, isDeposit: boolean) {
+    return this.prisma.invoice.count({
+      where: { bookingId, isDeposit, status: { not: 'VOID' } },
+    });
+  }
+
   async assignAndMarkSent(
     userId: string,
     id: string,

@@ -3,6 +3,7 @@ import { InvoicesRepository } from './invoices.repository';
 import { CommunicationsService } from '../communications/communications.service';
 import { DocumentsService } from '../documents/documents.service';
 import { ChecklistEvaluatorService } from '../checklist/checklist-evaluator.service';
+import { ChecklistRepository } from '../checklist/checklist.repository';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { SendInvoiceDto } from './dto/send-invoice.dto';
@@ -17,6 +18,7 @@ export class InvoicesService {
     private comms: CommunicationsService,
     private documents: DocumentsService,
     private evaluator: ChecklistEvaluatorService,
+    private checklistRepo: ChecklistRepository,
   ) {}
 
   findAll(userId: string, bookingId: string) {
@@ -98,6 +100,24 @@ export class InvoicesService {
       throw new BadRequestException('Only sent invoices can be marked as paid');
     }
     const result = await this.repo.markPaid(userId, bookingId, id);
+    await this.evaluator.evaluate(bookingId).catch(() => {});
+    return result;
+  }
+
+  async voidInvoice(userId: string, bookingId: string, id: string) {
+    const invoice = await this.findOne(userId, bookingId, id);
+    if (invoice.status === 'DRAFT') {
+      throw new BadRequestException('Draft invoices cannot be voided — delete them instead');
+    }
+    if (invoice.status === 'VOID') {
+      throw new BadRequestException('Invoice is already VOID');
+    }
+    const result = await this.repo.voidInvoice(id);
+    const remaining = await this.repo.countActiveByType(bookingId, invoice.isDeposit);
+    if (remaining === 0) {
+      const checklistKey = invoice.isDeposit ? 'create_deposit_invoice' : 'create_balance_invoice';
+      await this.checklistRepo.resetItemByKey(bookingId, checklistKey);
+    }
     await this.evaluator.evaluate(bookingId).catch(() => {});
     return result;
   }

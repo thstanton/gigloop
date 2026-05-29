@@ -98,6 +98,18 @@ export class InvoicesController {
     return this.service.markSent(req.userId, bookingId, id, dto);
   }
 
+  @ApiOperation({ summary: 'Void an invoice (SENT or PAID only; drafts must be deleted)' })
+  @ApiResponse({ status: 200, description: 'Invoice voided' })
+  @ApiResponse({ status: 400, description: 'Invoice is a draft or already void' })
+  @Post(':id/void')
+  voidInvoice(
+    @Req() req: AuthedRequest,
+    @Param('bookingId') bookingId: string,
+    @Param('id') id: string,
+  ) {
+    return this.service.voidInvoice(req.userId, bookingId, id);
+  }
+
   @ApiOperation({ summary: 'Mark an invoice as paid' })
   @ApiResponse({ status: 200, description: 'Invoice marked Paid; depositReceivedAt set if deposit invoice with INVOICE tracking mode' })
   @ApiResponse({ status: 400, description: 'Invoice is not sent' })

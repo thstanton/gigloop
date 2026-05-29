@@ -33,7 +33,7 @@ export type SongGenre =
   | 'BOLLYWOOD'
   | 'CHRISTMAS';
 
-export type InvoiceStatus = 'DRAFT' | 'SENT' | 'PAID';
+export type InvoiceStatus = 'DRAFT' | 'SENT' | 'PAID' | 'VOID';
 
 // ─────────────────────────────────────────
 // Contacts
