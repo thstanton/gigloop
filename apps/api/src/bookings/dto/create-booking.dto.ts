@@ -94,10 +94,10 @@ export class CreateBookingDto {
   @IsUUID()
   venueId?: string;
 
-  @ApiPropertyOptional({ example: 'uuid-of-referrer-contact' })
+  @ApiPropertyOptional({ example: 'uuid-of-booking-agent-contact' })
   @IsOptional()
   @IsUUID()
-  referrerId?: string;
+  bookingAgentId?: string;
 
   @ApiPropertyOptional({ type: [String], description: 'Performance format IDs to apply (in order)' })
   @IsOptional()

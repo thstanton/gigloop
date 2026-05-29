@@ -36,7 +36,7 @@ const contractInclude = {
 const bookingIncludes = {
   customer: true,
   venue: true,
-  referrer: true,
+  bookingAgent: true,
   sets: { orderBy: { order: 'asc' as const } },
   performanceFormats: {
     include: {
@@ -52,7 +52,7 @@ const bookingIncludes = {
 const listIncludes = {
   customer: { select: { id: true, name: true, email: true } },
   venue: { select: { id: true, name: true } },
-  referrer: { select: { id: true, name: true } },
+  bookingAgent: { select: { id: true, name: true } },
   sets: { select: { startTime: true }, orderBy: { order: 'asc' as const }, take: 1 },
 } as const;
 

@@ -6,7 +6,21 @@ import { useContact } from '@/lib/hooks/useContact';
 import { formatDate } from '@/lib/formatters';
 import { EVENT_TYPE_LABELS } from '@/lib/constants';
 import ContactEditDrawer from '@/features/contacts/ContactEditDrawer';
-import type { BookingRef, BookingStatus } from '@/types/api';
+import type { BookingRef, BookingStatus, ContactDetail as ContactDetailType } from '@/types/api';
+
+const PRIMARY_ROLE_LABELS: Record<string, string> = {
+  CUSTOMER: 'Customer',
+  VENUE: 'Venue',
+  BOOKING_AGENT: 'Booking agent',
+};
+
+function buildNewBookingState(contact: ContactDetailType): { customerId?: string; venueId?: string; bookingAgentId?: string } {
+  switch (contact.primaryRole) {
+    case 'VENUE': return { venueId: contact.id };
+    case 'BOOKING_AGENT': return { bookingAgentId: contact.id };
+    default: return { customerId: contact.id };
+  }
+}
 
 // ─── Info row ─────────────────────────────────────────────────────────────────
 
@@ -41,12 +55,12 @@ type RoleBooking = BookingRef & { role: string };
 function mergeBookings(
   customer: BookingRef[],
   venue: BookingRef[],
-  referrer: BookingRef[],
+  bookingAgent: BookingRef[],
 ): RoleBooking[] {
   return [
     ...customer.map((b) => ({ ...b, role: 'Customer' })),
     ...venue.map((b) => ({ ...b, role: 'Venue' })),
-    ...referrer.map((b) => ({ ...b, role: 'Referrer' })),
+    ...bookingAgent.map((b) => ({ ...b, role: 'Booking agent' })),
   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 }
 
@@ -122,7 +136,7 @@ export default function ContactDetailPage() {
   const bookings = mergeBookings(
     contact.customerBookings,
     contact.venueBookings,
-    contact.referrerBookings,
+    contact.bookingAgentBookings,
   );
 
   const hasVenueDetails = contact.parkingInfo || contact.accessInfo || contact.equipmentAvailable;
@@ -144,12 +158,17 @@ export default function ContactDetailPage() {
         <div>
           {/* Header */}
           <div className="flex items-start justify-between gap-4 mb-8">
-            <h1 className="font-display text-2xl font-semibold text-foreground">{contact.name}</h1>
+            <div>
+              <h1 className="font-display text-2xl font-semibold text-foreground">{contact.name}</h1>
+              {contact.primaryRole && (
+                <span className="text-xs text-muted mt-1 inline-block">{PRIMARY_ROLE_LABELS[contact.primaryRole]}</span>
+              )}
+            </div>
             <div className="flex items-center gap-2">
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => navigate(`/admin/bookings/new`, { state: { customerId: id } })}
+                onClick={() => navigate(`/admin/bookings/new`, { state: buildNewBookingState(contact) })}
               >
                 <Plus size={14} className="mr-1" />
                 New booking

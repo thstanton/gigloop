@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { Controller } from 'react-hook-form';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -6,6 +7,13 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import type { Contact, CreateContactInput, UpdateContactInput } from '@/types/api';
 import { cn } from '@/lib/utils';
 
@@ -23,6 +31,7 @@ const schema = z.object({
   accessInfo: z.string(),
   equipmentAvailable: z.string(),
   commissionArrangement: z.string(),
+  primaryRole: z.enum(['CUSTOMER', 'VENUE', 'BOOKING_AGENT', '']),
 });
 
 export type ContactFormValues = z.infer<typeof schema>;
@@ -42,6 +51,7 @@ export function toContactPayload(
     accessInfo: values.accessInfo || null,
     equipmentAvailable: values.equipmentAvailable || null,
     commissionArrangement: values.commissionArrangement || null,
+    primaryRole: values.primaryRole || null,
   };
 }
 
@@ -58,6 +68,7 @@ export function contactToFormValues(c: Contact): ContactFormValues {
     accessInfo: c.accessInfo ?? '',
     equipmentAvailable: c.equipmentAvailable ?? '',
     commissionArrangement: c.commissionArrangement ?? '',
+    primaryRole: (c.primaryRole as ContactFormValues['primaryRole']) ?? '',
   };
 }
 
@@ -111,6 +122,7 @@ export default function ContactForm({
 }: ContactFormProps) {
   const {
     register,
+    control,
     handleSubmit,
     watch,
     setValue,
@@ -120,7 +132,7 @@ export default function ContactForm({
     defaultValues: defaultValues ?? {
       name: '', greetingName: '', email: '', phone: '', website: '',
       address: '', notes: '', parkingInfo: '',
-      accessInfo: '', equipmentAvailable: '', commissionArrangement: '',
+      accessInfo: '', equipmentAvailable: '', commissionArrangement: '', primaryRole: '',
     },
   });
 
@@ -171,6 +183,25 @@ export default function ContactForm({
         </Field>
         <Field label="Notes" error={errors.notes?.message}>
           <Textarea {...register('notes')} rows={3} />
+        </Field>
+        <Field label="Primary role (optional)" error={errors.primaryRole?.message}>
+          <Controller
+            name="primaryRole"
+            control={control}
+            render={({ field }) => (
+              <Select value={field.value} onValueChange={field.onChange}>
+                <SelectTrigger>
+                  <SelectValue placeholder="No primary role" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">No primary role</SelectItem>
+                  <SelectItem value="CUSTOMER">Customer</SelectItem>
+                  <SelectItem value="VENUE">Venue</SelectItem>
+                  <SelectItem value="BOOKING_AGENT">Booking agent</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+          />
         </Field>
       </div>
 

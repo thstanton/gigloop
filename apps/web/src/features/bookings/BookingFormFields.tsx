@@ -30,7 +30,7 @@ export const bookingFormSchema = z.object({
   notes: z.string(),
   customerId: z.string().min(1, 'Customer is required'),
   venueId: z.string().nullable(),
-  referrerId: z.string().nullable(),
+  bookingAgentId: z.string().nullable(),
   formatIds: z.array(z.string()),
 });
 
@@ -288,16 +288,16 @@ export function BookingFormFields({
         </div>
 
         <div className="space-y-1.5">
-          <Label>Referrer (optional)</Label>
+          <Label>Booking agent (optional)</Label>
           <Controller
-            name="referrerId"
+            name="bookingAgentId"
             control={control}
             render={({ field }) => (
               <ContactPicker
                 value={field.value}
                 onChange={field.onChange}
-                placeholder="Select referrer..."
-                label="referrer"
+                placeholder="Select booking agent..."
+                label="booking agent"
               />
             )}
           />

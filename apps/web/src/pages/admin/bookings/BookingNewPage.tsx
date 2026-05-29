@@ -66,7 +66,7 @@ export default function BookingNewPage() {
   const [newLabel, setNewLabel] = useState('');
   const [newStage, setNewStage] = useState('CONFIRMED');
 
-  const locationState = location.state as { customerId?: string; date?: string } | null;
+  const locationState = location.state as { customerId?: string; venueId?: string; bookingAgentId?: string; date?: string } | null;
 
   const { data: userProfile } = useQuery({
     queryKey: ['me'],
@@ -90,16 +90,18 @@ export default function BookingNewPage() {
       fee: '',
       notes: '',
       customerId: locationState?.customerId ?? '',
-      venueId: null,
-      referrerId: null,
+      venueId: locationState?.venueId ?? null,
+      bookingAgentId: locationState?.bookingAgentId ?? null,
       formatIds: [],
     },
   });
 
   useEffect(() => {
     if (locationState?.customerId) setValue('customerId', locationState.customerId);
+    if (locationState?.venueId) setValue('venueId', locationState.venueId);
+    if (locationState?.bookingAgentId) setValue('bookingAgentId', locationState.bookingAgentId);
     if (locationState?.date) setValue('date', locationState.date);
-  }, [locationState?.customerId, locationState?.date, setValue]);
+  }, [locationState?.customerId, locationState?.venueId, locationState?.bookingAgentId, locationState?.date, setValue]);
 
   useEffect(() => {
     if (!userProfile) return;
@@ -119,7 +121,7 @@ export default function BookingNewPage() {
         fee: values.fee ? parseFloat(values.fee) : undefined,
         notes: values.notes || undefined,
         venueId: values.venueId ?? undefined,
-        referrerId: values.referrerId ?? undefined,
+        bookingAgentId: values.bookingAgentId ?? undefined,
         formatIds: values.formatIds.length ? values.formatIds : undefined,
         checklistItems,
       });

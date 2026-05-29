@@ -54,6 +54,7 @@ export interface Contact {
   equipmentAvailable: string | null;
   website: string | null;
   commissionArrangement: string | null;
+  primaryRole: string | null;
 }
 
 export interface BookingRef {
@@ -67,7 +68,7 @@ export interface BookingRef {
 export interface ContactDetail extends Contact {
   customerBookings: BookingRef[];
   venueBookings: BookingRef[];
-  referrerBookings: BookingRef[];
+  bookingAgentBookings: BookingRef[];
 }
 
 export interface CreateContactInput {
@@ -82,6 +83,7 @@ export interface CreateContactInput {
   equipmentAvailable?: string;
   website?: string;
   commissionArrangement?: string;
+  primaryRole?: string | null;
 }
 
 export interface UpdateContactInput {
@@ -96,6 +98,7 @@ export interface UpdateContactInput {
   equipmentAvailable?: string | null;
   website?: string | null;
   commissionArrangement?: string | null;
+  primaryRole?: string | null;
 }
 
 // ─────────────────────────────────────────
@@ -158,8 +161,8 @@ export interface BookingListItem {
   customer: ContactSummary;
   venueId: string | null;
   venue: ContactSummary | null;
-  referrerId: string | null;
-  referrer: ContactSummary | null;
+  bookingAgentId: string | null;
+  bookingAgent: ContactSummary | null;
   sets: { startTime: string | null }[];
 }
 
@@ -194,10 +197,10 @@ export interface ChecklistItem {
   dueDateRule: DueDateRule | null;
 }
 
-export interface BookingDetail extends Omit<BookingListItem, 'customer' | 'venue' | 'referrer'> {
+export interface BookingDetail extends Omit<BookingListItem, 'customer' | 'venue' | 'bookingAgent'> {
   customer: Contact;
   venue: Contact | null;
-  referrer: Contact | null;
+  bookingAgent: Contact | null;
   sets: PerformanceSet[];
   performanceFormats: BookingPerformanceFormatSummary[];
   activeContract: Contract | null;
@@ -231,7 +234,7 @@ export interface CreateBookingInput {
   fee?: number;
   notes?: string;
   venueId?: string;
-  referrerId?: string;
+  bookingAgentId?: string;
   formatIds?: string[];
   checklistItems: ChecklistDefaultItem[];
 }
@@ -245,7 +248,7 @@ export interface UpdateBookingInput {
   fee?: number | null;
   notes?: string | null;
   venueId?: string | null;
-  referrerId?: string | null;
+  bookingAgentId?: string | null;
 }
 
 // ─────────────────────────────────────────

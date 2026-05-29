@@ -1,5 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsNotEmpty, IsOptional, IsString, IsUrl } from 'class-validator';
+import { IsEmail, IsIn, IsNotEmpty, IsOptional, IsString, IsUrl, ValidateIf } from 'class-validator';
+
+const PRIMARY_ROLES = ['CUSTOMER', 'VENUE', 'BOOKING_AGENT'] as const;
 
 export class CreateContactDto {
   @ApiProperty({ example: 'Jane Smith' })
@@ -52,8 +54,14 @@ export class CreateContactDto {
   @IsUrl()
   website?: string;
 
-  @ApiPropertyOptional({ description: 'Commission rate or arrangement for referrers' })
+  @ApiPropertyOptional({ description: 'Commission rate or arrangement for booking agents' })
   @IsOptional()
   @IsString()
   commissionArrangement?: string;
+
+  @ApiPropertyOptional({ enum: PRIMARY_ROLES, nullable: true, description: 'Primary role of this contact' })
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsIn(PRIMARY_ROLES)
+  primaryRole?: string | null;
 }

@@ -58,7 +58,7 @@ export default function ContactEditDrawer({ contact }: Props) {
   const totalBookings =
     contact.customerBookings.length +
     contact.venueBookings.length +
-    contact.referrerBookings.length;
+    contact.bookingAgentBookings.length;
 
   return (
     <Sheet open={isOpen} onOpenChange={(open) => { if (!open) close(); }}>

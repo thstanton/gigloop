@@ -168,7 +168,7 @@ export default function ContactPicker({
               greetingName: pendingName.trim().split(/\s+/)[0] ?? '',
               email: '', phone: '', website: '',
               address: '', notes: '', parkingInfo: '',
-              accessInfo: '', equipmentAvailable: '', commissionArrangement: '',
+              accessInfo: '', equipmentAvailable: '', commissionArrangement: '', primaryRole: '',
             }}
             onSubmit={(values) => createMutation.mutate(values)}
             isPending={createMutation.isPending}

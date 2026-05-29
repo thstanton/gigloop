@@ -20,7 +20,7 @@ export class ContactsRepository {
       include: {
         customerBookings: { orderBy: { date: 'desc' } },
         venueBookings: { orderBy: { date: 'desc' } },
-        referrerBookings: { orderBy: { date: 'desc' } },
+        bookingAgentBookings: { orderBy: { date: 'desc' } },
       },
     });
   }
@@ -42,7 +42,7 @@ export class ContactsRepository {
     return this.prisma.booking.count({
       where: {
         userId,
-        OR: [{ customerId: id }, { venueId: id }, { referrerId: id }],
+        OR: [{ customerId: id }, { venueId: id }, { bookingAgentId: id }],
       },
     });
   }

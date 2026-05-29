@@ -64,7 +64,7 @@ export class UpdateBookingDto {
   @IsOptional()
   @ValidateIf((_, v) => v !== null)
   @IsUUID()
-  referrerId?: string | null;
+  bookingAgentId?: string | null;
 
   @ApiPropertyOptional({ example: '2026-06-15T10:00:00.000Z', nullable: true })
   @IsOptional()

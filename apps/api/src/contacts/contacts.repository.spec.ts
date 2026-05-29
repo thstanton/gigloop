@@ -72,7 +72,7 @@ describe('ContactsRepository', () => {
       expect(call.include).toMatchObject({
         customerBookings: expect.anything(),
         venueBookings: expect.anything(),
-        referrerBookings: expect.anything(),
+        bookingAgentBookings: expect.anything(),
       });
     });
 
@@ -118,7 +118,7 @@ describe('ContactsRepository', () => {
           OR: [
             { customerId: 'c1' },
             { venueId: 'c1' },
-            { referrerId: 'c1' },
+            { bookingAgentId: 'c1' },
           ],
         },
       });

@@ -32,7 +32,7 @@ function buildDefaultValues(booking: BookingDetail): BookingFormValues {
     notes: booking.notes ?? '',
     customerId: booking.customerId,
     venueId: booking.venueId,
-    referrerId: booking.referrerId,
+    bookingAgentId: booking.bookingAgentId,
     formatIds: [],
   };
 }
@@ -95,7 +95,7 @@ export default function BookingEditDrawer({ booking }: Props) {
         notes: values.notes || null,
         customerId: values.customerId,
         venueId: values.venueId,
-        referrerId: values.referrerId,
+        bookingAgentId: values.bookingAgentId,
       });
     },
     onSuccess: () => {

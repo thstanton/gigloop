@@ -100,19 +100,20 @@ model Contact {
   phone        String?
   address String?
   notes   String?
+  primaryRole String?
 
   // Venue-specific fields
   parkingInfo        String?
   accessInfo         String?
   equipmentAvailable String?
 
-  // Referrer-specific fields
+  // Booking agent-specific fields
   website               String?
   commissionArrangement String?
 
-  customerBookings Booking[]       @relation("BookingCustomer")
-  venueBookings    Booking[]       @relation("BookingVenue")
-  referrerBookings Booking[]       @relation("BookingReferrer")
+  customerBookings     Booking[]       @relation("BookingCustomer")
+  venueBookings        Booking[]       @relation("BookingVenue")
+  bookingAgentBookings Booking[]       @relation("BookingAgent")
   invoices         Invoice[]
   communications   Communication[]
 
@@ -140,8 +141,8 @@ model Booking {
   venueId String?
   venue   Contact? @relation("BookingVenue", fields: [venueId], references: [id], onDelete: Restrict)
 
-  referrerId String?
-  referrer   Contact? @relation("BookingReferrer", fields: [referrerId], references: [id], onDelete: Restrict)
+  bookingAgentId String?
+  bookingAgent   Contact? @relation("BookingAgent", fields: [bookingAgentId], references: [id], onDelete: Restrict)
 
   sets              PerformanceSet[]
   performanceFormats BookingPerformanceFormat[]
@@ -156,7 +157,7 @@ model Booking {
   @@index([userId])
   @@index([customerId])
   @@index([venueId])
-  @@index([referrerId])
+  @@index([bookingAgentId])
 }
 
 model BookingChecklistItem {

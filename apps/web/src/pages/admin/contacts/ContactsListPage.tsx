@@ -6,6 +6,12 @@ import { Input } from '@/components/ui/input';
 import { useContacts } from '@/lib/hooks/useContacts';
 import type { Contact } from '@/types/api';
 
+const PRIMARY_ROLE_LABELS: Record<string, string> = {
+  CUSTOMER: 'Customer',
+  VENUE: 'Venue',
+  BOOKING_AGENT: 'Booking agent',
+};
+
 // ─── Empty state ──────────────────────────────────────────────────────────────
 
 function EmptyState({ filtered }: { filtered: boolean }) {
@@ -78,7 +84,12 @@ function ContactsTable({ contacts }: { contacts: Contact[] }) {
               className="h-12 border-b border-border cursor-pointer hover:bg-surface transition-colors duration-100"
             >
               <td className="px-4">
-                <span className="text-sm font-medium text-foreground">{c.name}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-foreground">{c.name}</span>
+                  {c.primaryRole && (
+                    <span className="text-xs text-muted">{PRIMARY_ROLE_LABELS[c.primaryRole]}</span>
+                  )}
+                </div>
               </td>
               <td className="px-4">
                 {c.email ? (
@@ -126,7 +137,12 @@ function ContactCardList({ contacts }: { contacts: Contact[] }) {
           onClick={() => navigate(`/admin/contacts/${c.id}`)}
           className="py-3 flex flex-col gap-0.5 cursor-pointer active:bg-surface transition-colors duration-100"
         >
-          <span className="text-sm font-medium text-foreground">{c.name}</span>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-foreground">{c.name}</span>
+            {c.primaryRole && (
+              <span className="text-xs text-muted">{PRIMARY_ROLE_LABELS[c.primaryRole]}</span>
+            )}
+          </div>
           {(c.email || c.phone) && (
             <span className="text-sm text-muted" onClick={(e) => e.stopPropagation()}>
               {c.email && (

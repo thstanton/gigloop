@@ -1546,13 +1546,13 @@ export default function BookingDetailPage() {
             <SectionHeader label="People" />
             <div className="border-t border-border">
               <PersonCard role="Customer" contact={booking.customer} linkState={backState} onEdit={() => setEditingContact(booking.customer)} />
-              {booking.referrer && (
+              {booking.bookingAgent && (
                 <PersonCard
-                  role="Referrer"
-                  contact={booking.referrer}
-                  commissionArrangement={booking.referrer.commissionArrangement}
+                  role="Booking agent"
+                  contact={booking.bookingAgent}
+                  commissionArrangement={booking.bookingAgent.commissionArrangement}
                   linkState={backState}
-                  onEdit={() => setEditingContact(booking.referrer!)}
+                  onEdit={() => setEditingContact(booking.bookingAgent!)}
                 />
               )}
             </div>

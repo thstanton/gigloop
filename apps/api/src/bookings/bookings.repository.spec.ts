@@ -89,14 +89,14 @@ describe('BookingsRepository', () => {
       );
     });
 
-    it('includes customer, venue, referrer, and sets', async () => {
+    it('includes customer, venue, bookingAgent, and sets', async () => {
       prisma.booking.findFirst.mockResolvedValue(null);
       await repo.findOne('u1', 'b1');
       const include = prisma.booking.findFirst.mock.calls[0][0].include;
       expect(include).toMatchObject({
         customer: true,
         venue: true,
-        referrer: true,
+        bookingAgent: true,
         sets: expect.anything(),
       });
     });

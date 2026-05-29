@@ -25,9 +25,10 @@ const baseContact: ContactDetail = {
   equipmentAvailable: null,
   website: null,
   commissionArrangement: null,
+  primaryRole: null,
   customerBookings: [],
   venueBookings: [],
-  referrerBookings: [],
+  bookingAgentBookings: [],
 };
 
 const bookingRef = {
@@ -68,8 +69,8 @@ describe('ContactEditDrawer — delete section', () => {
     expect(screen.getByRole('button', { name: /delete contact/i })).toBeDisabled();
   });
 
-  it('disables the delete button when the contact has referrer bookings', () => {
-    renderDrawer({ ...baseContact, referrerBookings: [bookingRef] });
+  it('disables the delete button when the contact has booking agent bookings', () => {
+    renderDrawer({ ...baseContact, bookingAgentBookings: [bookingRef] });
     expect(screen.getByRole('button', { name: /delete contact/i })).toBeDisabled();
   });
 

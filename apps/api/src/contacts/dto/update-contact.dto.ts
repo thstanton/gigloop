@@ -1,5 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsNotEmpty, IsOptional, IsString, IsUrl, ValidateIf } from 'class-validator';
+import { IsEmail, IsIn, IsNotEmpty, IsOptional, IsString, IsUrl, ValidateIf } from 'class-validator';
+
+const PRIMARY_ROLES = ['CUSTOMER', 'VENUE', 'BOOKING_AGENT'] as const;
 
 export class UpdateContactDto {
   @ApiPropertyOptional({ example: 'Jane Smith' })
@@ -67,4 +69,10 @@ export class UpdateContactDto {
   @ValidateIf((_, v) => v !== null)
   @IsString()
   commissionArrangement?: string | null;
+
+  @ApiPropertyOptional({ enum: PRIMARY_ROLES, nullable: true, description: 'Primary role of this contact' })
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsIn(PRIMARY_ROLES)
+  primaryRole?: string | null;
 }
