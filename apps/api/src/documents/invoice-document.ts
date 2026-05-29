@@ -12,6 +12,7 @@ export interface InvoicePdfData {
   address: string | null;
   bankDetails: string | null;
   vatNumber: string | null;
+  vatRate: number | null;
   logoUrl: string | null;
 
   invoiceNumber: string;
@@ -92,38 +93,44 @@ export function buildInvoiceDefinition(data: InvoicePdfData): TDocumentDefinitio
   ];
 
   // ── Totals ────────────────────────────────────────────────────────────────
+  const vatAmount = data.vatRate !== null ? (subtotal * data.vatRate) / 100 : 0;
+  const showVat = data.vatRate !== null;
+  const separator: Content = { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 200, y2: 0, lineWidth: 0.5, lineColor: '#e5e5e5' }], alignment: 'right', margin: [0, 0, 0, 4] };
+
+  function totalRow(label: string, value: string, style?: string): Content {
+    return {
+      columns: [
+        { text: label, style: style ?? 'totalLabel', width: '*', alignment: 'right' },
+        { text: value, style: style, width: 80, alignment: 'right' },
+      ],
+      margin: [0, 0, 0, 3],
+    };
+  }
+
   const totalsContent: Content[] = showDepositDeduction
     ? [
-        {
-          columns: [
-            { text: 'Subtotal', style: 'totalLabel', width: '*', alignment: 'right' },
-            { text: formatCurrency(subtotal.toFixed(2)), width: 80, alignment: 'right' },
-          ],
-          margin: [0, 0, 0, 3],
-        },
-        {
-          columns: [
-            { text: 'Less deposit', style: 'totalLabel', width: '*', alignment: 'right' },
-            { text: `-${formatCurrency(depositAmount!.toFixed(2))}`, width: 80, alignment: 'right' },
-          ],
-          margin: [0, 0, 0, 3],
-        },
-        { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 200, y2: 0, lineWidth: 0.5, lineColor: '#e5e5e5' }], alignment: 'right', margin: [0, 0, 0, 4] },
-        {
-          columns: [
-            { text: 'Balance due', style: 'totalDueLabel', width: '*', alignment: 'right' },
-            { text: formatCurrency(balanceDue.toFixed(2)), style: 'totalDueValue', width: 80, alignment: 'right' },
-          ],
-        },
+        totalRow('Subtotal', formatCurrency(subtotal.toFixed(2))),
+        totalRow('Less deposit', `-${formatCurrency(depositAmount!.toFixed(2))}`),
+        separator,
+        ...(showVat
+          ? [
+              totalRow('Balance', formatCurrency(balanceDue.toFixed(2))),
+              totalRow(`VAT @ ${data.vatRate}%`, formatCurrency(vatAmount.toFixed(2))),
+              separator,
+              totalRow('Total inc. VAT', formatCurrency((balanceDue + vatAmount).toFixed(2)), 'totalDueValue') as Content,
+            ]
+          : [totalRow('Balance due', formatCurrency(balanceDue.toFixed(2)), 'totalDueValue') as Content]),
       ]
     : [
-        { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 200, y2: 0, lineWidth: 0.5, lineColor: '#e5e5e5' }], alignment: 'right', margin: [0, 0, 0, 4] },
-        {
-          columns: [
-            { text: 'Total due', style: 'totalDueLabel', width: '*', alignment: 'right' },
-            { text: formatCurrency(subtotal.toFixed(2)), style: 'totalDueValue', width: 80, alignment: 'right' },
-          ],
-        },
+        separator,
+        ...(showVat
+          ? [
+              totalRow('Subtotal', formatCurrency(subtotal.toFixed(2))),
+              totalRow(`VAT @ ${data.vatRate}%`, formatCurrency(vatAmount.toFixed(2))),
+              separator,
+              totalRow('Total inc. VAT', formatCurrency((subtotal + vatAmount).toFixed(2)), 'totalDueValue') as Content,
+            ]
+          : [totalRow('Total due', formatCurrency(subtotal.toFixed(2)), 'totalDueValue') as Content]),
       ];
 
   // ── Payment details ───────────────────────────────────────────────────────

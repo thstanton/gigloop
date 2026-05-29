@@ -1381,6 +1381,9 @@ export default function BookingDetailPage() {
 
   const title = booking.title ?? EVENT_TYPE_LABELS[booking.eventType];
   const fee = formatFee(booking.fee);
+  const feeWithVat = userProfile?.vatNumber && booking.fee
+    ? `${fee} (${formatCurrency(parseFloat(booking.fee) * (1 + (userProfile.vatRate ?? 20) / 100))} inc. VAT)`
+    : fee;
   // Use combined contract+deposit template when the deposit_received checklist item exists
   const hasDepositItem = checklist.some((item) => item.key === 'deposit_received');
   const contractShortcutType = hasDepositItem ? 'contract_and_deposit_cover' : 'contract_cover';
@@ -1537,7 +1540,7 @@ export default function BookingDetailPage() {
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2">
               <StatusDropdown booking={booking} checklist={checklist} />
               <span className="text-sm text-muted">{formatDate(booking.date)}</span>
-              {fee && <span className="text-sm text-muted">{fee}</span>}
+              {feeWithVat && <span className="text-sm text-muted">{feeWithVat}</span>}
             </div>
           </section>
 

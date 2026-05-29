@@ -106,6 +106,7 @@ export class DocumentsService {
       address: userProfile?.address ?? null,
       bankDetails: userProfile?.bankDetails ?? null,
       vatNumber: userProfile?.vatNumber ?? null,
+      vatRate: userProfile?.vatNumber ? (userProfile.vatRate ?? 20) : null,
       logoUrl: publicProfile.logoUrl ?? null,
 
       invoiceNumber: invoice.invoiceNumber,

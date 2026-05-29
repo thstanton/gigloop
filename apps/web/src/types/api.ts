@@ -480,6 +480,7 @@ export interface UserProfile {
   address: string | null;
   bankDetails: string | null;
   vatNumber: string | null;
+  vatRate: number;
   defaultPaymentTermsDays: number;
   invoiceNumberSequence: number;
   invoiceSequenceYear: number;
@@ -514,6 +515,7 @@ export interface UpdateUserProfileInput {
   address?: string;
   bankDetails?: string | null;
   vatNumber?: string;
+  vatRate?: number;
   defaultPaymentTermsDays?: number;
   depositPercentage?: number;
   digestEmailEnabled?: boolean;

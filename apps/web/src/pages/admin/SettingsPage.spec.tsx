@@ -40,6 +40,7 @@ const mockUserProfile: UserProfile = {
   address: null,
   bankDetails: null,
   vatNumber: null,
+  vatRate: 20,
   defaultPaymentTermsDays: 30,
   invoiceNumberSequence: 1,
   invoiceSequenceYear: 2025,

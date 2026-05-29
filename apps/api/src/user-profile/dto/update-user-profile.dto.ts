@@ -18,6 +18,13 @@ export class UpdateUserProfileDto {
   @IsString()
   vatNumber?: string;
 
+  @ApiPropertyOptional({ example: 20, description: 'VAT rate as a percentage (0–100)' })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(100)
+  vatRate?: number;
+
   @ApiPropertyOptional({ example: 14 })
   @IsOptional()
   @IsInt()
