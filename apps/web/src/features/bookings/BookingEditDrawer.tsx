@@ -142,7 +142,6 @@ export default function BookingEditDrawer({ booking }: Props) {
 
           <div className="mt-8 pt-6 border-t border-border">
             <PerformanceEditor booking={booking} />
-            <p className="text-xs text-muted mt-3">Performance changes save automatically.</p>
           </div>
 
           {booking.hasMusicFormConfig && (

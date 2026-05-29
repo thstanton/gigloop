@@ -37,47 +37,62 @@ function SetEditRow({
   onDelete: (setId: string) => void;
 }) {
   const queryClient = useQueryClient();
+  const [label, setLabel] = useState(set.label ?? '');
+  const [duration, setDuration] = useState(set.duration.toString());
+  const [startTime, setStartTime] = useState(set.startTime ?? '');
+
+  const isDirty =
+    (label.trim() || null) !== (set.label ?? null) ||
+    (parseInt(duration, 10) || 0) !== set.duration ||
+    (startTime || null) !== (set.startTime ?? null);
 
   const updateSet = useMutation({
-    mutationFn: (patch: { label?: string | null; duration?: number; startTime?: string | null }) =>
-      apiPatch(`/bookings/${bookingId}/sets/${set.id}`, patch),
+    mutationFn: () =>
+      apiPatch(`/bookings/${bookingId}/sets/${set.id}`, {
+        label: label.trim() || null,
+        duration: parseInt(duration, 10) || set.duration,
+        startTime: startTime || null,
+      }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['booking', bookingId] }),
   });
 
   return (
-    <div className="grid grid-cols-[1fr_5rem_5rem_1.25rem] items-center gap-2 py-2 border-b border-border last:border-0">
+    <div className="grid grid-cols-[1fr_5rem_5rem_2.5rem_1.25rem] items-center gap-2 py-2 border-b border-border last:border-0">
       <input
         type="text"
-        defaultValue={set.label ?? ''}
+        value={label}
         placeholder="Label"
-        onBlur={(e) => {
-          const val = e.target.value.trim() || null;
-          if (val !== set.label) updateSet.mutate({ label: val });
-        }}
+        onChange={(e) => setLabel(e.target.value)}
         className="text-sm text-foreground border border-border rounded px-2 py-0.5 bg-background min-w-0"
         aria-label="Set label"
       />
       <input
         type="number"
-        defaultValue={set.duration}
+        value={duration}
         min={1}
-        onBlur={(e) => {
-          const val = parseInt(e.target.value, 10);
-          if (!isNaN(val) && val >= 1 && val !== set.duration) updateSet.mutate({ duration: val });
-        }}
+        onChange={(e) => setDuration(e.target.value)}
         className="text-sm text-foreground border border-border rounded px-2 py-0.5 bg-background w-full"
         aria-label="Duration in minutes"
       />
       <input
         type="time"
-        defaultValue={set.startTime ?? ''}
-        onBlur={(e) => {
-          const val = e.target.value || null;
-          if (val !== set.startTime) updateSet.mutate({ startTime: val });
-        }}
+        value={startTime}
+        onChange={(e) => setStartTime(e.target.value)}
         className="text-sm text-muted border border-border rounded px-2 py-0.5 bg-background"
         aria-label="Start time"
       />
+      <span>
+        {isDirty && (
+          <button
+            type="button"
+            onClick={() => updateSet.mutate()}
+            disabled={updateSet.isPending}
+            className="text-xs text-primary hover:text-primary/80 transition-colors disabled:opacity-50"
+          >
+            {updateSet.isPending ? '…' : 'Save'}
+          </button>
+        )}
+      </span>
       <button
         type="button"
         onClick={() => onDelete(set.id)}
@@ -190,10 +205,11 @@ export default function PerformanceEditor({ booking }: { booking: BookingDetail 
             </div>
 
             {sets.length > 0 && (
-              <div className="text-xs text-muted grid grid-cols-[1fr_5rem_5rem_1.25rem] gap-2 pb-1 mb-1 border-b border-border">
+              <div className="text-xs text-muted grid grid-cols-[1fr_5rem_5rem_2.5rem_1.25rem] gap-2 pb-1 mb-1 border-b border-border">
                 <span className="pl-2">Label</span>
                 <span className="pl-2">Min</span>
                 <span className="pl-2">Start</span>
+                <span />
                 <span />
               </div>
             )}

@@ -43,7 +43,7 @@ function UpcomingGigsWidget({ bookings }: { bookings: BookingListItem[] }) {
       {gigs.map((g) => (
         <li key={g.id}>
           <button
-            onClick={() => navigate(`/admin/bookings/${g.id}`)}
+            onClick={() => navigate(`/admin/bookings/${g.id}`, { state: { from: '/admin', label: 'Dashboard' } })}
             className="w-full flex items-start justify-between gap-4 py-3 text-left hover:bg-muted/30 transition-colors -mx-4 px-4"
           >
             <div className="flex flex-col gap-0.5 min-w-0">
@@ -120,7 +120,7 @@ function ActionsWidget() {
       {actions.map((a) => (
         <li key={a.bookingId}>
           <button
-            onClick={() => navigate(`/admin/bookings/${a.bookingId}`)}
+            onClick={() => navigate(`/admin/bookings/${a.bookingId}`, { state: { from: '/admin', label: 'Dashboard' } })}
             className="w-full flex items-start justify-between gap-4 py-3 text-left hover:bg-muted/30 transition-colors -mx-4 px-4"
           >
             <div className="flex flex-col gap-0.5 min-w-0">
@@ -204,7 +204,7 @@ function CalendarWidget({ bookings }: { bookings: BookingListItem[] }) {
 
     if (gigsOnDay && gigsOnDay.length > 0) {
       if (gigsOnDay.length === 1) {
-        navigate(`/admin/bookings/${gigsOnDay[0].id}`);
+        navigate(`/admin/bookings/${gigsOnDay[0].id}`, { state: { from: '/admin', label: 'Dashboard' } });
       } else {
         setExpanded(expanded === key ? null : key);
       }
@@ -291,7 +291,7 @@ function CalendarWidget({ bookings }: { bookings: BookingListItem[] }) {
           {(byDate.get(expanded) ?? []).map((b) => (
             <li key={b.id}>
               <button
-                onClick={() => navigate(`/admin/bookings/${b.id}`)}
+                onClick={() => navigate(`/admin/bookings/${b.id}`, { state: { from: '/admin', label: 'Dashboard' } })}
                 className="w-full flex flex-col items-start gap-1 py-2 text-left hover:bg-muted/30 transition-colors -mx-4 px-4"
               >
                 <span className="text-sm text-foreground">

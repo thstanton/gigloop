@@ -670,6 +670,7 @@ export default function PortalPreviewPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['publicProfile'] });
       setIsDirty(false);
+      setSheetOpen(false);
     },
   });
 

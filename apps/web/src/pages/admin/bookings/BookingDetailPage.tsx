@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import { useAuth } from '@clerk/react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, CheckCircle2, Circle, AlertTriangle, Mail, Music, FileText, DollarSign, FolderOpen, ChevronDown, Check, Pencil, Plus, Send, Download, Eye, Lock, Heart, GlassWater, Utensils, Moon, Briefcase, Music2, Car, KeyRound, Speaker, Sparkles } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
@@ -1209,6 +1209,8 @@ function PageSkeleton() {
 
 export default function BookingDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const location = useLocation();
+  const backNav = (location.state as { from?: string; label?: string } | null);
   const [, setSearchParams] = useSearchParams();
 
   const [composeOpen, setComposeOpen] = useState(false);
@@ -1484,11 +1486,11 @@ export default function BookingDetailPage() {
 
       {/* Back */}
       <Link
-        to="/admin/bookings"
+        to={backNav?.from ?? '/admin/bookings'}
         className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground transition-colors"
       >
         <ChevronLeft size={14} />
-        Bookings
+        {backNav?.label ?? 'Bookings'}
       </Link>
 
       <div className="mt-6 md:grid md:grid-cols-[3fr_2fr] md:gap-8 md:items-start">
