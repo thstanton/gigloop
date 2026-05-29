@@ -27,42 +27,31 @@ function FormatIcon({ icon, size = 14 }: { icon: string; size?: number }) {
 
 // ─── Set edit row ─────────────────────────────────────────────────────────────
 
+type SetValues = { label: string; duration: string; startTime: string };
+
 function SetEditRow({
   set,
-  bookingId,
+  onChange,
   onDelete,
 }: {
   set: PerformanceSet;
-  bookingId: string;
+  onChange: (setId: string, values: SetValues) => void;
   onDelete: (setId: string) => void;
 }) {
-  const queryClient = useQueryClient();
   const [label, setLabel] = useState(set.label ?? '');
   const [duration, setDuration] = useState(set.duration.toString());
   const [startTime, setStartTime] = useState(set.startTime ?? '');
 
-  const isDirty =
-    (label.trim() || null) !== (set.label ?? null) ||
-    (parseInt(duration, 10) || 0) !== set.duration ||
-    (startTime || null) !== (set.startTime ?? null);
-
-  const updateSet = useMutation({
-    mutationFn: () =>
-      apiPatch(`/bookings/${bookingId}/sets/${set.id}`, {
-        label: label.trim() || null,
-        duration: parseInt(duration, 10) || set.duration,
-        startTime: startTime || null,
-      }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['booking', bookingId] }),
-  });
-
   return (
-    <div className="grid grid-cols-[1fr_5rem_5rem_2.5rem_1.25rem] items-center gap-2 py-2 border-b border-border last:border-0">
+    <div className="grid grid-cols-[1fr_5rem_5rem_1.25rem] items-center gap-2 py-2 border-b border-border last:border-0">
       <input
         type="text"
         value={label}
         placeholder="Label"
-        onChange={(e) => setLabel(e.target.value)}
+        onChange={(e) => {
+          setLabel(e.target.value);
+          onChange(set.id, { label: e.target.value, duration, startTime });
+        }}
         className="text-sm text-foreground border border-border rounded px-2 py-0.5 bg-background min-w-0"
         aria-label="Set label"
       />
@@ -70,36 +59,30 @@ function SetEditRow({
         type="number"
         value={duration}
         min={1}
-        onChange={(e) => setDuration(e.target.value)}
+        onChange={(e) => {
+          setDuration(e.target.value);
+          onChange(set.id, { label, duration: e.target.value, startTime });
+        }}
         className="text-sm text-foreground border border-border rounded px-2 py-0.5 bg-background w-full"
         aria-label="Duration in minutes"
       />
       <input
         type="time"
         value={startTime}
-        onChange={(e) => setStartTime(e.target.value)}
+        onChange={(e) => {
+          setStartTime(e.target.value);
+          onChange(set.id, { label, duration, startTime: e.target.value });
+        }}
         className="text-sm text-muted border border-border rounded px-2 py-0.5 bg-background"
         aria-label="Start time"
       />
-      <span>
-        {isDirty && (
-          <button
-            type="button"
-            onClick={() => updateSet.mutate()}
-            disabled={updateSet.isPending}
-            className="text-xs text-primary hover:text-primary/80 transition-colors disabled:opacity-50"
-          >
-            {updateSet.isPending ? '…' : 'Save'}
-          </button>
-        )}
-      </span>
       <button
         type="button"
         onClick={() => onDelete(set.id)}
         className="text-muted hover:text-status-cancelled transition-colors"
         aria-label="Remove set"
       >
-        <Trash2 size={13} />
+        <Trash2 size={13} aria-hidden="true" />
       </button>
     </div>
   );
@@ -110,6 +93,8 @@ function SetEditRow({
 export default function PerformanceEditor({ booking }: { booking: BookingDetail }) {
   const queryClient = useQueryClient();
   const [addOpen, setAddOpen] = useState(false);
+  const [pendingEdits, setPendingEdits] = useState<Map<string, SetValues>>(new Map());
+  const [discardKey, setDiscardKey] = useState(0);
 
   const { data: allFormats = [], isLoading: formatsLoading } = useQuery({
     queryKey: ['performance-formats'],
@@ -121,6 +106,43 @@ export default function PerformanceEditor({ booking }: { booking: BookingDetail 
     (booking.performanceFormats ?? []).map((bpf) => bpf.performanceFormatId),
   );
   const availableFormats = allFormats.filter((f) => !appliedFormatIds.has(f.id));
+
+  function handleSetChange(setId: string, values: SetValues) {
+    const original = (booking.sets ?? []).find((s) => s.id === setId);
+    if (!original) return;
+    const dirty =
+      (values.label.trim() || null) !== (original.label ?? null) ||
+      (parseInt(values.duration, 10) || 0) !== original.duration ||
+      (values.startTime || null) !== (original.startTime ?? null);
+    setPendingEdits((prev) => {
+      const next = new Map(prev);
+      if (dirty) next.set(setId, values);
+      else next.delete(setId);
+      return next;
+    });
+  }
+
+  const saveEdits = useMutation({
+    mutationFn: () =>
+      Promise.all(
+        Array.from(pendingEdits.entries()).map(([setId, values]) =>
+          apiPatch(`/bookings/${booking.id}/sets/${setId}`, {
+            label: values.label.trim() || null,
+            duration: parseInt(values.duration, 10) || 1,
+            startTime: values.startTime || null,
+          }),
+        ),
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['booking', booking.id] });
+      setPendingEdits(new Map());
+    },
+  });
+
+  function handleDiscard() {
+    setPendingEdits(new Map());
+    setDiscardKey((k) => k + 1);
+  }
 
   const applyFormat = useMutation({
     mutationFn: (formatId: string) =>
@@ -200,25 +222,24 @@ export default function PerformanceEditor({ booking }: { booking: BookingDetail 
                 className="text-muted hover:text-status-cancelled transition-colors disabled:opacity-50"
                 aria-label={`Remove ${bpf.performanceFormat.label}`}
               >
-                <Trash2 size={13} />
+                <Trash2 size={13} aria-hidden="true" />
               </button>
             </div>
 
             {sets.length > 0 && (
-              <div className="text-xs text-muted grid grid-cols-[1fr_5rem_5rem_2.5rem_1.25rem] gap-2 pb-1 mb-1 border-b border-border">
+              <div className="text-xs text-muted grid grid-cols-[1fr_5rem_5rem_1.25rem] gap-2 pb-1 mb-1 border-b border-border">
                 <span className="pl-2">Label</span>
                 <span className="pl-2">Min</span>
                 <span className="pl-2">Start</span>
-                <span />
                 <span />
               </div>
             )}
 
             {sets.map((set) => (
               <SetEditRow
-                key={set.id}
+                key={`${set.id}-${discardKey}`}
                 set={set}
-                bookingId={booking.id}
+                onChange={handleSetChange}
                 onDelete={(id) => deleteSet.mutate(id)}
               />
             ))}
@@ -229,7 +250,7 @@ export default function PerformanceEditor({ booking }: { booking: BookingDetail 
               disabled={addSet.isPending}
               className="mt-1 inline-flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors disabled:opacity-50"
             >
-              <Plus size={12} />
+              <Plus size={12} aria-hidden="true" />
               Add set
             </button>
           </div>
@@ -241,13 +262,44 @@ export default function PerformanceEditor({ booking }: { booking: BookingDetail 
           <p className="text-sm font-medium text-foreground mb-1">Other sets</p>
           {unassigned.map((set) => (
             <SetEditRow
-              key={set.id}
+              key={`${set.id}-${discardKey}`}
               set={set}
-              bookingId={booking.id}
+              onChange={handleSetChange}
               onDelete={(id) => deleteSet.mutate(id)}
             />
           ))}
         </div>
+      )}
+
+      {/* Section-level save bar */}
+      {pendingEdits.size > 0 && (
+        <div className="mb-4 flex items-center justify-between border-t border-border pt-3">
+          <span className="text-xs text-muted">
+            {pendingEdits.size === 1 ? '1 unsaved change' : `${pendingEdits.size} unsaved changes`}
+          </span>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={handleDiscard}
+              disabled={saveEdits.isPending}
+              className="text-xs text-muted hover:text-foreground transition-colors disabled:opacity-50"
+            >
+              Discard
+            </button>
+            <button
+              type="button"
+              onClick={() => saveEdits.mutate()}
+              disabled={saveEdits.isPending}
+              className="text-xs text-primary hover:text-primary/80 transition-colors disabled:opacity-50"
+            >
+              {saveEdits.isPending ? 'Saving…' : 'Save changes'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {saveEdits.isError && (
+        <p className="text-xs text-status-cancelled mb-3">Failed to save. Please try again.</p>
       )}
 
       {!addOpen ? (
@@ -256,7 +308,7 @@ export default function PerformanceEditor({ booking }: { booking: BookingDetail 
           onClick={() => setAddOpen(true)}
           className="inline-flex items-center gap-1 text-sm text-primary hover:text-primary/80 transition-colors"
         >
-          <Plus size={14} />
+          <Plus size={14} aria-hidden="true" />
           Add format
         </button>
       ) : (
@@ -294,4 +346,3 @@ export default function PerformanceEditor({ booking }: { booking: BookingDetail 
     </div>
   );
 }
-

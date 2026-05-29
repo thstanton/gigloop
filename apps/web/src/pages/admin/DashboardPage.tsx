@@ -204,7 +204,7 @@ function CalendarWidget({ bookings }: { bookings: BookingListItem[] }) {
 
     if (gigsOnDay && gigsOnDay.length > 0) {
       if (gigsOnDay.length === 1) {
-        navigate(`/admin/bookings/${gigsOnDay[0].id}`, { state: { from: '/admin', label: 'Dashboard' } });
+        navigate(`/admin/bookings/${gigsOnDay[0].id}`, { state: { from: '/admin', label: 'Calendar' } });
       } else {
         setExpanded(expanded === key ? null : key);
       }
@@ -291,7 +291,7 @@ function CalendarWidget({ bookings }: { bookings: BookingListItem[] }) {
           {(byDate.get(expanded) ?? []).map((b) => (
             <li key={b.id}>
               <button
-                onClick={() => navigate(`/admin/bookings/${b.id}`, { state: { from: '/admin', label: 'Dashboard' } })}
+                onClick={() => navigate(`/admin/bookings/${b.id}`, { state: { from: '/admin', label: 'Calendar' } })}
                 className="w-full flex items-start justify-between gap-3 py-2 text-left hover:bg-muted/30 transition-colors -mx-4 px-4"
               >
                 <div className="flex flex-col gap-0.5">
