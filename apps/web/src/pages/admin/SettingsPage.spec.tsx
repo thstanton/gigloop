@@ -22,15 +22,17 @@ const mockPublicProfile: PublicProfile = {
   email: null,
   phone: null,
   logoUrl: null,
-  brandColour: '#000000',
   photo: null,
   website: null,
   socials: null,
-  portalTheme: 'LIGHT_MODERN',
-  portalHeroImage: null,
-  showContactPhoto: false,
-  showContactEmail: true,
-  showContactPhone: false,
+  clientPortalConfig: {
+    theme: 'LIGHT_MODERN',
+    brandColour: '#000000',
+    heroImage: null,
+    showContactPhoto: false,
+    showContactEmail: true,
+    showContactPhone: false,
+  },
 };
 
 const mockUserProfile: UserProfile = {

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { SpecialRequestDto } from './dto/submit-music-form.dto';
+import { CONTRACT_INCLUDE } from '../bookings/booking.includes';
 
 @Injectable()
 export class PortalRepository {
@@ -45,11 +46,7 @@ export class PortalRepository {
             template: { select: { builtInType: true } },
           },
         },
-        contracts: {
-          where: { status: { not: 'VOID' } },
-          orderBy: { createdAt: 'desc' as const },
-          take: 1,
-        },
+        contracts: CONTRACT_INCLUDE,
       },
     });
   }

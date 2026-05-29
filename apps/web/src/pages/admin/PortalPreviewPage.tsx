@@ -23,7 +23,7 @@ import {
   pickTextColour,
 } from '@/pages/portal/PortalPage';
 import { SignatureSection } from '@/pages/portal/PortalContractPage';
-import type { PublicProfile, PortalPublicProfile, PortalTheme, UpdatePublicProfileInput } from '@/types/api';
+import type { PublicProfile, PortalPublicProfile, PortalTheme, UpdatePublicProfileInput, ClientPortalConfig } from '@/types/api';
 import { cn } from '@/lib/utils';
 
 // ─── Mock data ────────────────────────────────────────────────────────────────
@@ -84,13 +84,14 @@ interface Overrides {
 }
 
 function profileToOverrides(p: PublicProfile): Overrides {
+  const cfg: Partial<ClientPortalConfig> = p.clientPortalConfig ?? {};
   return {
-    theme: (p.portalTheme as PortalTheme) ?? 'LIGHT_MODERN',
-    brandColour: p.brandColour ?? '#1a1a1a',
-    heroImage: (p.portalHeroImage as 'piano' | 'stage' | null) ?? null,
-    showContactPhoto: p.showContactPhoto,
-    showContactEmail: p.showContactEmail,
-    showContactPhone: p.showContactPhone,
+    theme: cfg.theme ?? 'LIGHT_MODERN',
+    brandColour: cfg.brandColour ?? '#1a1a1a',
+    heroImage: cfg.heroImage ?? null,
+    showContactPhoto: cfg.showContactPhoto ?? false,
+    showContactEmail: cfg.showContactEmail ?? true,
+    showContactPhone: cfg.showContactPhone ?? false,
   };
 }
 
@@ -682,12 +683,14 @@ export default function PortalPreviewPage() {
   function handleSave() {
     if (!overrides) return;
     saveMutation.mutate({
-      brandColour: overrides.brandColour,
-      portalTheme: overrides.theme,
-      portalHeroImage: overrides.heroImage,
-      showContactPhoto: overrides.showContactPhoto,
-      showContactEmail: overrides.showContactEmail,
-      showContactPhone: overrides.showContactPhone,
+      clientPortalConfig: {
+        theme: overrides.theme,
+        brandColour: overrides.brandColour,
+        heroImage: overrides.heroImage,
+        showContactPhoto: overrides.showContactPhoto,
+        showContactEmail: overrides.showContactEmail,
+        showContactPhone: overrides.showContactPhone,
+      },
     });
   }
 

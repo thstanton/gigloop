@@ -8,6 +8,7 @@ import { CreateSetDto } from './dto/create-set.dto';
 import { UpdateSetDto } from './dto/update-set.dto';
 import { UpsertMusicFormConfigDto } from './dto/upsert-music-form-config.dto';
 import { computeDueDate } from './checklist-defaults';
+import { CONTRACT_INCLUDE } from './booking.includes';
 
 type ChecklistItemSeed = {
   key?: string | null;
@@ -27,12 +28,6 @@ type FormatWithSlots = {
   slots: Array<{ label: string | null; duration: number; order: number }>;
 };
 
-const contractInclude = {
-  where: { status: { not: 'VOID' } },
-  orderBy: { createdAt: 'desc' as const },
-  take: 1,
-} as const;
-
 const bookingIncludes = {
   customer: true,
   venue: true,
@@ -46,7 +41,7 @@ const bookingIncludes = {
   },
   musicFormConfig: { select: { id: true } },
   musicFormResponse: { select: { id: true } },
-  contracts: contractInclude,
+  contracts: CONTRACT_INCLUDE,
 } as const;
 
 const listIncludes = {

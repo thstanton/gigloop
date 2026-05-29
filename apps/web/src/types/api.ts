@@ -490,6 +490,17 @@ export interface UserProfile {
   preferences: Partial<UserPreferences>;
 }
 
+export type PortalTheme = 'LIGHT_MODERN' | 'LIGHT_ROMANTIC' | 'BOLD_MODERN' | 'BOLD_ROMANTIC';
+
+export interface ClientPortalConfig {
+  theme: PortalTheme;
+  brandColour: string;
+  heroImage: 'piano' | 'stage' | null;
+  showContactPhoto: boolean;
+  showContactEmail: boolean;
+  showContactPhone: boolean;
+}
+
 export interface PublicProfile {
   id: string;
   createdAt: string;
@@ -500,15 +511,10 @@ export interface PublicProfile {
   email: string | null;
   phone: string | null;
   logoUrl: string | null;
-  brandColour: string | null;
   photo: string | null;
   website: string | null;
   socials: Record<string, string> | null;
-  portalTheme: string;
-  portalHeroImage: string | null;
-  showContactPhoto: boolean;
-  showContactEmail: boolean;
-  showContactPhone: boolean;
+  clientPortalConfig: ClientPortalConfig;
 }
 
 export interface UpdateUserProfileInput {
@@ -523,8 +529,6 @@ export interface UpdateUserProfileInput {
   preferences?: Partial<UserPreferences>;
 }
 
-export type PortalTheme = 'LIGHT_MODERN' | 'LIGHT_ROMANTIC' | 'BOLD_MODERN' | 'BOLD_ROMANTIC';
-
 export interface UpdatePublicProfileInput {
   businessName?: string;
   displayName?: string | null;
@@ -532,15 +536,10 @@ export interface UpdatePublicProfileInput {
   email?: string | null;
   phone?: string | null;
   logoUrl?: string | null;
-  brandColour?: string;
   photo?: string | null;
   website?: string | null;
   socials?: Record<string, string> | null;
-  portalTheme?: PortalTheme;
-  portalHeroImage?: 'piano' | 'stage' | null;
-  showContactPhoto?: boolean;
-  showContactEmail?: boolean;
-  showContactPhone?: boolean;
+  clientPortalConfig?: Partial<ClientPortalConfig>;
 }
 
 // ─────────────────────────────────────────

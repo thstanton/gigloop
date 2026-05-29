@@ -16,11 +16,14 @@ export class PublicProfileRepository {
   }
 
   updateByUserId(userId: string, data: UpdatePublicProfileDto) {
-    const { socials, ...rest } = data;
-    const payload = {
+    const { socials, clientPortalConfig, ...rest } = data;
+    const payload: Record<string, unknown> = {
       ...rest,
       ...(socials !== undefined
         ? { socials: socials === null ? Prisma.DbNull : socials }
+        : {}),
+      ...(clientPortalConfig !== undefined
+        ? { clientPortalConfig: clientPortalConfig as Prisma.InputJsonValue }
         : {}),
     };
     return this.prisma.publicProfile.upsert({

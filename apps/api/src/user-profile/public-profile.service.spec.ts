@@ -27,20 +27,20 @@ describe('PublicProfileService', () => {
 
   describe('update — brandColour validation', () => {
     it('throws BadRequestException for a plain colour name', () => {
-      expect(() => service.update('u1', { brandColour: 'red' })).toThrow(BadRequestException);
+      expect(() => service.update('u1', { clientPortalConfig: { brandColour: 'red' } })).toThrow(BadRequestException);
     });
 
     it('throws for a hex value without # prefix', () => {
-      expect(() => service.update('u1', { brandColour: '3B82F6' })).toThrow(BadRequestException);
+      expect(() => service.update('u1', { clientPortalConfig: { brandColour: '3B82F6' } })).toThrow(BadRequestException);
     });
 
     it('throws for a 3-digit hex shorthand', () => {
-      expect(() => service.update('u1', { brandColour: '#F00' })).toThrow(BadRequestException);
+      expect(() => service.update('u1', { clientPortalConfig: { brandColour: '#F00' } })).toThrow(BadRequestException);
     });
 
     it('accepts a valid 6-digit hex colour', async () => {
       repo.updateByUserId.mockResolvedValue({ userId: 'u1' });
-      await expect(service.update('u1', { brandColour: '#3B82F6' })).resolves.toBeDefined();
+      await expect(service.update('u1', { clientPortalConfig: { brandColour: '#3B82F6' } })).resolves.toBeDefined();
     });
 
     it('accepts an update with no brandColour field', async () => {

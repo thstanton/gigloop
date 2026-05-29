@@ -1,5 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsIn, IsObject, IsOptional, IsString, IsUrl, ValidateIf } from 'class-validator';
+import { IsObject, IsOptional, IsString, IsUrl, ValidateIf, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
+import { ClientPortalConfigDto } from './client-portal-config.dto';
 
 export class UpdatePublicProfileDto {
   @ApiPropertyOptional({ nullable: true })
@@ -37,11 +39,6 @@ export class UpdatePublicProfileDto {
   @IsUrl()
   logoUrl?: string | null;
 
-  @ApiPropertyOptional({ example: '#3B82F6' })
-  @IsOptional()
-  @IsString()
-  brandColour?: string;
-
   @ApiPropertyOptional({ nullable: true })
   @IsOptional()
   @ValidateIf((_, v) => v !== null)
@@ -60,31 +57,9 @@ export class UpdatePublicProfileDto {
   @IsObject()
   socials?: Record<string, string> | null;
 
-  @ApiPropertyOptional({
-    enum: ['LIGHT_MODERN', 'LIGHT_ROMANTIC', 'BOLD_MODERN', 'BOLD_ROMANTIC'],
-  })
+  @ApiPropertyOptional({ type: ClientPortalConfigDto })
   @IsOptional()
-  @IsIn(['LIGHT_MODERN', 'LIGHT_ROMANTIC', 'BOLD_MODERN', 'BOLD_ROMANTIC'])
-  portalTheme?: string;
-
-  @ApiPropertyOptional({ nullable: true, enum: ['piano', 'stage'] })
-  @IsOptional()
-  @ValidateIf((_, v) => v !== null)
-  @IsIn(['piano', 'stage'])
-  portalHeroImage?: string | null;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsBoolean()
-  showContactPhoto?: boolean;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsBoolean()
-  showContactEmail?: boolean;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsBoolean()
-  showContactPhone?: boolean;
+  @ValidateNested()
+  @Type(() => ClientPortalConfigDto)
+  clientPortalConfig?: ClientPortalConfigDto;
 }

@@ -7,6 +7,53 @@ import { ChecklistEvaluatorService } from '../checklist/checklist-evaluator.serv
 import type { Request } from 'express';
 import type { SubmitMusicFormDto } from './dto/submit-music-form.dto';
 
+const PORTAL_CONFIG_DEFAULTS = {
+  theme: 'LIGHT_MODERN',
+  brandColour: '#1a1a1a',
+  heroImage: null,
+  showContactPhoto: false,
+  showContactEmail: true,
+  showContactPhone: false,
+} as const;
+
+type PortalConfigJson = Partial<{
+  theme: string;
+  brandColour: string;
+  heroImage: string | null;
+  showContactPhoto: boolean;
+  showContactEmail: boolean;
+  showContactPhone: boolean;
+}>;
+
+function buildPortalPublicProfile(p: {
+  businessName: string;
+  displayName: string | null;
+  bio: string | null;
+  email: string | null;
+  phone: string | null;
+  logoUrl: string | null;
+  photo: string | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  clientPortalConfig: any;
+}) {
+  const cfg: PortalConfigJson = (p.clientPortalConfig as PortalConfigJson) ?? {};
+  return {
+    businessName: p.businessName,
+    displayName: p.displayName,
+    bio: p.bio,
+    email: p.email,
+    phone: p.phone,
+    logoUrl: p.logoUrl,
+    brandColour: cfg.brandColour ?? PORTAL_CONFIG_DEFAULTS.brandColour,
+    photo: p.photo,
+    portalTheme: cfg.theme ?? PORTAL_CONFIG_DEFAULTS.theme,
+    portalHeroImage: cfg.heroImage ?? PORTAL_CONFIG_DEFAULTS.heroImage,
+    showContactPhoto: cfg.showContactPhoto ?? PORTAL_CONFIG_DEFAULTS.showContactPhoto,
+    showContactEmail: cfg.showContactEmail ?? PORTAL_CONFIG_DEFAULTS.showContactEmail,
+    showContactPhone: cfg.showContactPhone ?? PORTAL_CONFIG_DEFAULTS.showContactPhone,
+  };
+}
+
 @Injectable()
 export class PortalService {
   constructor(
@@ -81,21 +128,7 @@ export class PortalService {
         })),
         contractSignedAt: booking.contracts?.[0]?.signedAt?.toISOString() ?? null,
       },
-      publicProfile: {
-        businessName: publicProfile.businessName,
-        displayName: publicProfile.displayName,
-        bio: publicProfile.bio,
-        email: publicProfile.email,
-        phone: publicProfile.phone,
-        logoUrl: publicProfile.logoUrl,
-        brandColour: publicProfile.brandColour ?? '#1a1a1a',
-        photo: publicProfile.photo,
-        portalTheme: publicProfile.portalTheme,
-        portalHeroImage: publicProfile.portalHeroImage,
-        showContactPhoto: publicProfile.showContactPhoto,
-        showContactEmail: publicProfile.showContactEmail,
-        showContactPhone: publicProfile.showContactPhone,
-      },
+      publicProfile: buildPortalPublicProfile(publicProfile),
       signedContractUrl,
       documents,
       hasMusicForm: !!booking.musicFormConfig,

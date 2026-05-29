@@ -17,7 +17,8 @@ export class PublicProfileService {
   }
 
   update(userId: string, dto: UpdatePublicProfileDto) {
-    if (dto.brandColour !== undefined && !HEX_COLOUR_RE.test(dto.brandColour)) {
+    const colour = dto.clientPortalConfig?.brandColour;
+    if (colour !== undefined && !HEX_COLOUR_RE.test(colour)) {
       throw new BadRequestException('brandColour must be a valid hex colour (e.g. #3B82F6)');
     }
     return this.repo.updateByUserId(userId, dto);
