@@ -977,10 +977,12 @@ function BookingSettingsSection({ profile }: { profile: UserProfile }) {
                   <p className="text-xs text-muted mt-0.5">{formatDueDateRule(item.dueDateRule)}</p>
                 </div>
                 <button
+                  type="button"
+                  aria-label={`Remove ${item.label}`}
                   onClick={() => setCustomItems((prev) => prev.filter((_, i) => i !== idx))}
                   className="text-muted hover:text-status-cancelled transition-colors flex-shrink-0"
                 >
-                  <Trash2 size={14} />
+                  <Trash2 size={14} aria-hidden="true" />
                 </button>
               </div>
             ))}

@@ -47,16 +47,20 @@ function ToolbarButton({
   active,
   disabled,
   onClick,
+  label,
   children,
 }: {
   active?: boolean;
   disabled?: boolean;
   onClick: () => void;
+  label: string;
   children: React.ReactNode;
 }) {
   return (
     <button
       type="button"
+      aria-label={label}
+      aria-pressed={active}
       onMouseDown={(e) => { e.preventDefault(); onClick(); }}
       disabled={disabled}
       className={cn(
@@ -99,43 +103,43 @@ function EditorToolbar({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-0.5 px-2 py-1.5 border-b border-border bg-surface rounded-t-md">
-      <ToolbarButton active={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()}>
-        <Bold size={14} />
+    <div role="toolbar" aria-label="Text formatting" className="flex flex-wrap items-center gap-0.5 px-2 py-1.5 border-b border-border bg-surface rounded-t-md">
+      <ToolbarButton label="Bold" active={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()}>
+        <Bold size={14} aria-hidden="true" />
       </ToolbarButton>
-      <ToolbarButton active={editor.isActive('italic')} onClick={() => editor.chain().focus().toggleItalic().run()}>
-        <Italic size={14} />
+      <ToolbarButton label="Italic" active={editor.isActive('italic')} onClick={() => editor.chain().focus().toggleItalic().run()}>
+        <Italic size={14} aria-hidden="true" />
       </ToolbarButton>
-      <ToolbarButton active={editor.isActive('underline')} onClick={() => editor.chain().focus().toggleUnderline().run()}>
-        <UnderlineIcon size={14} />
+      <ToolbarButton label="Underline" active={editor.isActive('underline')} onClick={() => editor.chain().focus().toggleUnderline().run()}>
+        <UnderlineIcon size={14} aria-hidden="true" />
       </ToolbarButton>
 
       {isDocument && (
         <>
-          <div className="w-px h-4 bg-border mx-1" />
-          <ToolbarButton active={editor.isActive('heading', { level: 2 })} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}>
-            <Heading2 size={14} />
+          <div aria-hidden="true" className="w-px h-4 bg-border mx-1" />
+          <ToolbarButton label="Heading 2" active={editor.isActive('heading', { level: 2 })} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}>
+            <Heading2 size={14} aria-hidden="true" />
           </ToolbarButton>
-          <ToolbarButton active={editor.isActive('heading', { level: 3 })} onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}>
-            <Heading3 size={14} />
+          <ToolbarButton label="Heading 3" active={editor.isActive('heading', { level: 3 })} onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}>
+            <Heading3 size={14} aria-hidden="true" />
           </ToolbarButton>
         </>
       )}
 
-      <div className="w-px h-4 bg-border mx-1" />
+      <div aria-hidden="true" className="w-px h-4 bg-border mx-1" />
 
       {!isDocument && (
-        <ToolbarButton active={editor.isActive('link')} onClick={insertLink}>
-          <LinkIcon size={14} />
+        <ToolbarButton label="Link" active={editor.isActive('link')} onClick={insertLink}>
+          <LinkIcon size={14} aria-hidden="true" />
         </ToolbarButton>
       )}
-      {!isDocument && <div className="w-px h-4 bg-border mx-1" />}
+      {!isDocument && <div aria-hidden="true" className="w-px h-4 bg-border mx-1" />}
 
-      <ToolbarButton active={editor.isActive('bulletList')} onClick={() => editor.chain().focus().toggleBulletList().run()}>
-        <List size={14} />
+      <ToolbarButton label="Bullet list" active={editor.isActive('bulletList')} onClick={() => editor.chain().focus().toggleBulletList().run()}>
+        <List size={14} aria-hidden="true" />
       </ToolbarButton>
-      <ToolbarButton active={editor.isActive('orderedList')} onClick={() => editor.chain().focus().toggleOrderedList().run()}>
-        <ListOrdered size={14} />
+      <ToolbarButton label="Numbered list" active={editor.isActive('orderedList')} onClick={() => editor.chain().focus().toggleOrderedList().run()}>
+        <ListOrdered size={14} aria-hidden="true" />
       </ToolbarButton>
 
       {variables.length > 0 && (

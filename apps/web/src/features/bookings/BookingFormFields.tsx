@@ -120,19 +120,21 @@ function FormatSelector({
               <div className="flex gap-1">
                 <button
                   type="button"
+                  aria-label={`Move ${fmt.label} up`}
                   disabled={idx === 0}
                   onClick={() => move(fmt.id, 'up')}
                   className="text-muted hover:text-foreground disabled:opacity-30 transition-colors"
                 >
-                  <ChevronUp size={14} />
+                  <ChevronUp size={14} aria-hidden="true" />
                 </button>
                 <button
                   type="button"
+                  aria-label={`Move ${fmt.label} down`}
                   disabled={idx === selected.length - 1}
                   onClick={() => move(fmt.id, 'down')}
                   className="text-muted hover:text-foreground disabled:opacity-30 transition-colors"
                 >
-                  <ChevronDown size={14} />
+                  <ChevronDown size={14} aria-hidden="true" />
                 </button>
               </div>
             </div>

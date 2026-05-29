@@ -39,16 +39,19 @@ function ToggleSwitch({
   checked,
   onChange,
   disabled,
+  'aria-label': ariaLabel,
 }: {
   checked: boolean;
   onChange: (v: boolean) => void;
   disabled?: boolean;
+  'aria-label'?: string;
 }) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
+      aria-label={ariaLabel}
       disabled={disabled}
       onClick={(e) => {
         e.stopPropagation();
@@ -299,20 +302,23 @@ function SongRow({
 
   return (
     <div className={cn('border-b border-border', !song.active && 'opacity-60')}>
-      <div
-        className="flex items-center gap-3 py-3 cursor-pointer select-none"
-        onClick={onToggle}
-      >
-        <div className="flex-1 min-w-0">
+      <div className="flex items-center gap-3 py-3">
+        <button
+          type="button"
+          aria-expanded={isExpanded}
+          onClick={onToggle}
+          className="flex-1 min-w-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 rounded"
+        >
           <p className="text-sm font-medium text-foreground truncate">{song.title}</p>
           {secondaryLine && (
             <p className="text-xs text-muted mt-0.5 truncate">{secondaryLine}</p>
           )}
-        </div>
+        </button>
         <ToggleSwitch
           checked={song.active}
           onChange={(active) => toggleMutation.mutate(active)}
           disabled={toggleMutation.isPending}
+          aria-label={`${song.active ? 'Deactivate' : 'Activate'} ${song.title}`}
         />
       </div>
 
