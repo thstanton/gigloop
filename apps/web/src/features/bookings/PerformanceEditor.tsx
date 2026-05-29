@@ -95,6 +95,7 @@ export default function PerformanceEditor({ booking }: { booking: BookingDetail 
   const [addOpen, setAddOpen] = useState(false);
   const [pendingEdits, setPendingEdits] = useState<Map<string, SetValues>>(new Map());
   const [discardKey, setDiscardKey] = useState(0);
+  const [confirmRemoveFormatId, setConfirmRemoveFormatId] = useState<string | null>(null);
 
   const { data: allFormats = [], isLoading: formatsLoading } = useQuery({
     queryKey: ['performance-formats'],
@@ -177,11 +178,10 @@ export default function PerformanceEditor({ booking }: { booking: BookingDetail 
   function handleRemoveFormat(bpf: BookingPerformanceFormatSummary) {
     const sets = (booking.sets ?? []).filter((s) => s.performanceFormatId === bpf.performanceFormatId);
     const hasStartTimes = sets.some((s) => s.startTime);
-    if (
-      hasStartTimes &&
-      !window.confirm(`Remove "${bpf.performanceFormat.label}" and its ${sets.length} set(s)?`)
-    )
+    if (hasStartTimes) {
+      setConfirmRemoveFormatId(bpf.id);
       return;
+    }
     removeFormat.mutate(bpf.id);
   }
 
@@ -215,15 +215,35 @@ export default function PerformanceEditor({ booking }: { booking: BookingDetail 
                 <FormatIcon icon={bpf.performanceFormat.icon} />
                 {bpf.performanceFormat.label}
               </span>
-              <button
-                type="button"
-                onClick={() => handleRemoveFormat(bpf)}
-                disabled={removeFormat.isPending}
-                className="text-muted hover:text-status-cancelled transition-colors disabled:opacity-50"
-                aria-label={`Remove ${bpf.performanceFormat.label}`}
-              >
-                <Trash2 size={13} aria-hidden="true" />
-              </button>
+              {confirmRemoveFormatId === bpf.id ? (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { removeFormat.mutate(bpf.id); setConfirmRemoveFormatId(null); }}
+                    disabled={removeFormat.isPending}
+                    className="text-xs text-status-cancelled hover:text-status-cancelled/80 transition-colors disabled:opacity-50"
+                  >
+                    {removeFormat.isPending ? 'Removing…' : 'Confirm remove'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmRemoveFormatId(null)}
+                    className="text-xs text-muted hover:text-foreground transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleRemoveFormat(bpf)}
+                  disabled={removeFormat.isPending}
+                  className="text-muted hover:text-status-cancelled transition-colors disabled:opacity-50"
+                  aria-label={`Remove ${bpf.performanceFormat.label}`}
+                >
+                  <Trash2 size={13} aria-hidden="true" />
+                </button>
+              )}
             </div>
 
             {sets.length > 0 && (
