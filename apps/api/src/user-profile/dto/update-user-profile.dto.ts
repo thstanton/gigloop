@@ -13,10 +13,10 @@ export class UpdateUserProfileDto {
   @IsString()
   bankDetails?: string | null;
 
-  @ApiPropertyOptional({ example: 'GB123456789' })
+  @ApiPropertyOptional({ example: 'GB123456789', nullable: true })
   @IsOptional()
   @IsString()
-  vatNumber?: string;
+  vatNumber?: string | null;
 
   @ApiPropertyOptional({ example: 20, description: 'VAT rate as a percentage (0–100)' })
   @IsOptional()

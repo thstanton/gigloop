@@ -32,6 +32,7 @@ type PublicForm = z.infer<typeof publicSchema>;
 const businessSchema = z.object({
   address: z.string(),
   bankDetails: z.string(),
+  vatRegistered: z.boolean(),
   vatNumber: z.string(),
   vatRate: z.number().int().min(0, 'Must be 0–100').max(100, 'Must be 0–100'),
   defaultPaymentTermsDays: z.number().int().min(0, 'Must be 0 or more'),
@@ -436,6 +437,7 @@ function BusinessDetailsSection({ profile }: { profile: UserProfile }) {
   const defaults = {
     address: profile.address ?? '',
     bankDetails: profile.bankDetails ?? '',
+    vatRegistered: !!(profile.vatNumber),
     vatNumber: profile.vatNumber ?? '',
     vatRate: profile.vatRate ?? 20,
     defaultPaymentTermsDays: profile.defaultPaymentTermsDays,
@@ -444,10 +446,14 @@ function BusinessDetailsSection({ profile }: { profile: UserProfile }) {
 
   const {
     register,
+    control,
     handleSubmit,
     reset,
+    watch,
     formState: { errors },
   } = useForm<BusinessForm>({ resolver: zodResolver(businessSchema), defaultValues: defaults });
+
+  const vatRegistered = watch('vatRegistered');
 
   useEffect(() => { reset(defaults); }, [profile]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -464,8 +470,8 @@ function BusinessDetailsSection({ profile }: { profile: UserProfile }) {
     mutation.mutate({
       address: values.address || undefined,
       bankDetails: values.bankDetails || null,
-      vatNumber: values.vatNumber || undefined,
-      vatRate: values.vatRate,
+      vatNumber: values.vatRegistered ? (values.vatNumber || null) : null,
+      ...(values.vatRegistered ? { vatRate: values.vatRate } : {}),
       defaultPaymentTermsDays: values.defaultPaymentTermsDays,
       depositPercentage: values.depositPercentage,
     });
@@ -490,20 +496,36 @@ function BusinessDetailsSection({ profile }: { profile: UserProfile }) {
         />
       </Field>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Field label="VAT number" error={errors.vatNumber?.message}>
-          <Input {...register('vatNumber')} placeholder="GB123456789" />
-        </Field>
-        <Field label="VAT rate (%)" error={errors.vatRate?.message}>
-          <Input
-            type="number"
-            min={0}
-            max={100}
-            {...register('vatRate', { valueAsNumber: true })}
-            className="w-20"
-          />
-        </Field>
-      </div>
+      <Controller
+        name="vatRegistered"
+        control={control}
+        render={({ field }) => (
+          <label className="flex items-start gap-3 cursor-pointer">
+            <Toggle checked={field.value} onChange={field.onChange} />
+            <div className="-mt-0.5">
+              <p className="text-sm font-medium text-foreground">VAT registered</p>
+              <p className="text-xs text-muted mt-0.5">Show VAT number and rate fields on invoices</p>
+            </div>
+          </label>
+        )}
+      />
+
+      {vatRegistered && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label="VAT number" error={errors.vatNumber?.message}>
+            <Input {...register('vatNumber')} placeholder="GB123456789" />
+          </Field>
+          <Field label="VAT rate (%)" error={errors.vatRate?.message}>
+            <Input
+              type="number"
+              min={0}
+              max={100}
+              {...register('vatRate', { valueAsNumber: true })}
+              className="w-20"
+            />
+          </Field>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Field label="Default payment terms" error={errors.defaultPaymentTermsDays?.message}>

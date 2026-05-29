@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import { useAuth } from '@clerk/react';
 import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, CheckCircle2, Circle, AlertTriangle, Mail, Music, FileText, DollarSign, FolderOpen, ChevronDown, Check, Pencil, Plus, Send, Download, Eye, Lock, Heart, GlassWater, Utensils, Moon, Briefcase, Music2, Car, KeyRound, Speaker, Sparkles } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckCircle2, Circle, AlertTriangle, Mail, Music, FileText, DollarSign, FolderOpen, ChevronDown, Check, X, Pencil, Plus, Send, Download, Eye, Lock, Heart, GlassWater, Utensils, Moon, Briefcase, Music2, Car, KeyRound, Speaker, Sparkles } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,6 +27,7 @@ import { useBookingInvoices } from '@/lib/hooks/useBookingInvoices';
 import { useBookingCommunications } from '@/lib/hooks/useBookingCommunications';
 import { useBookingDocuments } from '@/lib/hooks/useBookingDocuments';
 import BookingEditDrawer from '@/features/bookings/BookingEditDrawer';
+import ContactPicker from '@/features/bookings/ContactPicker';
 import ContractSheet from '@/features/bookings/ContractSheet';
 import ContactEditSheet from '@/features/contacts/ContactEditSheet';
 import ComposeEmailSheet from '@/features/communications/ComposeEmailSheet';
@@ -66,6 +67,7 @@ import type {
   PerformanceSet,
   Invoice,
   Communication,
+  Template,
   UserProfile,
 } from '@/types/api';
 
@@ -102,6 +104,13 @@ function dueDateDisplay(dueDate: string | null | undefined): { text: string; cla
   };
 }
 
+const CELEBRATORY_TITLES = [
+  "You're smashing it!",
+  "Nice work!",
+  "All done!",
+  "You're on a roll!",
+];
+
 const STAGE_LABELS: Record<string, string> = {
   ENQUIRY: 'Enquiry',
   PROVISIONAL: 'Provisional',
@@ -133,6 +142,9 @@ const STATUS_LABELS: Record<BookingStatus, string> = {
 function StatusDropdown({ booking, checklist }: { booking: BookingDetail; checklist: ChecklistItem[] }) {
   const queryClient = useQueryClient();
   const [pendingStatus, setPendingStatus] = useState<BookingStatus | null>(null);
+  const [displayStatus, setDisplayStatus] = useState<BookingStatus>(booking.status);
+
+  useEffect(() => { setDisplayStatus(booking.status); }, [booking.status]);
 
   const mutation = useMutation({
     mutationFn: (status: BookingStatus) =>
@@ -141,6 +153,10 @@ function StatusDropdown({ booking, checklist }: { booking: BookingDetail; checkl
       queryClient.invalidateQueries({ queryKey: ['booking', booking.id] });
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
       queryClient.invalidateQueries({ queryKey: ['bookingChecklist', booking.id] });
+    },
+    onError: () => {
+      setDisplayStatus(booking.status);
+      toast({ title: 'Failed to update status', variant: 'destructive' });
     },
   });
 
@@ -155,6 +171,7 @@ function StatusDropdown({ booking, checklist }: { booking: BookingDetail; checkl
     if (outstanding.length > 0) {
       setPendingStatus(s);
     } else {
+      setDisplayStatus(s);
       mutation.mutate(s);
     }
   };
@@ -165,11 +182,12 @@ function StatusDropdown({ booking, checklist }: { booking: BookingDetail; checkl
         <DropdownMenuTrigger asChild>
           <button
             className={cn(
-              'inline-flex items-center gap-1 border-l-[3px] pl-2 pr-2.5 py-0.5 text-xs font-medium cursor-pointer',
-              STATUS_PILL_CLASSES[booking.status],
+              'inline-flex items-center gap-1 border-l-[3px] pl-2 pr-2.5 py-0.5 text-xs font-medium cursor-pointer transition-opacity',
+              STATUS_PILL_CLASSES[displayStatus],
+              mutation.isPending && 'opacity-50',
             )}
           >
-            {STATUS_LABELS[booking.status]}
+            {STATUS_LABELS[displayStatus]}
             <ChevronDown size={10} className="opacity-60" />
           </button>
         </DropdownMenuTrigger>
@@ -209,6 +227,7 @@ function StatusDropdown({ booking, checklist }: { booking: BookingDetail; checkl
               <Button variant="outline" onClick={() => setPendingStatus(null)}>Cancel</Button>
               <Button
                 onClick={() => {
+                  setDisplayStatus(pendingStatus);
                   mutation.mutate(pendingStatus);
                   setPendingStatus(null);
                 }}
@@ -283,6 +302,136 @@ function InlineNotes({ bookingId, initialNotes }: { bookingId: string; initialNo
         className="resize-none text-sm"
       />
     </section>
+  );
+}
+
+// ─── InlineFeeAdd ─────────────────────────────────────────────────────────────
+
+function InlineFeeAdd({ bookingId }: { bookingId: string }) {
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState('');
+
+  const mutation = useMutation({
+    mutationFn: (fee: string) => apiPatch(`/bookings/${bookingId}`, { fee: parseFloat(fee) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['booking', bookingId] });
+      queryClient.invalidateQueries({ queryKey: ['bookings'] });
+      setEditing(false);
+      setValue('');
+    },
+  });
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        onClick={() => setEditing(true)}
+        className="text-sm text-primary hover:underline"
+      >
+        + Add fee
+      </button>
+    );
+  }
+
+  return (
+    <form
+      className="flex items-center gap-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const trimmed = value.trim();
+        if (trimmed) mutation.mutate(trimmed);
+      }}
+    >
+      <Input
+        autoFocus
+        type="number"
+        min="0"
+        step="0.01"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        placeholder="0.00"
+        className="h-8 w-28 text-sm"
+        disabled={mutation.isPending}
+      />
+      <button
+        type="submit"
+        disabled={!value.trim() || mutation.isPending}
+        className="text-status-confirmed hover:text-status-confirmed/70 disabled:opacity-40 transition-colors"
+        aria-label="Save fee"
+      >
+        <Check size={16} />
+      </button>
+      <button
+        type="button"
+        onClick={() => { setEditing(false); setValue(''); }}
+        className="text-muted hover:text-foreground transition-colors"
+        aria-label="Cancel"
+      >
+        <X size={16} />
+      </button>
+    </form>
+  );
+}
+
+// ─── InlineVenueAdd ───────────────────────────────────────────────────────────
+
+function InlineVenueAdd({ bookingId }: { bookingId: string }) {
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [venueId, setVenueId] = useState<string | null>(null);
+
+  const mutation = useMutation({
+    mutationFn: (id: string) => apiPatch(`/bookings/${bookingId}`, { venueId: id }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['booking', bookingId] });
+      queryClient.invalidateQueries({ queryKey: ['bookings'] });
+      setEditing(false);
+      setVenueId(null);
+    },
+  });
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        onClick={() => setEditing(true)}
+        className="text-sm text-primary hover:underline"
+      >
+        + Add venue
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <div className="flex-1">
+        <ContactPicker
+          value={venueId}
+          onChange={setVenueId}
+          placeholder="Select venue..."
+          label="venue"
+          preferredRole="VENUE"
+        />
+      </div>
+      <button
+        type="button"
+        disabled={!venueId || mutation.isPending}
+        onClick={() => { if (venueId) mutation.mutate(venueId); }}
+        className="text-status-confirmed hover:text-status-confirmed/70 disabled:opacity-40 transition-colors flex-shrink-0"
+        aria-label="Save venue"
+      >
+        <Check size={16} />
+      </button>
+      <button
+        type="button"
+        onClick={() => { setEditing(false); setVenueId(null); }}
+        className="text-muted hover:text-foreground transition-colors flex-shrink-0"
+        aria-label="Cancel"
+      >
+        <X size={16} />
+      </button>
+    </div>
   );
 }
 
@@ -403,6 +552,7 @@ function PerformanceSection({ booking }: { booking: BookingDetail }) {
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       next.set('edit', 'true');
+      next.set('section', 'performance');
       return next;
     });
   }
@@ -510,7 +660,7 @@ function MusicFormSection({ booking, documents }: { booking: BookingDetail; docu
   });
 
   function openDrawer() {
-    setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('edit', 'true'); return next; });
+    setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('edit', 'true'); next.set('section', 'musicForm'); return next; });
   }
 
   if (!booking.hasMusicFormConfig) {
@@ -851,7 +1001,10 @@ function ContractCard({
     <>
       <Card title="Contract" action={headerAction}>
         {isEmpty ? (
-          <p className="text-sm text-muted">None created</p>
+          <div className="flex items-center gap-2 text-muted py-1">
+            <FileText size={14} />
+            <span className="text-sm">No contracts yet</span>
+          </div>
         ) : (
           <div className="flex items-start justify-between gap-3 py-0.5">
             <div className="min-w-0">
@@ -1312,6 +1465,9 @@ export default function BookingDetailPage() {
   const [pendingContract, setPendingContract] = useState<Contract | null>(null);
   const [showAllChecklist, setShowAllChecklist] = useState(false);
   const [showAddItem, setShowAddItem] = useState(false);
+  const [readyDialogStatus, setReadyDialogStatus] = useState<BookingStatus | null>(null);
+  const dismissedTransitions = useRef(new Set<string>());
+  const celebratoryTitle = useRef(CELEBRATORY_TITLES[Math.floor(Math.random() * CELEBRATORY_TITLES.length)]);
 
   const { isLoaded } = useAuth();
   const { data: booking, isLoading, isError } = useBooking(id!);
@@ -1333,11 +1489,37 @@ export default function BookingDetailPage() {
     enabled: isLoaded && !!booking && booking.status !== 'CANCELLED',
   });
 
+  useQuery({
+    queryKey: ['templates'],
+    queryFn: () => apiGet<Template[]>('/templates'),
+    enabled: isLoaded,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  useEffect(() => {
+    if (!booking || checklistLoading || checklist.length === 0) return;
+    const targetStatus = (['PROVISIONAL', 'CONFIRMED', 'READY', 'COMPLETE'] as const).find((s) => {
+      const targetIdx = STATUS_ORDER.indexOf(s);
+      const currentIdx = STATUS_ORDER.indexOf(booking.status);
+      if (targetIdx <= currentIdx) return false;
+      const key = `${id}:${booking.status}->${s}`;
+      if (dismissedTransitions.current.has(key)) return false;
+      const forStatus = checklist.filter((i) => i.requiredForStatus === s);
+      return forStatus.length > 0 && forStatus.every((i) => i.state === 'COMPLETE');
+    });
+    if (targetStatus) setReadyDialogStatus(targetStatus);
+  }, [checklist]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function invalidateBooking() {
+    queryClient.invalidateQueries({ queryKey: ['booking', id] });
+    queryClient.invalidateQueries({ queryKey: ['bookingChecklist', id] });
+  }
+
   const createContract = useMutation({
     mutationFn: () => apiPost<Contract>(`/bookings/${id}/contracts`, {}),
     onSuccess: (data) => {
       setPendingContract(data);
-      queryClient.invalidateQueries({ queryKey: ['booking', id] });
+      invalidateBooking();
       setContractSheetReadOnly(false);
       setContractSheetOpen(true);
     },
@@ -1346,20 +1528,20 @@ export default function BookingDetailPage() {
 
   const sendContractMutation = useMutation({
     mutationFn: (contractId: string) => apiPostVoid(`/bookings/${id}/contracts/${contractId}/send`, {}),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['booking', id] }),
+    onSuccess: () => invalidateBooking(),
     onError: () => toast({ title: 'Failed to mark contract as sent', variant: 'destructive' }),
   });
 
   const voidContractMutation = useMutation({
     mutationFn: ({ contractId, confirmSignedVoid }: { contractId: string; confirmSignedVoid: boolean }) =>
       apiPostVoid(`/bookings/${id}/contracts/${contractId}/void`, { confirmSignedVoid }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['booking', id] }),
+    onSuccess: () => invalidateBooking(),
     onError: () => toast({ title: 'Failed to void contract', variant: 'destructive' }),
   });
 
   const deleteContractMutation = useMutation({
     mutationFn: (contractId: string) => apiDelete(`/bookings/${id}/contracts/${contractId}`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['booking', id] }),
+    onSuccess: () => invalidateBooking(),
     onError: () => toast({ title: 'Failed to delete contract', variant: 'destructive' }),
   });
 
@@ -1376,7 +1558,7 @@ export default function BookingDetailPage() {
     mutationFn: (invoiceId: string) => apiPost(`/bookings/${id}/invoices/${invoiceId}/mark-paid`, {}),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bookingInvoices', id] });
-      queryClient.invalidateQueries({ queryKey: ['booking', id] });
+      invalidateBooking();
     },
     onError: () => toast({ title: 'Failed to mark invoice as paid', variant: 'destructive' }),
   });
@@ -1630,7 +1812,10 @@ export default function BookingDetailPage() {
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2">
               <StatusDropdown booking={booking} checklist={checklist} />
               <span className="text-sm text-muted">{formatDate(booking.date)}</span>
-              {feeWithVat && <span className="text-sm text-muted">{feeWithVat}</span>}
+              {feeWithVat
+                ? <span className="text-sm text-muted">{feeWithVat}</span>
+                : <InlineFeeAdd bookingId={booking.id} />
+              }
             </div>
           </section>
 
@@ -1659,7 +1844,10 @@ export default function BookingDetailPage() {
             <SectionHeader label="For the day" />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <PerformanceSection booking={booking} />
-              {booking.venue && <VenueCard venue={booking.venue} linkState={backState} onEdit={() => setEditingContact(booking.venue!)} />}
+              {booking.venue
+                ? <VenueCard venue={booking.venue} linkState={backState} onEdit={() => setEditingContact(booking.venue!)} />
+                : <InlineVenueAdd bookingId={booking.id} />
+              }
               <div className={booking.venue ? 'sm:col-span-2' : undefined}>
                 <MusicFormSection booking={booking} documents={documents} />
               </div>
@@ -1764,21 +1952,6 @@ export default function BookingDetailPage() {
                       Show fewer
                     </button>
                   )}
-
-                  {(['PROVISIONAL', 'CONFIRMED', 'READY', 'COMPLETE'] as const)
-                    .filter((targetStatus) => {
-                      const targetIdx = STATUS_ORDER.indexOf(targetStatus);
-                      const currentIdx = STATUS_ORDER.indexOf(booking.status);
-                      if (targetIdx <= currentIdx) return false;
-                      const forStatus = checklist.filter((i) => i.requiredForStatus === targetStatus);
-                      return forStatus.length > 0 && forStatus.every((i) => i.state === 'COMPLETE');
-                    })
-                    .map((targetStatus) => (
-                      <div key={targetStatus} className="flex items-center gap-2 text-xs text-status-confirmed">
-                        <CheckCircle2 size={13} />
-                        <span>Ready to mark as <span className="font-medium">{STATUS_LABELS[targetStatus]}</span>?</span>
-                      </div>
-                    ))}
                 </div>
               </section>
             );
@@ -1950,6 +2123,51 @@ export default function BookingDetailPage() {
 
         </div>{/* end right column */}
       </div>{/* end two-column grid */}
+
+      {readyDialogStatus && (
+        <Dialog open onOpenChange={() => {
+          const key = `${id}:${booking.status}->${readyDialogStatus}`;
+          dismissedTransitions.current.add(key);
+          celebratoryTitle.current = CELEBRATORY_TITLES[Math.floor(Math.random() * CELEBRATORY_TITLES.length)];
+          setReadyDialogStatus(null);
+        }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="font-display text-xl">{celebratoryTitle.current}</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted">
+              You've completed all the tasks for this booking. Ready to move it to{' '}
+              <span className="font-medium text-foreground">{STATUS_LABELS[readyDialogStatus]}</span>?
+            </p>
+            <div className="flex gap-2 justify-end mt-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  const key = `${id}:${booking.status}->${readyDialogStatus}`;
+                  dismissedTransitions.current.add(key);
+                  celebratoryTitle.current = CELEBRATORY_TITLES[Math.floor(Math.random() * CELEBRATORY_TITLES.length)];
+                  setReadyDialogStatus(null);
+                }}
+              >
+                Not yet
+              </Button>
+              <Button
+                onClick={() => {
+                  const next = readyDialogStatus;
+                  setReadyDialogStatus(null);
+                  apiPatch<BookingDetail>(`/bookings/${id}`, { status: next }).then(() => {
+                    queryClient.invalidateQueries({ queryKey: ['booking', id] });
+                    queryClient.invalidateQueries({ queryKey: ['bookings'] });
+                    queryClient.invalidateQueries({ queryKey: ['bookingChecklist', id] });
+                  });
+                }}
+              >
+                Mark as {STATUS_LABELS[readyDialogStatus]}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
 
       <ContractSheet
         bookingId={id!}

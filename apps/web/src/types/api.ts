@@ -521,7 +521,7 @@ export interface PublicProfile {
 export interface UpdateUserProfileInput {
   address?: string;
   bankDetails?: string | null;
-  vatNumber?: string;
+  vatNumber?: string | null;
   vatRate?: number;
   defaultPaymentTermsDays?: number;
   depositPercentage?: number;

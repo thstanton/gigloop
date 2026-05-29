@@ -20,6 +20,7 @@ interface ContactPickerProps {
   onChange: (id: string | null) => void;
   placeholder?: string;
   label?: string;
+  preferredRole?: string;
 }
 
 export default function ContactPicker({
@@ -27,6 +28,7 @@ export default function ContactPicker({
   onChange,
   placeholder = 'Select contact...',
   label = 'contact',
+  preferredRole,
 }: ContactPickerProps) {
   const [open, setOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
@@ -41,9 +43,20 @@ export default function ContactPicker({
 
   const selected = contacts.find((c) => c.id === value) ?? null;
 
-  const filtered = search
-    ? contacts.filter((c) => c.name.toLowerCase().includes(search.toLowerCase()))
-    : contacts;
+  const sortByRole = (list: Contact[]) => {
+    if (!preferredRole) return list;
+    return [...list].sort((a, b) => {
+      const aMatch = a.primaryRole === preferredRole ? 0 : 1;
+      const bMatch = b.primaryRole === preferredRole ? 0 : 1;
+      return aMatch - bMatch;
+    });
+  };
+
+  const filtered = sortByRole(
+    search
+      ? contacts.filter((c) => c.name.toLowerCase().includes(search.toLowerCase()))
+      : contacts,
+  );
 
   const hasExactMatch = contacts.some(
     (c) => c.name.toLowerCase() === search.toLowerCase()
@@ -151,7 +164,7 @@ export default function ContactPicker({
               value={search}
               onChange={(e) => { setSearch(e.target.value); setActiveIndex(-1); }}
               onKeyDown={handleKeyDown}
-              placeholder="Search..."
+              placeholder={`Search or create new ${label}`}
               className="flex-1 text-sm bg-transparent outline-none text-foreground placeholder:text-muted"
             />
           </div>

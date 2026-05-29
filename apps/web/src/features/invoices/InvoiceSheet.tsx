@@ -120,6 +120,7 @@ export default function InvoiceSheet({
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bookingInvoices', bookingId] });
+      queryClient.invalidateQueries({ queryKey: ['bookingChecklist', bookingId] });
       onOpenChange(false);
       toast({ title: 'Invoice created' });
     },

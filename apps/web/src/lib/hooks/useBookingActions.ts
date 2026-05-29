@@ -5,23 +5,24 @@ import type { Invoice } from '@/types/api';
 export function useBookingActions(bookingId: string) {
   const queryClient = useQueryClient();
 
+  function invalidateBooking() {
+    queryClient.invalidateQueries({ queryKey: ['booking', bookingId] });
+    queryClient.invalidateQueries({ queryKey: ['bookingChecklist', bookingId] });
+  }
+
   const contractMutation = useMutation({
     mutationFn: (contractId: string) =>
       apiPatch(`/bookings/${bookingId}/contracts/${contractId}`, {
         status: 'SIGNED',
         signedAt: new Date().toISOString(),
       }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['booking', bookingId] });
-    },
+    onSuccess: () => invalidateBooking(),
   });
 
   const depositMutation = useMutation({
     mutationFn: () =>
       apiPatch(`/bookings/${bookingId}`, { depositReceivedAt: new Date().toISOString() }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['booking', bookingId] });
-    },
+    onSuccess: () => invalidateBooking(),
   });
 
   const autoCreateInvoiceMutation = useMutation({
@@ -32,6 +33,7 @@ export function useBookingActions(bookingId: string) {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bookingInvoices', bookingId] });
+      invalidateBooking();
     },
   });
 

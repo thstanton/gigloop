@@ -54,6 +54,7 @@ export default function MarkSentDialog({
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bookingInvoices', bookingId] });
+      queryClient.invalidateQueries({ queryKey: ['bookingChecklist', bookingId] });
       onOpenChange(false);
       toast({ title: 'Invoice marked as sent' });
     },

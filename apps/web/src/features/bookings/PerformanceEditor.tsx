@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2, Heart, GlassWater, Utensils, Moon, Briefcase, Music, Music2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
 import type {
   BookingDetail,
@@ -297,23 +298,24 @@ export default function PerformanceEditor({ booking }: { booking: BookingDetail 
           <span className="text-xs text-muted">
             {pendingEdits.size === 1 ? '1 unsaved change' : `${pendingEdits.size} unsaved changes`}
           </span>
-          <div className="flex gap-3">
-            <button
+          <div className="flex gap-2">
+            <Button
               type="button"
+              size="sm"
+              variant="outline"
               onClick={handleDiscard}
               disabled={saveEdits.isPending}
-              className="text-xs text-muted hover:text-foreground transition-colors disabled:opacity-50"
             >
               Discard
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              size="sm"
               onClick={() => saveEdits.mutate()}
               disabled={saveEdits.isPending}
-              className="text-xs text-primary hover:text-primary/80 transition-colors disabled:opacity-50"
             >
               {saveEdits.isPending ? 'Saving…' : 'Save changes'}
-            </button>
+            </Button>
           </div>
         </div>
       )}
