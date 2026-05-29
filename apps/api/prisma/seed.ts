@@ -157,7 +157,6 @@ async function main() {
       defaultPaymentTermsDays: 14,
       invoiceNumberSequence: 7,
       invoiceSequenceYear: 2026,
-      depositTrackingMode: 'INVOICE',
       digestEmailEnabled: true,
       songRequestFormEnabled: true,
     },
