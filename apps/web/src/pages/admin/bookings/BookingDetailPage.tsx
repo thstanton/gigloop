@@ -1669,7 +1669,7 @@ export default function BookingDetailPage() {
         </div>
 
         {/* ─── Right column ─── */}
-        <div className="mt-8 md:mt-0 space-y-6 md:sticky md:top-20 md:max-h-[calc(100vh-5rem)] md:overflow-y-auto md:overflow-x-hidden md:pb-6">
+        <div className="mt-8 md:mt-0 space-y-6">
 
           {/* Checklist */}
           {booking.status !== 'CANCELLED' && checklistLoading && (
