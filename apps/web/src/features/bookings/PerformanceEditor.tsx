@@ -5,8 +5,8 @@ import { Button } from '@/components/ui/button';
 import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
 import type {
   BookingDetail,
-  BookingPerformanceFormatSummary,
-  PerformanceFormat,
+  BookingPackageSummary,
+  Package,
   PerformanceSet,
 } from '@/types/api';
 
@@ -99,15 +99,20 @@ export default function PerformanceEditor({ booking }: { booking: BookingDetail 
   const [confirmRemoveFormatId, setConfirmRemoveFormatId] = useState<string | null>(null);
 
   const { data: allFormats = [], isLoading: formatsLoading } = useQuery({
-    queryKey: ['performance-formats'],
-    queryFn: () => apiGet<PerformanceFormat[]>('/performance-formats'),
+    queryKey: ['packages'],
+    queryFn: () => apiGet<Package[]>('/packages'),
     enabled: addOpen,
   });
 
+  const [otherOpen, setOtherOpen] = useState(false);
+
   const appliedFormatIds = new Set(
-    (booking.performanceFormats ?? []).map((bpf) => bpf.performanceFormatId),
+    (booking.packages ?? []).map((bpf) => bpf.packageId),
   );
-  const availableFormats = allFormats.filter((f) => !appliedFormatIds.has(f.id));
+  const enabledUnapplied = allFormats.filter((f) => f.enabled && !appliedFormatIds.has(f.id));
+  const matchingFormats = enabledUnapplied.filter((f) => f.category === booking.eventType);
+  const otherFormats = enabledUnapplied.filter((f) => f.category !== booking.eventType);
+  const availableFormats = enabledUnapplied;
 
   function handleSetChange(setId: string, values: SetValues) {
     const original = (booking.sets ?? []).find((s) => s.id === setId);
@@ -162,9 +167,9 @@ export default function PerformanceEditor({ booking }: { booking: BookingDetail 
   });
 
   const addSet = useMutation({
-    mutationFn: (payload: { performanceFormatId: string; order: number }) =>
+    mutationFn: (payload: { packageId: string; order: number }) =>
       apiPost(`/bookings/${booking.id}/sets`, {
-        performanceFormatId: payload.performanceFormatId,
+        packageId: payload.packageId,
         order: payload.order,
         duration: 30,
       }),
@@ -176,8 +181,8 @@ export default function PerformanceEditor({ booking }: { booking: BookingDetail 
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['booking', booking.id] }),
   });
 
-  function handleRemoveFormat(bpf: BookingPerformanceFormatSummary) {
-    const sets = (booking.sets ?? []).filter((s) => s.performanceFormatId === bpf.performanceFormatId);
+  function handleRemoveFormat(bpf: BookingPackageSummary) {
+    const sets = (booking.sets ?? []).filter((s) => s.packageId === bpf.packageId);
     const hasStartTimes = sets.some((s) => s.startTime);
     if (hasStartTimes) {
       setConfirmRemoveFormatId(bpf.id);
@@ -186,14 +191,14 @@ export default function PerformanceEditor({ booking }: { booking: BookingDetail 
     removeFormat.mutate(bpf.id);
   }
 
-  function handleAddSet(bpf: BookingPerformanceFormatSummary) {
+  function handleAddSet(bpf: BookingPackageSummary) {
     const nextOrder = Math.max(0, ...(booking.sets ?? []).map((s) => s.order)) + 1;
-    addSet.mutate({ performanceFormatId: bpf.performanceFormatId, order: nextOrder });
+    addSet.mutate({ packageId: bpf.packageId, order: nextOrder });
   }
 
   const setsByFormatId = new Map<string | null, PerformanceSet[]>();
   for (const set of booking.sets ?? []) {
-    const key = set.performanceFormatId ?? null;
+    const key = set.packageId ?? null;
     if (!setsByFormatId.has(key)) setsByFormatId.set(key, []);
     setsByFormatId.get(key)!.push(set);
   }
@@ -203,18 +208,18 @@ export default function PerformanceEditor({ booking }: { booking: BookingDetail 
     <div>
       <p className="text-sm font-medium text-foreground mb-3">Performance</p>
 
-      {(booking.performanceFormats ?? []).length === 0 && unassigned.length === 0 && (
+      {(booking.packages ?? []).length === 0 && unassigned.length === 0 && (
         <p className="text-sm text-muted mb-3">No formats applied yet.</p>
       )}
 
-      {(booking.performanceFormats ?? []).map((bpf) => {
-        const sets = setsByFormatId.get(bpf.performanceFormatId) ?? [];
+      {(booking.packages ?? []).map((bpf) => {
+        const sets = setsByFormatId.get(bpf.packageId) ?? [];
         return (
           <div key={bpf.id} className="mb-5">
             <div className="flex items-center justify-between mb-1">
               <span className="text-sm font-medium text-foreground flex items-center gap-1.5">
-                <FormatIcon icon={bpf.performanceFormat.icon} />
-                {bpf.performanceFormat.label}
+                <FormatIcon icon={bpf.package.icon} />
+                {bpf.package.label}
               </span>
               {confirmRemoveFormatId === bpf.id ? (
                 <div className="flex items-center gap-2">
@@ -240,7 +245,7 @@ export default function PerformanceEditor({ booking }: { booking: BookingDetail 
                   onClick={() => handleRemoveFormat(bpf)}
                   disabled={removeFormat.isPending}
                   className="text-muted hover:text-status-cancelled transition-colors disabled:opacity-50"
-                  aria-label={`Remove ${bpf.performanceFormat.label}`}
+                  aria-label={`Remove ${bpf.package.label}`}
                 >
                   <Trash2 size={13} aria-hidden="true" />
                 </button>
@@ -341,19 +346,48 @@ export default function PerformanceEditor({ booking }: { booking: BookingDetail 
           ) : availableFormats.length === 0 ? (
             <p className="text-sm text-muted">All formats already applied.</p>
           ) : (
-            <div className="flex flex-wrap gap-2">
-              {availableFormats.map((fmt) => (
-                <button
-                  key={fmt.id}
-                  type="button"
-                  disabled={applyFormat.isPending}
-                  onClick={() => applyFormat.mutate(fmt.id)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border text-sm hover:border-primary transition-colors disabled:opacity-50"
-                >
-                  <FormatIcon icon={fmt.icon} />
-                  {fmt.label}
-                </button>
-              ))}
+            <div className="space-y-3">
+              <div className="flex flex-wrap gap-2">
+                {(matchingFormats.length > 0 ? matchingFormats : otherFormats).map((fmt) => (
+                  <button
+                    key={fmt.id}
+                    type="button"
+                    disabled={applyFormat.isPending}
+                    onClick={() => applyFormat.mutate(fmt.id)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border text-sm hover:border-primary transition-colors disabled:opacity-50"
+                  >
+                    <FormatIcon icon={fmt.icon} />
+                    {fmt.label}
+                  </button>
+                ))}
+              </div>
+              {matchingFormats.length > 0 && otherFormats.length > 0 && (
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setOtherOpen((o) => !o)}
+                    className="text-sm text-muted hover:text-foreground transition-colors"
+                  >
+                    {otherOpen ? '▾' : '▸'} Other packages ({otherFormats.length})
+                  </button>
+                  {otherOpen && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {otherFormats.map((fmt) => (
+                        <button
+                          key={fmt.id}
+                          type="button"
+                          disabled={applyFormat.isPending}
+                          onClick={() => applyFormat.mutate(fmt.id)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border text-sm hover:border-primary transition-colors disabled:opacity-50"
+                        >
+                          <FormatIcon icon={fmt.icon} />
+                          {fmt.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
           <button

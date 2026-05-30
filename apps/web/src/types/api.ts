@@ -117,14 +117,14 @@ export interface PerformanceSet {
   duration: number;
   startTime: string | null;
   label: string | null;
-  performanceFormatId: string | null;
+  packageId: string | null;
 }
 
-export interface BookingPerformanceFormatSummary {
+export interface BookingPackageSummary {
   id: string;
   order: number;
-  performanceFormatId: string;
-  performanceFormat: {
+  packageId: string;
+  package: {
     id: string;
     label: string;
     icon: string;
@@ -202,7 +202,7 @@ export interface BookingDetail extends Omit<BookingListItem, 'customer' | 'venue
   venue: Contact | null;
   bookingAgent: Contact | null;
   sets: PerformanceSet[];
-  performanceFormats: BookingPerformanceFormatSummary[];
+  packages: BookingPackageSummary[];
   activeContract: Contract | null;
   depositReceivedAt: string | null;
   portalToken: string;
@@ -215,7 +215,7 @@ export interface CreateSetInput {
   duration: number;
   startTime?: string;
   label?: string;
-  performanceFormatId?: string;
+  packageId?: string;
 }
 
 export interface UpdateSetInput {
@@ -337,17 +337,17 @@ export interface UpdateSongInput {
 }
 
 // ─────────────────────────────────────────
-// Performance Formats
+// Packages
 // ─────────────────────────────────────────
 
-export interface PerformanceFormatSlot {
+export interface PackageSlot {
   id: string;
   label: string | null;
   duration: number;
   order: number;
 }
 
-export interface PerformanceFormat {
+export interface Package {
   id: string;
   createdAt: string;
   updatedAt: string;
@@ -357,7 +357,38 @@ export interface PerformanceFormat {
   keyMoments: string[];
   defaultGenreSelection: string[];
   notes: string | null;
-  slots: PerformanceFormatSlot[];
+  isSystemDefault: boolean;
+  enabled: boolean;
+  slots: PackageSlot[];
+}
+
+export interface SlotInput {
+  id?: string;
+  label?: string;
+  duration: number;
+  order: number;
+}
+
+export interface CreatePackageInput {
+  label: string;
+  icon: string;
+  category?: string;
+  notes?: string;
+  keyMoments?: string[];
+  defaultGenreSelection?: string[];
+  enabled?: boolean;
+  slots?: SlotInput[];
+}
+
+export interface UpdatePackageInput {
+  label?: string;
+  icon?: string;
+  category?: string | null;
+  notes?: string | null;
+  keyMoments?: string[];
+  defaultGenreSelection?: string[];
+  enabled?: boolean;
+  slots?: SlotInput[];
 }
 
 // ─────────────────────────────────────────
@@ -552,7 +583,7 @@ export interface PortalBookingSet {
   label: string | null;
   startTime: string | null;
   duration: number | null;
-  performanceFormatId: string | null;
+  packageId: string | null;
 }
 
 export interface PortalBookingFormat {

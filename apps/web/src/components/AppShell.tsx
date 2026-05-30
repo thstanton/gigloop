@@ -14,6 +14,7 @@ import {
   LogOut,
   ChevronUp,
   MoreHorizontal,
+  Package,
 } from 'lucide-react';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
@@ -35,6 +36,7 @@ const primaryNav: NavItem[] = [
 ];
 
 const secondaryNav: NavItem[] = [
+  { label: 'Packages',  to: '/admin/packages',  icon: Package },
   { label: 'Templates', to: '/admin/templates', icon: FileText },
   { label: 'Settings',  to: '/admin/settings',  icon: Settings },
 ];

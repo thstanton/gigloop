@@ -4,6 +4,7 @@ import ReactDOM from 'react-dom/client';
 import { ClerkProvider } from '@clerk/react';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import HomePage from './pages/HomePage';
 import SignInPage from './pages/SignInPage';
 import SignUpPage from './pages/SignUpPage';
@@ -23,6 +24,7 @@ import PortalPage from './pages/portal/PortalPage';
 import PortalContractPage from './pages/portal/PortalContractPage';
 import PortalMusicPage from './pages/portal/PortalMusicPage';
 import PortalPreviewPage from './pages/admin/PortalPreviewPage';
+import PackagesPage from './pages/admin/PackagesPage';
 
 const queryClient = new QueryClient();
 
@@ -70,6 +72,7 @@ const router = createBrowserRouter([
       { path: 'repertoire', element: <RepertoirePage /> },
       { path: 'templates', element: <TemplatesListPage /> },
       { path: 'templates/:id/edit', element: <TemplateEditPage /> },
+      { path: 'packages', element: <PackagesPage /> },
     ],
   },
 ]);
@@ -80,6 +83,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       <React.StrictMode>
         <RouterProvider router={router} />
       </React.StrictMode>
+      <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>
   </ClerkProvider>,
 );
