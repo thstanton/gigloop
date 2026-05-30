@@ -12,6 +12,7 @@ import { Switch } from '@/components/ui/switch';
 import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
 import type { CreatePackageInput, Package, SlotInput, UpdatePackageInput } from '@/types/api';
 import { cn } from '@/lib/utils';
+import { Card } from '@/components/common/Card';
 
 // ─── Icon registry ────────────────────────────────────────────────────────────
 
@@ -487,7 +488,7 @@ function PackageCard({
   });
 
   return (
-    <div className="bg-background border border-border rounded-lg p-4 space-y-3">
+    <Card className="space-y-3">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
@@ -521,7 +522,7 @@ function PackageCard({
       >
         Edit
       </Button>
-    </div>
+    </Card>
   );
 }
 
@@ -540,7 +541,7 @@ function CategoryGroup({
   return (
     <section>
       <h2 className="text-sm font-semibold text-muted uppercase tracking-wide mb-3">{title}</h2>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {packages.map((pkg) => (
           <PackageCard key={pkg.id} pkg={pkg} onEdit={onEdit} />
         ))}
@@ -570,7 +571,7 @@ export default function PackagesPage() {
   const uncategorised = packages.filter((p) => !p.category);
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
+    <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-foreground">Packages</h1>
         <Button onClick={() => setDrawerMode({ type: 'create' })}>+ New package</Button>

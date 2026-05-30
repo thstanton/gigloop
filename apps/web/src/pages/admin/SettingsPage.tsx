@@ -15,6 +15,7 @@ import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
 import type { PublicProfile, UserProfile, UpdatePublicProfileInput, UpdateUserProfileInput, UserPreferences, DueDateRule, ChecklistDefaultItem } from '@/types/api';
 import { cn } from '@/lib/utils';
+import { Card } from '@/components/common/Card';
 
 // ─── Schemas ─────────────────────────────────────────────────────────────────
 
@@ -1194,8 +1195,7 @@ function BookingSettingsSection({ profile }: { profile: UserProfile }) {
           })}
         </div>
 
-        <div className="border border-border rounded-lg p-4 space-y-3 mb-6">
-          <p className="text-xs font-medium text-muted uppercase tracking-wide">Add custom item</p>
+        <Card title="Add custom item" className="space-y-3 mb-6">
           <div className="space-y-2">
             <Input
               placeholder="Item label"
@@ -1265,7 +1265,7 @@ function BookingSettingsSection({ profile }: { profile: UserProfile }) {
               Add
             </Button>
           </div>
-        </div>
+        </Card>
 
         <SaveBar
           isPending={checklistMutation.isPending}

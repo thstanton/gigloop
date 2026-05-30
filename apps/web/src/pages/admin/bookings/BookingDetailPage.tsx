@@ -42,6 +42,7 @@ import {
 } from '@/lib/formatters';
 import { EVENT_TYPE_LABELS, GENRE_LABELS, STATUS_ORDER } from '@/lib/constants';
 import { cn } from '@/lib/utils';
+import { Card } from '@/components/common/Card';
 import {
   Sheet,
   SheetContent,
@@ -443,22 +444,6 @@ function SectionHeader({ label }: { label: string }) {
   );
 }
 
-// ─── Card ─────────────────────────────────────────────────────────────────────
-
-function Card({ title, action, children }: { title?: string; action?: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <div className="bg-background border border-border rounded-lg p-4">
-      {title && (
-        <div className="flex items-center justify-between mb-3">
-          <p className="text-xs font-medium text-muted uppercase tracking-wide">{title}</p>
-          {action}
-        </div>
-      )}
-      {children}
-    </div>
-  );
-}
-
 // ─── PersonCard ───────────────────────────────────────────────────────────────
 
 function PersonCard({
@@ -542,7 +527,7 @@ function PerformanceSection({ booking }: { booking: BookingDetail }) {
 
   const setsByFormatId = new Map<string | null, PerformanceSet[]>();
   for (const set of booking.sets ?? []) {
-    const key = set.performanceFormatId ?? null;
+    const key = set.packageId ?? null;
     if (!setsByFormatId.has(key)) setsByFormatId.set(key, []);
     setsByFormatId.get(key)!.push(set);
   }
@@ -570,20 +555,20 @@ function PerformanceSection({ booking }: { booking: BookingDetail }) {
         </button>
       }
     >
-      {(booking.performanceFormats ?? []).length === 0 && unassigned.length === 0 && (
+      {(booking.packages ?? []).length === 0 && unassigned.length === 0 && (
         <div className="flex items-center gap-2 text-muted py-1">
           <Music size={14} />
           <span className="text-sm">No formats applied</span>
         </div>
       )}
 
-      {(booking.performanceFormats ?? []).map((bpf) => {
-        const sets = setsByFormatId.get(bpf.performanceFormatId) ?? [];
+      {(booking.packages ?? []).map((bpf) => {
+        const sets = setsByFormatId.get(bpf.packageId) ?? [];
         return (
           <div key={bpf.id} className="mb-4 last:mb-0">
             <div className="flex items-center gap-1.5 text-sm font-medium text-foreground mb-1">
-              <FormatIcon icon={bpf.performanceFormat.icon} />
-              {bpf.performanceFormat.label}
+              <FormatIcon icon={bpf.package.icon} />
+              {bpf.package.label}
             </div>
             {sets.map((set) => (
               <div key={set.id} className="flex items-center gap-3 py-1.5 border-b border-border last:border-0">
@@ -641,10 +626,10 @@ function MusicFormSection({ booking, documents }: { booking: BookingDetail; docu
 
   const songListDoc = documents.find((d) => d.type === 'SONG_LIST');
 
-  const seedKeyMoments: KeyMoment[] = (booking.performanceFormats ?? []).flatMap((bpf) =>
-    bpf.performanceFormat.keyMoments.map((km) => ({ label: km, section: bpf.performanceFormat.label })),
+  const seedKeyMoments: KeyMoment[] = (booking.packages ?? []).flatMap((bpf) =>
+    bpf.package.keyMoments.map((km) => ({ label: km, section: bpf.package.label })),
   );
-  const seedGenres = [...new Set((booking.performanceFormats ?? []).flatMap((bpf) => bpf.performanceFormat.defaultGenreSelection))];
+  const seedGenres = [...new Set((booking.packages ?? []).flatMap((bpf) => bpf.package.defaultGenreSelection))];
 
   const configure = useMutation({
     mutationFn: () =>
@@ -688,9 +673,9 @@ function MusicFormSection({ booking, documents }: { booking: BookingDetail; docu
   }
 
   const sectionIconMap = new Map<string, string>(
-    (booking.performanceFormats ?? []).map((bpf) => [
-      bpf.performanceFormat.label,
-      bpf.performanceFormat.icon,
+    (booking.packages ?? []).map((bpf) => [
+      bpf.package.label,
+      bpf.package.icon,
     ]),
   );
 
@@ -1591,11 +1576,11 @@ export default function BookingDetailPage() {
   function buildSetsDescription(): string {
     if (!booking?.sets?.length) return '';
     const formatById = new Map(
-      (booking.performanceFormats ?? []).map((f) => [f.performanceFormatId, f.performanceFormat.label]),
+      (booking.packages ?? []).map((f) => [f.packageId, f.package.label]),
     );
     return booking.sets
       .map((s) => {
-        const label = s.label ?? (s.performanceFormatId ? formatById.get(s.performanceFormatId) : null) ?? null;
+        const label = s.label ?? (s.packageId ? formatById.get(s.packageId) : null) ?? null;
         return label ? `${label} (${s.duration} min)` : `${s.duration} min`;
       })
       .join(', ');
@@ -1979,10 +1964,7 @@ export default function BookingDetailPage() {
           )}
 
           {/* Invoices */}
-          <div className="bg-background border border-border rounded-lg p-4">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-xs font-medium text-muted uppercase tracking-wide">Invoices</p>
-              <DropdownMenu>
+          <Card title="Invoices" action={<DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button type="button" className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors">
                     <Plus size={12} />
@@ -2015,8 +1997,7 @@ export default function BookingDetailPage() {
                     Balance invoice
                   </DropdownMenuItem>
                 </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+              </DropdownMenu>}>
             {invoicesPending ? (
               <div className="space-y-2 animate-pulse">
                 {[1, 2].map((i) => <div key={i} className="h-9 bg-border rounded" />)}
@@ -2043,7 +2024,7 @@ export default function BookingDetailPage() {
                 ))}
               </div>
             )}
-          </div>
+          </Card>
 
           {/* Documents */}
           <Card title="Documents">
