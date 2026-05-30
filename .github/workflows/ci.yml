@@ -15,8 +15,15 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: '1.1.3'
+      - uses: actions/cache@v4
+        id: cache
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lockb') }}
       - run: bun install --frozen-lockfile
+        if: steps.cache.outputs.cache-hit != 'true'
       - run: cd apps/api && bunx prisma generate
+        if: steps.cache.outputs.cache-hit != 'true'
         env:
           DATABASE_URL: postgresql://user:password@localhost/db
       - run: cd apps/api && bun run lint
@@ -30,8 +37,15 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: '1.1.3'
+      - uses: actions/cache@v4
+        id: cache
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lockb') }}
       - run: bun install --frozen-lockfile
+        if: steps.cache.outputs.cache-hit != 'true'
       - run: cd apps/api && bunx prisma generate
+        if: steps.cache.outputs.cache-hit != 'true'
         env:
           DATABASE_URL: postgresql://user:password@localhost/db
       - run: cd apps/api && bun run test
@@ -45,8 +59,15 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: '1.1.3'
+      - uses: actions/cache@v4
+        id: cache
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lockb') }}
       - run: bun install --frozen-lockfile
+        if: steps.cache.outputs.cache-hit != 'true'
       - run: cd apps/api && bunx prisma generate
+        if: steps.cache.outputs.cache-hit != 'true'
         env:
           DATABASE_URL: postgresql://user:password@localhost/db
       - run: cd apps/api && bun run build
