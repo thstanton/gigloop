@@ -4,8 +4,9 @@ import { z } from 'zod';
 import { ChevronUp, ChevronDown, Heart, GlassWater, Utensils, Moon, Briefcase, Music, Music2, Check } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { DatePicker } from '@/components/ui/date-picker';
-import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { FormField } from '@/components/common/FormField';
+import { IconButton } from '@/components/common/IconButton';
 import {
   Select,
   SelectContent,
@@ -118,24 +119,20 @@ function FormatSelector({
               <FormatIcon icon={fmt.icon} size={14} />
               <span className="flex-1 text-sm">{fmt.label}</span>
               <div className="flex gap-1">
-                <button
-                  type="button"
-                  aria-label={`Move ${fmt.label} up`}
+                <IconButton
+                  label={`Move ${fmt.label} up`}
                   disabled={idx === 0}
                   onClick={() => move(fmt.id, 'up')}
-                  className="text-muted hover:text-foreground disabled:opacity-30 transition-colors"
                 >
                   <ChevronUp size={14} aria-hidden="true" />
-                </button>
-                <button
-                  type="button"
-                  aria-label={`Move ${fmt.label} down`}
+                </IconButton>
+                <IconButton
+                  label={`Move ${fmt.label} down`}
                   disabled={idx === selected.length - 1}
                   onClick={() => move(fmt.id, 'down')}
-                  className="text-muted hover:text-foreground disabled:opacity-30 transition-colors"
                 >
                   <ChevronDown size={14} aria-hidden="true" />
-                </button>
+                </IconButton>
               </div>
             </div>
           ))}
@@ -168,8 +165,7 @@ export function BookingFormFields({
     <div className="space-y-6">
       {/* Event type + Date */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="space-y-1.5">
-          <Label>Event type</Label>
+        <FormField label="Event type">
           <Controller
             name="eventType"
             control={control}
@@ -190,10 +186,9 @@ export function BookingFormFields({
               </Select>
             )}
           />
-        </div>
+        </FormField>
 
-        <div className="space-y-1.5">
-          <Label>Date</Label>
+        <FormField label="Date" error={errors.date?.message}>
           <Controller
             name="date"
             control={control}
@@ -201,16 +196,12 @@ export function BookingFormFields({
               <DatePicker value={field.value} onChange={field.onChange} />
             )}
           />
-          {errors.date && (
-            <p className="text-sm text-status-cancelled">{errors.date.message}</p>
-          )}
-        </div>
+        </FormField>
       </div>
 
       {/* Status + Fee */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="space-y-1.5">
-          <Label>Status</Label>
+        <FormField label="Status">
           <Controller
             name="status"
             control={control}
@@ -230,10 +221,9 @@ export function BookingFormFields({
               </Select>
             )}
           />
-        </div>
+        </FormField>
 
-        <div className="space-y-1.5">
-          <Label>Fee (optional)</Label>
+        <FormField label="Fee (optional)">
           <Input
             type="number"
             min="0"
@@ -241,21 +231,19 @@ export function BookingFormFields({
             placeholder="0.00"
             {...register('fee')}
           />
-        </div>
+        </FormField>
       </div>
 
       {/* Title */}
-      <div className="space-y-1.5">
-        <Label>Title (optional)</Label>
+      <FormField label="Title (optional)">
         <Input placeholder="e.g. Smith Wedding" {...register('title')} />
-      </div>
+      </FormField>
 
       {/* People */}
       <div className="space-y-4">
         <h2 className="text-sm font-semibold text-foreground">People</h2>
 
-        <div className="space-y-1.5">
-          <Label>Customer</Label>
+        <FormField label="Customer" required error={errors.customerId?.message}>
           <Controller
             name="customerId"
             control={control}
@@ -269,13 +257,9 @@ export function BookingFormFields({
               />
             )}
           />
-          {errors.customerId && (
-            <p className="text-sm text-status-cancelled">{errors.customerId.message}</p>
-          )}
-        </div>
+        </FormField>
 
-        <div className="space-y-1.5">
-          <Label>Venue (optional)</Label>
+        <FormField label="Venue (optional)">
           <Controller
             name="venueId"
             control={control}
@@ -289,10 +273,9 @@ export function BookingFormFields({
               />
             )}
           />
-        </div>
+        </FormField>
 
-        <div className="space-y-1.5">
-          <Label>Booking agent (optional)</Label>
+        <FormField label="Booking agent (optional)">
           <Controller
             name="bookingAgentId"
             control={control}
@@ -306,7 +289,7 @@ export function BookingFormFields({
               />
             )}
           />
-        </div>
+        </FormField>
       </div>
 
       {/* Performance formats */}
@@ -329,14 +312,13 @@ export function BookingFormFields({
 
       {/* Notes — hidden when managed by inline auto-save on the detail page */}
       {!hideNotes && (
-        <div className="space-y-1.5">
-          <Label>Notes (optional)</Label>
+        <FormField label="Notes (optional)">
           <Textarea
             rows={3}
             placeholder="Any notes about this booking..."
             {...register('notes')}
           />
-        </div>
+        </FormField>
       )}
     </div>
   );

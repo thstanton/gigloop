@@ -21,6 +21,7 @@ import {
   type BookingFormValues,
 } from '@/features/bookings/BookingFormFields';
 import { apiGet, apiPost } from '@/lib/api';
+import { SubLabel } from '@/components/common/SubLabel';
 import type {
   BookingDetail,
   BookingStatus,
@@ -205,9 +206,9 @@ export default function BookingNewPage() {
           <div className="space-y-5 mb-6">
             {grouped.map(({ stage, entries }) => (
               <div key={stage}>
-                <p className="text-xs font-medium text-muted uppercase tracking-wide border-b border-border pb-1 mb-2">
+                <SubLabel className="border-b border-border pb-1 mb-2">
                   {STAGE_LABELS[stage]}
-                </p>
+                </SubLabel>
                 <div className="space-y-1">
                   {entries.map(({ item, idx }) => (
                     <button
@@ -236,7 +237,7 @@ export default function BookingNewPage() {
 
         {/* Custom items */}
         <div className="border-t border-border pt-4 mb-6">
-          <p className="text-xs font-medium text-muted uppercase tracking-wide mb-3">Add a custom item</p>
+          <SubLabel className="mb-3">Add a custom item</SubLabel>
           <div className="flex gap-2">
             <Input
               value={newLabel}

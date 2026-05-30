@@ -16,6 +16,8 @@ import { toast } from '@/lib/hooks/use-toast';
 import type { PublicProfile, UserProfile, UpdatePublicProfileInput, UpdateUserProfileInput, UserPreferences, DueDateRule, ChecklistDefaultItem } from '@/types/api';
 import { cn } from '@/lib/utils';
 import { Card } from '@/components/common/Card';
+import { PageSection } from '@/components/common/PageSection';
+import { FormField } from '@/components/common/FormField';
 
 // ─── Schemas ─────────────────────────────────────────────────────────────────
 
@@ -59,41 +61,6 @@ const bookingGeneralSchema = z.object({
 
 type BookingGeneralForm = z.infer<typeof bookingGeneralSchema>;
 
-// ─── Shared helpers ───────────────────────────────────────────────────────────
-
-function Field({
-  label,
-  required,
-  error,
-  children,
-  className,
-}: {
-  label: string;
-  required?: boolean;
-  error?: string;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <div className={cn('space-y-1.5', className)}>
-      <Label>
-        {label}
-        {required && <span className="text-status-cancelled ml-0.5">*</span>}
-      </Label>
-      {children}
-      {error && <p className="text-sm text-status-cancelled">{error}</p>}
-    </div>
-  );
-}
-
-function SectionHeader({ title, description }: { title: string; description?: string }) {
-  return (
-    <div className="mb-6">
-      <h2 className="text-base font-semibold text-foreground">{title}</h2>
-      {description && <p className="mt-1 text-sm text-muted">{description}</p>}
-    </div>
-  );
-}
 
 function SubsectionHeader({ title, description }: { title: string; description?: string }) {
   return (
@@ -343,7 +310,7 @@ function PublicProfileSection({ profile }: { profile: PublicProfile }) {
 
   return (
     <div className="space-y-5">
-      <SectionHeader
+      <PageSection
         title="Public profile"
         description="Shown on your client portal and in emails."
       />
@@ -374,34 +341,34 @@ function PublicProfileSection({ profile }: { profile: PublicProfile }) {
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Field label="Business name" required error={errors.businessName?.message}>
+        <FormField label="Business name" required error={errors.businessName?.message}>
           <Input {...register('businessName')} />
-        </Field>
-        <Field label="Display name" error={errors.displayName?.message}>
+        </FormField>
+        <FormField label="Display name" error={errors.displayName?.message}>
           <Input {...register('displayName')} placeholder="e.g. John Smith" />
-        </Field>
+        </FormField>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Field label="Email" error={errors.email?.message}>
+        <FormField label="Email" error={errors.email?.message}>
           <Input type="email" {...register('email')} />
-        </Field>
-        <Field label="Phone" error={errors.phone?.message}>
+        </FormField>
+        <FormField label="Phone" error={errors.phone?.message}>
           <Input type="tel" {...register('phone')} />
-        </Field>
+        </FormField>
       </div>
 
-      <Field label="Bio" error={errors.bio?.message}>
+      <FormField label="Bio" error={errors.bio?.message}>
         <Textarea
           {...register('bio')}
           rows={3}
           placeholder="A short introduction for your clients"
         />
-      </Field>
+      </FormField>
 
-      <Field label="Website" error={errors.website?.message}>
+      <FormField label="Website" error={errors.website?.message}>
         <Input type="url" {...register('website')} placeholder="https://" />
-      </Field>
+      </FormField>
 
       <SaveBar isPending={mutation.isPending} saved={saved} isError={mutation.isError} />
     </form>
@@ -414,7 +381,7 @@ function PublicProfileSection({ profile }: { profile: PublicProfile }) {
 function PortalSection() {
   return (
     <div>
-      <SectionHeader
+      <PageSection
         title="Portal"
         description="Customise your client portal's appearance and branding."
       />
@@ -480,22 +447,22 @@ function BusinessDetailsSection({ profile }: { profile: UserProfile }) {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-      <SectionHeader
+      <PageSection
         title="Business details"
         description="Used on invoices and other client-facing documents."
       />
 
-      <Field label="Address" error={errors.address?.message}>
+      <FormField label="Address" error={errors.address?.message}>
         <Textarea {...register('address')} rows={3} placeholder="Your business address" />
-      </Field>
+      </FormField>
 
-      <Field label="Bank details" error={errors.bankDetails?.message}>
+      <FormField label="Bank details" error={errors.bankDetails?.message}>
         <Textarea
           {...register('bankDetails')}
           rows={3}
           placeholder="Sort code, account number, bank name"
         />
-      </Field>
+      </FormField>
 
       <Controller
         name="vatRegistered"
@@ -513,10 +480,10 @@ function BusinessDetailsSection({ profile }: { profile: UserProfile }) {
 
       {vatRegistered && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="VAT number" error={errors.vatNumber?.message}>
+          <FormField label="VAT number" error={errors.vatNumber?.message}>
             <Input {...register('vatNumber')} placeholder="GB123456789" />
-          </Field>
-          <Field label="VAT rate (%)" error={errors.vatRate?.message}>
+          </FormField>
+          <FormField label="VAT rate (%)" error={errors.vatRate?.message}>
             <Input
               type="number"
               min={0}
@@ -524,12 +491,12 @@ function BusinessDetailsSection({ profile }: { profile: UserProfile }) {
               {...register('vatRate', { valueAsNumber: true })}
               className="w-20"
             />
-          </Field>
+          </FormField>
         </div>
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Field label="Default payment terms" error={errors.defaultPaymentTermsDays?.message}>
+        <FormField label="Default payment terms" error={errors.defaultPaymentTermsDays?.message}>
           <div className="flex items-center gap-2">
             <Input
               type="number"
@@ -539,8 +506,8 @@ function BusinessDetailsSection({ profile }: { profile: UserProfile }) {
             />
             <span className="text-sm text-muted">days</span>
           </div>
-        </Field>
-        <Field label="Default deposit" error={errors.depositPercentage?.message}>
+        </FormField>
+        <FormField label="Default deposit" error={errors.depositPercentage?.message}>
           <div className="flex items-center gap-2">
             <Input
               type="number"
@@ -552,7 +519,7 @@ function BusinessDetailsSection({ profile }: { profile: UserProfile }) {
             />
             <span className="text-sm text-muted">% of fee</span>
           </div>
-        </Field>
+        </FormField>
       </div>
 
       <SaveBar isPending={mutation.isPending} saved={saved} isError={mutation.isError} />
@@ -593,7 +560,7 @@ function NotificationsSection({ profile }: { profile: UserProfile }) {
 
   return (
     <form onSubmit={handleSubmit((v) => mutation.mutate(v))} className="space-y-6">
-      <SectionHeader
+      <PageSection
         title="Notifications"
         description="Control digest emails and automated reminder sending."
       />
@@ -920,7 +887,7 @@ function BookingSettingsSection({ profile }: { profile: UserProfile }) {
 
   return (
     <div className="space-y-10">
-      <SectionHeader
+      <PageSection
         title="Booking settings"
         description="Control how new bookings are created and what appears on their checklists."
       />
@@ -945,7 +912,7 @@ function BookingSettingsSection({ profile }: { profile: UserProfile }) {
             )}
           />
 
-          <Field label="Default booking status">
+          <FormField label="Default booking status">
             <Controller
               name="defaultBookingStatus"
               control={generalControl}
@@ -963,7 +930,7 @@ function BookingSettingsSection({ profile }: { profile: UserProfile }) {
               )}
             />
             <p className="text-xs text-muted mt-1">Pre-selected status when creating a new booking</p>
-          </Field>
+          </FormField>
 
           <SaveBar isPending={generalMutation.isPending} saved={generalSaved} isError={generalMutation.isError} />
         </form>

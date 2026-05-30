@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import InvoiceStatusPill from '@/components/domain/InvoiceStatusPill';
+import InvoiceStatusPill from '@/components/common/InvoiceStatusPill';
 import { useBooking } from '@/lib/hooks/useBooking';
 import { useBookingActions } from '@/lib/hooks/useBookingActions';
 import { useBookingInvoices } from '@/lib/hooks/useBookingInvoices';
@@ -45,6 +45,8 @@ import { cn } from '@/lib/utils';
 import { Card } from '@/components/common/Card';
 import { SectionHeader } from '@/components/common/SectionHeader';
 import { GhostButton } from '@/components/common/GhostButton';
+import { IconButton } from '@/components/common/IconButton';
+import { SubLabel } from '@/components/common/SubLabel';
 import {
   Sheet,
   SheetContent,
@@ -365,14 +367,9 @@ function InlineFeeAdd({ bookingId }: { bookingId: string }) {
       >
         <Check size={16} />
       </button>
-      <button
-        type="button"
-        onClick={() => { setEditing(false); setValue(''); }}
-        className="text-muted hover:text-foreground transition-colors"
-        aria-label="Cancel"
-      >
+      <IconButton label="Cancel" onClick={() => { setEditing(false); setValue(''); }}>
         <X size={16} />
-      </button>
+      </IconButton>
     </form>
   );
 }
@@ -426,14 +423,9 @@ function InlineVenueAdd({ bookingId }: { bookingId: string }) {
       >
         <Check size={16} />
       </button>
-      <button
-        type="button"
-        onClick={() => { setEditing(false); setVenueId(null); }}
-        className="text-muted hover:text-foreground transition-colors flex-shrink-0"
-        aria-label="Cancel"
-      >
+      <IconButton label="Cancel" className="flex-shrink-0" onClick={() => { setEditing(false); setVenueId(null); }}>
         <X size={16} />
-      </button>
+      </IconButton>
     </div>
   );
 }
@@ -456,7 +448,7 @@ function PersonCard({
   return (
     <div className="py-4 border-b border-border last:border-0">
       <div className="flex items-center justify-between mb-1.5">
-        <p className="text-xs font-medium text-muted uppercase tracking-wide">{role}</p>
+        <SubLabel>{role}</SubLabel>
         <button
           type="button"
           onClick={onEdit}
@@ -775,7 +767,7 @@ function MusicFormSection({ booking, documents }: { booking: BookingDetail; docu
               <div className="space-y-6">
                 {response.specialRequests.some((r) => r.song || r.freeText) && (
                   <section>
-                    <p className="text-xs font-medium text-muted uppercase tracking-wide mb-3">Key moments</p>
+                    <SubLabel className="mb-3">Key moments</SubLabel>
                     <div className="space-y-2">
                       {response.specialRequests.map((req, i) => (
                         <div key={i} className="flex items-start gap-3">
@@ -798,7 +790,7 @@ function MusicFormSection({ booking, documents }: { booking: BookingDetail; docu
                   }
                   return (
                     <section>
-                      <p className="text-xs font-medium text-muted uppercase tracking-wide mb-3">General requests</p>
+                      <SubLabel className="mb-3">General requests</SubLabel>
                       <div className="space-y-4">
                         {Array.from(genreMap.entries()).map(([genre, songs]) => (
                           <div key={genre}>
@@ -819,7 +811,7 @@ function MusicFormSection({ booking, documents }: { booking: BookingDetail; docu
                 })()}
                 {response.notes && (
                   <section>
-                    <p className="text-xs font-medium text-muted uppercase tracking-wide mb-2">Notes</p>
+                    <SubLabel className="mb-2">Notes</SubLabel>
                     <p className="text-sm text-foreground whitespace-pre-wrap">{response.notes}</p>
                   </section>
                 )}
@@ -1000,27 +992,17 @@ function ContractCard({
             <div className="flex items-center gap-2 flex-shrink-0">
               {status === 'DRAFT' && (
                 <>
-                  <button
-                    type="button"
-                    onClick={onSend}
-                    className="text-muted hover:text-foreground transition-colors"
-                    aria-label="Send contract"
-                  >
+                  <IconButton label="Send contract" onClick={onSend}>
                     <Send size={14} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={onEdit}
-                    className="text-muted hover:text-foreground transition-colors"
-                    aria-label="Edit contract"
-                  >
+                  </IconButton>
+                  <IconButton label="Edit contract" onClick={onEdit}>
                     <Pencil size={14} />
-                  </button>
+                  </IconButton>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <button className="text-muted hover:text-foreground transition-colors" aria-label="More actions">
+                      <IconButton label="More actions">
                         <ChevronDown size={14} />
-                      </button>
+                      </IconButton>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem
@@ -1035,19 +1017,14 @@ function ContractCard({
               )}
               {status === 'SENT' && (
                 <>
-                  <button
-                    type="button"
-                    onClick={onPreview}
-                    className="text-muted hover:text-foreground transition-colors"
-                    aria-label="Preview contract"
-                  >
+                  <IconButton label="Preview contract" onClick={onPreview}>
                     <Eye size={14} />
-                  </button>
+                  </IconButton>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <button className="text-muted hover:text-foreground transition-colors" aria-label="More actions">
+                      <IconButton label="More actions">
                         <ChevronDown size={14} />
-                      </button>
+                      </IconButton>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem
@@ -1062,14 +1039,9 @@ function ContractCard({
               )}
               {status === 'SIGNED' && (
                 <>
-                  <button
-                    type="button"
-                    onClick={onPreview}
-                    className="text-muted hover:text-foreground transition-colors"
-                    aria-label="Preview contract"
-                  >
+                  <IconButton label="Preview contract" onClick={onPreview}>
                     <Eye size={14} />
-                  </button>
+                  </IconButton>
                   {contractDoc && (
                     <a
                       href={contractDoc.url}
@@ -1083,9 +1055,9 @@ function ContractCard({
                   )}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <button className="text-muted hover:text-foreground transition-colors" aria-label="More actions">
+                      <IconButton label="More actions">
                         <ChevronDown size={14} />
-                      </button>
+                      </IconButton>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem
@@ -1179,28 +1151,17 @@ function InvoiceRow({
         </span>
         {isDraft && (
           <>
-            <button
-              onClick={() => onSend(invoice)}
-              className="text-muted hover:text-foreground transition-colors"
-              aria-label="Send invoice"
-            >
+            <IconButton label="Send invoice" onClick={() => onSend(invoice)}>
               <Send size={14} />
-            </button>
-            <button
-              onClick={() => onEdit(invoice)}
-              className="text-muted hover:text-foreground transition-colors"
-              aria-label="Edit invoice"
-            >
+            </IconButton>
+            <IconButton label="Edit invoice" onClick={() => onEdit(invoice)}>
               <Pencil size={14} />
-            </button>
+            </IconButton>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button
-                  className="text-muted hover:text-foreground transition-colors"
-                  aria-label="More actions"
-                >
+                <IconButton label="More actions">
                   <ChevronDown size={14} />
-                </button>
+                </IconButton>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={() => onMarkSent(invoice)}>

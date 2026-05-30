@@ -2,7 +2,7 @@ import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'reac
 import { ChevronLeft, Plus } from 'lucide-react';
 import { LabelValue } from '@/components/common/LabelValue';
 import { Button } from '@/components/ui/button';
-import BookingStatusPill from '@/components/domain/BookingStatusPill';
+import BookingStatusPill from '@/components/common/BookingStatusPill';
 import { useContact } from '@/lib/hooks/useContact';
 import { formatDate } from '@/lib/formatters';
 import { EVENT_TYPE_LABELS } from '@/lib/constants';

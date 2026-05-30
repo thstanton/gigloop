@@ -1,4 +1,5 @@
 import { cn } from '@/lib/utils';
+import { SubLabel } from '@/components/common/SubLabel';
 
 interface CardProps {
   title?: string;
@@ -12,7 +13,7 @@ export function Card({ title, action, className, children }: CardProps) {
     <div className={cn('bg-background border border-border rounded-lg p-4', className)}>
       {title && (
         <div className="flex items-center justify-between mb-3">
-          <p className="text-xs font-medium text-muted uppercase tracking-wide">{title}</p>
+          <SubLabel>{title}</SubLabel>
           {action}
         </div>
       )}

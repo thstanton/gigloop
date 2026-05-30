@@ -6,7 +6,8 @@ import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, AlertCircle, RotateCcw } from 'lucide-react';
 import { apiGet } from '@/lib/api';
 import { useBookings } from '@/lib/hooks/useBookings';
-import BookingStatusPill from '@/components/domain/BookingStatusPill';
+import BookingStatusPill from '@/components/common/BookingStatusPill';
+import { PageSection } from '@/components/common/PageSection';
 import { formatDate } from '@/lib/formatters';
 import type { DashboardAction, BookingListItem } from '@/types/api';
 import { cn } from '@/lib/utils';
@@ -317,7 +318,7 @@ function CalendarWidget({ bookings }: { bookings: BookingListItem[] }) {
 function Widget({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="rounded-lg border border-border p-4">
-      <h2 className="text-base font-semibold text-foreground mb-3">{title}</h2>
+      <PageSection title={title} className="mb-3" />
       {children}
     </section>
   );

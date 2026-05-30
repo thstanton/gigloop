@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@clerk/react';
 import { Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { SubLabel } from '@/components/common/SubLabel';
 import { apiGet, apiPut } from '@/lib/api';
 import { ALL_GENRES, GENRE_LABELS } from '@/lib/constants';
 import type { BookingDetail, KeyMoment, MusicFormConfig } from '@/types/api';
@@ -106,7 +107,7 @@ export default function MusicFormEditor({
             <div className="space-y-3">
               {Array.from(sectionMap.entries()).map(([section, moments]) => (
                 <div key={section}>
-                  <p className="text-xs text-muted uppercase tracking-wide mb-1">{section}</p>
+                  <SubLabel className="mb-1">{section}</SubLabel>
                   <div className="space-y-1">
                     {moments.map((km, i) => (
                       <div key={i} className="flex items-center justify-between gap-2">

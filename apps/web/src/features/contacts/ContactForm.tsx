@@ -6,7 +6,6 @@ import { z } from 'zod';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -14,8 +13,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { FormField } from '@/components/common/FormField';
 import type { Contact, CreateContactInput, UpdateContactInput } from '@/types/api';
-import { cn } from '@/lib/utils';
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
@@ -70,33 +69,6 @@ export function contactToFormValues(c: Contact): ContactFormValues {
     commissionArrangement: c.commissionArrangement ?? '',
     primaryRole: (c.primaryRole as ContactFormValues['primaryRole']) ?? '',
   };
-}
-
-// ─── Field helper ─────────────────────────────────────────────────────────────
-
-function Field({
-  label,
-  required,
-  error,
-  children,
-  className,
-}: {
-  label: string;
-  required?: boolean;
-  error?: string;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <div className={cn('space-y-1.5', className)}>
-      <Label>
-        {label}
-        {required && <span className="text-status-cancelled ml-0.5">*</span>}
-      </Label>
-      {children}
-      {error && <p className="text-sm text-status-cancelled">{error}</p>}
-    </div>
-  );
 }
 
 // ─── Form ─────────────────────────────────────────────────────────────────────
@@ -157,34 +129,34 @@ export default function ContactForm({
       {/* Core */}
       <div className="space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Name" required error={errors.name?.message}>
+          <FormField label="Name" required error={errors.name?.message}>
             <Input {...register('name')} autoFocus />
-          </Field>
-          <Field label="Greeting name" error={errors.greetingName?.message}>
+          </FormField>
+          <FormField label="Greeting name" error={errors.greetingName?.message}>
             <Input
               {...greetingNameRegistration}
               placeholder="e.g. Jane"
             />
-          </Field>
+          </FormField>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Email" error={errors.email?.message}>
+          <FormField label="Email" error={errors.email?.message}>
             <Input type="email" {...register('email')} />
-          </Field>
-          <Field label="Phone" error={errors.phone?.message}>
+          </FormField>
+          <FormField label="Phone" error={errors.phone?.message}>
             <Input type="tel" {...register('phone')} />
-          </Field>
+          </FormField>
         </div>
-        <Field label="Website" error={errors.website?.message}>
+        <FormField label="Website" error={errors.website?.message}>
           <Input type="url" {...register('website')} placeholder="https://" />
-        </Field>
-        <Field label="Address" error={errors.address?.message}>
+        </FormField>
+        <FormField label="Address" error={errors.address?.message}>
           <Textarea {...register('address')} rows={3} />
-        </Field>
-        <Field label="Notes" error={errors.notes?.message}>
+        </FormField>
+        <FormField label="Notes" error={errors.notes?.message}>
           <Textarea {...register('notes')} rows={3} />
-        </Field>
-        <Field label="Primary role (optional)" error={errors.primaryRole?.message}>
+        </FormField>
+        <FormField label="Primary role (optional)" error={errors.primaryRole?.message}>
           <Controller
             name="primaryRole"
             control={control}
@@ -202,27 +174,27 @@ export default function ContactForm({
               </Select>
             )}
           />
-        </Field>
+        </FormField>
       </div>
 
       {/* Venue extras */}
       <div className="space-y-4">
         <p className="text-sm font-medium text-foreground">Venue details</p>
-        <Field label="Parking" error={errors.parkingInfo?.message}>
+        <FormField label="Parking" error={errors.parkingInfo?.message}>
           <Textarea {...register('parkingInfo')} rows={2} />
-        </Field>
-        <Field label="Access" error={errors.accessInfo?.message}>
+        </FormField>
+        <FormField label="Access" error={errors.accessInfo?.message}>
           <Textarea {...register('accessInfo')} rows={2} />
-        </Field>
-        <Field label="Equipment available" error={errors.equipmentAvailable?.message}>
+        </FormField>
+        <FormField label="Equipment available" error={errors.equipmentAvailable?.message}>
           <Textarea {...register('equipmentAvailable')} rows={2} />
-        </Field>
+        </FormField>
       </div>
 
       {/* Commission */}
-      <Field label="Commission arrangement" error={errors.commissionArrangement?.message}>
+      <FormField label="Commission arrangement" error={errors.commissionArrangement?.message}>
         <Textarea {...register('commissionArrangement')} rows={2} />
-      </Field>
+      </FormField>
 
       <div className="flex items-center gap-3">
         <Button type="submit" disabled={isPending}>

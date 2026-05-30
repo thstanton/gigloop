@@ -10,7 +10,7 @@ import {
 } from '@tanstack/react-table';
 import { ChevronUp, ChevronDown, ChevronsUpDown, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import BookingStatusPill from '@/components/domain/BookingStatusPill';
+import BookingStatusPill from '@/components/common/BookingStatusPill';
 import type { BookingListItem } from '@/types/api';
 import { cn } from '@/lib/utils';
 import { formatDateAndDay, formatFeeWhole } from '@/lib/formatters';

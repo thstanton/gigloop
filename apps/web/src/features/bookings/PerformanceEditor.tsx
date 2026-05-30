@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2, Heart, GlassWater, Utensils, Moon, Briefcase, Music, Music2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { GhostButton } from '@/components/common/GhostButton';
+import { SubLabel } from '@/components/common/SubLabel';
 import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
 import type {
   BookingDetail,
@@ -341,7 +342,7 @@ export default function PerformanceEditor({ booking }: { booking: BookingDetail 
         </GhostButton>
       ) : (
         <div className="space-y-2">
-          <p className="text-xs text-muted font-medium uppercase tracking-wide">Select a format</p>
+          <SubLabel>Select a format</SubLabel>
           {formatsLoading ? (
             <p className="text-sm text-muted">Loading…</p>
           ) : availableFormats.length === 0 ? (
