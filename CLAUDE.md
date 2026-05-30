@@ -102,6 +102,14 @@ Feature branches → `main`. No direct pushes to `main` for application code cha
 ### Multi-issue features
 For features spanning several issues, create a **tracking issue** in GitHub Issues — an umbrella issue whose body lists sub-issues as a task list (`- [ ] #94 description`). The branch references the tracking issue number. Sub-issues are closed via `Closes #94, #95` in the PR description.
 
+### Commit messages
+Use [Conventional Commits](https://www.conventionalcommits.org/):
+`<type>[optional scope]: <description>`
+
+Types: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `style`, `perf`, `ci`, `build`
+
+Examples: `feat(bookings): add checklist seeding on creation`, `fix(invoices): correct deposit tracking on send`, `ci: cache node_modules in GitHub Actions`
+
 ### My responsibilities (Claude Code)
 - At the start of any session involving application code changes: confirm we are on a feature branch, or create one.
 - At the end of the session: open a PR with `gh pr create` rather than committing to `main`.
