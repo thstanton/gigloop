@@ -87,6 +87,37 @@ Every feature module uses three layers:
 The service depends on the repository; the controller depends on the service.
 All three are declared as providers in the feature module.
 
+## Branching Strategy
+
+### Model
+Feature branches → `main`. No direct pushes to `main` for application code changes.
+
+**Exception — direct to `main` acceptable:** root-level docs and process files only (`CLAUDE.md`, `CONTEXT.md`, `docs/adr/`, `SPEC.md`). Anything touching `apps/api/` or `apps/web/src/` requires a branch and PR.
+
+### Branch naming
+- `feature/<issue-number>-short-description` — new functionality (references tracking issue number)
+- `fix/<issue-number>-short-description` — bug fixes
+- `chore/<short-description>` — tooling, dependencies, config (no issue number required)
+
+### Multi-issue features
+For features spanning several issues, create a **tracking issue** in GitHub Issues — an umbrella issue whose body lists sub-issues as a task list (`- [ ] #94 description`). The branch references the tracking issue number. Sub-issues are closed via `Closes #94, #95` in the PR description.
+
+### My responsibilities (Claude Code)
+- At the start of any session involving application code changes: confirm we are on a feature branch, or create one.
+- At the end of the session: open a PR with `gh pr create` rather than committing to `main`.
+- Never push application code directly to `main`.
+
+### Merging
+- Squash merge only (configured in GitHub repo settings — disable merge commits and rebase merge).
+- PRs require CI to pass (Lint, Test, Build — see `.github/workflows/ci.yml`) before merging.
+- Only the user merges PRs.
+
+### Branch protection (configure in GitHub → Settings → Branches)
+Protect `main` with:
+- Require a pull request before merging
+- Require status checks: `Lint`, `Test`, `Build`
+- Do not require approvals (solo project)
+
 ## Package Discipline
 - Do not install new packages without asking first
 - Do not add packages to solve problems that can be solved with what's already installed
