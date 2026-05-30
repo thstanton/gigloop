@@ -6,7 +6,7 @@
     "dev": "nest start --watch",
     "build": "nest build",
     "start": "node dist/main",
-    "lint": "eslint \"{src,test}/**/*.ts\"",
+    "lint": "tsc --noEmit",
     "test": "jest",
     "seed": "ts-node -r tsconfig-paths/register prisma/seed.ts",
     "seed:checklists": "ts-node -r tsconfig-paths/register src/scripts/seed-checklists.ts"
