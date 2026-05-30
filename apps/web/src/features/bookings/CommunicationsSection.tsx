@@ -23,12 +23,37 @@ function emailDoc(body: string) {
   </style></head><body>${body}</body></html>`;
 }
 
+function EmailPreviewSheet({ comm, open, onClose }: { comm: Communication; open: boolean; onClose: () => void }) {
+  return (
+    <Sheet open={open} onOpenChange={onClose}>
+      <SheetContent side="right" className="w-full sm:max-w-lg flex flex-col p-0">
+        <SheetHeader className="px-6 pt-6 pb-4 border-b border-border shrink-0">
+          <SheetTitle className="truncate">{comm.subject}</SheetTitle>
+          <div className="space-y-0.5 mt-1">
+            <p className="text-xs text-muted">
+              To: {comm.contact.name}
+              {comm.contact.email && (
+                <> &lt;<a href={`mailto:${comm.contact.email}`} className="hover:text-primary transition-colors">{comm.contact.email}</a>&gt;</>
+              )}
+            </p>
+            {comm.sentAt && <p className="text-xs text-muted">Sent: {formatDate(comm.sentAt)}</p>}
+          </div>
+        </SheetHeader>
+        <div className="flex-1 overflow-y-auto">
+          <iframe srcDoc={emailDoc(comm.body)} title={comm.subject} className="w-full h-full border-0" sandbox="allow-same-origin" />
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 function CommunicationRow({ comm }: { comm: Communication }) {
   const [open, setOpen] = useState(false);
-  const meta = [comm.template?.name, `To ${comm.contact.name}`].filter(Boolean).join(' · ');
   const isFailed = comm.status === 'FAILED';
   const isPending = comm.status === 'PENDING';
   const isSent = comm.status === 'SENT';
+  const meta = [comm.template?.name, `To ${comm.contact.name}`].filter(Boolean).join(' · ');
+  const statusPrefix = isFailed ? 'Send failed · ' : isPending ? 'Sending · ' : '';
 
   return (
     <>
@@ -44,9 +69,7 @@ function CommunicationRow({ comm }: { comm: Communication }) {
             <p className={`text-sm truncate ${isFailed ? 'text-status-cancelled' : 'text-foreground'}`}>
               {comm.subject}
             </p>
-            <p className="text-xs text-muted mt-0.5">
-              {isFailed ? 'Send failed · ' : isPending ? 'Sending · ' : ''}{meta}
-            </p>
+            <p className="text-xs text-muted mt-0.5">{statusPrefix}{meta}</p>
           </div>
         </div>
         <span className="text-xs text-muted flex-shrink-0">
@@ -54,30 +77,7 @@ function CommunicationRow({ comm }: { comm: Communication }) {
         </span>
       </div>
 
-      <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-lg flex flex-col p-0">
-          <SheetHeader className="px-6 pt-6 pb-4 border-b border-border shrink-0">
-            <SheetTitle className="truncate">{comm.subject}</SheetTitle>
-            <div className="space-y-0.5 mt-1">
-              <p className="text-xs text-muted">
-                To: {comm.contact.name}
-                {comm.contact.email && (
-                  <> &lt;<a href={`mailto:${comm.contact.email}`} className="hover:text-primary transition-colors">{comm.contact.email}</a>&gt;</>
-                )}
-              </p>
-              {comm.sentAt && <p className="text-xs text-muted">Sent: {formatDate(comm.sentAt)}</p>}
-            </div>
-          </SheetHeader>
-          <div className="flex-1 overflow-y-auto">
-            <iframe
-              srcDoc={emailDoc(comm.body)}
-              title={comm.subject}
-              className="w-full h-full border-0"
-              sandbox="allow-same-origin"
-            />
-          </div>
-        </SheetContent>
-      </Sheet>
+      {isSent && <EmailPreviewSheet comm={comm} open={open} onClose={() => setOpen(false)} />}
     </>
   );
 }
@@ -111,4 +111,3 @@ export default function CommunicationsSection({ communications, onCompose }: Com
     </section>
   );
 }
-

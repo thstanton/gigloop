@@ -15,6 +15,70 @@ function invoiceLineTotal(invoice: Invoice): number {
   return invoice.lineItems.reduce((sum, item) => sum + parseFloat(item.amount), 0);
 }
 
+interface InvoiceRowActionsProps {
+  invoice: Invoice;
+  pdfUrl: string | null;
+  onEdit: (invoice: Invoice) => void;
+  onDelete: (invoice: Invoice) => void;
+  onSend: (invoice: Invoice) => void;
+  onMarkSent: (invoice: Invoice) => void;
+  onMarkPaid: (invoice: Invoice) => void;
+  onVoid: (invoice: Invoice) => void;
+}
+
+function InvoiceRowActions({ invoice, pdfUrl, onEdit, onDelete, onSend, onMarkSent, onMarkPaid, onVoid }: InvoiceRowActionsProps) {
+  const isDraft = invoice.status === 'DRAFT';
+  const isSent = invoice.status === 'SENT';
+  const isPaid = invoice.status === 'PAID';
+
+  if (isDraft) {
+    return (
+      <>
+        <IconButton label="Send invoice" onClick={() => onSend(invoice)}><Send size={14} /></IconButton>
+        <IconButton label="Edit invoice" onClick={() => onEdit(invoice)}><Pencil size={14} /></IconButton>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <IconButton label="More actions"><ChevronDown size={14} /></IconButton>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => onMarkSent(invoice)}>Mark as sent</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onDelete(invoice)} className="text-status-cancelled focus:text-status-cancelled">Delete</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </>
+    );
+  }
+
+  if (isSent || isPaid) {
+    return (
+      <>
+        {isSent && (
+          <button onClick={() => onMarkPaid(invoice)} className="text-muted hover:text-foreground transition-colors" aria-label="Mark invoice as paid">
+            <CheckCircle2 size={14} />
+          </button>
+        )}
+        {pdfUrl && (
+          <a href={pdfUrl} target="_blank" rel="noopener noreferrer" className="text-muted hover:text-foreground transition-colors" aria-label="Download invoice PDF">
+            <Download size={14} />
+          </a>
+        )}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="text-muted hover:text-foreground transition-colors" aria-label="More actions">
+              <ChevronDown size={14} />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => onVoid(invoice)} className="text-status-cancelled focus:text-status-cancelled">Void invoice</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </>
+    );
+  }
+
+  return null;
+}
+
 export interface InvoiceRowProps {
   invoice: Invoice;
   pdfUrl: string | null;
@@ -26,25 +90,10 @@ export interface InvoiceRowProps {
   onVoid: (invoice: Invoice) => void;
 }
 
-export default function InvoiceRow({
-  invoice,
-  pdfUrl,
-  onEdit,
-  onDelete,
-  onSend,
-  onMarkSent,
-  onMarkPaid,
-  onVoid,
-}: InvoiceRowProps) {
-  const overdue =
-    invoice.status === 'SENT' &&
-    !!invoice.dueDate &&
-    new Date(invoice.dueDate) < new Date();
-  const total = invoiceLineTotal(invoice);
-  const isDraft = invoice.status === 'DRAFT';
-  const isSent = invoice.status === 'SENT';
-  const isPaid = invoice.status === 'PAID';
+export default function InvoiceRow({ invoice, pdfUrl, onEdit, onDelete, onSend, onMarkSent, onMarkPaid, onVoid }: InvoiceRowProps) {
+  const overdue = invoice.status === 'SENT' && !!invoice.dueDate && new Date(invoice.dueDate) < new Date();
   const isVoid = invoice.status === 'VOID';
+  const isPaid = invoice.status === 'PAID';
 
   return (
     <div className="flex items-start justify-between gap-3 py-2.5 border-b border-border last:border-0">
@@ -63,76 +112,9 @@ export default function InvoiceRow({
       </div>
       <div className="flex items-center gap-2 flex-shrink-0">
         <span className={cn('text-sm font-medium tabular-nums', isVoid ? 'text-muted' : 'text-foreground')}>
-          {formatCurrency(total)}
+          {formatCurrency(invoiceLineTotal(invoice))}
         </span>
-        {isDraft && (
-          <>
-            <IconButton label="Send invoice" onClick={() => onSend(invoice)}>
-              <Send size={14} />
-            </IconButton>
-            <IconButton label="Edit invoice" onClick={() => onEdit(invoice)}>
-              <Pencil size={14} />
-            </IconButton>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <IconButton label="More actions">
-                  <ChevronDown size={14} />
-                </IconButton>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => onMarkSent(invoice)}>
-                  Mark as sent
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => onDelete(invoice)}
-                  className="text-status-cancelled focus:text-status-cancelled"
-                >
-                  Delete
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </>
-        )}
-        {isSent && (
-          <button
-            onClick={() => onMarkPaid(invoice)}
-            className="text-muted hover:text-foreground transition-colors"
-            aria-label="Mark invoice as paid"
-          >
-            <CheckCircle2 size={14} />
-          </button>
-        )}
-        {(isSent || isPaid) && pdfUrl && (
-          <a
-            href={pdfUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-muted hover:text-foreground transition-colors"
-            aria-label="Download invoice PDF"
-          >
-            <Download size={14} />
-          </a>
-        )}
-        {(isSent || isPaid) && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                className="text-muted hover:text-foreground transition-colors"
-                aria-label="More actions"
-              >
-                <ChevronDown size={14} />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem
-                onClick={() => onVoid(invoice)}
-                className="text-status-cancelled focus:text-status-cancelled"
-              >
-                Void invoice
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
+        <InvoiceRowActions invoice={invoice} pdfUrl={pdfUrl} onEdit={onEdit} onDelete={onDelete} onSend={onSend} onMarkSent={onMarkSent} onMarkPaid={onMarkPaid} onVoid={onVoid} />
       </div>
     </div>
   );

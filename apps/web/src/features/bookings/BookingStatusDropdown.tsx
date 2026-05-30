@@ -35,6 +35,42 @@ const STATUS_LABELS: Record<BookingStatus, string> = {
   CANCELLED:    'Cancelled',
 };
 
+interface OutstandingChecklistDialogProps {
+  pendingStatus: BookingStatus;
+  outstandingItems: ChecklistItem[];
+  onConfirm: () => void;
+  onCancel: () => void;
+}
+
+function OutstandingChecklistDialog({ pendingStatus, outstandingItems, onConfirm, onCancel }: OutstandingChecklistDialogProps) {
+  const label = STATUS_LABELS[pendingStatus];
+  const count = outstandingItems.length;
+
+  return (
+    <Dialog open onOpenChange={onCancel}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Outstanding checklist items</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted">
+          {count} item{count !== 1 ? 's' : ''} still outstanding for{' '}
+          <span className="font-medium text-foreground">{label}</span>:
+        </p>
+        <ul className="text-sm space-y-1 list-disc list-inside text-foreground">
+          {outstandingItems.map((item) => (
+            <li key={item.id}>{item.label}</li>
+          ))}
+        </ul>
+        <p className="text-sm text-muted">Mark as {label} anyway?</p>
+        <div className="flex gap-2 justify-end mt-2">
+          <Button variant="outline" onClick={onCancel}>Cancel</Button>
+          <Button onClick={onConfirm}>Mark as {label}</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export interface BookingStatusDropdownProps {
   currentStatus: BookingStatus;
   checklist: ChecklistItem[];
@@ -86,11 +122,7 @@ export default function BookingStatusDropdown({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start">
           {STATUS_ORDER.map((s) => (
-            <DropdownMenuItem
-              key={s}
-              onSelect={() => handleSelect(s)}
-              className="gap-2"
-            >
+            <DropdownMenuItem key={s} onSelect={() => handleSelect(s)} className="gap-2">
               <span className={cn('inline-flex items-center border-l-[3px] pl-2 pr-2.5 py-0.5 text-xs font-medium', STATUS_PILL_CLASSES[s])}>
                 {STATUS_LABELS[s]}
               </span>
@@ -101,35 +133,16 @@ export default function BookingStatusDropdown({
       </DropdownMenu>
 
       {pendingStatus && (
-        <Dialog open onOpenChange={() => setPendingStatus(null)}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Outstanding checklist items</DialogTitle>
-            </DialogHeader>
-            <p className="text-sm text-muted">
-              {outstandingFor(pendingStatus).length} item{outstandingFor(pendingStatus).length !== 1 ? 's' : ''} still outstanding for{' '}
-              <span className="font-medium text-foreground">{STATUS_LABELS[pendingStatus]}</span>:
-            </p>
-            <ul className="text-sm space-y-1 list-disc list-inside text-foreground">
-              {outstandingFor(pendingStatus).map((item) => (
-                <li key={item.id}>{item.label}</li>
-              ))}
-            </ul>
-            <p className="text-sm text-muted">Mark as {STATUS_LABELS[pendingStatus]} anyway?</p>
-            <div className="flex gap-2 justify-end mt-2">
-              <Button variant="outline" onClick={() => setPendingStatus(null)}>Cancel</Button>
-              <Button
-                onClick={() => {
-                  setDisplayStatus(pendingStatus);
-                  onStatusChange(pendingStatus);
-                  setPendingStatus(null);
-                }}
-              >
-                Mark as {STATUS_LABELS[pendingStatus]}
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+        <OutstandingChecklistDialog
+          pendingStatus={pendingStatus}
+          outstandingItems={outstandingFor(pendingStatus)}
+          onConfirm={() => {
+            setDisplayStatus(pendingStatus);
+            onStatusChange(pendingStatus);
+            setPendingStatus(null);
+          }}
+          onCancel={() => setPendingStatus(null)}
+        />
       )}
     </>
   );

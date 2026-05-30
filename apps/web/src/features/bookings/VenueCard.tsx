@@ -1,4 +1,4 @@
-import { ChevronRight, Car, KeyRound, Speaker } from 'lucide-react';
+import { ChevronRight, Car, KeyRound, Speaker, type LucideIcon } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Card } from '@/components/common/Card';
 import type { Contact } from '@/types/api';
@@ -9,25 +9,31 @@ export interface VenueCardProps {
   onEdit: () => void;
 }
 
+function VenueInfoItem({ icon: Icon, label, text }: { icon: LucideIcon; label: string; text: string }) {
+  return (
+    <div>
+      <div className="flex items-center gap-1.5 text-sm font-medium text-foreground mb-0.5">
+        <Icon size={14} />
+        {label}
+      </div>
+      <p className="text-sm text-foreground">{text}</p>
+    </div>
+  );
+}
+
 export default function VenueCard({ venue, linkState, onEdit }: VenueCardProps) {
+  const hasExtras = !!(venue.parkingInfo || venue.accessInfo || venue.equipmentAvailable);
+
   return (
     <Card
       title="Venue"
       action={
-        <button
-          type="button"
-          onClick={onEdit}
-          className="text-xs text-primary hover:text-primary/80 transition-colors"
-        >
+        <button type="button" onClick={onEdit} className="text-xs text-primary hover:text-primary/80 transition-colors">
           Edit
         </button>
       }
     >
-      <Link
-        to={`/admin/contacts/${venue.id}`}
-        state={linkState}
-        className="inline-flex items-center gap-1 group"
-      >
+      <Link to={`/admin/contacts/${venue.id}`} state={linkState} className="inline-flex items-center gap-1 group">
         <span className="text-sm font-medium text-foreground group-hover:text-primary transition-colors">
           {venue.name}
         </span>
@@ -47,35 +53,11 @@ export default function VenueCard({ venue, linkState, onEdit }: VenueCardProps) 
       {venue.address && (
         <p className="text-sm text-muted mt-0.5 whitespace-pre-wrap">{venue.address}</p>
       )}
-      {(venue.parkingInfo || venue.accessInfo || venue.equipmentAvailable) && (
+      {hasExtras && (
         <div className="mt-3 pt-3 border-t border-border space-y-3">
-          {venue.parkingInfo && (
-            <div>
-              <div className="flex items-center gap-1.5 text-sm font-medium text-foreground mb-0.5">
-                <Car size={14} />
-                Parking
-              </div>
-              <p className="text-sm text-foreground">{venue.parkingInfo}</p>
-            </div>
-          )}
-          {venue.accessInfo && (
-            <div>
-              <div className="flex items-center gap-1.5 text-sm font-medium text-foreground mb-0.5">
-                <KeyRound size={14} />
-                Access
-              </div>
-              <p className="text-sm text-foreground">{venue.accessInfo}</p>
-            </div>
-          )}
-          {venue.equipmentAvailable && (
-            <div>
-              <div className="flex items-center gap-1.5 text-sm font-medium text-foreground mb-0.5">
-                <Speaker size={14} />
-                Equipment
-              </div>
-              <p className="text-sm text-foreground">{venue.equipmentAvailable}</p>
-            </div>
-          )}
+          {venue.parkingInfo && <VenueInfoItem icon={Car} label="Parking" text={venue.parkingInfo} />}
+          {venue.accessInfo && <VenueInfoItem icon={KeyRound} label="Access" text={venue.accessInfo} />}
+          {venue.equipmentAvailable && <VenueInfoItem icon={Speaker} label="Equipment" text={venue.equipmentAvailable} />}
         </div>
       )}
     </Card>

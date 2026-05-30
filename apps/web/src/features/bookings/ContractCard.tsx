@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { formatDate } from '@/lib/formatters';
-import type { BookingDetail, Document } from '@/types/api';
+import type { BookingDetail, ContractStatus, Document } from '@/types/api';
 
 const CONTRACT_PILL_CLASSES: Record<string, string> = {
   DRAFT:  'bg-status-enquiry/12 text-status-enquiry border-l-status-enquiry',
@@ -33,6 +33,75 @@ const CONTRACT_PILL_LABELS: Record<string, string> = {
   SIGNED: 'Signed',
   VOID:   'Void',
 };
+
+interface ContractCardActionsProps {
+  status: ContractStatus;
+  contractDoc: Document | undefined;
+  onEdit: () => void;
+  onPreview: () => void;
+  onSend: () => void;
+  onVoidSent: () => void;
+  onVoidSigned: () => void;
+  onDelete: () => void;
+}
+
+function ContractCardActions({ status, contractDoc, onEdit, onPreview, onSend, onVoidSent, onVoidSigned, onDelete }: ContractCardActionsProps) {
+  if (status === 'DRAFT') {
+    return (
+      <>
+        <IconButton label="Send contract" onClick={onSend}><Send size={14} /></IconButton>
+        <IconButton label="Edit contract" onClick={onEdit}><Pencil size={14} /></IconButton>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <IconButton label="More actions"><ChevronDown size={14} /></IconButton>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={onDelete} className="text-status-cancelled focus:text-status-cancelled">Delete</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </>
+    );
+  }
+
+  if (status === 'SENT') {
+    return (
+      <>
+        <IconButton label="Preview contract" onClick={onPreview}><Eye size={14} /></IconButton>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <IconButton label="More actions"><ChevronDown size={14} /></IconButton>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={onVoidSent} className="text-status-cancelled focus:text-status-cancelled">Void contract</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </>
+    );
+  }
+
+  if (status === 'SIGNED') {
+    return (
+      <>
+        <IconButton label="Preview contract" onClick={onPreview}><Eye size={14} /></IconButton>
+        {contractDoc && (
+          <a href={contractDoc.url} target="_blank" rel="noopener noreferrer" className="text-muted hover:text-foreground transition-colors" aria-label="Download signed contract PDF">
+            <Download size={14} />
+          </a>
+        )}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <IconButton label="More actions"><ChevronDown size={14} /></IconButton>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={onVoidSigned} className="text-status-cancelled focus:text-status-cancelled">Void contract</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </>
+    );
+  }
+
+  return null;
+}
 
 export interface ContractCardProps {
   booking: BookingDetail;
@@ -64,27 +133,19 @@ export default function ContractCard({
   const isEmpty = !contract;
   const contractDoc = documents.find((d) => d.type === 'CONTRACT' && d.contractStatus !== 'VOID');
 
-  const headerAction = (isEmpty || isVoid) ? (
-    <GhostButton
-      onClick={onCreateContract}
-      disabled={isCreating}
-      variant="primary"
-      size="xs"
-      icon={<Plus size={12} />}
-    >
-      {isCreating ? 'Creating…' : 'Create contract'}
-    </GhostButton>
-  ) : null;
-
   const contractDate = contract
     ? status === 'SIGNED' && contract.signedAt
       ? formatDate(contract.signedAt)
       : status === 'SENT' && contract.updatedAt
         ? formatDate(contract.updatedAt)
-        : contract.createdAt
-          ? formatDate(contract.createdAt)
-          : null
+        : contract.createdAt ? formatDate(contract.createdAt) : null
     : null;
+
+  const headerAction = (isEmpty || isVoid) ? (
+    <GhostButton onClick={onCreateContract} disabled={isCreating} variant="primary" size="xs" icon={<Plus size={12} />}>
+      {isCreating ? 'Creating…' : 'Create contract'}
+    </GhostButton>
+  ) : null;
 
   return (
     <>
@@ -98,97 +159,27 @@ export default function ContractCard({
           <div className="flex items-start justify-between gap-3 py-0.5">
             <div className="min-w-0">
               <p className={cn('text-sm', isVoid ? 'text-muted line-through' : 'text-foreground')}>Contract</p>
-              {contractDate && (
-                <p className="text-xs text-muted mt-0.5">{contractDate}</p>
-              )}
+              {contractDate && <p className="text-xs text-muted mt-0.5">{contractDate}</p>}
               <div className="mt-1">
                 <span className={cn('inline-flex items-center border-l-[3px] pl-2 pr-2.5 py-0.5 text-xs font-medium', CONTRACT_PILL_CLASSES[status ?? ''] ?? '')}>
                   {CONTRACT_PILL_LABELS[status ?? ''] ?? status}
                 </span>
               </div>
             </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              {status === 'DRAFT' && (
-                <>
-                  <IconButton label="Send contract" onClick={onSend}>
-                    <Send size={14} />
-                  </IconButton>
-                  <IconButton label="Edit contract" onClick={onEdit}>
-                    <Pencil size={14} />
-                  </IconButton>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <IconButton label="More actions">
-                        <ChevronDown size={14} />
-                      </IconButton>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem
-                        onClick={onDelete}
-                        className="text-status-cancelled focus:text-status-cancelled"
-                      >
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </>
-              )}
-              {status === 'SENT' && (
-                <>
-                  <IconButton label="Preview contract" onClick={onPreview}>
-                    <Eye size={14} />
-                  </IconButton>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <IconButton label="More actions">
-                        <ChevronDown size={14} />
-                      </IconButton>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem
-                        onClick={() => onVoid(false)}
-                        className="text-status-cancelled focus:text-status-cancelled"
-                      >
-                        Void contract
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </>
-              )}
-              {status === 'SIGNED' && (
-                <>
-                  <IconButton label="Preview contract" onClick={onPreview}>
-                    <Eye size={14} />
-                  </IconButton>
-                  {contractDoc && (
-                    <a
-                      href={contractDoc.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-muted hover:text-foreground transition-colors"
-                      aria-label="Download signed contract PDF"
-                    >
-                      <Download size={14} />
-                    </a>
-                  )}
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <IconButton label="More actions">
-                        <ChevronDown size={14} />
-                      </IconButton>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem
-                        onClick={() => setConfirmVoidOpen(true)}
-                        className="text-status-cancelled focus:text-status-cancelled"
-                      >
-                        Void contract
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </>
-              )}
-            </div>
+            {status && status !== 'VOID' && (
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <ContractCardActions
+                  status={status}
+                  contractDoc={contractDoc}
+                  onEdit={onEdit}
+                  onPreview={onPreview}
+                  onSend={onSend}
+                  onVoidSent={() => onVoid(false)}
+                  onVoidSigned={() => setConfirmVoidOpen(true)}
+                  onDelete={onDelete}
+                />
+              </div>
+            )}
           </div>
         )}
       </Card>
@@ -203,12 +194,7 @@ export default function ContractCard({
             </p>
             <div className="flex gap-2 justify-end mt-2">
               <Button variant="outline" onClick={() => setConfirmVoidOpen(false)}>Cancel</Button>
-              <Button
-                variant="destructive"
-                onClick={() => { onVoid(true); setConfirmVoidOpen(false); }}
-              >
-                Void contract
-              </Button>
+              <Button variant="destructive" onClick={() => { onVoid(true); setConfirmVoidOpen(false); }}>Void contract</Button>
             </div>
           </DialogContent>
         </Dialog>
