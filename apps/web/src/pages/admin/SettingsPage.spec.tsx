@@ -71,34 +71,25 @@ function renderPage() {
 describe('SettingsPage — notifications section', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('renders all six reminder type labels once data loads', async () => {
+  it('renders the digest email toggle once data loads', async () => {
     renderPage();
-    await waitFor(() => expect(screen.getByText('Quote email')).toBeInTheDocument());
-
-    expect(screen.getByText('Contract')).toBeInTheDocument();
-    expect(screen.getByText('Deposit invoice')).toBeInTheDocument();
-    expect(screen.getByText('Balance invoice')).toBeInTheDocument();
-    expect(screen.getByText('Music preference form')).toBeInTheDocument();
-    expect(screen.getByText('Thank you email')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Weekly digest email')).toBeInTheDocument());
+    expect(screen.getByText('Notifications')).toBeInTheDocument();
   });
 
-  it('labels the thank you email reminder as after the event', async () => {
+  it('renders the reminder window input with the profile value', async () => {
     renderPage();
-    await waitFor(() => expect(screen.getByText('Thank you email')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Reminder window')).toBeInTheDocument());
 
-    const thankYouLabel = screen.getByText('Thank you email');
-    // The row containing this label should say "after" not just "before"
-    const row = thankYouLabel.closest('div');
-    expect(row).toHaveTextContent('after');
+    // mockUserProfile.preferences.reminderLeadDays = 7
+    // The input doesn't have an aria-label; select it by its name attribute
+    const input = document.querySelector<HTMLInputElement>('input[name="reminderLeadDays"]');
+    expect(input).not.toBeNull();
+    expect(Number(input!.value)).toBe(7);
   });
 
-  it('labels all other reminder rows as before the event', async () => {
+  it('renders the days-before-due-date label', async () => {
     renderPage();
-    await waitFor(() => expect(screen.getByText('Quote email')).toBeInTheDocument());
-
-    for (const label of ['Quote email', 'Contract', 'Deposit invoice', 'Balance invoice', 'Music preference form']) {
-      const row = screen.getByText(label).closest('div');
-      expect(row).toHaveTextContent('before');
-    }
+    await waitFor(() => expect(screen.getByText('days before due date')).toBeInTheDocument());
   });
 });
