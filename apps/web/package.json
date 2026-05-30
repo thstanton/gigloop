@@ -47,10 +47,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@storybook/addon-essentials": "^8.6.14",
     "@storybook/addon-vitest": "10.4.1",
-    "@storybook/blocks": "^8.6.14",
-    "@storybook/experimental-addon-test": "^8.6.14",
     "@storybook/react": "^10.4.1",
     "@storybook/react-vite": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
