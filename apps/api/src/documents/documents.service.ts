@@ -173,7 +173,6 @@ export class DocumentsService {
     const substituted = substituteTiptapVariables(tiptapContent, context);
     const contractContent = renderTiptapToPdfmake(substituted);
 
-    const logoUrl = context.musicianEmail ? null : null; // logo handled via publicProfile separately
     const signatureDataUrl = signatureBase64.startsWith('data:')
       ? signatureBase64
       : `data:image/png;base64,${signatureBase64}`;
