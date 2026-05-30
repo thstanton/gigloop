@@ -90,14 +90,13 @@ All three are declared as providers in the feature module.
 ## Branching Strategy
 
 ### Model
-Feature branches → `main`. No direct pushes to `main` for application code changes.
-
-**Exception — direct to `main` acceptable:** root-level docs and process files only (`CLAUDE.md`, `CONTEXT.md`, `docs/adr/`, `SPEC.md`). Anything touching `apps/api/` or `apps/web/src/` requires a branch and PR.
+Feature branches → `main`. No direct pushes to `main` — the GitHub ruleset enforces this for everyone including repo owner.
 
 ### Branch naming
 - `feature/<issue-number>-short-description` — new functionality (references tracking issue number)
 - `fix/<issue-number>-short-description` — bug fixes
 - `chore/<short-description>` — tooling, dependencies, config (no issue number required)
+- `docs/<short-description>` — documentation and process file updates (`CLAUDE.md`, `CONTEXT.md`, `docs/adr/`, `SPEC.md`)
 
 ### Multi-issue features
 For features spanning several issues, create a **tracking issue** in GitHub Issues — an umbrella issue whose body lists sub-issues as a task list (`- [ ] #94 description`). The branch references the tracking issue number. Sub-issues are closed via `Closes #94, #95` in the PR description.
