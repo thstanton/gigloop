@@ -45,7 +45,7 @@ export const ReadyToGo: Story = {
   parameters: { msw: { handlers: makeBookingDetailHandlers('ReadyToGo') } },
   play: async ({ canvas }) => {
     await expect(await canvas.findByText("Sophie's Wedding")).toBeVisible();
-    await expect(canvas.getByText('Ready')).toBeVisible();
+    await expect(canvas.getAllByText('Ready')[0]).toBeVisible();
   },
 };
 
