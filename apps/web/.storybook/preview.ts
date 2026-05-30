@@ -1,3 +1,4 @@
+import '@vitejs/plugin-react/preamble';
 import type { Preview } from '@storybook/react-vite';
 import '../src/styles/globals.css';
 import React from 'react';
