@@ -92,6 +92,26 @@ All three are declared as providers in the feature module.
 - Do not add packages to solve problems that can be solved with what's already installed
 - Use `bun add <package>` (never `npm install`) for all package installation
 
+## UI Components
+
+### Inventory check — before writing any UI code
+Before writing any JSX, scan `components/common/` and `components/ui/`. If a component already encodes the pattern you need (typography, spacing + colour combination, layout), use it. Writing raw `className` that replicates what an existing component already does is the mistake to prevent — not just creating new files.
+
+### Creating new shared components
+Creating a new file in `components/common/` or `components/ui/` requires approval. Before creating one, stop and ask — explaining what the new component does and why no existing component covers the case. Do not proceed without confirmation.
+
+### Story requirement
+A `components/common/` component is not done until it has at least one story covering its primary use case. Stories are the usage documentation that makes the inventory check above reliable — a component without a story is invisible to the next session.
+
+### Story testing tiers (see ADR-0024)
+- `components/ui/` — smoke: story renders, key elements visible
+- `components/common/` — smoke + one `play` function covering the primary use case
+- Feature presentational components — interaction `play` covering the primary happy path
+- Page stories — smoke only
+
+### Development sequence
+For feature components, always build the presentational layer + story before the container (per ADR-0023). This ensures every new UI is reviewable in Storybook before logic is wired up.
+
 ## Session Behaviour
 - Build only what the current session specifies
 - Do not begin the next feature unprompted
@@ -99,6 +119,7 @@ All three are declared as providers in the feature module.
   - What was built
   - Any decisions made that weren't in the spec
   - Anything that should be reviewed before the next session
+  - **Promotion candidates:** any repeated `className`/JSX patterns observed that may warrant extraction to `components/common/`
 - Do not run database migrations without confirming first
 - Run `bun run test` and verify all tests pass before committing
 - Commit all changes at the end of each session with a descriptive message
