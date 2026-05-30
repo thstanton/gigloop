@@ -6,6 +6,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const config: StorybookConfig = {
   stories: ['../src/**/*.stories.@(ts|tsx)'],
+  staticDirs: ['../public'],
   framework: {
     name: '@storybook/react-vite',
     options: {},
@@ -15,6 +16,7 @@ const config: StorybookConfig = {
     config.resolve.alias = {
       ...(config.resolve.alias ?? {}),
       '@': path.resolve(__dirname, '../src'),
+      '@clerk/react': path.resolve(__dirname, './clerk-mock.ts'),
     };
     return config;
   },
