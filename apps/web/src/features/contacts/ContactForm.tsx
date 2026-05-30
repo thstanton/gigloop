@@ -189,12 +189,12 @@ export default function ContactForm({
             name="primaryRole"
             control={control}
             render={({ field }) => (
-              <Select value={field.value} onValueChange={field.onChange}>
+              <Select value={field.value || 'NONE'} onValueChange={(v) => field.onChange(v === 'NONE' ? '' : v)}>
                 <SelectTrigger>
                   <SelectValue placeholder="No primary role" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">No primary role</SelectItem>
+                  <SelectItem value="NONE">No primary role</SelectItem>
                   <SelectItem value="CUSTOMER">Customer</SelectItem>
                   <SelectItem value="VENUE">Venue</SelectItem>
                   <SelectItem value="BOOKING_AGENT">Booking agent</SelectItem>

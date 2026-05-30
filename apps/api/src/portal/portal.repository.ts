@@ -17,13 +17,13 @@ export class PortalRepository {
         sets: {
           orderBy: { order: 'asc' },
           include: {
-            performanceFormat: { select: { id: true, label: true, icon: true } },
+            package: { select: { id: true, label: true, icon: true } },
           },
         },
-        performanceFormats: {
+        packages: {
           orderBy: { order: 'asc' },
           include: {
-            performanceFormat: { select: { id: true, label: true, icon: true } },
+            package: { select: { id: true, label: true, icon: true } },
           },
         },
         invoices: {

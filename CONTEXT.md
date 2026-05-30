@@ -6,7 +6,7 @@ A CRM for musicians. The central workflow is managing Bookings with Contacts.
 
 **Design principle — contextual actions:** The [[BookingChecklist]] is the primary interface for progressing a booking. The happy path is: musician opens a booking, sees what needs doing, and completes it from the checklist without navigating elsewhere. Other panels (Invoices, Communications, Documents) exist for specificity and historical detail — not for primary workflow. Every outstanding checklist item should, where possible, carry an inline action that resolves it in one tap. This is the core differentiator: a smart management system that surfaces the right action at the right time, rather than a passive record-keeper the musician has to manually interrogate. Checklist intelligence is scoped to a single booking — cross-booking awareness (e.g. double-booking detection, band member coordination) is explicitly deferred.
 
-**Design principle — template + overrides:** System-provided defaults (seeded [[PerformanceFormat]]s, built-in [[Template]]s, [[UserProfile]] reminder offsets) act as templates. Per-booking configuration is always a copy of that template, editable by the musician without touching the original. Further customisation of templates and user-defined defaults is a P2 concern — MVP ships sensible system defaults only.
+**Design principle — template + overrides:** System-provided defaults (seeded [[Package]]s, built-in [[Template]]s, [[UserProfile]] reminder offsets) act as templates. Per-booking configuration is always a copy of that template, editable by the musician without touching the original. Packages are fully user-customisable; further customisation of templates and other user-defined defaults is a P2 concern.
 
 **Design principle — enums for closed lifecycles only:** Use Prisma enums for states that are genuinely exhaustive domain constants (e.g. `BookingStatus`, `InvoiceStatus`). Avoid them for extensible classifier fields (event categories, genres, format types) — store those as validated strings instead. Adding a new value to an extensible enum requires a DB migration and cascading code changes; a constants list requires only a deploy.
 
@@ -46,7 +46,7 @@ Status transitions are not enforced by the API — a Booking can move freely bet
 - **title** (optional): human-readable label; useful when the booking is for a named event (e.g. a festival) not easily derived from the customer name
 - **fee**: the agreed total amount (Option A — independent of invoice line items; represents what was verbally agreed, used in the contract)
 - **notes** (optional): freeform internal notes for the musician
-- **eventType**: string — one of `WEDDING | CORPORATE | PRIVATE | RESIDENCY | FESTIVAL | OUTDOOR | FUNCTION | OTHER`; a display classifier and filter axis; stored as a plain string (not a Prisma enum), validated in application code; decoupled from [[PerformanceFormat]] behaviour
+- **eventType**: string — one of `WEDDING | CORPORATE | PRIVATE | RESIDENCY | FESTIVAL | OUTDOOR | FUNCTION | OTHER`; a display classifier and filter axis; stored as a plain string (not a Prisma enum), validated in application code; decoupled from [[Package]] behaviour
 - **customerId** (required FK → Contact)
 - **venueId** (optional FK → Contact): venue address/info lives on the Contact record, not duplicated
 - **bookingAgentId** (optional FK → Contact)
@@ -87,14 +87,14 @@ A person or organisation the musician does business with. Role-agnostic — the 
 All fields live on the Contact table as nullable columns — no sub-type tables. A Contact can serve as both a venue and a booking agent on different Bookings; the extra fields are always available regardless of role.
 
 ### Set
-A scheduled performance slot within a Booking — always traceable to a [[PerformanceFormat]]. Multiple Sets form the running order for the day and constitute the performance schedule in the contract. Fields:
+A scheduled performance slot within a Booking — always traceable to a [[Package]]. Multiple Sets form the running order for the day and constitute the performance schedule in the contract. Fields:
 - **duration** (required): length in minutes (e.g. 45)
 - **startTime** (optional): the time the set begins (e.g. 14:00) — set at the booking level; not on the format template
 - **label** (optional): occasion name (e.g. "Ceremony", "Drinks Reception")
 - **order** (required): integer used to preserve sequence when start times are absent
-- **performanceFormatId** (optional FK → [[PerformanceFormat]]): records which format this set was copied from; used to group sets by format in the UI
+- **packageId** (optional FK → [[Package]]): records which package this set was copied from; used to group sets by package in the UI
 
-Sets are created by applying a [[PerformanceFormat]] to a booking — the format's default slots are copied as editable Set records. Ad-hoc sets without a format association are not permitted. Song requirements within a Set (must-haves, don't-plays, special roles) are deferred to the Song Library feature.
+Sets are created by applying a [[Package]] to a booking — the package's default slots are copied as editable Set records. Ad-hoc sets without a package association are not permitted. Song requirements within a Set (must-haves, don't-plays, special roles) are deferred to the Song Library feature.
 
 ### Invoice
 A financial document issued to a Contact for a Booking. A Booking can have multiple Invoices (e.g. a deposit invoice followed by a balance invoice, or a single full invoice — the musician decides). Has many [[InvoiceLineItem]]s.
@@ -305,7 +305,7 @@ A daily summary email sent to the musician via Resend. MVP scope. Contains upcom
 Items sorted by `dueDate` ascending within each booking; undated status-gate items follow dated items.
 
 ### MusicFormConfig
-The per-booking configuration for a [[MusicForm]]. Created at booking creation (if [[PerformanceFormat]]s are applied) or from the Music Form section on the booking detail page. Independent of the send invite action — the config may exist before the invite is sent.
+The per-booking configuration for a [[MusicForm]]. Created at booking creation (if [[Package]]s are applied) or from the Music Form section on the booking detail page. Independent of the send invite action — the config may exist before the invite is sent.
 
 **Fields:**
 - `keyMoments` — `{ label: string, section: string }[]`; `section` is the format label the moment came from (e.g. "Wedding Ceremony"), used to group moments in the portal form. Copied from applied formats; editable per-booking without affecting the format template.
@@ -383,25 +383,29 @@ The home screen. Action-oriented — designed for the musician's morning check-i
 
 **Actionable checklist items shown in Actions widget:** USER-completedBy items with an associated shortcut action, surfaced by the same two rules as [[DigestNotification]] (dated items within `reminderLeadDays` of their `dueDate`; undated items that are the last status gate). Passive-wait items (CUSTOMER-completedBy) are omitted. Items sorted by `dueDate` ascending; undated status-gate items follow.
 
-### PerformanceFormat
-A named template defining what a musician offers for a specific type of performance engagement. Per-user — seeded from system defaults on first access (on-demand); user-defined formats are a P2 feature.
+### Package
+A named template defining what a musician offers for a specific type of performance occasion. Per-user — seeded from system defaults on first access (on-demand); user-defined packages are fully supported. Multiple Packages applied to a booking form the complete performance structure for that event.
 
 **Fields:**
 - `label` — human-readable name (e.g. "Wedding Ceremony", "Evening Reception", "Solo Piano")
-- `category` (optional string) — contextual classifier using the same values as `Booking.eventType`; filters which formats are suggested when creating a booking of that type
-- `keyMoments` — `string[]`; moment labels copied into [[MusicFormConfig]] when the format is applied to a booking (e.g. `["Processional", "Signing of the Register (Song 1)", "Signing of the Register (Song 2)", "Signing of the Register (Song 3)", "Recessional"]`)
-- `defaultGenreSelection` — `string[]`; genre values enabled by default in [[MusicFormConfig]]; all formats default to Contemporary, Classical, Jazz, Film/TV/Musicals (Bollywood and Christmas excluded)
+- `category` (optional string) — contextual classifier; same value set as `Booking.eventType` (`WEDDING | CORPORATE | PRIVATE | RESIDENCY | FESTIVAL | OUTDOOR | FUNCTION | OTHER`). Used in two places: (1) in the booking creation form — matching-category packages appear above the fold, others below; (2) on `/admin/packages` — packages are grouped by category. Null = uncategorised; these appear in their own group.
+- `keyMoments` — `string[]`; moment labels copied into [[MusicFormConfig]] when the package is applied to a booking (e.g. `["Processional", "Signing of the Register (Song 1)", "Signing of the Register (Song 2)", "Signing of the Register (Song 3)", "Recessional"]`)
+- `defaultGenreSelection` — `string[]`; genre values enabled by default in [[MusicFormConfig]]; all packages default to Contemporary, Classical, Jazz, Film/TV/Musicals (Bollywood and Christmas excluded)
 - `icon` — Lucide icon name (string) for display in the booking creation form and booking detail
-- `sets` — ordered list of default [[Set]] definitions (label, duration, order); copied onto the booking as editable `PerformanceSet` records when the format is applied; start times are not set on the format — added at the booking level
-- `notes` (optional) — freeform description of the format
+- `sets` — ordered list of default [[Set]] definitions (label, duration, order); copied onto the booking as editable Set records when the package is applied; start times are not set on the package — added at the booking level
+- `notes` (optional) — freeform description of the package
+- `isSystemDefault` — boolean; true for seeded system packages, false for user-created packages. Both can be deleted — but only if no Bookings reference them (409 if referenced). Both can be edited per-user without affecting other users.
+- `enabled` — boolean; disabled packages are hidden from the booking creation form picker. Mirrors the enable/disable toggle on checklist defaults.
 
-**Template + overrides:** applying a format to a booking copies its sets and seeds its `keyMoments` + `defaultGenreSelection` into the booking's [[MusicFormConfig]]. Per-booking edits do not affect the format.
+**Template + overrides:** applying a package to a booking copies its sets and seeds its `keyMoments` + `defaultGenreSelection` into the booking's [[MusicFormConfig]]. Per-booking edits do not affect the package.
 
-**Relationship to [[Set]]:** every `Set` on a booking is traceable to a `PerformanceFormat` via an optional `performanceFormatId` FK. Ad-hoc sets without a format are not permitted.
+**Relationship to [[Set]]:** every `Set` on a booking is traceable to a `Package` via an optional FK. Ad-hoc sets without a package are not permitted.
 
-**Relationship to [[Booking]]:** a booking has many PerformanceFormats applied (via a `BookingPerformanceFormat` join table with an `order` field). Formats are selected at booking creation via multi-select chips in the creation form; editing (add/remove/reorder) is available on the booking detail page.
+**Relationship to [[Booking]]:** a booking has many Packages applied (via a join table with an `order` field). Packages are selected at booking creation via multi-select chips in the creation form; editing (add/remove/reorder) is available on the booking detail page.
 
-**MVP seeded formats (system defaults, per user):**
+**Management UI (`/admin/packages`):** packages are displayed as read-only cards grouped by category. Each card shows the icon + label, and a read-only slot list (label + duration only — start times are booking-level). Card interactions: an enable/disable toggle (mirrors checklist defaults) and an Edit button that opens a right-side drawer. All editing — label, icon, category, notes, keyMoments, defaultGenreSelection, slots (add/remove/reorder with up/down arrows) — is done in the drawer with an explicit Save button. Deletion is also in the drawer (bottom, same pattern as booking cancellation). A "+ New package" button on the page opens the same drawer with empty fields.
+
+**System defaults (seeded per user):**
 
 | Label | Category | Sets | Key moments |
 |---|---|---|---|
@@ -412,8 +416,6 @@ A named template defining what a musician offers for a specific type of performa
 | Corporate Dinner | CORPORATE | Drinks, 60 min · Dinner, 90 min | — |
 | Background Music | — | Background Music, 60 min | — |
 | Solo Piano | — | Solo Piano, 60 min | — |
-
-Due dates are configured per item via `dueDateRule` in `UserProfile.preferences.checklistDefaults`. The global reminder lead time is `UserProfile.preferences.reminderLeadDays`. No flat `*ReminderDays` columns exist on UserProfile — adding a new item type requires no DB migration.
 
 ### Contact Roles (on a Booking)
 A Booking has up to three Contact relations, each a separate FK:

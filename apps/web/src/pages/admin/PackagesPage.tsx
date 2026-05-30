@@ -13,6 +13,7 @@ import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
 import type { CreatePackageInput, Package, SlotInput, UpdatePackageInput } from '@/types/api';
 import { cn } from '@/lib/utils';
 import { Card } from '@/components/common/Card';
+import { EmptyState } from '@/components/common/EmptyState';
 
 // ─── Icon registry ────────────────────────────────────────────────────────────
 
@@ -586,12 +587,12 @@ export default function PackagesPage() {
       )}
 
       {!isLoading && packages.length === 0 && (
-        <div className="text-center py-16">
-          <Music size={40} strokeWidth={1.5} className="mx-auto text-muted mb-3" />
-          <h2 className="text-base font-medium text-foreground mb-1">No packages yet</h2>
-          <p className="text-sm text-muted mb-4">Create a package to get started.</p>
-          <Button onClick={() => setDrawerMode({ type: 'create' })}>New package</Button>
-        </div>
+        <EmptyState
+          icon={<Music size={40} strokeWidth={1.5} />}
+          heading="No packages yet"
+          description="Create a package to get started."
+          action={<Button onClick={() => setDrawerMode({ type: 'create' })}>New package</Button>}
+        />
       )}
 
       {!isLoading && packages.length > 0 && (

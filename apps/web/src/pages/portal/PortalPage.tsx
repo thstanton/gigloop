@@ -186,7 +186,7 @@ export function SetsCard({ sets, formats, bold }: { sets: PortalBookingSet[]; fo
 
   const setsByFormatId = new Map<string | null, PortalBookingSet[]>();
   for (const s of sets) {
-    const key = s.performanceFormatId ?? null;
+    const key = s.packageId ?? null;
     if (!setsByFormatId.has(key)) setsByFormatId.set(key, []);
     setsByFormatId.get(key)!.push(s);
   }

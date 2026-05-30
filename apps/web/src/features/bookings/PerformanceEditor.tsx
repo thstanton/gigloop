@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2, Heart, GlassWater, Utensils, Moon, Briefcase, Music, Music2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { GhostButton } from '@/components/common/GhostButton';
 import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
 import type {
   BookingDetail,
@@ -270,15 +271,16 @@ export default function PerformanceEditor({ booking }: { booking: BookingDetail 
               />
             ))}
 
-            <button
-              type="button"
+            <GhostButton
               onClick={() => handleAddSet(bpf)}
               disabled={addSet.isPending}
-              className="mt-1 inline-flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors disabled:opacity-50"
+              variant="primary"
+              size="xs"
+              icon={<Plus size={12} aria-hidden="true" />}
+              className="mt-1"
             >
-              <Plus size={12} aria-hidden="true" />
               Add set
-            </button>
+            </GhostButton>
           </div>
         );
       })}
@@ -330,14 +332,13 @@ export default function PerformanceEditor({ booking }: { booking: BookingDetail 
       )}
 
       {!addOpen ? (
-        <button
-          type="button"
+        <GhostButton
           onClick={() => setAddOpen(true)}
-          className="inline-flex items-center gap-1 text-sm text-primary hover:text-primary/80 transition-colors"
+          variant="primary"
+          icon={<Plus size={14} aria-hidden="true" />}
         >
-          <Plus size={14} aria-hidden="true" />
           Add format
-        </button>
+        </GhostButton>
       ) : (
         <div className="space-y-2">
           <p className="text-xs text-muted font-medium uppercase tracking-wide">Select a format</p>

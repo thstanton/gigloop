@@ -124,12 +124,12 @@ export class PortalService {
           label: s.label,
           startTime: s.startTime,
           duration: s.duration,
-          performanceFormatId: s.performanceFormatId,
+          packageId: s.packageId,
         })),
-        formats: booking.performanceFormats.map((bpf) => ({
-          id: bpf.performanceFormatId,
-          label: bpf.performanceFormat.label,
-          icon: bpf.performanceFormat.icon,
+        formats: booking.packages.map((bpf) => ({
+          id: bpf.packageId,
+          label: bpf.package.label,
+          icon: bpf.package.icon,
           order: bpf.order,
         })),
         contractSignedAt: activeContract?.status === 'SIGNED'

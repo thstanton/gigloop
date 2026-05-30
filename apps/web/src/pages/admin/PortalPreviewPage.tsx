@@ -34,10 +34,10 @@ const PREVIEW_FORMATTED_DATE = PREVIEW_DATE.toLocaleDateString('en-GB', {
 });
 
 const PREVIEW_SETS = [
-  { order: 0, label: null, startTime: '4:00 pm', duration: 60, performanceFormatId: 'fmt1' },
-  { order: 1, label: null, startTime: '7:00 pm', duration: 45, performanceFormatId: 'fmt2' },
-  { order: 2, label: 'Set 1', startTime: '8:30 pm', duration: 60, performanceFormatId: 'fmt3' },
-  { order: 3, label: 'Set 2', startTime: '10:00 pm', duration: 60, performanceFormatId: 'fmt3' },
+  { order: 0, label: null, startTime: '4:00 pm', duration: 60, packageId: 'fmt1' },
+  { order: 1, label: null, startTime: '7:00 pm', duration: 45, packageId: 'fmt2' },
+  { order: 2, label: 'Set 1', startTime: '8:30 pm', duration: 60, packageId: 'fmt3' },
+  { order: 3, label: 'Set 2', startTime: '10:00 pm', duration: 60, packageId: 'fmt3' },
 ];
 
 const PREVIEW_FORMATS = [

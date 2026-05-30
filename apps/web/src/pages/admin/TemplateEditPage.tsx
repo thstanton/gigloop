@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
+import { PageHeader } from '@/components/common/PageHeader';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
@@ -8,7 +9,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@clerk/react';
 import {
   Bold, Italic, Underline as UnderlineIcon, Link as LinkIcon,
-  List, ListOrdered, ChevronLeft, ChevronDown, Heading2, Heading3,
+  List, ListOrdered, ChevronDown, Heading2, Heading3,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -258,19 +259,13 @@ function TemplateEditor({ template }: { template: Template }) {
 
   return (
     <div className="px-4 md:px-6 py-6 max-w-3xl mx-auto">
-      <Link
-        to="/admin/templates"
-        className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground transition-colors mb-6"
-      >
-        <ChevronLeft size={14} />
-        Templates
-      </Link>
-
-      <h1 className="font-display text-2xl font-semibold text-foreground mb-1">
-        {meta?.name ?? template.builtInType}
-      </h1>
-      {meta && (
-        <p className="text-sm text-muted mb-6">{meta.description}</p>
+      <PageHeader
+        title={meta?.name ?? template.builtInType ?? 'Template'}
+        backHref="/admin/templates"
+        backLabel="Templates"
+      />
+      {meta?.description && (
+        <p className="text-sm text-muted -mt-4 mb-6">{meta.description}</p>
       )}
 
       {/* Editor */}

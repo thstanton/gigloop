@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import InvoiceStatusPill from '@/components/InvoiceStatusPill';
+import InvoiceStatusPill from '@/components/domain/InvoiceStatusPill';
 import { useBooking } from '@/lib/hooks/useBooking';
 import { useBookingActions } from '@/lib/hooks/useBookingActions';
 import { useBookingInvoices } from '@/lib/hooks/useBookingInvoices';
@@ -43,6 +43,8 @@ import {
 import { EVENT_TYPE_LABELS, GENRE_LABELS, STATUS_ORDER } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 import { Card } from '@/components/common/Card';
+import { SectionHeader } from '@/components/common/SectionHeader';
+import { GhostButton } from '@/components/common/GhostButton';
 import {
   Sheet,
   SheetContent,
@@ -433,14 +435,6 @@ function InlineVenueAdd({ bookingId }: { bookingId: string }) {
         <X size={16} />
       </button>
     </div>
-  );
-}
-
-// ─── SectionHeader ────────────────────────────────────────────────────────────
-
-function SectionHeader({ label }: { label: string }) {
-  return (
-    <h2 className="text-sm font-semibold text-foreground mb-3">{label}</h2>
   );
 }
 
@@ -961,15 +955,15 @@ function ContractCard({
   const contractDoc = documents.find((d) => d.type === 'CONTRACT' && d.contractStatus !== 'VOID');
 
   const headerAction = (isEmpty || isVoid) ? (
-    <button
-      type="button"
+    <GhostButton
       onClick={onCreateContract}
       disabled={isCreating}
-      className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors disabled:opacity-50"
+      variant="primary"
+      size="xs"
+      icon={<Plus size={12} />}
     >
-      <Plus size={12} />
       {isCreating ? 'Creating…' : 'Create contract'}
-    </button>
+    </GhostButton>
   ) : null;
 
   const contractDate = contract
@@ -1886,14 +1880,14 @@ export default function BookingDetailPage() {
               <section>
                 <div className="flex items-center justify-between mb-3">
                   <h2 className="text-sm font-semibold text-foreground">Checklist</h2>
-                  <button
-                    type="button"
+                  <GhostButton
                     onClick={() => setShowAddItem((v) => !v)}
-                    className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors"
+                    variant="primary"
+                    size="xs"
+                    icon={<Plus size={12} />}
                   >
-                    <Plus size={12} />
                     Add item
-                  </button>
+                  </GhostButton>
                 </div>
 
                 {showAddItem && (
@@ -1966,10 +1960,9 @@ export default function BookingDetailPage() {
           {/* Invoices */}
           <Card title="Invoices" action={<DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button type="button" className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors">
-                    <Plus size={12} />
+                  <GhostButton variant="primary" size="xs" icon={<Plus size={12} />}>
                     Add invoice
-                  </button>
+                  </GhostButton>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem
@@ -2083,10 +2076,9 @@ export default function BookingDetailPage() {
           <section>
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-semibold text-foreground">Communications</h2>
-              <button type="button" onClick={() => openCompose()} className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors">
-                <Mail size={12} />
+              <GhostButton onClick={() => openCompose()} variant="primary" size="xs" icon={<Mail size={12} />}>
                 Send email
-              </button>
+              </GhostButton>
             </div>
             {communications.length === 0 ? (
               <div className="flex items-center gap-2 text-muted py-1">

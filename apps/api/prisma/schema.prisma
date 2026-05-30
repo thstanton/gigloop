@@ -140,9 +140,9 @@ model Booking {
   bookingAgentId String?
   bookingAgent   Contact? @relation("BookingAgent", fields: [bookingAgentId], references: [id], onDelete: Restrict)
 
-  sets              PerformanceSet[]
-  performanceFormats BookingPerformanceFormat[]
-  invoices          Invoice[]
+  sets     PerformanceSet[]
+  packages BookingPackage[]
+  invoices Invoice[]
   communications    Communication[]
   documents         Document[]
   musicFormConfig   MusicFormConfig?
@@ -217,15 +217,15 @@ model PerformanceSet {
   bookingId String
   booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 
-  performanceFormatId String?
-  performanceFormat   PerformanceFormat? @relation(fields: [performanceFormatId], references: [id], onDelete: SetNull)
+  packageId String?
+  package   Package? @relation(fields: [packageId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([bookingId])
-  @@index([performanceFormatId])
+  @@index([packageId])
 }
 
-model PerformanceFormat {
+model Package {
   id        String   @id @default(uuid())
   userId    String
   createdAt DateTime @default(now())
@@ -237,15 +237,17 @@ model PerformanceFormat {
   keyMoments            String[]
   defaultGenreSelection String[]
   notes                 String?
+  isSystemDefault       Boolean  @default(false)
+  enabled               Boolean  @default(true)
 
-  slots          PerformanceFormatSlot[]
-  bookingFormats BookingPerformanceFormat[]
-  sets           PerformanceSet[]
+  slots    PackageSlot[]
+  bookings BookingPackage[]
+  sets     PerformanceSet[]
 
   @@index([userId])
 }
 
-model PerformanceFormatSlot {
+model PackageSlot {
   id        String   @id @default(uuid())
   userId    String
   createdAt DateTime @default(now())
@@ -255,14 +257,14 @@ model PerformanceFormatSlot {
   duration Int
   order    Int
 
-  performanceFormatId String
-  performanceFormat   PerformanceFormat @relation(fields: [performanceFormatId], references: [id], onDelete: Cascade)
+  packageId String
+  package   Package @relation(fields: [packageId], references: [id], onDelete: Cascade)
 
   @@index([userId])
-  @@index([performanceFormatId])
+  @@index([packageId])
 }
 
-model BookingPerformanceFormat {
+model BookingPackage {
   id        String   @id @default(uuid())
   userId    String
   createdAt DateTime @default(now())
@@ -273,12 +275,12 @@ model BookingPerformanceFormat {
   bookingId String
   booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 
-  performanceFormatId String
-  performanceFormat   PerformanceFormat @relation(fields: [performanceFormatId], references: [id], onDelete: Restrict)
+  packageId String
+  package   Package @relation(fields: [packageId], references: [id], onDelete: Restrict)
 
   @@index([userId])
   @@index([bookingId])
-  @@index([performanceFormatId])
+  @@index([packageId])
 }
 
 model Invoice {

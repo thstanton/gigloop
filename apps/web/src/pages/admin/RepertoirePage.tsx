@@ -20,6 +20,7 @@ import { apiPost, apiPatch, apiDelete } from '@/lib/api';
 import { GENRE_LABELS, ALL_GENRES } from '@/lib/constants';
 import type { Song } from '@/types/api';
 import { cn } from '@/lib/utils';
+import { EmptyState } from '@/components/common/EmptyState';
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
@@ -414,16 +415,12 @@ export default function RepertoirePage() {
           ))}
         </div>
       ) : songs.length === 0 && !addingNew ? (
-        <div className="py-16 text-center">
-          <Music2 size={32} className="text-muted mx-auto mb-3" strokeWidth={1.5} />
-          <p className="text-sm font-medium text-foreground mb-1">No songs yet</p>
-          <p className="text-sm text-muted mb-4">
-            Add your first song to start building your repertoire.
-          </p>
-          <Button size="sm" onClick={() => setAddingNew(true)}>
-            Add your first song
-          </Button>
-        </div>
+        <EmptyState
+          icon={<Music2 size={40} strokeWidth={1.5} />}
+          heading="No songs yet"
+          description="Add your first song to start building your repertoire."
+          action={<Button size="sm" onClick={() => setAddingNew(true)}>Add your first song</Button>}
+        />
       ) : filtered.length === 0 ? (
         <div className="py-12 text-center">
           <p className="text-sm text-muted">No songs match your search.</p>

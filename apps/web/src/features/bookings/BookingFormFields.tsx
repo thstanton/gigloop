@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/select';
 import ContactPicker from './ContactPicker';
 import { EVENT_TYPE_LABELS } from '@/lib/constants';
-import type { EventType, PerformanceFormat } from '@/types/api';
+import type { EventType, Package } from '@/types/api';
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
@@ -61,7 +61,7 @@ function FormatSelector({
   value,
   onChange,
 }: {
-  formats: PerformanceFormat[];
+  formats: Package[];
   value: string[];
   onChange: (ids: string[]) => void;
 }) {
@@ -85,7 +85,7 @@ function FormatSelector({
 
   const selected = value
     .map((id) => formats.find((f) => f.id === id))
-    .filter((f): f is PerformanceFormat => f !== undefined);
+    .filter((f): f is Package => f !== undefined);
 
   return (
     <div className="space-y-3">
@@ -152,7 +152,7 @@ interface Props {
   register: UseFormRegister<BookingFormValues>;
   errors: FieldErrors<BookingFormValues>;
   songRequestFormEnabled?: boolean;
-  formats?: PerformanceFormat[];
+  formats?: Package[];
   hideNotes?: boolean;
 }
 
@@ -265,6 +265,7 @@ export function BookingFormFields({
                 onChange={(id) => field.onChange(id ?? '')}
                 placeholder="Select customer..."
                 label="customer"
+                preferredRole="CUSTOMER"
               />
             )}
           />
@@ -284,6 +285,7 @@ export function BookingFormFields({
                 onChange={field.onChange}
                 placeholder="Select venue..."
                 label="venue"
+                preferredRole="VENUE"
               />
             )}
           />
@@ -300,6 +302,7 @@ export function BookingFormFields({
                 onChange={field.onChange}
                 placeholder="Select booking agent..."
                 label="booking agent"
+                preferredRole="BOOKING_AGENT"
               />
             )}
           />

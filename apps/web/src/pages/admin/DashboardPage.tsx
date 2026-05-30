@@ -6,7 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, AlertCircle, RotateCcw } from 'lucide-react';
 import { apiGet } from '@/lib/api';
 import { useBookings } from '@/lib/hooks/useBookings';
-import BookingStatusPill from '@/components/BookingStatusPill';
+import BookingStatusPill from '@/components/domain/BookingStatusPill';
 import { formatDate } from '@/lib/formatters';
 import type { DashboardAction, BookingListItem } from '@/types/api';
 import { cn } from '@/lib/utils';

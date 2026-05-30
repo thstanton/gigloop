@@ -190,7 +190,7 @@ export class BookingsService {
     await this.findOne(userId, bookingId);
     const bookingFormat = await this.repo.findBookingFormat(userId, bookingId, bookingFormatId);
     if (!bookingFormat) throw new NotFoundException('Applied format not found');
-    const booking = await this.repo.removeFormat(bookingId, bookingFormatId, bookingFormat.performanceFormatId);
+    const booking = await this.repo.removeFormat(bookingId, bookingFormatId, bookingFormat.packageId);
     return this.mapBooking(booking!);
   }
 

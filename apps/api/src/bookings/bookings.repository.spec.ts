@@ -15,7 +15,7 @@ type MockPrisma = {
     update: jest.Mock;
     delete: jest.Mock;
   };
-  performanceFormat: {
+  package: {
     findMany: jest.Mock;
   };
 };
@@ -34,7 +34,7 @@ function makePrisma(): MockPrisma {
       update: jest.fn(),
       delete: jest.fn(),
     },
-    performanceFormat: {
+    package: {
       findMany: jest.fn(),
     },
   };
@@ -138,16 +138,16 @@ describe('BookingsRepository', () => {
 
   describe('findFormats', () => {
     it('queries by userId and ids', async () => {
-      prisma.performanceFormat.findMany.mockResolvedValue([]);
+      prisma.package.findMany.mockResolvedValue([]);
       await repo.findFormats('u1', ['f1', 'f2']);
-      expect(prisma.performanceFormat.findMany).toHaveBeenCalledWith(
+      expect(prisma.package.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ where: { id: { in: ['f1', 'f2'] }, userId: 'u1' } }),
       );
     });
   });
 
   describe('createWithFormats', () => {
-    it('creates sets from format slots with performanceFormatId', async () => {
+    it('creates sets from format slots with packageId', async () => {
       prisma.booking.create.mockResolvedValue({ id: 'b1' });
       const fmt = {
         id: 'f1',
@@ -158,7 +158,7 @@ describe('BookingsRepository', () => {
       };
       await repo.createWithFormats('u1', { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', checklistItems: [] }, [fmt], false);
       const data = prisma.booking.create.mock.calls[0][0].data;
-      expect(data.sets.create[0]).toMatchObject({ duration: 30, performanceFormatId: 'f1' });
+      expect(data.sets.create[0]).toMatchObject({ duration: 30, packageId: 'f1' });
     });
 
     it('creates musicFormConfig when formats have keyMoments and songRequestFormEnabled', async () => {

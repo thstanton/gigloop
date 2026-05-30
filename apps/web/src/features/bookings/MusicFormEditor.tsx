@@ -38,10 +38,10 @@ export default function MusicFormEditor({
 
     const existing = config.keyMoments ?? [];
     const existingKeys = new Set(existing.map((km) => `${km.section}::${km.label}`));
-    const fromFormats: KeyMoment[] = (booking.performanceFormats ?? []).flatMap((bpf) =>
-      bpf.performanceFormat.keyMoments.map((km) => ({
+    const fromFormats: KeyMoment[] = (booking.packages ?? []).flatMap((bpf) =>
+      bpf.package.keyMoments.map((km) => ({
         label: km,
-        section: bpf.performanceFormat.label,
+        section: bpf.package.label,
       })),
     );
     const merged = [
@@ -50,13 +50,13 @@ export default function MusicFormEditor({
     ];
     const seedGenres = [
       ...new Set(
-        (booking.performanceFormats ?? []).flatMap((bpf) => bpf.performanceFormat.defaultGenreSelection),
+        (booking.packages ?? []).flatMap((bpf) => bpf.package.defaultGenreSelection),
       ),
     ];
     setLocalKeyMoments(merged);
     setLocalGenres(config.enabledGenres?.length ? config.enabledGenres : seedGenres);
     setInitialized(true);
-  }, [config, initialized, booking.performanceFormats]);
+  }, [config, initialized, booking.packages]);
 
   const save = useMutation({
     mutationFn: () =>

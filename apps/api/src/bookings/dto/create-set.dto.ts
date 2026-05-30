@@ -23,8 +23,8 @@ export class CreateSetDto {
   @IsNotEmpty()
   label?: string;
 
-  @ApiPropertyOptional({ description: 'Associate this set with a performance format' })
+  @ApiPropertyOptional({ description: 'Associate this set with a package' })
   @IsOptional()
   @IsString()
-  performanceFormatId?: string;
+  packageId?: string;
 }

@@ -284,7 +284,7 @@ describe('BookingsService', () => {
   });
 
   describe('applyFormat', () => {
-    const rawBooking = { ...booking, musicFormConfig: null, musicFormResponse: null, performanceFormats: [] };
+    const rawBooking = { ...booking, musicFormConfig: null, musicFormResponse: null, packages: [] };
 
     it('applies a format when booking and format both exist', async () => {
       const fmt = { id: 'f1', label: 'Ceremony', keyMoments: [], defaultGenreSelection: [], slots: [] };
@@ -309,10 +309,10 @@ describe('BookingsService', () => {
   });
 
   describe('removeFormat', () => {
-    const rawBooking = { ...booking, musicFormConfig: null, musicFormResponse: null, performanceFormats: [] };
+    const rawBooking = { ...booking, musicFormConfig: null, musicFormResponse: null, packages: [] };
 
     it('removes a format when booking and bookingFormat both exist', async () => {
-      const bookingFormat = { id: 'bf1', performanceFormatId: 'f1' };
+      const bookingFormat = { id: 'bf1', packageId: 'f1' };
       repo.findOne.mockResolvedValue(rawBooking);
       repo.findBookingFormat.mockResolvedValue(bookingFormat);
       repo.removeFormat.mockResolvedValue(rawBooking);

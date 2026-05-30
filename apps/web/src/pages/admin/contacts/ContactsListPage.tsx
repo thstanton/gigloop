@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useContacts } from '@/lib/hooks/useContacts';
 import type { Contact } from '@/types/api';
+import { EmptyState } from '@/components/common/EmptyState';
 
 const PRIMARY_ROLE_LABELS: Record<string, string> = {
   CUSTOMER: 'Customer',
@@ -14,25 +15,15 @@ const PRIMARY_ROLE_LABELS: Record<string, string> = {
 
 // ─── Empty state ──────────────────────────────────────────────────────────────
 
-function EmptyState({ filtered }: { filtered: boolean }) {
+function ContactsEmptyState({ filtered }: { filtered: boolean }) {
   const navigate = useNavigate();
   return (
-    <div className="flex flex-col items-center justify-center py-20 gap-4">
-      <Users size={48} strokeWidth={1.25} className="text-muted opacity-40" />
-      <div className="text-center space-y-1">
-        <p className="text-sm font-medium text-foreground">
-          {filtered ? 'No contacts match your search' : 'No contacts yet'}
-        </p>
-        <p className="text-sm text-muted">
-          {filtered ? 'Try a different name or email.' : 'Add your first contact to get started.'}
-        </p>
-      </div>
-      {!filtered && (
-        <Button size="sm" onClick={() => navigate('/admin/contacts/new')}>
-          New contact
-        </Button>
-      )}
-    </div>
+    <EmptyState
+      icon={<Users size={40} strokeWidth={1.5} />}
+      heading={filtered ? 'No contacts match your search' : 'No contacts yet'}
+      description={filtered ? 'Try a different name or email.' : 'Add your first contact to get started.'}
+      action={!filtered && <Button size="sm" onClick={() => navigate('/admin/contacts/new')}>New contact</Button>}
+    />
   );
 }
 
@@ -211,7 +202,7 @@ export default function ContactsListPage() {
       )}
 
       {!isLoading && !isError && filtered.length === 0 && (
-        <EmptyState filtered={search.trim().length > 0} />
+        <ContactsEmptyState filtered={search.trim().length > 0} />
       )}
 
       {!isLoading && !isError && filtered.length > 0 && (

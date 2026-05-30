@@ -1,7 +1,8 @@
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, Plus } from 'lucide-react';
+import { LabelValue } from '@/components/common/LabelValue';
 import { Button } from '@/components/ui/button';
-import BookingStatusPill from '@/components/BookingStatusPill';
+import BookingStatusPill from '@/components/domain/BookingStatusPill';
 import { useContact } from '@/lib/hooks/useContact';
 import { formatDate } from '@/lib/formatters';
 import { EVENT_TYPE_LABELS } from '@/lib/constants';
@@ -24,27 +25,15 @@ function buildNewBookingState(contact: ContactDetailType): { customerId?: string
 
 // ─── Info row ─────────────────────────────────────────────────────────────────
 
-function InfoRow({
-  label,
-  value,
-  href,
-}: {
-  label: string;
-  value: string | null | undefined;
-  href?: string;
-}) {
+function InfoRow({ label, value, href }: { label: string; value: string | null | undefined; href?: string }) {
   if (!value) return null;
   return (
-    <div className="py-3 grid grid-cols-[140px_1fr] gap-4 border-b border-border last:border-0">
-      <span className="text-sm text-muted">{label}</span>
-      {href ? (
-        <a href={href} className="text-sm text-foreground hover:text-primary transition-colors">
-          {value}
-        </a>
-      ) : (
-        <span className="text-sm text-foreground whitespace-pre-wrap">{value}</span>
-      )}
-    </div>
+    <LabelValue label={label}>
+      {href
+        ? <a href={href} className="hover:text-primary transition-colors">{value}</a>
+        : <span className="whitespace-pre-wrap">{value}</span>
+      }
+    </LabelValue>
   );
 }
 

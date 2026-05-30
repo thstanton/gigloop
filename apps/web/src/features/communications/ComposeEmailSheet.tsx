@@ -102,6 +102,9 @@ export default function ComposeEmailSheet({
     setFormIssueDate('');
     setFormDueDate('');
     editor?.commands.setContent('');
+    // Evict cached render results so renderResult reliably goes undefined → new value,
+    // ensuring the populate effect always re-fires on open even for the same template.
+    queryClient.removeQueries({ queryKey: ['renderEmail', bookingId] });
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Pre-select once when the filtered template list is ready
@@ -186,6 +189,7 @@ export default function ComposeEmailSheet({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bookingCommunications', bookingId] });
+      queryClient.invalidateQueries({ queryKey: ['bookingChecklist', bookingId] });
       if (showDateFields && invoiceId) {
         queryClient.invalidateQueries({ queryKey: ['bookingInvoices', bookingId] });
         queryClient.invalidateQueries({ queryKey: ['bookingDocuments', bookingId] });
@@ -281,13 +285,18 @@ export default function ComposeEmailSheet({
           {selectedTemplateId && (
             <div>
               <p className="text-xs text-muted mb-1">Subject</p>
-              <input
-                type="text"
-                value={subject}
-                onChange={(e) => setSubject(e.target.value)}
-                disabled={rendering}
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
-              />
+              {rendering ? (
+                <div className="h-9 rounded-md border border-border bg-background px-3 py-2 flex items-center">
+                  <div className="animate-pulse h-3 w-2/3 rounded bg-muted" />
+                </div>
+              ) : (
+                <input
+                  type="text"
+                  value={subject}
+                  onChange={(e) => setSubject(e.target.value)}
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              )}
             </div>
           )}
 
@@ -295,9 +304,17 @@ export default function ComposeEmailSheet({
           {selectedTemplateId && (
             <div>
               <p className="text-xs text-muted mb-1">Body</p>
-              <div className={`rounded-md border border-border bg-background px-3 py-2 tiptap-content ${rendering ? 'opacity-50' : ''}`}>
+              <div className="rounded-md border border-border bg-background px-3 py-2 tiptap-content">
                 {rendering ? (
-                  <p className="text-sm text-muted min-h-48 flex items-center">Loading…</p>
+                  <div className="animate-pulse space-y-2 min-h-48 py-1">
+                    <div className="h-3 rounded bg-muted w-full" />
+                    <div className="h-3 rounded bg-muted w-5/6" />
+                    <div className="h-3 rounded bg-muted w-4/6" />
+                    <div className="h-3 rounded bg-muted w-full mt-4" />
+                    <div className="h-3 rounded bg-muted w-3/4" />
+                    <div className="h-3 rounded bg-muted w-full" />
+                    <div className="h-3 rounded bg-muted w-2/3" />
+                  </div>
                 ) : (
                   <EditorContent editor={editor} />
                 )}

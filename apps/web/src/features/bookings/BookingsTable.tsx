@@ -10,10 +10,11 @@ import {
 } from '@tanstack/react-table';
 import { ChevronUp, ChevronDown, ChevronsUpDown, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import BookingStatusPill from '@/components/BookingStatusPill';
+import BookingStatusPill from '@/components/domain/BookingStatusPill';
 import type { BookingListItem } from '@/types/api';
 import { cn } from '@/lib/utils';
 import { formatDateAndDay, formatFeeWhole } from '@/lib/formatters';
+import { EmptyState } from '@/components/common/EmptyState';
 
 // ─── Column helper ───────────────────────────────────────────────────────────
 
@@ -86,20 +87,14 @@ function SortIcon({ direction }: { direction: 'asc' | 'desc' | false }) {
 
 // ─── Empty state ─────────────────────────────────────────────────────────────
 
-function EmptyState({ onNew }: { onNew?: () => void }) {
+function BookingsEmptyState({ onNew }: { onNew?: () => void }) {
   return (
-    <div className="flex flex-col items-center justify-center py-20 gap-4">
-      <Calendar size={48} strokeWidth={1.25} className="text-muted opacity-40" />
-      <div className="text-center space-y-1">
-        <p className="text-sm font-medium text-foreground">No bookings yet</p>
-        <p className="text-sm text-muted">Add your first booking to get started.</p>
-      </div>
-      {onNew && (
-        <Button size="sm" onClick={onNew}>
-          New booking
-        </Button>
-      )}
-    </div>
+    <EmptyState
+      icon={<Calendar size={40} strokeWidth={1.5} />}
+      heading="No bookings yet"
+      description="Add your first booking to get started."
+      action={onNew && <Button size="sm" onClick={onNew}>New booking</Button>}
+    />
   );
 }
 
@@ -168,7 +163,7 @@ export default function BookingsTable({ data, onNew }: BookingsTableProps) {
   });
 
   if (data.length === 0) {
-    return <EmptyState onNew={onNew} />;
+    return <BookingsEmptyState onNew={onNew} />;
   }
 
   return (

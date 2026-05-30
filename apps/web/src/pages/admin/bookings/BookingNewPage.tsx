@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { PageHeader } from '@/components/common/PageHeader';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ChevronLeft, CheckSquare, Square, X } from 'lucide-react';
+import { CheckSquare, Square, X } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@clerk/react';
 import { Button } from '@/components/ui/button';
@@ -25,7 +26,7 @@ import type {
   BookingStatus,
   ChecklistDefaultItem,
   EventType,
-  PerformanceFormat,
+  Package,
   UserProfile,
 } from '@/types/api';
 
@@ -78,8 +79,8 @@ export default function BookingNewPage() {
   });
 
   const { data: formats } = useQuery({
-    queryKey: ['performance-formats'],
-    queryFn: () => apiGet<PerformanceFormat[]>('/performance-formats'),
+    queryKey: ['packages'],
+    queryFn: () => apiGet<Package[]>('/packages'),
     enabled: isLoaded && (userProfile?.songRequestFormEnabled ?? false),
   });
 
@@ -195,17 +196,8 @@ export default function BookingNewPage() {
 
     return (
       <div className="px-6 py-8 max-w-3xl mx-auto">
-        <button
-          type="button"
-          onClick={() => setStep(1)}
-          className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground transition-colors mb-6"
-        >
-          <ChevronLeft size={14} />
-          Back
-        </button>
-
-        <h1 className="font-display text-2xl font-semibold text-foreground mb-1">Checklist</h1>
-        <p className="text-sm text-muted mb-6">
+        <PageHeader title="Checklist" onBack={() => setStep(1)} backLabel="Back" />
+        <p className="text-sm text-muted -mt-4 mb-6">
           Choose which items to include. You can adjust these on the booking page later.
         </p>
 
@@ -309,15 +301,7 @@ export default function BookingNewPage() {
 
   return (
     <div className="px-6 py-8 max-w-3xl mx-auto">
-      <Link
-        to="/admin/bookings"
-        className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground transition-colors mb-6"
-      >
-        <ChevronLeft size={14} />
-        Bookings
-      </Link>
-
-      <h1 className="font-display text-2xl font-semibold text-foreground mb-8">New booking</h1>
+      <PageHeader title="New booking" backHref="/admin/bookings" backLabel="Bookings" />
 
       <form onSubmit={handleSubmit(advanceToStep2)} className="space-y-6">
         <BookingFormFields

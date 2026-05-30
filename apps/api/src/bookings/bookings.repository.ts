@@ -33,9 +33,9 @@ const bookingIncludes = {
   venue: true,
   bookingAgent: true,
   sets: { orderBy: { order: 'asc' as const } },
-  performanceFormats: {
+  packages: {
     include: {
-      performanceFormat: { select: { id: true, label: true, icon: true, keyMoments: true, defaultGenreSelection: true } },
+      package: { select: { id: true, label: true, icon: true, keyMoments: true, defaultGenreSelection: true } },
     },
     orderBy: { order: 'asc' as const },
   },
@@ -89,7 +89,7 @@ export class BookingsRepository {
   }
 
   findFormats(userId: string, ids: string[]) {
-    return this.prisma.performanceFormat.findMany({
+    return this.prisma.package.findMany({
       where: { id: { in: ids }, userId },
       include: { slots: { orderBy: { order: 'asc' } } },
     });
@@ -105,14 +105,14 @@ export class BookingsRepository {
         order: slotOrder++,
         duration: slot.duration,
         label: slot.label ?? undefined,
-        performanceFormatId: fmt.id,
+        packageId: fmt.id,
       })),
     );
 
     const formatRecords = orderedFormats.map((fmt, idx) => ({
       userId,
       order: idx + 1,
-      performanceFormatId: fmt.id,
+      packageId: fmt.id,
     }));
 
     const allKeyMoments = orderedFormats.flatMap((fmt) =>
@@ -127,7 +127,7 @@ export class BookingsRepository {
         date: new Date(date),
         ...(fee !== undefined ? { fee } : {}),
         sets: setRecords.length ? { create: setRecords } : undefined,
-        performanceFormats: { create: formatRecords },
+        packages: { create: formatRecords },
         ...(songRequestFormEnabled
           ? {
               musicFormConfig: {
@@ -248,14 +248,14 @@ export class BookingsRepository {
   }
 
   findBookingFormat(userId: string, bookingId: string, bookingFormatId: string) {
-    return this.prisma.bookingPerformanceFormat.findFirst({
+    return this.prisma.bookingPackage.findFirst({
       where: { id: bookingFormatId, bookingId, userId },
     });
   }
 
   async applyFormat(userId: string, bookingId: string, format: FormatWithSlots) {
     const [existingFormats, existingSets] = await Promise.all([
-      this.prisma.bookingPerformanceFormat.findMany({ where: { bookingId }, select: { order: true } }),
+      this.prisma.bookingPackage.findMany({ where: { bookingId }, select: { order: true } }),
       this.prisma.performanceSet.findMany({ where: { bookingId }, select: { order: true } }),
     ]);
     const nextFormatOrder = existingFormats.length
@@ -266,8 +266,8 @@ export class BookingsRepository {
       : 1;
 
     await this.prisma.$transaction([
-      this.prisma.bookingPerformanceFormat.create({
-        data: { userId, bookingId, order: nextFormatOrder, performanceFormatId: format.id },
+      this.prisma.bookingPackage.create({
+        data: { userId, bookingId, order: nextFormatOrder, packageId: format.id },
       }),
       ...format.slots.map((slot, idx) =>
         this.prisma.performanceSet.create({
@@ -277,7 +277,7 @@ export class BookingsRepository {
             order: nextSetOrder + idx,
             duration: slot.duration,
             label: slot.label ?? undefined,
-            performanceFormatId: format.id,
+            packageId: format.id,
           },
         }),
       ),
@@ -286,10 +286,10 @@ export class BookingsRepository {
     return this.prisma.booking.findFirst({ where: { id: bookingId }, include: bookingIncludes });
   }
 
-  async removeFormat(bookingId: string, bookingFormatId: string, performanceFormatId: string) {
+  async removeFormat(bookingId: string, bookingFormatId: string, packageId: string) {
     await this.prisma.$transaction([
-      this.prisma.performanceSet.deleteMany({ where: { bookingId, performanceFormatId } }),
-      this.prisma.bookingPerformanceFormat.delete({ where: { id: bookingFormatId } }),
+      this.prisma.performanceSet.deleteMany({ where: { bookingId, packageId } }),
+      this.prisma.bookingPackage.delete({ where: { id: bookingFormatId } }),
     ]);
     return this.prisma.booking.findFirst({ where: { id: bookingId }, include: bookingIncludes });
   }

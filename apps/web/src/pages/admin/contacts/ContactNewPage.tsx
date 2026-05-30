@@ -1,11 +1,10 @@
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft } from 'lucide-react';
-import { Link } from 'react-router-dom';
 import ContactForm, { toContactPayload } from '@/features/contacts/ContactForm';
 import type { ContactFormValues } from '@/features/contacts/ContactForm';
 import { apiPost } from '@/lib/api';
 import type { Contact } from '@/types/api';
+import { PageHeader } from '@/components/common/PageHeader';
 
 export default function ContactNewPage() {
   const navigate = useNavigate();
@@ -22,15 +21,7 @@ export default function ContactNewPage() {
 
   return (
     <div className="px-6 py-8 max-w-3xl mx-auto">
-      <Link
-        to="/admin/contacts"
-        className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground transition-colors mb-6"
-      >
-        <ChevronLeft size={14} />
-        Contacts
-      </Link>
-
-      <h1 className="font-display text-2xl font-semibold text-foreground mb-8">New contact</h1>
+      <PageHeader title="New contact" backHref="/admin/contacts" backLabel="Contacts" />
 
       <ContactForm
         onSubmit={(values) => mutation.mutate(values)}
