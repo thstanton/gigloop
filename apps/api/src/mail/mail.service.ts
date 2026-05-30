@@ -141,7 +141,7 @@ export class MailService {
   }
 
   async send(options: MailTransportOptions): Promise<void> {
-    const { to, subject, body, attachments } = options;
+    const { subject, body, attachments } = options;
 
     await this.resend.emails.send({
       from: process.env.RESEND_FROM ?? 'noreply@gigman.com',

@@ -30,12 +30,12 @@ async function bootstrap() {
 
   const document = SwaggerModule.createDocument(app, config);
 
-  app.use('/openapi.json', (_req: unknown, res: { setHeader: Function; send: Function }) => {
+  app.use('/openapi.json', (_req: unknown, res: { setHeader: (k: string, v: string) => void; send: (body: unknown) => void }) => {
     res.setHeader('Content-Type', 'application/json');
     res.send(document);
   });
 
-  app.use('/docs', (_req: unknown, res: { setHeader: Function; send: Function }) => {
+  app.use('/docs', (_req: unknown, res: { setHeader: (k: string, v: string) => void; send: (body: unknown) => void }) => {
     res.setHeader('Content-Type', 'text/html');
     res.send(`<!doctype html>
 <html>

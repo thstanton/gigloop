@@ -616,7 +616,7 @@ export default function PackagesPage() {
       {drawerMode && (
         <PackageDrawer
           mode={drawerMode}
-          open={drawerMode !== null}
+          open={drawerMode != null}
           onClose={() => setDrawerMode(null)}
         />
       )}

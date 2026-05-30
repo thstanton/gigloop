@@ -94,10 +94,6 @@ export class ChecklistEvaluatorService {
           newState = 'COMPLETE';
         } else if (isCommFailed(rule, booking)) {
           newState = 'FAILED';
-        } else if (item.state === 'FAILED') {
-          // Retry in progress but not yet succeeded — unblock based on deps
-          const blocked = item.dependsOn.some((dep) => stateMap.get(dep) !== 'COMPLETE');
-          newState = blocked ? 'BLOCKED' : 'PENDING';
         } else {
           const blocked = item.dependsOn.some((dep) => stateMap.get(dep) !== 'COMPLETE');
           newState = blocked ? 'BLOCKED' : 'PENDING';

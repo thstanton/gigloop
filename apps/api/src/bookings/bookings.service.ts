@@ -119,7 +119,7 @@ export class BookingsService {
       ]);
       const orderedFormats = dto.formatIds
         .map((id) => formats.find((f) => f.id === id))
-        .filter((f): f is NonNullable<typeof f> => f !== null && f !== undefined);
+        .filter((f): f is NonNullable<typeof f> => f != null);
       const songRequestFormEnabled = profile?.songRequestFormEnabled ?? false;
       booking = await this.repo.createWithFormats(userId, dto, orderedFormats, songRequestFormEnabled);
     }

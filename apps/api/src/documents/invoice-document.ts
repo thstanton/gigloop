@@ -185,7 +185,7 @@ export function buildInvoiceDefinition(data: InvoicePdfData): TDocumentDefinitio
           body: tableBody,
         },
         layout: {
-          hLineWidth: (i: number) => (i <= 1 ? 0.5 : 0.5),
+          hLineWidth: () => 0.5,
           vLineWidth: () => 0,
           hLineColor: (i: number) => (i <= 1 ? '#e5e5e5' : '#f0f0f0'),
           fillColor: (i: number) => (i === 0 ? '#f5f5f5' : null),

@@ -1,7 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { BookingStatus } from '@prisma/client';
 import {
-  Allow,
   IsDateString,
   IsEnum,
   IsIn,
