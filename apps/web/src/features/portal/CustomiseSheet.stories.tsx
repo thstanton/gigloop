@@ -85,9 +85,13 @@ export const LightRomanticTheme: Story = {
 export const BrandColourChange: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement.ownerDocument.body);
-    const hexInput = canvas.getByDisplayValue('#1a1a1a');
-    await userEvent.clear(hexInput);
-    await userEvent.type(hexInput, '#ff5500');
+    // getByRole('textbox') targets the hex text input specifically,
+    // not the adjacent <input type="color"> which shares the same value
+    const hexInput = canvas.getByRole('textbox');
+    await expect(hexInput).toHaveValue('#1a1a1a');
+    // The hex input is a controlled React input with maxLength=7 and regex validation,
+    // so we step through valid intermediate values by backspacing 6 hex chars then typing new ones
+    await userEvent.type(hexInput, '{backspace}{backspace}{backspace}{backspace}{backspace}{backspace}ff5500');
     const saveBtn = canvas.getByRole('button', { name: /save changes/i });
     await expect(saveBtn).not.toBeDisabled();
   },
