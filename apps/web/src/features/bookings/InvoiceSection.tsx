@@ -1,6 +1,7 @@
 import { DollarSign, Plus } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { GhostButton } from '@/components/common/GhostButton';
+import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -8,7 +9,72 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import InvoiceRow from './InvoiceRow';
-import type { Invoice, Document } from '@/types/api';
+import type { Invoice, Document, SeriesInvoice } from '@/types/api';
+
+export interface SeriesInvoiceSectionProps {
+  seriesLabel: string;
+  invoice: SeriesInvoice | null | undefined;
+  isLoading: boolean;
+  onCreateInvoice: () => void;
+  onEdit: (invoice: SeriesInvoice) => void;
+  onDelete: (invoice: SeriesInvoice) => void;
+  onSend: (invoice: SeriesInvoice) => void;
+  onMarkSent: (invoice: SeriesInvoice) => void;
+  onVoid: (invoice: SeriesInvoice) => void;
+}
+
+export function SeriesInvoiceSection({
+  seriesLabel,
+  invoice,
+  isLoading,
+  onCreateInvoice,
+  onEdit,
+  onDelete,
+  onSend,
+  onMarkSent,
+  onVoid,
+}: Readonly<SeriesInvoiceSectionProps>) {
+  const notice = (
+    <p className="text-sm text-muted px-0 pb-2">
+      This invoice covers all bookings in <strong>{seriesLabel}</strong>. Changes affect the whole series.
+    </p>
+  );
+
+  if (isLoading) {
+    return (
+      <Card title="Series Invoice">
+        <div className="h-9 bg-border rounded animate-pulse" />
+      </Card>
+    );
+  }
+
+  if (!invoice) {
+    return (
+      <Card title="Series Invoice">
+        {notice}
+        <Button size="sm" onClick={onCreateInvoice}>
+          Create series invoice
+        </Button>
+      </Card>
+    );
+  }
+
+  return (
+    <Card title="Series Invoice">
+      {notice}
+      <InvoiceRow
+        invoice={invoice as unknown as Invoice}
+        pdfUrl={null}
+        onEdit={() => onEdit(invoice)}
+        onDelete={() => onDelete(invoice)}
+        onSend={() => onSend(invoice)}
+        onMarkSent={() => onMarkSent(invoice)}
+        onMarkPaid={() => {}}
+        onVoid={() => onVoid(invoice)}
+      />
+    </Card>
+  );
+}
 
 export interface InvoiceSectionProps {
   invoices: Invoice[];

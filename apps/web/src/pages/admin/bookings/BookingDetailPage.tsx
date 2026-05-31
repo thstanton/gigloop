@@ -13,6 +13,7 @@ import {
 import { useBooking } from '@/lib/hooks/useBooking';
 import { useBookingActions } from '@/lib/hooks/useBookingActions';
 import { useBookingInvoices } from '@/lib/hooks/useBookingInvoices';
+import { useSeriesInvoice } from '@/lib/hooks/useSeriesInvoice';
 import { useBookingCommunications } from '@/lib/hooks/useBookingCommunications';
 import { useBookingDocuments } from '@/lib/hooks/useBookingDocuments';
 import BookingEditDrawer from '@/features/bookings/BookingEditDrawer';
@@ -23,7 +24,7 @@ import ComposeEmailSheet from '@/features/communications/ComposeEmailSheet';
 import InvoiceSheet from '@/features/invoices/InvoiceSheet';
 import MarkSentDialog from '@/features/invoices/MarkSentDialog';
 import ContractCard from '@/features/bookings/ContractCard';
-import InvoiceSection from '@/features/bookings/InvoiceSection';
+import InvoiceSection, { SeriesInvoiceSection } from '@/features/bookings/InvoiceSection';
 import VenueCard from '@/features/bookings/VenueCard';
 import PersonCard from '@/features/bookings/PersonCard';
 import CommunicationsSection from '@/features/bookings/CommunicationsSection';
@@ -55,6 +56,7 @@ import type {
   Invoice,
   MusicFormConfig,
   MusicFormResponse,
+  SeriesInvoice,
   Template,
   UserProfile,
 } from '@/types/api';
@@ -187,6 +189,7 @@ export default function BookingDetailPage() {
   const { isLoaded } = useAuth();
   const { data: booking, isLoading, isError } = useBooking(id!);
   const { data: invoices = [], isPending: invoicesPending } = useBookingInvoices(id!);
+  const { data: seriesInvoice, isPending: seriesInvoicePending } = useSeriesInvoice(booking?.seriesId);
   const { data: communications = [] } = useBookingCommunications(id!);
   const { data: documents = [] } = useBookingDocuments(id!);
   const { data: userProfile } = useQuery({
@@ -301,6 +304,27 @@ export default function BookingDetailPage() {
     mutationFn: (contractId: string) => apiDelete(`/bookings/${id}/contracts/${contractId}`),
     onSuccess: () => invalidateBooking(),
     onError: () => toast({ title: 'Failed to delete contract', variant: 'destructive' }),
+  });
+
+  const seriesId = booking?.seriesId;
+  const invalidateSeriesInvoice = () => queryClient.invalidateQueries({ queryKey: ['seriesInvoice', seriesId] });
+
+  const createSeriesInvoiceMutation = useMutation({
+    mutationFn: () => apiPost<SeriesInvoice>(`/series/${seriesId}/invoices`, {}),
+    onSuccess: invalidateSeriesInvoice,
+    onError: () => toast({ title: 'Failed to create series invoice', variant: 'destructive' }),
+  });
+
+  const voidSeriesInvoiceMutation = useMutation({
+    mutationFn: (invoiceId: string) => apiPostVoid(`/series/${seriesId}/invoices/${invoiceId}/void`, {}),
+    onSuccess: invalidateSeriesInvoice,
+    onError: () => toast({ title: 'Failed to void series invoice', variant: 'destructive' }),
+  });
+
+  const deleteSeriesInvoiceMutation = useMutation({
+    mutationFn: (invoiceId: string) => apiDelete(`/series/${seriesId}/invoices/${invoiceId}`),
+    onSuccess: invalidateSeriesInvoice,
+    onError: () => toast({ title: 'Failed to delete series invoice', variant: 'destructive' }),
   });
 
   const voidInvoiceMutation = useMutation({
@@ -622,33 +646,55 @@ export default function BookingDetailPage() {
           )}
 
           {/* Invoices */}
-          <InvoiceSection
-            invoices={invoices}
-            documents={documents}
-            isPending={invoicesPending}
-            onNewDepositInvoice={() => {
-              const fee = booking.fee ? parseFloat(booking.fee) : null;
-              const pct = userProfile?.depositPercentage;
-              openCreateInvoice({
-                isDeposit: true,
-                amount: fee && pct ? Math.round((fee * pct / 100) * 100) / 100 : undefined,
-              });
-            }}
-            onNewBalanceInvoice={() => {
-              const fee = booking.fee ? parseFloat(booking.fee) : null;
-              const pct = userProfile?.depositPercentage;
-              openCreateInvoice({
-                isDeposit: false,
-                amount: fee && pct ? Math.round((fee * (1 - pct / 100)) * 100) / 100 : undefined,
-              });
-            }}
-            onEdit={openEditInvoice}
-            onDelete={(inv) => actions.deleteInvoice(inv.id)}
-            onSend={openSendInvoice}
-            onMarkSent={setMarkSentInvoice}
-            onMarkPaid={(inv) => markPaid.mutate(inv.id)}
-            onVoid={(inv) => voidInvoiceMutation.mutate(inv.id)}
-          />
+          {booking.series ? (
+            <SeriesInvoiceSection
+              seriesLabel={booking.series.label}
+              invoice={seriesInvoice}
+              isLoading={seriesInvoicePending}
+              onCreateInvoice={() => createSeriesInvoiceMutation.mutate()}
+              onEdit={(inv) => {
+                setEditingInvoice(inv as unknown as Invoice);
+                setInvoiceSheetOpen(true);
+              }}
+              onDelete={(inv) => deleteSeriesInvoiceMutation.mutate(inv.id)}
+              onSend={(inv) => {
+                const templateType = 'balance_invoice_cover';
+                setComposeTemplateType(templateType);
+                setComposeOpen(true);
+                setEditingInvoice(inv as unknown as Invoice);
+              }}
+              onMarkSent={(inv) => setMarkSentInvoice(inv as unknown as Invoice)}
+              onVoid={(inv) => voidSeriesInvoiceMutation.mutate(inv.id)}
+            />
+          ) : (
+            <InvoiceSection
+              invoices={invoices}
+              documents={documents}
+              isPending={invoicesPending}
+              onNewDepositInvoice={() => {
+                const fee = booking.fee ? parseFloat(booking.fee) : null;
+                const pct = userProfile?.depositPercentage;
+                openCreateInvoice({
+                  isDeposit: true,
+                  amount: fee && pct ? Math.round((fee * pct / 100) * 100) / 100 : undefined,
+                });
+              }}
+              onNewBalanceInvoice={() => {
+                const fee = booking.fee ? parseFloat(booking.fee) : null;
+                const pct = userProfile?.depositPercentage;
+                openCreateInvoice({
+                  isDeposit: false,
+                  amount: fee && pct ? Math.round((fee * (1 - pct / 100)) * 100) / 100 : undefined,
+                });
+              }}
+              onEdit={openEditInvoice}
+              onDelete={(inv) => actions.deleteInvoice(inv.id)}
+              onSend={openSendInvoice}
+              onMarkSent={setMarkSentInvoice}
+              onMarkPaid={(inv) => markPaid.mutate(inv.id)}
+              onVoid={(inv) => voidInvoiceMutation.mutate(inv.id)}
+            />
+          )}
 
           {/* Documents */}
           <Card title="Documents">

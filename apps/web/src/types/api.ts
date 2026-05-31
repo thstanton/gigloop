@@ -116,6 +116,21 @@ export interface BookingSeries {
   invoiceStatus?: string | null;
 }
 
+export interface SeriesInvoice {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  status: InvoiceStatus;
+  invoiceNumber: string | null;
+  issueDate: string | null;
+  dueDate: string | null;
+  paidAt: string | null;
+  seriesId: string;
+  billToContactId: string;
+  billToContact: Contact;
+  lineItems: InvoiceLineItem[];
+}
+
 // ─────────────────────────────────────────
 // Bookings
 // ─────────────────────────────────────────
@@ -224,7 +239,7 @@ export interface BookingDetail extends Omit<BookingListItem, 'customer' | 'venue
   hasMusicFormConfig: boolean;
   hasMusicFormResponse: boolean;
   seriesId: string | null;
-  series: { id: string; label: string } | null;
+  series: { id: string; label: string; customerId: string } | null;
 }
 
 export interface CreateSetInput {

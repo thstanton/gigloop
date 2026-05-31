@@ -158,6 +158,14 @@ export class InvoicesRepository {
     });
   }
 
+  assignWithInheritedNumber(id: string, invoiceNumber: string, issueDate: Date, dueDate: Date | null) {
+    return this.prisma.invoice.update({
+      where: { id },
+      data: { invoiceNumber, issueDate, dueDate, status: 'SENT' },
+      include: invoiceIncludes,
+    });
+  }
+
   async markPaid(userId: string, bookingId: string, invoiceId: string) {
     return this.prisma.$transaction(async (tx) => {
       const invoice = await tx.invoice.findFirst({

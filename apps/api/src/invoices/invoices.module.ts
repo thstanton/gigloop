@@ -10,5 +10,6 @@ import { InvoicesRepository } from './invoices.repository';
   imports: [CommunicationsModule, DocumentsModule, ChecklistModule],
   controllers: [InvoicesController],
   providers: [InvoicesService, InvoicesRepository],
+  exports: [InvoicesRepository],
 })
 export class InvoicesModule {}
