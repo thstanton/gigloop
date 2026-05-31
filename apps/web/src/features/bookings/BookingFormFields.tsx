@@ -328,35 +328,29 @@ export function BookingFormFields({
           name="seriesMode"
           control={control}
           render={({ field }) => (
-            <div className="flex gap-2">
-              {(['none', 'existing', 'new'] as const).map((mode) => (
-                <button
-                  key={mode}
-                  type="button"
-                  onClick={() => field.onChange(mode)}
-                  className={`px-3 py-1.5 rounded border text-sm transition-colors ${
-                    field.value === mode
-                      ? 'bg-primary text-primary-foreground border-primary'
-                      : 'bg-background text-foreground border-border hover:border-primary'
-                  }`}
-                >
-                  {SERIES_MODE_LABELS[mode]}
-                </button>
-              ))}
-            </div>
-          )}
-        />
-        <Controller
-          name="seriesMode"
-          control={control}
-          render={({ field: modeField }) => (
             <>
-              {modeField.value === 'existing' && series && series.length > 0 && (
+              <div className="flex gap-2">
+                {(['none', 'existing', 'new'] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => field.onChange(mode)}
+                    className={`px-3 py-1.5 rounded border text-sm transition-colors ${
+                      field.value === mode
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'bg-background text-foreground border-border hover:border-primary'
+                    }`}
+                  >
+                    {SERIES_MODE_LABELS[mode]}
+                  </button>
+                ))}
+              </div>
+              {field.value === 'existing' && series && series.length > 0 && (
                 <Controller
                   name="seriesId"
                   control={control}
-                  render={({ field }) => (
-                    <Select value={field.value ?? ''} onValueChange={field.onChange}>
+                  render={({ field: seriesField }) => (
+                    <Select value={seriesField.value ?? ''} onValueChange={seriesField.onChange}>
                       <SelectTrigger>
                         <SelectValue placeholder="Select series..." />
                       </SelectTrigger>
@@ -371,10 +365,10 @@ export function BookingFormFields({
                   )}
                 />
               )}
-              {modeField.value === 'existing' && (!series || series.length === 0) && (
+              {field.value === 'existing' && (!series || series.length === 0) && (
                 <p className="text-sm text-muted">No series yet. Use "New series" to create one.</p>
               )}
-              {modeField.value === 'new' && (
+              {field.value === 'new' && (
                 <FormField label="Series label">
                   <Input
                     placeholder="e.g. Hotel Intercontinental — May 2026"

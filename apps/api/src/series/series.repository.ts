@@ -18,8 +18,8 @@ export class SeriesRepository {
     });
   }
 
-  async findOne(userId: string, id: string) {
-    const series = await this.prisma.bookingSeries.findFirst({
+  findOne(userId: string, id: string) {
+    return this.prisma.bookingSeries.findFirst({
       where: { id, userId },
       include: {
         ...seriesIncludes,
@@ -27,7 +27,13 @@ export class SeriesRepository {
         invoices: { select: { id: true, status: true }, where: { userId } },
       },
     });
-    return series;
+  }
+
+  findExists(userId: string, id: string) {
+    return this.prisma.bookingSeries.findFirst({
+      where: { id, userId },
+      select: { id: true },
+    });
   }
 
   create(userId: string, label: string, customerId: string) {

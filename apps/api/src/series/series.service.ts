@@ -28,15 +28,11 @@ export class SeriesService {
   async findOne(userId: string, id: string) {
     const series = await this.repo.findOne(userId, id);
     if (!series) throw new NotFoundException('Series not found');
-    const activeInvoice = series.invoices.find((i) => i.status !== 'VOID') ?? null;
+    const { bookings, invoices, ...baseFields } = series;
+    const activeInvoice = invoices.find((i) => i.status !== 'VOID') ?? null;
     return {
-      id: series.id,
-      createdAt: series.createdAt,
-      updatedAt: series.updatedAt,
-      label: series.label,
-      customerId: series.customerId,
-      customer: series.customer,
-      memberBookingCount: series.bookings.length,
+      ...baseFields,
+      memberBookingCount: bookings.length,
       invoiceStatus: activeInvoice?.status ?? null,
     };
   }
