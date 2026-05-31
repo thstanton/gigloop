@@ -29,6 +29,7 @@ import type {
   ChecklistDefaultItem,
   EventType,
   Package,
+  SeriesDefaults,
   UserProfile,
 } from '@/types/api';
 
@@ -92,7 +93,7 @@ export default function BookingNewPage() {
     enabled: isLoaded,
   });
 
-  const { register, control, handleSubmit, setValue, formState: { errors } } = useForm<BookingFormValues>({
+  const { register, control, handleSubmit, setValue, watch, formState: { errors } } = useForm<BookingFormValues>({
     resolver: zodResolver(bookingFormSchema),
     defaultValues: {
       eventType: 'WEDDING',
@@ -124,6 +125,23 @@ export default function BookingNewPage() {
     setValue('status', pref as BookingFormValues['status']);
   }, [userProfile?.id, setValue]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const seriesMode = watch('seriesMode');
+  const selectedSeriesId = watch('seriesId');
+
+  const { data: seriesDefaults } = useQuery({
+    queryKey: ['seriesDefaults', selectedSeriesId],
+    queryFn: () => apiGet<SeriesDefaults>(`/series/${selectedSeriesId}/defaults`),
+    enabled: isLoaded && seriesMode === 'existing' && !!selectedSeriesId,
+  });
+
+  useEffect(() => {
+    if (!seriesDefaults || seriesMode !== 'existing') return;
+    if (seriesDefaults.customerId) setValue('customerId', seriesDefaults.customerId);
+    if (seriesDefaults.venueId !== undefined) setValue('venueId', seriesDefaults.venueId ?? null);
+    if (seriesDefaults.bookingAgentId !== undefined) setValue('bookingAgentId', seriesDefaults.bookingAgentId ?? null);
+    if (seriesDefaults.packageIds) setValue('formatIds', seriesDefaults.packageIds);
+  }, [seriesDefaults, seriesMode, setValue]);
+
   const mutation = useMutation({
     mutationFn: (payload: { values: BookingFormValues; checklistItems: ChecklistDefaultItem[] }) => {
       const { values, checklistItems } = payload;
@@ -152,7 +170,8 @@ export default function BookingNewPage() {
   });
 
   function advanceToStep2(values: BookingFormValues) {
-    const defaults = userProfile?.preferences?.checklistDefaults ?? [];
+    const seriesItems = values.seriesMode === 'existing' && seriesDefaults?.checklistItems;
+    const defaults = seriesItems || userProfile?.preferences?.checklistDefaults || [];
     const filtered = filterByStartingStatus(defaults, values.status as BookingStatus);
     setPendingValues(values);
     // Pre-select enabled items only; disabled items appear unchecked (opt-in per booking)
@@ -178,7 +197,8 @@ export default function BookingNewPage() {
 
   function handleCreate() {
     if (!pendingValues) return;
-    const defaults = userProfile?.preferences?.checklistDefaults ?? [];
+    const seriesItems = pendingValues.seriesMode === 'existing' && seriesDefaults?.checklistItems;
+    const defaults = seriesItems || userProfile?.preferences?.checklistDefaults || [];
     const filtered = filterByStartingStatus(defaults, pendingValues.status as BookingStatus);
     const selected = filtered.filter((_, i) => selectedIndices.has(i));
     const custom: ChecklistDefaultItem[] = customItems
@@ -198,7 +218,8 @@ export default function BookingNewPage() {
   // ─── Step 2: Checklist customisation ─────────────────────────────────────────
 
   if (step === 2 && pendingValues) {
-    const defaults = userProfile?.preferences?.checklistDefaults ?? [];
+    const seriesItems = pendingValues.seriesMode === 'existing' && seriesDefaults?.checklistItems;
+    const defaults = seriesItems || userProfile?.preferences?.checklistDefaults || [];
     const filtered = filterByStartingStatus(defaults, pendingValues.status as BookingStatus);
     const grouped = (['PROVISIONAL', 'CONFIRMED', 'READY', 'COMPLETE'] as const)
       .map((stage) => ({

@@ -29,6 +29,21 @@ export class SeriesRepository {
     return series;
   }
 
+  findEarliestMemberBooking(userId: string, seriesId: string) {
+    return this.prisma.booking.findFirst({
+      where: { seriesId, userId },
+      orderBy: { createdAt: 'asc' },
+      include: {
+        packages: {
+          include: { package: true },
+          orderBy: { order: 'asc' },
+        },
+        checklistItems: { orderBy: { order: 'asc' } },
+        musicFormConfig: true,
+      },
+    });
+  }
+
   create(userId: string, label: string, customerId: string) {
     return this.prisma.bookingSeries.create({
       data: { userId, label, customerId },

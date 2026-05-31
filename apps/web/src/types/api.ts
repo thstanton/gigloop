@@ -116,6 +116,15 @@ export interface BookingSeries {
   invoiceStatus?: string | null;
 }
 
+export interface SeriesDefaults {
+  customerId?: string;
+  venueId?: string | null;
+  bookingAgentId?: string | null;
+  packageIds?: string[];
+  checklistItems?: ChecklistDefaultItem[];
+  musicFormConfig?: { enabledGenres: string[]; keyMoments: KeyMoment[] } | null;
+}
+
 // ─────────────────────────────────────────
 // Bookings
 // ─────────────────────────────────────────
