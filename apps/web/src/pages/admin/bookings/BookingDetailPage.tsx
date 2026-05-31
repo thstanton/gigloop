@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { useAuth } from '@clerk/react';
 import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, Check, X, FolderOpen, FileText, Download, MapPin } from 'lucide-react';
@@ -15,6 +15,9 @@ import { useBookingActions } from '@/lib/hooks/useBookingActions';
 import { useBookingInvoices } from '@/lib/hooks/useBookingInvoices';
 import { useBookingCommunications } from '@/lib/hooks/useBookingCommunications';
 import { useBookingDocuments } from '@/lib/hooks/useBookingDocuments';
+import { useBookingChecklist } from '@/lib/hooks/useBookingChecklist';
+import { useContractActions } from '@/lib/hooks/useContractActions';
+import { useInvoiceActions } from '@/lib/hooks/useInvoiceActions';
 import BookingEditDrawer from '@/features/bookings/BookingEditDrawer';
 import ContactPicker from '@/features/bookings/ContactPicker';
 import ContractSheet from '@/features/bookings/ContractSheet';
@@ -34,13 +37,13 @@ import BookingStatusDropdown from '@/features/bookings/BookingStatusDropdown';
 import InlineNotes from '@/features/bookings/InlineNotes';
 import InlineFeeAdd from '@/features/bookings/InlineFeeAdd';
 import { toast } from '@/lib/hooks/use-toast';
-import { apiGet, apiPatch, apiPost, apiPostVoid, apiPut, apiDelete } from '@/lib/api';
+import { apiGet, apiPatch, apiPut } from '@/lib/api';
 import {
   formatDate,
   formatCurrency,
   formatFee,
 } from '@/lib/formatters';
-import { EVENT_TYPE_LABELS, STATUS_ORDER } from '@/lib/constants';
+import { EVENT_TYPE_LABELS } from '@/lib/constants';
 import { Card } from '@/components/common/Card';
 import { SectionHeader } from '@/components/common/SectionHeader';
 import { IconButton } from '@/components/common/IconButton';
@@ -48,9 +51,7 @@ import { EmptyState } from '@/components/common/EmptyState';
 import type {
   BookingDetail,
   BookingStatus,
-  ChecklistItem,
   Contact,
-  Contract,
   Document,
   Invoice,
   MusicFormConfig,
@@ -60,13 +61,6 @@ import type {
 } from '@/types/api';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-const CELEBRATORY_TITLES = [
-  "You're smashing it!",
-  "Nice work!",
-  "All done!",
-  "You're on a roll!",
-];
 
 const STATUS_LABELS: Record<BookingStatus, string> = {
   ENQUIRY:      'Enquiry',
@@ -170,14 +164,8 @@ export default function BookingDetailPage() {
   const [, setSearchParams] = useSearchParams();
 
   const [composeTemplateType, setComposeTemplateType] = useState<string | null>(null);
-  const [invoiceSheetState, setInvoiceSheetState] = useState<{ invoice?: Invoice; prefill?: { isDeposit: boolean; amount?: number; description?: string } } | null>(null);
-  const [markSentInvoice, setMarkSentInvoice] = useState<Invoice | undefined>();
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
-  const [contractSheetState, setContractSheetState] = useState<{ readOnly: boolean; contract?: Contract } | null>(null);
-  const [readyDialogStatus, setReadyDialogStatus] = useState<BookingStatus | null>(null);
   const [viewingMusicFormResponse, setViewingMusicFormResponse] = useState(false);
-  const dismissedTransitions = useRef(new Set<string>());
-  const celebratoryTitle = useRef(CELEBRATORY_TITLES[Math.floor(Math.random() * CELEBRATORY_TITLES.length)]);
 
   const { isLoaded } = useAuth();
   const { data: booking, isLoading, isError } = useBooking(id!);
@@ -193,11 +181,24 @@ export default function BookingDetailPage() {
   const actions = useBookingActions(id!);
   const queryClient = useQueryClient();
 
-  const { data: checklist = [], isPending: checklistLoading } = useQuery({
-    queryKey: ['bookingChecklist', id],
-    queryFn: () => apiGet<ChecklistItem[]>(`/bookings/${id}/checklist`),
-    enabled: isLoaded && !!booking && booking.status !== 'CANCELLED',
-  });
+  const {
+    checklist, checklistLoading,
+    readyDialogStatus, celebratoryTitle,
+    dismissReadyDialog, confirmStatusTransition,
+    toggleItem, addItem, isAddingItem,
+  } = useBookingChecklist(id!, booking, isLoaded);
+
+  const {
+    contractSheetState, setContractSheetState,
+    createContract, isCreatingContract,
+    sendContract, voidContract, deleteContract,
+  } = useContractActions(id!);
+
+  const {
+    invoiceSheetState, setInvoiceSheetState,
+    markSentInvoice, setMarkSentInvoice,
+    voidInvoice, markPaid, isMarkingPaid,
+  } = useInvoiceActions(id!);
 
   const { data: musicFormConfig, isLoading: musicFormConfigLoading } = useQuery({
     queryKey: ['booking-music-form-config', id],
@@ -217,25 +218,6 @@ export default function BookingDetailPage() {
     enabled: isLoaded,
     staleTime: 5 * 60 * 1000,
   });
-
-  useEffect(() => {
-    if (!booking || checklistLoading || checklist.length === 0) return;
-    const targetStatus = (['PROVISIONAL', 'CONFIRMED', 'READY', 'COMPLETE'] as const).find((s) => {
-      const targetIdx = STATUS_ORDER.indexOf(s);
-      const currentIdx = STATUS_ORDER.indexOf(booking.status);
-      if (targetIdx <= currentIdx) return false;
-      const key = `${id}:${booking.status}->${s}`;
-      if (dismissedTransitions.current.has(key)) return false;
-      const forStatus = checklist.filter((i) => i.requiredForStatus === s);
-      return forStatus.length > 0 && forStatus.every((i) => i.state === 'COMPLETE');
-    });
-    if (targetStatus) setReadyDialogStatus(targetStatus);
-  }, [booking, checklist, checklistLoading, id]);
-
-  function invalidateBooking() {
-    queryClient.invalidateQueries({ queryKey: ['booking', id] });
-    queryClient.invalidateQueries({ queryKey: ['bookingChecklist', id] });
-  }
 
   // ─── Mutations ────────────────────────────────────────────────────────────
 
@@ -266,81 +248,6 @@ export default function BookingDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['booking', id] });
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
     },
-  });
-
-  const createContract = useMutation({
-    mutationFn: () => apiPost<Contract>(`/bookings/${id}/contracts`, {}),
-    onSuccess: (data) => {
-      invalidateBooking();
-      setContractSheetState({ readOnly: false, contract: data });
-    },
-    onError: () => toast({ title: 'Failed to create contract', variant: 'destructive' }),
-  });
-
-  const sendContractMutation = useMutation({
-    mutationFn: (contractId: string) => apiPostVoid(`/bookings/${id}/contracts/${contractId}/send`, {}),
-    onSuccess: () => invalidateBooking(),
-    onError: () => toast({ title: 'Failed to mark contract as sent', variant: 'destructive' }),
-  });
-
-  const voidContractMutation = useMutation({
-    mutationFn: ({ contractId, confirmSignedVoid }: { contractId: string; confirmSignedVoid: boolean }) =>
-      apiPostVoid(`/bookings/${id}/contracts/${contractId}/void`, { confirmSignedVoid }),
-    onSuccess: () => invalidateBooking(),
-    onError: () => toast({ title: 'Failed to void contract', variant: 'destructive' }),
-  });
-
-  const deleteContractMutation = useMutation({
-    mutationFn: (contractId: string) => apiDelete(`/bookings/${id}/contracts/${contractId}`),
-    onSuccess: () => invalidateBooking(),
-    onError: () => toast({ title: 'Failed to delete contract', variant: 'destructive' }),
-  });
-
-  const voidInvoiceMutation = useMutation({
-    mutationFn: (invoiceId: string) => apiPostVoid(`/bookings/${id}/invoices/${invoiceId}/void`, {}),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['bookingInvoices', id] });
-      queryClient.invalidateQueries({ queryKey: ['bookingChecklist', id] });
-    },
-    onError: () => toast({ title: 'Failed to void invoice', variant: 'destructive' }),
-  });
-
-  const markPaid = useMutation({
-    mutationFn: (invoiceId: string) => apiPost(`/bookings/${id}/invoices/${invoiceId}/mark-paid`, {}),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['bookingInvoices', id] });
-      invalidateBooking();
-    },
-    onError: () => toast({ title: 'Failed to mark invoice as paid', variant: 'destructive' }),
-  });
-
-  const toggleChecklistItem = useMutation({
-    mutationFn: ({ itemId, state }: { itemId: string; state: 'COMPLETE' | 'PENDING' }) =>
-      apiPatch(`/bookings/${id}/checklist/${itemId}`, { state }),
-    onMutate: async ({ itemId, state }) => {
-      await queryClient.cancelQueries({ queryKey: ['bookingChecklist', id] });
-      const previous = queryClient.getQueryData<ChecklistItem[]>(['bookingChecklist', id]);
-      queryClient.setQueryData<ChecklistItem[]>(['bookingChecklist', id], (old) =>
-        old?.map((item) => item.id === itemId ? { ...item, state } : item) ?? [],
-      );
-      return { previous };
-    },
-    onError: (_err, _vars, context) => {
-      if (context?.previous) queryClient.setQueryData(['bookingChecklist', id], context.previous);
-      toast({ title: 'Failed to update checklist item', variant: 'destructive' });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['bookingChecklist', id] });
-    },
-  });
-
-  const addChecklistItem = useMutation({
-    mutationFn: (data: { label: string; requiredForStatus: string | null; dueDate: string | null }) =>
-      apiPost(`/bookings/${id}/checklist`, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['bookingChecklist', id] });
-    },
-    onError: () => toast({ title: 'Failed to add item', variant: 'destructive' }),
   });
 
   const configureMusicForm = useMutation({
@@ -396,7 +303,7 @@ export default function BookingDetailPage() {
 
   function handleChecklistAction(action: 'create_deposit_invoice' | 'create_balance_invoice' | 'create_contract') {
     if (action === 'create_contract') {
-      createContract.mutate();
+      createContract();
       return;
     }
     const isDeposit = action === 'create_deposit_invoice';
@@ -416,7 +323,7 @@ export default function BookingDetailPage() {
       if (booking?.activeContract) actions.markContractSigned(booking.activeContract.id);
     } else {
       const sentDeposit = invoices.find((inv) => inv.isDeposit && inv.status === 'SENT');
-      if (sentDeposit) markPaid.mutate(sentDeposit.id);
+      if (sentDeposit) markPaid(sentDeposit.id);
       else actions.markDepositReceived();
     }
   }
@@ -572,13 +479,13 @@ export default function BookingDetailPage() {
               isLoading={checklistLoading}
               bookingStatus={booking.status}
               contractTemplateType={contractShortcutType}
-              onToggle={(itemId, state) => toggleChecklistItem.mutate({ itemId, state })}
+              onToggle={toggleItem}
               onChecklistAction={handleChecklistAction}
               onOpenCompose={openCompose}
               onMarkDone={handleMarkDone}
-              onAddItem={(data) => addChecklistItem.mutate(data)}
-              isAddingItem={addChecklistItem.isPending}
-              isActionPending={actions.isPending || markPaid.isPending}
+              onAddItem={addItem}
+              isAddingItem={isAddingItem}
+              isActionPending={actions.isPending || isMarkingPaid}
             />
           )}
 
@@ -587,18 +494,18 @@ export default function BookingDetailPage() {
             <ContractCard
               booking={booking}
               documents={documents}
-              isCreating={createContract.isPending}
-              onCreateContract={() => createContract.mutate()}
+              isCreating={isCreatingContract}
+              onCreateContract={createContract}
               onEdit={() => setContractSheetState({ readOnly: false })}
               onPreview={() => setContractSheetState({ readOnly: true })}
               onSend={() => openCompose(contractShortcutType)}
               onVoid={(confirmSignedVoid) => {
                 const contractId = booking.activeContract?.id;
-                if (contractId) voidContractMutation.mutate({ contractId, confirmSignedVoid });
+                if (contractId) voidContract({ contractId, confirmSignedVoid });
               }}
               onDelete={() => {
                 const contractId = booking.activeContract?.id;
-                if (contractId) deleteContractMutation.mutate(contractId);
+                if (contractId) deleteContract(contractId);
               }}
             />
           )}
@@ -628,8 +535,8 @@ export default function BookingDetailPage() {
             onDelete={(inv) => actions.deleteInvoice(inv.id)}
             onSend={openSendInvoice}
             onMarkSent={setMarkSentInvoice}
-            onMarkPaid={(inv) => markPaid.mutate(inv.id)}
-            onVoid={(inv) => voidInvoiceMutation.mutate(inv.id)}
+            onMarkPaid={(inv) => markPaid(inv.id)}
+            onVoid={(inv) => voidInvoice(inv.id)}
           />
 
           {/* Documents */}
@@ -695,43 +602,20 @@ export default function BookingDetailPage() {
       </div>{/* end two-column grid */}
 
       {readyDialogStatus && (
-        <Dialog open onOpenChange={() => {
-          const key = `${id}:${booking.status}->${readyDialogStatus}`;
-          dismissedTransitions.current.add(key);
-          celebratoryTitle.current = CELEBRATORY_TITLES[Math.floor(Math.random() * CELEBRATORY_TITLES.length)];
-          setReadyDialogStatus(null);
-        }}>
+        <Dialog open onOpenChange={dismissReadyDialog}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle className="font-display text-xl">{celebratoryTitle.current}</DialogTitle>
+              <DialogTitle className="font-display text-xl">{celebratoryTitle}</DialogTitle>
             </DialogHeader>
             <p className="text-sm text-muted">
               You've completed all the tasks for this booking. Ready to move it to{' '}
               <span className="font-medium text-foreground">{STATUS_LABELS[readyDialogStatus]}</span>?
             </p>
             <div className="flex gap-2 justify-end mt-2">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  const key = `${id}:${booking.status}->${readyDialogStatus}`;
-                  dismissedTransitions.current.add(key);
-                  celebratoryTitle.current = CELEBRATORY_TITLES[Math.floor(Math.random() * CELEBRATORY_TITLES.length)];
-                  setReadyDialogStatus(null);
-                }}
-              >
+              <Button variant="outline" onClick={dismissReadyDialog}>
                 Not yet
               </Button>
-              <Button
-                onClick={() => {
-                  const next = readyDialogStatus;
-                  setReadyDialogStatus(null);
-                  apiPatch<BookingDetail>(`/bookings/${id}`, { status: next }).then(() => {
-                    queryClient.invalidateQueries({ queryKey: ['booking', id] });
-                    queryClient.invalidateQueries({ queryKey: ['bookings'] });
-                    queryClient.invalidateQueries({ queryKey: ['bookingChecklist', id] });
-                  });
-                }}
-              >
+              <Button onClick={() => confirmStatusTransition(readyDialogStatus)}>
                 Mark as {STATUS_LABELS[readyDialogStatus]}
               </Button>
             </div>
@@ -768,7 +652,7 @@ export default function BookingDetailPage() {
           const isContractEmail = templateType === 'contract_cover' || templateType === 'contract_and_deposit_cover';
           const contractId = booking.activeContract?.id;
           if (isContractEmail && contractId && booking.activeContract?.status === 'DRAFT') {
-            sendContractMutation.mutate(contractId);
+            sendContract(contractId);
           }
         }}
       />
