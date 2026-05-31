@@ -16,6 +16,13 @@ import { Type } from 'class-transformer';
 import { EVENT_TYPES } from '../../common/constants';
 import type { DueDateRule } from '../checklist-defaults';
 
+export class NewSeriesInput {
+  @ApiProperty({ example: 'Hotel Intercontinental — May 2026' })
+  @IsString()
+  @IsNotEmpty()
+  label!: string;
+}
+
 export class ChecklistItemInput {
   @ApiProperty({ example: 'send_quote', nullable: true })
   @IsOptional()
@@ -110,4 +117,15 @@ export class CreateBookingDto {
   @ValidateNested({ each: true })
   @Type(() => ChecklistItemInput)
   checklistItems!: ChecklistItemInput[];
+
+  @ApiPropertyOptional({ example: 'uuid-of-existing-series', description: 'Assign to an existing series' })
+  @IsOptional()
+  @IsUUID()
+  seriesId?: string;
+
+  @ApiPropertyOptional({ description: 'Create a new series for this booking' })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => NewSeriesInput)
+  newSeries?: NewSeriesInput;
 }

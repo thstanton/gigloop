@@ -3,6 +3,7 @@ import { BookingStatus } from '@prisma/client';
 import { BookingsService } from './bookings.service';
 import { BookingsRepository } from './bookings.repository';
 import { BookingActionsService } from './bookings-actions.service';
+import { SeriesRepository } from '../series/series.repository';
 import { MailService } from '../mail/mail.service';
 import { ChecklistEvaluatorService } from '../checklist/checklist-evaluator.service';
 import type { EmailContext } from '../mail/mail.service';
@@ -38,6 +39,7 @@ type MockRepo = {
   recomputeChecklistDueDates: jest.Mock;
 };
 
+type MockSeriesRepo = { findOne: jest.Mock; create: jest.Mock };
 type MockMail = { buildContext: jest.Mock };
 type MockEvaluator = { evaluate: jest.Mock };
 type MockActions = { computeActionItem: jest.Mock };
@@ -83,6 +85,10 @@ function makeEvaluator(): MockEvaluator {
   return { evaluate: jest.fn().mockResolvedValue(undefined) };
 }
 
+function makeSeriesRepo(): MockSeriesRepo {
+  return { findOne: jest.fn(), create: jest.fn() };
+}
+
 function makeActions(): MockActions {
   return { computeActionItem: jest.fn().mockReturnValue(null) };
 }
@@ -108,17 +114,20 @@ const baseContext: EmailContext = {
 describe('BookingsService', () => {
   let service: BookingsService;
   let repo: MockRepo;
+  let seriesRepo: MockSeriesRepo;
   let mail: MockMail;
   let evaluator: MockEvaluator;
   let actions: MockActions;
 
   beforeEach(() => {
     repo = makeRepo();
+    seriesRepo = makeSeriesRepo();
     mail = makeMail();
     evaluator = makeEvaluator();
     actions = makeActions();
     service = new BookingsService(
       repo as unknown as BookingsRepository,
+      seriesRepo as unknown as SeriesRepository,
       mail as unknown as MailService,
       evaluator as unknown as ChecklistEvaluatorService,
       actions as unknown as BookingActionsService,

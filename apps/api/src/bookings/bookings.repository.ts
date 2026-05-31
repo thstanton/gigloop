@@ -32,6 +32,7 @@ const bookingIncludes = {
   customer: true,
   venue: true,
   bookingAgent: true,
+  series: { select: { id: true, label: true } },
   sets: { orderBy: { order: 'asc' as const } },
   packages: {
     include: {
@@ -76,7 +77,7 @@ export class BookingsRepository {
   }
 
   create(userId: string, dto: CreateBookingDto) {
-    const { formatIds: _, fee, date, checklistItems: __, ...fields } = dto;
+    const { formatIds: _, fee, date, checklistItems: __, newSeries: ___, ...fields } = dto;
     return this.prisma.booking.create({
       data: {
         userId,
@@ -96,7 +97,7 @@ export class BookingsRepository {
   }
 
   createWithFormats(userId: string, dto: CreateBookingDto, orderedFormats: FormatWithSlots[], songRequestFormEnabled: boolean) {
-    const { formatIds: _, fee, date, checklistItems: __, ...fields } = dto;
+    const { formatIds: _, fee, date, checklistItems: __, newSeries: ___, ...fields } = dto;
 
     let slotOrder = 1;
     const setRecords = orderedFormats.flatMap((fmt) =>

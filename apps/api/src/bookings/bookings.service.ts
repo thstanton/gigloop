@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { BookingStatus } from '@prisma/client';
 import { BookingsRepository } from './bookings.repository';
 import { BookingActionsService } from './bookings-actions.service';
+import { SeriesRepository } from '../series/series.repository';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
 import { UpdateContractDto } from './dto/update-contract.dto';
@@ -18,6 +19,7 @@ const VALID_STATUSES = new Set<string>(Object.values(BookingStatus));
 export class BookingsService {
   constructor(
     private repo: BookingsRepository,
+    private seriesRepo: SeriesRepository,
     private mail: MailService,
     private evaluator: ChecklistEvaluatorService,
     private actions: BookingActionsService,
@@ -43,6 +45,18 @@ export class BookingsService {
   }
 
   async create(userId: string, dto: CreateBookingDto) {
+    if (dto.seriesId && dto.newSeries) {
+      throw new BadRequestException('Provide either seriesId or newSeries, not both');
+    }
+
+    if (dto.newSeries) {
+      const series = await this.seriesRepo.create(userId, dto.newSeries.label, dto.customerId);
+      dto.seriesId = series.id;
+    } else if (dto.seriesId) {
+      const series = await this.seriesRepo.findOne(userId, dto.seriesId);
+      if (!series) throw new NotFoundException('Series not found');
+    }
+
     let booking;
     if (!dto.formatIds?.length) {
       booking = await this.repo.create(userId, dto);

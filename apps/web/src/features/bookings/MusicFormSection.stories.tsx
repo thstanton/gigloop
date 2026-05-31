@@ -20,6 +20,7 @@ const baseBooking: BookingDetail = {
   ],
   activeContract: null, depositReceivedAt: null, portalToken: 'tok_abc',
   hasMusicFormConfig: false, hasMusicFormResponse: false,
+  seriesId: null, series: null,
 };
 
 const config: MusicFormConfig = {

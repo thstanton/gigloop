@@ -509,6 +509,11 @@ export default function BookingDetailPage() {
                 ? <span className="text-sm text-muted">{feeWithVat}</span>
                 : <InlineFeeAdd onSave={(fee) => updateFeeMutation.mutate(fee)} isSaving={updateFeeMutation.isPending} />
               }
+              {booking.series && (
+                <span className="text-sm text-muted border border-border rounded px-2 py-0.5">
+                  Series: {booking.series.label}
+                </span>
+              )}
             </div>
           </section>
 

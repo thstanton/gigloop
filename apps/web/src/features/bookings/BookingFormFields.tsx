@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/select';
 import ContactPicker from './ContactPicker';
 import { EVENT_TYPE_LABELS } from '@/lib/constants';
-import type { EventType, Package } from '@/types/api';
+import type { BookingSeries, EventType, Package } from '@/types/api';
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
@@ -33,6 +33,9 @@ export const bookingFormSchema = z.object({
   venueId: z.string().nullable(),
   bookingAgentId: z.string().nullable(),
   formatIds: z.array(z.string()),
+  seriesMode: z.enum(['none', 'existing', 'new']),
+  seriesId: z.string().nullable().optional(),
+  newSeriesLabel: z.string().optional(),
 });
 
 export type BookingFormValues = z.infer<typeof bookingFormSchema>;
@@ -142,6 +145,12 @@ function FormatSelector({
   );
 }
 
+const SERIES_MODE_LABELS: Record<string, string> = {
+  none: 'None',
+  existing: 'Existing series',
+  new: 'New series',
+};
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 interface Props {
@@ -150,6 +159,7 @@ interface Props {
   errors: FieldErrors<BookingFormValues>;
   songRequestFormEnabled?: boolean;
   formats?: Package[];
+  series?: BookingSeries[];
   hideNotes?: boolean;
 }
 
@@ -159,6 +169,7 @@ export function BookingFormFields({
   errors,
   songRequestFormEnabled,
   formats,
+  series,
   hideNotes,
 }: Props) {
   return (
@@ -309,6 +320,72 @@ export function BookingFormFields({
           />
         </div>
       )}
+
+      {/* Series */}
+      <div className="space-y-3">
+        <h2 className="text-sm font-semibold text-foreground">Series (optional)</h2>
+        <Controller
+          name="seriesMode"
+          control={control}
+          render={({ field }) => (
+            <div className="flex gap-2">
+              {(['none', 'existing', 'new'] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => field.onChange(mode)}
+                  className={`px-3 py-1.5 rounded border text-sm transition-colors ${
+                    field.value === mode
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'bg-background text-foreground border-border hover:border-primary'
+                  }`}
+                >
+                  {SERIES_MODE_LABELS[mode]}
+                </button>
+              ))}
+            </div>
+          )}
+        />
+        <Controller
+          name="seriesMode"
+          control={control}
+          render={({ field: modeField }) => (
+            <>
+              {modeField.value === 'existing' && series && series.length > 0 && (
+                <Controller
+                  name="seriesId"
+                  control={control}
+                  render={({ field }) => (
+                    <Select value={field.value ?? ''} onValueChange={field.onChange}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select series..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {series.map((s) => (
+                          <SelectItem key={s.id} value={s.id}>
+                            {s.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              )}
+              {modeField.value === 'existing' && (!series || series.length === 0) && (
+                <p className="text-sm text-muted">No series yet. Use "New series" to create one.</p>
+              )}
+              {modeField.value === 'new' && (
+                <FormField label="Series label">
+                  <Input
+                    placeholder="e.g. Hotel Intercontinental — May 2026"
+                    {...register('newSeriesLabel')}
+                  />
+                </FormField>
+              )}
+            </>
+          )}
+        />
+      </div>
 
       {/* Notes — hidden when managed by inline auto-save on the detail page */}
       {!hideNotes && (

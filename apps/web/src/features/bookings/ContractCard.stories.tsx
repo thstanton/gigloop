@@ -28,6 +28,8 @@ const baseBooking: BookingDetail = {
   portalToken: 'tok_abc',
   hasMusicFormConfig: false,
   hasMusicFormResponse: false,
+  seriesId: null,
+  series: null,
 };
 
 const contractDoc: Document = {
