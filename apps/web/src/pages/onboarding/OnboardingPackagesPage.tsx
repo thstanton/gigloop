@@ -2,8 +2,27 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@clerk/react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, useEffect } from 'react';
+import {
+  Music, Mic2, Guitar, Piano, Drum, Church, Cake, Wine, Star, Heart,
+  GlassWater, Utensils, Moon, Briefcase, Music2, Sparkles, Radio,
+  Headphones, Volume2, Users,
+} from 'lucide-react';
 import { apiGet, apiPatch } from '@/lib/api';
 import type { Package } from '@/types/api';
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const ICON_MAP: Record<string, React.ComponentType<any>> = {
+  music: Music, 'mic-2': Mic2, guitar: Guitar, piano: Piano, drum: Drum,
+  church: Church, cake: Cake, wine: Wine, star: Star, heart: Heart,
+  'glass-water': GlassWater, utensils: Utensils, moon: Moon,
+  briefcase: Briefcase, 'music-2': Music2, sparkles: Sparkles,
+  radio: Radio, headphones: Headphones, 'volume-2': Volume2, users: Users,
+};
+
+function PackageIcon({ icon }: { icon: string }) {
+  const Icon = ICON_MAP[icon] ?? Music;
+  return <Icon size={18} strokeWidth={1.75} />;
+}
 
 export default function OnboardingPackagesPage() {
   const navigate = useNavigate();
@@ -79,7 +98,7 @@ export default function OnboardingPackagesPage() {
                     className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-muted/10 transition-colors"
                   >
                     <div className="flex items-center gap-3">
-                      <span className="text-xl">{pkg.icon}</span>
+                      <span className="text-muted"><PackageIcon icon={pkg.icon} /></span>
                       <span className="text-base text-foreground">{pkg.label}</span>
                     </div>
                     <input
@@ -101,6 +120,13 @@ export default function OnboardingPackagesPage() {
       <div className="flex flex-col sm:flex-row items-start gap-3 pt-2">
         <button
           type="button"
+          onClick={() => navigate('/onboarding/songs')}
+          className="rounded-lg border border-border text-foreground text-base font-medium px-6 py-2.5 transition-colors hover:bg-muted/30"
+        >
+          Back
+        </button>
+        <button
+          type="button"
           onClick={handleNext}
           disabled={isPending}
           className="rounded-lg bg-primary text-primary-foreground text-base font-medium px-6 py-2.5 transition-opacity hover:opacity-90 disabled:opacity-40"
@@ -115,14 +141,6 @@ export default function OnboardingPackagesPage() {
           Skip for now
         </button>
       </div>
-
-      <button
-        type="button"
-        onClick={() => navigate('/onboarding/songs')}
-        className="text-sm text-muted hover:text-foreground transition-colors self-start"
-      >
-        ← Back
-      </button>
     </div>
   );
 }

@@ -111,6 +111,13 @@ export default function OnboardingChecklistPage() {
       <div className="flex flex-col sm:flex-row items-start gap-3 pt-2">
         <button
           type="button"
+          onClick={() => navigate('/onboarding/packages')}
+          className="rounded-lg border border-border text-foreground text-base font-medium px-6 py-2.5 transition-colors hover:bg-muted/30"
+        >
+          Back
+        </button>
+        <button
+          type="button"
           onClick={() => finish(false)}
           disabled={isPending}
           className="rounded-lg bg-primary text-primary-foreground text-base font-medium px-6 py-2.5 transition-opacity hover:opacity-90 disabled:opacity-40"
@@ -126,14 +133,6 @@ export default function OnboardingChecklistPage() {
           Skip for now
         </button>
       </div>
-
-      <button
-        type="button"
-        onClick={() => navigate('/onboarding/packages')}
-        className="text-sm text-muted hover:text-foreground transition-colors self-start"
-      >
-        ← Back
-      </button>
     </div>
   );
 }
