@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useUser } from '@clerk/react';
 import { apiPatch } from '@/lib/api';
+import { Button } from '@/components/ui/button';
 import { FormField } from '@/components/common/FormField';
 import { Input } from '@/components/ui/input';
 import type { PublicProfile } from '@/types/api';
@@ -79,13 +80,9 @@ export default function OnboardingProfilePage() {
         </FormField>
 
         <div className="flex justify-start pt-2">
-          <button
-            type="submit"
-            disabled={!isValid || isPending}
-            className="rounded-lg bg-primary text-primary-foreground text-base font-medium px-6 py-2.5 transition-opacity hover:opacity-90 disabled:opacity-40"
-          >
+          <Button type="submit" disabled={!isValid || isPending}>
             {isPending ? 'Saving…' : 'Next'}
-          </button>
+          </Button>
         </div>
       </form>
     </div>

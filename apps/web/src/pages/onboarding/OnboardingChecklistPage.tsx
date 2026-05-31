@@ -3,6 +3,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, useEffect } from 'react';
 import { apiPatch, apiPost } from '@/lib/api';
 import { useMe } from '@/lib/hooks/useMe';
+import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import type { ChecklistDefaultItem } from '@/types/api';
 
 const STAGE_ORDER = ['PROVISIONAL', 'CONFIRMED', 'READY', 'COMPLETE'] as const;
@@ -84,21 +86,21 @@ export default function OnboardingChecklistPage() {
                 <div className="rounded-lg border border-border divide-y divide-border">
                   {items.map((item) => {
                     const key = item.key ?? item.label;
+                    const checked = overrides.get(key) ?? true;
                     return (
-                      <label
+                      <div
                         key={key}
-                        className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-muted/10 transition-colors"
+                        className="flex items-center justify-between px-4 py-3"
                       >
                         <span className="text-base text-foreground">{item.label}</span>
-                        <input
-                          type="checkbox"
-                          checked={overrides.get(key) ?? true}
-                          onChange={(e) =>
-                            setOverrides((prev) => new Map(prev).set(key, e.target.checked))
+                        <Switch
+                          checked={checked}
+                          onCheckedChange={(val) =>
+                            setOverrides((prev) => new Map(prev).set(key, val))
                           }
-                          className="accent-primary"
+                          aria-label={`${item.label}: ${checked ? 'enabled' : 'disabled'}`}
                         />
-                      </label>
+                      </div>
                     );
                   })}
                 </div>
@@ -109,29 +111,15 @@ export default function OnboardingChecklistPage() {
       )}
 
       <div className="flex flex-col sm:flex-row items-start gap-3 pt-2">
-        <button
-          type="button"
-          onClick={() => navigate('/onboarding/packages')}
-          className="rounded-lg border border-border text-foreground text-base font-medium px-6 py-2.5 transition-colors hover:bg-muted/30"
-        >
+        <Button variant="outline" onClick={() => navigate('/onboarding/packages')}>
           Back
-        </button>
-        <button
-          type="button"
-          onClick={() => finish(false)}
-          disabled={isPending}
-          className="rounded-lg bg-primary text-primary-foreground text-base font-medium px-6 py-2.5 transition-opacity hover:opacity-90 disabled:opacity-40"
-        >
+        </Button>
+        <Button onClick={() => finish(false)} disabled={isPending}>
           {isPending ? 'Finishing…' : 'Finish'}
-        </button>
-        <button
-          type="button"
-          onClick={() => finish(true)}
-          disabled={isPending}
-          className="rounded-lg text-foreground text-base font-medium px-6 py-2.5 transition-colors hover:bg-muted/30 disabled:opacity-40"
-        >
+        </Button>
+        <Button variant="ghost" onClick={() => finish(true)} disabled={isPending}>
           Skip for now
-        </button>
+        </Button>
       </div>
     </div>
   );

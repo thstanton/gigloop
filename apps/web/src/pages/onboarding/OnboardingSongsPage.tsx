@@ -3,6 +3,7 @@ import { useAuth } from '@clerk/react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { apiGet, apiPost } from '@/lib/api';
+import { Button } from '@/components/ui/button';
 import type { CatalogueGroup } from '@/types/api';
 
 export default function OnboardingSongsPage() {
@@ -68,16 +69,17 @@ export default function OnboardingSongsPage() {
 
             return (
               <div key={group.genre} className="rounded-lg border border-border overflow-hidden">
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
                   onClick={() => toggleGenre(group)}
-                  className="w-full flex items-center justify-between px-4 py-3 bg-muted/20 hover:bg-muted/40 transition-colors text-left"
+                  className="w-full flex items-center justify-between px-4 py-3 h-auto rounded-none bg-muted/20 hover:bg-muted/40"
                 >
-                  <span className="text-base font-medium text-foreground">{group.label}</span>
-                  <span className="text-sm text-muted">
+                  <span className="font-medium">{group.label}</span>
+                  <span className="text-muted text-sm font-normal">
                     {allSelected ? 'Deselect all' : 'Select all'}
                   </span>
-                </button>
+                </Button>
                 <div className="divide-y divide-border">
                   {group.songs.map((song) => (
                     <label
@@ -104,28 +106,15 @@ export default function OnboardingSongsPage() {
       )}
 
       <div className="flex flex-col sm:flex-row items-start gap-3 pt-2">
-        <button
-          type="button"
-          onClick={() => navigate('/onboarding/profile')}
-          className="rounded-lg border border-border text-foreground text-base font-medium px-6 py-2.5 transition-colors hover:bg-muted/30"
-        >
+        <Button variant="outline" onClick={() => navigate('/onboarding/profile')}>
           Back
-        </button>
-        <button
-          type="button"
-          onClick={handleNext}
-          disabled={isPending}
-          className="rounded-lg bg-primary text-primary-foreground text-base font-medium px-6 py-2.5 transition-opacity hover:opacity-90 disabled:opacity-40"
-        >
+        </Button>
+        <Button onClick={handleNext} disabled={isPending}>
           {isPending ? 'Saving…' : 'Next'}
-        </button>
-        <button
-          type="button"
-          onClick={() => navigate('/onboarding/packages')}
-          className="rounded-lg text-foreground text-base font-medium px-6 py-2.5 transition-colors hover:bg-muted/30"
-        >
+        </Button>
+        <Button variant="ghost" onClick={() => navigate('/onboarding/packages')}>
           Skip for now
-        </button>
+        </Button>
       </div>
     </div>
   );

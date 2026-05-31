@@ -8,6 +8,8 @@ import {
   Headphones, Volume2, Users,
 } from 'lucide-react';
 import { apiGet, apiPatch } from '@/lib/api';
+import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import type { Package } from '@/types/api';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -92,25 +94,27 @@ export default function OnboardingPackagesPage() {
             <div key={category}>
               <h2 className="text-base font-medium text-foreground mb-2">{category}</h2>
               <div className="rounded-lg border border-border divide-y divide-border">
-                {pkgs.map((pkg) => (
-                  <label
-                    key={pkg.id}
-                    className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-muted/10 transition-colors"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="text-muted"><PackageIcon icon={pkg.icon} /></span>
-                      <span className="text-base text-foreground">{pkg.label}</span>
+                {pkgs.map((pkg) => {
+                  const checked = overrides.get(pkg.id) ?? pkg.enabled;
+                  return (
+                    <div
+                      key={pkg.id}
+                      className="flex items-center justify-between px-4 py-3"
+                    >
+                      <div className="flex items-center gap-3 text-muted">
+                        <PackageIcon icon={pkg.icon} />
+                        <span className="text-base text-foreground">{pkg.label}</span>
+                      </div>
+                      <Switch
+                        checked={checked}
+                        onCheckedChange={(val) =>
+                          setOverrides((prev) => new Map(prev).set(pkg.id, val))
+                        }
+                        aria-label={`${pkg.label}: ${checked ? 'enabled' : 'disabled'}`}
+                      />
                     </div>
-                    <input
-                      type="checkbox"
-                      checked={overrides.get(pkg.id) ?? pkg.enabled}
-                      onChange={(e) =>
-                        setOverrides((prev) => new Map(prev).set(pkg.id, e.target.checked))
-                      }
-                      className="accent-primary"
-                    />
-                  </label>
-                ))}
+                  );
+                })}
               </div>
             </div>
           ))}
@@ -118,28 +122,15 @@ export default function OnboardingPackagesPage() {
       )}
 
       <div className="flex flex-col sm:flex-row items-start gap-3 pt-2">
-        <button
-          type="button"
-          onClick={() => navigate('/onboarding/songs')}
-          className="rounded-lg border border-border text-foreground text-base font-medium px-6 py-2.5 transition-colors hover:bg-muted/30"
-        >
+        <Button variant="outline" onClick={() => navigate('/onboarding/songs')}>
           Back
-        </button>
-        <button
-          type="button"
-          onClick={handleNext}
-          disabled={isPending}
-          className="rounded-lg bg-primary text-primary-foreground text-base font-medium px-6 py-2.5 transition-opacity hover:opacity-90 disabled:opacity-40"
-        >
+        </Button>
+        <Button onClick={handleNext} disabled={isPending}>
           {isPending ? 'Saving…' : 'Next'}
-        </button>
-        <button
-          type="button"
-          onClick={() => navigate('/onboarding/checklist')}
-          className="rounded-lg text-foreground text-base font-medium px-6 py-2.5 transition-colors hover:bg-muted/30"
-        >
+        </Button>
+        <Button variant="ghost" onClick={() => navigate('/onboarding/checklist')}>
           Skip for now
-        </button>
+        </Button>
       </div>
     </div>
   );

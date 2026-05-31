@@ -4,6 +4,7 @@ import { useAuth } from '@clerk/react';
 import { useUser } from '@clerk/react';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, AlertCircle, RotateCcw, CalendarPlus } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { apiGet } from '@/lib/api';
 import { useBookings } from '@/lib/hooks/useBookings';
 import BookingStatusPill from '@/components/common/BookingStatusPill';
@@ -392,12 +393,9 @@ export default function DashboardPage() {
                 Add your first booking to start tracking your gigs, invoices, and communications in one place.
               </p>
             </div>
-            <a
-              href="/admin/bookings/new"
-              className="rounded-lg bg-primary text-primary-foreground text-base font-medium px-4 py-2 transition-opacity hover:opacity-90"
-            >
-              Create your first booking
-            </a>
+            <Button asChild>
+              <a href="/admin/bookings/new">Create your first booking</a>
+            </Button>
           </div>
         )}
 
