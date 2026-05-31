@@ -34,22 +34,11 @@ export class BookingsService {
     const booking = await this.repo.findOne(userId, id);
     if (!booking) throw new NotFoundException('Booking not found');
     const { musicFormConfig, musicFormResponse, contracts, ...rest } = booking;
-    const raw = contracts?.[0] ?? null;
-    const activeContract = raw
-      ? {
-          id: raw.id,
-          createdAt: raw.createdAt.toISOString(),
-          updatedAt: raw.updatedAt.toISOString(),
-          status: raw.status,
-          content: raw.content,
-          signedAt: raw.signedAt?.toISOString() ?? null,
-        }
-      : null;
     return {
       ...rest,
       hasMusicFormConfig: !!musicFormConfig,
       hasMusicFormResponse: !!musicFormResponse,
-      activeContract,
+      activeContract: this.normaliseContract(contracts?.[0] ?? null),
     };
   }
 
@@ -142,18 +131,24 @@ export class BookingsService {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private mapBooking(booking: any) {
     const { musicFormConfig, musicFormResponse, contracts, ...rest } = booking;
-    const raw = contracts?.[0] ?? null;
-    const activeContract = raw
-      ? {
-          id: raw.id,
-          createdAt: raw.createdAt.toISOString(),
-          updatedAt: raw.updatedAt.toISOString(),
-          status: raw.status,
-          content: raw.content,
-          signedAt: raw.signedAt?.toISOString() ?? null,
-        }
-      : null;
-    return { ...rest, hasMusicFormConfig: !!musicFormConfig, hasMusicFormResponse: !!musicFormResponse, activeContract };
+    return {
+      ...rest,
+      hasMusicFormConfig: !!musicFormConfig,
+      hasMusicFormResponse: !!musicFormResponse,
+      activeContract: this.normaliseContract(contracts?.[0] ?? null),
+    };
+  }
+
+  private normaliseContract(raw: { id: string; createdAt: Date; updatedAt: Date; status: string; content: unknown; signedAt: Date | null } | null) {
+    if (!raw) return null;
+    return {
+      id: raw.id,
+      createdAt: raw.createdAt.toISOString(),
+      updatedAt: raw.updatedAt.toISOString(),
+      status: raw.status,
+      content: raw.content,
+      signedAt: raw.signedAt?.toISOString() ?? null,
+    };
   }
 
   async getMusicFormResponse(userId: string, bookingId: string) {
