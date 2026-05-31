@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ChevronRight, ImageIcon, Pencil, Plus, Trash2, Upload } from 'lucide-react';
 import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
-import type { PublicProfile, UserProfile, UpdatePublicProfileInput, UpdateUserProfileInput, UserPreferences, DueDateRule, ChecklistDefaultItem } from '@/types/api';
+import type { PublicProfile, UserProfile, UpdatePublicProfileInput, UpdateUserProfileInput, UserPreferences, DueDateRule, ChecklistDefaultItem, InvoiceNumberFormat, PaddingWidth } from '@/types/api';
 import { cn } from '@/lib/utils';
 import { Card } from '@/components/common/Card';
 import { PageSection } from '@/components/common/PageSection';
@@ -53,6 +53,27 @@ const notificationsSchema = z.object({
 });
 
 type NotificationsForm = z.infer<typeof notificationsSchema>;
+
+const PADDING_OPTIONS: PaddingWidth[] = [1, 3, 4, 6];
+
+const paddingWidthSchema = z.union([z.literal(1), z.literal(3), z.literal(4), z.literal(6)]);
+
+const invoiceNumberSchema = z.object({
+  prefix: z.string().max(20, 'Max 20 characters'),
+  includeYear: z.boolean(),
+  paddingWidth: paddingWidthSchema,
+});
+
+type InvoiceNumberForm = z.infer<typeof invoiceNumberSchema>;
+
+const FORMAT_DEFAULTS: InvoiceNumberFormat = { prefix: 'INV', includeYear: true, paddingWidth: 3 };
+
+function previewInvoiceNumber(seq: number, year: number, form: InvoiceNumberForm): string {
+  const { prefix, includeYear, paddingWidth } = form;
+  const seqStr = String(seq).padStart(paddingWidth, '0');
+  const parts = [...(prefix ? [prefix] : []), ...(includeYear ? [String(year)] : []), seqStr];
+  return parts.join('-');
+}
 
 const bookingGeneralSchema = z.object({
   songRequestFormEnabled: z.boolean(),
@@ -524,6 +545,110 @@ function BusinessDetailsSection({ profile }: { profile: UserProfile }) {
             <span className="text-sm text-muted">% of fee</span>
           </div>
         </FormField>
+      </div>
+
+      <SaveBar isPending={mutation.isPending} saved={saved} isError={mutation.isError} />
+    </form>
+  );
+}
+
+// ─── Invoice settings section ─────────────────────────────────────────────────
+
+function InvoiceSettingsSection({ profile }: { profile: UserProfile }) {
+  const queryClient = useQueryClient();
+  const [saved, setSaved] = useState(false);
+
+  const prefs = (profile.preferences as UserPreferences | undefined)?.invoiceNumberFormat;
+  const defaults: InvoiceNumberForm = {
+    prefix: prefs?.prefix ?? FORMAT_DEFAULTS.prefix,
+    includeYear: prefs?.includeYear ?? FORMAT_DEFAULTS.includeYear,
+    paddingWidth: prefs?.paddingWidth ?? FORMAT_DEFAULTS.paddingWidth,
+  };
+
+  const { register, control, handleSubmit, reset, watch, formState: { errors } } = useForm<InvoiceNumberForm>({
+    resolver: zodResolver(invoiceNumberSchema),
+    defaultValues: defaults,
+  });
+
+  useEffect(() => { reset(defaults); }, [profile]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const formValues = watch();
+  const currentYear = new Date().getFullYear();
+  const isNewYear = formValues.includeYear && profile.invoiceSequenceYear !== currentYear;
+  const nextSeq = isNewYear ? 1 : profile.invoiceNumberSequence + 1;
+  const preview = previewInvoiceNumber(nextSeq, currentYear, formValues);
+
+  const mutation = useMutation({
+    mutationFn: (data: InvoiceNumberForm) =>
+      apiPatch<UserProfile>('/me', { preferences: { invoiceNumberFormat: data } }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['me'] });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    },
+  });
+
+  return (
+    <form onSubmit={handleSubmit((v) => mutation.mutate(v))} className="space-y-6">
+      <PageSection
+        title="Invoice numbering"
+        description="Control the format of invoice numbers generated when an invoice is sent."
+      />
+
+      <div className="space-y-5">
+        <FormField label="Prefix" error={errors.prefix?.message}>
+          <Input
+            {...register('prefix')}
+            placeholder="INV"
+            maxLength={20}
+            className="max-w-40"
+          />
+        </FormField>
+
+        <Controller
+          name="includeYear"
+          control={control}
+          render={({ field }) => (
+            <label className="flex items-start gap-3 cursor-pointer">
+              <Toggle checked={field.value} onChange={field.onChange} />
+              <div className="-mt-0.5">
+                <p className="text-sm font-medium text-foreground">Include year</p>
+                <p className="text-xs text-muted mt-0.5">
+                  Resets the sequence each calendar year when enabled
+                </p>
+              </div>
+            </label>
+          )}
+        />
+
+        <FormField label="Number padding" error={undefined}>
+          <Controller
+            name="paddingWidth"
+            control={control}
+            render={({ field }) => (
+              <Select
+                value={String(field.value)}
+                onValueChange={(v) => field.onChange(Number(v) as PaddingWidth)}
+              >
+                <SelectTrigger className="max-w-40">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PADDING_OPTIONS.map((n) => (
+                    <SelectItem key={n} value={String(n)}>
+                      {String(1).padStart(n, '0')} ({n} digit{n !== 1 ? 's' : ''})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          />
+        </FormField>
+
+        <div>
+          <p className="text-sm font-medium text-foreground mb-1">Preview</p>
+          <p className="font-mono text-base text-foreground">{preview}</p>
+        </div>
       </div>
 
       <SaveBar isPending={mutation.isPending} saved={saved} isError={mutation.isError} />
@@ -1298,6 +1423,8 @@ export default function SettingsPage() {
         <PortalSection />
         <div className="border-t border-border" />
         <BusinessDetailsSection profile={userProfile} />
+        <div className="border-t border-border" />
+        <InvoiceSettingsSection profile={userProfile} />
         <div className="border-t border-border" />
         <NotificationsSection profile={userProfile} />
         <div className="border-t border-border" />
