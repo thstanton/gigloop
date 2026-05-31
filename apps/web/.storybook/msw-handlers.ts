@@ -261,10 +261,57 @@ export const communicationFixtures: Record<string, unknown[]> = {
 
 const userProfile = {
   id: 'up1', userId: 'user_storybook_test',
-  businessName: 'Tim Stanton Music', vatNumber: null, vatRate: 20,
+  address: null, bankDetails: null, vatNumber: null, vatRate: 20,
   depositPercentage: 30, defaultPaymentTermsDays: 30,
+  invoiceNumberSequence: 0, invoiceSequenceYear: 2024,
+  digestEmailEnabled: true, songRequestFormEnabled: true,
   createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z',
+  onboardingCompletedAt: '2024-01-01T00:00:00Z',
+  preferences: { reminderLeadDays: 7, checklistDefaults: [] },
 };
+
+export const meOnboarding = {
+  ...userProfile,
+  onboardingCompletedAt: null,
+  preferences: {
+    reminderLeadDays: 7,
+    checklistDefaults: [
+      { key: 'send_quote', label: 'Send quote', completedBy: 'USER', dependsOn: [], autoCompleteRule: null, requiredForStatus: 'PROVISIONAL', dueDateRule: null },
+      { key: 'confirm_quote', label: 'Quote confirmed', completedBy: 'USER', dependsOn: [], autoCompleteRule: null, requiredForStatus: 'PROVISIONAL', dueDateRule: null },
+      { key: 'create_deposit_invoice', label: 'Create deposit invoice', completedBy: 'USER', dependsOn: [], autoCompleteRule: null, requiredForStatus: 'CONFIRMED', dueDateRule: null },
+      { key: 'create_contract', label: 'Create contract', completedBy: 'USER', dependsOn: [], autoCompleteRule: null, requiredForStatus: 'CONFIRMED', dueDateRule: null },
+      { key: 'send_contract', label: 'Send contract & deposit email', completedBy: 'USER', dependsOn: [], autoCompleteRule: null, requiredForStatus: 'CONFIRMED', dueDateRule: null },
+      { key: 'sound_check', label: 'Confirm sound check time', completedBy: 'USER', dependsOn: [], autoCompleteRule: null, requiredForStatus: 'READY', dueDateRule: null },
+      { key: 'send_final_details', label: 'Send final details email', completedBy: 'USER', dependsOn: [], autoCompleteRule: null, requiredForStatus: 'READY', dueDateRule: null },
+      { key: 'collect_balance', label: 'Collect balance payment', completedBy: 'USER', dependsOn: [], autoCompleteRule: null, requiredForStatus: 'COMPLETE', dueDateRule: null },
+    ],
+  },
+};
+
+const songCatalogue = [
+  {
+    genre: 'CONTEMPORARY', label: 'Contemporary',
+    songs: [
+      { id: 'con-001', title: 'Perfect', artist: 'Ed Sheeran', genre: 'CONTEMPORARY' },
+      { id: 'con-002', title: 'Thinking Out Loud', artist: 'Ed Sheeran', genre: 'CONTEMPORARY' },
+      { id: 'con-003', title: 'All of Me', artist: 'John Legend', genre: 'CONTEMPORARY' },
+    ],
+  },
+  {
+    genre: 'CLASSICAL', label: 'Classical',
+    songs: [
+      { id: 'cla-001', title: 'Canon in D', artist: 'Pachelbel', genre: 'CLASSICAL' },
+      { id: 'cla-002', title: 'Air on the G String', artist: 'Bach', genre: 'CLASSICAL' },
+    ],
+  },
+  {
+    genre: 'JAZZ', label: 'Jazz',
+    songs: [
+      { id: 'jaz-001', title: 'La Vie en Rose', artist: 'Édith Piaf', genre: 'JAZZ' },
+      { id: 'jaz-002', title: 'Fly Me to the Moon', artist: 'Frank Sinatra', genre: 'JAZZ' },
+    ],
+  },
+];
 
 export function makeBookingDetailHandlers(scenario: string) {
   return [
@@ -295,6 +342,10 @@ export const mswHandlers = {
   ],
   songs: [
     http.get('/api/songs', () => HttpResponse.json(songs)),
+    http.get('/api/songs/catalogue', () => HttpResponse.json(songCatalogue)),
+  ],
+  me: [
+    http.get('/api/me', () => HttpResponse.json(userProfile)),
   ],
   dashboard: [
     http.get('/api/bookings/actions', () => HttpResponse.json(dashboardActions)),
@@ -314,4 +365,5 @@ export const allHandlers = [
   ...mswHandlers.dashboard,
   ...mswHandlers.packages,
   ...mswHandlers.templates,
+  ...mswHandlers.me,
 ];

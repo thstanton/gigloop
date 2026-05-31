@@ -16,6 +16,13 @@ export const TitleOnly: Story = {
   args: { title: 'New booking' },
 };
 
+export const TitleAndSubheading: Story = {
+  args: {
+    title: 'Set up your profile',
+    subheading: 'This appears on your client portal and communications.',
+  },
+};
+
 export const TitleAndBack: Story = {
   args: {
     title: 'Spring Wedding',

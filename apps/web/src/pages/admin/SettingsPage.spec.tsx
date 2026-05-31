@@ -50,6 +50,7 @@ const mockUserProfile: UserProfile = {
   digestEmailEnabled: false,
   songRequestFormEnabled: false,
   preferences: { reminderLeadDays: 7, checklistDefaults: [] },
+  onboardingCompletedAt: '2024-01-01T00:00:00.000Z',
 };
 
 function renderPage() {

@@ -15,6 +15,7 @@ import { SONG_GENRES } from '../common/constants';
 import { SongsService } from './songs.service';
 import { CreateSongDto } from './dto/create-song.dto';
 import { UpdateSongDto } from './dto/update-song.dto';
+import { SeedSongsDto } from './dto/seed-songs.dto';
 import type { Request } from 'express';
 
 type AuthedRequest = Request & { userId: string };
@@ -24,6 +25,18 @@ type AuthedRequest = Request & { userId: string };
 @Controller('songs')
 export class SongsController {
   constructor(private service: SongsService) {}
+
+  @ApiOperation({ summary: 'Get the static song seed catalogue grouped by genre' })
+  @Get('catalogue')
+  getCatalogue() {
+    return this.service.getCatalogue();
+  }
+
+  @ApiOperation({ summary: 'Seed songs from the catalogue into the user library (skips duplicates)' })
+  @Post('seed')
+  seedSongs(@Req() req: AuthedRequest, @Body() dto: SeedSongsDto) {
+    return this.service.seedSongs(req.userId, dto.ids);
+  }
 
   @ApiOperation({ summary: 'List songs' })
   @ApiQuery({ name: 'genre', required: false, enum: SONG_GENRES, description: 'Filter by genre' })

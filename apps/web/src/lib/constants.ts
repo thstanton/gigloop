@@ -43,3 +43,27 @@ export const CHECKLIST_STAGE_ORDER: Array<BookingStatus | null> = [
 export function statusGte(current: BookingStatus, threshold: BookingStatus): boolean {
   return STATUS_ORDER.indexOf(current) >= STATUS_ORDER.indexOf(threshold);
 }
+
+export const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
+  ENQUIRY:     'Enquiry',
+  PROVISIONAL: 'Provisional',
+  CONFIRMED:   'Confirmed',
+  READY:       'Ready',
+  COMPLETE:    'Complete',
+  CANCELLED:   'Cancelled',
+};
+
+export const PACKAGE_CATEGORY_LABELS: Record<string, string> = {
+  WEDDING:   'Wedding',
+  CORPORATE: 'Corporate',
+  PRIVATE:   'Private',
+  RESIDENCY: 'Residency',
+  FESTIVAL:  'Festival',
+  OUTDOOR:   'Outdoor',
+  FUNCTION:  'Function',
+  OTHER:     'Other',
+};
+
+export const PACKAGE_CATEGORY_ORDER = [
+  'WEDDING', 'CORPORATE', 'PRIVATE', 'RESIDENCY', 'FESTIVAL', 'OUTDOOR', 'FUNCTION', 'OTHER',
+] as const;

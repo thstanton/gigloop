@@ -3,6 +3,7 @@ import { SONG_GENRES } from '../common/constants';
 import { SongsRepository } from './songs.repository';
 import { CreateSongDto } from './dto/create-song.dto';
 import { UpdateSongDto } from './dto/update-song.dto';
+import { getCatalogue, getCatalogueEntries } from './song-catalogue';
 
 const VALID_GENRES = new Set<string>(SONG_GENRES);
 
@@ -41,5 +42,14 @@ export class SongsService {
   async delete(userId: string, id: string) {
     await this.findOne(userId, id);
     return this.repo.delete(id);
+  }
+
+  getCatalogue() {
+    return getCatalogue();
+  }
+
+  async seedSongs(userId: string, ids: string[]) {
+    const entries = getCatalogueEntries(ids);
+    return this.repo.seedSongs(userId, entries);
   }
 }

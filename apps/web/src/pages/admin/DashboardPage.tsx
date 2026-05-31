@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@clerk/react';
 import { useUser } from '@clerk/react';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight, AlertCircle, RotateCcw } from 'lucide-react';
+import { ChevronLeft, ChevronRight, AlertCircle, RotateCcw, CalendarPlus } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { apiGet } from '@/lib/api';
 import { useBookings } from '@/lib/hooks/useBookings';
 import BookingStatusPill from '@/components/common/BookingStatusPill';
@@ -381,6 +382,22 @@ export default function DashboardPage() {
             </p>
           )}
         </div>
+
+        {/* First booking empty state */}
+        {!isLoading && bookings.length === 0 && (
+          <div className="mb-8 rounded-lg border border-border p-6 flex flex-col items-start gap-4">
+            <CalendarPlus className="size-8 text-primary" />
+            <div>
+              <h2 className="font-display text-xl font-semibold text-foreground">No bookings yet</h2>
+              <p className="text-base text-muted mt-1">
+                Add your first booking to start tracking your gigs, invoices, and communications in one place.
+              </p>
+            </div>
+            <Button asChild>
+              <a href="/admin/bookings/new">Create your first booking</a>
+            </Button>
+          </div>
+        )}
 
         {/* Two-column grid */}
         <div className="md:grid md:grid-cols-2 md:gap-8 space-y-4 md:space-y-0">

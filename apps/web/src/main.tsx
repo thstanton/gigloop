@@ -9,6 +9,7 @@ import HomePage from './pages/HomePage';
 import SignInPage from './pages/SignInPage';
 import SignUpPage from './pages/SignUpPage';
 import AdminLayout from './layouts/AdminLayout';
+import OnboardingLayout from './layouts/OnboardingLayout';
 import DashboardPage from './pages/admin/DashboardPage';
 import SettingsPage from './pages/admin/SettingsPage';
 import BookingsListPage from './pages/admin/bookings/BookingsListPage';
@@ -25,6 +26,10 @@ import PortalContractPage from './pages/portal/PortalContractPage';
 import PortalMusicPage from './pages/portal/PortalMusicPage';
 import PortalPreviewPage from './pages/admin/PortalPreviewPage';
 import PackagesPage from './pages/admin/PackagesPage';
+import OnboardingProfilePage from './pages/onboarding/OnboardingProfilePage';
+import OnboardingSongsPage from './pages/onboarding/OnboardingSongsPage';
+import OnboardingPackagesPage from './pages/onboarding/OnboardingPackagesPage';
+import OnboardingChecklistPage from './pages/onboarding/OnboardingChecklistPage';
 
 const queryClient = new QueryClient();
 
@@ -56,6 +61,16 @@ const router = createBrowserRouter([
   {
     path: '/admin/portal-preview',
     element: <PortalPreviewPage />,
+  },
+  {
+    path: '/onboarding',
+    element: <OnboardingLayout />,
+    children: [
+      { path: 'profile', element: <OnboardingProfilePage /> },
+      { path: 'songs', element: <OnboardingSongsPage /> },
+      { path: 'packages', element: <OnboardingPackagesPage /> },
+      { path: 'checklist', element: <OnboardingChecklistPage /> },
+    ],
   },
   {
     path: '/admin',

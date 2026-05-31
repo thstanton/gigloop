@@ -30,6 +30,13 @@ export class UserProfileController {
     return this.userProfileService.update(req.userId, dto);
   }
 
+  @ApiOperation({ summary: 'Mark onboarding as complete (idempotent)' })
+  @ApiResponse({ status: 200, description: 'Updated user profile' })
+  @Post('onboarding/complete')
+  completeOnboarding(@Req() req: AuthedRequest) {
+    return this.userProfileService.completeOnboarding(req.userId);
+  }
+
   @ApiOperation({ summary: 'Update checklist defaults (system item dueDateRules, reminderLeadDays, and custom items)' })
   @ApiResponse({ status: 200, description: 'Updated user profile' })
   @Patch('preferences/checklist-defaults')

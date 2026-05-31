@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Switch } from '@/components/ui/switch';
 import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
+import { PACKAGE_CATEGORY_LABELS, PACKAGE_CATEGORY_ORDER } from '@/lib/constants';
 import type { CreatePackageInput, Package, SlotInput, UpdatePackageInput } from '@/types/api';
 import { cn } from '@/lib/utils';
 import { Card } from '@/components/common/Card';
@@ -50,20 +51,9 @@ function PackageIcon({ icon, size = 16 }: { icon: string; size?: number }) {
 
 // ─── Category display ─────────────────────────────────────────────────────────
 
-const CATEGORY_LABELS: Record<string, string> = {
-  WEDDING: 'Wedding',
-  CORPORATE: 'Corporate',
-  PRIVATE: 'Private',
-  RESIDENCY: 'Residency',
-  FESTIVAL: 'Festival',
-  OUTDOOR: 'Outdoor',
-  FUNCTION: 'Function',
-  OTHER: 'Other',
-};
-
 const CATEGORY_OPTIONS = [
   { value: '', label: 'Uncategorised' },
-  ...Object.entries(CATEGORY_LABELS).map(([v, l]) => ({ value: v, label: l })),
+  ...Object.entries(PACKAGE_CATEGORY_LABELS).map(([v, l]) => ({ value: v, label: l })),
 ];
 
 // ─── Tag input ────────────────────────────────────────────────────────────────
@@ -553,8 +543,6 @@ function CategoryGroup({
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-const CATEGORY_ORDER = ['WEDDING', 'CORPORATE', 'PRIVATE', 'RESIDENCY', 'FESTIVAL', 'OUTDOOR', 'FUNCTION', 'OTHER'];
-
 export default function PackagesPage() {
   const { isLoaded } = useAuth();
   const [drawerMode, setDrawerMode] = useState<DrawerMode | null>(null);
@@ -565,7 +553,7 @@ export default function PackagesPage() {
     enabled: isLoaded,
   });
 
-  const grouped = CATEGORY_ORDER.reduce<Record<string, Package[]>>((acc, cat) => {
+  const grouped = PACKAGE_CATEGORY_ORDER.reduce<Record<string, Package[]>>((acc, cat) => {
     acc[cat] = packages.filter((p) => p.category === cat);
     return acc;
   }, {});
@@ -597,10 +585,10 @@ export default function PackagesPage() {
 
       {!isLoading && packages.length > 0 && (
         <div className="space-y-8">
-          {CATEGORY_ORDER.map((cat) => (
+          {PACKAGE_CATEGORY_ORDER.map((cat) => (
             <CategoryGroup
               key={cat}
-              title={CATEGORY_LABELS[cat]}
+              title={PACKAGE_CATEGORY_LABELS[cat]}
               packages={grouped[cat]}
               onEdit={(pkg) => setDrawerMode({ type: 'edit', pkg })}
             />
