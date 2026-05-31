@@ -570,7 +570,14 @@ function InvoiceSettingsSection({ profile }: { profile: UserProfile }) {
     defaultValues: defaults,
   });
 
-  useEffect(() => { reset(defaults); }, [profile]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const p = (profile.preferences as UserPreferences | undefined)?.invoiceNumberFormat;
+    reset({
+      prefix: p?.prefix ?? FORMAT_DEFAULTS.prefix,
+      includeYear: p?.includeYear ?? FORMAT_DEFAULTS.includeYear,
+      paddingWidth: p?.paddingWidth ?? FORMAT_DEFAULTS.paddingWidth,
+    });
+  }, [profile, reset]);
 
   const formValues = watch();
   const currentYear = new Date().getFullYear();
