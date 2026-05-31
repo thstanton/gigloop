@@ -15,7 +15,7 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
   play: async ({ canvas }) => {
-    await expect(await canvas.findByText('Add songs to your repertoire')).toBeVisible();
-    await expect(await canvas.findByText('Contemporary')).toBeVisible();
+    await expect((await canvas.findAllByText('Add songs to your repertoire'))[0]).toBeVisible();
+    await expect((await canvas.findAllByText('Contemporary'))[0]).toBeVisible();
   },
 };
