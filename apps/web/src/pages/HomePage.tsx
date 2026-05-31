@@ -3,16 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@clerk/react';
 import { Music2 } from 'lucide-react';
 
-export default function HomePage() {
-  const { isLoaded, isSignedIn } = useAuth();
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    if (isLoaded && isSignedIn) navigate('/admin', { replace: true });
-  }, [isLoaded, isSignedIn, navigate]);
-
-  if (!isLoaded || isSignedIn) return null;
-
+export function LaunchHero() {
   return (
     <main className="min-h-screen flex flex-col items-center justify-center px-6 bg-background">
       <div className="flex flex-col items-center gap-6 max-w-sm w-full text-center">
@@ -42,4 +33,17 @@ export default function HomePage() {
       </div>
     </main>
   );
+}
+
+export default function HomePage() {
+  const { isLoaded, isSignedIn } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (isLoaded && isSignedIn) navigate('/admin', { replace: true });
+  }, [isLoaded, isSignedIn, navigate]);
+
+  if (!isLoaded || isSignedIn) return null;
+
+  return <LaunchHero />;
 }
