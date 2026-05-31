@@ -348,7 +348,7 @@ function BookingSummary({ data, musicSuccess, isPreview, previewFrom }: {
       )}
 
       {/* Contract signed / CTA */}
-      {booking.contractSignedAt ? (
+      {booking.contractSignedAt && (
         <div className={`${bannerBase} ${bold ? 'bg-white/15' : 'bg-green-50 border-l-2 border-green-400'}`}>
           <CheckCircle className={`h-4 w-4 flex-shrink-0 mt-0.5 ${bold ? 'text-green-400' : 'text-green-600'}`} />
           <span className={bold ? 'text-white/75 text-sm' : 'text-green-900 text-sm'}>
@@ -357,7 +357,8 @@ function BookingSummary({ data, musicSuccess, isPreview, previewFrom }: {
             })}
           </span>
         </div>
-      ) : data.contractStatus === 'SENT' ? (
+      )}
+      {!booking.contractSignedAt && data.contractStatus === 'SENT' && (
         <Link
           to={isPreview ? `contract?preview=admin&from=${encodeURIComponent(previewFrom ?? '')}` : 'contract'}
           className={ctaClass}
@@ -366,7 +367,7 @@ function BookingSummary({ data, musicSuccess, isPreview, previewFrom }: {
           <FileText className="h-4 w-4" />
           Review &amp; sign contract
         </Link>
-      ) : null}
+      )}
 
       {/* Music success banner */}
       {musicSuccess && (
@@ -379,30 +380,29 @@ function BookingSummary({ data, musicSuccess, isPreview, previewFrom }: {
       )}
 
       {/* Music form */}
-      {data.hasMusicForm && (
-        data.hasMusicFormResponse && !musicSuccess ? (
-          <div className={`${bannerBase} ${bold ? 'bg-white/15' : 'bg-[#f5f2ed]'}`}>
-            <ClipboardCheck className={`h-4 w-4 flex-shrink-0 mt-0.5 ${bold ? 'text-green-400' : 'text-green-600'}`} />
-            <span className={bold ? 'text-white/75 text-sm' : 'text-[#5a544e] text-sm'}>
-              Song requests submitted
-            </span>
-            <Link
-              to={isPreview ? `music?preview=admin&from=${encodeURIComponent(previewFrom ?? '')}` : 'music'}
-              className={`ml-auto text-xs underline underline-offset-2 ${bold ? 'text-white/45 hover:text-white' : 'text-[#a39e97] hover:text-[#1a1a1a]'}`}
-            >
-              Update
-            </Link>
-          </div>
-        ) : !data.hasMusicFormResponse ? (
+      {data.hasMusicForm && data.hasMusicFormResponse && !musicSuccess && (
+        <div className={`${bannerBase} ${bold ? 'bg-white/15' : 'bg-[#f5f2ed]'}`}>
+          <ClipboardCheck className={`h-4 w-4 flex-shrink-0 mt-0.5 ${bold ? 'text-green-400' : 'text-green-600'}`} />
+          <span className={bold ? 'text-white/75 text-sm' : 'text-[#5a544e] text-sm'}>
+            Song requests submitted
+          </span>
           <Link
             to={isPreview ? `music?preview=admin&from=${encodeURIComponent(previewFrom ?? '')}` : 'music'}
-            className={ctaClass}
-            style={ctaStyle}
+            className={`ml-auto text-xs underline underline-offset-2 ${bold ? 'text-white/45 hover:text-white' : 'text-[#a39e97] hover:text-[#1a1a1a]'}`}
           >
-            <Music className="h-4 w-4" />
-            Choose your songs
+            Update
           </Link>
-        ) : null
+        </div>
+      )}
+      {data.hasMusicForm && !data.hasMusicFormResponse && (
+        <Link
+          to={isPreview ? `music?preview=admin&from=${encodeURIComponent(previewFrom ?? '')}` : 'music'}
+          className={ctaClass}
+          style={ctaStyle}
+        >
+          <Music className="h-4 w-4" />
+          Choose your songs
+        </Link>
       )}
 
       {/* Documents */}

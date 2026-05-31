@@ -17,24 +17,24 @@ export default tseslint.config(
       },
     },
     rules: {
-      // Warnings — real quality signals, fix opportunistically
       '@typescript-eslint/no-explicit-any': 'warn',
-      'sonarjs/cognitive-complexity': ['warn', 10],
-      'sonarjs/no-nested-conditional': 'warn',
-      'sonarjs/no-nested-template-literals': 'warn',
-      'sonarjs/no-nested-functions': 'warn',
-      'react-hooks/exhaustive-deps': 'warn',
-      'sonarjs/deprecation': 'warn',
-      'sonarjs/function-return-type': 'warn',
-      'sonarjs/no-unenclosed-multiline-block': 'warn',
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      // Cognitive complexity — warn at 10; blocked from error until cleanup of 5 files (see ADR-0026)
+      'sonarjs/cognitive-complexity': ['warn', 10],
+      'react-hooks/exhaustive-deps': 'warn',
+      // Errors — enforced; all existing violations resolved
+      'sonarjs/no-nested-conditional': 'error',
+      'sonarjs/no-nested-template-literals': 'error',
+      // Off — noise without signal in React context
+      'sonarjs/no-nested-functions': 'off',
+      'sonarjs/deprecation': 'off',
+      'sonarjs/function-return-type': 'off',
+      'sonarjs/no-unenclosed-multiline-block': 'off',
       'sonarjs/no-unused-vars': 'off',
-      // Off — stylistic preferences, not quality issues
       'sonarjs/prefer-read-only-props': 'off',
       'sonarjs/use-type-alias': 'off',
       'sonarjs/pseudo-random': 'off',
       'sonarjs/todo-tag': 'off',
-      'sonarjs/no-unused-vars': 'off',
     },
   },
 );

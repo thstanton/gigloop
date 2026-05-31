@@ -402,7 +402,7 @@ export default function RepertoirePage() {
       )}
 
       {/* List */}
-      {isLoading ? (
+      {isLoading && (
         <div className="animate-pulse border-t border-border">
           {[1, 2, 3, 4, 5].map((i) => (
             <div key={i} className="py-3 border-b border-border flex items-center gap-3">
@@ -414,18 +414,21 @@ export default function RepertoirePage() {
             </div>
           ))}
         </div>
-      ) : songs.length === 0 && !addingNew ? (
+      )}
+      {!isLoading && songs.length === 0 && !addingNew && (
         <EmptyState
           icon={<Music2 size={40} strokeWidth={1.5} />}
           heading="No songs yet"
           description="Add your first song to start building your repertoire."
           action={<Button size="sm" onClick={() => setAddingNew(true)}>Add your first song</Button>}
         />
-      ) : filtered.length === 0 ? (
+      )}
+      {!isLoading && (songs.length > 0 || addingNew) && filtered.length === 0 && (
         <div className="py-12 text-center">
           <p className="text-sm text-muted">No songs match your search.</p>
         </div>
-      ) : (
+      )}
+      {!isLoading && (songs.length > 0 || addingNew) && filtered.length > 0 && (
         <div className="border-t border-border">
           {filtered.map((song) => (
             <SongRow

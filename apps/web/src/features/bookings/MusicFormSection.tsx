@@ -57,9 +57,8 @@ function SongRequestsSheetBody({ response, songListDoc }: Readonly<SongRequestsS
           <SubLabel className="mb-3">Key moments</SubLabel>
           <div className="space-y-2">
             {response.specialRequests.map((req) => {
-              const songText = req.song
-                ? `${req.song.title}${req.song.artist ? ` — ${req.song.artist}` : ''}`
-                : null;
+              const artistSuffix = req.song?.artist ? ` — ${req.song.artist}` : '';
+              const songText = req.song ? `${req.song.title}${artistSuffix}` : null;
               return (
                 <div key={req.key} className="flex items-start gap-3">
                   <span className="text-sm text-muted w-36 flex-shrink-0">{req.key}</span>

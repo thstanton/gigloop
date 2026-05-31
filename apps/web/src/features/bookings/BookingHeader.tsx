@@ -26,6 +26,7 @@ export function BookingHeader({
   const feeWithVat = userProfile?.vatNumber && booking.fee
     ? `${fee} (${formatCurrency(parseFloat(booking.fee) * (1 + (userProfile.vatRate ?? 20) / 100))} inc. VAT)`
     : fee;
+  const backUrl = encodeURIComponent(`/admin/bookings/${booking.id}`);
 
   return (
     <section>
@@ -33,7 +34,7 @@ export function BookingHeader({
         <h1 className="font-display text-2xl font-semibold text-foreground">{title}</h1>
         <div className="flex items-center gap-2 flex-shrink-0">
           <a
-            href={`/booking/${booking.portalToken}?preview=admin&from=${encodeURIComponent(`/admin/bookings/${booking.id}`)}`}
+            href={`/booking/${booking.portalToken}?preview=admin&from=${backUrl}`}
             className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-foreground transition-colors border border-border rounded px-3 py-1.5"
           >
             Client portal

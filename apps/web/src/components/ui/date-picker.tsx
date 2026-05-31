@@ -198,11 +198,9 @@ export function DatePicker({
                 aria-pressed={isSelected}
                 className={cn(
                   'relative h-8 w-8 flex items-center justify-center rounded-md text-sm select-none transition-colors',
-                  isSelected
-                    ? 'bg-primary text-primary-foreground font-medium'
-                    : isToday
-                    ? 'text-primary font-medium hover:bg-accent'
-                    : 'text-foreground hover:bg-accent',
+                  isSelected && 'bg-primary text-primary-foreground font-medium',
+                  !isSelected && isToday && 'text-primary font-medium hover:bg-accent',
+                  !isSelected && !isToday && 'text-foreground hover:bg-accent',
                   isFocused && !isSelected && 'ring-1 ring-ring ring-inset',
                 )}
               >

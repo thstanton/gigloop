@@ -343,11 +343,11 @@ export default function PerformanceEditor({ booking }: { booking: BookingDetail 
       ) : (
         <div className="space-y-2">
           <SubLabel>Select a format</SubLabel>
-          {formatsLoading ? (
-            <p className="text-sm text-muted">Loading…</p>
-          ) : availableFormats.length === 0 ? (
+          {formatsLoading && <p className="text-sm text-muted">Loading…</p>}
+          {!formatsLoading && availableFormats.length === 0 && (
             <p className="text-sm text-muted">All formats already applied.</p>
-          ) : (
+          )}
+          {!formatsLoading && availableFormats.length > 0 && (
             <div className="space-y-3">
               <div className="flex flex-wrap gap-2">
                 {(matchingFormats.length > 0 ? matchingFormats : otherFormats).map((fmt) => (

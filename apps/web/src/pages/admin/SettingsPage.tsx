@@ -154,6 +154,10 @@ function ImageUploadField({
   maxSizeBytes?: number;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  let uploadLabel: string;
+  if (uploading) uploadLabel = 'Uploading…';
+  else if (currentUrl) uploadLabel = 'Change';
+  else uploadLabel = 'Upload';
 
   return (
     <div className="space-y-1.5">
@@ -189,7 +193,7 @@ function ImageUploadField({
             onClick={() => inputRef.current?.click()}
           >
             <Upload size={14} className="mr-1.5" />
-            {uploading ? 'Uploading…' : currentUrl ? 'Change' : 'Upload'}
+            {uploadLabel}
           </Button>
           {currentUrl && (
             <Button
@@ -667,7 +671,10 @@ const ALL_SYSTEM_KEYS = CHECKLIST_STAGE_GROUPS.flatMap((g) => g.items.map((i) =>
 function formatDueDateRule(rule: DueDateRule | null): string {
   if (!rule) return 'No due date';
   const days = Math.abs(rule.offsetDays);
-  const direction = rule.offsetDays < 0 ? 'before' : rule.offsetDays > 0 ? 'after' : 'on';
+  let direction: string;
+  if (rule.offsetDays < 0) direction = 'before';
+  else if (rule.offsetDays > 0) direction = 'after';
+  else direction = 'on';
   const basis = rule.basis === 'bookingDate' ? 'booking date' : 'booking creation';
   if (direction === 'on') return `On ${basis}`;
   return `${days} day${days !== 1 ? 's' : ''} ${direction} ${basis}`;
@@ -745,7 +752,7 @@ function BookingSettingsSection({ profile }: { profile: UserProfile }) {
     const prefs = profile.preferences as UserPreferences | undefined;
     const defaults = prefs?.checklistDefaults ?? [];
     setCustomItems(defaults.filter((d) => !ALL_SYSTEM_KEYS.includes(d.key as string)));
-  }, [profile]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [profile]);
   const [newItem, setNewItem] = useState<CustomItemForm>({
     label: '',
     completedBy: 'USER',

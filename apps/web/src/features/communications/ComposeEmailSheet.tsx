@@ -115,7 +115,7 @@ export default function ComposeEmailSheet({
     const match = emailTemplates.find((t) => t.builtInType === initialTemplateType);
     if (match) setSelectedTemplateId(match.id);
     didPreselect.current = true;
-  }, [open, initialTemplateType, emailTemplates]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, initialTemplateType, emailTemplates]);
 
   const selectedTemplate = emailTemplates.find((t) => t.id === selectedTemplateId) ?? null;
   const selectedType = selectedTemplate?.builtInType ?? null;
@@ -136,7 +136,7 @@ export default function ComposeEmailSheet({
     } else {
       setFormDueDate('');
     }
-  }, [showDateFields, defaultPaymentTermsDays]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [showDateFields, defaultPaymentTermsDays]);
 
   const renderQueryKey = ['renderEmail', bookingId, selectedTemplateId, invoiceId, formIssueDate, formDueDate];
   const renderUrl = useMemo(() => {
