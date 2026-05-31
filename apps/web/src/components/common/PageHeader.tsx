@@ -3,6 +3,7 @@ import { ChevronLeft } from 'lucide-react';
 
 interface PageHeaderProps {
   title: string;
+  subheading?: string;
   backHref?: string;
   backLabel?: string;
   onBack?: () => void;
@@ -10,7 +11,7 @@ interface PageHeaderProps {
   className?: string;
 }
 
-export function PageHeader({ title, backHref, backLabel = 'Back', onBack, action, className }: PageHeaderProps) {
+export function PageHeader({ title, subheading, backHref, backLabel = 'Back', onBack, action, className }: PageHeaderProps) {
   const backLinkClass = 'inline-flex items-center gap-1 text-sm text-muted hover:text-foreground transition-colors';
 
   return (
@@ -31,7 +32,10 @@ export function PageHeader({ title, backHref, backLabel = 'Back', onBack, action
         </div>
       )}
       <div className="flex items-start justify-between gap-4 mb-6">
-        <h1 className="font-display text-2xl font-semibold text-foreground">{title}</h1>
+        <div>
+          <h1 className="font-display text-2xl font-semibold text-foreground">{title}</h1>
+          {subheading && <p className="text-base text-muted mt-1">{subheading}</p>}
+        </div>
         {action && <div className="flex items-center gap-2 flex-shrink-0">{action}</div>}
       </div>
     </div>

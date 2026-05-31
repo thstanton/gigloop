@@ -6,6 +6,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useUser } from '@clerk/react';
 import { apiPatch } from '@/lib/api';
 import { Button } from '@/components/ui/button';
+import { PageHeader } from '@/components/common/PageHeader';
 import { FormField } from '@/components/common/FormField';
 import { Input } from '@/components/ui/input';
 import type { PublicProfile } from '@/types/api';
@@ -55,12 +56,11 @@ export default function OnboardingProfilePage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="font-display text-2xl font-semibold text-foreground">Set up your profile</h1>
-        <p className="text-base text-muted mt-1">
-          This appears on your client portal and communications.
-        </p>
-      </div>
+      <PageHeader
+        title="Set up your profile"
+        subheading="This appears on your client portal and communications."
+        className="mb-0"
+      />
 
       <form onSubmit={handleSubmit((data) => mutate(data))} className="flex flex-col gap-4">
         <FormField label="Business name" error={errors.businessName?.message} required>

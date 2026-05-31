@@ -4,6 +4,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { apiGet, apiPost } from '@/lib/api';
 import { Button } from '@/components/ui/button';
+import { PageHeader } from '@/components/common/PageHeader';
 import type { CatalogueGroup } from '@/types/api';
 
 export default function OnboardingSongsPage() {
@@ -48,12 +49,11 @@ export default function OnboardingSongsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="font-display text-2xl font-semibold text-foreground">Add songs to your repertoire</h1>
-        <p className="text-base text-muted mt-1">
-          Select songs to add to your library. You can add more later in Settings.
-        </p>
-      </div>
+      <PageHeader
+        title="Add songs to your repertoire"
+        subheading="Select songs to add to your library. You can add more later in Settings."
+        className="mb-0"
+      />
 
       {isLoading ? (
         <div className="space-y-4">

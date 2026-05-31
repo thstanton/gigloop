@@ -5,6 +5,7 @@ import { apiPatch, apiPost } from '@/lib/api';
 import { useMe } from '@/lib/hooks/useMe';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
+import { PageHeader } from '@/components/common/PageHeader';
 import { PageSection } from '@/components/common/PageSection';
 import type { ChecklistDefaultItem } from '@/types/api';
 
@@ -63,12 +64,11 @@ export default function OnboardingChecklistPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="font-display text-2xl font-semibold text-foreground">Booking checklist defaults</h1>
-        <p className="text-base text-muted mt-1">
-          These are the tasks GigMan will track for every booking. You can customise them fully in Settings → Booking defaults.
-        </p>
-      </div>
+      <PageHeader
+        title="Booking checklist defaults"
+        subheading="These are the tasks GigMan will track for every booking. You can customise them fully in Settings → Booking defaults."
+        className="mb-0"
+      />
 
       {isLoading ? (
         <div className="space-y-4">

@@ -11,6 +11,7 @@ import { apiGet, apiPatch } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { CATEGORY_LABELS } from '@/pages/admin/PackagesPage';
+import { PageHeader } from '@/components/common/PageHeader';
 import { PageSection } from '@/components/common/PageSection';
 import type { Package } from '@/types/api';
 
@@ -77,12 +78,11 @@ export default function OnboardingPackagesPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="font-display text-2xl font-semibold text-foreground">Choose your packages</h1>
-        <p className="text-base text-muted mt-1">
-          Enable the packages you offer. You can update these any time in Settings.
-        </p>
-      </div>
+      <PageHeader
+        title="Choose your packages"
+        subheading="Enable the packages you offer. You can update these any time in Settings."
+        className="mb-0"
+      />
 
       {isLoading ? (
         <div className="space-y-4">
