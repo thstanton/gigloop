@@ -7,7 +7,7 @@ export interface InlineNotesProps {
   isSaving: boolean;
 }
 
-export default function InlineNotes({ notes, onSave, isSaving }: InlineNotesProps) {
+export default function InlineNotes({ notes, onSave, isSaving }: Readonly<InlineNotesProps>) {
   const [value, setValue] = useState(notes ?? '');
   const [savedVisible, setSavedVisible] = useState(false);
   const lastSavedRef = useRef(notes ?? '');
@@ -53,12 +53,14 @@ export default function InlineNotes({ notes, onSave, isSaving }: InlineNotesProp
   }, []);
 
   const statusText = isSaving ? 'Saving…' : savedVisible ? 'Saved' : null;
+  const opacityClass = statusText ? 'opacity-100' : 'opacity-0';
+  const colorClass = savedVisible && !isSaving ? 'text-status-confirmed' : 'text-muted';
 
   return (
     <section>
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm font-semibold text-foreground">Notes</h2>
-        <span className={`text-xs transition-opacity duration-300 ${statusText ? 'opacity-100' : 'opacity-0'} ${savedVisible && !isSaving ? 'text-status-confirmed' : 'text-muted'}`}>
+        <span className={`text-xs transition-opacity duration-300 ${opacityClass} ${colorClass}`}>
           {statusText ?? 'Saved'}
         </span>
       </div>

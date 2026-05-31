@@ -23,7 +23,7 @@ function emailDoc(body: string) {
   </style></head><body>${body}</body></html>`;
 }
 
-function EmailPreviewSheet({ comm, open, onClose }: { comm: Communication; open: boolean; onClose: () => void }) {
+function EmailPreviewSheet({ comm, open, onClose }: Readonly<{ comm: Communication; open: boolean; onClose: () => void }>) {
   return (
     <Sheet open={open} onOpenChange={onClose}>
       <SheetContent side="right" className="w-full sm:max-w-lg flex flex-col p-0">
@@ -47,38 +47,56 @@ function EmailPreviewSheet({ comm, open, onClose }: { comm: Communication; open:
   );
 }
 
-function CommunicationRow({ comm }: { comm: Communication }) {
+function getStatusPrefix(isFailed: boolean, isPending: boolean): string {
+  if (isFailed) return 'Send failed · ';
+  if (isPending) return 'Sending · ';
+  return '';
+}
+
+function CommunicationRow({ comm }: Readonly<{ comm: Communication }>) {
   const [open, setOpen] = useState(false);
   const isFailed = comm.status === 'FAILED';
   const isPending = comm.status === 'PENDING';
   const isSent = comm.status === 'SENT';
   const meta = [comm.template?.name, `To ${comm.contact.name}`].filter(Boolean).join(' · ');
-  const statusPrefix = isFailed ? 'Send failed · ' : isPending ? 'Sending · ' : '';
+  const statusPrefix = getStatusPrefix(isFailed, isPending);
+  const rowContent = (
+    <>
+      <div className="min-w-0 flex items-start gap-2">
+        {isFailed && <AlertTriangle size={14} className="text-status-cancelled flex-shrink-0 mt-0.5" />}
+        <div className="min-w-0">
+          <p className={`text-sm truncate ${isFailed ? 'text-status-cancelled' : 'text-foreground'}`}>
+            {comm.subject}
+          </p>
+          <p className="text-xs text-muted mt-0.5">{statusPrefix}{meta}</p>
+        </div>
+      </div>
+      <span className="text-xs text-muted flex-shrink-0">
+        {comm.sentAt ? formatDate(comm.sentAt) : '—'}
+      </span>
+    </>
+  );
+
+  if (isSent) {
+    return (
+      <>
+        <button
+          type="button"
+          className="w-full text-left flex items-start justify-between gap-3 py-3 border-b border-border last:border-0 cursor-pointer hover:bg-muted/30 -mx-4 px-4 rounded transition-colors"
+          onClick={() => setOpen(true)}
+          aria-label={`View email: ${comm.subject}`}
+        >
+          {rowContent}
+        </button>
+        <EmailPreviewSheet comm={comm} open={open} onClose={() => setOpen(false)} />
+      </>
+    );
+  }
 
   return (
-    <>
-      <div
-        className={`flex items-start justify-between gap-3 py-3 border-b border-border last:border-0 ${isSent ? 'cursor-pointer hover:bg-muted/30 -mx-4 px-4 rounded transition-colors' : ''}`}
-        onClick={() => { if (isSent) setOpen(true); }}
-        role={isSent ? 'button' : undefined}
-        aria-label={isSent ? `View email: ${comm.subject}` : undefined}
-      >
-        <div className="min-w-0 flex items-start gap-2">
-          {isFailed && <AlertTriangle size={14} className="text-status-cancelled flex-shrink-0 mt-0.5" />}
-          <div className="min-w-0">
-            <p className={`text-sm truncate ${isFailed ? 'text-status-cancelled' : 'text-foreground'}`}>
-              {comm.subject}
-            </p>
-            <p className="text-xs text-muted mt-0.5">{statusPrefix}{meta}</p>
-          </div>
-        </div>
-        <span className="text-xs text-muted flex-shrink-0">
-          {comm.sentAt ? formatDate(comm.sentAt) : '—'}
-        </span>
-      </div>
-
-      {isSent && <EmailPreviewSheet comm={comm} open={open} onClose={() => setOpen(false)} />}
-    </>
+    <div className="flex items-start justify-between gap-3 py-3 border-b border-border last:border-0">
+      {rowContent}
+    </div>
   );
 }
 
@@ -87,7 +105,7 @@ export interface CommunicationsSectionProps {
   onCompose: () => void;
 }
 
-export default function CommunicationsSection({ communications, onCompose }: CommunicationsSectionProps) {
+export default function CommunicationsSection({ communications, onCompose }: Readonly<CommunicationsSectionProps>) {
   return (
     <section>
       <div className="flex items-center justify-between mb-3">

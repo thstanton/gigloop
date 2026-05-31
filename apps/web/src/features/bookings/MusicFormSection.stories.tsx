@@ -44,7 +44,6 @@ const meta = {
     isLoading: false,
     response: null,
     onUpdateConfig: noop,
-    onSendInvite: noop,
     onViewResponse: noop,
     onEdit: noop,
   },

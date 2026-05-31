@@ -19,7 +19,6 @@ export interface MusicFormSectionProps {
   isLoading: boolean;
   response: MusicFormResponse | null;
   onUpdateConfig: () => void;
-  onSendInvite: () => void;
   onViewResponse: () => void;
   onEdit: () => void;
 }
@@ -38,7 +37,7 @@ interface SongRequestsSheetBodyProps {
   songListDoc: Document | undefined;
 }
 
-function SongRequestsSheetBody({ response, songListDoc }: SongRequestsSheetBodyProps) {
+function SongRequestsSheetBody({ response, songListDoc }: Readonly<SongRequestsSheetBodyProps>) {
   if (!response) {
     return (
       <div className="space-y-3 animate-pulse">
@@ -57,16 +56,19 @@ function SongRequestsSheetBody({ response, songListDoc }: SongRequestsSheetBodyP
         <section>
           <SubLabel className="mb-3">Key moments</SubLabel>
           <div className="space-y-2">
-            {response.specialRequests.map((req, i) => (
-              <div key={i} className="flex items-start gap-3">
-                <span className="text-sm text-muted w-36 flex-shrink-0">{req.key}</span>
-                <span className="text-sm text-foreground">
-                  {req.song
-                    ? `${req.song.title}${req.song.artist ? ` — ${req.song.artist}` : ''}`
-                    : req.freeText ?? <span className="text-muted italic">No selection</span>}
-                </span>
-              </div>
-            ))}
+            {response.specialRequests.map((req) => {
+              const songText = req.song
+                ? `${req.song.title}${req.song.artist ? ` — ${req.song.artist}` : ''}`
+                : null;
+              return (
+                <div key={req.key} className="flex items-start gap-3">
+                  <span className="text-sm text-muted w-36 flex-shrink-0">{req.key}</span>
+                  <span className="text-sm text-foreground">
+                    {songText ?? req.freeText ?? <span className="text-muted italic">No selection</span>}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </section>
       )}
@@ -121,7 +123,7 @@ export default function MusicFormSection({
   onUpdateConfig,
   onViewResponse,
   onEdit,
-}: MusicFormSectionProps) {
+}: Readonly<MusicFormSectionProps>) {
   const [viewingResponse, setViewingResponse] = useState(false);
   const songListDoc = documents.find((d) => d.type === 'SONG_LIST');
 
@@ -200,8 +202,8 @@ export default function MusicFormSection({
                 {section}
               </div>
               <div className="space-y-0.5">
-                {moments.map((km, i) => (
-                  <p key={i} className="text-sm text-foreground">{km.label}</p>
+                {moments.map((km) => (
+                  <p key={km.label} className="text-sm text-foreground">{km.label}</p>
                 ))}
               </div>
             </div>

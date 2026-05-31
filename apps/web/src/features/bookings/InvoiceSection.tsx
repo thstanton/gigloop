@@ -36,7 +36,7 @@ export default function InvoiceSection({
   onMarkSent,
   onMarkPaid,
   onVoid,
-}: InvoiceSectionProps) {
+}: Readonly<InvoiceSectionProps>) {
   const action = (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -45,44 +45,50 @@ export default function InvoiceSection({
         </GhostButton>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={onNewDepositInvoice}>
-          Deposit invoice
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={onNewBalanceInvoice}>
-          Balance invoice
-        </DropdownMenuItem>
+        <DropdownMenuItem onClick={onNewDepositInvoice}>Deposit invoice</DropdownMenuItem>
+        <DropdownMenuItem onClick={onNewBalanceInvoice}>Balance invoice</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
 
-  return (
-    <Card title="Invoices" action={action}>
-      {isPending ? (
+  if (isPending) {
+    return (
+      <Card title="Invoices" action={action}>
         <div className="space-y-2 animate-pulse">
           {[1, 2].map((i) => <div key={i} className="h-9 bg-border rounded" />)}
         </div>
-      ) : invoices.length === 0 ? (
+      </Card>
+    );
+  }
+
+  if (invoices.length === 0) {
+    return (
+      <Card title="Invoices" action={action}>
         <div className="flex items-center gap-2 text-muted py-1">
           <DollarSign size={14} />
           <span className="text-sm">No invoices yet</span>
         </div>
-      ) : (
-        <div>
-          {invoices.map((inv) => (
-            <InvoiceRow
-              key={inv.id}
-              invoice={inv}
-              pdfUrl={documents.find((d) => d.type === 'INVOICE' && d.invoiceId === inv.id)?.url ?? null}
-              onEdit={onEdit}
-              onDelete={onDelete}
-              onSend={onSend}
-              onMarkSent={onMarkSent}
-              onMarkPaid={onMarkPaid}
-              onVoid={onVoid}
-            />
-          ))}
-        </div>
-      )}
+      </Card>
+    );
+  }
+
+  return (
+    <Card title="Invoices" action={action}>
+      <div>
+        {invoices.map((inv) => (
+          <InvoiceRow
+            key={inv.id}
+            invoice={inv}
+            pdfUrl={documents.find((d) => d.type === 'INVOICE' && d.invoiceId === inv.id)?.url ?? null}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            onSend={onSend}
+            onMarkSent={onMarkSent}
+            onMarkPaid={onMarkPaid}
+            onVoid={onVoid}
+          />
+        ))}
+      </div>
     </Card>
   );
 }

@@ -552,7 +552,6 @@ export default function BookingDetailPage() {
                   isLoading={musicFormConfigLoading}
                   response={musicFormResponse ?? null}
                   onUpdateConfig={() => configureMusicForm.mutate()}
-                  onSendInvite={() => openCompose('music_form_invite')}
                   onViewResponse={() => setViewingMusicFormResponse(true)}
                   onEdit={() => setSearchParams((prev) => {
                     const next = new URLSearchParams(prev);

@@ -42,9 +42,10 @@ interface OutstandingChecklistDialogProps {
   onCancel: () => void;
 }
 
-function OutstandingChecklistDialog({ pendingStatus, outstandingItems, onConfirm, onCancel }: OutstandingChecklistDialogProps) {
+function OutstandingChecklistDialog({ pendingStatus, outstandingItems, onConfirm, onCancel }: Readonly<OutstandingChecklistDialogProps>) {
   const label = STATUS_LABELS[pendingStatus];
   const count = outstandingItems.length;
+  const plural = count === 1 ? '' : 's';
 
   return (
     <Dialog open onOpenChange={onCancel}>
@@ -53,7 +54,7 @@ function OutstandingChecklistDialog({ pendingStatus, outstandingItems, onConfirm
           <DialogTitle>Outstanding checklist items</DialogTitle>
         </DialogHeader>
         <p className="text-sm text-muted">
-          {count} item{count !== 1 ? 's' : ''} still outstanding for{' '}
+          {count} item{plural} still outstanding for{' '}
           <span className="font-medium text-foreground">{label}</span>:
         </p>
         <ul className="text-sm space-y-1 list-disc list-inside text-foreground">
@@ -83,7 +84,7 @@ export default function BookingStatusDropdown({
   checklist,
   onStatusChange,
   isPending,
-}: BookingStatusDropdownProps) {
+}: Readonly<BookingStatusDropdownProps>) {
   const [pendingStatus, setPendingStatus] = useState<BookingStatus | null>(null);
   const [displayStatus, setDisplayStatus] = useState<BookingStatus>(currentStatus);
 

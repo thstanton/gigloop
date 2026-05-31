@@ -12,7 +12,7 @@ import { formatDate, formatCurrency } from '@/lib/formatters';
 import type { Invoice } from '@/types/api';
 
 function invoiceLineTotal(invoice: Invoice): number {
-  return invoice.lineItems.reduce((sum, item) => sum + parseFloat(item.amount), 0);
+  return invoice.lineItems.reduce((sum, item) => sum + Number.parseFloat(item.amount), 0);
 }
 
 interface InvoiceRowActionsProps {
@@ -26,7 +26,7 @@ interface InvoiceRowActionsProps {
   onVoid: (invoice: Invoice) => void;
 }
 
-function InvoiceRowActions({ invoice, pdfUrl, onEdit, onDelete, onSend, onMarkSent, onMarkPaid, onVoid }: InvoiceRowActionsProps) {
+function InvoiceRowActions({ invoice, pdfUrl, onEdit, onDelete, onSend, onMarkSent, onMarkPaid, onVoid }: Readonly<InvoiceRowActionsProps>) {
   const isDraft = invoice.status === 'DRAFT';
   const isSent = invoice.status === 'SENT';
   const isPaid = invoice.status === 'PAID';

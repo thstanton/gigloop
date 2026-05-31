@@ -18,7 +18,14 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { formatDate } from '@/lib/formatters';
-import type { BookingDetail, ContractStatus, Document } from '@/types/api';
+import type { BookingDetail, Contract, ContractStatus, Document } from '@/types/api';
+
+function getContractDate(contract: Contract, status: ContractStatus | null): string | null {
+  if (status === 'SIGNED' && contract.signedAt) return formatDate(contract.signedAt);
+  if (status === 'SENT' && contract.updatedAt) return formatDate(contract.updatedAt);
+  if (contract.createdAt) return formatDate(contract.createdAt);
+  return null;
+}
 
 const CONTRACT_PILL_CLASSES: Record<string, string> = {
   DRAFT:  'bg-status-enquiry/12 text-status-enquiry border-l-status-enquiry',
@@ -45,7 +52,7 @@ interface ContractCardActionsProps {
   onDelete: () => void;
 }
 
-function ContractCardActions({ status, contractDoc, onEdit, onPreview, onSend, onVoidSent, onVoidSigned, onDelete }: ContractCardActionsProps) {
+function ContractCardActions({ status, contractDoc, onEdit, onPreview, onSend, onVoidSent, onVoidSigned, onDelete }: Readonly<ContractCardActionsProps>) {
   if (status === 'DRAFT') {
     return (
       <>
@@ -125,21 +132,14 @@ export default function ContractCard({
   onSend,
   onVoid,
   onDelete,
-}: ContractCardProps) {
+}: Readonly<ContractCardProps>) {
   const [confirmVoidOpen, setConfirmVoidOpen] = useState(false);
   const contract = booking.activeContract;
   const status = contract?.status ?? null;
   const isVoid = status === 'VOID';
   const isEmpty = !contract;
   const contractDoc = documents.find((d) => d.type === 'CONTRACT' && d.contractStatus !== 'VOID');
-
-  const contractDate = contract
-    ? status === 'SIGNED' && contract.signedAt
-      ? formatDate(contract.signedAt)
-      : status === 'SENT' && contract.updatedAt
-        ? formatDate(contract.updatedAt)
-        : contract.createdAt ? formatDate(contract.createdAt) : null
-    : null;
+  const contractDate = contract ? getContractDate(contract, status) : null;
 
   const headerAction = (isEmpty || isVoid) ? (
     <GhostButton onClick={onCreateContract} disabled={isCreating} variant="primary" size="xs" icon={<Plus size={12} />}>

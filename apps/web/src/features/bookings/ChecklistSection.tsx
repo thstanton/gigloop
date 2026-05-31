@@ -68,7 +68,7 @@ interface ChecklistItemIconProps {
   onToggle: (itemId: string, newState: 'COMPLETE' | 'PENDING') => void;
 }
 
-function ChecklistItemIcon({ state, isPlayTheGig, itemId, onToggle }: ChecklistItemIconProps) {
+function ChecklistItemIcon({ state, isPlayTheGig, itemId, onToggle }: Readonly<ChecklistItemIconProps>) {
   if (state === 'COMPLETE') {
     return (
       <button
@@ -143,7 +143,13 @@ interface ChecklistItemRowProps {
   onMarkDone: (key: MarkDoneKey) => void;
 }
 
-function ChecklistItemRow({ item, shortcuts, isActionPending, onToggle, onOpenCompose, onChecklistAction, onMarkDone }: ChecklistItemRowProps) {
+function labelClass(isDone: boolean, isFailed: boolean): string {
+  if (isDone) return 'text-muted line-through';
+  if (isFailed) return 'text-status-cancelled';
+  return 'text-foreground';
+}
+
+function ChecklistItemRow({ item, shortcuts, isActionPending, onToggle, onOpenCompose, onChecklistAction, onMarkDone }: Readonly<ChecklistItemRowProps>) {
   const isDone = item.state === 'COMPLETE';
   const isFailed = item.state === 'FAILED';
   const isBlocked = item.state === 'BLOCKED';
@@ -155,7 +161,7 @@ function ChecklistItemRow({ item, shortcuts, isActionPending, onToggle, onOpenCo
       <div className="flex items-center gap-2.5 min-w-0">
         <ChecklistItemIcon state={item.state} isPlayTheGig={isPlayTheGig} itemId={item.id} onToggle={onToggle} />
         <div className="min-w-0">
-          <span className={cn('text-sm', isDone ? 'text-muted line-through' : isFailed ? 'text-status-cancelled' : 'text-foreground')}>
+          <span className={cn('text-sm', labelClass(isDone, isFailed))}>
             {item.label}
           </span>
           {due && !isDone && !isBlocked && <p className={cn('text-xs', due.className)}>{due.text}</p>}
@@ -287,8 +293,8 @@ export default function ChecklistSection({
 
   const bookingIdx = STAGE_LIST.indexOf(bookingStatus as typeof STAGE_LIST[number]);
   const defaultStageSet = new Set<string | null>([null]);
-  if (bookingIdx >= 0) defaultStageSet.add(STAGE_LIST[bookingIdx]!);
-  if (bookingIdx >= 0 && bookingIdx + 1 < STAGE_LIST.length) defaultStageSet.add(STAGE_LIST[bookingIdx + 1]!);
+  if (bookingIdx >= 0) defaultStageSet.add(STAGE_LIST[bookingIdx]);
+  if (bookingIdx >= 0 && bookingIdx + 1 < STAGE_LIST.length) defaultStageSet.add(STAGE_LIST[bookingIdx + 1]);
 
   const filtered = showAllChecklist ? baseList : baseList.filter((i) => defaultStageSet.has(i.requiredForStatus));
   const hiddenCount = baseList.length - filtered.length;
