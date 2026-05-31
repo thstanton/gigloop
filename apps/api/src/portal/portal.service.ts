@@ -285,7 +285,6 @@ export class PortalService {
     const bookingDate = booking.date.toISOString().split('T')[0];
     const musicianName = publicProfile.displayName ?? publicProfile.businessName;
 
-    // Generate PDF
     const { buffer } = await this.documents.generateAndStoreSongListPdf(
       bookingData.userId,
       bookingData.id,
@@ -303,18 +302,49 @@ export class PortalService {
 
     if (!publicProfile.email) return;
 
-    // Build email body
-    const adminUrl = `${process.env.APP_BASE_URL}/admin/bookings/${bookingData.id}`;
-    let body = `${booking.customer.name} has submitted their song requests for ${bookingTitle}.\n\n`;
+    const grouped = this.groupSongsForEmail(specialRequests, selectedSongs);
+    const body = this.buildSongListEmailBody(grouped, dto.notes ?? null, booking.customer.name, bookingTitle, bookingData.id);
 
-    if (specialRequests.length > 0) {
+    await this.mail.send({
+      to: publicProfile.email,
+      subject: `${booking.customer.name} has submitted their song requests for ${bookingTitle}`,
+      body: body.replace(/\n/g, '<br>'),
+      attachments: [{ filename: 'song-list.pdf', content: buffer }],
+    });
+  }
+
+  private groupSongsForEmail(
+    specialRequests: Array<{ key: string; section: string; song?: { title: string; artist?: string | null }; freeText?: string }>,
+    selectedSongs: Array<{ title: string; artist?: string | null; genre: string }>,
+  ) {
+    const bySection = new Map<string, typeof specialRequests>();
+    for (const req of specialRequests) {
+      if (!bySection.has(req.section)) bySection.set(req.section, []);
+      bySection.get(req.section)!.push(req);
+    }
+
+    const byGenre = new Map<string, typeof selectedSongs>();
+    for (const song of selectedSongs) {
+      if (!byGenre.has(song.genre)) byGenre.set(song.genre, []);
+      byGenre.get(song.genre)!.push(song);
+    }
+
+    return { bySection, byGenre };
+  }
+
+  private buildSongListEmailBody(
+    grouped: ReturnType<PortalService['groupSongsForEmail']>,
+    notes: string | null,
+    customerName: string,
+    bookingTitle: string,
+    bookingId: string,
+  ): string {
+    const adminUrl = `${process.env.APP_BASE_URL}/admin/bookings/${bookingId}`;
+    let body = `${customerName} has submitted their song requests for ${bookingTitle}.\n\n`;
+
+    if (grouped.bySection.size > 0) {
       body += 'KEY MOMENTS\n';
-      const sectionMap = new Map<string, typeof specialRequests>();
-      for (const req of specialRequests) {
-        if (!sectionMap.has(req.section)) sectionMap.set(req.section, []);
-        sectionMap.get(req.section)!.push(req);
-      }
-      for (const [section, reqs] of sectionMap.entries()) {
+      for (const [section, reqs] of grouped.bySection.entries()) {
         body += `\n${section}\n`;
         for (const req of reqs) {
           const song = req.song
@@ -326,14 +356,9 @@ export class PortalService {
       body += '\n';
     }
 
-    if (selectedSongs.length > 0) {
+    if (grouped.byGenre.size > 0) {
       body += 'GENERAL REQUESTS\n';
-      const genreMap = new Map<string, typeof selectedSongs>();
-      for (const song of selectedSongs) {
-        if (!genreMap.has(song.genre)) genreMap.set(song.genre, []);
-        genreMap.get(song.genre)!.push(song);
-      }
-      for (const [genre, songs] of genreMap.entries()) {
+      for (const [genre, songs] of grouped.byGenre.entries()) {
         body += `\n${genre}\n`;
         for (const song of songs) {
           body += `  ${song.title}${song.artist ? ` — ${song.artist}` : ''}\n`;
@@ -342,15 +367,10 @@ export class PortalService {
       body += '\n';
     }
 
-    if (dto.notes) body += `NOTES\n${dto.notes}\n\n`;
+    if (notes) body += `NOTES\n${notes}\n\n`;
     body += `View booking: ${adminUrl}`;
 
-    await this.mail.send({
-      to: publicProfile.email,
-      subject: `${booking.customer.name} has submitted their song requests for ${bookingTitle}`,
-      body: body.replace(/\n/g, '<br>'),
-      attachments: [{ filename: 'song-list.pdf', content: buffer }],
-    });
+    return body;
   }
 
   private async sendSigningNotification(
@@ -362,32 +382,54 @@ export class PortalService {
   ) {
     if (!publicProfile.email) return;
 
+    const depositInvoice = booking.depositReceivedAt
+      ? null
+      : await this.repo.findDepositInvoice(booking.id, booking.userId);
+
     const bookingTitle = booking.title ?? `${booking.customer.name} · ${booking.date.toISOString().split('T')[0]}`;
-    const bookingDate = booking.date.toISOString().split('T')[0];
-    const venueLine = booking.venue ? `\nVenue: ${booking.venue.name}` : '';
-
-    let depositSection = '';
-    if (booking.depositReceivedAt) {
-      const adminUrl = `${process.env.APP_BASE_URL}/admin/bookings/${booking.id}`;
-      depositSection = `\n\nThe deposit has also been received. Mark this booking as Confirmed:\n${adminUrl}`;
-    } else {
-      const depositInvoice = await this.repo.findDepositInvoice(booking.id, booking.userId);
-      if (depositInvoice) {
-        const dueDate = depositInvoice.dueDate
-          ? `Awaiting deposit — due ${depositInvoice.dueDate.toISOString().split('T')[0]}.`
-          : 'Awaiting deposit.';
-        depositSection = `\n\n${dueDate}`;
-      }
-    }
-
-    const adminUrl = `${process.env.APP_BASE_URL}/admin/bookings/${booking.id}`;
-    const body = `${booking.customer.name} has signed the contract for ${bookingTitle}.\n\nBooking date: ${bookingDate}${venueLine}\nSigned at: ${signedAt.toISOString()}\n\nView booking: ${adminUrl}${depositSection}`;
+    const body = this.buildSigningNotificationBody({
+      bookingId: booking.id,
+      bookingTitle,
+      bookingDate: booking.date.toISOString().split('T')[0],
+      customerName: booking.customer.name,
+      venueName: booking.venue?.name ?? null,
+      signedAt,
+      depositReceivedAt: booking.depositReceivedAt ?? null,
+      depositInvoice: depositInvoice ?? null,
+    });
 
     await this.mail.send({
       to: publicProfile.email,
       subject: `${booking.customer.name} has signed your contract for ${bookingTitle}`,
       body: body.replace(/\n/g, '<br>'),
     });
+  }
+
+  private buildSigningNotificationBody(params: {
+    bookingId: string;
+    bookingTitle: string;
+    bookingDate: string;
+    customerName: string;
+    venueName: string | null;
+    signedAt: Date;
+    depositReceivedAt: Date | null;
+    depositInvoice: { dueDate: Date | null } | null;
+  }): string {
+    const { bookingId, bookingTitle, bookingDate, customerName, venueName, signedAt, depositReceivedAt, depositInvoice } = params;
+    const adminUrl = `${process.env.APP_BASE_URL}/admin/bookings/${bookingId}`;
+    const venueLine = venueName ? `\nVenue: ${venueName}` : '';
+
+    let depositSection = '';
+    if (depositReceivedAt) {
+      depositSection = `\n\nThe deposit has also been received. Mark this booking as Confirmed:\n${adminUrl}`;
+    } else if (depositInvoice) {
+      const dueLine = depositInvoice.dueDate
+        ? `Awaiting deposit — due ${depositInvoice.dueDate.toISOString().split('T')[0]}.`
+        : 'Awaiting deposit.';
+      depositSection = `\n\n${dueLine}`;
+    }
+
+    return `${customerName} has signed the contract for ${bookingTitle}.\n\nBooking date: ${bookingDate}${venueLine}\nSigned at: ${signedAt.toISOString()}\n\nView booking: ${adminUrl}${depositSection}`;
   }
 
   private extractIp(req: Request): string {

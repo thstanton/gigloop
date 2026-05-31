@@ -121,6 +121,7 @@ This makes the git history meaningful (each commit is a reviewable unit of work)
 
 ### My responsibilities (Claude Code)
 - At the start of any session involving application code changes: confirm we are on a feature branch, or create one.
+- When working multiple branches in one session: open a PR for each branch as soon as it is complete, then immediately start the next branch. This lets review overlap with ongoing development.
 - At the end of the session: open a PR with `gh pr create` rather than committing to `main`.
 - Never push application code directly to `main`.
 
