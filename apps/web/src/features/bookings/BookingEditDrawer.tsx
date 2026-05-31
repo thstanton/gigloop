@@ -118,7 +118,9 @@ export default function BookingEditDrawer({ booking }: Props) {
         onOpenAutoFocus={(e) => {
           if (!section) return;
           e.preventDefault();
-          const ref = section === 'performance' ? performanceRef : section === 'musicForm' ? musicFormRef : null;
+          let ref: typeof performanceRef | null = null;
+          if (section === 'performance') ref = performanceRef;
+          else if (section === 'musicForm') ref = musicFormRef;
           if (!ref?.current) return;
           requestAnimationFrame(() => {
             ref.current!.scrollIntoView({ behavior: 'smooth', block: 'start' });

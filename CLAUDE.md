@@ -51,6 +51,18 @@ PDF generation runs in the API process using `@react-pdf/renderer` and the resul
 - If anything in the task contradicts SPEC.md, flag it rather 
   than resolving it yourself
 
+## Code Quality
+
+These rules apply every session — not just when things look complex.
+
+**Pre-flight:** Before modifying any existing file, run `bun run lint` on it and report any existing violations. If the file already has complexity errors, propose refactoring it first before adding new code.
+
+**Pre-commit:** Run `bun run lint && bun run build` in both `apps/api` and `apps/web` before every commit. Never commit if either fails.
+
+**Session close:** Run `/simplify` on any file substantially changed in the session before raising a PR.
+
+**Line count proxy:** Files over ~300 lines are a yellow flag. Check lint complexity before extending them further.
+
 ## Shared types
 `apps/web/src/types/api.ts` is the single source of frontend-facing types.
 It mirrors the API's DTOs as plain TypeScript interfaces — no `@prisma/client`

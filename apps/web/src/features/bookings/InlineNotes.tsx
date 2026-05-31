@@ -52,7 +52,9 @@ export default function InlineNotes({ notes, onSave, isSaving }: Readonly<Inline
     return () => { if (savedTimerRef.current) clearTimeout(savedTimerRef.current); };
   }, []);
 
-  const statusText = isSaving ? 'Saving…' : savedVisible ? 'Saved' : null;
+  let statusText: string | null = null;
+  if (isSaving) statusText = 'Saving…';
+  else if (savedVisible) statusText = 'Saved';
   const opacityClass = statusText ? 'opacity-100' : 'opacity-0';
   const colorClass = savedVisible && !isSaving ? 'text-status-confirmed' : 'text-muted';
 

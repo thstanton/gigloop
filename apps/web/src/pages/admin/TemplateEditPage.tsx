@@ -191,6 +191,7 @@ function TemplateEditor({ template }: { template: Template }) {
   const meta = builtInType ? TEMPLATE_DISPLAY[builtInType] : null;
   const variables = builtInType ? TEMPLATE_VARIABLES[builtInType] : [];
   const isDocument = builtInType ? BUILT_IN_DOCUMENT_TYPES.includes(builtInType) : false;
+  const saveLabel = saved ? 'Saved' : 'Save changes';
 
   const { data: publicProfile } = useQuery({
     queryKey: ['publicProfile'],
@@ -311,7 +312,7 @@ function TemplateEditor({ template }: { template: Template }) {
 
       <div className="flex gap-3">
         <Button onClick={handleSave} disabled={saveMutation.isPending}>
-          {saveMutation.isPending ? 'Saving…' : saved ? 'Saved' : 'Save changes'}
+          {saveMutation.isPending ? 'Saving…' : saveLabel}
         </Button>
         <Button variant="outline" onClick={() => navigate('/admin/templates')}>
           Cancel

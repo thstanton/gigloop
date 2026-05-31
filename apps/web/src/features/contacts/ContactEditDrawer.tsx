@@ -59,6 +59,7 @@ export default function ContactEditDrawer({ contact }: Props) {
     contact.customerBookings.length +
     contact.venueBookings.length +
     contact.bookingAgentBookings.length;
+  const bookingSuffix = totalBookings === 1 ? '' : 's';
 
   return (
     <Sheet open={isOpen} onOpenChange={(open) => { if (!open) close(); }}>
@@ -87,7 +88,7 @@ export default function ContactEditDrawer({ contact }: Props) {
             <p className="text-sm font-medium text-foreground mb-1">Delete contact</p>
             <p className="text-sm text-muted mb-4">
               {totalBookings > 0
-                ? `This contact has ${totalBookings} booking${totalBookings === 1 ? '' : 's'} and cannot be deleted.`
+                ? `This contact has ${totalBookings} booking${bookingSuffix} and cannot be deleted.`
                 : 'Permanently removes this contact. This cannot be undone.'}
             </p>
             {deleteConfirm ? (

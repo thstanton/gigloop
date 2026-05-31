@@ -23,7 +23,9 @@ function SongAutocomplete({
   const [query, setQuery] = useState(() => {
     if (value.songId) {
       const song = allSongs.find((s) => s.id === value.songId);
-      return song ? `${song.title}${song.artist ? ` — ${song.artist}` : ''}` : '';
+      if (!song) return '';
+      const artistSuffix = song.artist ? ` — ${song.artist}` : '';
+      return `${song.title}${artistSuffix}`;
     }
     return value.freeText ?? '';
   });
@@ -40,7 +42,8 @@ function SongAutocomplete({
   }, [query, allSongs]);
 
   function select(song: PortalSong) {
-    const label = `${song.title}${song.artist ? ` — ${song.artist}` : ''}`;
+    const artistSuffix = song.artist ? ` — ${song.artist}` : '';
+    const label = `${song.title}${artistSuffix}`;
     setQuery(label);
     setOpen(false);
     onChange({ key: value.key, songId: song.id, freeText: undefined });
@@ -227,16 +230,13 @@ export default function PortalMusicPage() {
     sectionMap.get(km.section)!.push({ km, idx });
   });
 
+  const activeLabelClass = bold ? 'bg-white text-[#1a1a1a]' : 'bg-[#1a1a1a] text-white';
+  const inactiveLabelClass = bold ? 'bg-white/10 text-white/70 hover:bg-white/20' : 'bg-[#f3f4f6] text-[#6b7280] hover:bg-[#e5e7eb]';
   const labelClass = (active: boolean) =>
-    `px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-      active
-        ? bold
-          ? 'bg-white text-[#1a1a1a]'
-          : 'bg-[#1a1a1a] text-white'
-        : bold
-        ? 'bg-white/10 text-white/70 hover:bg-white/20'
-        : 'bg-[#f3f4f6] text-[#6b7280] hover:bg-[#e5e7eb]'
-    }`;
+    `px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${active ? activeLabelClass : inactiveLabelClass}`;
+  const selectedCheckClass = bold ? 'bg-white border-white' : 'bg-[#1a1a1a] border-[#1a1a1a]';
+  const unselectedCheckClass = bold ? 'border-white/30 bg-transparent' : 'border-[#d1d5db] bg-transparent';
+  const submitLabel = data.existingResponse ? 'Update requests' : 'Submit requests';
 
   const sectionHeadingClass = `text-xs font-medium uppercase tracking-wide mb-3 ${bold ? 'text-white/50' : 'text-[#9ca3af]'}`;
   const inputClass = `w-full rounded-lg border px-3 py-2.5 text-sm ${
@@ -312,15 +312,7 @@ export default function PortalMusicPage() {
                     }`}
                   >
                     <span
-                      className={`flex-shrink-0 h-5 w-5 rounded border flex items-center justify-center transition-colors ${
-                        isSelected
-                          ? bold
-                            ? 'bg-white border-white'
-                            : 'bg-[#1a1a1a] border-[#1a1a1a]'
-                          : bold
-                          ? 'border-white/30 bg-transparent'
-                          : 'border-[#d1d5db] bg-transparent'
-                      }`}
+                      className={`flex-shrink-0 h-5 w-5 rounded border flex items-center justify-center transition-colors ${isSelected ? selectedCheckClass : unselectedCheckClass}`}
                     >
                       {isSelected && (
                         <Check className={`h-3 w-3 ${bold ? 'text-[#1a1a1a]' : 'text-white'}`} />
@@ -406,7 +398,7 @@ export default function PortalMusicPage() {
           className="w-full rounded-lg px-5 py-3 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
           style={{ backgroundColor: profile.brandColour ?? '#1a1a1a' }}
         >
-          {submit.isPending ? 'Submitting…' : data.existingResponse ? 'Update requests' : 'Submit requests'}
+          {submit.isPending ? 'Submitting…' : submitLabel}
         </button>
         {isPreview && (
           <p className={`text-sm text-center ${bold ? 'text-white/40' : 'text-[#9ca3af]'}`}>
