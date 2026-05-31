@@ -38,9 +38,9 @@ jobs:
       - name: Test API with coverage
         run: cd apps/api && bun run test -- --coverage
 
-      # Web: Storybook + unit tests (no coverage until @vitest/coverage-v8 is added)
-      - name: Test web
-        run: cd apps/web && bun run test
+      # Web: Vitest with v8 coverage — outputs to apps/web/coverage/lcov.info
+      - name: Test web with coverage
+        run: cd apps/web && bun run test:coverage
 
       - uses: SonarSource/sonarcloud-github-action@master
         env:

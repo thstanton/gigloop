@@ -9,6 +9,19 @@ export default defineConfig({
   plugins: [react()],
   resolve: { alias },
   test: {
+    coverage: {
+      provider: 'v8',
+      reporter: ['lcov', 'text-summary'],
+      reportsDirectory: './coverage',
+      include: ['src/**/*.{ts,tsx}'],
+      exclude: [
+        'src/**/*.stories.{ts,tsx}',
+        'src/**/*.spec.{ts,tsx}',
+        'src/test/**',
+        'src/main.tsx',
+        'src/vite-env.d.ts',
+      ],
+    },
     projects: [
       {
         plugins: [react()],
