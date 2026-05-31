@@ -382,32 +382,54 @@ export class PortalService {
   ) {
     if (!publicProfile.email) return;
 
+    const depositInvoice = booking.depositReceivedAt
+      ? null
+      : await this.repo.findDepositInvoice(booking.id, booking.userId);
+
     const bookingTitle = booking.title ?? `${booking.customer.name} · ${booking.date.toISOString().split('T')[0]}`;
-    const bookingDate = booking.date.toISOString().split('T')[0];
-    const venueLine = booking.venue ? `\nVenue: ${booking.venue.name}` : '';
-
-    let depositSection = '';
-    if (booking.depositReceivedAt) {
-      const adminUrl = `${process.env.APP_BASE_URL}/admin/bookings/${booking.id}`;
-      depositSection = `\n\nThe deposit has also been received. Mark this booking as Confirmed:\n${adminUrl}`;
-    } else {
-      const depositInvoice = await this.repo.findDepositInvoice(booking.id, booking.userId);
-      if (depositInvoice) {
-        const dueDate = depositInvoice.dueDate
-          ? `Awaiting deposit — due ${depositInvoice.dueDate.toISOString().split('T')[0]}.`
-          : 'Awaiting deposit.';
-        depositSection = `\n\n${dueDate}`;
-      }
-    }
-
-    const adminUrl = `${process.env.APP_BASE_URL}/admin/bookings/${booking.id}`;
-    const body = `${booking.customer.name} has signed the contract for ${bookingTitle}.\n\nBooking date: ${bookingDate}${venueLine}\nSigned at: ${signedAt.toISOString()}\n\nView booking: ${adminUrl}${depositSection}`;
+    const body = this.buildSigningNotificationBody({
+      bookingId: booking.id,
+      bookingTitle,
+      bookingDate: booking.date.toISOString().split('T')[0],
+      customerName: booking.customer.name,
+      venueName: booking.venue?.name ?? null,
+      signedAt,
+      depositReceivedAt: booking.depositReceivedAt ?? null,
+      depositInvoice: depositInvoice ?? null,
+    });
 
     await this.mail.send({
       to: publicProfile.email,
       subject: `${booking.customer.name} has signed your contract for ${bookingTitle}`,
       body: body.replace(/\n/g, '<br>'),
     });
+  }
+
+  private buildSigningNotificationBody(params: {
+    bookingId: string;
+    bookingTitle: string;
+    bookingDate: string;
+    customerName: string;
+    venueName: string | null;
+    signedAt: Date;
+    depositReceivedAt: Date | null;
+    depositInvoice: { dueDate: Date | null } | null;
+  }): string {
+    const { bookingId, bookingTitle, bookingDate, customerName, venueName, signedAt, depositReceivedAt, depositInvoice } = params;
+    const adminUrl = `${process.env.APP_BASE_URL}/admin/bookings/${bookingId}`;
+    const venueLine = venueName ? `\nVenue: ${venueName}` : '';
+
+    let depositSection = '';
+    if (depositReceivedAt) {
+      depositSection = `\n\nThe deposit has also been received. Mark this booking as Confirmed:\n${adminUrl}`;
+    } else if (depositInvoice) {
+      const dueLine = depositInvoice.dueDate
+        ? `Awaiting deposit — due ${depositInvoice.dueDate.toISOString().split('T')[0]}.`
+        : 'Awaiting deposit.';
+      depositSection = `\n\n${dueLine}`;
+    }
+
+    return `${customerName} has signed the contract for ${bookingTitle}.\n\nBooking date: ${bookingDate}${venueLine}\nSigned at: ${signedAt.toISOString()}\n\nView booking: ${adminUrl}${depositSection}`;
   }
 
   private extractIp(req: Request): string {
