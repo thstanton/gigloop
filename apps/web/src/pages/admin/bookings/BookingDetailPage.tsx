@@ -18,6 +18,7 @@ import { useBookingDocuments } from '@/lib/hooks/useBookingDocuments';
 import { useBookingChecklist } from '@/lib/hooks/useBookingChecklist';
 import { useContractActions } from '@/lib/hooks/useContractActions';
 import { useInvoiceActions } from '@/lib/hooks/useInvoiceActions';
+import { useConfigureMusicForm } from '@/lib/hooks/useConfigureMusicForm';
 import BookingEditDrawer from '@/features/bookings/BookingEditDrawer';
 import ContactPicker from '@/features/bookings/ContactPicker';
 import ContractSheet from '@/features/bookings/ContractSheet';
@@ -37,7 +38,7 @@ import BookingStatusDropdown from '@/features/bookings/BookingStatusDropdown';
 import InlineNotes from '@/features/bookings/InlineNotes';
 import InlineFeeAdd from '@/features/bookings/InlineFeeAdd';
 import { toast } from '@/lib/hooks/use-toast';
-import { apiGet, apiPatch, apiPut } from '@/lib/api';
+import { apiGet, apiPatch } from '@/lib/api';
 import {
   formatDate,
   formatCurrency,
@@ -49,7 +50,6 @@ import { SectionHeader } from '@/components/common/SectionHeader';
 import { IconButton } from '@/components/common/IconButton';
 import { EmptyState } from '@/components/common/EmptyState';
 import type {
-  BookingDetail,
   BookingStatus,
   Contact,
   Document,
@@ -223,7 +223,7 @@ export default function BookingDetailPage() {
 
   const updateStatusMutation = useMutation({
     mutationFn: (status: BookingStatus) =>
-      apiPatch<BookingDetail>(`/bookings/${id}`, { status }),
+      apiPatch(`/bookings/${id}`, { status }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['booking', id] });
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
@@ -250,23 +250,8 @@ export default function BookingDetailPage() {
     },
   });
 
-  const configureMusicForm = useMutation({
-    mutationFn: () => {
-      if (!booking) return Promise.reject(new Error('No booking'));
-      const seedKeyMoments = (booking.packages ?? []).flatMap((bpf) =>
-        bpf.package.keyMoments.map((km) => ({ label: km, section: bpf.package.label })),
-      );
-      const seedGenres = [...new Set((booking.packages ?? []).flatMap((bpf) => bpf.package.defaultGenreSelection))];
-      return apiPut<MusicFormConfig>(`/bookings/${id}/music-form-config`, {
-        keyMoments: seedKeyMoments,
-        enabledGenres: seedGenres,
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['booking-music-form-config', id] });
-      queryClient.invalidateQueries({ queryKey: ['booking', id] });
-      setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('edit', 'true'); return next; });
-    },
+  const configureMusicForm = useConfigureMusicForm(id!, booking, () => {
+    setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('edit', 'true'); return next; });
   });
 
   // ─── Helpers ─────────────────────────────────────────────────────────────

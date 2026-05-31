@@ -12,6 +12,27 @@ const CELEBRATORY_TITLES = [
   "You're on a roll!",
 ];
 
+const TRANSITION_STATUSES = ['PROVISIONAL', 'CONFIRMED', 'READY', 'COMPLETE'] as const;
+
+function isChecklistCompleteFor(checklist: ChecklistItem[], status: BookingStatus): boolean {
+  const items = checklist.filter((i) => i.requiredForStatus === status);
+  return items.length > 0 && items.every((i) => i.state === 'COMPLETE');
+}
+
+function findReadyStatus(
+  booking: BookingDetail,
+  checklist: ChecklistItem[],
+  bookingId: string,
+  dismissed: Set<string>,
+): BookingStatus | undefined {
+  const currentIdx = STATUS_ORDER.indexOf(booking.status);
+  return TRANSITION_STATUSES.find((s) => {
+    if (STATUS_ORDER.indexOf(s) <= currentIdx) return false;
+    if (dismissed.has(`${bookingId}:${booking.status}->${s}`)) return false;
+    return isChecklistCompleteFor(checklist, s);
+  });
+}
+
 export function useBookingChecklist(
   bookingId: string,
   booking: BookingDetail | undefined,
@@ -20,7 +41,8 @@ export function useBookingChecklist(
   const queryClient = useQueryClient();
   const [readyDialogStatus, setReadyDialogStatus] = useState<BookingStatus | null>(null);
   const dismissedTransitions = useRef(new Set<string>());
-  const celebratoryTitle = useRef(CELEBRATORY_TITLES[Math.floor(Math.random() * CELEBRATORY_TITLES.length)]);
+  const titleIndex = useRef(0);
+  const celebratoryTitle = useRef(CELEBRATORY_TITLES[0]);
 
   const { data: checklist = [], isPending: checklistLoading } = useQuery({
     queryKey: ['bookingChecklist', bookingId],
@@ -30,16 +52,8 @@ export function useBookingChecklist(
 
   useEffect(() => {
     if (!booking || checklistLoading || checklist.length === 0) return;
-    const targetStatus = (['PROVISIONAL', 'CONFIRMED', 'READY', 'COMPLETE'] as const).find((s) => {
-      const targetIdx = STATUS_ORDER.indexOf(s);
-      const currentIdx = STATUS_ORDER.indexOf(booking.status);
-      if (targetIdx <= currentIdx) return false;
-      const key = `${bookingId}:${booking.status}->${s}`;
-      if (dismissedTransitions.current.has(key)) return false;
-      const forStatus = checklist.filter((i) => i.requiredForStatus === s);
-      return forStatus.length > 0 && forStatus.every((i) => i.state === 'COMPLETE');
-    });
-    if (targetStatus) setReadyDialogStatus(targetStatus);
+    const target = findReadyStatus(booking, checklist, bookingId, dismissedTransitions.current);
+    if (target) setReadyDialogStatus(target);
   }, [booking, checklist, checklistLoading, bookingId]);
 
   const toggleItemMutation = useMutation({
@@ -71,16 +85,21 @@ export function useBookingChecklist(
     onError: () => toast({ title: 'Failed to add item', variant: 'destructive' }),
   });
 
+  function advanceTitle() {
+    titleIndex.current = (titleIndex.current + 1) % CELEBRATORY_TITLES.length;
+    celebratoryTitle.current = CELEBRATORY_TITLES[titleIndex.current];
+  }
+
   function dismissReadyDialog() {
     if (!booking || !readyDialogStatus) return;
     dismissedTransitions.current.add(`${bookingId}:${booking.status}->${readyDialogStatus}`);
-    celebratoryTitle.current = CELEBRATORY_TITLES[Math.floor(Math.random() * CELEBRATORY_TITLES.length)];
+    advanceTitle();
     setReadyDialogStatus(null);
   }
 
   function confirmStatusTransition(status: BookingStatus) {
     setReadyDialogStatus(null);
-    apiPatch<BookingDetail>(`/bookings/${bookingId}`, { status }).then(() => {
+    apiPatch(`/bookings/${bookingId}`, { status }).then(() => {
       queryClient.invalidateQueries({ queryKey: ['booking', bookingId] });
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
       queryClient.invalidateQueries({ queryKey: ['bookingChecklist', bookingId] });
