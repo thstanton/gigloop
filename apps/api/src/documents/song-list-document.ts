@@ -52,98 +52,85 @@ function songRow(song: SongListSong): Content {
   };
 }
 
-export function buildSongListDefinition(data: SongListPdfData): TDocumentDefinitions {
-  const content: Content[] = [
-    // Header
+function resolveSongText(req: SongListSpecialRequest): string {
+  if (!req.song) return req.freeText ?? '(no selection)';
+  const artist = req.song.artist ? ` — ${req.song.artist}` : '';
+  return `${req.song.title}${artist}`;
+}
+
+function buildHeader(data: SongListPdfData): Content[] {
+  return [
     { text: data.musicianName, style: 'header', margin: [0, 0, 0, 4] },
     { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 487, y2: 0, lineWidth: 0.5, lineColor: '#e5e5e5' }], margin: [0, 0, 0, 12] },
-
-    // Booking summary
-    {
-      columns: [
-        { text: 'Customer', width: 100, fontSize: 9, color: '#666666' },
-        { text: data.customerName, fontSize: 10, width: '*' },
-      ],
-      margin: [0, 0, 0, 4],
-    },
-    {
-      columns: [
-        { text: 'Date', width: 100, fontSize: 9, color: '#666666' },
-        { text: data.bookingDate, fontSize: 10, width: '*' },
-      ],
-      margin: [0, 0, 0, 4],
-    },
-    ...(data.venueName
-      ? [{
-          columns: [
-            { text: 'Venue', width: 100, fontSize: 9, color: '#666666' },
-            { text: data.venueName, fontSize: 10, width: '*' },
-          ],
-          margin: [0, 0, 0, 4],
-        } as Content]
-      : []),
-    {
-      columns: [
-        { text: 'Submitted', width: 100, fontSize: 9, color: '#666666' },
-        { text: data.submittedAt, fontSize: 10, width: '*' },
-      ],
-      margin: [0, 0, 0, 4],
-    },
+    { columns: [{ text: 'Customer', width: 100, fontSize: 9, color: '#666666' }, { text: data.customerName, fontSize: 10, width: '*' }], margin: [0, 0, 0, 4] },
+    { columns: [{ text: 'Date', width: 100, fontSize: 9, color: '#666666' }, { text: data.bookingDate, fontSize: 10, width: '*' }], margin: [0, 0, 0, 4] },
+    ...(data.venueName ? [{ columns: [{ text: 'Venue', width: 100, fontSize: 9, color: '#666666' }, { text: data.venueName, fontSize: 10, width: '*' }], margin: [0, 0, 0, 4] } as Content] : []),
+    { columns: [{ text: 'Submitted', width: 100, fontSize: 9, color: '#666666' }, { text: data.submittedAt, fontSize: 10, width: '*' }], margin: [0, 0, 0, 4] },
   ];
+}
 
-  // Key moments
-  if (data.specialRequests.length > 0) {
-    content.push(divider());
-    content.push({ text: 'Key moments', fontSize: 12, bold: true, margin: [0, 0, 0, 8] });
+function buildSectionRows(section: string, reqs: SongListSpecialRequest[]): Content[] {
+  return [
+    sectionHeading(section),
+    ...reqs.map((req): Content => ({
+      columns: [
+        { text: req.key, fontSize: 10, width: 160 },
+        { text: resolveSongText(req), fontSize: 10, color: req.freeText && !req.song ? '#666666' : '#1a1a1a', width: '*' },
+      ],
+      margin: [0, 0, 0, 4],
+    })),
+  ];
+}
 
-    const sectionMap = new Map<string, SongListSpecialRequest[]>();
-    for (const req of data.specialRequests) {
-      if (!sectionMap.has(req.section)) sectionMap.set(req.section, []);
-      sectionMap.get(req.section)!.push(req);
-    }
+function buildKeyMomentsSection(specialRequests: SongListSpecialRequest[]): Content[] {
+  if (specialRequests.length === 0) return [];
 
-    for (const [section, reqs] of sectionMap.entries()) {
-      content.push(sectionHeading(section));
-      for (const req of reqs) {
-        const songText = req.song
-          ? `${req.song.title}${req.song.artist ? ` — ${req.song.artist}` : ''}`
-          : req.freeText ?? '(no selection)';
-        content.push({
-          columns: [
-            { text: req.key, fontSize: 10, width: 160 },
-            { text: songText, fontSize: 10, color: req.freeText && !req.song ? '#666666' : '#1a1a1a', width: '*' },
-          ],
-          margin: [0, 0, 0, 4],
-        });
-      }
-    }
+  const sectionMap = new Map<string, SongListSpecialRequest[]>();
+  for (const req of specialRequests) {
+    if (!sectionMap.has(req.section)) sectionMap.set(req.section, []);
+    sectionMap.get(req.section)!.push(req);
   }
 
-  // General song requests
-  if (data.selectedSongs.length > 0) {
-    content.push(divider());
-    content.push({ text: 'General requests', fontSize: 12, bold: true, margin: [0, 0, 0, 8] });
+  return [
+    divider(),
+    { text: 'Key moments', fontSize: 12, bold: true, margin: [0, 0, 0, 8] },
+    ...[...sectionMap.entries()].flatMap(([section, reqs]) => buildSectionRows(section, reqs)),
+  ];
+}
 
-    const genreMap = new Map<string, SongListSong[]>();
-    for (const song of data.selectedSongs) {
-      if (!genreMap.has(song.genre)) genreMap.set(song.genre, []);
-      genreMap.get(song.genre)!.push(song);
-    }
+function buildGeneralRequestsSection(selectedSongs: SongListSong[]): Content[] {
+  if (selectedSongs.length === 0) return [];
 
-    for (const [genre, songs] of genreMap.entries()) {
-      content.push(sectionHeading(genre));
-      for (const song of songs) {
-        content.push(songRow(song));
-      }
-    }
+  const genreMap = new Map<string, SongListSong[]>();
+  for (const song of selectedSongs) {
+    if (!genreMap.has(song.genre)) genreMap.set(song.genre, []);
+    genreMap.get(song.genre)!.push(song);
   }
 
-  // Notes
-  if (data.notes) {
-    content.push(divider());
-    content.push({ text: 'Notes', fontSize: 12, bold: true, margin: [0, 0, 0, 8] });
-    content.push({ text: data.notes, fontSize: 10, color: '#374151' });
+  const rows: Content[] = [divider(), { text: 'General requests', fontSize: 12, bold: true, margin: [0, 0, 0, 8] }];
+  for (const [genre, songs] of genreMap.entries()) {
+    rows.push(sectionHeading(genre));
+    for (const song of songs) rows.push(songRow(song));
   }
+  return rows;
+}
+
+function buildNotesSection(notes: string | null): Content[] {
+  if (!notes) return [];
+  return [
+    divider(),
+    { text: 'Notes', fontSize: 12, bold: true, margin: [0, 0, 0, 8] },
+    { text: notes, fontSize: 10, color: '#374151' },
+  ];
+}
+
+export function buildSongListDefinition(data: SongListPdfData): TDocumentDefinitions {
+  const content: Content[] = [
+    ...buildHeader(data),
+    ...buildKeyMomentsSection(data.specialRequests),
+    ...buildGeneralRequestsSection(data.selectedSongs),
+    ...buildNotesSection(data.notes),
+  ];
 
   return {
     pageSize: 'A4',

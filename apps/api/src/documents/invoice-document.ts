@@ -47,21 +47,24 @@ function metaRow(label: string, value: string): Content {
   };
 }
 
-// ─── Document definition ──────────────────────────────────────────────────────
+// ─── Section builders ─────────────────────────────────────────────────────────
 
-export function buildInvoiceDefinition(data: InvoicePdfData): TDocumentDefinitions {
-  const subtotal = sumLineItems(data.lineItems);
-  const depositAmount = data.depositTotal ? parseFloat(data.depositTotal) : null;
-  const balanceDue = depositAmount !== null ? subtotal - depositAmount : subtotal;
-  const showDepositDeduction = !data.isDeposit && depositAmount !== null;
-  const invoiceTypeLabel = data.isDeposit ? 'Deposit Invoice' : 'Invoice';
+function totalRow(label: string, value: string, style?: string): Content {
+  return {
+    columns: [
+      { text: label, style: style ?? 'totalLabel', width: '*', alignment: 'right' },
+      { text: value, style: style, width: 80, alignment: 'right' },
+    ],
+    margin: [0, 0, 0, 3],
+  };
+}
 
+function buildBusinessHeader(data: InvoicePdfData): Content {
   const addressLines: Content[] = (data.address ?? '').split('\n').filter(Boolean).map((line) => ({
     text: line,
     style: 'muted',
   }));
 
-  // ── Header ────────────────────────────────────────────────────────────────
   const businessInfoStack: Content[] = [
     ...(data.logoUrl ? [{ text: data.businessName, style: 'businessNameRight' as string }] : []),
     ...(data.email ? [{ text: data.email, style: 'muted' as string }] : []),
@@ -73,14 +76,62 @@ export function buildInvoiceDefinition(data: InvoicePdfData): TDocumentDefinitio
     ? { image: data.logoUrl, width: 120, fit: [120, 40] }
     : { text: data.businessName, style: 'businessNameLeft' };
 
-  // ── Meta rows ─────────────────────────────────────────────────────────────
+  return { columns: [headerLeft, { stack: businessInfoStack, alignment: 'right' }], margin: [0, 0, 0, 36] };
+}
+
+function buildTotalsSection(
+  data: InvoicePdfData,
+  subtotal: number,
+  depositAmount: number | null,
+  balanceDue: number,
+): Content[] {
+  const showDepositDeduction = !data.isDeposit && depositAmount !== null;
+  const vatAmount = data.vatRate !== null ? (subtotal * data.vatRate) / 100 : 0;
+  const showVat = data.vatRate !== null;
+  const separator: Content = { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 200, y2: 0, lineWidth: 0.5, lineColor: '#e5e5e5' }], alignment: 'right', margin: [0, 0, 0, 4] };
+
+  if (showDepositDeduction) {
+    const vatRows: Content[] = showVat
+      ? [
+          totalRow('Balance', formatCurrency(balanceDue.toFixed(2))),
+          totalRow(`VAT @ ${data.vatRate}%`, formatCurrency(vatAmount.toFixed(2))),
+          separator,
+          totalRow('Total inc. VAT', formatCurrency((balanceDue + vatAmount).toFixed(2)), 'totalDueValue'),
+        ]
+      : [totalRow('Balance due', formatCurrency(balanceDue.toFixed(2)), 'totalDueValue')];
+    return [
+      totalRow('Subtotal', formatCurrency(subtotal.toFixed(2))),
+      totalRow('Less deposit', `-${formatCurrency(depositAmount!.toFixed(2))}`),
+      separator,
+      ...vatRows,
+    ];
+  }
+
+  const vatRows: Content[] = showVat
+    ? [
+        totalRow('Subtotal', formatCurrency(subtotal.toFixed(2))),
+        totalRow(`VAT @ ${data.vatRate}%`, formatCurrency(vatAmount.toFixed(2))),
+        separator,
+        totalRow('Total inc. VAT', formatCurrency((subtotal + vatAmount).toFixed(2)), 'totalDueValue'),
+      ]
+    : [totalRow('Total due', formatCurrency(subtotal.toFixed(2)), 'totalDueValue')];
+  return [separator, ...vatRows];
+}
+
+// ─── Document definition ──────────────────────────────────────────────────────
+
+export function buildInvoiceDefinition(data: InvoicePdfData): TDocumentDefinitions {
+  const subtotal = sumLineItems(data.lineItems);
+  const depositAmount = data.depositTotal ? parseFloat(data.depositTotal) : null;
+  const balanceDue = depositAmount !== null ? subtotal - depositAmount : subtotal;
+  const invoiceTypeLabel = data.isDeposit ? 'Deposit Invoice' : 'Invoice';
+
   const metaRows: Content[] = [
     metaRow('Number', data.invoiceNumber),
     metaRow('Issue date', data.issueDate),
     ...(data.dueDate ? [metaRow('Due date', data.dueDate)] : []),
   ];
 
-  // ── Line items table body ─────────────────────────────────────────────────
   const tableBody: Content[][] = [
     [
       { text: 'Description', style: 'tableHeader' },
@@ -92,98 +143,28 @@ export function buildInvoiceDefinition(data: InvoicePdfData): TDocumentDefinitio
     ]),
   ];
 
-  // ── Totals ────────────────────────────────────────────────────────────────
-  const vatAmount = data.vatRate !== null ? (subtotal * data.vatRate) / 100 : 0;
-  const showVat = data.vatRate !== null;
-  const separator: Content = { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 200, y2: 0, lineWidth: 0.5, lineColor: '#e5e5e5' }], alignment: 'right', margin: [0, 0, 0, 4] };
-
-  function totalRow(label: string, value: string, style?: string): Content {
-    return {
-      columns: [
-        { text: label, style: style ?? 'totalLabel', width: '*', alignment: 'right' },
-        { text: value, style: style, width: 80, alignment: 'right' },
-      ],
-      margin: [0, 0, 0, 3],
-    };
-  }
-
-  const totalsContent: Content[] = showDepositDeduction
-    ? [
-        totalRow('Subtotal', formatCurrency(subtotal.toFixed(2))),
-        totalRow('Less deposit', `-${formatCurrency(depositAmount!.toFixed(2))}`),
-        separator,
-        ...(showVat
-          ? [
-              totalRow('Balance', formatCurrency(balanceDue.toFixed(2))),
-              totalRow(`VAT @ ${data.vatRate}%`, formatCurrency(vatAmount.toFixed(2))),
-              separator,
-              totalRow('Total inc. VAT', formatCurrency((balanceDue + vatAmount).toFixed(2)), 'totalDueValue') as Content,
-            ]
-          : [totalRow('Balance due', formatCurrency(balanceDue.toFixed(2)), 'totalDueValue') as Content]),
-      ]
-    : [
-        separator,
-        ...(showVat
-          ? [
-              totalRow('Subtotal', formatCurrency(subtotal.toFixed(2))),
-              totalRow(`VAT @ ${data.vatRate}%`, formatCurrency(vatAmount.toFixed(2))),
-              separator,
-              totalRow('Total inc. VAT', formatCurrency((subtotal + vatAmount).toFixed(2)), 'totalDueValue') as Content,
-            ]
-          : [totalRow('Total due', formatCurrency(subtotal.toFixed(2)), 'totalDueValue') as Content]),
-      ];
-
-  // ── Payment details ───────────────────────────────────────────────────────
   const paymentContent: Content[] = data.bankDetails
     ? [
         { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 487, y2: 0, lineWidth: 0.5, lineColor: '#e5e5e5' }], margin: [0, 16, 0, 12] },
         { text: 'Payment details', style: 'sectionLabel', margin: [0, 0, 0, 4] },
         ...data.bankDetails.split('\n').map((line): Content => ({ text: line, style: 'paymentText' })),
-        {
-          text: `Please use invoice number ${data.invoiceNumber} as your payment reference.`,
-          style: 'paymentText',
-          margin: [0, 4, 0, 0],
-        },
+        { text: `Please use invoice number ${data.invoiceNumber} as your payment reference.`, style: 'paymentText', margin: [0, 4, 0, 0] },
       ]
     : [];
 
-  // ── Document ──────────────────────────────────────────────────────────────
   return {
     pageSize: 'A4',
     pageMargins: [54, 48, 54, 60],
     defaultStyle: { font: 'Roboto', fontSize: 10, color: '#1a1a1a' },
 
     content: [
-      // Header
-      {
-        columns: [
-          headerLeft,
-          { stack: businessInfoStack, alignment: 'right' },
-        ],
-        margin: [0, 0, 0, 36],
-      },
-
-      // Title + meta
-      {
-        columns: [
-          { text: invoiceTypeLabel, style: 'title' },
-          { stack: metaRows, alignment: 'right' },
-        ],
-        margin: [0, 0, 0, 12],
-      },
+      buildBusinessHeader(data),
+      { columns: [{ text: invoiceTypeLabel, style: 'title' }, { stack: metaRows, alignment: 'right' }], margin: [0, 0, 0, 12] },
       { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 487, y2: 0, lineWidth: 0.5, lineColor: '#e5e5e5' }], margin: [0, 0, 0, 20] },
-
-      // Bill to
       { text: 'Bill to', style: 'sectionLabel', margin: [0, 0, 0, 4] },
       { text: data.clientName, style: 'clientName', margin: [0, 0, 0, 24] },
-
-      // Line items
       {
-        table: {
-          widths: ['*', 80],
-          headerRows: 1,
-          body: tableBody,
-        },
+        table: { widths: ['*', 80], headerRows: 1, body: tableBody },
         layout: {
           hLineWidth: () => 0.5,
           vLineWidth: () => 0,
@@ -196,11 +177,7 @@ export function buildInvoiceDefinition(data: InvoicePdfData): TDocumentDefinitio
         },
         margin: [0, 0, 0, 20],
       },
-
-      // Totals
-      ...totalsContent,
-
-      // Payment details
+      ...buildTotalsSection(data, subtotal, depositAmount, balanceDue),
       ...paymentContent,
     ],
 

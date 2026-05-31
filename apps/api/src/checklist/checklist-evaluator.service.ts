@@ -55,6 +55,79 @@ function isCommFailed(rule: AutoCompleteRule, ctx: BookingContext): boolean {
   return matching.length > 0 && matching[matching.length - 1].status === 'FAILED';
 }
 
+type ChecklistItem = {
+  id: string;
+  key: string | null;
+  state: string;
+  completedAt: Date | null;
+  dependsOn: string[];
+  autoCompleteRule: unknown;
+};
+
+function buildStateMap(items: ChecklistItem[]): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const item of items) {
+    if (item.key) map.set(item.key, item.state);
+  }
+  return map;
+}
+
+function resolveSkip(item: ChecklistItem, bookingStatus: string): boolean {
+  return SKIP_RULES.some(
+    ({ keys, threshold }) =>
+      item.key && keys.includes(item.key) && statusGte(bookingStatus, threshold),
+  );
+}
+
+function resolveNewState(item: ChecklistItem, booking: BookingContext, stateMap: Map<string, string>): string {
+  const rule = item.autoCompleteRule as AutoCompleteRule | null;
+  const blocked = item.dependsOn.some((dep) => stateMap.get(dep) !== 'COMPLETE');
+
+  if (!rule) return blocked ? 'BLOCKED' : 'PENDING';
+  if (evaluateRule(rule, booking)) return 'COMPLETE';
+  if (isCommFailed(rule, booking)) return 'FAILED';
+  return blocked ? 'BLOCKED' : 'PENDING';
+}
+
+function buildItemUpdate(
+  item: ChecklistItem,
+  booking: BookingContext,
+  stateMap: Map<string, string>,
+): { id: string; state: string; completedAt?: Date | null } | null {
+  const newState = resolveNewState(item, booking, stateMap);
+  if (newState === item.state) return null;
+  const update: { id: string; state: string; completedAt?: Date | null } = { id: item.id, state: newState };
+  if (newState === 'COMPLETE') update.completedAt = new Date();
+  else if (item.completedAt) update.completedAt = null;
+  return update;
+}
+
+function evaluateItem(
+  item: ChecklistItem,
+  booking: BookingContext,
+  stateMap: Map<string, string>,
+): { id: string; state: string; completedAt?: Date | null } | null {
+  if (resolveSkip(item, booking.status)) return { id: item.id, state: 'SKIPPED' };
+  return buildItemUpdate(item, booking, stateMap);
+}
+
+function computeUpdates(
+  items: ChecklistItem[],
+  booking: BookingContext,
+  stateMap: Map<string, string>,
+): Array<{ id: string; state: string; completedAt?: Date | null }> {
+  const updates: Array<{ id: string; state: string; completedAt?: Date | null }> = [];
+  for (const item of items) {
+    if (item.state === 'SKIPPED' || item.state === 'COMPLETE') continue;
+    const update = evaluateItem(item, booking, stateMap);
+    if (update) {
+      updates.push(update);
+      if (item.key) stateMap.set(item.key, update.state);
+    }
+  }
+  return updates;
+}
+
 @Injectable()
 export class ChecklistEvaluatorService {
   constructor(private repo: ChecklistRepository) {}
@@ -62,65 +135,8 @@ export class ChecklistEvaluatorService {
   async evaluate(bookingId: string): Promise<void> {
     const { items, booking } = await this.repo.findItemsWithContext(bookingId);
     if (!booking || !items.length) return;
-
-    // Build state map keyed by item key for dependency resolution
-    const stateMap = new Map<string, string>();
-    for (const item of items) {
-      if (item.key) stateMap.set(item.key, item.state);
-    }
-
-    const updates: Array<{ id: string; state: string; completedAt?: Date | null }> = [];
-
-    for (const item of items) {
-      if (item.state === 'SKIPPED') continue;
-      if (item.state === 'COMPLETE') continue; // COMPLETE is sticky
-
-      // SKIPPED conditions from status
-      const shouldSkip = SKIP_RULES.some(
-        ({ keys, threshold }) =>
-          item.key && keys.includes(item.key) && statusGte(booking.status, threshold),
-      );
-      if (shouldSkip) {
-        updates.push({ id: item.id, state: 'SKIPPED' });
-        if (item.key) stateMap.set(item.key, 'SKIPPED');
-        continue;
-      }
-
-      const rule = item.autoCompleteRule as AutoCompleteRule | null;
-      let newState: string;
-
-      if (rule) {
-        if (evaluateRule(rule, booking)) {
-          newState = 'COMPLETE';
-        } else if (isCommFailed(rule, booking)) {
-          newState = 'FAILED';
-        } else {
-          const blocked = item.dependsOn.some((dep) => stateMap.get(dep) !== 'COMPLETE');
-          newState = blocked ? 'BLOCKED' : 'PENDING';
-        }
-      } else {
-        // Manual item — only track blocking state
-        const blocked = item.dependsOn.some((dep) => stateMap.get(dep) !== 'COMPLETE');
-        newState = blocked ? 'BLOCKED' : 'PENDING';
-      }
-
-      if (newState !== item.state) {
-        const update: { id: string; state: string; completedAt?: Date | null } = {
-          id: item.id,
-          state: newState,
-        };
-        if (newState === 'COMPLETE') {
-          update.completedAt = new Date();
-        } else if (item.completedAt) {
-          update.completedAt = null;
-        }
-        updates.push(update);
-        if (item.key) stateMap.set(item.key, newState);
-      }
-    }
-
-    if (updates.length) {
-      await this.repo.updateItemStates(updates);
-    }
+    const stateMap = buildStateMap(items);
+    const updates = computeUpdates(items, booking, stateMap);
+    if (updates.length) await this.repo.updateItemStates(updates);
   }
 }

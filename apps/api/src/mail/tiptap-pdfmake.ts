@@ -39,13 +39,28 @@ function convertInlines(nodes: TiptapNode[]): PdfContent[] {
   return nodes.map(convertInline);
 }
 
+function headingFontSize(level: number): number {
+  if (level === 1) return 16;
+  if (level === 2) return 13;
+  return 11;
+}
+
+function normalizeResult(r: PdfContent | PdfContent[] | null): PdfContent[] {
+  if (r === null) return [];
+  return Array.isArray(r) ? r : [r];
+}
+
+function convertListItems(items: TiptapNode[]): PdfContent[] {
+  return items.map((item) => {
+    const paras = (item.content ?? []).flatMap((child) => normalizeResult(convertNode(child)));
+    return paras.length === 1 ? paras[0] : paras;
+  });
+}
+
 function convertNode(node: TiptapNode): PdfContent | PdfContent[] | null {
   switch (node.type) {
     case 'doc':
-      return (node.content ?? []).flatMap((child) => {
-        const result = convertNode(child);
-        return result === null ? [] : Array.isArray(result) ? result : [result];
-      });
+      return (node.content ?? []).flatMap((child) => normalizeResult(convertNode(child)));
 
     case 'paragraph': {
       const inlines = node.content ? convertInlines(node.content) : [];
@@ -56,33 +71,14 @@ function convertNode(node: TiptapNode): PdfContent | PdfContent[] | null {
     case 'heading': {
       const level = Number(node.attrs?.level ?? 2);
       const inlines = node.content ? convertInlines(node.content) : [];
-      const fontSize = level === 1 ? 16 : level === 2 ? 13 : 11;
-      return { text: inlines, bold: true, fontSize, margin: [0, 12, 0, 6] };
+      return { text: inlines, bold: true, fontSize: headingFontSize(level), margin: [0, 12, 0, 6] };
     }
 
     case 'bulletList':
-      return {
-        ul: (node.content ?? []).map((item) => {
-          const paras = (item.content ?? []).flatMap((child) => {
-            const r = convertNode(child);
-            return r === null ? [] : Array.isArray(r) ? r : [r];
-          });
-          return paras.length === 1 ? paras[0] : paras;
-        }),
-        margin: [0, 0, 0, 8],
-      };
+      return { ul: convertListItems(node.content ?? []), margin: [0, 0, 0, 8] };
 
     case 'orderedList':
-      return {
-        ol: (node.content ?? []).map((item) => {
-          const paras = (item.content ?? []).flatMap((child) => {
-            const r = convertNode(child);
-            return r === null ? [] : Array.isArray(r) ? r : [r];
-          });
-          return paras.length === 1 ? paras[0] : paras;
-        }),
-        margin: [0, 0, 0, 8],
-      };
+      return { ol: convertListItems(node.content ?? []), margin: [0, 0, 0, 8] };
 
     case 'blockquote':
       return {
