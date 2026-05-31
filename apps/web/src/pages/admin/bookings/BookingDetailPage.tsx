@@ -169,16 +169,11 @@ export default function BookingDetailPage() {
   const backNav = (location.state as { from?: string; label?: string } | null);
   const [, setSearchParams] = useSearchParams();
 
-  const [composeOpen, setComposeOpen] = useState(false);
-  const [composeTemplateType, setComposeTemplateType] = useState<string | undefined>();
-  const [invoiceSheetOpen, setInvoiceSheetOpen] = useState(false);
-  const [editingInvoice, setEditingInvoice] = useState<Invoice | undefined>();
-  const [invoiceSheetPrefill, setInvoiceSheetPrefill] = useState<{ isDeposit: boolean; amount?: number; description?: string } | undefined>();
+  const [composeTemplateType, setComposeTemplateType] = useState<string | null>(null);
+  const [invoiceSheetState, setInvoiceSheetState] = useState<{ invoice?: Invoice; prefill?: { isDeposit: boolean; amount?: number; description?: string } } | null>(null);
   const [markSentInvoice, setMarkSentInvoice] = useState<Invoice | undefined>();
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
-  const [contractSheetOpen, setContractSheetOpen] = useState(false);
-  const [contractSheetReadOnly, setContractSheetReadOnly] = useState(false);
-  const [pendingContract, setPendingContract] = useState<Contract | null>(null);
+  const [contractSheetState, setContractSheetState] = useState<{ readOnly: boolean; contract?: Contract } | null>(null);
   const [readyDialogStatus, setReadyDialogStatus] = useState<BookingStatus | null>(null);
   const [viewingMusicFormResponse, setViewingMusicFormResponse] = useState(false);
   const dismissedTransitions = useRef(new Set<string>());
@@ -276,10 +271,8 @@ export default function BookingDetailPage() {
   const createContract = useMutation({
     mutationFn: () => apiPost<Contract>(`/bookings/${id}/contracts`, {}),
     onSuccess: (data) => {
-      setPendingContract(data);
       invalidateBooking();
-      setContractSheetReadOnly(false);
-      setContractSheetOpen(true);
+      setContractSheetState({ readOnly: false, contract: data });
     },
     onError: () => toast({ title: 'Failed to create contract', variant: 'destructive' }),
   });
@@ -372,8 +365,7 @@ export default function BookingDetailPage() {
   // ─── Helpers ─────────────────────────────────────────────────────────────
 
   function openCompose(templateType?: string) {
-    setComposeTemplateType(templateType);
-    setComposeOpen(true);
+    setComposeTemplateType(templateType ?? '');
   }
 
   function buildSetsDescription(): string {
@@ -390,15 +382,11 @@ export default function BookingDetailPage() {
   }
 
   function openCreateInvoice(prefill?: { isDeposit: boolean; amount?: number }) {
-    setEditingInvoice(undefined);
-    setInvoiceSheetPrefill(prefill ? { ...prefill, description: buildSetsDescription() } : undefined);
-    setInvoiceSheetOpen(true);
+    setInvoiceSheetState({ prefill: prefill ? { ...prefill, description: buildSetsDescription() } : undefined });
   }
 
   function openEditInvoice(invoice: Invoice) {
-    setEditingInvoice(invoice);
-    setInvoiceSheetPrefill(undefined);
-    setInvoiceSheetOpen(true);
+    setInvoiceSheetState({ invoice });
   }
 
   function openSendInvoice(invoice: Invoice) {
@@ -601,8 +589,8 @@ export default function BookingDetailPage() {
               documents={documents}
               isCreating={createContract.isPending}
               onCreateContract={() => createContract.mutate()}
-              onEdit={() => { setContractSheetReadOnly(false); setContractSheetOpen(true); }}
-              onPreview={() => { setContractSheetReadOnly(true); setContractSheetOpen(true); }}
+              onEdit={() => setContractSheetState({ readOnly: false })}
+              onPreview={() => setContractSheetState({ readOnly: true })}
               onSend={() => openCompose(contractShortcutType)}
               onVoid={(confirmSignedVoid) => {
                 const contractId = booking.activeContract?.id;
@@ -753,29 +741,29 @@ export default function BookingDetailPage() {
 
       <ContractSheet
         bookingId={id!}
-        contract={pendingContract ?? booking.activeContract}
-        readOnly={contractSheetReadOnly}
-        open={contractSheetOpen}
-        onClose={() => { setContractSheetOpen(false); setPendingContract(null); }}
+        contract={contractSheetState?.contract ?? booking.activeContract}
+        readOnly={contractSheetState?.readOnly ?? false}
+        open={contractSheetState !== null}
+        onClose={() => setContractSheetState(null)}
       />
       <BookingEditDrawer booking={booking} />
       <ContactEditSheet contact={editingContact} onClose={() => setEditingContact(null)} />
       <InvoiceSheet
         bookingId={id!}
-        invoice={editingInvoice}
+        invoice={invoiceSheetState?.invoice}
         hasDepositInvoice={invoices.some((inv) => inv.isDeposit)}
-        prefill={invoiceSheetPrefill}
-        open={invoiceSheetOpen}
-        onOpenChange={setInvoiceSheetOpen}
+        prefill={invoiceSheetState?.prefill}
+        open={invoiceSheetState !== null}
+        onOpenChange={(open) => { if (!open) setInvoiceSheetState(null); }}
       />
       <ComposeEmailSheet
         bookingId={id!}
         booking={booking}
         invoices={invoices}
         defaultPaymentTermsDays={userProfile?.defaultPaymentTermsDays}
-        open={composeOpen}
-        onOpenChange={setComposeOpen}
-        initialTemplateType={composeTemplateType}
+        open={composeTemplateType !== null}
+        onOpenChange={(open) => { if (!open) setComposeTemplateType(null); }}
+        initialTemplateType={composeTemplateType || undefined}
         onAfterSend={(templateType) => {
           const isContractEmail = templateType === 'contract_cover' || templateType === 'contract_and_deposit_cover';
           const contractId = booking.activeContract?.id;
