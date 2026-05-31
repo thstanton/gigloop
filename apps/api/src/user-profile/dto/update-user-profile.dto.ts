@@ -50,7 +50,7 @@ export class UpdateUserProfileDto {
 
   @ApiPropertyOptional({
     description: 'User preferences JSON — merged with existing value on PATCH',
-    example: { reminderLeadDays: 7 },
+    example: { reminderLeadDays: 7, invoiceNumberFormat: { prefix: 'INV', includeYear: true, paddingWidth: 3 } },
   })
   @IsOptional()
   @IsObject()

@@ -5,6 +5,39 @@ import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { CreateLineItemDto } from './dto/create-line-item.dto';
 import { UpdateLineItemDto } from './dto/update-line-item.dto';
 
+export type PaddingWidth = 1 | 3 | 4 | 6;
+
+export interface InvoiceNumberFormat {
+  prefix: string;
+  includeYear: boolean;
+  paddingWidth: PaddingWidth;
+}
+
+const FORMAT_DEFAULTS: InvoiceNumberFormat = { prefix: 'INV', includeYear: true, paddingWidth: 3 };
+
+export function buildInvoiceNumber(seq: number, year: number, format: InvoiceNumberFormat): string {
+  const { prefix, includeYear, paddingWidth } = format;
+  const seq_str = String(seq).padStart(paddingWidth, '0');
+  const parts = [
+    ...(prefix ? [prefix] : []),
+    ...(includeYear ? [String(year)] : []),
+    seq_str,
+  ];
+  return parts.join('-');
+}
+
+function resolveFormat(preferences: Record<string, unknown>): InvoiceNumberFormat {
+  const raw = preferences.invoiceNumberFormat as Partial<InvoiceNumberFormat> | undefined;
+  if (!raw) return FORMAT_DEFAULTS;
+  return {
+    prefix: typeof raw.prefix === 'string' ? raw.prefix : FORMAT_DEFAULTS.prefix,
+    includeYear: typeof raw.includeYear === 'boolean' ? raw.includeYear : FORMAT_DEFAULTS.includeYear,
+    paddingWidth: ([1, 3, 4, 6] as PaddingWidth[]).includes(raw.paddingWidth as PaddingWidth)
+      ? (raw.paddingWidth as PaddingWidth)
+      : FORMAT_DEFAULTS.paddingWidth,
+  };
+}
+
 const invoiceIncludes = {
   lineItems: { orderBy: { order: 'asc' } },
   billToContact: true,
@@ -103,15 +136,19 @@ export class InvoicesRepository {
       const profile = await tx.userProfile.findUnique({ where: { userId } });
       if (!profile) throw new Error('User profile not found');
 
-      const isNewYear = profile.invoiceSequenceYear !== currentYear;
+      const format = resolveFormat((profile.preferences as Record<string, unknown>) ?? {});
+      const isNewYear = format.includeYear && profile.invoiceSequenceYear !== currentYear;
       const nextSeq = isNewYear ? 1 : profile.invoiceNumberSequence + 1;
 
       await tx.userProfile.update({
         where: { userId },
-        data: { invoiceNumberSequence: nextSeq, invoiceSequenceYear: currentYear },
+        data: {
+          invoiceNumberSequence: nextSeq,
+          ...(format.includeYear ? { invoiceSequenceYear: currentYear } : {}),
+        },
       });
 
-      const invoiceNumber = `INV-${currentYear}-${String(nextSeq).padStart(3, '0')}`;
+      const invoiceNumber = buildInvoiceNumber(nextSeq, currentYear, format);
 
       return tx.invoice.update({
         where: { id },
