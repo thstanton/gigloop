@@ -44,20 +44,24 @@ export class BookingsService {
     };
   }
 
-  async create(userId: string, dto: CreateBookingDto) {
+  private async resolveSeriesId(userId: string, dto: CreateBookingDto): Promise<string | undefined> {
     if (dto.seriesId && dto.newSeries) {
       throw new BadRequestException('Provide either seriesId or newSeries, not both');
     }
-
-    let resolvedSeriesId = dto.seriesId;
     if (dto.newSeries) {
       const series = await this.seriesRepo.create(userId, dto.newSeries.label, dto.customerId);
-      resolvedSeriesId = series.id;
-    } else if (resolvedSeriesId) {
-      const exists = await this.seriesRepo.findExists(userId, resolvedSeriesId);
-      if (!exists) throw new NotFoundException('Series not found');
+      return series.id;
     }
+    if (dto.seriesId) {
+      const exists = await this.seriesRepo.findExists(userId, dto.seriesId);
+      if (!exists) throw new NotFoundException('Series not found');
+      return dto.seriesId;
+    }
+    return undefined;
+  }
 
+  async create(userId: string, dto: CreateBookingDto) {
+    const resolvedSeriesId = await this.resolveSeriesId(userId, dto);
     const dtoWithSeries = { ...dto, seriesId: resolvedSeriesId };
     let booking;
     if (!dto.formatIds?.length) {

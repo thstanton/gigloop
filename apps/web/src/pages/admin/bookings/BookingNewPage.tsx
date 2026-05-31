@@ -47,6 +47,12 @@ const STATUS_TO_STAGE: Record<string, BookingStatus | null> = {
   READY: 'READY', COMPLETE: 'COMPLETE', CANCELLED: 'COMPLETE',
 };
 
+function buildSeriesPayload(values: BookingFormValues): { seriesId?: string; newSeries?: { label: string } } {
+  if (values.seriesMode === 'existing' && values.seriesId) return { seriesId: values.seriesId };
+  if (values.seriesMode === 'new' && values.newSeriesLabel?.trim()) return { newSeries: { label: values.newSeriesLabel.trim() } };
+  return {};
+}
+
 function filterByStartingStatus(
   items: ChecklistDefaultItem[],
   startingStatus: BookingStatus,
@@ -139,10 +145,7 @@ export default function BookingNewPage() {
         bookingAgentId: values.bookingAgentId ?? undefined,
         formatIds: values.formatIds.length ? values.formatIds : undefined,
         checklistItems,
-        seriesId: values.seriesMode === 'existing' && values.seriesId ? values.seriesId : undefined,
-        newSeries: values.seriesMode === 'new' && values.newSeriesLabel?.trim()
-          ? { label: values.newSeriesLabel.trim() }
-          : undefined,
+        ...buildSeriesPayload(values),
       });
     },
     onSuccess: (created) => {
