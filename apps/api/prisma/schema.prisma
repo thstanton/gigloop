@@ -113,6 +113,7 @@ model Contact {
   bookingAgentBookings Booking[]       @relation("BookingAgent")
   invoices         Invoice[]
   communications   Communication[]
+  series           BookingSeries[]
 
   @@index([userId])
 }
@@ -141,6 +142,9 @@ model Booking {
   bookingAgentId String?
   bookingAgent   Contact? @relation("BookingAgent", fields: [bookingAgentId], references: [id], onDelete: Restrict)
 
+  seriesId String?
+  series   BookingSeries? @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+
   sets     PerformanceSet[]
   packages BookingPackage[]
   invoices Invoice[]
@@ -155,6 +159,7 @@ model Booking {
   @@index([customerId])
   @@index([venueId])
   @@index([bookingAgentId])
+  @@index([seriesId])
 }
 
 model BookingChecklistItem {
@@ -284,6 +289,24 @@ model BookingPackage {
   @@index([packageId])
 }
 
+model BookingSeries {
+  id        String   @id @default(uuid())
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  label String
+
+  customerId String
+  customer   Contact @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  bookings Booking[]
+  invoices Invoice[]
+
+  @@index([userId])
+  @@index([customerId])
+}
+
 model Invoice {
   id        String   @id @default(uuid())
   userId    String
@@ -297,8 +320,11 @@ model Invoice {
   dueDate       DateTime?
   paidAt        DateTime?
 
-  bookingId String
-  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  bookingId String?
+  booking   Booking? @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  seriesId String?
+  series   BookingSeries? @relation(fields: [seriesId], references: [id], onDelete: Cascade)
 
   billToContactId String
   billToContact   Contact @relation(fields: [billToContactId], references: [id], onDelete: Restrict)
@@ -308,6 +334,7 @@ model Invoice {
 
   @@index([userId])
   @@index([bookingId])
+  @@index([seriesId])
 }
 
 model InvoiceLineItem {
