@@ -512,10 +512,19 @@ export interface CreateChecklistItemInput {
   dueDate?: string | null;
 }
 
+export type PaddingWidth = 1 | 3 | 4 | 6;
+
+export interface InvoiceNumberFormat {
+  prefix: string;
+  includeYear: boolean;
+  paddingWidth: PaddingWidth;
+}
+
 export interface UserPreferences {
   reminderLeadDays: number;
   checklistDefaults: ChecklistDefaultItem[];
   defaultBookingStatus?: 'ENQUIRY' | 'PROVISIONAL' | 'CONFIRMED';
+  invoiceNumberFormat?: InvoiceNumberFormat;
 }
 
 export interface UserProfile {

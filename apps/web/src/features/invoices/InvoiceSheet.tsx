@@ -126,8 +126,9 @@ export default function InvoiceSheet({
     },
     onError: (error: unknown, variables: FormValues) => {
       const is409 = error instanceof Response && error.status === 409;
+      const invoiceType = variables.isDeposit ? 'deposit' : 'balance';
       const title = is409
-        ? `A ${variables.isDeposit ? 'deposit' : 'balance'} invoice already exists — void it before creating a new one`
+        ? `A ${invoiceType} invoice already exists — void it before creating a new one`
         : 'Failed to create invoice';
       toast({ title, variant: 'destructive' });
     },

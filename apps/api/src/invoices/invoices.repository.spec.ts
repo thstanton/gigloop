@@ -1,4 +1,4 @@
-import { InvoicesRepository } from './invoices.repository';
+import { InvoicesRepository, buildInvoiceNumber } from './invoices.repository';
 import { PrismaService } from '../prisma/prisma.service';
 
 type MockPrisma = {
@@ -45,6 +45,28 @@ function makePrisma(): MockPrisma {
   prisma.$transaction.mockImplementation((fn: (tx: typeof prisma) => unknown) => fn(prisma));
   return prisma;
 }
+
+describe('buildInvoiceNumber', () => {
+  it('produces default format INV-YYYY-NNN', () => {
+    expect(buildInvoiceNumber(1, 2026, { prefix: 'INV', includeYear: true, paddingWidth: 3 })).toBe('INV-2026-001');
+  });
+
+  it('custom prefix, no year, 4-digit padding', () => {
+    expect(buildInvoiceNumber(1, 2026, { prefix: 'MUSIC', includeYear: false, paddingWidth: 4 })).toBe('MUSIC-0001');
+  });
+
+  it('empty prefix with year', () => {
+    expect(buildInvoiceNumber(42, 2026, { prefix: '', includeYear: true, paddingWidth: 3 })).toBe('2026-042');
+  });
+
+  it('empty prefix, no year', () => {
+    expect(buildInvoiceNumber(7, 2026, { prefix: '', includeYear: false, paddingWidth: 1 })).toBe('7');
+  });
+
+  it('6-digit padding', () => {
+    expect(buildInvoiceNumber(5, 2026, { prefix: 'INV', includeYear: false, paddingWidth: 6 })).toBe('INV-000005');
+  });
+});
 
 describe('InvoicesRepository', () => {
   let repo: InvoicesRepository;
