@@ -169,7 +169,6 @@ For feature components, always build the presentational layer + story before the
   - Anything that should be reviewed before the next session
   - **Promotion candidates:** any repeated `className`/JSX patterns observed that may warrant extraction to `components/common/`
 - Do not run database migrations without confirming first
-- Run `bun run test` and verify all tests pass before each commit
 - Commit after each issue is complete — not once at the end of the session (see **One commit per issue** under Branching Strategy)
 
 ## Data Fetching
