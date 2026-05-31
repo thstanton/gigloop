@@ -90,6 +90,19 @@ export class UserProfileRepository {
     return this.decryptProfile(profile);
   }
 
+  async completeOnboarding(userId: string) {
+    const existing = await this.prisma.userProfile.findUnique({ where: { userId } });
+    if (existing?.onboardingCompletedAt) {
+      return this.decryptProfile(existing);
+    }
+    const profile = await this.prisma.userProfile.upsert({
+      where: { userId },
+      update: { onboardingCompletedAt: new Date() },
+      create: { userId, onboardingCompletedAt: new Date() },
+    });
+    return this.decryptProfile(profile);
+  }
+
   private decryptProfile(profile: { bankDetails: string | null; [key: string]: unknown }): { bankDetails: string | null; [key: string]: unknown } {
     return {
       ...profile,

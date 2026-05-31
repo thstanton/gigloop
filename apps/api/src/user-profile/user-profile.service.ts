@@ -28,6 +28,10 @@ export class UserProfileService {
     return this.repo.updateByUserId(userId, dto);
   }
 
+  completeOnboarding(userId: string) {
+    return this.repo.completeOnboarding(userId);
+  }
+
   updateChecklistDefaults(userId: string, dto: UpdateChecklistDefaultsDto) {
     // Validate system item keys exist
     for (const override of dto.systemItemOverrides ?? []) {

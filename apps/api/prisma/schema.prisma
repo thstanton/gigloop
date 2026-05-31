@@ -81,7 +81,8 @@ model UserProfile {
   digestEmailEnabled         Boolean @default(true)
   songRequestFormEnabled     Boolean @default(true)
 
-  preferences Json @default("{}")
+  preferences           Json      @default("{}")
+  onboardingCompletedAt DateTime?
 }
 
 model Contact {

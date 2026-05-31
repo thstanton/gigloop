@@ -320,6 +320,19 @@ export interface Song {
   tags: string[];
 }
 
+export interface CatalogueEntry {
+  id: string;
+  title: string;
+  artist?: string;
+  genre: string;
+}
+
+export interface CatalogueGroup {
+  genre: string;
+  label: string;
+  songs: CatalogueEntry[];
+}
+
 export interface CreateSongInput {
   title: string;
   genre: SongGenre;
@@ -520,6 +533,7 @@ export interface UserProfile {
   digestEmailEnabled: boolean;
   songRequestFormEnabled: boolean;
   preferences: Partial<UserPreferences>;
+  onboardingCompletedAt: string | null;
 }
 
 export type PortalTheme = 'LIGHT_MODERN' | 'LIGHT_ROMANTIC' | 'BOLD_MODERN' | 'BOLD_ROMANTIC';
