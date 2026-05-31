@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { BookingStatus } from '@prisma/client';
 import { BookingsRepository } from './bookings.repository';
+import { BookingActionsService } from './bookings-actions.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
 import { UpdateContractDto } from './dto/update-contract.dto';
@@ -13,69 +14,13 @@ import { ChecklistEvaluatorService } from '../checklist/checklist-evaluator.serv
 
 const VALID_STATUSES = new Set<string>(Object.values(BookingStatus));
 
-// ─── Actions computation ──────────────────────────────────────────────────────
-
-
-function inWindow(bookingDate: Date, today: Date, days: number | null, post: boolean): boolean {
-  if (days === null) return false;
-  const diff = Math.floor((bookingDate.getTime() - today.getTime()) / 86_400_000);
-  return post ? diff >= -days && diff < 0 : diff >= 0 && diff <= days;
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function computeActionItem(booking: any, profile: any, today: Date) {
-  const bookingDate = new Date(booking.date);
-  bookingDate.setHours(0, 0, 0, 0);
-
-  const trackDeposit = true;
-  const bookingDatePassed = bookingDate < today;
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const comms: Array<{ status: string; template: { builtInType: string | null } | null }> = booking.communications;
-  const invoices: Array<{ isDeposit: boolean; status: string }> = booking.invoices;
-  const activeContract: { status: string; signedAt: Date | null } | null = booking.contracts?.[0] ?? null;
-
-  const hasSent = (...types: string[]) =>
-    comms.some((c) => types.includes(c.template?.builtInType ?? '') && c.status === 'SENT');
-  const lastFailed = (...types: string[]) => {
-    const rel = comms.filter((c) => types.includes(c.template?.builtInType ?? ''));
-    return rel.length > 0 && rel[rel.length - 1].status === 'FAILED';
-  };
-
-  const gtEq = (s: string, target: string) =>
-    ['CONFIRMED', 'READY', 'COMPLETE', 'CANCELLED'].slice(
-      ['CONFIRMED', 'READY', 'COMPLETE', 'CANCELLED'].indexOf(target),
-    ).includes(s);
-
-  const contractSigned = activeContract?.status === 'SIGNED';
-
-  const candidates = [
-    { key: 'send_quote', label: 'Send quote', done: hasSent('quote'), failed: lastFailed('quote'), irrelevant: gtEq(booking.status, 'CONFIRMED') },
-    { key: 'create_deposit_invoice', label: 'Create deposit invoice', done: invoices.some((i) => i.isDeposit), failed: false, irrelevant: !trackDeposit },
-    { key: 'send_contract', label: 'Send contract & deposit email', done: hasSent('contract_cover', 'contract_and_deposit_cover'), failed: lastFailed('contract_cover', 'contract_and_deposit_cover'), irrelevant: contractSigned && (!!booking.depositReceivedAt || !trackDeposit) },
-    { key: 'create_balance_invoice', label: 'Create balance invoice', done: invoices.some((i) => !i.isDeposit), failed: false, irrelevant: booking.status === 'ENQUIRY' },
-    { key: 'music_form_invite', label: 'Send music form invite', done: hasSent('music_form_invite'), failed: lastFailed('music_form_invite'), irrelevant: !booking.musicFormConfig || booking.status === 'ENQUIRY' },
-    { key: 'send_thank_you', label: 'Send thank you', done: hasSent('thank_you'), failed: lastFailed('thank_you'), irrelevant: !bookingDatePassed },
-  ];
-
-  const prefs = profile?.preferences as { reminderLeadDays?: number } | null;
-  const reminderLeadDays = prefs?.reminderLeadDays ?? 7;
-
-  for (const c of candidates) {
-    if (c.irrelevant || c.done) continue;
-    if (!inWindow(bookingDate, today, reminderLeadDays, c.key === 'send_thank_you')) continue;
-    return { key: c.key, label: c.label, state: (c.failed ? 'failed' : 'outstanding') as 'failed' | 'outstanding' };
-  }
-
-  return null;
-}
-
 @Injectable()
 export class BookingsService {
   constructor(
     private repo: BookingsRepository,
     private mail: MailService,
     private evaluator: ChecklistEvaluatorService,
+    private actions: BookingActionsService,
   ) {}
 
   findAll(userId: string, status?: string) {
@@ -89,22 +34,11 @@ export class BookingsService {
     const booking = await this.repo.findOne(userId, id);
     if (!booking) throw new NotFoundException('Booking not found');
     const { musicFormConfig, musicFormResponse, contracts, ...rest } = booking;
-    const raw = contracts?.[0] ?? null;
-    const activeContract = raw
-      ? {
-          id: raw.id,
-          createdAt: raw.createdAt.toISOString(),
-          updatedAt: raw.updatedAt.toISOString(),
-          status: raw.status,
-          content: raw.content,
-          signedAt: raw.signedAt?.toISOString() ?? null,
-        }
-      : null;
     return {
       ...rest,
       hasMusicFormConfig: !!musicFormConfig,
       hasMusicFormResponse: !!musicFormResponse,
-      activeContract,
+      activeContract: this.normaliseContract(contracts?.[0] ?? null),
     };
   }
 
@@ -197,18 +131,24 @@ export class BookingsService {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private mapBooking(booking: any) {
     const { musicFormConfig, musicFormResponse, contracts, ...rest } = booking;
-    const raw = contracts?.[0] ?? null;
-    const activeContract = raw
-      ? {
-          id: raw.id,
-          createdAt: raw.createdAt.toISOString(),
-          updatedAt: raw.updatedAt.toISOString(),
-          status: raw.status,
-          content: raw.content,
-          signedAt: raw.signedAt?.toISOString() ?? null,
-        }
-      : null;
-    return { ...rest, hasMusicFormConfig: !!musicFormConfig, hasMusicFormResponse: !!musicFormResponse, activeContract };
+    return {
+      ...rest,
+      hasMusicFormConfig: !!musicFormConfig,
+      hasMusicFormResponse: !!musicFormResponse,
+      activeContract: this.normaliseContract(contracts?.[0] ?? null),
+    };
+  }
+
+  private normaliseContract(raw: { id: string; createdAt: Date; updatedAt: Date; status: string; content: unknown; signedAt: Date | null } | null) {
+    if (!raw) return null;
+    return {
+      id: raw.id,
+      createdAt: raw.createdAt.toISOString(),
+      updatedAt: raw.updatedAt.toISOString(),
+      status: raw.status,
+      content: raw.content,
+      signedAt: raw.signedAt?.toISOString() ?? null,
+    };
   }
 
   async getMusicFormResponse(userId: string, bookingId: string) {
@@ -381,7 +321,7 @@ export class BookingsService {
 
     return bookings
       .map((b) => {
-        const item = computeActionItem(b, profile, today);
+        const item = this.actions.computeActionItem(b, profile, today);
         if (!item) return null;
         return {
           bookingId: b.id,

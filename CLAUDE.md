@@ -121,6 +121,7 @@ This makes the git history meaningful (each commit is a reviewable unit of work)
 
 ### My responsibilities (Claude Code)
 - At the start of any session involving application code changes: confirm we are on a feature branch, or create one.
+- When working multiple branches in one session: open a PR for each branch as soon as it is complete, then immediately start the next branch. This lets review overlap with ongoing development.
 - At the end of the session: open a PR with `gh pr create` rather than committing to `main`.
 - Never push application code directly to `main`.
 
@@ -169,7 +170,6 @@ For feature components, always build the presentational layer + story before the
   - Anything that should be reviewed before the next session
   - **Promotion candidates:** any repeated `className`/JSX patterns observed that may warrant extraction to `components/common/`
 - Do not run database migrations without confirming first
-- Run `bun run test` and verify all tests pass before each commit
 - Commit after each issue is complete — not once at the end of the session (see **One commit per issue** under Branching Strategy)
 
 ## Data Fetching
