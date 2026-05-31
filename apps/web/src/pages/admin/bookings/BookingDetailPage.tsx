@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '@clerk/react';
 import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, Check, X, FolderOpen, FileText, Download, MapPin } from 'lucide-react';
+import { ChevronLeft, Check, X, MapPin } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import {
@@ -19,6 +19,7 @@ import { useBookingChecklist } from '@/lib/hooks/useBookingChecklist';
 import { useContractActions } from '@/lib/hooks/useContractActions';
 import { useInvoiceActions } from '@/lib/hooks/useInvoiceActions';
 import { useConfigureMusicForm } from '@/lib/hooks/useConfigureMusicForm';
+import { useBookingFields } from '@/lib/hooks/useBookingFields';
 import BookingEditDrawer from '@/features/bookings/BookingEditDrawer';
 import ContactPicker from '@/features/bookings/ContactPicker';
 import ContractSheet from '@/features/bookings/ContractSheet';
@@ -37,7 +38,7 @@ import ChecklistSection from '@/features/bookings/ChecklistSection';
 import BookingStatusDropdown from '@/features/bookings/BookingStatusDropdown';
 import InlineNotes from '@/features/bookings/InlineNotes';
 import InlineFeeAdd from '@/features/bookings/InlineFeeAdd';
-import { toast } from '@/lib/hooks/use-toast';
+import { DocumentList } from '@/features/bookings/DocumentList';
 import { apiGet, apiPatch } from '@/lib/api';
 import {
   formatDate,
@@ -50,9 +51,9 @@ import { SectionHeader } from '@/components/common/SectionHeader';
 import { IconButton } from '@/components/common/IconButton';
 import { EmptyState } from '@/components/common/EmptyState';
 import type {
+  BookingDetail,
   BookingStatus,
   Contact,
-  Document,
   Invoice,
   MusicFormConfig,
   MusicFormResponse,
@@ -61,6 +62,31 @@ import type {
 } from '@/types/api';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function buildSetsDescription(booking: BookingDetail): string {
+  if (!booking.sets?.length) return '';
+  const formatById = new Map(
+    (booking.packages ?? []).map((f) => [f.packageId, f.package.label]),
+  );
+  return booking.sets
+    .map((s) => {
+      const label = s.label ?? (s.packageId ? formatById.get(s.packageId) : null) ?? null;
+      return label ? `${label} (${s.duration} min)` : `${s.duration} min`;
+    })
+    .join(', ');
+}
+
+function buildInvoicePrefill(
+  booking: BookingDetail,
+  userProfile: UserProfile | undefined,
+  isDeposit: boolean,
+): { isDeposit: boolean; amount?: number } {
+  const fee = booking.fee ? parseFloat(booking.fee) : null;
+  const pct = userProfile?.depositPercentage;
+  const multiplier = isDeposit ? pct! / 100 : 1 - pct! / 100;
+  const amount = fee && pct ? Math.round(fee * multiplier * 100) / 100 : undefined;
+  return { isDeposit, amount };
+}
 
 const STATUS_LABELS: Record<BookingStatus, string> = {
   ENQUIRY:      'Enquiry',
@@ -179,7 +205,7 @@ export default function BookingDetailPage() {
   });
 
   const actions = useBookingActions(id!);
-  const queryClient = useQueryClient();
+  const fields = useBookingFields(id!);
 
   const {
     checklist, checklistLoading,
@@ -219,37 +245,6 @@ export default function BookingDetailPage() {
     staleTime: 5 * 60 * 1000,
   });
 
-  // ─── Mutations ────────────────────────────────────────────────────────────
-
-  const updateStatusMutation = useMutation({
-    mutationFn: (status: BookingStatus) =>
-      apiPatch(`/bookings/${id}`, { status }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['booking', id] });
-      queryClient.invalidateQueries({ queryKey: ['bookings'] });
-      queryClient.invalidateQueries({ queryKey: ['bookingChecklist', id] });
-    },
-    onError: () => {
-      toast({ title: 'Failed to update status', variant: 'destructive' });
-    },
-  });
-
-  const updateNotesMutation = useMutation({
-    mutationFn: (notes: string) => apiPatch(`/bookings/${id}`, { notes: notes || null }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['booking', id] });
-      queryClient.invalidateQueries({ queryKey: ['bookings'] });
-    },
-  });
-
-  const updateFeeMutation = useMutation({
-    mutationFn: (fee: number) => apiPatch(`/bookings/${id}`, { fee }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['booking', id] });
-      queryClient.invalidateQueries({ queryKey: ['bookings'] });
-    },
-  });
-
   const configureMusicForm = useConfigureMusicForm(id!, booking, () => {
     setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('edit', 'true'); return next; });
   });
@@ -260,21 +255,8 @@ export default function BookingDetailPage() {
     setComposeTemplateType(templateType ?? '');
   }
 
-  function buildSetsDescription(): string {
-    if (!booking?.sets?.length) return '';
-    const formatById = new Map(
-      (booking.packages ?? []).map((f) => [f.packageId, f.package.label]),
-    );
-    return booking.sets
-      .map((s) => {
-        const label = s.label ?? (s.packageId ? formatById.get(s.packageId) : null) ?? null;
-        return label ? `${label} (${s.duration} min)` : `${s.duration} min`;
-      })
-      .join(', ');
-  }
-
   function openCreateInvoice(prefill?: { isDeposit: boolean; amount?: number }) {
-    setInvoiceSheetState({ prefill: prefill ? { ...prefill, description: buildSetsDescription() } : undefined });
+    setInvoiceSheetState({ prefill: prefill ? { ...prefill, description: buildSetsDescription(booking) } : undefined });
   }
 
   function openEditInvoice(invoice: Invoice) {
@@ -282,8 +264,7 @@ export default function BookingDetailPage() {
   }
 
   function openSendInvoice(invoice: Invoice) {
-    const templateType = invoice.isDeposit ? 'deposit_invoice_cover' : 'balance_invoice_cover';
-    openCompose(templateType);
+    openCompose(invoice.isDeposit ? 'deposit_invoice_cover' : 'balance_invoice_cover');
   }
 
   function handleChecklistAction(action: 'create_deposit_invoice' | 'create_balance_invoice' | 'create_contract') {
@@ -380,13 +361,13 @@ export default function BookingDetailPage() {
               <BookingStatusDropdown
                 currentStatus={booking.status}
                 checklist={checklist}
-                onStatusChange={(status) => updateStatusMutation.mutate(status)}
-                isPending={updateStatusMutation.isPending}
+                onStatusChange={fields.updateStatus}
+                isPending={fields.isStatusPending}
               />
               <span className="text-sm text-muted">{formatDate(booking.date)}</span>
               {feeWithVat
                 ? <span className="text-sm text-muted">{feeWithVat}</span>
-                : <InlineFeeAdd onSave={(fee) => updateFeeMutation.mutate(fee)} isSaving={updateFeeMutation.isPending} />
+                : <InlineFeeAdd onSave={fields.updateFee} isSaving={fields.isFeePending} />
               }
             </div>
           </section>
@@ -411,8 +392,8 @@ export default function BookingDetailPage() {
           {/* 3. Notes */}
           <InlineNotes
             notes={booking.notes}
-            onSave={(notes) => updateNotesMutation.mutate(notes)}
-            isSaving={updateNotesMutation.isPending}
+            onSave={fields.updateNotes}
+            isSaving={fields.isNotesPending}
           />
 
           {/* 4. For the day */}
@@ -500,22 +481,8 @@ export default function BookingDetailPage() {
             invoices={invoices}
             documents={documents}
             isPending={invoicesPending}
-            onNewDepositInvoice={() => {
-              const fee = booking.fee ? parseFloat(booking.fee) : null;
-              const pct = userProfile?.depositPercentage;
-              openCreateInvoice({
-                isDeposit: true,
-                amount: fee && pct ? Math.round((fee * pct / 100) * 100) / 100 : undefined,
-              });
-            }}
-            onNewBalanceInvoice={() => {
-              const fee = booking.fee ? parseFloat(booking.fee) : null;
-              const pct = userProfile?.depositPercentage;
-              openCreateInvoice({
-                isDeposit: false,
-                amount: fee && pct ? Math.round((fee * (1 - pct / 100)) * 100) / 100 : undefined,
-              });
-            }}
+            onNewDepositInvoice={() => openCreateInvoice(buildInvoicePrefill(booking, userProfile, true))}
+            onNewBalanceInvoice={() => openCreateInvoice(buildInvoicePrefill(booking, userProfile, false))}
             onEdit={openEditInvoice}
             onDelete={(inv) => actions.deleteInvoice(inv.id)}
             onSend={openSendInvoice}
@@ -526,55 +493,7 @@ export default function BookingDetailPage() {
 
           {/* Documents */}
           <Card title="Documents">
-            {documents.length === 0 ? (
-              <div className="flex items-center gap-2 text-muted py-1">
-                <FolderOpen size={14} />
-                <span className="text-sm">No documents yet</span>
-              </div>
-            ) : (
-              <div className="divide-y divide-border">
-                {documents.map((doc: Document) => {
-                  const invoice = invoices.find((i) => i.id === doc.invoiceId);
-                  const isVoidContract = doc.type === 'CONTRACT' && doc.contractStatus === 'VOID';
-                  const label = doc.type === 'CONTRACT'
-                    ? isVoidContract ? 'Contract [VOID]' : 'Contract'
-                    : invoice?.isDeposit
-                      ? 'Deposit invoice'
-                      : 'Balance invoice';
-                  const filename = `${label.toLowerCase().replace(' ', '-')}.pdf`;
-                  const handleDownload = async () => {
-                    const res = await fetch(doc.url);
-                    const blob = await res.blob();
-                    const a = window.document.createElement('a');
-                    a.href = URL.createObjectURL(blob);
-                    a.download = filename;
-                    a.click();
-                    URL.revokeObjectURL(a.href);
-                  };
-                  return (
-                    <div key={doc.id} className="flex items-center gap-2 py-2">
-                      <FileText size={14} className="flex-shrink-0 text-muted mt-0.5 self-start" />
-                      <div className="flex flex-col min-w-0">
-                        <span className="text-sm text-foreground">{label}</span>
-                        {invoice?.invoiceNumber && (
-                          <span className="text-xs text-muted">{invoice.invoiceNumber}</span>
-                        )}
-                      </div>
-                      <span className="text-muted ml-auto text-xs shrink-0">
-                        {new Date(doc.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                      </span>
-                      <button
-                        onClick={handleDownload}
-                        title="Download"
-                        className="text-muted hover:text-foreground shrink-0"
-                      >
-                        <Download size={14} />
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+            <DocumentList documents={documents} invoices={invoices} />
           </Card>
 
           {/* Communications */}
