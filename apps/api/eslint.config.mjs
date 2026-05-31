@@ -13,11 +13,10 @@ export default tseslint.config(
       },
     },
     rules: {
-      // Warnings — real quality signals, fix opportunistically
       '@typescript-eslint/no-explicit-any': 'warn',
-      'sonarjs/cognitive-complexity': ['warn', 10],
-      'sonarjs/no-nested-conditional': 'warn',
-      'sonarjs/no-nested-template-literals': 'warn',
+      'sonarjs/cognitive-complexity': ['error', 10],
+      'sonarjs/no-nested-conditional': 'error',
+      'sonarjs/no-nested-template-literals': 'error',
       // Unused vars — allow _-prefixed names as intentional discards
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
       'sonarjs/no-unused-vars': 'off',
