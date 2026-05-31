@@ -10,6 +10,7 @@ import {
 import { apiGet, apiPatch } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
+import { CATEGORY_LABELS } from '@/pages/admin/PackagesPage';
 import type { Package } from '@/types/api';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -92,7 +93,7 @@ export default function OnboardingPackagesPage() {
         <div className="flex flex-col gap-6">
           {Object.entries(grouped).map(([category, pkgs]) => (
             <div key={category}>
-              <h2 className="text-base font-medium text-foreground mb-2">{category}</h2>
+              <h2 className="text-base font-medium text-foreground mb-2">{CATEGORY_LABELS[category] ?? category}</h2>
               <div className="rounded-lg border border-border divide-y divide-border">
                 {pkgs.map((pkg) => {
                   const checked = overrides.get(pkg.id) ?? pkg.enabled;

@@ -50,7 +50,7 @@ function PackageIcon({ icon, size = 16 }: { icon: string; size?: number }) {
 
 // ─── Category display ─────────────────────────────────────────────────────────
 
-const CATEGORY_LABELS: Record<string, string> = {
+export const CATEGORY_LABELS: Record<string, string> = {
   WEDDING: 'Wedding',
   CORPORATE: 'Corporate',
   PRIVATE: 'Private',
