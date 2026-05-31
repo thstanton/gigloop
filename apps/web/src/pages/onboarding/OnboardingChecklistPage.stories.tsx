@@ -24,7 +24,7 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
   play: async ({ canvas }) => {
-    await expect(canvas.getByText('Booking checklist defaults')).toBeVisible();
+    await expect(await canvas.findByText('Booking checklist defaults')).toBeVisible();
     await expect(await canvas.findByText('Send quote')).toBeVisible();
   },
 };

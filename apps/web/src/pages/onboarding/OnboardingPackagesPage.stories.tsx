@@ -15,7 +15,7 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
   play: async ({ canvas }) => {
-    await expect(canvas.getByText('Choose your packages')).toBeVisible();
+    await expect(await canvas.findByText('Choose your packages')).toBeVisible();
     await expect(await canvas.findByText('Duo')).toBeVisible();
   },
 };

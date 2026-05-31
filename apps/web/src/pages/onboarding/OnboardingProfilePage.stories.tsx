@@ -15,7 +15,7 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
   play: async ({ canvas }) => {
-    await expect(canvas.getByText('Set up your profile')).toBeVisible();
-    await expect(canvas.getByPlaceholderText(/Smith String Quartet/i)).toBeVisible();
+    await expect(await canvas.findByText('Set up your profile')).toBeVisible();
+    await expect(await canvas.findByPlaceholderText(/Smith String Quartet/i)).toBeVisible();
   },
 };
