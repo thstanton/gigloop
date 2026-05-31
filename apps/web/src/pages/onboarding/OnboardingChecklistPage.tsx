@@ -5,6 +5,7 @@ import { apiPatch, apiPost } from '@/lib/api';
 import { useMe } from '@/lib/hooks/useMe';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
+import { PageSection } from '@/components/common/PageSection';
 import type { ChecklistDefaultItem } from '@/types/api';
 
 const STAGE_ORDER = ['PROVISIONAL', 'CONFIRMED', 'READY', 'COMPLETE'] as const;
@@ -82,7 +83,7 @@ export default function OnboardingChecklistPage() {
             if (items.length === 0) return null;
             return (
               <div key={stage}>
-                <h2 className="text-base font-medium text-foreground mb-2">{STAGE_LABELS[stage]}</h2>
+                <PageSection title={STAGE_LABELS[stage]} className="mb-2" />
                 <div className="rounded-lg border border-border divide-y divide-border">
                   {items.map((item) => {
                     const key = item.key ?? item.label;
