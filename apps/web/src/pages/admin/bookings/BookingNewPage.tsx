@@ -125,8 +125,7 @@ export default function BookingNewPage() {
     setValue('status', pref as BookingFormValues['status']);
   }, [userProfile?.id, setValue]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const seriesMode = watch('seriesMode');
-  const selectedSeriesId = watch('seriesId');
+  const [seriesMode, selectedSeriesId] = watch(['seriesMode', 'seriesId']);
 
   const { data: seriesDefaults } = useQuery({
     queryKey: ['seriesDefaults', selectedSeriesId],
@@ -169,9 +168,14 @@ export default function BookingNewPage() {
     },
   });
 
+  function activeChecklistDefaults(mode: string): ChecklistDefaultItem[] {
+    return (mode === 'existing' && seriesDefaults?.checklistItems)
+      || userProfile?.preferences?.checklistDefaults
+      || [];
+  }
+
   function advanceToStep2(values: BookingFormValues) {
-    const seriesItems = values.seriesMode === 'existing' && seriesDefaults?.checklistItems;
-    const defaults = seriesItems || userProfile?.preferences?.checklistDefaults || [];
+    const defaults = activeChecklistDefaults(values.seriesMode);
     const filtered = filterByStartingStatus(defaults, values.status as BookingStatus);
     setPendingValues(values);
     // Pre-select enabled items only; disabled items appear unchecked (opt-in per booking)
@@ -197,8 +201,7 @@ export default function BookingNewPage() {
 
   function handleCreate() {
     if (!pendingValues) return;
-    const seriesItems = pendingValues.seriesMode === 'existing' && seriesDefaults?.checklistItems;
-    const defaults = seriesItems || userProfile?.preferences?.checklistDefaults || [];
+    const defaults = activeChecklistDefaults(pendingValues.seriesMode);
     const filtered = filterByStartingStatus(defaults, pendingValues.status as BookingStatus);
     const selected = filtered.filter((_, i) => selectedIndices.has(i));
     const custom: ChecklistDefaultItem[] = customItems
@@ -218,8 +221,7 @@ export default function BookingNewPage() {
   // ─── Step 2: Checklist customisation ─────────────────────────────────────────
 
   if (step === 2 && pendingValues) {
-    const seriesItems = pendingValues.seriesMode === 'existing' && seriesDefaults?.checklistItems;
-    const defaults = seriesItems || userProfile?.preferences?.checklistDefaults || [];
+    const defaults = activeChecklistDefaults(pendingValues.seriesMode);
     const filtered = filterByStartingStatus(defaults, pendingValues.status as BookingStatus);
     const grouped = (['PROVISIONAL', 'CONFIRMED', 'READY', 'COMPLETE'] as const)
       .map((stage) => ({

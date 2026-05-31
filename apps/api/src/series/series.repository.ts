@@ -29,15 +29,19 @@ export class SeriesRepository {
     return series;
   }
 
+  findSeriesCustomerId(userId: string, id: string) {
+    return this.prisma.bookingSeries.findFirst({
+      where: { id, userId },
+      select: { customerId: true },
+    });
+  }
+
   findEarliestMemberBooking(userId: string, seriesId: string) {
     return this.prisma.booking.findFirst({
       where: { seriesId, userId },
       orderBy: { createdAt: 'asc' },
       include: {
-        packages: {
-          include: { package: true },
-          orderBy: { order: 'asc' },
-        },
+        packages: { select: { packageId: true }, orderBy: { order: 'asc' } },
         checklistItems: { orderBy: { order: 'asc' } },
         musicFormConfig: true,
       },

@@ -26,7 +26,7 @@ export class SeriesService {
   }
 
   async findDefaults(userId: string, id: string) {
-    const series = await this.repo.findOne(userId, id);
+    const series = await this.repo.findSeriesCustomerId(userId, id);
     if (!series) throw new NotFoundException('Series not found');
 
     const earliest = await this.repo.findEarliestMemberBooking(userId, id);
