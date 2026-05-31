@@ -97,13 +97,17 @@ A scheduled performance slot within a Booking — always traceable to a [[Packag
 Sets are created by applying a [[Package]] to a booking — the package's default slots are copied as editable Set records. Ad-hoc sets without a package association are not permitted. Song requirements within a Set (must-haves, don't-plays, special roles) are deferred to the Song Library feature.
 
 ### Invoice
-A financial document issued to a Contact for a Booking. A Booking can have multiple Invoices (e.g. a deposit invoice followed by a balance invoice, or a single full invoice — the musician decides). Has many [[InvoiceLineItem]]s.
+A financial document issued to a Contact for a [[Booking]] or a [[BookingSeries]]. A Booking can have multiple Invoices (e.g. a deposit invoice followed by a balance invoice, or a single full invoice — the musician decides). Has many [[InvoiceLineItem]]s.
 
-**Status:** `Draft | Sent | Paid | Void` (stored). *Overdue* is derived — not a stored state — inferred when status is `Sent`, a due date is set, and that date has passed. A Void invoice is preserved for history but no longer active; a new invoice can be created on the same booking after voiding.
+**Ownership:** an Invoice belongs to either a Booking (`bookingId` set, `seriesId` null) or a BookingSeries (`seriesId` set, `bookingId` null). Exactly one must be set — enforced at the application layer. See ADR-0029.
+
+**Status:** `Draft | Sent | Paid | Void` (stored). *Overdue* is derived — not a stored state — inferred when status is `Sent`, a due date is set, and that date has passed. A Void invoice is preserved for history but no longer active; a new invoice can be created on the same booking or series after voiding.
 
 Two ways to move to `Sent`: (1) **Send** — app emails the invoice via Resend using the appropriate invoice cover template (`deposit_invoice_cover` or `balance_invoice_cover`) and atomically sets the issue date, due date, invoice number, and marks it Sent; (2) **Mark as sent** — sets dates and invoice number and marks it Sent without sending an email, for cases where the invoice was communicated outside the app. Both paths go through dedicated endpoints (`POST /invoices/:id/send` and `POST /invoices/:id/mark-sent`).
 
-**Fields include:** invoiceNumber (nullable — null until sent, assigned from `UserProfile.invoiceNumberSequence` at send time, format `INV-{year}-{NNN}`), issueDate (nullable — null until sent, defaults to today at send time), dueDate (nullable — null until sent, defaults to `issueDate + UserProfile.defaultPaymentTermsDays` if set), status, isDeposit (boolean, default false — at most one deposit invoice per booking), and a reference to which Contact it is addressed to (defaults to the Booking's customer but may differ). When `isDeposit` is true and the invoice is marked Paid, `Booking.depositReceivedAt` is automatically set (if `depositTrackingMode` resolves to `INVOICE`).
+**Fields include:** invoiceNumber (nullable — null until sent; format derived from `UserProfile.preferences.invoiceNumberFormat` (default `INV-{year}-{NNN}`); assigned at send time by either incrementing `UserProfile.invoiceNumberSequence` or, if a VOID invoice of the same type already exists on the booking, inheriting its number — see ADR-0028), issueDate (nullable — null until sent, defaults to today at send time), dueDate (nullable — null until sent, defaults to `issueDate + UserProfile.defaultPaymentTermsDays` if set), status, isDeposit (boolean, default false — at most one non-VOID invoice of each type per booking, enforced at the API level; 409 if a non-VOID invoice of the same `isDeposit` value already exists on creation), and a reference to which Contact it is addressed to (defaults to the Booking's customer or the [[BookingSeries]] customer but may differ). When `isDeposit` is true and the invoice is marked Paid, `Booking.depositReceivedAt` is automatically set.
+
+**Series invoices:** `isDeposit` is always false for series invoices — the deposit/balance concept belongs to single-booking project invoicing only. The constraint is "at most one non-VOID invoice per series" (no type distinction). Line items are auto-generated at creation: one line per member [[Booking]] (date + sets description + booking fee as amount), pre-populated and fully editable.
 
 **Draft state:** a draft invoice has no invoiceNumber, issueDate, or dueDate. These display as "—" in the UI.
 
@@ -115,6 +119,25 @@ A line on an [[Invoice]]: description (text) + amount (decimal).
 **First line item — service description:** when an invoice is created, the first line item description is pre-populated from the booking's performance formats and sets (e.g. "Wedding Ceremony (30 min), Drinks Reception (90 min), Evening Reception (45 min × 2)"). This gives clients the service detail they typically request. The amount defaults to the booking fee (or deposit percentage for deposit invoices). The description is fully editable — pre-population is a convenience, not a constraint.
 
 **Additional line items:** free text for anything beyond the core service — travel, equipment hire, accommodation, etc. No fixed categories.
+
+### BookingSeries
+A billing grouping for a set of related [[Booking]]s that are invoiced together — typically a residency (a regular slot at a venue billed at the end of a billing period). See ADR-0029.
+
+**Principle — series as billing batch:** a series represents one billing period, not an ongoing residency entity. Bookings in a different billing period form a separate series. The series has no dedicated UI page; it surfaces contextually within the [[Booking]] detail page.
+
+**Fields:**
+- `label` — human-readable name (e.g. "Hotel Intercontinental — May 2026"); required
+- `customerId` FK → [[Contact]] — the billing contact; authoritative source for who the series [[Invoice]] is addressed to
+
+**Membership:** a Booking joins a series via `Booking.seriesId` (nullable). Membership can be set at booking creation or retroactively, with two guards on retroactive assignment: (1) the booking must have no non-VOID invoices (409 with an explanation if it does); (2) if the booking's `customerId` differs from the series `customerId`, the API returns a warning — the musician must explicitly confirm, since the series invoice will be addressed to the series customer regardless. The booking's own `customerId` is never modified by series assignment. A booking can only belong to one series.
+
+**Series lifecycle:** derived from the Invoice — no stored status. No invoice → open/unbilled. Draft invoice → billing in progress. Sent or Paid → billed. Void → back to open.
+
+**No series contract:** residency arrangements are informal or handled through booking agencies. Contract ownership stays per-Booking; series member bookings typically carry no contract checklist items.
+
+**New booking pre-population:** when the musician selects an existing series in the booking creation form, the following fields are pre-populated from the earliest member booking in the series (ordered by `createdAt`): venue, booking agent, performance packages, checklist items, and [[MusicFormConfig]] (which for residency bookings is typically absent — the music form feature is rarely relevant for recurring slots). Customer is pre-populated from `series.customerId`. All pre-populated values are editable before saving.
+
+**Invoice section in booking UI:** the Invoice section on any member Booking's detail page shows the series invoice as a variant ("Series Invoice") — creation and edits carry a reminder that changes affect the whole series.
 
 ### Template
 A reusable content block stored as Tiptap JSON. Used for email body rendering and contract display on the [[Portal]]. Custom template creation is deferred to P2; MVP exposes only built-in templates.
@@ -192,12 +215,13 @@ The client-facing [[Portal]] is musician-branded: displays the musician's logo, 
 ### UserProfile
 The private, authenticated-only half of the musician's settings (one per `userId`). Never returned to portal clients. See ADR-0002.
 
-**Business fields (explicit columns):** address, bankDetails (encrypted at rest — see ADR-0003), vatNumber, defaultPaymentTermsDays, invoiceNumberSequence, invoiceSequenceYear, depositPercentage (nullable integer 1–100 — the default deposit % of the booking fee; null means no default set), digestEmailEnabled, songRequestFormEnabled. `depositTrackingMode` has been removed — deposit tracking is now fully handled by the [[BookingChecklistItem]] model. `songRequestFormEnabled` remains a column but is surfaced in **Booking settings → General** (not Notifications).
+**Business fields (explicit columns):** address, bankDetails (encrypted at rest — see ADR-0003), vatNumber, defaultPaymentTermsDays, invoiceNumberSequence, invoiceSequenceYear, depositPercentage (nullable integer 1–100 — the default deposit % of the booking fee; null means no default set), digestEmailEnabled, songRequestFormEnabled, onboardingCompletedAt (nullable timestamp — null until the musician completes or skips all [[OnboardingFlow]] steps; used as the gate for admin access). `depositTrackingMode` has been removed — deposit tracking is now fully handled by the [[BookingChecklistItem]] model. `songRequestFormEnabled` remains a column but is surfaced in **Booking settings → General** (not Notifications).
 
 **`preferences` (JSON column):** all workflow and behaviour preferences, gated by subscription tier at write time. See ADR-0015. Contains:
 - `checklistDefaults` — the musician's default [[BookingChecklistItem]] template; an ordered array of item definitions (key, label, completedBy, dependsOn, autoCompleteRule, requiredForStatus, dueDateRule, enabled). Seeded from system defaults on first access. The system defaults represent the current 12-item workflow. System items carry a `key` and may be disabled (`enabled: false`) — disabled items are not seeded into new bookings, and any `dependsOn` references to missing items are stripped at seeding time. Custom items (no `key`) are always enabled and can be appended.
 - `defaultBookingStatus` — `'ENQUIRY' | 'PROVISIONAL' | 'CONFIRMED'`; the status pre-filled in the new booking form. Default: `'PROVISIONAL'`. A musician who creates bookings only after the contract and deposit are already done outside the app would set this to `'CONFIRMED'` — items for earlier stages are not seeded. Stored in `UserProfile.preferences`; surfaced in **Booking settings → General**.
 - `reminderLeadDays` — global integer; how many days before an item's `dueDate` it starts surfacing in the [[DigestNotification]] and Dashboard Actions widget (e.g. 7 = surface tasks in the 7 days leading up to their due date). Default: 7. Replaces the former flat `*ReminderDays` columns and per-item `reminderDays` field.
+- `invoiceNumberFormat` — controls how invoice numbers are generated: `{ prefix: string (default "INV", may be empty), includeYear: boolean (default true), paddingWidth: 1 | 3 | 4 | 6 (default 3) }`. Parts are joined with `-`; empty prefix is omitted. Examples: default → `INV-2026-001`; prefix "MUSIC", no year, 4 digits → `MUSIC-0001`; no prefix, no year, 3 digits → `001`. Year inclusion and annual reset are coupled: `includeYear: false` makes the sequence continuous (never resets); `includeYear: true` resets the counter each January.
 - Future preference domains (dashboard widget config, feature toggles, etc.) are added as sibling keys.
 
 **Invoice numbering:** format `INV-{year}-{NNN}` (e.g. `INV-2025-001`). `invoiceNumberSequence` is a per-year counter; `invoiceSequenceYear` records the year it was last reset. Both reset each January. Subject to revision.
@@ -422,3 +446,18 @@ A Booking has up to three Contact relations, each a separate FK:
 - **Customer** (required): the direct payer (e.g. a couple getting married). Rarely repeats.
 - **Venue** (optional): the location of the performance. Repeats across bookings; persistent notes (e.g. parking info) live on the Contact record.
 - **Booking agent** (optional): the professional third party who sourced the booking — a formal booking agent, a wedding planner acting in that capacity, or similar. Always someone with a commercial role in originating the booking; casual personal referrals are not recorded here. Repeats across bookings.
+
+### LaunchScreen
+The public-facing entry point at `/`. Shows a hero, a sign-up CTA, and a sign-in link. Not a marketing page — no feature list, pricing, or screenshots. Authenticated users who land on `/` are redirected immediately to `/admin`.
+
+### OnboardingFlow
+A four-step wizard at `/onboarding/*` that every new musician completes before accessing the admin. Steps in order:
+1. **Profile** (required) — `businessName`, `displayName`, `email`, `phone`. Minimum data for templates to render correctly.
+2. **Songs** (skippable) — opt-in song selection from the [[SeedCatalogue]].
+3. **Packages** (skippable) — enable/disable system default [[Package]]s.
+4. **Checklist** (skippable) — enable/disable system default [[BookingChecklistItem]] templates, shown by stage group.
+
+Each step saves immediately on "Next". Skippable steps show "Skip for now — customise in Settings." Completion is recorded by `POST /me/onboarding/complete`, which stamps `UserProfile.onboardingCompletedAt`. The admin route loader gates entry on this field (null → redirect to `/onboarding/profile`). The `/onboarding/*` loader gates the other direction (field set → redirect to `/admin`). See ADR-0027.
+
+### SeedCatalogue
+A static list of songs (derived from the mick-form song list) stored as a TypeScript file in the API. Not a DB table — there is no global song pool. Exposed via `GET /songs/catalogue`; musicians opt in during [[OnboardingFlow]] by selecting songs, which are then created as per-user [[Song]] records via `POST /songs/seed`. The catalogue is grouped by [[Genre]]; selection is two-level (genre toggle selects/deselects all songs in that genre; individual song toggles are independent).
