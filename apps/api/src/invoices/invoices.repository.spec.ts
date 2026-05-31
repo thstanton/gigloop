@@ -2,6 +2,7 @@ import { InvoicesRepository } from './invoices.repository';
 import { PrismaService } from '../prisma/prisma.service';
 
 type MockPrisma = {
+  $transaction: jest.Mock;
   booking: { findFirst: jest.Mock };
   invoice: {
     findMany: jest.Mock;
@@ -9,7 +10,9 @@ type MockPrisma = {
     create: jest.Mock;
     update: jest.Mock;
     delete: jest.Mock;
+    count: jest.Mock;
   };
+  userProfile: { findUnique: jest.Mock; update: jest.Mock };
   invoiceLineItem: {
     findFirst: jest.Mock;
     create: jest.Mock;
@@ -19,7 +22,7 @@ type MockPrisma = {
 };
 
 function makePrisma(): MockPrisma {
-  return {
+  const prisma = {
     booking: { findFirst: jest.fn() },
     invoice: {
       findMany: jest.fn(),
@@ -27,14 +30,20 @@ function makePrisma(): MockPrisma {
       create: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
+      count: jest.fn(),
     },
+    userProfile: { findUnique: jest.fn(), update: jest.fn() },
     invoiceLineItem: {
       findFirst: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
     },
+    $transaction: jest.fn(),
   };
+  // Default: run callback with prisma itself as the tx object
+  prisma.$transaction.mockImplementation((fn: (tx: typeof prisma) => unknown) => fn(prisma));
+  return prisma;
 }
 
 describe('InvoicesRepository', () => {
@@ -189,6 +198,57 @@ describe('InvoicesRepository', () => {
       prisma.invoiceLineItem.delete.mockResolvedValue({ id: 'li1' });
       await repo.deleteLineItem('li1');
       expect(prisma.invoiceLineItem.delete).toHaveBeenCalledWith({ where: { id: 'li1' } });
+    });
+  });
+
+  describe('assignAndMarkSent', () => {
+    const profile = { invoiceNumberSequence: 5, invoiceSequenceYear: 2026 };
+    const issueDate = new Date('2026-06-01');
+    const sentInvoice = { id: 'i1', invoiceNumber: 'INV-2026-006', status: 'SENT' };
+
+    beforeEach(() => {
+      prisma.userProfile.findUnique.mockResolvedValue(profile);
+      prisma.userProfile.update.mockResolvedValue(undefined);
+      prisma.invoice.update.mockResolvedValue(sentInvoice);
+    });
+
+    it('increments sequence and assigns new number when no VOID invoice of same type exists', async () => {
+      prisma.invoice.findFirst.mockResolvedValue(null);
+      await repo.assignAndMarkSent('u1', { id: 'i1', bookingId: 'b1', isDeposit: false, issueDate, dueDate: null });
+      expect(prisma.userProfile.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ invoiceNumberSequence: 6 }) }),
+      );
+      expect(prisma.invoice.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ invoiceNumber: 'INV-2026-006' }) }),
+      );
+    });
+
+    it('reuses VOID invoice number and skips counter increment when slot found', async () => {
+      prisma.invoice.findFirst.mockResolvedValue({ invoiceNumber: 'INV-2026-003' });
+      await repo.assignAndMarkSent('u1', { id: 'i1', bookingId: 'b1', isDeposit: false, issueDate, dueDate: null });
+      expect(prisma.userProfile.update).not.toHaveBeenCalled();
+      expect(prisma.invoice.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ invoiceNumber: 'INV-2026-003' }) }),
+      );
+    });
+
+    it('queries VOID invoice scoped to bookingId, userId, and isDeposit', async () => {
+      prisma.invoice.findFirst.mockResolvedValue(null);
+      await repo.assignAndMarkSent('u1', { id: 'i1', bookingId: 'b1', isDeposit: true, issueDate, dueDate: null });
+      expect(prisma.invoice.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ bookingId: 'b1', userId: 'u1', isDeposit: true, status: 'VOID' }),
+        }),
+      );
+    });
+
+    it('resets sequence to 1 at year boundary', async () => {
+      prisma.invoice.findFirst.mockResolvedValue(null);
+      prisma.userProfile.findUnique.mockResolvedValue({ ...profile, invoiceSequenceYear: 2025 });
+      await repo.assignAndMarkSent('u1', { id: 'i1', bookingId: 'b1', isDeposit: false, issueDate, dueDate: null });
+      expect(prisma.userProfile.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ invoiceNumberSequence: 1 }) }),
+      );
     });
   });
 });
