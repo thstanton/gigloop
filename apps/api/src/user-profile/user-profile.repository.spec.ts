@@ -42,7 +42,7 @@ describe('UserProfileRepository', () => {
   describe('updateByUserId', () => {
     it('encrypts bankDetails before writing to DB', async () => {
       const plaintext = 'sort: 12-34-56, acc: 12345678';
-      prisma.userProfile.upsert.mockImplementation(async ({ update }: any) => ({
+      prisma.userProfile.upsert.mockImplementation(async ({ update }: { update: { bankDetails?: string | null } }) => ({
         userId: 'u1',
         bankDetails: update.bankDetails,
       }));
@@ -56,7 +56,7 @@ describe('UserProfileRepository', () => {
 
     it('returns decrypted bankDetails', async () => {
       const plaintext = 'sort: 12-34-56, acc: 12345678';
-      prisma.userProfile.upsert.mockImplementation(async ({ update }: any) => ({
+      prisma.userProfile.upsert.mockImplementation(async ({ update }: { update: { bankDetails?: string | null } }) => ({
         userId: 'u1',
         bankDetails: update.bankDetails,
       }));

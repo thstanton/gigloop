@@ -1,4 +1,4 @@
-import { UnauthorizedException } from '@nestjs/common';
+import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { AuthGuard } from './auth.guard';
 import { verifyToken } from '@clerk/backend';
@@ -15,7 +15,7 @@ function makeContext(headers: Record<string, string> = {}, isPublic = false) {
     getHandler: jest.fn(),
     getClass: jest.fn(),
     switchToHttp: () => ({ getRequest: () => request }),
-  } as any;
+  } as unknown as ExecutionContext;
   return { guard: new AuthGuard(reflector), context, request };
 }
 

@@ -16,7 +16,6 @@ export class BookingActionsService {
     const trackDeposit = true;
     const bookingDatePassed = bookingDate < today;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const comms: Array<{ status: string; template: { builtInType: string | null } | null }> = booking.communications;
     const invoices: Array<{ isDeposit: boolean; status: string }> = booking.invoices;
     const activeContract: { status: string; signedAt: Date | null } | null = booking.contracts?.[0] ?? null;

@@ -1,6 +1,7 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { PackagesService } from './packages.service';
 import { PackagesRepository } from './packages.repository';
+import { CreatePackageDto } from './dto/create-package.dto';
 
 type MockRepo = {
   countByUserId: jest.Mock;
@@ -75,7 +76,7 @@ describe('PackagesService', () => {
       const dto = { label: 'Custom', icon: 'music', slots: [] };
       repo.create.mockResolvedValue({ ...pkg, ...dto });
 
-      const result = await service.create('u1', dto as any);
+      const result = await service.create('u1', dto as CreatePackageDto);
 
       expect(repo.create).toHaveBeenCalledWith('u1', dto);
       expect(result.label).toBe('Custom');
