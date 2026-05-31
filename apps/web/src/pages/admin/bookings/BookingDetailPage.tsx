@@ -68,6 +68,10 @@ import type {
   UserProfile,
 } from '@/types/api';
 
+function isSeriesConfirmationRequired(r: object): r is Required<UpdateBookingSeriesResponse> {
+  return 'requiresConfirmation' in r;
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const CELEBRATORY_TITLES = [
@@ -220,7 +224,7 @@ export default function BookingDetailPage() {
     mutationFn: (payload: { seriesId: string | null; confirm?: boolean }) =>
       apiPatch<UpdateBookingSeriesResponse | BookingDetail>(`/bookings/${id}/series`, payload),
     onSuccess: (result) => {
-      if ('requiresConfirmation' in result && result.requiresConfirmation && result.warning && selectedSeriesId) {
+      if (isSeriesConfirmationRequired(result) && selectedSeriesId) {
         setSeriesConfirm({ warning: result.warning, seriesId: selectedSeriesId });
         return;
       }
