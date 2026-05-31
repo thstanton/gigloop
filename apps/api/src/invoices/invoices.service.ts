@@ -67,7 +67,7 @@ export class InvoicesService {
     const issueDate = new Date(dto.issueDate);
     const dueDate = dto.dueDate ? new Date(dto.dueDate) : null;
 
-    const sentInvoice = await this.repo.assignAndMarkSent(userId, id, issueDate, dueDate);
+    const sentInvoice = await this.repo.assignAndMarkSent(userId, { id, bookingId, isDeposit: invoice.isDeposit, issueDate, dueDate });
 
     const { buffer: pdfBuffer } = await this.documents.generateAndStoreInvoicePdf(userId, bookingId, sentInvoice.id, sentInvoice);
 
@@ -99,7 +99,7 @@ export class InvoicesService {
     const issueDate = new Date(dto.issueDate);
     const dueDate = dto.dueDate ? new Date(dto.dueDate) : null;
 
-    return this.repo.assignAndMarkSent(userId, id, issueDate, dueDate);
+    return this.repo.assignAndMarkSent(userId, { id, bookingId, isDeposit: invoice.isDeposit, issueDate, dueDate });
   }
 
   async markPaid(userId: string, bookingId: string, id: string) {

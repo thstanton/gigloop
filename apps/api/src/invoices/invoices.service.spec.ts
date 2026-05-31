@@ -50,7 +50,7 @@ const mockComms = { sendEmail: jest.fn() } as unknown as CommunicationsService;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockDocuments = { generateAndStoreInvoicePdf: jest.fn(), generatePreviewPdf: jest.fn() } as any;
 
-const invoice = { id: 'i1', bookingId: 'b1', userId: 'u1', status: 'DRAFT' };
+const invoice = { id: 'i1', bookingId: 'b1', userId: 'u1', status: 'DRAFT', isDeposit: false };
 const lineItem = { id: 'li1', invoiceId: 'i1', userId: 'u1' };
 
 describe('InvoicesService', () => {
@@ -273,14 +273,22 @@ describe('InvoicesService', () => {
       expect(repo.assignAndMarkSent).not.toHaveBeenCalled();
     });
 
-    it('calls assignAndMarkSent with parsed issueDate and dueDate', async () => {
+    it('calls assignAndMarkSent with bookingId, isDeposit, parsed issueDate and dueDate', async () => {
       await service.send('u1', 'b1', 'i1', dto);
-      expect(repo.assignAndMarkSent).toHaveBeenCalledWith('u1', 'i1', new Date('2026-05-26'), new Date('2026-06-09'));
+      expect(repo.assignAndMarkSent).toHaveBeenCalledWith('u1', {
+        id: 'i1', bookingId: 'b1', isDeposit: false, issueDate: new Date('2026-05-26'), dueDate: new Date('2026-06-09'),
+      });
     });
 
     it('calls assignAndMarkSent with null dueDate when not provided', async () => {
       await service.send('u1', 'b1', 'i1', { ...dto, dueDate: undefined });
-      expect(repo.assignAndMarkSent).toHaveBeenCalledWith('u1', 'i1', new Date('2026-05-26'), null);
+      expect(repo.assignAndMarkSent).toHaveBeenCalledWith('u1', expect.objectContaining({ dueDate: null }));
+    });
+
+    it('passes isDeposit: true to assignAndMarkSent for deposit invoices', async () => {
+      repo.findOne.mockResolvedValue({ ...invoice, isDeposit: true });
+      await service.send('u1', 'b1', 'i1', dto);
+      expect(repo.assignAndMarkSent).toHaveBeenCalledWith('u1', expect.objectContaining({ isDeposit: true }));
     });
 
     it('calls generateAndStoreInvoicePdf with the sentInvoice to avoid a redundant DB fetch', async () => {
@@ -319,14 +327,16 @@ describe('InvoicesService', () => {
       expect(repo.assignAndMarkSent).not.toHaveBeenCalled();
     });
 
-    it('calls assignAndMarkSent with parsed issueDate and dueDate', async () => {
+    it('calls assignAndMarkSent with bookingId, isDeposit, parsed issueDate and dueDate', async () => {
       await service.markSent('u1', 'b1', 'i1', dto);
-      expect(repo.assignAndMarkSent).toHaveBeenCalledWith('u1', 'i1', new Date('2026-05-26'), new Date('2026-06-09'));
+      expect(repo.assignAndMarkSent).toHaveBeenCalledWith('u1', {
+        id: 'i1', bookingId: 'b1', isDeposit: false, issueDate: new Date('2026-05-26'), dueDate: new Date('2026-06-09'),
+      });
     });
 
     it('calls assignAndMarkSent with null dueDate when not provided', async () => {
       await service.markSent('u1', 'b1', 'i1', { issueDate: '2026-05-26' });
-      expect(repo.assignAndMarkSent).toHaveBeenCalledWith('u1', 'i1', new Date('2026-05-26'), null);
+      expect(repo.assignAndMarkSent).toHaveBeenCalledWith('u1', expect.objectContaining({ dueDate: null }));
     });
 
     it('returns the updated invoice', async () => {
