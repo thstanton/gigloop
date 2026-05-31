@@ -236,19 +236,20 @@ export default function BookingDetailPage() {
   const backState = { from: `/admin/bookings/${id}`, label: title };
 
   function handleVoidContract(confirmSignedVoid: boolean) {
-    const contractId = booking.activeContract?.id;
+    const contractId = booking?.activeContract?.id;
     if (contractId) voidContract({ contractId, confirmSignedVoid });
   }
 
   function handleDeleteContract() {
-    const contractId = booking.activeContract?.id;
+    const contractId = booking?.activeContract?.id;
     if (contractId) deleteContract(contractId);
   }
 
-  function handleAfterSend(templateType: string) {
+  function handleAfterSend(templateType: string | null) {
+    if (!templateType) return;
     const isContractEmail = templateType === 'contract_cover' || templateType === 'contract_and_deposit_cover';
-    const contractId = booking.activeContract?.id;
-    if (isContractEmail && contractId && booking.activeContract?.status === 'DRAFT') {
+    const contractId = booking?.activeContract?.id;
+    if (isContractEmail && contractId && booking?.activeContract?.status === 'DRAFT') {
       sendContract(contractId);
     }
   }
