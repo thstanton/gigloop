@@ -37,7 +37,7 @@ export const ConfirmedWithContract: Story = {
   parameters: { msw: { handlers: makeBookingDetailHandlers('ConfirmedWithContract') } },
   play: async ({ canvas }) => {
     await expect(await canvas.findByText("Sophie's Wedding")).toBeVisible();
-    await expect(canvas.getByText('Confirmed')).toBeVisible();
+    await expect(canvas.getAllByText('Confirmed')[0]).toBeVisible();
   },
 };
 
