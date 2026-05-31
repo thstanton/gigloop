@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@clerk/react';
 import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, Check, X, FolderOpen, FileText, Download } from 'lucide-react';
+import { ChevronLeft, Check, X, FolderOpen, FileText, Download, MapPin } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import {
@@ -44,6 +44,7 @@ import { EVENT_TYPE_LABELS, STATUS_ORDER } from '@/lib/constants';
 import { Card } from '@/components/common/Card';
 import { SectionHeader } from '@/components/common/SectionHeader';
 import { IconButton } from '@/components/common/IconButton';
+import { EmptyState } from '@/components/common/EmptyState';
 import type {
   BookingDetail,
   BookingStatus,
@@ -95,13 +96,20 @@ function InlineVenueAdd({ bookingId }: { bookingId: string }) {
 
   if (!editing) {
     return (
-      <button
-        type="button"
-        onClick={() => setEditing(true)}
-        className="text-sm text-primary hover:underline"
-      >
-        + Add venue
-      </button>
+      <EmptyState
+        icon={<MapPin size={32} />}
+        heading="No venue"
+        description="Link a venue contact to this booking."
+        action={
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="text-sm text-primary hover:underline"
+          >
+            + Add venue
+          </button>
+        }
+      />
     );
   }
 
