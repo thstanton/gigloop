@@ -102,6 +102,16 @@ export interface UpdateContactInput {
 }
 
 // ─────────────────────────────────────────
+// Bookings
+// ─────────────────────────────────────────
+
+export interface ContactSummary {
+  id: string;
+  name: string;
+  email?: string | null;
+}
+
+// ─────────────────────────────────────────
 // Series
 // ─────────────────────────────────────────
 
@@ -114,16 +124,6 @@ export interface BookingSeries {
   customer: ContactSummary;
   memberBookingCount?: number;
   invoiceStatus?: string | null;
-}
-
-// ─────────────────────────────────────────
-// Bookings
-// ─────────────────────────────────────────
-
-export interface ContactSummary {
-  id: string;
-  name: string;
-  email?: string | null;
 }
 
 export interface PerformanceSet {
