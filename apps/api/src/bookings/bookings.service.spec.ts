@@ -2,6 +2,7 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { BookingStatus } from '@prisma/client';
 import { BookingsService } from './bookings.service';
 import { BookingsRepository } from './bookings.repository';
+import { BookingActionsService } from './bookings-actions.service';
 import { MailService } from '../mail/mail.service';
 import { ChecklistEvaluatorService } from '../checklist/checklist-evaluator.service';
 import type { EmailContext } from '../mail/mail.service';
@@ -39,6 +40,7 @@ type MockRepo = {
 
 type MockMail = { buildContext: jest.Mock };
 type MockEvaluator = { evaluate: jest.Mock };
+type MockActions = { computeActionItem: jest.Mock };
 
 function makeRepo(): MockRepo {
   return {
@@ -81,6 +83,10 @@ function makeEvaluator(): MockEvaluator {
   return { evaluate: jest.fn().mockResolvedValue(undefined) };
 }
 
+function makeActions(): MockActions {
+  return { computeActionItem: jest.fn().mockReturnValue(null) };
+}
+
 const booking = { id: 'b1', userId: 'u1', status: BookingStatus.CONFIRMED };
 const set = { id: 's1', bookingId: 'b1', userId: 'u1' };
 
@@ -104,15 +110,18 @@ describe('BookingsService', () => {
   let repo: MockRepo;
   let mail: MockMail;
   let evaluator: MockEvaluator;
+  let actions: MockActions;
 
   beforeEach(() => {
     repo = makeRepo();
     mail = makeMail();
     evaluator = makeEvaluator();
+    actions = makeActions();
     service = new BookingsService(
       repo as unknown as BookingsRepository,
       mail as unknown as MailService,
       evaluator as unknown as ChecklistEvaluatorService,
+      actions as unknown as BookingActionsService,
     );
   });
 
