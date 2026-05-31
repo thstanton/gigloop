@@ -41,7 +41,7 @@ type MockRepo = {
   updateSeries: jest.Mock;
 };
 
-type MockSeriesRepo = { findOne: jest.Mock; create: jest.Mock };
+type MockSeriesRepo = { findOne: jest.Mock; findOneLight: jest.Mock; create: jest.Mock };
 type MockMail = { buildContext: jest.Mock };
 type MockEvaluator = { evaluate: jest.Mock };
 type MockActions = { computeActionItem: jest.Mock };
@@ -90,7 +90,7 @@ function makeEvaluator(): MockEvaluator {
 }
 
 function makeSeriesRepo(): MockSeriesRepo {
-  return { findOne: jest.fn(), create: jest.fn() };
+  return { findOne: jest.fn(), findOneLight: jest.fn(), create: jest.fn() };
 }
 
 function makeActions(): MockActions {
@@ -690,7 +690,7 @@ describe('BookingsService', () => {
 
     it('assigns booking to series when customers match', async () => {
       repo.findOne.mockResolvedValue(bookingWithCustomer);
-      seriesRepo.findOne.mockResolvedValue(series);
+      seriesRepo.findOneLight.mockResolvedValue(series);
       (repo.countNonVoidInvoices as jest.Mock).mockResolvedValue(0);
       (repo.updateSeries as jest.Mock).mockResolvedValue({ ...bookingWithCustomer, seriesId: 's1' });
 
@@ -700,7 +700,7 @@ describe('BookingsService', () => {
 
     it('throws ConflictException when booking has non-VOID invoices', async () => {
       repo.findOne.mockResolvedValue(bookingWithCustomer);
-      seriesRepo.findOne.mockResolvedValue(series);
+      seriesRepo.findOneLight.mockResolvedValue(series);
       (repo.countNonVoidInvoices as jest.Mock).mockResolvedValue(2);
 
       await expect(service.updateSeries('u1', 'b1', 's1')).rejects.toThrow(ConflictException);
@@ -709,7 +709,7 @@ describe('BookingsService', () => {
 
     it('returns requiresConfirmation when customers differ without confirm flag', async () => {
       repo.findOne.mockResolvedValue(bookingDifferentCustomer);
-      seriesRepo.findOne.mockResolvedValue(series);
+      seriesRepo.findOneLight.mockResolvedValue(series);
       (repo.countNonVoidInvoices as jest.Mock).mockResolvedValue(0);
 
       const result = await service.updateSeries('u1', 'b1', 's1');
@@ -719,7 +719,7 @@ describe('BookingsService', () => {
 
     it('assigns when customers differ but confirm is true', async () => {
       repo.findOne.mockResolvedValue(bookingDifferentCustomer);
-      seriesRepo.findOne.mockResolvedValue(series);
+      seriesRepo.findOneLight.mockResolvedValue(series);
       (repo.countNonVoidInvoices as jest.Mock).mockResolvedValue(0);
       (repo.updateSeries as jest.Mock).mockResolvedValue({ ...bookingDifferentCustomer, seriesId: 's1' });
 
@@ -738,7 +738,7 @@ describe('BookingsService', () => {
 
     it('throws NotFoundException when series not found', async () => {
       repo.findOne.mockResolvedValue(bookingWithCustomer);
-      seriesRepo.findOne.mockResolvedValue(null);
+      seriesRepo.findOneLight.mockResolvedValue(null);
 
       await expect(service.updateSeries('u1', 'b1', 's1')).rejects.toThrow(NotFoundException);
     });

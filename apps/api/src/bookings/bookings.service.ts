@@ -324,7 +324,7 @@ export class BookingsService {
     const booking = await this.findOne(userId, bookingId);
 
     if (seriesId !== null) {
-      const series = await this.seriesRepo.findOne(userId, seriesId);
+      const series = await this.seriesRepo.findOneLight(userId, seriesId);
       if (!series) throw new NotFoundException('Series not found');
 
       const nonVoidCount = await this.repo.countNonVoidInvoices(bookingId);
@@ -335,11 +335,9 @@ export class BookingsService {
       }
 
       if (booking.customerId !== series.customerId && !confirm) {
-        const customer = booking.customer as { name: string };
-        const seriesCustomer = series.customer as { name: string };
         return {
           requiresConfirmation: true,
-          warning: `This booking's customer (${customer.name}) differs from the series billing customer (${seriesCustomer.name}). The series invoice will be addressed to ${seriesCustomer.name}. Resend with confirm: true to proceed.`,
+          warning: `This booking's customer (${booking.customer.name}) differs from the series billing customer (${series.customer.name}). The series invoice will be addressed to ${series.customer.name}. Resend with confirm: true to proceed.`,
         };
       }
     }

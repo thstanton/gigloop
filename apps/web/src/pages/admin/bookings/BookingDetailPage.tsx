@@ -220,9 +220,8 @@ export default function BookingDetailPage() {
     mutationFn: (payload: { seriesId: string | null; confirm?: boolean }) =>
       apiPatch<UpdateBookingSeriesResponse | BookingDetail>(`/bookings/${id}/series`, payload),
     onSuccess: (result) => {
-      const res = result as UpdateBookingSeriesResponse;
-      if (res.requiresConfirmation && res.warning && selectedSeriesId) {
-        setSeriesConfirm({ warning: res.warning, seriesId: selectedSeriesId });
+      if ('requiresConfirmation' in result && result.requiresConfirmation && result.warning && selectedSeriesId) {
+        setSeriesConfirm({ warning: result.warning, seriesId: selectedSeriesId });
         return;
       }
       setSeriesSheetOpen(false);
@@ -862,12 +861,12 @@ export default function BookingDetailPage() {
                 <SelectValue placeholder="Select series..." />
               </SelectTrigger>
               <SelectContent>
-                {(seriesList ?? []).map((s) => (
-                  <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
-                ))}
-                {(!seriesList || seriesList.length === 0) && (
-                  <SelectItem value="" disabled>No series available</SelectItem>
-                )}
+                {seriesList?.length
+                  ? seriesList.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
+                    ))
+                  : <SelectItem value="" disabled>No series available</SelectItem>
+                }
               </SelectContent>
             </Select>
             <div className="flex gap-3">
