@@ -55,15 +55,22 @@ PDF generation runs in the API process using `@react-pdf/renderer` and the resul
 
 These rules apply every session — not just when things look complex.
 
-**Pre-flight:** Before modifying any existing file, run `bun run lint` on it and report any existing violations. If the file already has complexity errors, propose refactoring it first before adding new code.
+**Pre-flight:** Before modifying any existing file:
+1. Run `bun run lint` on it and report any existing violations
+2. Run CodeScene `code_health_review` on it and report any health issues
 
-**Pre-commit:** Run `bun run lint && bun run build` in both `apps/api` and `apps/web` before every commit. Never commit if either fails.
+If the file has complexity errors or Code Health problems, propose refactoring it first before adding new code.
+
+**Pre-commit:** Before every commit:
+1. Run `bun run lint && bun run build` in both `apps/api` and `apps/web` — never commit if either fails
+2. Run CodeScene `pre_commit_code_health_safeguard` — if it reports a regression, refactor before committing
 
 **Pre-PR (mandatory — in this order):**
 1. `bun run lint && bun run build` in both workspaces — must pass clean
-2. Run `/simplify` on every file substantially changed in the session
-3. Confirm every new page or component file has a `.stories.tsx` in the same branch
-4. Open PR with `gh pr create`
+2. Run CodeScene `analyze_change_set` — if it reports a regression, refactor before opening PR
+3. Run `/simplify` on every file substantially changed in the session
+4. Confirm every new page or component file has a `.stories.tsx` in the same branch
+5. Open PR with `gh pr create`
 
 **Line count proxy:** Files over ~300 lines are a yellow flag. Check lint complexity before extending them further.
 
@@ -264,3 +271,20 @@ Default label vocabulary (needs-triage, needs-info, ready-for-agent, ready-for-h
 ### Domain docs
 
 Single-context repo — one `CONTEXT.md` + `docs/adr/` at the root. See `docs/agents/domain.md`.
+
+### CodeScene
+
+CodeScene MCP Server is active (default project: gigman). Target Code Health: 10.0.
+
+**Mandatory safeguards (every session):**
+- `pre_commit_code_health_safeguard` — before every commit (staged files gate)
+- `analyze_change_set` — before every PR (branch-level gate)
+- If either reports a regression: run `code_health_review` on flagged files, refactor, re-check. Do not declare work done with a failing safeguard.
+
+**File inspection:**
+- `code_health_review` — detailed review of a file; use during pre-flight on any file flagged as a hotspot
+- `/codescene:guiding-refactoring-with-code-health` — step-by-step refactoring workflow using Code Health findings
+
+**Prioritization:**
+- `/codescene:prioritizing-technical-debt` — use when choosing what to refactor next
+- `list_technical_debt_hotspots_for_project` — ranked list of highest-risk files
