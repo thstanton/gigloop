@@ -112,16 +112,13 @@ export default function OnboardingSongsPage() {
         >
           {isPending ? 'Saving…' : 'Next'}
         </button>
-        <div className="flex flex-col gap-1">
-          <button
-            type="button"
-            onClick={() => navigate('/onboarding/packages')}
-            className="rounded-lg border border-border text-foreground text-base font-medium px-6 py-2.5 transition-colors hover:bg-muted/30"
-          >
-            Skip for now
-          </button>
-          <p className="text-sm text-muted">You can customise this in Settings.</p>
-        </div>
+        <button
+          type="button"
+          onClick={() => navigate('/onboarding/packages')}
+          className="rounded-lg text-foreground text-base font-medium px-6 py-2.5 transition-colors hover:bg-muted/30"
+        >
+          Skip for now
+        </button>
       </div>
 
       <button

@@ -117,17 +117,14 @@ export default function OnboardingChecklistPage() {
         >
           {isPending ? 'Finishing…' : 'Finish'}
         </button>
-        <div className="flex flex-col gap-1">
-          <button
-            type="button"
-            onClick={() => finish(true)}
-            disabled={isPending}
-            className="rounded-lg border border-border text-foreground text-base font-medium px-6 py-2.5 transition-colors hover:bg-muted/30 disabled:opacity-40"
-          >
-            Skip for now
-          </button>
-          <p className="text-sm text-muted">You can customise this in Settings.</p>
-        </div>
+        <button
+          type="button"
+          onClick={() => finish(true)}
+          disabled={isPending}
+          className="rounded-lg text-foreground text-base font-medium px-6 py-2.5 transition-colors hover:bg-muted/30 disabled:opacity-40"
+        >
+          Skip for now
+        </button>
       </div>
 
       <button
