@@ -2,20 +2,13 @@ import { useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, useEffect } from 'react';
 import { apiPatch, apiPost } from '@/lib/api';
+import { CHECKLIST_STAGE_ORDER, BOOKING_STATUS_LABELS } from '@/lib/constants';
 import { useMe } from '@/lib/hooks/useMe';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { PageHeader } from '@/components/common/PageHeader';
 import { PageSection } from '@/components/common/PageSection';
-import type { ChecklistDefaultItem } from '@/types/api';
-
-const STAGE_ORDER = ['PROVISIONAL', 'CONFIRMED', 'READY', 'COMPLETE'] as const;
-const STAGE_LABELS: Record<string, string> = {
-  PROVISIONAL: 'Provisional',
-  CONFIRMED: 'Confirmed',
-  READY: 'Ready',
-  COMPLETE: 'Complete',
-};
+import type { ChecklistDefaultItem, BookingStatus } from '@/types/api';
 
 export default function OnboardingChecklistPage() {
   const navigate = useNavigate();
@@ -57,10 +50,11 @@ export default function OnboardingChecklistPage() {
     },
   });
 
-  const grouped = STAGE_ORDER.reduce<Record<string, ChecklistDefaultItem[]>>((acc, stage) => {
+  const stages = CHECKLIST_STAGE_ORDER.filter((s): s is BookingStatus => !!s && s !== 'ENQUIRY' && s !== 'CANCELLED');
+  const grouped = stages.reduce<Record<string, ChecklistDefaultItem[]>>((acc, stage) => {
     acc[stage] = defaults.filter((d) => d.requiredForStatus === stage);
     return acc;
-  }, {} as Record<string, ChecklistDefaultItem[]>);
+  }, {});
 
   return (
     <div className="flex flex-col gap-6">
@@ -78,12 +72,12 @@ export default function OnboardingChecklistPage() {
         </div>
       ) : (
         <div className="flex flex-col gap-6">
-          {STAGE_ORDER.map((stage) => {
+          {stages.map((stage) => {
             const items = grouped[stage] ?? [];
             if (items.length === 0) return null;
             return (
               <div key={stage}>
-                <PageSection title={STAGE_LABELS[stage]} className="mb-2" />
+                <PageSection title={BOOKING_STATUS_LABELS[stage]} className="mb-2" />
                 <div className="rounded-lg border border-border divide-y divide-border">
                   {items.map((item) => {
                     const key = item.key ?? item.label;

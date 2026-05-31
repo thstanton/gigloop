@@ -10,7 +10,7 @@ import {
 import { apiGet, apiPatch } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { CATEGORY_LABELS } from '@/pages/admin/PackagesPage';
+import { PACKAGE_CATEGORY_LABELS } from '@/lib/constants';
 import { PageHeader } from '@/components/common/PageHeader';
 import { PageSection } from '@/components/common/PageSection';
 import type { Package } from '@/types/api';
@@ -94,7 +94,7 @@ export default function OnboardingPackagesPage() {
         <div className="flex flex-col gap-6">
           {Object.entries(grouped).map(([category, pkgs]) => (
             <div key={category}>
-              <PageSection title={CATEGORY_LABELS[category] ?? category} className="mb-2" />
+              <PageSection title={PACKAGE_CATEGORY_LABELS[category] ?? category} className="mb-2" />
               <div className="rounded-lg border border-border divide-y divide-border">
                 {pkgs.map((pkg) => {
                   const checked = overrides.get(pkg.id) ?? pkg.enabled;
