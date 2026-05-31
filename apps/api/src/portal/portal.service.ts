@@ -314,7 +314,7 @@ export class PortalService {
   }
 
   private groupSongsForEmail(
-    specialRequests: Array<{ key: string; section: string; song?: { title: string; artist?: string | null } | undefined; freeText?: string }>,
+    specialRequests: Array<{ key: string; section: string; song?: { title: string; artist?: string | null }; freeText?: string }>,
     selectedSongs: Array<{ title: string; artist?: string | null; genre: string }>,
   ) {
     const bySection = new Map<string, typeof specialRequests>();
