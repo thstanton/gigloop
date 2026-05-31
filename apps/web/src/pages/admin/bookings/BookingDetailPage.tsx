@@ -63,8 +63,8 @@ import type {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function buildSetsDescription(booking: BookingDetail): string {
-  if (!booking.sets?.length) return '';
+function buildSetsDescription(booking: BookingDetail | undefined): string {
+  if (!booking?.sets?.length) return '';
   const formatById = new Map(
     (booking.packages ?? []).map((f) => [f.packageId, f.package.label]),
   );
