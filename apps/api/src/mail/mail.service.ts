@@ -31,12 +31,45 @@ export interface MailTransportOptions {
   attachments?: Array<{ filename: string; content: Buffer }>;
 }
 
+type SetRow = { startTime: string | null; label: string | null; duration: number };
+
+function buildSetsSchedule(sets: SetRow[]): string {
+  if (sets.length === 0) return '';
+  return sets
+    .map((s) => {
+      const time = s.startTime ? `${s.startTime} — ` : '';
+      return `${time}${s.label ?? 'Set'} (${s.duration} min)`;
+    })
+    .join('\n');
+}
+
 @Injectable()
 export class MailService {
   private resend: Resend;
 
   constructor(private prisma: PrismaService) {
     this.resend = new Resend(process.env.RESEND_API_KEY);
+  }
+
+  private async buildInvoiceContext(
+    invoiceId: string,
+    bookingId: string,
+    userId: string,
+    issueDateOverride?: string,
+    dueDateOverride?: string,
+  ): Promise<{ issueDate: string; invoiceTotal: string; invoiceDueDate: string }> {
+    const invoice = await this.prisma.invoice.findFirst({
+      where: { id: invoiceId, bookingId, userId },
+      include: { lineItems: true },
+    });
+    if (!invoice) return { issueDate: '', invoiceTotal: '', invoiceDueDate: '' };
+
+    const total = invoice.lineItems.reduce((sum, item) => sum + Number(item.amount), 0);
+    return {
+      issueDate: issueDateOverride ?? (invoice.issueDate ? invoice.issueDate.toISOString().split('T')[0] : ''),
+      invoiceTotal: `£${total.toFixed(2)}`,
+      invoiceDueDate: dueDateOverride ?? (invoice.dueDate ? invoice.dueDate.toISOString().split('T')[0] : ''),
+    };
   }
 
   async buildContext(
@@ -56,45 +89,13 @@ export class MailService {
     });
     if (!booking) throw new NotFoundException('Booking not found');
 
-    const publicProfile = await this.prisma.publicProfile.findUnique({
-      where: { userId },
-    });
+    const publicProfile = await this.prisma.publicProfile.findUnique({ where: { userId } });
     if (!publicProfile)
-      throw new NotFoundException(
-        'Public profile not found — complete your profile before sending emails',
-      );
+      throw new NotFoundException('Public profile not found — complete your profile before sending emails');
 
-    let issueDate = '';
-    let invoiceTotal = '';
-    let invoiceDueDate = '';
-
-    if (invoiceId) {
-      const invoice = await this.prisma.invoice.findFirst({
-        where: { id: invoiceId, bookingId, userId },
-        include: { lineItems: true },
-      });
-      if (invoice) {
-        const total = invoice.lineItems.reduce(
-          (sum, item) => sum + Number(item.amount),
-          0,
-        );
-        issueDate = issueDateOverride
-          ?? (invoice.issueDate ? invoice.issueDate.toISOString().split('T')[0] : '');
-        invoiceTotal = `£${total.toFixed(2)}`;
-        invoiceDueDate = dueDateOverride
-          ?? (invoice.dueDate ? invoice.dueDate.toISOString().split('T')[0] : '');
-      }
-    }
-
-    const setsSchedule =
-      booking.sets.length === 0
-        ? ''
-        : booking.sets
-            .map((s) => {
-              const time = s.startTime ? `${s.startTime} — ` : '';
-              return `${time}${s.label ?? 'Set'} (${s.duration} min)`;
-            })
-            .join('\n');
+    const invoiceContext = invoiceId
+      ? await this.buildInvoiceContext(invoiceId, bookingId, userId, issueDateOverride, dueDateOverride)
+      : { issueDate: '', invoiceTotal: '', invoiceDueDate: '' };
 
     return {
       customerName: booking.customer.name,
@@ -102,13 +103,11 @@ export class MailService {
       bookingDate: booking.date ? booking.date.toISOString().split('T')[0] : '',
       venueName: booking.venue?.name ?? '',
       bookingFee: booking.fee != null ? `£${Number(booking.fee).toFixed(2)}` : '',
-      setsSchedule,
+      setsSchedule: buildSetsSchedule(booking.sets),
       musicianName: publicProfile.displayName ?? publicProfile.businessName ?? '',
       musicianEmail: publicProfile.email ?? '',
       portalLink: `${process.env.APP_BASE_URL}/booking/${booking.portalToken}`,
-      issueDate,
-      invoiceTotal,
-      invoiceDueDate,
+      ...invoiceContext,
     };
   }
 
