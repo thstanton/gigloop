@@ -45,19 +45,21 @@ export class SongsRepository {
   }
 
   async seedSongs(userId: string, entries: CatalogueEntry[]) {
+    if (entries.length === 0) return [];
+
     const existing = await this.prisma.song.findMany({
-      where: { userId },
+      where: { userId, title: { in: entries.map((e) => e.title) } },
       select: { title: true, artist: true },
     });
-    const existingKeys = new Set(existing.map((s) => `${s.title}|||${s.artist ?? ''}`));
+    const existingKeys = new Set(existing.map((s) => JSON.stringify([s.title, s.artist ?? ''])));
 
     const toCreate = entries.filter(
-      (e) => !existingKeys.has(`${e.title}|||${e.artist ?? ''}`),
+      (e) => !existingKeys.has(JSON.stringify([e.title, e.artist ?? ''])),
     );
 
     if (toCreate.length === 0) return [];
 
-    await this.prisma.song.createMany({
+    return this.prisma.song.createManyAndReturn({
       data: toCreate.map((e) => ({
         userId,
         title: e.title,
@@ -66,14 +68,6 @@ export class SongsRepository {
         active: true,
         tags: [],
       })),
-    });
-
-    return this.prisma.song.findMany({
-      where: {
-        userId,
-        title: { in: toCreate.map((e) => e.title) },
-      },
-      orderBy: [{ artist: 'asc' }, { title: 'asc' }],
     });
   }
 }

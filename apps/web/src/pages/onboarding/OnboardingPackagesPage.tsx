@@ -20,10 +20,9 @@ export default function OnboardingPackagesPage() {
 
   useEffect(() => {
     if (packages.length > 0) {
-      const initial = new Map(packages.map((p) => [p.id, p.enabled]));
-      setOverrides(initial);
+      setOverrides(new Map(packages.map((p) => [p.id, p.enabled])));
     }
-  }, [packages]);
+  }, [packages.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const { mutate: saveChanges, isPending } = useMutation({
     mutationFn: async () => {

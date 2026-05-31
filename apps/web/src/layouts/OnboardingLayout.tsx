@@ -1,11 +1,9 @@
 import { useEffect } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@clerk/react';
-import { useQuery } from '@tanstack/react-query';
-import { apiGet } from '@/lib/api';
+import { useMe } from '@/lib/hooks/useMe';
 import { Music2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { UserProfile } from '@/types/api';
 
 const STEPS = [
   { label: 'Profile', path: '/onboarding/profile' },
@@ -14,10 +12,12 @@ const STEPS = [
   { label: 'Checklist', path: '/onboarding/checklist' },
 ];
 
+const BASE_STEP_CIRCLE = 'w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold transition-colors';
+
 function stepCircleClass(isActive: boolean, isDone: boolean): string {
-  if (isActive) return 'w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold transition-colors bg-primary text-primary-foreground';
-  if (isDone) return 'w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold transition-colors bg-primary/20 text-primary';
-  return 'w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold transition-colors bg-muted text-muted-foreground';
+  if (isActive) return cn(BASE_STEP_CIRCLE, 'bg-primary text-primary-foreground');
+  if (isDone) return cn(BASE_STEP_CIRCLE, 'bg-primary/20 text-primary');
+  return cn(BASE_STEP_CIRCLE, 'bg-muted text-muted-foreground');
 }
 
 function ProgressIndicator({ currentPath }: { currentPath: string }) {
@@ -53,11 +53,7 @@ export default function OnboardingLayout() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const { data: profile, isLoading: profileLoading } = useQuery({
-    queryKey: ['me'],
-    queryFn: () => apiGet<UserProfile>('/me'),
-    enabled: isLoaded && !!isSignedIn,
-  });
+  const { data: profile, isLoading: profileLoading } = useMe();
 
   useEffect(() => {
     if (isLoaded && !isSignedIn) navigate('/sign-in', { replace: true });
