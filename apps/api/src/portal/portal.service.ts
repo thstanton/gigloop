@@ -89,9 +89,11 @@ export class PortalService {
         } else if (doc.type === 'SONG_LIST') {
           label = 'Song list';
         } else if (doc.invoice?.isDeposit) {
-          label = `Deposit invoice${doc.invoice.invoiceNumber ? ` ${doc.invoice.invoiceNumber}` : ''}`;
+          const num = doc.invoice.invoiceNumber ? ` ${doc.invoice.invoiceNumber}` : '';
+          label = `Deposit invoice${num}`;
         } else {
-          label = `Invoice${doc.invoice?.invoiceNumber ? ` ${doc.invoice.invoiceNumber}` : ''}`;
+          const num = doc.invoice?.invoiceNumber ? ` ${doc.invoice.invoiceNumber}` : '';
+          label = `Invoice${num}`;
         }
         return {
           id: doc.id,
@@ -332,6 +334,37 @@ export class PortalService {
     return { bySection, byGenre };
   }
 
+  private buildKeyMomentsText(
+    bySection: Map<string, Array<{ key: string; song?: { title: string; artist?: string | null }; freeText?: string }>>,
+  ): string {
+    if (bySection.size === 0) return '';
+    let text = 'KEY MOMENTS\n';
+    for (const [section, reqs] of bySection.entries()) {
+      text += `\n${section}\n`;
+      for (const req of reqs) {
+        const artist = req.song?.artist ? ` — ${req.song.artist}` : '';
+        const song = req.song ? `${req.song.title}${artist}` : (req.freeText ?? '(no selection)');
+        text += `  ${req.key}: ${song}\n`;
+      }
+    }
+    return text + '\n';
+  }
+
+  private buildGeneralRequestsText(
+    byGenre: Map<string, Array<{ title: string; artist?: string | null }>>,
+  ): string {
+    if (byGenre.size === 0) return '';
+    let text = 'GENERAL REQUESTS\n';
+    for (const [genre, songs] of byGenre.entries()) {
+      text += `\n${genre}\n`;
+      for (const song of songs) {
+        const artist = song.artist ? ` — ${song.artist}` : '';
+        text += `  ${song.title}${artist}\n`;
+      }
+    }
+    return text + '\n';
+  }
+
   private buildSongListEmailBody(
     grouped: ReturnType<PortalService['groupSongsForEmail']>,
     notes: string | null,
@@ -341,35 +374,10 @@ export class PortalService {
   ): string {
     const adminUrl = `${process.env.APP_BASE_URL}/admin/bookings/${bookingId}`;
     let body = `${customerName} has submitted their song requests for ${bookingTitle}.\n\n`;
-
-    if (grouped.bySection.size > 0) {
-      body += 'KEY MOMENTS\n';
-      for (const [section, reqs] of grouped.bySection.entries()) {
-        body += `\n${section}\n`;
-        for (const req of reqs) {
-          const song = req.song
-            ? `${req.song.title}${req.song.artist ? ` — ${req.song.artist}` : ''}`
-            : req.freeText ?? '(no selection)';
-          body += `  ${req.key}: ${song}\n`;
-        }
-      }
-      body += '\n';
-    }
-
-    if (grouped.byGenre.size > 0) {
-      body += 'GENERAL REQUESTS\n';
-      for (const [genre, songs] of grouped.byGenre.entries()) {
-        body += `\n${genre}\n`;
-        for (const song of songs) {
-          body += `  ${song.title}${song.artist ? ` — ${song.artist}` : ''}\n`;
-        }
-      }
-      body += '\n';
-    }
-
+    body += this.buildKeyMomentsText(grouped.bySection);
+    body += this.buildGeneralRequestsText(grouped.byGenre);
     if (notes) body += `NOTES\n${notes}\n\n`;
     body += `View booking: ${adminUrl}`;
-
     return body;
   }
 
