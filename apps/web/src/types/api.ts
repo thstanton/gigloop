@@ -270,6 +270,16 @@ export interface UpdateBookingInput {
   bookingAgentId?: string | null;
 }
 
+export interface UpdateBookingSeriesInput {
+  seriesId: string | null;
+  confirm?: boolean;
+}
+
+export interface UpdateBookingSeriesResponse {
+  requiresConfirmation?: true;
+  warning?: string;
+}
+
 // ─────────────────────────────────────────
 // Invoices
 // ─────────────────────────────────────────
