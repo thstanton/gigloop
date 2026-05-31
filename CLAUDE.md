@@ -109,6 +109,16 @@ Types: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `style`, `perf`, `ci`
 
 Examples: `feat(bookings): add checklist seeding on creation`, `fix(invoices): correct deposit tracking on send`, `ci: cache node_modules in GitHub Actions`
 
+### One commit per issue — mandatory
+**Each issue must be its own commit.** Never batch multiple issues into a single commit.
+
+- Complete one issue fully (code + tests passing), commit it, then move to the next.
+- The commit message body must include `Closes #<issue-number>` so the issue is closed automatically on merge.
+- If issues have a strict dependency order, complete and commit them in that order.
+- If issues are independent, commit each in whichever order you work through them — but still one commit per issue.
+
+This makes the git history meaningful (each commit is a reviewable unit of work), keeps CI bisectable, and ensures individual issues can be reverted cleanly if needed.
+
 ### My responsibilities (Claude Code)
 - At the start of any session involving application code changes: confirm we are on a feature branch, or create one.
 - At the end of the session: open a PR with `gh pr create` rather than committing to `main`.
@@ -159,8 +169,8 @@ For feature components, always build the presentational layer + story before the
   - Anything that should be reviewed before the next session
   - **Promotion candidates:** any repeated `className`/JSX patterns observed that may warrant extraction to `components/common/`
 - Do not run database migrations without confirming first
-- Run `bun run test` and verify all tests pass before committing
-- Commit all changes at the end of each session with a descriptive message
+- Run `bun run test` and verify all tests pass before each commit
+- Commit after each issue is complete — not once at the end of the session (see **One commit per issue** under Branching Strategy)
 
 ## Data Fetching
 - Use TanStack Query (`useQuery`, `useMutation`) for all data fetching. Never fetch in raw `useEffect`.

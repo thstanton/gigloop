@@ -19,7 +19,7 @@ export default tseslint.config(
     rules: {
       // Warnings — real quality signals, fix opportunistically
       '@typescript-eslint/no-explicit-any': 'warn',
-      'sonarjs/cognitive-complexity': ['warn', 15],
+      'sonarjs/cognitive-complexity': ['warn', 10],
       'sonarjs/no-nested-conditional': 'warn',
       'sonarjs/no-nested-template-literals': 'warn',
       'sonarjs/no-nested-functions': 'warn',
