@@ -48,6 +48,12 @@ const STATUS_TO_STAGE: Record<string, BookingStatus | null> = {
   READY: 'READY', COMPLETE: 'COMPLETE', CANCELLED: 'COMPLETE',
 };
 
+function buildSeriesPayload(values: BookingFormValues): { seriesId?: string; newSeries?: { label: string } } {
+  if (values.seriesMode === 'existing' && values.seriesId) return { seriesId: values.seriesId };
+  if (values.seriesMode === 'new' && values.newSeriesLabel?.trim()) return { newSeries: { label: values.newSeriesLabel.trim() } };
+  return {};
+}
+
 function filterByStartingStatus(
   items: ChecklistDefaultItem[],
   startingStatus: BookingStatus,

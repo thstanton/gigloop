@@ -151,6 +151,77 @@ const SERIES_MODE_LABELS: Record<string, string> = {
   new: 'New series',
 };
 
+// ─── Series section ───────────────────────────────────────────────────────────
+
+function SeriesSection({
+  control,
+  register,
+  series,
+}: {
+  control: Control<BookingFormValues>;
+  register: UseFormRegister<BookingFormValues>;
+  series?: BookingSeries[];
+}) {
+  return (
+    <div className="space-y-3">
+      <h2 className="text-sm font-semibold text-foreground">Series (optional)</h2>
+      <Controller
+        name="seriesMode"
+        control={control}
+        render={({ field }) => (
+          <>
+            <div className="flex gap-2">
+              {(['none', 'existing', 'new'] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => field.onChange(mode)}
+                  className={`px-3 py-1.5 rounded border text-sm transition-colors ${
+                    field.value === mode
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'bg-background text-foreground border-border hover:border-primary'
+                  }`}
+                >
+                  {SERIES_MODE_LABELS[mode]}
+                </button>
+              ))}
+            </div>
+            {field.value === 'existing' && series && series.length > 0 && (
+              <Controller
+                name="seriesId"
+                control={control}
+                render={({ field: seriesField }) => (
+                  <Select value={seriesField.value ?? ''} onValueChange={seriesField.onChange}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select series..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {series.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            )}
+            {field.value === 'existing' && (!series || series.length === 0) && (
+              <p className="text-sm text-muted">No series yet. Use "New series" to create one.</p>
+            )}
+            {field.value === 'new' && (
+              <FormField label="Series label">
+                <Input
+                  placeholder="e.g. Hotel Intercontinental — May 2026"
+                  {...register('newSeriesLabel')}
+                />
+              </FormField>
+            )}
+          </>
+        )}
+      />
+    </div>
+  );
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 interface Props {

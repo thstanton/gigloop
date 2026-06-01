@@ -44,22 +44,28 @@ export class BookingsService {
     };
   }
 
-  async create(userId: string, dto: CreateBookingDto) {
+  private async resolveSeriesId(userId: string, dto: CreateBookingDto): Promise<string | undefined> {
     if (dto.seriesId && dto.newSeries) {
       throw new BadRequestException('Provide either seriesId or newSeries, not both');
     }
-
     if (dto.newSeries) {
       const series = await this.seriesRepo.create(userId, dto.newSeries.label, dto.customerId);
-      dto.seriesId = series.id;
-    } else if (dto.seriesId) {
-      const series = await this.seriesRepo.findOne(userId, dto.seriesId);
-      if (!series) throw new NotFoundException('Series not found');
+      return series.id;
     }
+    if (dto.seriesId) {
+      const exists = await this.seriesRepo.findExists(userId, dto.seriesId);
+      if (!exists) throw new NotFoundException('Series not found');
+      return dto.seriesId;
+    }
+    return undefined;
+  }
 
+  async create(userId: string, dto: CreateBookingDto) {
+    const resolvedSeriesId = await this.resolveSeriesId(userId, dto);
+    const dtoWithSeries = { ...dto, seriesId: resolvedSeriesId };
     let booking;
     if (!dto.formatIds?.length) {
-      booking = await this.repo.create(userId, dto);
+      booking = await this.repo.create(userId, dtoWithSeries);
     } else {
       const [formats, profile] = await Promise.all([
         this.repo.findFormats(userId, dto.formatIds),
@@ -69,7 +75,7 @@ export class BookingsService {
         .map((id) => formats.find((f) => f.id === id))
         .filter((f): f is NonNullable<typeof f> => f != null);
       const songRequestFormEnabled = profile?.songRequestFormEnabled ?? false;
-      booking = await this.repo.createWithFormats(userId, dto, orderedFormats, songRequestFormEnabled);
+      booking = await this.repo.createWithFormats(userId, dtoWithSeries, orderedFormats, songRequestFormEnabled);
     }
 
     if (dto.checklistItems.length > 0) {

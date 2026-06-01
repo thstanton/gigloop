@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InvoicesRepository } from './invoices.repository';
 import { CommunicationsService } from '../communications/communications.service';
 import { DocumentsService } from '../documents/documents.service';
@@ -34,6 +34,14 @@ export class InvoicesService {
   async create(userId: string, bookingId: string, dto: CreateInvoiceDto) {
     const customerId = await this.repo.findBookingCustomerId(userId, bookingId);
     if (customerId === null) throw new NotFoundException('Booking not found');
+
+    const isDeposit = dto.isDeposit ?? false;
+    const activeCount = await this.repo.countActiveByType(bookingId, isDeposit);
+    if (activeCount > 0) {
+      const type = isDeposit ? 'deposit' : 'balance';
+      throw new ConflictException(`A ${type} invoice already exists for this booking — void it before creating a new one`);
+    }
+
     const billToContactId = dto.billToContactId ?? customerId;
     const result = await this.repo.create(userId, bookingId, billToContactId, dto);
     await this.evaluator.evaluate(bookingId).catch(() => {});
@@ -59,7 +67,7 @@ export class InvoicesService {
     const issueDate = new Date(dto.issueDate);
     const dueDate = dto.dueDate ? new Date(dto.dueDate) : null;
 
-    const sentInvoice = await this.repo.assignAndMarkSent(userId, id, issueDate, dueDate);
+    const sentInvoice = await this.repo.assignAndMarkSent(userId, { id, bookingId, isDeposit: invoice.isDeposit, issueDate, dueDate });
 
     const { buffer: pdfBuffer } = await this.documents.generateAndStoreInvoicePdf(userId, bookingId, sentInvoice.id, sentInvoice);
 
@@ -91,7 +99,7 @@ export class InvoicesService {
     const issueDate = new Date(dto.issueDate);
     const dueDate = dto.dueDate ? new Date(dto.dueDate) : null;
 
-    return this.repo.assignAndMarkSent(userId, id, issueDate, dueDate);
+    return this.repo.assignAndMarkSent(userId, { id, bookingId, isDeposit: invoice.isDeposit, issueDate, dueDate });
   }
 
   async markPaid(userId: string, bookingId: string, id: string) {
@@ -139,10 +147,8 @@ export class InvoicesService {
     itemId: string,
     dto: UpdateLineItemDto,
   ) {
-    await this.findOne(userId, bookingId, id);
-    const item = await this.repo.findLineItem(userId, id, itemId);
-    if (!item) throw new NotFoundException('Line item not found');
-    return this.repo.updateLineItem(itemId, dto);
+    const item = await this.resolveLineItem(userId, bookingId, id, itemId);
+    return this.repo.updateLineItem(item.id, dto);
   }
 
   async deleteLineItem(
@@ -151,9 +157,14 @@ export class InvoicesService {
     id: string,
     itemId: string,
   ) {
-    await this.findOne(userId, bookingId, id);
-    const item = await this.repo.findLineItem(userId, id, itemId);
+    const item = await this.resolveLineItem(userId, bookingId, id, itemId);
+    return this.repo.deleteLineItem(item.id);
+  }
+
+  private async resolveLineItem(userId: string, bookingId: string, invoiceId: string, itemId: string) {
+    await this.findOne(userId, bookingId, invoiceId);
+    const item = await this.repo.findLineItem(userId, invoiceId, itemId);
     if (!item) throw new NotFoundException('Line item not found');
-    return this.repo.deleteLineItem(itemId);
+    return item;
   }
 }

@@ -135,6 +135,21 @@ export interface ContactSummary {
   email?: string | null;
 }
 
+// ─────────────────────────────────────────
+// Series
+// ─────────────────────────────────────────
+
+export interface BookingSeries {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  label: string;
+  customerId: string;
+  customer: ContactSummary;
+  memberBookingCount?: number;
+  invoiceStatus?: string | null;
+}
+
 export interface PerformanceSet {
   id: string;
   order: number;

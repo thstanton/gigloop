@@ -126,13 +126,25 @@ export class InvoicesRepository {
 
   async assignAndMarkSent(
     userId: string,
-    id: string,
-    issueDate: Date,
-    dueDate: Date | null,
+    params: { id: string; bookingId: string; isDeposit: boolean; issueDate: Date; dueDate: Date | null },
   ) {
+    const { id, bookingId, isDeposit, issueDate, dueDate } = params;
     const currentYear = new Date().getFullYear();
 
     return this.prisma.$transaction(async (tx) => {
+      const voided = await tx.invoice.findFirst({
+        where: { bookingId, userId, isDeposit, status: 'VOID', invoiceNumber: { not: null } },
+        select: { invoiceNumber: true },
+      });
+
+      if (voided?.invoiceNumber) {
+        return tx.invoice.update({
+          where: { id },
+          data: { invoiceNumber: voided.invoiceNumber, issueDate, dueDate, status: 'SENT' },
+          include: invoiceIncludes,
+        });
+      }
+
       const profile = await tx.userProfile.findUnique({ where: { userId } });
       if (!profile) throw new Error('User profile not found');
 
