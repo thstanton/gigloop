@@ -392,7 +392,6 @@ export function BookingFormFields({
         </div>
       )}
 
-      {/* Series */}
       <SeriesSection control={control} register={register} series={series} />
 
       {/* Notes — hidden when managed by inline auto-save on the detail page */}

@@ -22,4 +22,10 @@ export class SeriesController {
   findOne(@Req() req: AuthedRequest, @Param('id') id: string) {
     return this.service.findOne(req.userId, id);
   }
+
+  @ApiOperation({ summary: 'Get pre-population defaults from the earliest member booking' })
+  @Get(':id/defaults')
+  findDefaults(@Req() req: AuthedRequest, @Param('id') id: string) {
+    return this.service.findDefaults(req.userId, id);
+  }
 }
