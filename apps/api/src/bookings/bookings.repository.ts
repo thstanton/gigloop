@@ -450,6 +450,20 @@ export class BookingsRepository {
     });
   }
 
+  countNonVoidInvoices(bookingId: string) {
+    return this.prisma.invoice.count({
+      where: { bookingId, status: { not: 'VOID' } },
+    });
+  }
+
+  updateSeries(bookingId: string, seriesId: string | null) {
+    return this.prisma.booking.update({
+      where: { id: bookingId },
+      data: { seriesId },
+      include: bookingIncludes,
+    });
+  }
+
   async recomputeChecklistDueDates(bookingId: string, bookingDate: Date, bookingCreatedAt: Date) {
     const items = await this.prisma.bookingChecklistItem.findMany({
       where: { bookingId },

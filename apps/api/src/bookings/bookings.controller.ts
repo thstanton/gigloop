@@ -25,6 +25,7 @@ import { UpsertMusicFormConfigDto } from './dto/upsert-music-form-config.dto';
 import { UpdateContractDto } from './dto/update-contract.dto';
 import { UpdateChecklistItemDto } from './dto/update-checklist-item.dto';
 import { CreateChecklistItemDto } from './dto/create-checklist-item.dto';
+import { UpdateBookingSeriesDto } from './dto/update-booking-series.dto';
 import type { Request } from 'express';
 
 type AuthedRequest = Request & { userId: string };
@@ -58,6 +59,16 @@ export class BookingsController {
   @Post()
   create(@Req() req: AuthedRequest, @Body() dto: CreateBookingDto) {
     return this.service.create(req.userId, dto);
+  }
+
+  @ApiOperation({ summary: 'Assign or remove the booking from a series; returns requiresConfirmation on customer mismatch' })
+  @Patch(':id/series')
+  updateSeries(
+    @Req() req: AuthedRequest,
+    @Param('id') id: string,
+    @Body() dto: UpdateBookingSeriesDto,
+  ) {
+    return this.service.updateSeries(req.userId, id, dto.seriesId, dto.confirm);
   }
 
   @ApiOperation({ summary: 'Update a booking' })

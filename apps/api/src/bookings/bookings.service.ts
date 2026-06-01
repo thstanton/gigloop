@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { BookingStatus } from '@prisma/client';
 import { BookingsRepository } from './bookings.repository';
 import { BookingActionsService } from './bookings-actions.service';
@@ -324,6 +324,31 @@ export class BookingsService {
       completedAt: null,
       dueDate: item.dueDate?.toISOString() ?? null,
     };
+  }
+
+  async updateSeries(userId: string, bookingId: string, seriesId: string | null, confirm?: boolean) {
+    const booking = await this.findOne(userId, bookingId);
+
+    if (seriesId !== null) {
+      const series = await this.seriesRepo.findOneLight(userId, seriesId);
+      if (!series) throw new NotFoundException('Series not found');
+
+      const nonVoidCount = await this.repo.countNonVoidInvoices(bookingId);
+      if (nonVoidCount > 0) {
+        throw new ConflictException(
+          'This booking has non-VOID invoices. Void or delete them before adding the booking to a series.',
+        );
+      }
+
+      if (booking.customerId !== series.customerId && !confirm) {
+        return {
+          requiresConfirmation: true,
+          warning: `This booking's customer (${booking.customer.name}) differs from the series billing customer (${series.customer.name}). The series invoice will be addressed to ${series.customer.name}. Resend with confirm: true to proceed.`,
+        };
+      }
+    }
+
+    return this.repo.updateSeries(bookingId, seriesId);
   }
 
   async getActions(userId: string) {
