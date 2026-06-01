@@ -49,7 +49,12 @@ export class SeriesService {
     return series;
   }
 
-  private async assignSeriesInvoiceNumber(userId: string, seriesId: string, invoiceId: string, issueDate: Date, dueDate: Date | null) {
+  private async assignSeriesInvoiceNumber(
+    userId: string, seriesId: string, invoiceId: string,
+    dto: { issueDate: string; dueDate?: string },
+  ) {
+    const issueDate = new Date(dto.issueDate);
+    const dueDate = dto.dueDate ? new Date(dto.dueDate) : null;
     const voided = await this.repo.findVoidedSeriesInvoiceWithNumber(userId, seriesId);
     return voided?.invoiceNumber
       ? this.invoicesRepo.assignWithInheritedNumber(invoiceId, voided.invoiceNumber, issueDate, dueDate)
@@ -99,9 +104,7 @@ export class SeriesService {
     if (!invoice) throw new NotFoundException('Invoice not found');
     if (invoice.status !== 'DRAFT') throw new BadRequestException('Only draft invoices can be sent');
 
-    const issueDate = new Date(dto.issueDate);
-    const dueDate = dto.dueDate ? new Date(dto.dueDate) : null;
-    const sentInvoice = await this.assignSeriesInvoiceNumber(userId, seriesId, invoiceId, issueDate, dueDate);
+    const sentInvoice = await this.assignSeriesInvoiceNumber(userId, seriesId, invoiceId, dto);
 
     const pdfBuffer = await this.documents.generatePreviewPdf(userId, invoiceId);
     await this.comms.sendEmail({
@@ -120,9 +123,7 @@ export class SeriesService {
     if (!invoice) throw new NotFoundException('Invoice not found');
     if (invoice.status !== 'DRAFT') throw new BadRequestException('Only draft invoices can be marked as sent');
 
-    const issueDate = new Date(dto.issueDate);
-    const dueDate = dto.dueDate ? new Date(dto.dueDate) : null;
-    return this.assignSeriesInvoiceNumber(userId, seriesId, invoiceId, issueDate, dueDate);
+    return this.assignSeriesInvoiceNumber(userId, seriesId, invoiceId, dto);
   }
 
   async markPaidInvoice(userId: string, seriesId: string, invoiceId: string) {
