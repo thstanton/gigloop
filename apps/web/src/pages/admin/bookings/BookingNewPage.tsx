@@ -162,10 +162,7 @@ export default function BookingNewPage() {
         bookingAgentId: values.bookingAgentId ?? undefined,
         formatIds: values.formatIds.length ? values.formatIds : undefined,
         checklistItems,
-        seriesId: values.seriesMode === 'existing' && values.seriesId ? values.seriesId : undefined,
-        newSeries: values.seriesMode === 'new' && values.newSeriesLabel?.trim()
-          ? { label: values.newSeriesLabel.trim() }
-          : undefined,
+        ...buildSeriesPayload(values),
       });
     },
     onSuccess: (created) => {

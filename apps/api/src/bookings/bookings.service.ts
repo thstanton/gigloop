@@ -53,8 +53,8 @@ export class BookingsService {
       return series.id;
     }
     if (dto.seriesId) {
-      const exists = await this.seriesRepo.findExists(userId, dto.seriesId);
-      if (!exists) throw new NotFoundException('Series not found');
+      const series = await this.seriesRepo.findOne(userId, dto.seriesId);
+      if (!series) throw new NotFoundException('Series not found');
       return dto.seriesId;
     }
     return undefined;
