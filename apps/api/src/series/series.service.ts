@@ -43,9 +43,21 @@ export class SeriesService {
 
   // ─── Invoice operations ────────────────────────────────────────────────────
 
-  async createInvoice(userId: string, seriesId: string) {
-    const series = await this.repo.findOne(userId, seriesId);
+  private async requireSeries(userId: string, seriesId: string) {
+    const series = await this.repo.findOneMinimal(userId, seriesId);
     if (!series) throw new NotFoundException('Series not found');
+    return series;
+  }
+
+  private async assignSeriesInvoiceNumber(userId: string, seriesId: string, invoiceId: string, issueDate: Date, dueDate: Date | null) {
+    const voided = await this.repo.findVoidedSeriesInvoiceWithNumber(userId, seriesId);
+    return voided?.invoiceNumber
+      ? this.invoicesRepo.assignWithInheritedNumber(invoiceId, voided.invoiceNumber, issueDate, dueDate)
+      : this.invoicesRepo.assignAndMarkSent(userId, invoiceId, issueDate, dueDate);
+  }
+
+  async createInvoice(userId: string, seriesId: string) {
+    const series = await this.requireSeries(userId, seriesId);
 
     const existing = await this.repo.countNonVoidSeriesInvoices(userId, seriesId);
     if (existing > 0) throw new ConflictException('A non-VOID invoice already exists for this series');
@@ -63,8 +75,7 @@ export class SeriesService {
   }
 
   async getActiveInvoice(userId: string, seriesId: string) {
-    const series = await this.repo.findOne(userId, seriesId);
-    if (!series) throw new NotFoundException('Series not found');
+    await this.requireSeries(userId, seriesId);
     return this.repo.findActiveSeriesInvoice(userId, seriesId);
   }
 
@@ -90,24 +101,17 @@ export class SeriesService {
 
     const issueDate = new Date(dto.issueDate);
     const dueDate = dto.dueDate ? new Date(dto.dueDate) : null;
-
-    const voided = await this.repo.findVoidedSeriesInvoiceWithNumber(userId, seriesId);
-    const sentInvoice = voided?.invoiceNumber
-      ? await this.invoicesRepo.assignWithInheritedNumber(invoiceId, voided.invoiceNumber, issueDate, dueDate)
-      : await this.invoicesRepo.assignAndMarkSent(userId, invoiceId, issueDate, dueDate);
+    const sentInvoice = await this.assignSeriesInvoiceNumber(userId, seriesId, invoiceId, issueDate, dueDate);
 
     const pdfBuffer = await this.documents.generatePreviewPdf(userId, invoiceId);
-    const filename = `${sentInvoice.invoiceNumber ?? 'invoice'}.pdf`;
-
     await this.comms.sendEmail({
       userId,
-      bookingId: null as unknown as string,
       contactId: dto.contactId,
       to: dto.to,
       subject: dto.subject,
       body: dto.body,
       templateId: dto.templateId,
-      attachments: [{ filename, content: pdfBuffer }],
+      attachments: [{ filename: `${sentInvoice.invoiceNumber ?? 'invoice'}.pdf`, content: pdfBuffer }],
     });
   }
 
@@ -118,10 +122,13 @@ export class SeriesService {
 
     const issueDate = new Date(dto.issueDate);
     const dueDate = dto.dueDate ? new Date(dto.dueDate) : null;
+    return this.assignSeriesInvoiceNumber(userId, seriesId, invoiceId, issueDate, dueDate);
+  }
 
-    const voided = await this.repo.findVoidedSeriesInvoiceWithNumber(userId, seriesId);
-    return voided?.invoiceNumber
-      ? this.invoicesRepo.assignWithInheritedNumber(invoiceId, voided.invoiceNumber, issueDate, dueDate)
-      : this.invoicesRepo.assignAndMarkSent(userId, invoiceId, issueDate, dueDate);
+  async markPaidInvoice(userId: string, seriesId: string, invoiceId: string) {
+    const invoice = await this.repo.findSeriesInvoiceById(userId, seriesId, invoiceId);
+    if (!invoice) throw new NotFoundException('Invoice not found');
+    if (invoice.status !== 'SENT') throw new BadRequestException('Only sent invoices can be marked as paid');
+    return this.repo.markSeriesInvoicePaid(invoiceId);
   }
 }

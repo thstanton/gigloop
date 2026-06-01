@@ -38,7 +38,7 @@ function resolveFormat(preferences: Record<string, unknown>): InvoiceNumberForma
   };
 }
 
-const invoiceIncludes = {
+export const invoiceIncludes = {
   lineItems: { orderBy: { order: 'asc' } },
   billToContact: true,
 } as const;

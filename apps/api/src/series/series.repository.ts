@@ -1,13 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { invoiceIncludes } from '../invoices/invoices.repository';
 
 const seriesIncludes = {
   customer: { select: { id: true, name: true, email: true } },
-} as const;
-
-const invoiceIncludes = {
-  lineItems: { orderBy: { order: 'asc' as const } },
-  billToContact: true,
 } as const;
 
 @Injectable()
@@ -57,13 +53,17 @@ export class SeriesRepository {
     });
   }
 
+  findOneMinimal(userId: string, id: string) {
+    return this.prisma.bookingSeries.findFirst({
+      where: { id, userId },
+      select: { id: true, customerId: true },
+    });
+  }
+
   findMemberBookingsForInvoice(userId: string, seriesId: string) {
     return this.prisma.booking.findMany({
       where: { seriesId, userId },
-      include: {
-        sets: { orderBy: { order: 'asc' } },
-        packages: { include: { package: { select: { label: true } } }, orderBy: { order: 'asc' } },
-      },
+      include: { sets: { orderBy: { order: 'asc' } } },
       orderBy: { date: 'asc' },
     });
   }
@@ -96,6 +96,14 @@ export class SeriesRepository {
   countNonVoidSeriesInvoices(userId: string, seriesId: string) {
     return this.prisma.invoice.count({
       where: { seriesId, userId, status: { not: 'VOID' } },
+    });
+  }
+
+  markSeriesInvoicePaid(invoiceId: string) {
+    return this.prisma.invoice.update({
+      where: { id: invoiceId },
+      data: { status: 'PAID', paidAt: new Date() },
+      include: invoiceIncludes,
     });
   }
 }

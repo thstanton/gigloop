@@ -327,6 +327,12 @@ export default function BookingDetailPage() {
     onError: () => toast({ title: 'Failed to delete series invoice', variant: 'destructive' }),
   });
 
+  const markSeriesInvoicePaidMutation = useMutation({
+    mutationFn: (invoiceId: string) => apiPost(`/series/${seriesId}/invoices/${invoiceId}/mark-paid`, {}),
+    onSuccess: invalidateSeriesInvoice,
+    onError: () => toast({ title: 'Failed to mark series invoice as paid', variant: 'destructive' }),
+  });
+
   const voidInvoiceMutation = useMutation({
     mutationFn: (invoiceId: string) => apiPostVoid(`/bookings/${id}/invoices/${invoiceId}/void`, {}),
     onSuccess: () => {
@@ -658,12 +664,12 @@ export default function BookingDetailPage() {
               }}
               onDelete={(inv) => deleteSeriesInvoiceMutation.mutate(inv.id)}
               onSend={(inv) => {
-                const templateType = 'balance_invoice_cover';
-                setComposeTemplateType(templateType);
+                setComposeTemplateType('balance_invoice_cover');
                 setComposeOpen(true);
                 setEditingInvoice(inv as unknown as Invoice);
               }}
               onMarkSent={(inv) => setMarkSentInvoice(inv as unknown as Invoice)}
+              onMarkPaid={(inv) => markSeriesInvoicePaidMutation.mutate(inv.id)}
               onVoid={(inv) => voidSeriesInvoiceMutation.mutate(inv.id)}
             />
           ) : (

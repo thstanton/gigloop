@@ -59,6 +59,17 @@ export class SeriesController {
     return this.service.markSentInvoice(req.userId, id, invoiceId, dto);
   }
 
+  @ApiOperation({ summary: 'Mark a series invoice as paid' })
+  @Post(':id/invoices/:invoiceId/mark-paid')
+  @HttpCode(200)
+  markPaidInvoice(
+    @Req() req: AuthedRequest,
+    @Param('id') id: string,
+    @Param('invoiceId') invoiceId: string,
+  ) {
+    return this.service.markPaidInvoice(req.userId, id, invoiceId);
+  }
+
   @ApiOperation({ summary: 'Void a series invoice' })
   @Post(':id/invoices/:invoiceId/void')
   @HttpCode(200)

@@ -8,6 +8,7 @@ import { CommunicationsService } from '../communications/communications.service'
 type MockRepo = {
   findAll: jest.Mock;
   findOne: jest.Mock;
+  findOneMinimal: jest.Mock;
   create: jest.Mock;
   countNonVoidSeriesInvoices: jest.Mock;
   findMemberBookingsForInvoice: jest.Mock;
@@ -15,6 +16,7 @@ type MockRepo = {
   findVoidedSeriesInvoiceWithNumber: jest.Mock;
   findActiveSeriesInvoice: jest.Mock;
   createSeriesInvoice: jest.Mock;
+  markSeriesInvoicePaid: jest.Mock;
 };
 
 type MockInvoicesRepo = { voidInvoice: jest.Mock; delete: jest.Mock; assignAndMarkSent: jest.Mock; assignWithInheritedNumber: jest.Mock };
@@ -25,6 +27,7 @@ function makeRepo(): MockRepo {
   return {
     findAll: jest.fn(),
     findOne: jest.fn(),
+    findOneMinimal: jest.fn(),
     create: jest.fn(),
     countNonVoidSeriesInvoices: jest.fn(),
     findMemberBookingsForInvoice: jest.fn(),
@@ -32,6 +35,7 @@ function makeRepo(): MockRepo {
     findVoidedSeriesInvoiceWithNumber: jest.fn(),
     findActiveSeriesInvoice: jest.fn(),
     createSeriesInvoice: jest.fn(),
+    markSeriesInvoicePaid: jest.fn(),
   };
 }
 
@@ -122,7 +126,7 @@ describe('SeriesService', () => {
     const booking = { id: 'b1', date: new Date('2026-05-01'), fee: 500, sets: [] };
 
     it('creates invoice with line items for each member booking', async () => {
-      repo.findOne.mockResolvedValue({ ...series, bookings: [{ id: 'b1' }] });
+      repo.findOneMinimal.mockResolvedValue(series);
       repo.countNonVoidSeriesInvoices.mockResolvedValue(0);
       repo.findMemberBookingsForInvoice.mockResolvedValue([booking]);
       repo.createSeriesInvoice.mockResolvedValue({ id: 'inv1' });
@@ -134,14 +138,14 @@ describe('SeriesService', () => {
     });
 
     it('throws ConflictException when non-VOID invoice exists', async () => {
-      repo.findOne.mockResolvedValue(series);
+      repo.findOneMinimal.mockResolvedValue(series);
       repo.countNonVoidSeriesInvoices.mockResolvedValue(1);
       await expect(service.createInvoice('u1', 's1')).rejects.toThrow(ConflictException);
       expect(repo.createSeriesInvoice).not.toHaveBeenCalled();
     });
 
     it('throws BadRequestException when series has no member bookings', async () => {
-      repo.findOne.mockResolvedValue(series);
+      repo.findOneMinimal.mockResolvedValue(series);
       repo.countNonVoidSeriesInvoices.mockResolvedValue(0);
       repo.findMemberBookingsForInvoice.mockResolvedValue([]);
       await expect(service.createInvoice('u1', 's1')).rejects.toThrow(BadRequestException);

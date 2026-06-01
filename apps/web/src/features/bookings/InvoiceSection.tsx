@@ -20,6 +20,7 @@ export interface SeriesInvoiceSectionProps {
   onDelete: (invoice: SeriesInvoice) => void;
   onSend: (invoice: SeriesInvoice) => void;
   onMarkSent: (invoice: SeriesInvoice) => void;
+  onMarkPaid: (invoice: SeriesInvoice) => void;
   onVoid: (invoice: SeriesInvoice) => void;
 }
 
@@ -32,6 +33,7 @@ export function SeriesInvoiceSection({
   onDelete,
   onSend,
   onMarkSent,
+  onMarkPaid,
   onVoid,
 }: Readonly<SeriesInvoiceSectionProps>) {
   const notice = (
@@ -69,7 +71,7 @@ export function SeriesInvoiceSection({
         onDelete={() => onDelete(invoice)}
         onSend={() => onSend(invoice)}
         onMarkSent={() => onMarkSent(invoice)}
-        onMarkPaid={() => {}}
+        onMarkPaid={() => onMarkPaid(invoice)}
         onVoid={() => onVoid(invoice)}
       />
     </Card>
