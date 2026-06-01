@@ -1,7 +1,20 @@
 # ADR-0025 — Feature-branch workflow with squash merge to main
 
 ## Status
-Accepted
+Accepted  
+**Amended:** 2026-06-01 — "one branch per feature" made explicit and enforced; the "open a PR per branch, immediately start the next" guidance is withdrawn. See "Amendment 2026-06-01" below and ADR-0030.
+
+## Amendment (2026-06-01): one branch per feature, never parallel siblings
+
+The original decision already chose one branch per feature (rejecting one-branch-per-sub-issue), but practice drifted: the BookingSeries feature (#146) was split into four *dependent* sibling branches (#147 schema → #148 module → #149 prepopulation → #150 retroactive), each its own PR. Under squash merge, dependent sibling branches are a conflict footgun — each downstream branch had to absorb the *squashed* version of its upstream sibling, producing duplicate-looking history, `Merge branch 'main'` commits, and explicit `fix conflicts` commits. A contributing cause was *horizontal* slicing (a "schema migration" issue is a layer, not a shippable capability), which manufactured the dependency chain.
+
+Enforced going forward:
+- **One feature = one branch = one PR.** Sub-issues are *commits* on that branch, closed via the PR description. CI runs once; the feature is reviewed as a coherent unit.
+- **No sibling branches for a dependent feature.** If a feature is too big for one reviewable PR, split into **sequential** tracking issues — branch → PR → merge before the next starts. Never parallel.
+- The "when working multiple branches in one session, open a PR for each as soon as complete and start the next" guidance is **withdrawn** — it encouraged the parallel siblings that caused the conflicts.
+- Issues are sliced **vertically** (thin end-to-end capability), not by layer. See `docs/agents/issue-authoring.md`.
+
+The feature branch is expected to span multiple sessions; this is normal and is what the persistent branch is for (see ADR-0030, session-stop).
 
 ## Context
 

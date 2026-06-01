@@ -1,0 +1,25 @@
+# Pre-existing files missing a sibling .stories.tsx, accepted as known debt (ADR-0030 / ADR-0024).
+# The story-presence CI gate blocks NEW gaps; these are paid down opportunistically when next touched.
+# Remove a line when you add its story. Do not add new lines — new components must ship with a story.
+apps/web/src/components/ui/badge.tsx
+apps/web/src/components/ui/dropdown-menu.tsx
+apps/web/src/components/ui/label.tsx
+apps/web/src/components/ui/popover.tsx
+apps/web/src/components/ui/separator.tsx
+apps/web/src/components/ui/sheet.tsx
+apps/web/src/components/ui/table.tsx
+apps/web/src/components/ui/tabs.tsx
+apps/web/src/components/ui/toast.tsx
+apps/web/src/components/ui/toaster.tsx
+apps/web/src/components/ui/tooltip.tsx
+apps/web/src/pages/SignInPage.tsx
+apps/web/src/pages/SignUpPage.tsx
+apps/web/src/pages/admin/PortalPreviewPage.tsx
+apps/web/src/pages/admin/SettingsPage.tsx
+apps/web/src/pages/admin/TemplateEditPage.tsx
+apps/web/src/pages/admin/bookings/BookingNewPage.tsx
+apps/web/src/pages/admin/contacts/ContactDetailPage.tsx
+apps/web/src/pages/admin/contacts/ContactNewPage.tsx
+apps/web/src/pages/portal/PortalContractPage.tsx
+apps/web/src/pages/portal/PortalMusicPage.tsx
+apps/web/src/pages/portal/PortalPage.tsx
