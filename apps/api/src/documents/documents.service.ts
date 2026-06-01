@@ -46,7 +46,7 @@ type PreloadedInvoice = {
   issueDate: Date | null;
   dueDate: Date | null;
   isDeposit: boolean;
-  bookingId: string;
+  bookingId: string | null;
   billToContact: { name: string };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   lineItems: Array<{ description: string; amount: any; order: number }>;
@@ -85,7 +85,7 @@ export class DocumentsService {
     if (!publicProfile) throw new NotFoundException('Public profile not found');
 
     let depositTotal: string | null = null;
-    if (!invoice.isDeposit) {
+    if (!invoice.isDeposit && invoice.bookingId) {
       const depositInvoice = await this.prisma.invoice.findFirst({
         where: { bookingId: invoice.bookingId, userId, isDeposit: true },
         include: { lineItems: true },
