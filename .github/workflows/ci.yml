@@ -27,6 +27,8 @@ jobs:
           DATABASE_URL: postgresql://user:password@localhost/db
       - run: cd apps/api && bun run lint
       - run: cd apps/web && bun run lint
+      - name: Story presence (ADR-0030)
+        run: node scripts/check-stories.mjs
 
   test:
     name: Test

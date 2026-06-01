@@ -53,28 +53,35 @@ PDF generation runs in the API process using `@react-pdf/renderer` and the resul
 
 ## Code Quality
 
-These rules apply every session — not just when things look complex.
+Governing principle: **deterministic checks belong to automation; judgement belongs to planning; advisory tools inform, they don't trap.** See ADR-0030. Do not hand-run deterministic checks "to be safe" — that is the duplication that caused multiple passes. Trust the automation below.
 
-**Pre-flight:** Before modifying any existing file:
-1. Run `bun run lint` on it and report any existing violations
-2. Run CodeScene `code_health_review` on it and report any health issues
+### Deterministic gates (automated — do not run by hand)
 
-If the file has complexity errors or Code Health problems, propose refactoring it first before adding new code.
+```
+commit (hook):  lint                 (changed workspace only)   — fast, blocking
+push   (hook):  test + build         (changed workspace)        — build subsumes typecheck
+CI:             lint + test + build   (both apps)                — backstop
+```
 
-**Pre-commit:** Before every commit:
-1. Run `bun run lint && bun run build` in both `apps/api` and `apps/web` — never commit if either fails
-2. Run CodeScene `pre_commit_code_health_safeguard` — if it reports a regression, refactor before committing
+There is **no pre-flight check and no pre-commit checklist.** Lint runs automatically at commit; test + build run automatically at push; CI re-runs everything. You never need to invoke these manually — if a hook fails, fix the cause and let the hook re-run.
 
-**Pre-PR (mandatory — in this order):**
-1. `bun run lint && bun run build` in both workspaces — must pass clean
-2. Run CodeScene `analyze_change_set` — if it reports a regression, refactor before opening PR
-3. Run `/simplify` on every file substantially changed in the session
-4. Confirm every new page or component file has a `.stories.tsx` in the same branch
-5. Open PR with `gh pr create`
+### Advisory layer (CodeScene + /simplify — judgement, never a hard gate)
 
-**Line count proxy:** Files over ~300 lines are a yellow flag. Check lint complexity before extending them further.
+CodeScene is a **navigator, not a gatekeeper.** See ADR-0026 (amended).
 
-**ESLint disables:** Never add an `eslint-disable` comment without explaining the situation and getting explicit permission. The only pre-approved suppress is `@typescript-eslint/no-explicit-any` (with a mandatory inline comment explaining why). All other suppressions — including `react-hooks/exhaustive-deps` — require approval. If a lint rule cannot be resolved cleanly, stop and explain the situation rather than silencing it.
+- **Navigator (use proactively):** `list_technical_debt_hotspots_for_project` surfaces refactor targets. Refactoring is its **own deliberate work** — propose it as such; never cram a forced refactor into a feature commit.
+- **At PR only:** run `analyze_change_set` once and **report the Code Health delta to the human.** A regression is a conversation, not an automatic refactor loop. Target is **"no meaningful regression,"** not 10.0.
+- **`/simplify` is signal-driven**, not blanket: run it only on files `analyze_change_set` flags as regressed, plus any file that crossed ~300 lines this session.
+
+There is **no per-file pre-flight `code_health_review` and no per-commit `pre_commit_code_health_safeguard`.** Those are removed.
+
+### No silent shortcuts
+
+I never silently lower the bar. If the only way forward lowers it — an `eslint-disable`, an `any` to dodge a type error, a story that asserts nothing, a weakened or skipped test, hacking around a failing check, marking a checklist item done that isn't — I **stop and surface the trade-off** for the human to decide. If a clean (possibly slower) path exists, I take it and note it. **Surfacing a blocker is a success, not a failure.**
+
+**ESLint disables** are the canonical case: never add one without explaining the situation and getting explicit permission. The only pre-approved suppress is `@typescript-eslint/no-explicit-any` (with a mandatory inline comment explaining why). All other suppressions — including `react-hooks/exhaustive-deps` — require approval.
+
+**Line count proxy:** Files over ~300 lines are a yellow flag and a `/simplify` trigger.
 
 ## Shared types
 `apps/web/src/types/api.ts` is the single source of frontend-facing types.
@@ -124,8 +131,13 @@ Feature branches → `main`. No direct pushes to `main` — the GitHub ruleset e
 - `chore/<short-description>` — tooling, dependencies, config (no issue number required)
 - `docs/<short-description>` — documentation and process file updates (`CLAUDE.md`, `CONTEXT.md`, `docs/adr/`, `SPEC.md`)
 
+### Planning gate (before any feature)
+Non-trivial features start with a **planning pass** before any code: I draft the tracking issue + sub-issues per `docs/agents/issue-authoring.md`, and the human approves them. Trivial fixes (one file, no UI, no schema) skip the gate. This front-loads the reuse, story, slicing and dependency judgement into a calm, reviewable moment.
+
 ### Multi-issue features
-For features spanning several issues, create a **tracking issue** in GitHub Issues — an umbrella issue whose body lists sub-issues as a task list (`- [ ] #94 description`). The branch references the tracking issue number. Sub-issues are closed via `Closes #94, #95` in the PR description.
+A feature spanning several issues gets a **tracking issue** — an umbrella whose body lists sub-issues as a task list (`- [ ] #94 description`) with `Blocked by` links. It is the durable dependency map; I advance it one unblocked sub-issue at a time.
+
+**One feature = one branch = one PR.** Sub-issues are *commits on that single branch*, not separate branches. Sub-issues are closed via `Closes #94, #95` in the PR description. **Never split a dependent feature into sibling branches** — squash-merge + dependent branches is a conflict footgun (it is exactly what corrupted the series feature; see ADR-0025). If a feature is genuinely too big for one reviewable PR, split it into **sequential** tracking issues — each its own branch → PR → merge *before the next starts*. Never parallel.
 
 ### Commit messages
 Use [Conventional Commits](https://www.conventionalcommits.org/):
@@ -136,20 +148,19 @@ Types: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `style`, `perf`, `ci`
 Examples: `feat(bookings): add checklist seeding on creation`, `fix(invoices): correct deposit tracking on send`, `ci: cache node_modules in GitHub Actions`
 
 ### One commit per issue — mandatory
-**Each issue must be its own commit.** Never batch multiple issues into a single commit.
+**Each sub-issue is its own commit on the feature branch.** Never batch multiple issues into one commit.
 
-- Complete one issue fully (code + tests + story passing), commit it, then move to the next.
+- Complete one sub-issue fully (code + tests + story passing), commit it, then checkpoint (see Session Behaviour → session-stop).
 - The commit message body must include `Closes #<issue-number>` so the issue is closed automatically on merge.
-- If issues have a strict dependency order, complete and commit them in that order.
-- If issues are independent, commit each in whichever order you work through them — but still one commit per issue.
+- Complete and commit sub-issues in dependency order.
 - **Stories are part of the issue commit** — a new page or component commit is not complete without its `.stories.tsx` file. `chore(storybook):` commits are only for updating existing stories, never for adding a story that should have shipped with the original feature.
 
-This makes the git history meaningful (each commit is a reviewable unit of work), keeps CI bisectable, and ensures individual issues can be reverted cleanly if needed.
+This keeps each commit a reviewable unit of work and CI bisectable, while the whole feature stays on one branch.
 
 ### My responsibilities (Claude Code)
-- At the start of any session involving application code changes: confirm we are on a feature branch, or create one.
-- When working multiple branches in one session: open a PR for each branch as soon as it is complete, then immediately start the next branch. This lets review overlap with ongoing development.
-- At the end of the session: run the Pre-PR checklist above, then open a PR with `gh pr create`.
+- At the start of any feature session: confirm we are on the feature's branch, or create it; read the tracking issue to find the next unblocked sub-issue.
+- Work **one feature branch at a time.** Do not open parallel sibling branches for a single feature — sub-issues are commits, not branches.
+- Open the PR only when the **whole feature** is done (or at an agreed sequential split point), with `gh pr create`. Do not open a PR per sub-issue.
 - Never push application code directly to `main`.
 
 ### Merging
@@ -170,12 +181,12 @@ Protect `main` with:
 
 ## UI Components
 
-### Inventory check — mandatory before writing any JSX
+### Inventory pass — happens at issue authoring, not at coding time
 
-Before writing any JSX, work through these steps in order:
+The "which existing component do I use?" decision is made **when the issue is written**, not while coding (per `docs/agents/issue-authoring.md`). UI issues name the components to reuse so the human can catch a missed component at planning. At coding time, **build what the issue specifies.** This list is the reference for the planning-time inventory pass:
 
-1. **Check `components/ui/`** for primitives: `Button` (default/outline/ghost/destructive variants), `Input`, `Textarea`, `Select`, `Switch`, `Label`, `Badge`, `Separator`, `Sheet`, `Dialog`, `Tabs`, `Tooltip`, `Toast`
-2. **Check `components/common/`** for patterns:
+1. **`components/ui/`** primitives: `Button` (default/outline/ghost/destructive variants), `Input`, `Textarea`, `Select`, `Switch`, `Label`, `Badge`, `Separator`, `Sheet`, `Dialog`, `Tabs`, `Tooltip`, `Toast`
+2. **`components/common/`** patterns:
    - `PageHeader` — page title + optional back link + optional subheading + optional action
    - `PageSection` — section heading (h2-level) within a page
    - `Card` — bordered container with optional title
@@ -186,14 +197,13 @@ Before writing any JSX, work through these steps in order:
    - `LabelValue` — read-only label + value pair
    - `SubLabel` — de-emphasised label text
    - `BookingStatusPill` / `InvoiceStatusPill` / `StatusPill` — status badges
-3. **Only write raw `className`** if no existing component covers the pattern. If unsure, ask.
-4. **Never replicate a component's styling** with raw Tailwind — use the component.
+3. **Only write raw `className`** if no existing component covers the pattern (and the issue agrees). **Never replicate a component's styling** with raw Tailwind — use the component.
 
 ### Creating new shared components
-Creating a new file in `components/common/` or `components/ui/` requires approval. Before creating one, stop and ask — explaining what the new component does and why no existing component covers the case. Do not proceed without confirmation.
+Creating a new file in `components/common/` or `components/ui/` requires approval — flag it in the issue at planning time, or stop and ask if it emerges mid-build. Explain what the new component does and why no existing component covers the case. Do not proceed without confirmation.
 
 ### Story requirement
-A `components/common/` component is not done until it has at least one story covering its primary use case. Stories are the usage documentation that makes the inventory check above reliable — a component without a story is invisible to the next session.
+A new page or component is not done until it has a `.stories.tsx` (presence is enforced by a CI scan — a component without a story fails CI). Story *tasks* are written into UI issues explicitly and sequenced **before** the component build, so the story is a review checkpoint (see `docs/agents/issue-authoring.md` and ADR-0023). Story *quality* follows the ADR-0024 tiers below.
 
 ### Story testing tiers (see ADR-0024)
 - `components/ui/` — smoke: story renders, key elements visible
@@ -205,16 +215,26 @@ A `components/common/` component is not done until it has at least one story cov
 For feature components, always build the presentational layer + story before the container (per ADR-0023). This ensures every new UI is reviewable in Storybook before logic is wired up.
 
 ## Session Behaviour
-- Build only what the current session specifies
-- Do not begin the next feature unprompted
-- **Session sizing:** For UI-heavy features, work a maximum of 3–4 issues per session. When a feature has a dependency chain (API → layout → individual pages), break it into sessions by dependency level rather than attempting all layers at once.
-- When the session task is complete, stop and summarise:
-  - What was built
-  - Any decisions made that weren't in the spec
-  - Anything that should be reviewed before the next session
-  - **Promotion candidates:** any repeated `className`/JSX patterns observed that may warrant extraction to `components/common/`
-- Do not run database migrations without confirming first
-- Commit after each issue is complete — not once at the end of the session (see **One commit per issue** under Branching Strategy)
+- Build only what the current session specifies. Do not begin the next feature unprompted.
+- Do not run database migrations without confirming first.
+
+### Session-stop (the unit that matters is the session, not the PR)
+The feature branch persists across sessions; my context does not. "Too big" means *my context degrading and me ploughing on anyway* — never let that happen. The fix is to bound the **session**, biased hard toward stopping.
+
+**After every sub-issue commit, checkpoint. Default action: STOP and hand off.** Continue to another sub-issue only if *all* of these hold:
+- the next sub-issue is small, **and**
+- I show no degradation symptoms (re-reading files I already read this session, re-asking decisions we already settled, losing the thread of the plan), **and**
+- I have done ≤1 sub-issue so far this session.
+
+**Stopping cleanly is the success condition — not a partial failure.** Never push through a degrading context to "finish the tracking issue." The tracking issue is a durable map advanced one increment at a time, not a goal to complete in one sitting.
+
+**At a stop:** leave the branch at a clean commit → tick the completed sub-issues on the tracking issue → post a short handoff comment on the tracking issue (what's done, the next unblocked sub-issue, any decisions not yet in docs; `/handoff` can draft it) → summarise to the human. Next session resumes from the tracking issue + branch log.
+
+### End-of-session summary
+- What was built
+- Any decisions made that weren't in the spec
+- Anything to review before the next session
+- **Promotion candidates:** repeated `className`/JSX patterns that may warrant extraction to `components/common/`
 
 ## Data Fetching
 - Use TanStack Query (`useQuery`, `useMutation`) for all data fetching. Never fetch in raw `useEffect`.
@@ -264,6 +284,10 @@ GigMan is used on phones. Design every screen for 375px first, then enhance for 
 
 Issues are tracked in GitHub Issues. See `docs/agents/issue-tracker.md`.
 
+### Issue authoring (planning gate)
+
+Non-trivial features are planned into issues before any code. `/to-issues` and `/grill-with-docs` are generic global skills; the GigMan-specific requirements their output must meet live in `docs/agents/issue-authoring.md`. **When authoring issues for this repo, conform to that spec and get the human's approval before coding.**
+
 ### Triage labels
 
 Default label vocabulary (needs-triage, needs-info, ready-for-agent, ready-for-human, wontfix). See `docs/agents/triage-labels.md`.
@@ -272,19 +296,16 @@ Default label vocabulary (needs-triage, needs-info, ready-for-agent, ready-for-h
 
 Single-context repo — one `CONTEXT.md` + `docs/adr/` at the root. See `docs/agents/domain.md`.
 
-### CodeScene
+### CodeScene — navigator, not gatekeeper
 
-CodeScene MCP Server is active (default project: gigman). Target Code Health: 10.0.
+CodeScene MCP Server is active (default project: gigman). It is an **advisory navigator**, not a blocking gate. Target: **no meaningful regression** (not 10.0). See ADR-0026 (amended) and the Code Quality section above.
 
-**Mandatory safeguards (every session):**
-- `pre_commit_code_health_safeguard` — before every commit (staged files gate)
-- `analyze_change_set` — before every PR (branch-level gate)
-- If either reports a regression: run `code_health_review` on flagged files, refactor, re-check. Do not declare work done with a failing safeguard.
+**Navigator (proactive — this is CodeScene's main value):**
+- `list_technical_debt_hotspots_for_project` — ranked refactor targets. Surface these and propose refactoring as its **own deliberate work**; never force a refactor into a feature commit.
+- `/codescene:prioritizing-technical-debt` — choosing what to refactor next.
+- `/codescene:guiding-refactoring-with-code-health` — step-by-step refactoring workflow.
 
-**File inspection:**
-- `code_health_review` — detailed review of a file; use during pre-flight on any file flagged as a hotspot
-- `/codescene:guiding-refactoring-with-code-health` — step-by-step refactoring workflow using Code Health findings
+**At PR only (report, don't loop):**
+- `analyze_change_set` — run once at PR; **report the Code Health delta to the human.** A regression is a conversation, not an automatic refactor loop. It also feeds `/simplify` (run `/simplify` on the files it flags + any 300-line crossers).
 
-**Prioritization:**
-- `/codescene:prioritizing-technical-debt` — use when choosing what to refactor next
-- `list_technical_debt_hotspots_for_project` — ranked list of highest-risk files
+**Removed:** there is no per-file `code_health_review` pre-flight and no per-commit `pre_commit_code_health_safeguard`. `code_health_review` remains available on demand when deliberately inspecting a hotspot.
