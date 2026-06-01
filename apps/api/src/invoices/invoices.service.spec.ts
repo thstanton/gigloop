@@ -1,4 +1,4 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { InvoicesService } from './invoices.service';
 import { InvoicesRepository } from './invoices.repository';
 import { CommunicationsService } from '../communications/communications.service';
@@ -50,7 +50,7 @@ const mockComms = { sendEmail: jest.fn() } as unknown as CommunicationsService;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockDocuments = { generateAndStoreInvoicePdf: jest.fn(), generatePreviewPdf: jest.fn() } as any;
 
-const invoice = { id: 'i1', bookingId: 'b1', userId: 'u1', status: 'DRAFT' };
+const invoice = { id: 'i1', bookingId: 'b1', userId: 'u1', status: 'DRAFT', isDeposit: false };
 const lineItem = { id: 'li1', invoiceId: 'i1', userId: 'u1' };
 
 describe('InvoicesService', () => {
@@ -95,16 +95,18 @@ describe('InvoicesService', () => {
   });
 
   describe('create', () => {
-    it('defaults billToContactId to the booking customerId when not provided', async () => {
+    beforeEach(() => {
       repo.findBookingCustomerId.mockResolvedValue('c1');
+      repo.countActiveByType.mockResolvedValue(0);
       repo.create.mockResolvedValue(invoice);
+    });
+
+    it('defaults billToContactId to the booking customerId when not provided', async () => {
       await service.create('u1', 'b1', {});
       expect(repo.create).toHaveBeenCalledWith('u1', 'b1', 'c1', {});
     });
 
     it('uses the provided billToContactId instead of the booking customer', async () => {
-      repo.findBookingCustomerId.mockResolvedValue('c1');
-      repo.create.mockResolvedValue(invoice);
       await service.create('u1', 'b1', { billToContactId: 'c2' });
       expect(repo.create).toHaveBeenCalledWith('u1', 'b1', 'c2', { billToContactId: 'c2' });
     });
@@ -113,6 +115,23 @@ describe('InvoicesService', () => {
       repo.findBookingCustomerId.mockResolvedValue(null);
       await expect(service.create('u1', 'missing', {})).rejects.toThrow(NotFoundException);
       expect(repo.create).not.toHaveBeenCalled();
+    });
+
+    it('throws ConflictException when a non-VOID deposit invoice already exists', async () => {
+      repo.countActiveByType.mockResolvedValue(1);
+      await expect(service.create('u1', 'b1', { isDeposit: true })).rejects.toThrow(ConflictException);
+      expect(repo.create).not.toHaveBeenCalled();
+    });
+
+    it('throws ConflictException when a non-VOID balance invoice already exists', async () => {
+      repo.countActiveByType.mockResolvedValue(1);
+      await expect(service.create('u1', 'b1', { isDeposit: false })).rejects.toThrow(ConflictException);
+      expect(repo.create).not.toHaveBeenCalled();
+    });
+
+    it('checks the correct isDeposit type when guarding against duplicates', async () => {
+      await service.create('u1', 'b1', { isDeposit: true });
+      expect(repo.countActiveByType).toHaveBeenCalledWith('b1', true);
     });
   });
 
@@ -254,14 +273,22 @@ describe('InvoicesService', () => {
       expect(repo.assignAndMarkSent).not.toHaveBeenCalled();
     });
 
-    it('calls assignAndMarkSent with parsed issueDate and dueDate', async () => {
+    it('calls assignAndMarkSent with bookingId, isDeposit, parsed issueDate and dueDate', async () => {
       await service.send('u1', 'b1', 'i1', dto);
-      expect(repo.assignAndMarkSent).toHaveBeenCalledWith('u1', 'i1', new Date('2026-05-26'), new Date('2026-06-09'));
+      expect(repo.assignAndMarkSent).toHaveBeenCalledWith('u1', {
+        id: 'i1', bookingId: 'b1', isDeposit: false, issueDate: new Date('2026-05-26'), dueDate: new Date('2026-06-09'),
+      });
     });
 
     it('calls assignAndMarkSent with null dueDate when not provided', async () => {
       await service.send('u1', 'b1', 'i1', { ...dto, dueDate: undefined });
-      expect(repo.assignAndMarkSent).toHaveBeenCalledWith('u1', 'i1', new Date('2026-05-26'), null);
+      expect(repo.assignAndMarkSent).toHaveBeenCalledWith('u1', expect.objectContaining({ dueDate: null }));
+    });
+
+    it('passes isDeposit: true to assignAndMarkSent for deposit invoices', async () => {
+      repo.findOne.mockResolvedValue({ ...invoice, isDeposit: true });
+      await service.send('u1', 'b1', 'i1', dto);
+      expect(repo.assignAndMarkSent).toHaveBeenCalledWith('u1', expect.objectContaining({ isDeposit: true }));
     });
 
     it('calls generateAndStoreInvoicePdf with the sentInvoice to avoid a redundant DB fetch', async () => {
@@ -300,14 +327,16 @@ describe('InvoicesService', () => {
       expect(repo.assignAndMarkSent).not.toHaveBeenCalled();
     });
 
-    it('calls assignAndMarkSent with parsed issueDate and dueDate', async () => {
+    it('calls assignAndMarkSent with bookingId, isDeposit, parsed issueDate and dueDate', async () => {
       await service.markSent('u1', 'b1', 'i1', dto);
-      expect(repo.assignAndMarkSent).toHaveBeenCalledWith('u1', 'i1', new Date('2026-05-26'), new Date('2026-06-09'));
+      expect(repo.assignAndMarkSent).toHaveBeenCalledWith('u1', {
+        id: 'i1', bookingId: 'b1', isDeposit: false, issueDate: new Date('2026-05-26'), dueDate: new Date('2026-06-09'),
+      });
     });
 
     it('calls assignAndMarkSent with null dueDate when not provided', async () => {
       await service.markSent('u1', 'b1', 'i1', { issueDate: '2026-05-26' });
-      expect(repo.assignAndMarkSent).toHaveBeenCalledWith('u1', 'i1', new Date('2026-05-26'), null);
+      expect(repo.assignAndMarkSent).toHaveBeenCalledWith('u1', expect.objectContaining({ dueDate: null }));
     });
 
     it('returns the updated invoice', async () => {
