@@ -111,6 +111,21 @@ export interface ContactSummary {
   email?: string | null;
 }
 
+// ─────────────────────────────────────────
+// Series
+// ─────────────────────────────────────────
+
+export interface BookingSeries {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  label: string;
+  customerId: string;
+  customer: ContactSummary;
+  memberBookingCount?: number;
+  invoiceStatus?: string | null;
+}
+
 export interface PerformanceSet {
   id: string;
   order: number;
@@ -208,6 +223,8 @@ export interface BookingDetail extends Omit<BookingListItem, 'customer' | 'venue
   portalToken: string;
   hasMusicFormConfig: boolean;
   hasMusicFormResponse: boolean;
+  seriesId: string | null;
+  series: { id: string; label: string } | null;
 }
 
 export interface CreateSetInput {
@@ -237,6 +254,8 @@ export interface CreateBookingInput {
   bookingAgentId?: string;
   formatIds?: string[];
   checklistItems: ChecklistDefaultItem[];
+  seriesId?: string;
+  newSeries?: { label: string };
 }
 
 export interface UpdateBookingInput {

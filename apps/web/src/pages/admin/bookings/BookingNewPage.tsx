@@ -24,6 +24,7 @@ import { apiGet, apiPost } from '@/lib/api';
 import { SubLabel } from '@/components/common/SubLabel';
 import type {
   BookingDetail,
+  BookingSeries,
   BookingStatus,
   ChecklistDefaultItem,
   EventType,
@@ -45,6 +46,12 @@ const STATUS_TO_STAGE: Record<string, BookingStatus | null> = {
   ENQUIRY: null, PROVISIONAL: 'PROVISIONAL', CONFIRMED: 'CONFIRMED',
   READY: 'READY', COMPLETE: 'COMPLETE', CANCELLED: 'COMPLETE',
 };
+
+function buildSeriesPayload(values: BookingFormValues): { seriesId?: string; newSeries?: { label: string } } {
+  if (values.seriesMode === 'existing' && values.seriesId) return { seriesId: values.seriesId };
+  if (values.seriesMode === 'new' && values.newSeriesLabel?.trim()) return { newSeries: { label: values.newSeriesLabel.trim() } };
+  return {};
+}
 
 function filterByStartingStatus(
   items: ChecklistDefaultItem[],
@@ -85,6 +92,12 @@ export default function BookingNewPage() {
     enabled: isLoaded && (userProfile?.songRequestFormEnabled ?? false),
   });
 
+  const { data: seriesList } = useQuery({
+    queryKey: ['series'],
+    queryFn: () => apiGet<BookingSeries[]>('/series'),
+    enabled: isLoaded,
+  });
+
   const { register, control, handleSubmit, setValue, formState: { errors } } = useForm<BookingFormValues>({
     resolver: zodResolver(bookingFormSchema),
     defaultValues: {
@@ -98,6 +111,9 @@ export default function BookingNewPage() {
       venueId: locationState?.venueId ?? null,
       bookingAgentId: locationState?.bookingAgentId ?? null,
       formatIds: [],
+      seriesMode: 'none',
+      seriesId: null,
+      newSeriesLabel: '',
     },
   });
 
@@ -129,6 +145,7 @@ export default function BookingNewPage() {
         bookingAgentId: values.bookingAgentId ?? undefined,
         formatIds: values.formatIds.length ? values.formatIds : undefined,
         checklistItems,
+        ...buildSeriesPayload(values),
       });
     },
     onSuccess: (created) => {
@@ -311,6 +328,7 @@ export default function BookingNewPage() {
           errors={errors}
           songRequestFormEnabled={userProfile?.songRequestFormEnabled}
           formats={formats}
+          series={seriesList}
         />
 
         <div className="flex gap-3">

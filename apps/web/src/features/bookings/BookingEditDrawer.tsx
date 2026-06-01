@@ -34,6 +34,9 @@ function buildDefaultValues(booking: BookingDetail): BookingFormValues {
     venueId: booking.venueId,
     bookingAgentId: booking.bookingAgentId,
     formatIds: [],
+    seriesMode: 'none',
+    seriesId: null,
+    newSeriesLabel: '',
   };
 }
 

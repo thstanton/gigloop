@@ -15,8 +15,9 @@ import { TemplatesModule } from './templates/templates.module';
 import { UserProfileModule } from './user-profile/user-profile.module';
 import { PackagesModule } from './packages/packages.module';
 import { PortalModule } from './portal/portal.module';
+import { SeriesModule } from './series/series.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, HealthModule, StorageModule, MailModule, UserProfileModule, ContactsModule, BookingsModule, ChecklistModule, SongsModule, InvoicesModule, TemplatesModule, CommunicationsModule, DocumentsModule, PortalModule, PackagesModule],
+  imports: [PrismaModule, AuthModule, HealthModule, StorageModule, MailModule, UserProfileModule, ContactsModule, BookingsModule, ChecklistModule, SongsModule, InvoicesModule, TemplatesModule, CommunicationsModule, DocumentsModule, PortalModule, PackagesModule, SeriesModule],
 })
 export class AppModule {}
