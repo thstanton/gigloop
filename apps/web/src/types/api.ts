@@ -116,6 +116,16 @@ export interface BookingSeries {
   invoiceStatus?: string | null;
 }
 
+export interface SeriesDefaults {
+  customerId?: string;
+  venueId?: string | null;
+  bookingAgentId?: string | null;
+  packageIds?: string[];
+  checklistItems?: ChecklistDefaultItem[];
+  musicFormConfig?: { enabledGenres: string[]; keyMoments: KeyMoment[] } | null;
+}
+
+
 // ─────────────────────────────────────────
 // Bookings
 // ─────────────────────────────────────────
@@ -124,6 +134,21 @@ export interface ContactSummary {
   id: string;
   name: string;
   email?: string | null;
+}
+
+// ─────────────────────────────────────────
+// Series
+// ─────────────────────────────────────────
+
+export interface BookingSeries {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  label: string;
+  customerId: string;
+  customer: ContactSummary;
+  memberBookingCount?: number;
+  invoiceStatus?: string | null;
 }
 
 export interface PerformanceSet {

@@ -55,13 +55,26 @@ PDF generation runs in the API process using `@react-pdf/renderer` and the resul
 
 These rules apply every session — not just when things look complex.
 
-**Pre-flight:** Before modifying any existing file, run `bun run lint` on it and report any existing violations. If the file already has complexity errors, propose refactoring it first before adding new code.
+**Pre-flight:** Before modifying any existing file:
+1. Run `bun run lint` on it and report any existing violations
+2. Run CodeScene `code_health_review` on it and report any health issues
 
-**Pre-commit:** Run `bun run lint && bun run build` in both `apps/api` and `apps/web` before every commit. Never commit if either fails.
+If the file has complexity errors or Code Health problems, propose refactoring it first before adding new code.
 
-**Session close:** Run `/simplify` on any file substantially changed in the session before raising a PR.
+**Pre-commit:** Before every commit:
+1. Run `bun run lint && bun run build` in both `apps/api` and `apps/web` — never commit if either fails
+2. Run CodeScene `pre_commit_code_health_safeguard` — if it reports a regression, refactor before committing
+
+**Pre-PR (mandatory — in this order):**
+1. `bun run lint && bun run build` in both workspaces — must pass clean
+2. Run CodeScene `analyze_change_set` — if it reports a regression, refactor before opening PR
+3. Run `/simplify` on every file substantially changed in the session
+4. Confirm every new page or component file has a `.stories.tsx` in the same branch
+5. Open PR with `gh pr create`
 
 **Line count proxy:** Files over ~300 lines are a yellow flag. Check lint complexity before extending them further.
+
+**ESLint disables:** Never add an `eslint-disable` comment without explaining the situation and getting explicit permission. The only pre-approved suppress is `@typescript-eslint/no-explicit-any` (with a mandatory inline comment explaining why). All other suppressions — including `react-hooks/exhaustive-deps` — require approval. If a lint rule cannot be resolved cleanly, stop and explain the situation rather than silencing it.
 
 ## Shared types
 `apps/web/src/types/api.ts` is the single source of frontend-facing types.
@@ -89,6 +102,7 @@ Frontend pages import types from here rather than declaring local interfaces.
 - Errors are handled at the controller level using NestJS 
   built-in HttpException classes
 - Domain types and DTOs are kept separate
+- **Shared constants:** Label maps and lookup constants (status labels, category labels, ordered enum lists) belong in `apps/web/src/lib/constants.ts`. Never define a label map inside a component or page file if it may be needed elsewhere. Never import shared values from a page file — move them to `lib/constants` first.
 
 ## Repository Pattern
 Every feature module uses three layers:
@@ -124,17 +138,18 @@ Examples: `feat(bookings): add checklist seeding on creation`, `fix(invoices): c
 ### One commit per issue — mandatory
 **Each issue must be its own commit.** Never batch multiple issues into a single commit.
 
-- Complete one issue fully (code + tests passing), commit it, then move to the next.
+- Complete one issue fully (code + tests + story passing), commit it, then move to the next.
 - The commit message body must include `Closes #<issue-number>` so the issue is closed automatically on merge.
 - If issues have a strict dependency order, complete and commit them in that order.
 - If issues are independent, commit each in whichever order you work through them — but still one commit per issue.
+- **Stories are part of the issue commit** — a new page or component commit is not complete without its `.stories.tsx` file. `chore(storybook):` commits are only for updating existing stories, never for adding a story that should have shipped with the original feature.
 
 This makes the git history meaningful (each commit is a reviewable unit of work), keeps CI bisectable, and ensures individual issues can be reverted cleanly if needed.
 
 ### My responsibilities (Claude Code)
 - At the start of any session involving application code changes: confirm we are on a feature branch, or create one.
 - When working multiple branches in one session: open a PR for each branch as soon as it is complete, then immediately start the next branch. This lets review overlap with ongoing development.
-- At the end of the session: open a PR with `gh pr create` rather than committing to `main`.
+- At the end of the session: run the Pre-PR checklist above, then open a PR with `gh pr create`.
 - Never push application code directly to `main`.
 
 ### Merging
@@ -155,8 +170,24 @@ Protect `main` with:
 
 ## UI Components
 
-### Inventory check — before writing any UI code
-Before writing any JSX, scan `components/common/` and `components/ui/`. If a component already encodes the pattern you need (typography, spacing + colour combination, layout), use it. Writing raw `className` that replicates what an existing component already does is the mistake to prevent — not just creating new files.
+### Inventory check — mandatory before writing any JSX
+
+Before writing any JSX, work through these steps in order:
+
+1. **Check `components/ui/`** for primitives: `Button` (default/outline/ghost/destructive variants), `Input`, `Textarea`, `Select`, `Switch`, `Label`, `Badge`, `Separator`, `Sheet`, `Dialog`, `Tabs`, `Tooltip`, `Toast`
+2. **Check `components/common/`** for patterns:
+   - `PageHeader` — page title + optional back link + optional subheading + optional action
+   - `PageSection` — section heading (h2-level) within a page
+   - `Card` — bordered container with optional title
+   - `FormField` — label + input slot + error message
+   - `EmptyState` — icon + heading + paragraph + CTA
+   - `GhostButton` — small text-only action button
+   - `IconButton` — icon-only action button
+   - `LabelValue` — read-only label + value pair
+   - `SubLabel` — de-emphasised label text
+   - `BookingStatusPill` / `InvoiceStatusPill` / `StatusPill` — status badges
+3. **Only write raw `className`** if no existing component covers the pattern. If unsure, ask.
+4. **Never replicate a component's styling** with raw Tailwind — use the component.
 
 ### Creating new shared components
 Creating a new file in `components/common/` or `components/ui/` requires approval. Before creating one, stop and ask — explaining what the new component does and why no existing component covers the case. Do not proceed without confirmation.
@@ -176,6 +207,7 @@ For feature components, always build the presentational layer + story before the
 ## Session Behaviour
 - Build only what the current session specifies
 - Do not begin the next feature unprompted
+- **Session sizing:** For UI-heavy features, work a maximum of 3–4 issues per session. When a feature has a dependency chain (API → layout → individual pages), break it into sessions by dependency level rather than attempting all layers at once.
 - When the session task is complete, stop and summarise:
   - What was built
   - Any decisions made that weren't in the spec
@@ -239,3 +271,20 @@ Default label vocabulary (needs-triage, needs-info, ready-for-agent, ready-for-h
 ### Domain docs
 
 Single-context repo — one `CONTEXT.md` + `docs/adr/` at the root. See `docs/agents/domain.md`.
+
+### CodeScene
+
+CodeScene MCP Server is active (default project: gigman). Target Code Health: 10.0.
+
+**Mandatory safeguards (every session):**
+- `pre_commit_code_health_safeguard` — before every commit (staged files gate)
+- `analyze_change_set` — before every PR (branch-level gate)
+- If either reports a regression: run `code_health_review` on flagged files, refactor, re-check. Do not declare work done with a failing safeguard.
+
+**File inspection:**
+- `code_health_review` — detailed review of a file; use during pre-flight on any file flagged as a hotspot
+- `/codescene:guiding-refactoring-with-code-health` — step-by-step refactoring workflow using Code Health findings
+
+**Prioritization:**
+- `/codescene:prioritizing-technical-debt` — use when choosing what to refactor next
+- `list_technical_debt_hotspots_for_project` — ranked list of highest-risk files
