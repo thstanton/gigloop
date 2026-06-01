@@ -1,0 +1,47 @@
+# Issue authoring (the planning gate)
+
+How a feature is broken into issues *before any code is written*. This is the calm, fresh, human-in-the-loop moment where the judgement that is unreliable at coding time gets made once and made visible. See ADR-0030.
+
+`/to-issues` and `/grill-with-docs` are generic, user-global skills — they provide the machinery (vertical slicing, grilling) but know nothing about GigMan. This document is the GigMan-specific spec their output must conform to. **When authoring issues for this repo — whether via `/to-issues` or by hand — produce issues that meet every requirement below, then get the human's approval before coding.**
+
+## When the gate applies
+
+- **Non-trivial features** → planning gate is mandatory. I draft the tracking issue + sub-issues, the human approves/adjusts, *then* code begins.
+- **Trivial fixes** (one file, no new UI, no schema change) → skip the gate; go straight to a `fix/` branch.
+
+If unsure whether something is trivial, treat it as a feature and plan it.
+
+## What the gate produces
+
+A **tracking issue** (umbrella; durable dependency map) whose body lists sub-issues as a task list with `Blocked by` links, plus the sub-issues themselves. Every sub-issue must be:
+
+### 1. Vertically sliced
+Each sub-issue ships a thin, working capability end-to-end — *not* a horizontal layer. "Schema migration" alone is a layer, not a slice: it can't be reviewed or tested in isolation and it forces everything downstream to depend on it. Slice by capability (a narrow feature through schema → API → UI), not by tier. Horizontal slicing is what creates dependency chains and merge conflicts.
+
+### 2. Session-sized
+Each sub-issue is completable within **one healthy context window** — roughly one session's safe increment. A sub-issue that can't be finished before context degrades is too big; split it. The branch persists across sessions, so a feature spanning several sessions is normal and fine — but no single sub-issue should require ploughing through a degrading context.
+
+### 3. Dependency-mapped
+The tracking issue records order and dependencies (`Blocked by #N`). I advance the map **one unblocked sub-issue at a time**; it is not a goal to complete in one sitting.
+
+### 4. Reuse-annotated (UI issues)
+Before writing the issue, do the **component inventory pass** (see `apps/web/src/components/ui` and `components/common`, and Storybook). Name the components the issue should use directly in the issue body — e.g. "empty state via `EmptyState`", "wrap in `Card`", "header via `PageHeader`". The reuse decision is made here, once, where the human can catch a missed component at planning time rather than in a diff. If a genuinely new shared component is needed, the issue says so explicitly and flags it for approval (creating `components/common` or `components/ui` files requires approval — see CLAUDE.md).
+
+### 5. Story-task-bearing (UI issues)
+Story creation is an **explicit task**, sequenced **before** the component build (presentational-first, ADR-0023). The story is a deliberate review checkpoint: the human reviews the presentational component in Storybook *before* the container is wired up. Structure UI work so the story is its own commit boundary — "build story → STOP → review → build component" lines up exactly with the session-stop rule (CLAUDE.md → Session Behaviour).
+
+## Branch & PR shape (set at planning time)
+
+- **One feature = one branch = one PR.** Sub-issues are commits on that branch (`Closes #N` in the commit body; all closed in the PR description). **Never** split a dependent feature into sibling branches — that is the squash-merge conflict footgun (see ADR-0025).
+- If a feature is genuinely too large for one reviewable PR, split it into **sequential** tracking issues — each its own branch → PR → merge *before the next starts*. Never parallel.
+
+## Checklist for the human to approve
+
+Before coding starts, the human should be able to see, in the issues:
+
+- [ ] Each sub-issue is a vertical capability, not a layer
+- [ ] Each sub-issue fits one session
+- [ ] Dependencies are mapped on the tracking issue
+- [ ] UI sub-issues name the components to reuse
+- [ ] UI sub-issues include a story task, sequenced before the build
+- [ ] One branch / one PR for the whole feature (or an explicit sequential split)

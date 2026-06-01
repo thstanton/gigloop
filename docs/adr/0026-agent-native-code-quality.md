@@ -2,7 +2,19 @@
 
 **Status:** Accepted  
 **Date:** 2026-05-31  
-**Amended:** 2026-05-31 — CodeScene reclassified from passive dashboard to mandatory agent-run quality gate following installation of CodeScene MCP Server v1.2.2.
+**Amended:** 2026-05-31 — CodeScene reclassified from passive dashboard to mandatory agent-run quality gate following installation of CodeScene MCP Server v1.2.2.  
+**Amended:** 2026-06-01 — CodeScene reclassified again, from mandatory hard gate to advisory navigator. See "Amendment 2026-06-01" below and ADR-0030.
+
+## Amendment (2026-06-01): from gatekeeper to navigator
+
+The mandatory-gate stance (CodeScene must pass before commit and PR, target 10.0) created its own friction: refactor-until-perfect loops *inside* feature commits, gate-appeasement churn commits, and shortcuts taken to "make it pass." A workflow retrospective (see ADR-0030) found CodeScene was doing two jobs fused into one gate — a **navigator** (proactively ranking refactor targets, which is its real value) and a **gatekeeper** (blocking each commit/PR until health is restored, which is the friction). The gatekeeper role actively undermined the navigator role: forced in-feature refactoring is rushed and entangled, whereas refactoring done as its own deliberate work is done properly.
+
+Revised stance:
+- **Navigator kept.** `list_technical_debt_hotspots_for_project` drives refactoring as its own deliberate work.
+- **Gatekeeper demoted.** Per-file `code_health_review` pre-flight and per-commit `pre_commit_code_health_safeguard` are removed. `analyze_change_set` runs once at PR and is **reported** to the human (and feeds signal-driven `/simplify`) — not an automatic loop.
+- **Target is "no meaningful regression," not 10.0.**
+
+This does not reverse the agent-native principle below (a tool the agent can run and act on, in-session). It corrects the *strength* of the gate: deterministic checks (lint/test/build) are the hard gates now, automated via hooks + CI; CodeScene is advisory.
 
 ## Context
 
