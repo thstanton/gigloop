@@ -19,7 +19,7 @@ type MockRepo = {
   markSeriesInvoicePaid: jest.Mock;
 };
 
-type MockInvoicesRepo = { voidInvoice: jest.Mock; delete: jest.Mock; assignAndMarkSent: jest.Mock; assignWithInheritedNumber: jest.Mock };
+type MockInvoicesRepo = { voidInvoice: jest.Mock; delete: jest.Mock; assignNewSequenceNumber: jest.Mock; assignWithInheritedNumber: jest.Mock };
 type MockDocuments = { generatePreviewPdf: jest.Mock };
 type MockComms = { sendEmail: jest.Mock };
 
@@ -40,7 +40,7 @@ function makeRepo(): MockRepo {
 }
 
 function makeInvoicesRepo(): MockInvoicesRepo {
-  return { voidInvoice: jest.fn(), delete: jest.fn(), assignAndMarkSent: jest.fn(), assignWithInheritedNumber: jest.fn() };
+  return { voidInvoice: jest.fn(), delete: jest.fn(), assignNewSequenceNumber: jest.fn(), assignWithInheritedNumber: jest.fn() };
 }
 
 function makeDocuments(): MockDocuments {

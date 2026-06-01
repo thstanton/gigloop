@@ -10,6 +10,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useBooking } from '@/lib/hooks/useBooking';
 import { useBookingActions } from '@/lib/hooks/useBookingActions';
 import { useBookingInvoices } from '@/lib/hooks/useBookingInvoices';
@@ -48,6 +55,7 @@ import { IconButton } from '@/components/common/IconButton';
 import { EmptyState } from '@/components/common/EmptyState';
 import type {
   BookingDetail,
+  BookingSeries,
   BookingStatus,
   ChecklistItem,
   Contact,
@@ -58,8 +66,13 @@ import type {
   MusicFormResponse,
   SeriesInvoice,
   Template,
+  UpdateBookingSeriesResponse,
   UserProfile,
 } from '@/types/api';
+
+function isSeriesConfirmationRequired(r: object): r is Required<UpdateBookingSeriesResponse> {
+  return 'requiresConfirmation' in r;
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -183,6 +196,9 @@ export default function BookingDetailPage() {
   const [pendingContract, setPendingContract] = useState<Contract | null>(null);
   const [readyDialogStatus, setReadyDialogStatus] = useState<BookingStatus | null>(null);
   const [viewingMusicFormResponse, setViewingMusicFormResponse] = useState(false);
+  const [seriesSheetOpen, setSeriesSheetOpen] = useState(false);
+  const [selectedSeriesId, setSelectedSeriesId] = useState<string | null>(null);
+  const [seriesConfirm, setSeriesConfirm] = useState<{ warning: string; seriesId: string } | null>(null);
   const dismissedTransitions = useRef(new Set<string>());
   const celebratoryTitle = useRef(CELEBRATORY_TITLES[Math.floor(Math.random() * CELEBRATORY_TITLES.length)]);
 
@@ -200,6 +216,29 @@ export default function BookingDetailPage() {
 
   const actions = useBookingActions(id!);
   const queryClient = useQueryClient();
+
+  const { data: seriesList } = useQuery({
+    queryKey: ['series'],
+    queryFn: () => apiGet<BookingSeries[]>('/series'),
+    enabled: isLoaded && seriesSheetOpen,
+  });
+
+  const updateSeriesMutation = useMutation({
+    mutationFn: (payload: { seriesId: string | null; confirm?: boolean }) =>
+      apiPatch<UpdateBookingSeriesResponse | BookingDetail>(`/bookings/${id}/series`, payload),
+    onSuccess: (result) => {
+      if (isSeriesConfirmationRequired(result) && selectedSeriesId) {
+        setSeriesConfirm({ warning: result.warning, seriesId: selectedSeriesId });
+        return;
+      }
+      setSeriesSheetOpen(false);
+      setSeriesConfirm(null);
+      setSelectedSeriesId(null);
+      queryClient.invalidateQueries({ queryKey: ['booking', id] });
+      queryClient.invalidateQueries({ queryKey: ['bookings'] });
+    },
+    onError: () => toast({ title: 'Failed to update series assignment', variant: 'destructive' }),
+  });
 
   const { data: checklist = [], isPending: checklistLoading } = useQuery({
     queryKey: ['bookingChecklist', id],
@@ -539,10 +578,26 @@ export default function BookingDetailPage() {
                 ? <span className="text-sm text-muted">{feeWithVat}</span>
                 : <InlineFeeAdd onSave={(fee) => updateFeeMutation.mutate(fee)} isSaving={updateFeeMutation.isPending} />
               }
-              {booking.series && (
-                <span className="text-sm text-muted border border-border rounded px-2 py-0.5">
+              {booking.series ? (
+                <span className="inline-flex items-center gap-1.5 text-sm text-muted border border-border rounded px-2 py-0.5">
                   Series: {booking.series.label}
+                  <button
+                    type="button"
+                    onClick={() => updateSeriesMutation.mutate({ seriesId: null })}
+                    className="hover:text-foreground transition-colors"
+                    aria-label="Remove from series"
+                  >
+                    <X size={12} />
+                  </button>
                 </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setSeriesSheetOpen(true)}
+                  className="text-sm text-muted hover:text-foreground transition-colors underline underline-offset-2"
+                >
+                  + Add to series
+                </button>
               )}
             </div>
           </section>
@@ -849,6 +904,62 @@ export default function BookingDetailPage() {
           onOpenChange={(open) => { if (!open) setMarkSentInvoice(undefined); }}
         />
       )}
+
+      {/* Add to series dialog */}
+      <Dialog open={seriesSheetOpen} onOpenChange={(open) => { setSeriesSheetOpen(open); if (!open) setSelectedSeriesId(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add to series</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <Select value={selectedSeriesId ?? ''} onValueChange={setSelectedSeriesId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select series..." />
+              </SelectTrigger>
+              <SelectContent>
+                {seriesList?.length
+                  ? seriesList.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
+                    ))
+                  : <SelectItem value="" disabled>No series available</SelectItem>
+                }
+              </SelectContent>
+            </Select>
+            <div className="flex gap-3">
+              <Button
+                onClick={() => { if (selectedSeriesId) updateSeriesMutation.mutate({ seriesId: selectedSeriesId }); }}
+                disabled={!selectedSeriesId || updateSeriesMutation.isPending}
+              >
+                {updateSeriesMutation.isPending ? 'Saving…' : 'Add to series'}
+              </Button>
+              <Button variant="outline" onClick={() => setSeriesSheetOpen(false)}>Cancel</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Customer mismatch confirmation dialog */}
+      <Dialog open={!!seriesConfirm} onOpenChange={(open) => { if (!open) setSeriesConfirm(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Customer mismatch</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted pt-2">{seriesConfirm?.warning}</p>
+          <div className="flex gap-3 pt-4">
+            <Button
+              onClick={() => {
+                if (seriesConfirm) {
+                  updateSeriesMutation.mutate({ seriesId: seriesConfirm.seriesId, confirm: true });
+                }
+              }}
+              disabled={updateSeriesMutation.isPending}
+            >
+              {updateSeriesMutation.isPending ? 'Saving…' : 'Continue anyway'}
+            </Button>
+            <Button variant="outline" onClick={() => setSeriesConfirm(null)}>Cancel</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

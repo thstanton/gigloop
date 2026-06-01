@@ -36,6 +36,32 @@ export class SeriesRepository {
     });
   }
 
+  findOneLight(userId: string, id: string) {
+    return this.prisma.bookingSeries.findFirst({
+      where: { id, userId },
+      include: seriesIncludes,
+    });
+  }
+
+  findSeriesCustomerId(userId: string, id: string) {
+    return this.prisma.bookingSeries.findFirst({
+      where: { id, userId },
+      select: { customerId: true },
+    });
+  }
+
+  findEarliestMemberBooking(userId: string, seriesId: string) {
+    return this.prisma.booking.findFirst({
+      where: { seriesId, userId },
+      orderBy: { createdAt: 'asc' },
+      include: {
+        packages: { select: { packageId: true }, orderBy: { order: 'asc' } },
+        checklistItems: { orderBy: { order: 'asc' } },
+        musicFormConfig: true,
+      },
+    });
+  }
+
   create(userId: string, label: string, customerId: string) {
     return this.prisma.bookingSeries.create({
       data: { userId, label, customerId },

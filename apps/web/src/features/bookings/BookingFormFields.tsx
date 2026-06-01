@@ -222,6 +222,7 @@ function SeriesSection({
   );
 }
 
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 interface Props {

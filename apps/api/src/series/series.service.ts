@@ -37,6 +37,37 @@ export class SeriesService {
     };
   }
 
+  async findDefaults(userId: string, id: string) {
+    const series = await this.repo.findSeriesCustomerId(userId, id);
+    if (!series) throw new NotFoundException('Series not found');
+
+    const earliest = await this.repo.findEarliestMemberBooking(userId, id);
+    if (!earliest) return {};
+
+    return {
+      customerId: series.customerId,
+      venueId: earliest.venueId,
+      bookingAgentId: earliest.bookingAgentId,
+      packageIds: earliest.packages.map((bp) => bp.packageId),
+      checklistItems: earliest.checklistItems.map((item) => ({
+        key: item.key,
+        label: item.label,
+        completedBy: item.completedBy as 'USER' | 'CUSTOMER' | 'BAND_MEMBER',
+        dependsOn: item.dependsOn,
+        autoCompleteRule: item.autoCompleteRule as Record<string, unknown> | null,
+        requiredForStatus: item.requiredForStatus as 'PROVISIONAL' | 'CONFIRMED' | 'READY' | 'COMPLETE' | null,
+        dueDateRule: item.dueDateRule as Record<string, unknown> | null,
+        enabled: true,
+      })),
+      musicFormConfig: earliest.musicFormConfig
+        ? {
+            enabledGenres: earliest.musicFormConfig.enabledGenres,
+            keyMoments: earliest.musicFormConfig.keyMoments,
+          }
+        : null,
+    };
+  }
+
   // ─── Invoice operations ────────────────────────────────────────────────────
 
   private async requireSeries(userId: string, seriesId: string) {
@@ -54,7 +85,7 @@ export class SeriesService {
     const voided = await this.repo.findVoidedSeriesInvoiceWithNumber(userId, seriesId);
     return voided?.invoiceNumber
       ? this.invoicesRepo.assignWithInheritedNumber(invoiceId, voided.invoiceNumber, issueDate, dueDate)
-      : this.invoicesRepo.assignAndMarkSent(userId, invoiceId, issueDate, dueDate);
+      : this.invoicesRepo.assignNewSequenceNumber(userId, invoiceId, issueDate, dueDate);
   }
 
   async createInvoice(userId: string, seriesId: string) {

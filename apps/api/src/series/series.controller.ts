@@ -25,6 +25,12 @@ export class SeriesController {
     return this.service.findOne(req.userId, id);
   }
 
+  @ApiOperation({ summary: 'Get pre-population defaults from the earliest member booking' })
+  @Get(':id/defaults')
+  findDefaults(@Req() req: AuthedRequest, @Param('id') id: string) {
+    return this.service.findDefaults(req.userId, id);
+  }
+
   @ApiOperation({ summary: 'Create a series invoice with auto-generated line items' })
   @Post(':id/invoices')
   createInvoice(@Req() req: AuthedRequest, @Param('id') id: string) {

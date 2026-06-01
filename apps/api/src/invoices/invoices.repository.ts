@@ -126,13 +126,25 @@ export class InvoicesRepository {
 
   async assignAndMarkSent(
     userId: string,
-    id: string,
-    issueDate: Date,
-    dueDate: Date | null,
+    params: { id: string; bookingId: string; isDeposit: boolean; issueDate: Date; dueDate: Date | null },
   ) {
+    const { id, bookingId, isDeposit, issueDate, dueDate } = params;
     const currentYear = new Date().getFullYear();
 
     return this.prisma.$transaction(async (tx) => {
+      const voided = await tx.invoice.findFirst({
+        where: { bookingId, userId, isDeposit, status: 'VOID', invoiceNumber: { not: null } },
+        select: { invoiceNumber: true },
+      });
+
+      if (voided?.invoiceNumber) {
+        return tx.invoice.update({
+          where: { id },
+          data: { invoiceNumber: voided.invoiceNumber, issueDate, dueDate, status: 'SENT' },
+          include: invoiceIncludes,
+        });
+      }
+
       const profile = await tx.userProfile.findUnique({ where: { userId } });
       if (!profile) throw new Error('User profile not found');
 
@@ -163,6 +175,34 @@ export class InvoicesRepository {
       where: { id },
       data: { invoiceNumber, issueDate, dueDate, status: 'SENT' },
       include: invoiceIncludes,
+    });
+  }
+
+  async assignNewSequenceNumber(userId: string, invoiceId: string, issueDate: Date, dueDate: Date | null) {
+    const currentYear = new Date().getFullYear();
+    return this.prisma.$transaction(async (tx) => {
+      const profile = await tx.userProfile.findUnique({ where: { userId } });
+      if (!profile) throw new Error('User profile not found');
+
+      const format = resolveFormat((profile.preferences as Record<string, unknown>) ?? {});
+      const isNewYear = format.includeYear && profile.invoiceSequenceYear !== currentYear;
+      const nextSeq = isNewYear ? 1 : profile.invoiceNumberSequence + 1;
+
+      await tx.userProfile.update({
+        where: { userId },
+        data: {
+          invoiceNumberSequence: nextSeq,
+          ...(format.includeYear ? { invoiceSequenceYear: currentYear } : {}),
+        },
+      });
+
+      const invoiceNumber = buildInvoiceNumber(nextSeq, currentYear, format);
+
+      return tx.invoice.update({
+        where: { id: invoiceId },
+        data: { invoiceNumber, issueDate, dueDate, status: 'SENT' },
+        include: invoiceIncludes,
+      });
     });
   }
 
