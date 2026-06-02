@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { MapPin } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import { LabelValue } from '@/components/common/LabelValue';
 import { FormField } from '@/components/common/FormField';
 
 export interface AddressFields {
@@ -122,6 +121,43 @@ function ManualEntry({
   );
 }
 
+// ─── Editable fields shown after a place is selected ─────────────────────────
+
+function SelectedAddress({
+  value,
+  onChange,
+  onClear,
+}: {
+  value: AddressFields;
+  onChange: (v: AddressFields) => void;
+  onClear: () => void;
+}) {
+  const set = (field: keyof AddressFields) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    onChange({ ...value, [field]: e.target.value, placeId: null, latitude: null, longitude: null });
+
+  return (
+    <div className="space-y-2">
+      <button type="button" onClick={onClear} className="text-sm text-muted hover:text-foreground underline-offset-2 hover:underline">
+        ← Search again
+      </button>
+      <FormField label="Address line 1">
+        <Input value={value.addressLine1} onChange={set('addressLine1')} />
+      </FormField>
+      <FormField label="Address line 2">
+        <Input value={value.addressLine2} onChange={set('addressLine2')} placeholder="(optional)" />
+      </FormField>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <FormField label="City">
+          <Input value={value.city} onChange={set('city')} />
+        </FormField>
+        <FormField label="Postcode">
+          <Input value={value.postcode} onChange={set('postcode')} />
+        </FormField>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function AddressAutocomplete({ value, onChange }: AddressAutocompleteProps) {
@@ -131,6 +167,7 @@ export function AddressAutocomplete({ value, onChange }: AddressAutocompleteProp
   const [query, setQuery] = useState('');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [activeIndex, setActiveIndex] = useState(-1);
   const [loadFailed, setLoadFailed] = useState(false);
   const [manual, setManual] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -184,10 +221,14 @@ export function AddressAutocomplete({ value, onChange }: AddressAutocompleteProp
     return () => clearTimeout(t);
   }, [query, fetchSuggestions, loadFailed, manual]);
 
+  // Reset activeIndex whenever suggestions list changes.
+  useEffect(() => { setActiveIndex(-1); }, [suggestions]);
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const selectSuggestion = async (suggestion: any) => {
     setSuggestions([]);
     setQuery('');
+    setActiveIndex(-1);
     try {
       const place = suggestion.placePrediction.toPlace();
       await place.fetchFields({ fields: ['addressComponents', 'location'] });
@@ -211,27 +252,55 @@ export function AddressAutocomplete({ value, onChange }: AddressAutocompleteProp
     return <ManualEntry value={value} onChange={onChange} onBack={loadFailed ? undefined : () => setManual(false)} />;
   }
 
+  if (hasSelection) {
+    return (
+      <SelectedAddress
+        value={value}
+        onChange={onChange}
+        onClear={() => onChange({ addressLine1: '', addressLine2: '', city: '', county: '', postcode: '', country: 'GB', latitude: null, longitude: null, placeId: null })}
+      />
+    );
+  }
+
   return (
     <div ref={containerRef} className="space-y-3">
       <div className="relative">
         <MapPin size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
         <Input
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => { setQuery(e.target.value); }}
+          onKeyDown={(e) => {
+            if (!suggestions.length) return;
+            if (e.key === 'ArrowDown') {
+              e.preventDefault();
+              setActiveIndex((i) => Math.min(i + 1, suggestions.length - 1));
+            } else if (e.key === 'ArrowUp') {
+              e.preventDefault();
+              setActiveIndex((i) => Math.max(i - 1, 0));
+            } else if (e.key === 'Enter') {
+              e.preventDefault();
+              if (activeIndex >= 0) void selectSuggestion(suggestions[activeIndex]);
+            } else if (e.key === 'Escape') {
+              setSuggestions([]);
+              setActiveIndex(-1);
+            }
+          }}
           placeholder="Search for an address…"
           autoComplete="off"
           className="pl-9"
+          role="combobox"
+          aria-expanded={suggestions.length > 0}
+          aria-activedescendant={activeIndex >= 0 ? `addr-suggestion-${activeIndex}` : undefined}
         />
         {suggestions.length > 0 && (
-          <ul className="absolute z-50 w-full mt-1 bg-background border border-border rounded-md overflow-hidden shadow-md">
+          <ul role="listbox" className="absolute z-50 w-full mt-1 bg-background border border-border rounded-md overflow-hidden shadow-md">
             {suggestions.map((s, i) => (
-              <li key={i}>
+              <li key={i} id={`addr-suggestion-${i}`} role="option" aria-selected={i === activeIndex}>
                 <button
                   type="button"
-                  className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors"
+                  className={`w-full text-left px-3 py-2 text-sm transition-colors ${i === activeIndex ? 'bg-muted' : 'hover:bg-muted'}`}
                   onPointerDown={(e) => {
-                    // Use pointerdown so the value is set before onBlur fires on the input.
-                    e.preventDefault();
+                    e.preventDefault(); // prevent input blur before selection
                     void selectSuggestion(s);
                   }}
                 >
@@ -242,13 +311,6 @@ export function AddressAutocomplete({ value, onChange }: AddressAutocompleteProp
           </ul>
         )}
       </div>
-      {hasSelection && (
-        <div className="rounded-md border border-border px-3 py-1">
-          {value.addressLine1 && <LabelValue label="Address">{value.addressLine1}</LabelValue>}
-          {value.city && <LabelValue label="City">{value.city}</LabelValue>}
-          {value.postcode && <LabelValue label="Postcode">{value.postcode}</LabelValue>}
-        </div>
-      )}
       <button type="button" onClick={() => setManual(true)} className="text-sm text-muted hover:text-foreground underline-offset-2 hover:underline">
         Enter manually
       </button>

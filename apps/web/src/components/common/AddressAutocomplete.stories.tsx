@@ -44,8 +44,9 @@ export const WithSelection: Story = {
     },
   },
   play: async ({ canvas }) => {
-    await expect(canvas.getByText('10 Downing Street')).toBeVisible();
-    await expect(canvas.getByText('London')).toBeVisible();
-    await expect(canvas.getByText('SW1A 2AA')).toBeVisible();
+    // After selection, editable input fields are shown with parsed values.
+    await expect((canvas.getByDisplayValue('10 Downing Street'))).toBeVisible();
+    await expect((canvas.getByDisplayValue('London'))).toBeVisible();
+    await expect((canvas.getByDisplayValue('SW1A 2AA'))).toBeVisible();
   },
 };
