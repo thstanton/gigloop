@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -821,10 +822,10 @@ export default function BookingDetailPage() {
             <DialogHeader>
               <DialogTitle className="font-display text-xl">{celebratoryTitle.current}</DialogTitle>
             </DialogHeader>
-            <p className="text-sm text-muted">
+            <DialogDescription>
               You've completed all the tasks for this booking. Ready to move it to{' '}
               <span className="font-medium text-foreground">{STATUS_LABELS[readyDialogStatus]}</span>?
-            </p>
+            </DialogDescription>
             <div className="flex gap-2 justify-end mt-2">
               <Button
                 variant="outline"
@@ -900,7 +901,7 @@ export default function BookingDetailPage() {
 
       {/* Add to series dialog */}
       <Dialog open={seriesSheetOpen} onOpenChange={(open) => { setSeriesSheetOpen(open); if (!open) setSelectedSeriesId(null); }}>
-        <DialogContent>
+        <DialogContent aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>Add to series</DialogTitle>
           </DialogHeader>
@@ -937,7 +938,7 @@ export default function BookingDetailPage() {
           <DialogHeader>
             <DialogTitle>Customer mismatch</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted pt-2">{seriesConfirm?.warning}</p>
+          <DialogDescription className="pt-2">{seriesConfirm?.warning}</DialogDescription>
           <div className="flex gap-3 pt-4">
             <Button
               onClick={() => {
