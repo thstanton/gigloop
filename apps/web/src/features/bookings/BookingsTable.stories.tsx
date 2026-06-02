@@ -23,6 +23,8 @@ const bookings: BookingListItem[] = [
     bookingAgentId: null,
     bookingAgent: null,
     sets: [{ startTime: '19:00' }],
+    seriesId: 's1',
+    series: { id: 's1', label: 'Grand Hotel Residency — Summer 2030' },
   },
   {
     id: 'b2',
@@ -41,6 +43,8 @@ const bookings: BookingListItem[] = [
     bookingAgentId: null,
     bookingAgent: null,
     sets: [],
+    seriesId: null,
+    series: null,
   },
   {
     id: 'b3',
@@ -59,6 +63,8 @@ const bookings: BookingListItem[] = [
     bookingAgentId: null,
     bookingAgent: null,
     sets: [{ startTime: '19:30' }],
+    seriesId: null,
+    series: null,
   },
 ];
 

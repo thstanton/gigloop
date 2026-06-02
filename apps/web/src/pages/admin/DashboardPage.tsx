@@ -58,6 +58,9 @@ function UpcomingGigsWidget({ bookings }: { bookings: BookingListItem[] }) {
               {g.venue && (
                 <span className="text-xs text-muted truncate">{g.venue.name}</span>
               )}
+              {g.series && (
+                <span className="text-xs text-muted truncate">{g.series.label}</span>
+              )}
               <div className="mt-1">
                 <BookingStatusPill status={g.status} />
               </div>

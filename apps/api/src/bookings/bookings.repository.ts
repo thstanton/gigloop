@@ -50,6 +50,7 @@ const listIncludes = {
   venue: { select: { id: true, name: true } },
   bookingAgent: { select: { id: true, name: true } },
   sets: { select: { startTime: true }, orderBy: { order: 'asc' as const }, take: 1 },
+  series: { select: { id: true, label: true } },
 } as const;
 
 @Injectable()

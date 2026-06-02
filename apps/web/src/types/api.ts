@@ -204,6 +204,8 @@ export interface BookingListItem {
   bookingAgentId: string | null;
   bookingAgent: ContactSummary | null;
   sets: { startTime: string | null }[];
+  seriesId: string | null;
+  series: { id: string; label: string } | null;
 }
 
 export type ContractStatus = 'DRAFT' | 'SENT' | 'SIGNED' | 'VOID';
