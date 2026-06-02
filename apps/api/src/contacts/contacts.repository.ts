@@ -3,6 +3,20 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateContactDto } from './dto/create-contact.dto';
 import { UpdateContactDto } from './dto/update-contact.dto';
 
+type TravelTimeData = {
+  travelTimeMinutes: number;
+  travelDistanceMetres: number;
+  travelTimeCalculatedAt: Date;
+  travelMode: string;
+};
+
+type ContactUpdateData = UpdateContactDto & {
+  travelTimeMinutes?: number | null;
+  travelDistanceMetres?: number | null;
+  travelTimeCalculatedAt?: Date | null;
+  travelMode?: string | null;
+};
+
 @Injectable()
 export class ContactsRepository {
   constructor(private prisma: PrismaService) {}
@@ -31,10 +45,26 @@ export class ContactsRepository {
     });
   }
 
-  update(id: string, data: UpdateContactDto) {
+  update(id: string, data: ContactUpdateData) {
     return this.prisma.contact.update({
       where: { id },
       data,
+    });
+  }
+
+  updateTravelTime(id: string, data: TravelTimeData) {
+    return this.prisma.contact.update({ where: { id }, data });
+  }
+
+  clearTravelTimeForUser(userId: string) {
+    return this.prisma.contact.updateMany({
+      where: { userId },
+      data: {
+        travelTimeMinutes: null,
+        travelDistanceMetres: null,
+        travelTimeCalculatedAt: null,
+        travelMode: null,
+      },
     });
   }
 

@@ -4,6 +4,18 @@ import { UpdateUserProfileDto } from './dto/update-user-profile.dto';
 import { encrypt, decrypt } from '../common/crypto';
 import type { ChecklistDefaultItem } from '../bookings/checklist-defaults';
 
+const USER_PROFILE_ADDRESS_FIELDS: ReadonlyArray<keyof UpdateUserProfileDto> = [
+  'addressLine1', 'addressLine2', 'city', 'county', 'postcode', 'country',
+  'latitude', 'longitude', 'placeId',
+];
+
+const TRAVEL_TIME_CLEAR = {
+  travelTimeMinutes: null,
+  travelDistanceMetres: null,
+  travelTimeCalculatedAt: null,
+  travelMode: null,
+} as const;
+
 @Injectable()
 export class UserProfileRepository {
   constructor(private prisma: PrismaService) {}
@@ -35,6 +47,14 @@ export class UserProfileRepository {
       update: payload,
       create: { userId, ...payload },
     });
+
+    if (USER_PROFILE_ADDRESS_FIELDS.some((f) => f in data)) {
+      await this.prisma.contact.updateMany({
+        where: { userId },
+        data: TRAVEL_TIME_CLEAR,
+      });
+    }
+
     return this.decryptProfile(profile);
   }
 

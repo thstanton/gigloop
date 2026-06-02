@@ -866,3 +866,9 @@ export interface DashboardData {
   actions: DashboardAction[];
   calendarBookings: CalendarBooking[];
 }
+
+export interface TravelTimeResponse {
+  minutes: number;
+  distanceMetres: number;
+  calculatedAt: string;
+}

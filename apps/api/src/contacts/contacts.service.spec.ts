@@ -81,6 +81,26 @@ describe('ContactsService', () => {
       await expect(service.update('u1', 'missing', { name: 'X' })).rejects.toThrow(NotFoundException);
       expect(repo.update).not.toHaveBeenCalled();
     });
+
+    it('clears travel time fields when an address field is included in the update', async () => {
+      repo.findOne.mockResolvedValue(contact);
+      repo.update.mockResolvedValue({ ...contact, city: 'London' });
+      await service.update('u1', 'c1', { city: 'London' });
+      expect(repo.update).toHaveBeenCalledWith('c1', {
+        city: 'London',
+        travelTimeMinutes: null,
+        travelDistanceMetres: null,
+        travelTimeCalculatedAt: null,
+        travelMode: null,
+      });
+    });
+
+    it('does not clear travel time fields when no address field is included in the update', async () => {
+      repo.findOne.mockResolvedValue(contact);
+      repo.update.mockResolvedValue({ ...contact, name: 'Bob' });
+      await service.update('u1', 'c1', { name: 'Bob' });
+      expect(repo.update).toHaveBeenCalledWith('c1', { name: 'Bob' });
+    });
   });
 
   describe('delete', () => {

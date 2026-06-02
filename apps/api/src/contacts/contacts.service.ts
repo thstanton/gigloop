@@ -3,6 +3,18 @@ import { ContactsRepository } from './contacts.repository';
 import { CreateContactDto } from './dto/create-contact.dto';
 import { UpdateContactDto } from './dto/update-contact.dto';
 
+const TRAVEL_TIME_CLEAR = {
+  travelTimeMinutes: null,
+  travelDistanceMetres: null,
+  travelTimeCalculatedAt: null,
+  travelMode: null,
+} as const;
+
+const CONTACT_ADDRESS_FIELDS = new Set([
+  'addressLine1', 'addressLine2', 'city', 'county', 'postcode', 'country',
+  'latitude', 'longitude', 'placeId',
+]);
+
 @Injectable()
 export class ContactsService {
   constructor(private repo: ContactsRepository) {}
@@ -23,7 +35,9 @@ export class ContactsService {
 
   async update(userId: string, id: string, dto: UpdateContactDto) {
     await this.findOne(userId, id);
-    return this.repo.update(id, dto);
+    const hasAddressChange = Object.keys(dto).some((k) => CONTACT_ADDRESS_FIELDS.has(k));
+    const data = hasAddressChange ? { ...dto, ...TRAVEL_TIME_CLEAR } : dto;
+    return this.repo.update(id, data);
   }
 
   async delete(userId: string, id: string) {
