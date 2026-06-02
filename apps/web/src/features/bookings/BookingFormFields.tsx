@@ -362,10 +362,10 @@ export function BookingFormFields({
         </FormField>
       </div>
 
-      {/* Performance formats */}
+      {/* Packages */}
       {songRequestFormEnabled && formats && formats.length > 0 && (
         <div className="space-y-3">
-          <h2 className="text-sm font-semibold text-foreground">Performance formats</h2>
+          <h2 className="text-sm font-semibold text-foreground">Packages</h2>
           <Controller
             name="formatIds"
             control={control}
