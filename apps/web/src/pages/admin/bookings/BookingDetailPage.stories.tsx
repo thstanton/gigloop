@@ -64,3 +64,12 @@ export const Cancelled: Story = {
     await expect(canvas.getByText('Cancelled')).toBeVisible();
   },
 };
+
+export const InSeries: Story = {
+  parameters: { msw: { handlers: makeBookingDetailHandlers('InSeries') } },
+  play: async ({ canvas }) => {
+    await expect(await canvas.findByText("Sophie's Wedding")).toBeVisible();
+    await expect(canvas.getByText('Series Invoice')).toBeVisible();
+    await expect(canvas.getByText('Grand Hotel Monthly Residency')).toBeVisible();
+  },
+};

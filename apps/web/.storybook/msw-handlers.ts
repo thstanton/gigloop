@@ -198,6 +198,15 @@ const signedContract = {
   status: 'SIGNED', content: { type: 'doc', content: [] }, signedAt: '2030-04-15T10:00:00Z',
 };
 
+const series = [
+  {
+    id: 'sr1', createdAt: '2030-01-01T00:00:00Z', updatedAt: '2030-01-01T00:00:00Z',
+    label: 'Grand Hotel Monthly Residency', customerId: 'c1',
+    customer: { id: 'c1', name: 'The Grand Hotel', email: 'events@grandhotel.com' },
+    memberBookingCount: 3, invoiceStatus: null,
+  },
+];
+
 const lineItem = (amount: string) => ({ id: 'li1', createdAt: '2030-04-01T00:00:00Z', updatedAt: '2030-04-01T00:00:00Z', description: 'Performance fee', amount, order: 0 });
 
 const depositSent = { id: 'inv1', createdAt: '2030-04-12T10:00:00Z', updatedAt: '2030-04-12T10:00:00Z', status: 'SENT', isDeposit: true, invoiceNumber: 'INV-001', issueDate: '2030-04-12', dueDate: '2030-05-12', paidAt: null, bookingId: 'bd1', billToContactId: 'c2', billToContact: customer, lineItems: [lineItem('600.00')] };
@@ -211,6 +220,7 @@ export const bookingDetails: Record<string, object> = {
   ReadyToGo: { ...baseDetail, status: 'READY', activeContract: signedContract, depositReceivedAt: '2030-05-10T10:00:00Z' },
   Complete: { ...baseDetail, status: 'COMPLETE', activeContract: signedContract, depositReceivedAt: '2030-05-10T10:00:00Z' },
   Cancelled: { ...baseDetail, status: 'CANCELLED', activeContract: null },
+  InSeries: { ...baseDetail, status: 'CONFIRMED', activeContract: sentContract, seriesId: 'sr1', series: { id: 'sr1', label: 'Grand Hotel Monthly Residency', customerId: 'c1' } },
 };
 
 export const checklistFixtures: Record<string, unknown[]> = {
@@ -235,6 +245,18 @@ export const checklistFixtures: Record<string, unknown[]> = {
     { id: 'ci2', createdAt: '2030-04-01T10:00:00Z', updatedAt: '2030-09-17T10:00:00Z', bookingId: 'bd1', key: 'send_thank_you', label: 'Send thank you', completedBy: 'USER', state: 'COMPLETE', order: 1, dependsOn: [], autoCompleteRule: null, requiredForStatus: 'COMPLETE', completedAt: '2030-09-17T10:00:00Z', dueDate: null, dueDateRule: null },
   ],
   Cancelled: [],
+  InSeries: [
+    { id: 'ci1', createdAt: '2030-04-01T10:00:00Z', updatedAt: '2030-04-10T10:00:00Z', bookingId: 'bd1', key: 'send_quote', label: 'Send quote', completedBy: 'USER', state: 'COMPLETE', order: 0, dependsOn: [], autoCompleteRule: null, requiredForStatus: 'PROVISIONAL', completedAt: '2030-04-10T10:00:00Z', dueDate: null, dueDateRule: null },
+    { id: 'ci2', createdAt: '2030-04-01T10:00:00Z', updatedAt: '2030-04-10T10:00:00Z', bookingId: 'bd1', key: 'create_contract', label: 'Create contract', completedBy: 'USER', state: 'COMPLETE', order: 1, dependsOn: [], autoCompleteRule: null, requiredForStatus: 'CONFIRMED', completedAt: '2030-04-10T10:00:00Z', dueDate: null, dueDateRule: null },
+    { id: 'ci3', createdAt: '2030-04-01T10:00:00Z', updatedAt: '2030-04-01T10:00:00Z', bookingId: 'bd1', key: 'contract_signed', label: 'Contract signed', completedBy: 'USER', state: 'PENDING', order: 2, dependsOn: [], autoCompleteRule: null, requiredForStatus: 'CONFIRMED', completedAt: null, dueDate: null, dueDateRule: null },
+  ],
+};
+
+const seriesInvoiceSent = {
+  id: 'si1', createdAt: '2030-04-12T10:00:00Z', updatedAt: '2030-04-12T10:00:00Z',
+  status: 'SENT', invoiceNumber: 'INV-S001', issueDate: '2030-04-12', dueDate: '2030-05-12',
+  paidAt: null, seriesId: 'sr1', billToContactId: 'c1', billToContact: venue,
+  lineItems: [lineItem('4500.00')],
 };
 
 export const invoiceFixtures: Record<string, unknown[]> = {
@@ -243,6 +265,7 @@ export const invoiceFixtures: Record<string, unknown[]> = {
   ReadyToGo: [depositPaid, balanceSent],
   Complete: [depositPaid, balancePaid],
   Cancelled: [],
+  InSeries: [],
 };
 
 export const communicationFixtures: Record<string, unknown[]> = {
@@ -257,6 +280,9 @@ export const communicationFixtures: Record<string, unknown[]> = {
     { id: 'cm1', createdAt: '2030-09-17T10:00:00Z', updatedAt: '2030-09-17T10:00:00Z', direction: 'OUTBOUND', channel: 'EMAIL', status: 'SENT', subject: 'Thank you for a wonderful evening', body: '<p>It was such a pleasure to perform at your wedding.</p>', sentAt: '2030-09-17T10:00:00Z', bookingId: 'bd1', contactId: 'c2', contact: customer, templateId: null, template: null },
   ],
   Cancelled: [],
+  InSeries: [
+    { id: 'cm1', createdAt: '2030-04-10T10:00:00Z', updatedAt: '2030-04-10T10:00:00Z', direction: 'OUTBOUND', channel: 'EMAIL', status: 'SENT', subject: 'Your booking confirmation', body: '<p>Dear Grand Hotel, we are delighted to confirm your booking.</p>', sentAt: '2030-04-10T10:00:00Z', bookingId: 'bd1', contactId: 'c1', contact: venue, templateId: null, template: null },
+  ],
 };
 
 const userProfile = {
@@ -322,6 +348,10 @@ export function makeBookingDetailHandlers(scenario: string) {
     http.get('/api/bookings/bd1/communications', () => HttpResponse.json(communicationFixtures[scenario] ?? [])),
     http.get('/api/me', () => HttpResponse.json(userProfile)),
     http.get('/api/templates', () => HttpResponse.json(templates)),
+    http.get('/api/series', () => HttpResponse.json(series)),
+    http.get('/api/series/:seriesId/invoices/current', () =>
+      HttpResponse.json(scenario === 'InSeries' ? seriesInvoiceSent : null),
+    ),
   ];
 }
 
