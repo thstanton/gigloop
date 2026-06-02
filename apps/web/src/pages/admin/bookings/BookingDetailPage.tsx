@@ -579,8 +579,8 @@ export default function BookingDetailPage() {
                 : <InlineFeeAdd onSave={(fee) => updateFeeMutation.mutate(fee)} isSaving={updateFeeMutation.isPending} />
               }
               {booking.series ? (
-                <span className="inline-flex items-center gap-1.5 text-sm text-muted border border-border rounded px-2 py-0.5">
-                  Series: {booking.series.label}
+                <span className="inline-flex items-center gap-1.5 text-sm text-foreground border border-border rounded-full px-3 py-1.5">
+                  {booking.series.label}
                   <button
                     type="button"
                     onClick={() => updateSeriesMutation.mutate({ seriesId: null })}
