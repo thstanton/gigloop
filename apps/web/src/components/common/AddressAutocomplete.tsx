@@ -123,41 +123,6 @@ function ManualEntry({
 
 // ─── Editable fields shown after a place is selected ─────────────────────────
 
-function SelectedAddress({
-  value,
-  onChange,
-  onClear,
-}: {
-  value: AddressFields;
-  onChange: (v: AddressFields) => void;
-  onClear: () => void;
-}) {
-  const set = (field: keyof AddressFields) => (e: React.ChangeEvent<HTMLInputElement>) =>
-    onChange({ ...value, [field]: e.target.value, placeId: null, latitude: null, longitude: null });
-
-  return (
-    <div className="space-y-2">
-      <button type="button" onClick={onClear} className="text-sm text-muted hover:text-foreground underline-offset-2 hover:underline">
-        ← Search again
-      </button>
-      <FormField label="Address line 1">
-        <Input value={value.addressLine1} onChange={set('addressLine1')} />
-      </FormField>
-      <FormField label="Address line 2">
-        <Input value={value.addressLine2} onChange={set('addressLine2')} placeholder="(optional)" />
-      </FormField>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        <FormField label="City">
-          <Input value={value.city} onChange={set('city')} />
-        </FormField>
-        <FormField label="Postcode">
-          <Input value={value.postcode} onChange={set('postcode')} />
-        </FormField>
-      </div>
-    </div>
-  );
-}
-
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function AddressAutocomplete({ value, onChange }: AddressAutocompleteProps) {
@@ -252,15 +217,9 @@ export function AddressAutocomplete({ value, onChange }: AddressAutocompleteProp
     return <ManualEntry value={value} onChange={onChange} onBack={loadFailed ? undefined : () => setManual(false)} />;
   }
 
-  if (hasSelection) {
-    return (
-      <SelectedAddress
-        value={value}
-        onChange={onChange}
-        onClear={() => onChange({ addressLine1: '', addressLine2: '', city: '', county: '', postcode: '', country: 'GB', latitude: null, longitude: null, placeId: null })}
-      />
-    );
-  }
+  const hasData = !!(value.addressLine1 || value.city || value.postcode);
+  const setField = (field: keyof AddressFields) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    onChange({ ...value, [field]: e.target.value, placeId: null, latitude: null, longitude: null });
 
   return (
     <div ref={containerRef} className="space-y-3">
@@ -268,7 +227,7 @@ export function AddressAutocomplete({ value, onChange }: AddressAutocompleteProp
         <MapPin size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
         <Input
           value={query}
-          onChange={(e) => { setQuery(e.target.value); }}
+          onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
             if (!suggestions.length) return;
             if (e.key === 'ArrowDown') {
@@ -311,9 +270,31 @@ export function AddressAutocomplete({ value, onChange }: AddressAutocompleteProp
           </ul>
         )}
       </div>
-      <button type="button" onClick={() => setManual(true)} className="text-sm text-muted hover:text-foreground underline-offset-2 hover:underline">
-        Enter manually
-      </button>
+
+      {hasData && (
+        <div className="space-y-2">
+          <FormField label="Address line 1">
+            <Input value={value.addressLine1} onChange={setField('addressLine1')} />
+          </FormField>
+          <FormField label="Address line 2">
+            <Input value={value.addressLine2} onChange={setField('addressLine2')} placeholder="(optional)" />
+          </FormField>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <FormField label="City">
+              <Input value={value.city} onChange={setField('city')} />
+            </FormField>
+            <FormField label="Postcode">
+              <Input value={value.postcode} onChange={setField('postcode')} />
+            </FormField>
+          </div>
+        </div>
+      )}
+
+      {!hasData && (
+        <button type="button" onClick={() => setManual(true)} className="text-sm text-muted hover:text-foreground underline-offset-2 hover:underline">
+          Enter manually
+        </button>
+      )}
     </div>
   );
 }
