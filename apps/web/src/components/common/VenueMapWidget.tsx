@@ -145,7 +145,7 @@ export function VenueMapWidget({
           )}
 
           {formattedAddress && (
-            <div>
+            <div className="space-y-1">
               <SubLabel>Address</SubLabel>
               <a
                 href={mapsSearchUrl ?? '#'}
@@ -156,6 +156,24 @@ export function VenueMapWidget({
                 <MapPin size={14} className="text-muted-foreground flex-shrink-0 mt-0.5" />
                 <span>{formattedAddress}</span>
               </a>
+              {onRefreshTravelTime !== undefined && (
+                <div className="flex items-center gap-2 pt-1">
+                  {isLoadingTravelTime ? (
+                    <RefreshCw size={14} className="animate-spin text-muted-foreground" />
+                  ) : travelTime ? (
+                    <span className="text-sm text-foreground">
+                      ~{travelTime.minutes} min · {distanceKm} km driving
+                    </span>
+                  ) : (
+                    <span className="text-sm text-muted-foreground">Travel time unavailable</span>
+                  )}
+                  {!isLoadingTravelTime && (
+                    <IconButton label="Refresh travel time" onClick={onRefreshTravelTime}>
+                      <RefreshCw size={14} />
+                    </IconButton>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -192,27 +210,6 @@ export function VenueMapWidget({
             </div>
           )}
 
-          {onRefreshTravelTime !== undefined && (
-            <div>
-              <SubLabel>Travel</SubLabel>
-              <div className="flex items-center gap-2 mt-1">
-                {isLoadingTravelTime ? (
-                  <RefreshCw size={14} className="animate-spin text-muted-foreground" />
-                ) : travelTime ? (
-                  <span className="text-sm text-foreground">
-                    ~{travelTime.minutes} min · {distanceKm} km driving
-                  </span>
-                ) : (
-                  <span className="text-sm text-muted-foreground">Travel time unavailable</span>
-                )}
-                {!isLoadingTravelTime && (
-                  <IconButton label="Refresh travel time" onClick={onRefreshTravelTime}>
-                    <RefreshCw size={14} />
-                  </IconButton>
-                )}
-              </div>
-            </div>
-          )}
 
         </div>
 
