@@ -5,6 +5,7 @@ import { ChevronUp, ChevronDown, Heart, GlassWater, Utensils, Moon, Briefcase, M
 import { Input } from '@/components/ui/input';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Textarea } from '@/components/ui/textarea';
+import { TogglePill } from '@/components/ui/toggle-pill';
 import { FormField } from '@/components/common/FormField';
 import { IconButton } from '@/components/common/IconButton';
 import {
@@ -97,20 +98,11 @@ function FormatSelector({
         {formats.map((fmt) => {
           const active = value.includes(fmt.id);
           return (
-            <button
-              key={fmt.id}
-              type="button"
-              onClick={() => toggle(fmt.id)}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-sm transition-colors ${
-                active
-                  ? 'bg-primary text-primary-foreground border-primary'
-                  : 'bg-background text-foreground border-border hover:border-primary'
-              }`}
-            >
+            <TogglePill key={fmt.id} active={active} onClick={() => toggle(fmt.id)}>
               <FormatIcon icon={fmt.icon} size={14} />
               {fmt.label}
               {active && <Check size={12} />}
-            </button>
+            </TogglePill>
           );
         })}
       </div>
@@ -172,18 +164,13 @@ function SeriesSection({
           <>
             <div className="flex gap-2">
               {(['none', 'existing', 'new'] as const).map((mode) => (
-                <button
+                <TogglePill
                   key={mode}
-                  type="button"
+                  active={field.value === mode}
                   onClick={() => field.onChange(mode)}
-                  className={`inline-flex items-center px-3 py-1.5 rounded-full border text-sm transition-colors ${
-                    field.value === mode
-                      ? 'bg-primary text-primary-foreground border-primary'
-                      : 'bg-background text-foreground border-border hover:border-primary'
-                  }`}
                 >
                   {SERIES_MODE_LABELS[mode]}
-                </button>
+                </TogglePill>
               ))}
             </div>
             {field.value === 'existing' && series && series.length > 0 && (
