@@ -1,4 +1,5 @@
-import type { Meta, StoryObj } from '@storybook/react-vite';
+import React from 'react';
+import type { Meta, StoryObj } from '@storybook/react';
 import { expect, within } from 'storybook/test';
 import { Check, Music } from 'lucide-react';
 import { TogglePill } from './toggle-pill';
@@ -29,16 +30,13 @@ export const Active: Story = {
 };
 
 export const WithIcon: Story = {
-  args: {
-    active: true,
-    children: (
-      <>
-        <Music size={14} />
-        Duo
-        <Check size={12} />
-      </>
-    ),
-  },
+  render: () => (
+    <TogglePill active={true}>
+      <Music size={14} />
+      Duo
+      <Check size={12} />
+    </TogglePill>
+  ),
 };
 
 export const Group: Story = {
