@@ -29,6 +29,7 @@ export interface VenueMapWidgetProps {
 }
 
 const MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string;
+const MAPS_MAP_ID = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID as string;
 const SCRIPT_ID = 'google-maps-script';
 const CALLBACK = '__gmapsReady';
 
@@ -90,17 +91,19 @@ export function VenueMapWidget({
     let marker: any;
 
     loadMaps()
-      .then(() => {
+      .then(async () => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const win = window as any;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { AdvancedMarkerElement } = await win.google.maps.importLibrary('marker') as any;
         const map = new win.google.maps.Map(mapDiv, {
           center: { lat: venue.latitude, lng: venue.longitude },
           zoom: 14,
+          mapId: MAPS_MAP_ID,
           disableDefaultUI: true,
           gestureHandling: 'cooperative',
         });
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        marker = new (win.google.maps.Marker as any)({
+        marker = new AdvancedMarkerElement({
           position: { lat: venue.latitude, lng: venue.longitude },
           map,
         });
@@ -108,7 +111,7 @@ export function VenueMapWidget({
       .catch(() => setMapFailed(true));
 
     return () => {
-      marker?.setMap(null);
+      if (marker) marker.map = null;
     };
   }, [hasCoords, venue.latitude, venue.longitude]);
 
