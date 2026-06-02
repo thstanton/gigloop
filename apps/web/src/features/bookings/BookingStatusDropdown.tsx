@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -53,10 +54,10 @@ function OutstandingChecklistDialog({ pendingStatus, outstandingItems, onConfirm
         <DialogHeader>
           <DialogTitle>Outstanding checklist items</DialogTitle>
         </DialogHeader>
-        <p className="text-sm text-muted">
+        <DialogDescription>
           {count} item{plural} still outstanding for{' '}
           <span className="font-medium text-foreground">{label}</span>:
-        </p>
+        </DialogDescription>
         <ul className="text-sm space-y-1 list-disc list-inside text-foreground">
           {outstandingItems.map((item) => (
             <li key={item.id}>{item.label}</li>

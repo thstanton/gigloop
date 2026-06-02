@@ -13,6 +13,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -189,9 +190,9 @@ export default function ContractCard({
             <DialogHeader>
               <DialogTitle>Void signed contract?</DialogTitle>
             </DialogHeader>
-            <p className="text-sm text-muted">
+            <DialogDescription>
               This contract has been signed by the client. Voiding it will require them to sign a new contract.
-            </p>
+            </DialogDescription>
             <div className="flex gap-2 justify-end mt-2">
               <Button variant="outline" onClick={() => setConfirmVoidOpen(false)}>Cancel</Button>
               <Button variant="destructive" onClick={() => { onVoid(true); setConfirmVoidOpen(false); }}>Void contract</Button>
