@@ -5,8 +5,6 @@ import { PrismaService } from '../prisma/prisma.service';
 
 // Monday 2025-01-06 07:00 UTC (cron fire time)
 const MONDAY = new Date('2025-01-06T07:00:00.000Z');
-const WEEK_START = new Date('2025-01-06T00:00:00.000Z');
-const WEEK_END = new Date('2025-01-12T00:00:00.000Z');
 
 // Helpers
 function makeUserProfile(overrides: Partial<{

@@ -37,39 +37,49 @@ export class DigestService {
     const weekEnd = addDays(today, 6);
 
     const users = await this.digestRepo.findUsersWithDigestEnabled();
-
     const emails: MailTransportOptions[] = [];
 
     for (const user of users) {
-      if (!user.publicProfile?.email) continue;
-
-      const prefs = user.preferences as Record<string, unknown>;
-      const reminderLeadDays = typeof prefs.reminderLeadDays === 'number' ? prefs.reminderLeadDays : 7;
-
-      const { gigsThisWeek, upcomingItems } = await this.digestRepo.findDigestDataForUser(
-        user.userId,
-        weekStart,
-        weekEnd,
-        today,
-        reminderLeadDays,
-      );
-
-      if (gigsThisWeek.length === 0 && upcomingItems.length === 0) continue;
-
-      const subject =
-        gigsThisWeek.length > 0
-          ? `Your week ahead: ${gigsThisWeek.length} booking${gigsThisWeek.length === 1 ? '' : 's'}`
-          : 'Your week ahead';
-
-      emails.push({
-        to: user.publicProfile.email,
-        subject,
-        body: buildDigestHtml({ gigsThisWeek, upcomingItems, weekStart, today }),
-      });
+      const email = await this.buildEmailForUser(user, weekStart, weekEnd, today);
+      if (email) emails.push(email);
     }
 
     await this.mail.sendBatch(emails);
   }
+
+  private async buildEmailForUser(
+    user: { userId: string; preferences: unknown; publicProfile: { email: string | null } | null },
+    weekStart: Date,
+    weekEnd: Date,
+    today: Date,
+  ): Promise<MailTransportOptions | null> {
+    if (!user.publicProfile?.email) return null;
+
+    const prefs = user.preferences as Record<string, unknown>;
+    const reminderLeadDays = typeof prefs.reminderLeadDays === 'number' ? prefs.reminderLeadDays : 7;
+
+    const { gigsThisWeek, upcomingItems } = await this.digestRepo.findDigestDataForUser(
+      user.userId,
+      weekStart,
+      weekEnd,
+      today,
+      reminderLeadDays,
+    );
+
+    if (gigsThisWeek.length === 0 && upcomingItems.length === 0) return null;
+
+    return {
+      to: user.publicProfile.email,
+      subject: buildSubject(gigsThisWeek.length),
+      body: buildDigestHtml({ gigsThisWeek, upcomingItems, weekStart, today }),
+    };
+  }
+}
+
+function buildSubject(gigCount: number): string {
+  if (gigCount === 0) return 'Your week ahead';
+  const plural = gigCount === 1 ? 'booking' : 'bookings';
+  return `Your week ahead: ${gigCount} ${plural}`;
 }
 
 function buildDigestHtml(data: DigestEmailData): string {
