@@ -60,6 +60,11 @@ export class DocumentsService {
     private storage: StorageService,
   ) {}
 
+  private formatAddress(profile: { addressLine1: string | null; addressLine2: string | null; city: string | null; postcode: string | null } | null): string | null {
+    if (!profile) return null;
+    return [profile.addressLine1, profile.addressLine2, profile.city, profile.postcode].filter(Boolean).join('\n') || null;
+  }
+
   // ─── PDF: private ──────────────────────────────────────────────────────────
 
   private async buildInvoicePdfData(
@@ -103,10 +108,7 @@ export class DocumentsService {
       businessName: publicProfile.businessName,
       musicianName: publicProfile.displayName ?? publicProfile.businessName,
       email: publicProfile.email ?? '',
-      address: userProfile
-        ? [userProfile.addressLine1, userProfile.addressLine2, userProfile.city, userProfile.postcode]
-            .filter(Boolean).join('\n') || null
-        : null,
+      address: this.formatAddress(userProfile),
       bankDetails: userProfile?.bankDetails ?? null,
       vatNumber: userProfile?.vatNumber ?? null,
       vatRate: userProfile?.vatNumber ? (userProfile.vatRate ?? 20) : null,
