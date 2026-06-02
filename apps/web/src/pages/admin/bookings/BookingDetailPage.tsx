@@ -66,6 +66,7 @@ import type {
   MusicFormResponse,
   SeriesInvoice,
   Template,
+  TravelTimeResponse,
   UpdateBookingSeriesResponse,
   UserProfile,
 } from '@/types/api';
@@ -206,6 +207,13 @@ export default function BookingDetailPage() {
     queryKey: ['me'],
     queryFn: () => apiGet<UserProfile>('/me'),
     enabled: isLoaded,
+  });
+
+  const bookingVenueId = booking?.venue?.id;
+  const { data: travelTimeData, isFetching: isFetchingTravelTime } = useQuery({
+    queryKey: ['contact-travel-time', bookingVenueId],
+    queryFn: () => apiGet<TravelTimeResponse>(`/contacts/${bookingVenueId}/travel-time`),
+    enabled: isLoaded && !!bookingVenueId && !!booking?.venue?.latitude && !!booking?.venue?.longitude && !!userProfile?.latitude && !!userProfile?.longitude,
   });
 
   const actions = useBookingActions(id!);
@@ -630,11 +638,14 @@ export default function BookingDetailPage() {
                   showHeader={true}
                   contactHref={`/admin/contacts/${booking.venue.id}`}
                   travelTime={
-                    booking.venue.travelTimeMinutes != null && booking.venue.travelDistanceMetres != null
-                      ? { minutes: booking.venue.travelTimeMinutes, distanceMetres: booking.venue.travelDistanceMetres }
-                      : null
+                    travelTimeData
+                      ? { minutes: travelTimeData.minutes, distanceMetres: travelTimeData.distanceMetres }
+                      : booking.venue.travelTimeMinutes != null && booking.venue.travelDistanceMetres != null
+                        ? { minutes: booking.venue.travelTimeMinutes, distanceMetres: booking.venue.travelDistanceMetres }
+                        : null
                   }
-                  onRefreshTravelTime={() => {}}
+                  isLoadingTravelTime={isFetchingTravelTime}
+                  onRefreshTravelTime={() => queryClient.invalidateQueries({ queryKey: ['contact-travel-time', bookingVenueId] })}
                 />
               </div>
             )}
