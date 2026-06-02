@@ -195,7 +195,7 @@ export default function ContactDetailPage() {
         </div>
 
         {/* ─── Right column ─── */}
-        <div className="mt-8 md:mt-0 md:sticky md:top-20 md:max-h-[calc(100vh-5rem)] md:overflow-y-auto md:pb-6">
+        <div className="mt-8 md:mt-0 md:sticky md:top-20 md:max-h-[calc(100vh-5rem)] md:overflow-y-auto md:overflow-x-hidden md:pb-6">
           <h2 className="text-sm font-semibold text-foreground mb-3">
             Bookings
             {bookings.length > 0 && (
