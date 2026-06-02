@@ -136,6 +136,12 @@ function ManualEntry({
 
 export function AddressAutocomplete({ value, onChange }: AddressAutocompleteProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  // Keep latest onChange in a ref so the effect closure is never stale,
+  // without including onChange in the deps (which would destroy/recreate the
+  // element on every setValue call triggered by a selection).
+  const onChangeRef = useRef(onChange);
+  useEffect(() => { onChangeRef.current = onChange; });
+
   const [loadFailed, setLoadFailed] = useState(false);
   const [manual, setManual] = useState(false);
   const hasSelection = !!value.placeId;
@@ -143,42 +149,47 @@ export function AddressAutocomplete({ value, onChange }: AddressAutocompleteProp
   useEffect(() => {
     if (manual || loadFailed) return;
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let el: any = null;
+
     loadPlaces()
       .then(() => {
         if (!containerRef.current) return;
-        containerRef.current.innerHTML = '';
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const el = new (window as any).google.maps.places.PlaceAutocompleteElement({
+        el = new (window as any).google.maps.places.PlaceAutocompleteElement({
           componentRestrictions: { country: ['gb'] },
         });
 
         containerRef.current.appendChild(el);
 
-        el.addEventListener('gmp-placeselect', async (event: Event & { placePrediction: { toPlace(): unknown } }) => {
-          try {
+        el.addEventListener('gmp-placeselect', async (event: Event) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const place = (event as any).placePrediction.toPlace();
+          // 'id' is always present on the Place object — only fetch what needs a round-trip
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (place as any).fetchFields({ fields: ['addressComponents', 'location'] });
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const parsed = parseAddressComponents((place as any).addressComponents ?? []);
+          onChangeRef.current({
+            ...parsed,
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const place = (event as any).placePrediction.toPlace();
+            latitude: (place as any).location?.lat() ?? null,
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            await (place as any).fetchFields({ fields: ['addressComponents', 'location', 'id'] });
+            longitude: (place as any).location?.lng() ?? null,
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const parsed = parseAddressComponents((place as any).addressComponents ?? []);
-            onChange({
-              ...parsed,
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              latitude: (place as any).location?.lat() ?? null,
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              longitude: (place as any).location?.lng() ?? null,
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              placeId: (place as any).id ?? null,
-            });
-          } catch {
-            // place fetch failed — don't crash
-          }
+            placeId: (place as any).id ?? null,
+          });
         });
       })
       .catch(() => setLoadFailed(true));
-  }, [manual, loadFailed, onChange]);
+
+    return () => {
+      if (el && containerRef.current?.contains(el)) {
+        containerRef.current.removeChild(el);
+      }
+    };
+  }, [manual, loadFailed]); // onChange intentionally excluded — onChangeRef stays current
 
   if (loadFailed) {
     return <ManualEntry value={value} onChange={onChange} />;
