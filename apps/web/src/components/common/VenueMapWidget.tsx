@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Car, KeyRound, MapPin, RefreshCw, Speaker } from 'lucide-react';
 import { Card } from '@/components/common/Card';
+import { EmptyState } from '@/components/common/EmptyState';
 import { IconButton } from '@/components/common/IconButton';
 import { SubLabel } from '@/components/common/SubLabel';
 
@@ -22,6 +23,10 @@ export interface VenueMapWidgetProps {
   };
   /** Show venue name + contact details header. Hide on contact page where these are shown elsewhere. */
   showHeader?: boolean;
+  /** Card title (e.g. "Venue") — shown in the Card header above the content. */
+  cardTitle?: string;
+  /** Card action rendered alongside the card title (e.g. an Edit button). */
+  cardAction?: React.ReactNode;
   travelTime?: { minutes: number; distanceMetres: number } | null;
   isLoadingTravelTime?: boolean;
   onRefreshTravelTime?: () => void;
@@ -63,6 +68,8 @@ function loadMaps(): Promise<void> {
 export function VenueMapWidget({
   venue,
   showHeader = true,
+  cardTitle,
+  cardAction,
   travelTime,
   isLoadingTravelTime = false,
   onRefreshTravelTime,
@@ -116,7 +123,7 @@ export function VenueMapWidget({
   }, [hasCoords, venue.latitude, venue.longitude]);
 
   return (
-    <Card>
+    <Card title={cardTitle} action={cardAction}>
       <div className="flex flex-col md:flex-row gap-4">
         <div className="flex-1 space-y-4 min-w-0">
 
@@ -226,9 +233,12 @@ export function VenueMapWidget({
               <div ref={mapDivRef} className="h-full w-full" />
             )
           ) : (
-            <div className="h-full flex items-center justify-center text-sm text-muted-foreground p-4 text-center">
-              No address on file — add one to see the map.
-            </div>
+            <EmptyState
+              icon={<MapPin size={24} />}
+              heading="No map yet"
+              description="Add a full address to see the venue on a map."
+              className="h-full py-4"
+            />
           )}
         </div>
       </div>

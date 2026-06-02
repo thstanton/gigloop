@@ -636,6 +636,12 @@ export default function BookingDetailPage() {
                 <VenueMapWidget
                   venue={booking.venue}
                   showHeader={true}
+                  cardTitle="Venue"
+                  cardAction={
+                    <button type="button" onClick={() => setEditingContact(booking.venue!)} className="text-xs text-primary hover:text-primary/80 transition-colors">
+                      Edit
+                    </button>
+                  }
                   contactHref={`/admin/contacts/${booking.venue.id}`}
                   travelTime={
                     travelTimeData
