@@ -8,10 +8,14 @@ beforeAll(() => {
 
 type MockPrisma = {
   userProfile: { upsert: jest.Mock; update: jest.Mock };
+  contact: { updateMany: jest.Mock };
 };
 
 function makePrisma(): MockPrisma {
-  return { userProfile: { upsert: jest.fn(), update: jest.fn() } };
+  return {
+    userProfile: { upsert: jest.fn(), update: jest.fn() },
+    contact: { updateMany: jest.fn() },
+  };
 }
 
 describe('UserProfileRepository', () => {
@@ -67,7 +71,7 @@ describe('UserProfileRepository', () => {
 
     it('does not encrypt when bankDetails is not in the update', async () => {
       prisma.userProfile.upsert.mockResolvedValue({ userId: 'u1', bankDetails: null });
-      await repo.updateByUserId('u1', { address: '123 Main St' });
+      await repo.updateByUserId('u1', { addressLine1: '123 Main St' });
       const written = prisma.userProfile.upsert.mock.calls[0][0].update;
       expect(written.bankDetails).toBeUndefined();
     });
@@ -77,6 +81,26 @@ describe('UserProfileRepository', () => {
       await repo.updateByUserId('u1', { bankDetails: null });
       const written = prisma.userProfile.upsert.mock.calls[0][0].update.bankDetails;
       expect(written).toBeNull();
+    });
+
+    it('clears travel time on all contacts when an address field is updated', async () => {
+      prisma.userProfile.upsert.mockResolvedValue({ userId: 'u1', bankDetails: null });
+      await repo.updateByUserId('u1', { latitude: 51.5 });
+      expect(prisma.contact.updateMany).toHaveBeenCalledWith({
+        where: { userId: 'u1' },
+        data: {
+          travelTimeMinutes: null,
+          travelDistanceMetres: null,
+          travelTimeCalculatedAt: null,
+          travelMode: null,
+        },
+      });
+    });
+
+    it('does not clear travel time when no address field is updated', async () => {
+      prisma.userProfile.upsert.mockResolvedValue({ userId: 'u1', bankDetails: null });
+      await repo.updateByUserId('u1', { vatNumber: 'GB123456789' });
+      expect(prisma.contact.updateMany).not.toHaveBeenCalled();
     });
   });
 });

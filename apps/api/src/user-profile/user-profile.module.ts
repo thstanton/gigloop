@@ -13,5 +13,6 @@ import { PublicProfileRepository } from './public-profile.repository';
     PublicProfileService,
     PublicProfileRepository,
   ],
+  exports: [UserProfileRepository],
 })
 export class UserProfileModule {}

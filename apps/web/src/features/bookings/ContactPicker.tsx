@@ -235,7 +235,9 @@ export default function ContactPicker({
               name: pendingName,
               greetingName: pendingName.trim().split(/\s+/)[0] ?? '',
               email: '', phone: '', website: '',
-              address: '', notes: '', parkingInfo: '',
+              addressLine1: '', addressLine2: '', city: '', county: '',
+              postcode: '', country: 'GB', latitude: null, longitude: null, placeId: null,
+              notes: '', parkingInfo: '',
               accessInfo: '', equipmentAvailable: '', commissionArrangement: '', primaryRole: '',
             }}
             onSubmit={(values) => createMutation.mutate(values)}

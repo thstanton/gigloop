@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsIn, IsNotEmpty, IsOptional, IsString, IsUrl, ValidateIf } from 'class-validator';
+import { IsEmail, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, IsUrl, ValidateIf } from 'class-validator';
 
 const PRIMARY_ROLES = ['CUSTOMER', 'VENUE', 'BOOKING_AGENT'] as const;
 
@@ -24,10 +24,50 @@ export class CreateContactDto {
   @IsString()
   phone?: string;
 
-  @ApiPropertyOptional({ example: '123 High Street, London, SW1A 1AA' })
+  @ApiPropertyOptional({ example: '123 High Street' })
   @IsOptional()
   @IsString()
-  address?: string;
+  addressLine1?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  addressLine2?: string;
+
+  @ApiPropertyOptional({ example: 'London' })
+  @IsOptional()
+  @IsString()
+  city?: string;
+
+  @ApiPropertyOptional({ example: 'Greater London' })
+  @IsOptional()
+  @IsString()
+  county?: string;
+
+  @ApiPropertyOptional({ example: 'SW1A 1AA' })
+  @IsOptional()
+  @IsString()
+  postcode?: string;
+
+  @ApiPropertyOptional({ example: 'GB', default: 'GB' })
+  @IsOptional()
+  @IsString()
+  country?: string;
+
+  @ApiPropertyOptional({ example: 51.5014 })
+  @IsOptional()
+  @IsNumber()
+  latitude?: number;
+
+  @ApiPropertyOptional({ example: -0.1419 })
+  @IsOptional()
+  @IsNumber()
+  longitude?: number;
+
+  @ApiPropertyOptional({ example: 'ChIJdd4hrwug2EcRmSrV3Vo6llI' })
+  @IsOptional()
+  @IsString()
+  placeId?: string;
 
   @ApiPropertyOptional()
   @IsOptional()

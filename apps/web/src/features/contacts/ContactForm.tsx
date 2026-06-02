@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { FormField } from '@/components/common/FormField';
+import { AddressAutocomplete } from '@/components/common/AddressAutocomplete';
 import type { Contact, CreateContactInput, UpdateContactInput } from '@/types/api';
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
@@ -24,7 +25,15 @@ const schema = z.object({
   email: z.string().email('Invalid email').or(z.literal('')),
   phone: z.string(),
   website: z.string().url('Invalid URL').or(z.literal('')),
-  address: z.string(),
+  addressLine1: z.string(),
+  addressLine2: z.string(),
+  city: z.string(),
+  county: z.string(),
+  postcode: z.string(),
+  country: z.string(),
+  latitude: z.number().nullable(),
+  longitude: z.number().nullable(),
+  placeId: z.string().nullable(),
   notes: z.string(),
   parkingInfo: z.string(),
   accessInfo: z.string(),
@@ -44,7 +53,15 @@ export function toContactPayload(
     email: values.email || null,
     phone: values.phone || null,
     website: values.website || null,
-    address: values.address || null,
+    addressLine1: values.addressLine1 || null,
+    addressLine2: values.addressLine2 || null,
+    city: values.city || null,
+    county: values.county || null,
+    postcode: values.postcode || null,
+    country: values.country || null,
+    latitude: values.latitude,
+    longitude: values.longitude,
+    placeId: values.placeId,
     notes: values.notes || null,
     parkingInfo: values.parkingInfo || null,
     accessInfo: values.accessInfo || null,
@@ -61,7 +78,15 @@ export function contactToFormValues(c: Contact): ContactFormValues {
     email: c.email ?? '',
     phone: c.phone ?? '',
     website: c.website ?? '',
-    address: c.address ?? '',
+    addressLine1: c.addressLine1 ?? '',
+    addressLine2: c.addressLine2 ?? '',
+    city: c.city ?? '',
+    county: c.county ?? '',
+    postcode: c.postcode ?? '',
+    country: c.country ?? 'GB',
+    latitude: c.latitude,
+    longitude: c.longitude,
+    placeId: c.placeId,
     notes: c.notes ?? '',
     parkingInfo: c.parkingInfo ?? '',
     accessInfo: c.accessInfo ?? '',
@@ -103,7 +128,9 @@ export default function ContactForm({
     resolver: zodResolver(schema),
     defaultValues: defaultValues ?? {
       name: '', greetingName: '', email: '', phone: '', website: '',
-      address: '', notes: '', parkingInfo: '',
+      addressLine1: '', addressLine2: '', city: '', county: '',
+      postcode: '', country: 'GB', latitude: null, longitude: null, placeId: null,
+      notes: '', parkingInfo: '',
       accessInfo: '', equipmentAvailable: '', commissionArrangement: '', primaryRole: '',
     },
   });
@@ -122,6 +149,18 @@ export default function ContactForm({
   const greetingNameRegistration = register('greetingName', {
     onChange: () => { greetingNameEdited.current = true; },
   });
+
+  const addressValue = {
+    addressLine1: watch('addressLine1'),
+    addressLine2: watch('addressLine2'),
+    city: watch('city'),
+    county: watch('county'),
+    postcode: watch('postcode'),
+    country: watch('country'),
+    latitude: watch('latitude'),
+    longitude: watch('longitude'),
+    placeId: watch('placeId'),
+  };
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
@@ -150,8 +189,27 @@ export default function ContactForm({
         <FormField label="Website" error={errors.website?.message}>
           <Input type="url" {...register('website')} placeholder="https://" />
         </FormField>
-        <FormField label="Address" error={errors.address?.message}>
-          <Textarea {...register('address')} rows={3} />
+        <FormField label="Address">
+          <Controller
+            name="addressLine1"
+            control={control}
+            render={() => (
+              <AddressAutocomplete
+                value={addressValue}
+                onChange={(v) => {
+                  setValue('addressLine1', v.addressLine1, { shouldDirty: true });
+                  setValue('addressLine2', v.addressLine2, { shouldDirty: true });
+                  setValue('city', v.city, { shouldDirty: true });
+                  setValue('county', v.county, { shouldDirty: true });
+                  setValue('postcode', v.postcode, { shouldDirty: true });
+                  setValue('country', v.country, { shouldDirty: true });
+                  setValue('latitude', v.latitude, { shouldDirty: true });
+                  setValue('longitude', v.longitude, { shouldDirty: true });
+                  setValue('placeId', v.placeId, { shouldDirty: true });
+                }}
+              />
+            )}
+          />
         </FormField>
         <FormField label="Notes" error={errors.notes?.message}>
           <Textarea {...register('notes')} rows={3} />

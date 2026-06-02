@@ -69,7 +69,16 @@ model UserProfile {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  address                 String?
+  addressLine1 String?
+  addressLine2 String?
+  city         String?
+  county       String?
+  postcode     String?
+  country      String?
+  latitude     Float?
+  longitude    Float?
+  placeId      String?
+
   bankDetails             String?
   vatNumber               String?
   vatRate                 Int     @default(20)
@@ -95,9 +104,25 @@ model Contact {
   greetingName String?
   email        String?
   phone        String?
-  address String?
-  notes   String?
-  primaryRole String?
+  notes        String?
+  primaryRole  String?
+
+  // Structured address
+  addressLine1 String?
+  addressLine2 String?
+  city         String?
+  county       String?
+  postcode     String?
+  country      String?  @default("GB")
+  latitude     Float?
+  longitude    Float?
+  placeId      String?
+
+  // Travel time cache (populated by background job)
+  travelTimeMinutes      Int?
+  travelDistanceMetres   Int?
+  travelTimeCalculatedAt DateTime?
+  travelMode             String?
 
   // Venue-specific fields
   parkingInfo        String?
@@ -144,6 +169,8 @@ model Booking {
 
   seriesId String?
   series   BookingSeries? @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+
+  travelMode String?
 
   sets     PerformanceSet[]
   packages BookingPackage[]

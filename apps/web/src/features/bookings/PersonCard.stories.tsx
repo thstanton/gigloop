@@ -7,14 +7,20 @@ import type { Contact } from '@/types/api';
 
 const customer: Contact = {
   id: 'c1', name: 'Jane Smith', email: 'jane@example.com', phone: '+44 7700 900111',
-  address: null, notes: null, greetingName: 'Jane', primaryRole: 'CUSTOMER',
+  addressLine1: null, addressLine2: null, city: null, county: null, postcode: null, country: null,
+  latitude: null, longitude: null, placeId: null,
+  travelTimeMinutes: null, travelDistanceMetres: null, travelTimeCalculatedAt: null, travelMode: null,
+  notes: null, greetingName: 'Jane', primaryRole: 'CUSTOMER',
   parkingInfo: null, accessInfo: null, equipmentAvailable: null, website: null,
   commissionArrangement: null, createdAt: '2030-01-01T00:00:00Z', updatedAt: '2030-01-01T00:00:00Z',
 };
 
 const bookingAgent: Contact = {
   id: 'c2', name: 'Premier Events Agency', email: 'bookings@premierevents.com', phone: null,
-  address: null, notes: null, greetingName: null, primaryRole: 'BOOKING_AGENT',
+  addressLine1: null, addressLine2: null, city: null, county: null, postcode: null, country: null,
+  latitude: null, longitude: null, placeId: null,
+  travelTimeMinutes: null, travelDistanceMetres: null, travelTimeCalculatedAt: null, travelMode: null,
+  notes: null, greetingName: null, primaryRole: 'BOOKING_AGENT',
   parkingInfo: null, accessInfo: null, equipmentAvailable: null, website: null,
   commissionArrangement: '15% of gross fee', createdAt: '2030-01-01T00:00:00Z', updatedAt: '2030-01-01T00:00:00Z',
 };

@@ -7,14 +7,20 @@ import type { Contact } from '@/types/api';
 
 const minimalVenue: Contact = {
   id: 'v1', name: 'The Grand Ballroom', email: null, phone: null,
-  address: null, notes: null, greetingName: null, primaryRole: 'VENUE',
+  addressLine1: null, addressLine2: null, city: null, county: null, postcode: null, country: null,
+  latitude: null, longitude: null, placeId: null,
+  travelTimeMinutes: null, travelDistanceMetres: null, travelTimeCalculatedAt: null, travelMode: null,
+  notes: null, greetingName: null, primaryRole: 'VENUE',
   parkingInfo: null, accessInfo: null, equipmentAvailable: null,
   website: null, commissionArrangement: null, createdAt: '2030-01-01T00:00:00Z', updatedAt: '2030-01-01T00:00:00Z',
 };
 
 const fullVenue: Contact = {
   id: 'v2', name: 'Kensington Palace', email: 'events@kensingtonpalace.co.uk', phone: '+44 20 7937 9561',
-  address: '1 Kensington Palace, London W8 4PX', notes: null, greetingName: null, primaryRole: 'VENUE',
+  addressLine1: '1 Kensington Palace', addressLine2: null, city: 'London', county: null, postcode: 'W8 4PX', country: 'GB',
+  latitude: null, longitude: null, placeId: null,
+  travelTimeMinutes: null, travelDistanceMetres: null, travelTimeCalculatedAt: null, travelMode: null,
+  notes: null, greetingName: null, primaryRole: 'VENUE',
   parkingInfo: 'Use Kensington Road car park. Mention the event for free entry.',
   accessInfo: 'Side entrance on Palace Gate. Knock three times.',
   equipmentAvailable: 'Grand piano, PA system, lectern.',

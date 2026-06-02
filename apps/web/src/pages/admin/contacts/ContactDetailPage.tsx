@@ -1,13 +1,17 @@
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, Plus } from 'lucide-react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { LabelValue } from '@/components/common/LabelValue';
+import { Badge } from '@/components/ui/badge';
+import { VenueMapWidget } from '@/components/common/VenueMapWidget';
 import { Button } from '@/components/ui/button';
 import BookingStatusPill from '@/components/common/BookingStatusPill';
 import { useContact } from '@/lib/hooks/useContact';
+import { apiGet } from '@/lib/api';
 import { formatDate } from '@/lib/formatters';
 import { EVENT_TYPE_LABELS } from '@/lib/constants';
 import ContactEditDrawer from '@/features/contacts/ContactEditDrawer';
-import type { BookingRef, BookingStatus, ContactDetail as ContactDetailType } from '@/types/api';
+import type { BookingRef, BookingStatus, ContactDetail as ContactDetailType, TravelTimeResponse } from '@/types/api';
 
 const PRIMARY_ROLE_LABELS: Record<string, string> = {
   CUSTOMER: 'Customer',
@@ -108,7 +112,12 @@ export default function ContactDetailPage() {
   const [, setSearchParams] = useSearchParams();
   const backNav = (location.state as { from?: string; label?: string } | null);
 
+  const queryClient = useQueryClient();
   const { data: contact, isLoading, isError } = useContact(id!);
+  const { mutate: refreshTravelTime, isPending: isRefreshingTravelTime } = useMutation({
+    mutationFn: () => apiGet<TravelTimeResponse>(`/contacts/${id}/travel-time`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['contact', id] }),
+  });
 
   if (isLoading) return <DetailSkeleton />;
   if (isError || !contact) {
@@ -128,7 +137,6 @@ export default function ContactDetailPage() {
     contact.bookingAgentBookings,
   );
 
-  const hasVenueDetails = contact.parkingInfo || contact.accessInfo || contact.equipmentAvailable;
 
   return (
     <div className="px-6 py-8 max-w-7xl mx-auto">
@@ -150,7 +158,9 @@ export default function ContactDetailPage() {
             <div>
               <h1 className="font-display text-2xl font-semibold text-foreground">{contact.name}</h1>
               {contact.primaryRole && (
-                <span className="text-xs text-muted mt-1 inline-block">{PRIMARY_ROLE_LABELS[contact.primaryRole]}</span>
+                <Badge variant="secondary" className="mt-2">
+                  {PRIMARY_ROLE_LABELS[contact.primaryRole] ?? contact.primaryRole}
+                </Badge>
               )}
             </div>
             <div className="flex items-center gap-2">
@@ -173,26 +183,33 @@ export default function ContactDetailPage() {
             <InfoRow label="Email" value={contact.email} href={contact.email ? `mailto:${contact.email}` : undefined} />
             <InfoRow label="Phone" value={contact.phone} href={contact.phone ? `tel:${contact.phone}` : undefined} />
             <InfoRow label="Website" value={contact.website} />
-            <InfoRow label="Address" value={contact.address} />
+            {contact.primaryRole !== 'VENUE' && (
+              <InfoRow label="Address" value={[contact.addressLine1, contact.city, contact.postcode].filter(Boolean).join(', ') || null} />
+            )}
             <InfoRow label="Notes" value={contact.notes} />
             <InfoRow label="Commission" value={contact.commissionArrangement} />
           </div>
 
-          {/* Venue details */}
-          {hasVenueDetails && (
-            <div>
-              <h2 className="text-sm font-semibold text-foreground mb-1">Venue details</h2>
-              <div className="border-t border-border">
-                <InfoRow label="Parking" value={contact.parkingInfo} />
-                <InfoRow label="Access" value={contact.accessInfo} />
-                <InfoRow label="Equipment" value={contact.equipmentAvailable} />
-              </div>
+          {/* Venue map, address, details and travel — VENUE contacts only */}
+          {contact.primaryRole === 'VENUE' && (
+            <div className="mb-8">
+              <VenueMapWidget
+                venue={contact}
+                showHeader={false}
+                travelTime={
+                  contact.travelTimeMinutes != null && contact.travelDistanceMetres != null
+                    ? { minutes: contact.travelTimeMinutes, distanceMetres: contact.travelDistanceMetres }
+                    : null
+                }
+                isLoadingTravelTime={isRefreshingTravelTime}
+                onRefreshTravelTime={() => refreshTravelTime()}
+              />
             </div>
           )}
         </div>
 
         {/* ─── Right column ─── */}
-        <div className="mt-8 md:mt-0 md:sticky md:top-20 md:max-h-[calc(100vh-5rem)] md:overflow-y-auto md:pb-6">
+        <div className="mt-8 md:mt-0">
           <h2 className="text-sm font-semibold text-foreground mb-3">
             Bookings
             {bookings.length > 0 && (

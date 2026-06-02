@@ -33,7 +33,7 @@ import InvoiceSheet from '@/features/invoices/InvoiceSheet';
 import MarkSentDialog from '@/features/invoices/MarkSentDialog';
 import ContractCard from '@/features/bookings/ContractCard';
 import InvoiceSection, { SeriesInvoiceSection } from '@/features/bookings/InvoiceSection';
-import VenueCard from '@/features/bookings/VenueCard';
+import { VenueMapWidget } from '@/components/common/VenueMapWidget';
 import PersonCard from '@/features/bookings/PersonCard';
 import CommunicationsSection from '@/features/bookings/CommunicationsSection';
 import PerformanceSection from '@/features/bookings/PerformanceSection';
@@ -66,6 +66,7 @@ import type {
   MusicFormResponse,
   SeriesInvoice,
   Template,
+  TravelTimeResponse,
   UpdateBookingSeriesResponse,
   UserProfile,
 } from '@/types/api';
@@ -206,6 +207,13 @@ export default function BookingDetailPage() {
     queryKey: ['me'],
     queryFn: () => apiGet<UserProfile>('/me'),
     enabled: isLoaded,
+  });
+
+  const bookingVenueId = booking?.venue?.id;
+  const { data: travelTimeData, isFetching: isFetchingTravelTime } = useQuery({
+    queryKey: ['contact-travel-time', bookingVenueId],
+    queryFn: () => apiGet<TravelTimeResponse>(`/contacts/${bookingVenueId}/travel-time`),
+    enabled: isLoaded && !!bookingVenueId && !!booking?.venue?.latitude && !!booking?.venue?.longitude && !!userProfile?.latitude && !!userProfile?.longitude,
   });
 
   const actions = useBookingActions(id!);
@@ -523,6 +531,13 @@ export default function BookingDetailPage() {
   const backState = { from: `/admin/bookings/${id}`, label: title };
   const backUrl = encodeURIComponent(`/admin/bookings/${booking.id}`);
 
+  let venueTravelTime: { minutes: number; distanceMetres: number } | null = null;
+  if (travelTimeData) {
+    venueTravelTime = { minutes: travelTimeData.minutes, distanceMetres: travelTimeData.distanceMetres };
+  } else if (booking.venue?.travelTimeMinutes != null && booking.venue?.travelDistanceMetres != null) {
+    venueTravelTime = { minutes: booking.venue.travelTimeMinutes, distanceMetres: booking.venue.travelDistanceMetres };
+  }
+
   return (
     <div className="px-4 md:px-6 py-6 max-w-7xl mx-auto">
 
@@ -623,6 +638,24 @@ export default function BookingDetailPage() {
           {/* 4. For the day */}
           <section>
             <SectionHeader label="For the day" />
+            {booking.venue && (
+              <div className="mb-4">
+                <VenueMapWidget
+                  venue={booking.venue}
+                  showHeader={true}
+                  cardTitle="Venue"
+                  cardAction={
+                    <button type="button" onClick={() => setEditingContact(booking.venue!)} className="text-xs text-primary hover:text-primary/80 transition-colors">
+                      Edit
+                    </button>
+                  }
+                  contactHref={`/admin/contacts/${booking.venue.id}`}
+                  travelTime={venueTravelTime}
+                  isLoadingTravelTime={isFetchingTravelTime}
+                  onRefreshTravelTime={() => queryClient.invalidateQueries({ queryKey: ['contact-travel-time', bookingVenueId] })}
+                />
+              </div>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <PerformanceSection
                 booking={booking}
@@ -633,10 +666,7 @@ export default function BookingDetailPage() {
                   return next;
                 })}
               />
-              {booking.venue
-                ? <VenueCard venue={booking.venue} linkState={backState} onEdit={() => setEditingContact(booking.venue!)} />
-                : <InlineVenueAdd bookingId={booking.id} />
-              }
+              {!booking.venue && <InlineVenueAdd bookingId={booking.id} />}
               <div className={booking.venue ? 'sm:col-span-2' : undefined}>
                 <MusicFormSection
                   booking={booking}

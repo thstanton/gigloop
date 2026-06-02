@@ -47,8 +47,20 @@ export interface Contact {
   greetingName: string | null;
   email: string | null;
   phone: string | null;
-  address: string | null;
   notes: string | null;
+  addressLine1: string | null;
+  addressLine2: string | null;
+  city: string | null;
+  county: string | null;
+  postcode: string | null;
+  country: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  placeId: string | null;
+  travelTimeMinutes: number | null;
+  travelDistanceMetres: number | null;
+  travelTimeCalculatedAt: string | null;
+  travelMode: string | null;
   parkingInfo: string | null;
   accessInfo: string | null;
   equipmentAvailable: string | null;
@@ -76,8 +88,16 @@ export interface CreateContactInput {
   greetingName?: string;
   email?: string;
   phone?: string;
-  address?: string;
   notes?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  city?: string;
+  county?: string;
+  postcode?: string;
+  country?: string;
+  latitude?: number;
+  longitude?: number;
+  placeId?: string;
   parkingInfo?: string;
   accessInfo?: string;
   equipmentAvailable?: string;
@@ -91,8 +111,16 @@ export interface UpdateContactInput {
   greetingName?: string | null;
   email?: string | null;
   phone?: string | null;
-  address?: string | null;
   notes?: string | null;
+  addressLine1?: string | null;
+  addressLine2?: string | null;
+  city?: string | null;
+  county?: string | null;
+  postcode?: string | null;
+  country?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  placeId?: string | null;
   parkingInfo?: string | null;
   accessInfo?: string | null;
   equipmentAvailable?: string | null;
@@ -587,7 +615,15 @@ export interface UserProfile {
   id: string;
   createdAt: string;
   updatedAt: string;
-  address: string | null;
+  addressLine1: string | null;
+  addressLine2: string | null;
+  city: string | null;
+  county: string | null;
+  postcode: string | null;
+  country: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  placeId: string | null;
   bankDetails: string | null;
   vatNumber: string | null;
   vatRate: number;
@@ -629,7 +665,15 @@ export interface PublicProfile {
 }
 
 export interface UpdateUserProfileInput {
-  address?: string;
+  addressLine1?: string | null;
+  addressLine2?: string | null;
+  city?: string | null;
+  county?: string | null;
+  postcode?: string | null;
+  country?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  placeId?: string | null;
   bankDetails?: string | null;
   vatNumber?: string | null;
   vatRate?: number;
@@ -821,4 +865,10 @@ export interface DashboardData {
   upcomingGigs: UpcomingGig[];
   actions: DashboardAction[];
   calendarBookings: CalendarBooking[];
+}
+
+export interface TravelTimeResponse {
+  minutes: number;
+  distanceMetres: number;
+  calculatedAt: string;
 }
