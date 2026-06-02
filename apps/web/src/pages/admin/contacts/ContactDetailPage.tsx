@@ -1,6 +1,7 @@
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, Plus } from 'lucide-react';
 import { LabelValue } from '@/components/common/LabelValue';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import BookingStatusPill from '@/components/common/BookingStatusPill';
 import { useContact } from '@/lib/hooks/useContact';
@@ -128,7 +129,7 @@ export default function ContactDetailPage() {
     contact.bookingAgentBookings,
   );
 
-  const hasVenueDetails = contact.parkingInfo || contact.accessInfo || contact.equipmentAvailable;
+  const hasVenueDetails = contact.primaryRole === 'VENUE' && !!(contact.parkingInfo || contact.accessInfo || contact.equipmentAvailable);
 
   return (
     <div className="px-6 py-8 max-w-7xl mx-auto">
@@ -150,7 +151,9 @@ export default function ContactDetailPage() {
             <div>
               <h1 className="font-display text-2xl font-semibold text-foreground">{contact.name}</h1>
               {contact.primaryRole && (
-                <span className="text-xs text-muted mt-1 inline-block">{PRIMARY_ROLE_LABELS[contact.primaryRole]}</span>
+                <Badge variant="secondary" className="mt-2">
+                  {PRIMARY_ROLE_LABELS[contact.primaryRole] ?? contact.primaryRole}
+                </Badge>
               )}
             </div>
             <div className="flex items-center gap-2">
