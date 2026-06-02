@@ -151,10 +151,13 @@ export function AddressAutocomplete({ value, onChange }: AddressAutocompleteProp
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let el: any = null;
+    let active = true;
 
     loadPlaces()
       .then(() => {
-        if (!containerRef.current) return;
+        // Cleanup may have run before loadPlaces resolved (React Strict Mode runs
+        // effects twice in dev; cleanup fires synchronously while el is still null).
+        if (!active || !containerRef.current) return;
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         el = new (window as any).google.maps.places.PlaceAutocompleteElement({
@@ -166,7 +169,7 @@ export function AddressAutocomplete({ value, onChange }: AddressAutocompleteProp
         el.addEventListener('gmp-placeselect', async (event: Event) => {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const place = (event as any).placePrediction.toPlace();
-          // 'id' is always present on the Place object — only fetch what needs a round-trip
+          // 'id' is always present on Place — only fetch what needs a round-trip
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           await (place as any).fetchFields({ fields: ['addressComponents', 'location'] });
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -182,9 +185,10 @@ export function AddressAutocomplete({ value, onChange }: AddressAutocompleteProp
           });
         });
       })
-      .catch(() => setLoadFailed(true));
+      .catch(() => { if (active) setLoadFailed(true); });
 
     return () => {
+      active = false;
       if (el && containerRef.current?.contains(el)) {
         containerRef.current.removeChild(el);
       }
