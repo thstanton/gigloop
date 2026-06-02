@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { MapPin, RefreshCw } from 'lucide-react';
+import { Car, KeyRound, MapPin, RefreshCw, Speaker } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { IconButton } from '@/components/common/IconButton';
 import { SubLabel } from '@/components/common/SubLabel';
@@ -8,13 +8,20 @@ import { SubLabel } from '@/components/common/SubLabel';
 export interface VenueMapWidgetProps {
   venue: {
     name: string;
+    email: string | null;
+    phone: string | null;
     addressLine1: string | null;
     addressLine2: string | null;
     city: string | null;
     postcode: string | null;
     latitude: number | null;
     longitude: number | null;
+    parkingInfo: string | null;
+    accessInfo: string | null;
+    equipmentAvailable: string | null;
   };
+  /** Show venue name + contact details header. Hide on contact page where these are shown elsewhere. */
+  showHeader?: boolean;
   travelTime?: { minutes: number; distanceMetres: number } | null;
   isLoadingTravelTime?: boolean;
   onRefreshTravelTime?: () => void;
@@ -54,6 +61,7 @@ function loadMaps(): Promise<void> {
 
 export function VenueMapWidget({
   venue,
+  showHeader = true,
   travelTime,
   isLoadingTravelTime = false,
   onRefreshTravelTime,
@@ -72,6 +80,8 @@ export function VenueMapWidget({
     : null;
 
   const distanceKm = travelTime ? (travelTime.distanceMetres / 1000).toFixed(1) : null;
+
+  const hasVenueDetails = !!(venue.parkingInfo || venue.accessInfo || venue.equipmentAvailable);
 
   useEffect(() => {
     if (!hasCoords || !mapDivRef.current) return;
@@ -105,18 +115,36 @@ export function VenueMapWidget({
   return (
     <Card>
       <div className="flex flex-col md:flex-row gap-4">
-        <div className="flex-1 space-y-3 min-w-0">
-          <div>
-            {contactHref ? (
-              <Link to={contactHref} className="font-medium hover:underline">
-                {venue.name}
-              </Link>
-            ) : (
-              <span className="font-medium">{venue.name}</span>
-            )}
-          </div>
+        <div className="flex-1 space-y-4 min-w-0">
 
-          {formattedAddress ? (
+          {showHeader && (
+            <div>
+              {contactHref ? (
+                <Link to={contactHref} className="font-medium hover:underline">
+                  {venue.name}
+                </Link>
+              ) : (
+                <span className="font-medium">{venue.name}</span>
+              )}
+              {(venue.email || venue.phone) && (
+                <p className="text-sm text-muted mt-0.5">
+                  {venue.email && (
+                    <a href={`mailto:${venue.email}`} className="hover:text-primary transition-colors">
+                      {venue.email}
+                    </a>
+                  )}
+                  {venue.email && venue.phone && ' · '}
+                  {venue.phone && (
+                    <a href={`tel:${venue.phone}`} className="hover:text-primary transition-colors">
+                      {venue.phone}
+                    </a>
+                  )}
+                </p>
+              )}
+            </div>
+          )}
+
+          {formattedAddress && (
             <div>
               <SubLabel>Address</SubLabel>
               <a
@@ -129,26 +157,63 @@ export function VenueMapWidget({
                 <span>{formattedAddress}</span>
               </a>
             </div>
-          ) : null}
+          )}
 
-          {onRefreshTravelTime !== undefined && (
-            <div className="flex items-center gap-2">
-              {isLoadingTravelTime ? (
-                <RefreshCw size={14} className="animate-spin text-muted-foreground" />
-              ) : travelTime ? (
-                <span className="text-sm text-foreground">
-                  ~{travelTime.minutes} min · {distanceKm} km driving
-                </span>
-              ) : (
-                <span className="text-sm text-muted-foreground">Travel time unavailable</span>
+          {hasVenueDetails && (
+            <div className="space-y-3">
+              <SubLabel>Venue details</SubLabel>
+              {venue.parkingInfo && (
+                <div>
+                  <div className="flex items-center gap-1.5 text-sm font-medium text-foreground mb-0.5">
+                    <Car size={14} />
+                    Parking
+                  </div>
+                  <p className="text-sm text-foreground">{venue.parkingInfo}</p>
+                </div>
               )}
-              {!isLoadingTravelTime && (
-                <IconButton label="Refresh travel time" onClick={onRefreshTravelTime}>
-                  <RefreshCw size={14} />
-                </IconButton>
+              {venue.accessInfo && (
+                <div>
+                  <div className="flex items-center gap-1.5 text-sm font-medium text-foreground mb-0.5">
+                    <KeyRound size={14} />
+                    Access
+                  </div>
+                  <p className="text-sm text-foreground">{venue.accessInfo}</p>
+                </div>
+              )}
+              {venue.equipmentAvailable && (
+                <div>
+                  <div className="flex items-center gap-1.5 text-sm font-medium text-foreground mb-0.5">
+                    <Speaker size={14} />
+                    Equipment
+                  </div>
+                  <p className="text-sm text-foreground">{venue.equipmentAvailable}</p>
+                </div>
               )}
             </div>
           )}
+
+          {onRefreshTravelTime !== undefined && (
+            <div>
+              <SubLabel>Travel</SubLabel>
+              <div className="flex items-center gap-2 mt-1">
+                {isLoadingTravelTime ? (
+                  <RefreshCw size={14} className="animate-spin text-muted-foreground" />
+                ) : travelTime ? (
+                  <span className="text-sm text-foreground">
+                    ~{travelTime.minutes} min · {distanceKm} km driving
+                  </span>
+                ) : (
+                  <span className="text-sm text-muted-foreground">Travel time unavailable</span>
+                )}
+                {!isLoadingTravelTime && (
+                  <IconButton label="Refresh travel time" onClick={onRefreshTravelTime}>
+                    <RefreshCw size={14} />
+                  </IconButton>
+                )}
+              </div>
+            </div>
+          )}
+
         </div>
 
         <div className="md:w-64 h-48 rounded-md overflow-hidden bg-muted flex-shrink-0">
