@@ -223,7 +223,7 @@ export function VenueMapWidget({
 
         </div>
 
-        <div className="md:w-64 h-48 rounded-md overflow-hidden bg-muted flex-shrink-0">
+        <div className={`md:w-64 h-48 rounded-md overflow-hidden flex-shrink-0 ${hasCoords ? 'bg-muted' : 'bg-surface border border-border'}`}>
           {hasCoords ? (
             mapFailed ? (
               <div className="h-full flex items-center justify-center text-sm text-muted-foreground p-4 text-center">
