@@ -81,7 +81,7 @@ export const AddToSeriesNoSeries: Story = {
     await userEvent.click(await canvas.findByText('+ Add to series'));
     const dialog = within(await screen.findByRole('dialog'));
     await expect(dialog.getByRole('heading', { name: 'Add to series' })).toBeVisible();
-    await expect(dialog.getByText('No series available')).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Add to series' })).toBeDisabled();
   },
 };
 
