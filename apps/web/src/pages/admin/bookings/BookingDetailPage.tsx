@@ -914,7 +914,7 @@ export default function BookingDetailPage() {
                   ? seriesList.map((s) => (
                       <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
                     ))
-                  : <SelectItem value="" disabled>No series available</SelectItem>
+                  : <div className="py-2 px-2 text-sm text-muted-foreground">No series available</div>
                 }
               </SelectContent>
             </Select>

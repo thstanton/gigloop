@@ -207,6 +207,10 @@ const series = [
   },
 ];
 
+const seriesFixtures: Record<string, object[]> = {
+  AddToSeriesNoSeries: [],
+};
+
 const lineItem = (amount: string) => ({ id: 'li1', createdAt: '2030-04-01T00:00:00Z', updatedAt: '2030-04-01T00:00:00Z', description: 'Performance fee', amount, order: 0 });
 
 const depositSent = { id: 'inv1', createdAt: '2030-04-12T10:00:00Z', updatedAt: '2030-04-12T10:00:00Z', status: 'SENT', isDeposit: true, invoiceNumber: 'INV-001', issueDate: '2030-04-12', dueDate: '2030-05-12', paidAt: null, bookingId: 'bd1', billToContactId: 'c2', billToContact: customer, lineItems: [lineItem('600.00')] };
@@ -221,6 +225,8 @@ export const bookingDetails: Record<string, object> = {
   Complete: { ...baseDetail, status: 'COMPLETE', activeContract: signedContract, depositReceivedAt: '2030-05-10T10:00:00Z' },
   Cancelled: { ...baseDetail, status: 'CANCELLED', activeContract: null },
   InSeries: { ...baseDetail, status: 'CONFIRMED', activeContract: sentContract, seriesId: 'sr1', series: { id: 'sr1', label: 'Grand Hotel Monthly Residency', customerId: 'c1' } },
+  AddToSeriesNoSeries: { ...baseDetail, status: 'CONFIRMED', activeContract: sentContract },
+  AddToSeriesWithSeries: { ...baseDetail, status: 'CONFIRMED', activeContract: sentContract },
 };
 
 export const checklistFixtures: Record<string, unknown[]> = {
@@ -348,7 +354,7 @@ export function makeBookingDetailHandlers(scenario: string) {
     http.get('/api/bookings/bd1/communications', () => HttpResponse.json(communicationFixtures[scenario] ?? [])),
     http.get('/api/me', () => HttpResponse.json(userProfile)),
     http.get('/api/templates', () => HttpResponse.json(templates)),
-    http.get('/api/series', () => HttpResponse.json(series)),
+    http.get('/api/series', () => HttpResponse.json(seriesFixtures[scenario] ?? series)),
     http.get('/api/series/:seriesId/invoices/current', () =>
       HttpResponse.json(scenario === 'InSeries' ? seriesInvoiceSent : null),
     ),
