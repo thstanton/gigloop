@@ -66,10 +66,10 @@ describe('TravelTimeService', () => {
   });
 
   describe('getTravelTime', () => {
-    it('throws 422 when contact primaryRole is not VENUE', async () => {
-      contactsRepo.findOne.mockResolvedValue({ ...venueContact, primaryRole: 'CUSTOMER' });
+    it('throws 422 when contact is not found', async () => {
+      contactsRepo.findOne.mockResolvedValue(null);
       await expect(service.getTravelTime('u1', 'c1')).rejects.toThrow(
-        new UnprocessableEntityException('Travel time is only available for venue contacts'),
+        new UnprocessableEntityException('Contact not found'),
       );
     });
 

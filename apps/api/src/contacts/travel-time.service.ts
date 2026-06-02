@@ -15,10 +15,8 @@ export class TravelTimeService {
   async getTravelTime(userId: string, contactId: string): Promise<TravelTimeResponseDto> {
     const contact = await this.contactsRepo.findOne(userId, contactId);
 
-    if (contact?.primaryRole !== 'VENUE') {
-      throw new UnprocessableEntityException(
-        'Travel time is only available for venue contacts',
-      );
+    if (!contact) {
+      throw new UnprocessableEntityException('Contact not found');
     }
 
     if (contact.travelTimeCalculatedAt) {

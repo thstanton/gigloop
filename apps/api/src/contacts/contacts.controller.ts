@@ -36,7 +36,7 @@ export class ContactsController {
 
   @ApiOperation({ summary: 'Get travel time from home to venue' })
   @ApiResponse({ status: 200, type: TravelTimeResponseDto })
-  @ApiResponse({ status: 422, description: 'Home or venue address not set, or contact is not a venue' })
+  @ApiResponse({ status: 422, description: 'Contact not found, or home/venue address not set' })
   @Get(':id/travel-time')
   getTravelTime(@Req() req: AuthedRequest, @Param('id') id: string) {
     return this.travelTimeService.getTravelTime(req.userId, id);
