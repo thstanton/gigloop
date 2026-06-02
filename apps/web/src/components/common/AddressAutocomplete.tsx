@@ -142,7 +142,6 @@ export function AddressAutocomplete({ value, onChange }: AddressAutocompleteProp
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sessionTokenRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const hasSelection = !!value.placeId;
 
   // Pre-load Places on mount so the first keystroke isn't delayed.
   useEffect(() => {

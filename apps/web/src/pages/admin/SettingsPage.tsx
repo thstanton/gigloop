@@ -460,6 +460,7 @@ function BusinessDetailsSection({ profile }: { profile: UserProfile }) {
     handleSubmit,
     reset,
     watch,
+    setValue,
     formState: { errors },
   } = useForm<BusinessForm>({ resolver: zodResolver(businessSchema), defaultValues: defaults });
 
