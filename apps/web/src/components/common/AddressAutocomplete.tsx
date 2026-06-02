@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { MapPin } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import { FormField } from '@/components/common/FormField';
+import { SubLabel } from '@/components/common/SubLabel';
 
 export interface AddressFields {
   addressLine1: string;
@@ -102,19 +102,23 @@ function ManualEntry({
         </button>
       )}
       <div className="space-y-2">
-        <FormField label="Address line 1">
+        <div className="space-y-1.5">
+          <SubLabel>Address line 1</SubLabel>
           <Input value={value.addressLine1} onChange={set('addressLine1')} placeholder="123 High Street" />
-        </FormField>
-        <FormField label="Address line 2">
+        </div>
+        <div className="space-y-1.5">
+          <SubLabel>Address line 2</SubLabel>
           <Input value={value.addressLine2} onChange={set('addressLine2')} placeholder="(optional)" />
-        </FormField>
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <FormField label="City">
+          <div className="space-y-1.5">
+            <SubLabel>City</SubLabel>
             <Input value={value.city} onChange={set('city')} />
-          </FormField>
-          <FormField label="Postcode">
+          </div>
+          <div className="space-y-1.5">
+            <SubLabel>Postcode</SubLabel>
             <Input value={value.postcode} onChange={set('postcode')} />
-          </FormField>
+          </div>
         </div>
       </div>
     </div>
@@ -273,19 +277,23 @@ export function AddressAutocomplete({ value, onChange }: AddressAutocompleteProp
 
       {hasData && (
         <div className="space-y-2">
-          <FormField label="Address line 1">
+          <div className="space-y-1.5">
+            <SubLabel>Address line 1</SubLabel>
             <Input value={value.addressLine1} onChange={setField('addressLine1')} />
-          </FormField>
-          <FormField label="Address line 2">
+          </div>
+          <div className="space-y-1.5">
+            <SubLabel>Address line 2</SubLabel>
             <Input value={value.addressLine2} onChange={setField('addressLine2')} placeholder="(optional)" />
-          </FormField>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <FormField label="City">
+            <div className="space-y-1.5">
+              <SubLabel>City</SubLabel>
               <Input value={value.city} onChange={setField('city')} />
-            </FormField>
-            <FormField label="Postcode">
+            </div>
+            <div className="space-y-1.5">
+              <SubLabel>Postcode</SubLabel>
               <Input value={value.postcode} onChange={setField('postcode')} />
-            </FormField>
+            </div>
           </div>
         </div>
       )}
