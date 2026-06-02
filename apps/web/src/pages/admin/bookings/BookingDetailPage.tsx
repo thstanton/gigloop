@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@clerk/react';
 import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, Check, X, FolderOpen, FileText, Download, MapPin } from 'lucide-react';
+import { ChevronLeft, Check, X, FolderOpen, FileText, Download } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import {
@@ -52,7 +52,6 @@ import { EVENT_TYPE_LABELS, STATUS_ORDER } from '@/lib/constants';
 import { Card } from '@/components/common/Card';
 import { SectionHeader } from '@/components/common/SectionHeader';
 import { IconButton } from '@/components/common/IconButton';
-import { EmptyState } from '@/components/common/EmptyState';
 import type {
   BookingDetail,
   BookingSeries,
@@ -109,49 +108,43 @@ function InlineVenueAdd({ bookingId }: { bookingId: string }) {
     },
   });
 
-  if (!editing) {
-    return (
-      <EmptyState
-        icon={<MapPin size={32} />}
-        heading="No venue"
-        description="Link a venue contact to this booking."
-        action={
+  return (
+    <Card
+      title="Venue"
+      action={
+        !editing
+          ? <button type="button" onClick={() => setEditing(true)} className="text-xs text-primary hover:text-primary/80 transition-colors">+ Add</button>
+          : undefined
+      }
+    >
+      {!editing ? (
+        <p className="text-sm text-muted">No venue linked.</p>
+      ) : (
+        <div className="flex items-center gap-2">
+          <div className="flex-1">
+            <ContactPicker
+              value={venueId}
+              onChange={setVenueId}
+              placeholder="Select venue..."
+              label="venue"
+              preferredRole="VENUE"
+            />
+          </div>
           <button
             type="button"
-            onClick={() => setEditing(true)}
-            className="text-sm text-primary hover:underline"
+            disabled={!venueId || mutation.isPending}
+            onClick={() => { if (venueId) mutation.mutate(venueId); }}
+            className="text-status-confirmed hover:text-status-confirmed/70 disabled:opacity-40 transition-colors flex-shrink-0"
+            aria-label="Save venue"
           >
-            + Add venue
+            <Check size={16} />
           </button>
-        }
-      />
-    );
-  }
-
-  return (
-    <div className="flex items-center gap-2">
-      <div className="flex-1">
-        <ContactPicker
-          value={venueId}
-          onChange={setVenueId}
-          placeholder="Select venue..."
-          label="venue"
-          preferredRole="VENUE"
-        />
-      </div>
-      <button
-        type="button"
-        disabled={!venueId || mutation.isPending}
-        onClick={() => { if (venueId) mutation.mutate(venueId); }}
-        className="text-status-confirmed hover:text-status-confirmed/70 disabled:opacity-40 transition-colors flex-shrink-0"
-        aria-label="Save venue"
-      >
-        <Check size={16} />
-      </button>
-      <IconButton label="Cancel" className="flex-shrink-0" onClick={() => { setEditing(false); setVenueId(null); }}>
-        <X size={16} />
-      </IconButton>
-    </div>
+          <IconButton label="Cancel" className="flex-shrink-0" onClick={() => { setEditing(false); setVenueId(null); }}>
+            <X size={16} />
+          </IconButton>
+        </div>
+      )}
+    </Card>
   );
 }
 
