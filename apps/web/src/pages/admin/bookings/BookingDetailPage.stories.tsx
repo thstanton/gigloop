@@ -1,6 +1,6 @@
 import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, userEvent, within, screen } from 'storybook/test';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import BookingDetailPage from './BookingDetailPage';
 import { makeBookingDetailHandlers } from '../../../../.storybook/msw-handlers';
@@ -78,8 +78,8 @@ export const AddToSeriesNoSeries: Story = {
   parameters: { msw: { handlers: makeBookingDetailHandlers('AddToSeriesNoSeries') } },
   play: async ({ canvas }) => {
     await canvas.findByText("Sophie's Wedding");
-    await userEvent.click(canvas.getByText('+ Add to series'));
-    const dialog = within(await canvas.findByRole('dialog'));
+    await userEvent.click(await canvas.findByText('+ Add to series'));
+    const dialog = within(await screen.findByRole('dialog'));
     await expect(dialog.getByText('Add to series')).toBeVisible();
     await expect(dialog.getByText('No series available')).toBeVisible();
   },
@@ -89,8 +89,8 @@ export const AddToSeriesWithSeries: Story = {
   parameters: { msw: { handlers: makeBookingDetailHandlers('AddToSeriesWithSeries') } },
   play: async ({ canvas }) => {
     await canvas.findByText("Sophie's Wedding");
-    await userEvent.click(canvas.getByText('+ Add to series'));
-    const dialog = within(await canvas.findByRole('dialog'));
+    await userEvent.click(await canvas.findByText('+ Add to series'));
+    const dialog = within(await screen.findByRole('dialog'));
     await expect(dialog.getByText('Add to series')).toBeVisible();
     await expect(dialog.getByRole('combobox')).toBeVisible();
   },
