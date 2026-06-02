@@ -33,7 +33,7 @@ import InvoiceSheet from '@/features/invoices/InvoiceSheet';
 import MarkSentDialog from '@/features/invoices/MarkSentDialog';
 import ContractCard from '@/features/bookings/ContractCard';
 import InvoiceSection, { SeriesInvoiceSection } from '@/features/bookings/InvoiceSection';
-import VenueCard from '@/features/bookings/VenueCard';
+import { VenueMapWidget } from '@/components/common/VenueMapWidget';
 import PersonCard from '@/features/bookings/PersonCard';
 import CommunicationsSection from '@/features/bookings/CommunicationsSection';
 import PerformanceSection from '@/features/bookings/PerformanceSection';
@@ -623,6 +623,21 @@ export default function BookingDetailPage() {
           {/* 4. For the day */}
           <section>
             <SectionHeader label="For the day" />
+            {booking.venue && (
+              <div className="mb-4">
+                <VenueMapWidget
+                  venue={booking.venue}
+                  showHeader={true}
+                  contactHref={`/admin/contacts/${booking.venue.id}`}
+                  travelTime={
+                    booking.venue.travelTimeMinutes != null && booking.venue.travelDistanceMetres != null
+                      ? { minutes: booking.venue.travelTimeMinutes, distanceMetres: booking.venue.travelDistanceMetres }
+                      : null
+                  }
+                  onRefreshTravelTime={() => {}}
+                />
+              </div>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <PerformanceSection
                 booking={booking}
@@ -633,10 +648,7 @@ export default function BookingDetailPage() {
                   return next;
                 })}
               />
-              {booking.venue
-                ? <VenueCard venue={booking.venue} linkState={backState} onEdit={() => setEditingContact(booking.venue!)} />
-                : <InlineVenueAdd bookingId={booking.id} />
-              }
+              {!booking.venue && <InlineVenueAdd bookingId={booking.id} />}
               <div className={booking.venue ? 'sm:col-span-2' : undefined}>
                 <MusicFormSection
                   booking={booking}

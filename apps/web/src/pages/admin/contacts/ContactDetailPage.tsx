@@ -2,6 +2,7 @@ import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'reac
 import { ChevronLeft, Plus } from 'lucide-react';
 import { LabelValue } from '@/components/common/LabelValue';
 import { Badge } from '@/components/ui/badge';
+import { VenueMapWidget } from '@/components/common/VenueMapWidget';
 import { Button } from '@/components/ui/button';
 import BookingStatusPill from '@/components/common/BookingStatusPill';
 import { useContact } from '@/lib/hooks/useContact';
@@ -129,7 +130,6 @@ export default function ContactDetailPage() {
     contact.bookingAgentBookings,
   );
 
-  const hasVenueDetails = contact.primaryRole === 'VENUE' && !!(contact.parkingInfo || contact.accessInfo || contact.equipmentAvailable);
 
   return (
     <div className="px-6 py-8 max-w-7xl mx-auto">
@@ -176,20 +176,26 @@ export default function ContactDetailPage() {
             <InfoRow label="Email" value={contact.email} href={contact.email ? `mailto:${contact.email}` : undefined} />
             <InfoRow label="Phone" value={contact.phone} href={contact.phone ? `tel:${contact.phone}` : undefined} />
             <InfoRow label="Website" value={contact.website} />
-            <InfoRow label="Address" value={[contact.addressLine1, contact.city, contact.postcode].filter(Boolean).join(', ') || null} />
+            {contact.primaryRole !== 'VENUE' && (
+              <InfoRow label="Address" value={[contact.addressLine1, contact.city, contact.postcode].filter(Boolean).join(', ') || null} />
+            )}
             <InfoRow label="Notes" value={contact.notes} />
             <InfoRow label="Commission" value={contact.commissionArrangement} />
           </div>
 
-          {/* Venue details */}
-          {hasVenueDetails && (
-            <div>
-              <h2 className="text-sm font-semibold text-foreground mb-1">Venue details</h2>
-              <div className="border-t border-border">
-                <InfoRow label="Parking" value={contact.parkingInfo} />
-                <InfoRow label="Access" value={contact.accessInfo} />
-                <InfoRow label="Equipment" value={contact.equipmentAvailable} />
-              </div>
+          {/* Venue map, address, details and travel — VENUE contacts only */}
+          {contact.primaryRole === 'VENUE' && (
+            <div className="mb-8">
+              <VenueMapWidget
+                venue={contact}
+                showHeader={false}
+                travelTime={
+                  contact.travelTimeMinutes != null && contact.travelDistanceMetres != null
+                    ? { minutes: contact.travelTimeMinutes, distanceMetres: contact.travelDistanceMetres }
+                    : null
+                }
+                onRefreshTravelTime={() => {}}
+              />
             </div>
           )}
         </div>
