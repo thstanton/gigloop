@@ -80,7 +80,7 @@ export const AddToSeriesNoSeries: Story = {
     await canvas.findByText("Sophie's Wedding");
     await userEvent.click(await canvas.findByText('+ Add to series'));
     const dialog = within(await screen.findByRole('dialog'));
-    await expect(dialog.getByText('Add to series')).toBeVisible();
+    await expect(dialog.getByRole('heading', { name: 'Add to series' })).toBeVisible();
     await expect(dialog.getByText('No series available')).toBeVisible();
   },
 };
@@ -91,7 +91,7 @@ export const AddToSeriesWithSeries: Story = {
     await canvas.findByText("Sophie's Wedding");
     await userEvent.click(await canvas.findByText('+ Add to series'));
     const dialog = within(await screen.findByRole('dialog'));
-    await expect(dialog.getByText('Add to series')).toBeVisible();
+    await expect(dialog.getByRole('heading', { name: 'Add to series' })).toBeVisible();
     await expect(dialog.getByRole('combobox')).toBeVisible();
   },
 };
