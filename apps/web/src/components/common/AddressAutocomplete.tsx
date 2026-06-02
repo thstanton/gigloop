@@ -1,6 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { MapPin } from 'lucide-react';
-import { Input } from '@/components/ui/input';
 import { LabelValue } from '@/components/common/LabelValue';
 import { FormField } from '@/components/common/FormField';
 
@@ -23,30 +21,44 @@ export interface AddressAutocompleteProps {
 
 const MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string;
 const SCRIPT_ID = 'google-maps-script';
+const CALLBACK = '__gmapsReady';
 
-function loadMapsScript(): Promise<void> {
-  return new Promise((resolve, reject) => {
+// With loading=async, script.onload fires before google.maps is initialised.
+// The correct pattern is: load bootstrap with callback=, then importLibrary('places').
+let placesPromise: Promise<void> | null = null;
+
+function loadPlaces(): Promise<void> {
+  if (placesPromise) return placesPromise;
+  placesPromise = new Promise<void>((resolve, reject) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    if ((window as any).google?.maps?.places?.PlaceAutocompleteElement) {
-      resolve();
+    const win = window as any;
+
+    const importPlaces = () =>
+      win.google.maps.importLibrary('places').then(resolve).catch(reject);
+
+    if (win.google?.maps?.importLibrary) {
+      importPlaces();
       return;
     }
-    const existing = document.getElementById(SCRIPT_ID) as HTMLScriptElement | null;
-    if (existing) {
-      if (existing.dataset.loaded) { resolve(); return; }
-      existing.addEventListener('load', () => { existing.dataset.loaded = '1'; resolve(); });
-      existing.addEventListener('error', reject);
+
+    if (document.getElementById(SCRIPT_ID)) {
+      // Script already injected by another instance — wait for callback
+      const prev = win[CALLBACK];
+      win[CALLBACK] = () => { prev?.(); importPlaces(); };
       return;
     }
+
+    win[CALLBACK] = importPlaces;
     const script = document.createElement('script');
     script.id = SCRIPT_ID;
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${MAPS_API_KEY}&libraries=places&loading=async`;
+    // Do NOT include libraries= here; importLibrary handles dynamic loading.
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${MAPS_API_KEY}&loading=async&callback=${CALLBACK}`;
     script.async = true;
     script.defer = true;
-    script.onload = () => { script.dataset.loaded = '1'; resolve(); };
-    script.onerror = reject;
+    script.onerror = () => { placesPromise = null; reject(new Error('Maps failed')); };
     document.head.appendChild(script);
   });
+  return placesPromise;
 }
 
 function parseAddressComponents(
@@ -131,7 +143,7 @@ export function AddressAutocomplete({ value, onChange }: AddressAutocompleteProp
   useEffect(() => {
     if (manual || loadFailed) return;
 
-    loadMapsScript()
+    loadPlaces()
       .then(() => {
         if (!containerRef.current) return;
         containerRef.current.innerHTML = '';
@@ -178,10 +190,7 @@ export function AddressAutocomplete({ value, onChange }: AddressAutocompleteProp
 
   return (
     <div className="space-y-3">
-      <div className="relative">
-        <MapPin size={16} className="absolute left-3 top-3 text-muted-foreground pointer-events-none z-10" />
-        <div ref={containerRef} className="[&_gmp-placeautocomplete]:block [&_gmp-placeautocomplete]:w-full" />
-      </div>
+      <div ref={containerRef} className="[&_gmp-placeautocomplete]:block [&_gmp-placeautocomplete]:w-full" />
       {hasSelection && (
         <div className="rounded-md border border-border px-3 py-1">
           {value.addressLine1 && <LabelValue label="Address">{value.addressLine1}</LabelValue>}
