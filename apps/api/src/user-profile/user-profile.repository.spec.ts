@@ -67,7 +67,7 @@ describe('UserProfileRepository', () => {
 
     it('does not encrypt when bankDetails is not in the update', async () => {
       prisma.userProfile.upsert.mockResolvedValue({ userId: 'u1', bankDetails: null });
-      await repo.updateByUserId('u1', { address: '123 Main St' });
+      await repo.updateByUserId('u1', { addressLine1: '123 Main St' });
       const written = prisma.userProfile.upsert.mock.calls[0][0].update;
       expect(written.bankDetails).toBeUndefined();
     });

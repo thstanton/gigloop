@@ -103,7 +103,10 @@ export class DocumentsService {
       businessName: publicProfile.businessName,
       musicianName: publicProfile.displayName ?? publicProfile.businessName,
       email: publicProfile.email ?? '',
-      address: userProfile?.address ?? null,
+      address: userProfile
+        ? [userProfile.addressLine1, userProfile.addressLine2, userProfile.city, userProfile.postcode]
+            .filter(Boolean).join('\n') || null
+        : null,
       bankDetails: userProfile?.bankDetails ?? null,
       vatNumber: userProfile?.vatNumber ?? null,
       vatRate: userProfile?.vatNumber ? (userProfile.vatRate ?? 20) : null,

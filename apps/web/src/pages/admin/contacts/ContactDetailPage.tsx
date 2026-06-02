@@ -173,7 +173,7 @@ export default function ContactDetailPage() {
             <InfoRow label="Email" value={contact.email} href={contact.email ? `mailto:${contact.email}` : undefined} />
             <InfoRow label="Phone" value={contact.phone} href={contact.phone ? `tel:${contact.phone}` : undefined} />
             <InfoRow label="Website" value={contact.website} />
-            <InfoRow label="Address" value={contact.address} />
+            <InfoRow label="Address" value={[contact.addressLine1, contact.city, contact.postcode].filter(Boolean).join(', ') || null} />
             <InfoRow label="Notes" value={contact.notes} />
             <InfoRow label="Commission" value={contact.commissionArrangement} />
           </div>

@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils';
 import { Card } from '@/components/common/Card';
 import { PageSection } from '@/components/common/PageSection';
 import { FormField } from '@/components/common/FormField';
+import { AddressAutocomplete } from '@/components/common/AddressAutocomplete';
 
 // ─── Schemas ─────────────────────────────────────────────────────────────────
 
@@ -33,7 +34,15 @@ const publicSchema = z.object({
 type PublicForm = z.infer<typeof publicSchema>;
 
 const businessSchema = z.object({
-  address: z.string(),
+  addressLine1: z.string(),
+  addressLine2: z.string(),
+  city: z.string(),
+  county: z.string(),
+  postcode: z.string(),
+  country: z.string(),
+  latitude: z.number().nullable(),
+  longitude: z.number().nullable(),
+  placeId: z.string().nullable(),
   bankDetails: z.string(),
   vatRegistered: z.boolean(),
   vatNumber: z.string(),
@@ -428,7 +437,15 @@ function BusinessDetailsSection({ profile }: { profile: UserProfile }) {
   const [saved, setSaved] = useState(false);
 
   const defaults = {
-    address: profile.address ?? '',
+    addressLine1: profile.addressLine1 ?? '',
+    addressLine2: profile.addressLine2 ?? '',
+    city: profile.city ?? '',
+    county: profile.county ?? '',
+    postcode: profile.postcode ?? '',
+    country: profile.country ?? 'GB',
+    latitude: profile.latitude ?? null,
+    longitude: profile.longitude ?? null,
+    placeId: profile.placeId ?? null,
     bankDetails: profile.bankDetails ?? '',
     vatRegistered: !!(profile.vatNumber),
     vatNumber: profile.vatNumber ?? '',
@@ -461,7 +478,15 @@ function BusinessDetailsSection({ profile }: { profile: UserProfile }) {
 
   function onSubmit(values: BusinessForm) {
     mutation.mutate({
-      address: values.address || undefined,
+      addressLine1: values.addressLine1 || null,
+      addressLine2: values.addressLine2 || null,
+      city: values.city || null,
+      county: values.county || null,
+      postcode: values.postcode || null,
+      country: values.country || null,
+      latitude: values.latitude,
+      longitude: values.longitude,
+      placeId: values.placeId,
       bankDetails: values.bankDetails || null,
       vatNumber: values.vatRegistered ? (values.vatNumber || null) : null,
       ...(values.vatRegistered ? { vatRate: values.vatRate } : {}),
@@ -477,8 +502,40 @@ function BusinessDetailsSection({ profile }: { profile: UserProfile }) {
         description="Used on invoices and other client-facing documents."
       />
 
-      <FormField label="Address" error={errors.address?.message}>
-        <Textarea {...register('address')} rows={3} placeholder="Your business address" />
+      <FormField label="Address">
+        <Controller
+          name="addressLine1"
+          control={control}
+          render={() => {
+            const addressValue = {
+              addressLine1: watch('addressLine1'),
+              addressLine2: watch('addressLine2'),
+              city: watch('city'),
+              county: watch('county'),
+              postcode: watch('postcode'),
+              country: watch('country'),
+              latitude: watch('latitude'),
+              longitude: watch('longitude'),
+              placeId: watch('placeId'),
+            };
+            return (
+              <AddressAutocomplete
+                value={addressValue}
+                onChange={(v) => {
+                  setValue('addressLine1', v.addressLine1, { shouldDirty: true });
+                  setValue('addressLine2', v.addressLine2, { shouldDirty: true });
+                  setValue('city', v.city, { shouldDirty: true });
+                  setValue('county', v.county, { shouldDirty: true });
+                  setValue('postcode', v.postcode, { shouldDirty: true });
+                  setValue('country', v.country, { shouldDirty: true });
+                  setValue('latitude', v.latitude, { shouldDirty: true });
+                  setValue('longitude', v.longitude, { shouldDirty: true });
+                  setValue('placeId', v.placeId, { shouldDirty: true });
+                }}
+              />
+            );
+          }}
+        />
       </FormField>
 
       <FormField label="Bank details" error={errors.bankDetails?.message}>

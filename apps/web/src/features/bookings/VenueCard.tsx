@@ -50,8 +50,10 @@ export default function VenueCard({ venue, linkState, onEdit }: VenueCardProps) 
           )}
         </p>
       )}
-      {venue.address && (
-        <p className="text-sm text-muted mt-0.5 whitespace-pre-wrap">{venue.address}</p>
+      {(venue.addressLine1 || venue.city || venue.postcode) && (
+        <p className="text-sm text-muted mt-0.5">
+          {[venue.addressLine1, venue.city, venue.postcode].filter(Boolean).join(', ')}
+        </p>
       )}
       {hasExtras && (
         <div className="mt-3 pt-3 border-t border-border space-y-3">
