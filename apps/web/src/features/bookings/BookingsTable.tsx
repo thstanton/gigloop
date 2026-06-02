@@ -39,11 +39,12 @@ const columns = [
     id: 'customer',
     header: 'Customer',
     cell: ({ row }) => {
-      const { customer, title } = row.original;
+      const { customer, title, series } = row.original;
       return (
         <span className="flex flex-col gap-0.5">
           <span className="text-sm text-foreground">{customer.name}</span>
           {title && <span className="text-xs text-muted">{title}</span>}
+          {series && <span className="text-xs text-muted">{series.label}</span>}
         </span>
       );
     },
@@ -120,6 +121,9 @@ function BookingCardList({ data }: { data: BookingListItem[] }) {
                 </span>
                 {booking.title && (
                   <span className="text-xs text-muted truncate block">{booking.title}</span>
+                )}
+                {booking.series && (
+                  <span className="text-xs text-muted truncate block">{booking.series.label}</span>
                 )}
                 <div className="mt-1">
                   <BookingStatusPill status={booking.status} />

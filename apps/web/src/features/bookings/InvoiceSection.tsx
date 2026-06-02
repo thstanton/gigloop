@@ -1,7 +1,6 @@
 import { DollarSign, Plus } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { GhostButton } from '@/components/common/GhostButton';
-import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -42,6 +41,12 @@ export function SeriesInvoiceSection({
     </p>
   );
 
+  const createAction = !invoice ? (
+    <GhostButton variant="primary" size="xs" icon={<Plus size={12} />} onClick={onCreateInvoice}>
+      Create invoice
+    </GhostButton>
+  ) : null;
+
   if (isLoading) {
     return (
       <Card title="Series Invoice">
@@ -52,11 +57,12 @@ export function SeriesInvoiceSection({
 
   if (!invoice) {
     return (
-      <Card title="Series Invoice">
+      <Card title="Series Invoice" action={createAction}>
         {notice}
-        <Button size="sm" onClick={onCreateInvoice}>
-          Create series invoice
-        </Button>
+        <div className="flex items-center gap-2 text-muted py-1">
+          <DollarSign size={14} />
+          <span className="text-sm">No series invoice yet</span>
+        </div>
       </Card>
     );
   }
