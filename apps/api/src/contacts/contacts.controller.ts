@@ -34,6 +34,14 @@ export class ContactsController {
     return this.service.findAll(req.userId);
   }
 
+  @ApiOperation({ summary: 'Get travel time from home to venue' })
+  @ApiResponse({ status: 200, type: TravelTimeResponseDto })
+  @ApiResponse({ status: 422, description: 'Home or venue address not set, or contact is not a venue' })
+  @Get(':id/travel-time')
+  getTravelTime(@Req() req: AuthedRequest, @Param('id') id: string) {
+    return this.travelTimeService.getTravelTime(req.userId, id);
+  }
+
   @ApiOperation({ summary: 'Get a contact by ID' })
   @Get(':id')
   findOne(@Req() req: AuthedRequest, @Param('id') id: string) {
@@ -54,14 +62,6 @@ export class ContactsController {
     @Body() dto: UpdateContactDto,
   ) {
     return this.service.update(req.userId, id, dto);
-  }
-
-  @ApiOperation({ summary: 'Get travel time from home to venue' })
-  @ApiResponse({ status: 200, type: TravelTimeResponseDto })
-  @ApiResponse({ status: 422, description: 'Home or venue address not set, or contact is not a venue' })
-  @Get(':id/travel-time')
-  getTravelTime(@Req() req: AuthedRequest, @Param('id') id: string) {
-    return this.travelTimeService.getTravelTime(req.userId, id);
   }
 
   @ApiOperation({ summary: 'Delete a contact (blocked if it has bookings)' })
