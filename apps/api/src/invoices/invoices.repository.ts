@@ -38,7 +38,7 @@ function resolveFormat(preferences: Record<string, unknown>): InvoiceNumberForma
   };
 }
 
-const invoiceIncludes = {
+export const invoiceIncludes = {
   lineItems: { orderBy: { order: 'asc' } },
   billToContact: true,
 } as const;
@@ -164,6 +164,42 @@ export class InvoicesRepository {
 
       return tx.invoice.update({
         where: { id },
+        data: { invoiceNumber, issueDate, dueDate, status: 'SENT' },
+        include: invoiceIncludes,
+      });
+    });
+  }
+
+  assignWithInheritedNumber(id: string, invoiceNumber: string, issueDate: Date, dueDate: Date | null) {
+    return this.prisma.invoice.update({
+      where: { id },
+      data: { invoiceNumber, issueDate, dueDate, status: 'SENT' },
+      include: invoiceIncludes,
+    });
+  }
+
+  async assignNewSequenceNumber(userId: string, invoiceId: string, issueDate: Date, dueDate: Date | null) {
+    const currentYear = new Date().getFullYear();
+    return this.prisma.$transaction(async (tx) => {
+      const profile = await tx.userProfile.findUnique({ where: { userId } });
+      if (!profile) throw new Error('User profile not found');
+
+      const format = resolveFormat((profile.preferences as Record<string, unknown>) ?? {});
+      const isNewYear = format.includeYear && profile.invoiceSequenceYear !== currentYear;
+      const nextSeq = isNewYear ? 1 : profile.invoiceNumberSequence + 1;
+
+      await tx.userProfile.update({
+        where: { userId },
+        data: {
+          invoiceNumberSequence: nextSeq,
+          ...(format.includeYear ? { invoiceSequenceYear: currentYear } : {}),
+        },
+      });
+
+      const invoiceNumber = buildInvoiceNumber(nextSeq, currentYear, format);
+
+      return tx.invoice.update({
+        where: { id: invoiceId },
         data: { invoiceNumber, issueDate, dueDate, status: 'SENT' },
         include: invoiceIncludes,
       });

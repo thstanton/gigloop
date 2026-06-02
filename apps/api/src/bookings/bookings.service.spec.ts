@@ -41,7 +41,7 @@ type MockRepo = {
   updateSeries: jest.Mock;
 };
 
-type MockSeriesRepo = { findOne: jest.Mock; findOneLight: jest.Mock; create: jest.Mock };
+type MockSeriesRepo = { findOne: jest.Mock; findOneLight: jest.Mock; findExists: jest.Mock; create: jest.Mock };
 type MockMail = { buildContext: jest.Mock };
 type MockEvaluator = { evaluate: jest.Mock };
 type MockActions = { computeActionItem: jest.Mock };
@@ -90,7 +90,7 @@ function makeEvaluator(): MockEvaluator {
 }
 
 function makeSeriesRepo(): MockSeriesRepo {
-  return { findOne: jest.fn(), findOneLight: jest.fn(), create: jest.fn() };
+  return { findOne: jest.fn(), findOneLight: jest.fn(), findExists: jest.fn(), create: jest.fn() };
 }
 
 function makeActions(): MockActions {

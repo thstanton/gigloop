@@ -6,7 +6,7 @@ import { ChecklistEvaluatorService } from '../checklist/checklist-evaluator.serv
 
 export interface SendEmailOptions {
   userId: string;
-  bookingId: string;
+  bookingId?: string;
   contactId: string;
   to: string;
   subject: string;
@@ -47,6 +47,10 @@ export class CommunicationsService {
 
   async sendEmail(options: SendEmailOptions): Promise<void> {
     const { userId, bookingId, contactId, to, subject, body, templateId, attachments } = options;
+    if (!bookingId) {
+      await this.mail.send({ to, subject, body, attachments });
+      return;
+    }
     const communication = await this.repo.createPending(userId, bookingId, contactId, subject, body, templateId);
     try {
       await this.mail.send({ to, subject, body, attachments });

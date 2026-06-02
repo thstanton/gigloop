@@ -45,7 +45,7 @@ interface Props {
 }
 
 
-export default function ComposeEmailSheet({
+function ComposeEmailSheetBody({
   bookingId,
   booking,
   invoices,
@@ -213,11 +213,10 @@ export default function ComposeEmailSheet({
     (!showDateFields || !!formIssueDate);
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="flex flex-col w-full sm:max-w-lg p-0">
-        <SheetHeader className="px-6 pt-6 pb-4 border-b border-border">
-          <SheetTitle>Compose email</SheetTitle>
-        </SheetHeader>
+    <>
+      <SheetHeader className="px-6 pt-6 pb-4 border-b border-border">
+        <SheetTitle>Compose email</SheetTitle>
+      </SheetHeader>
 
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
           {/* Recipient */}
@@ -344,6 +343,15 @@ export default function ComposeEmailSheet({
             {sendMutation.isPending ? 'Sending…' : 'Send'}
           </Button>
         </div>
+    </>
+  );
+}
+
+export default function ComposeEmailSheet({ open, onOpenChange, ...rest }: Props) {
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="flex flex-col w-full sm:max-w-lg p-0">
+        {open && <ComposeEmailSheetBody open={open} onOpenChange={onOpenChange} {...rest} />}
       </SheetContent>
     </Sheet>
   );
