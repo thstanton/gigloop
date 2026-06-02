@@ -35,15 +35,18 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Booking detail page — full header + venue details + travel + map. */
+/** Booking detail page — card title + edit action + full header + travel + map. */
 export const BookingPage: Story = {
   args: {
     showHeader: true,
+    cardTitle: 'Venue',
+    cardAction: React.createElement('button', { type: 'button', className: 'text-xs text-primary hover:text-primary/80 transition-colors' }, 'Edit'),
     travelTime: { minutes: 45, distanceMetres: 32000 },
     isLoadingTravelTime: false,
     contactHref: '/admin/contacts/v1',
   },
   play: async ({ canvas, args }) => {
+    await expect(canvas.getByText('Venue')).toBeVisible();
     await expect(canvas.getByText('The O2 Arena')).toBeVisible();
     await expect(canvas.getByText('Peninsula Square, London, SE10 0DX')).toBeVisible();
     await expect(canvas.getByText('Parking')).toBeVisible();
@@ -95,5 +98,9 @@ export const NoAddress: Story = {
     isLoadingTravelTime: false,
     onRefreshTravelTime: undefined,
     contactHref: '/admin/contacts/v1',
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('No map yet')).toBeVisible();
+    await expect(canvas.getByText(/add a full address/i)).toBeVisible();
   },
 };
