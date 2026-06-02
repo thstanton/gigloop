@@ -70,6 +70,6 @@ export const InSeries: Story = {
   play: async ({ canvas }) => {
     await expect(await canvas.findByText("Sophie's Wedding")).toBeVisible();
     await expect(canvas.getByText('Series Invoice')).toBeVisible();
-    await expect(canvas.getByText('Grand Hotel Monthly Residency')).toBeVisible();
+    await expect(canvas.getAllByText('Grand Hotel Monthly Residency')[0]).toBeVisible();
   },
 };
