@@ -1,3 +1,4 @@
+import { forwardRef } from 'react';
 import { cn } from '@/lib/utils';
 
 interface GhostButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -6,29 +7,25 @@ interface GhostButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement>
   size?: 'sm' | 'xs';
 }
 
-export function GhostButton({
-  icon,
-  children,
-  variant = 'muted',
-  size = 'sm',
-  className,
-  ...props
-}: GhostButtonProps) {
-  return (
-    <button
-      type="button"
-      className={cn(
-        'inline-flex items-center gap-1 transition-colors disabled:opacity-50',
-        size === 'xs' ? 'text-xs' : 'text-sm',
-        variant === 'primary'
-          ? 'text-primary hover:text-primary/80'
-          : 'text-muted hover:text-foreground',
-        className,
-      )}
-      {...props}
-    >
-      {icon}
-      {children}
-    </button>
-  );
-}
+export const GhostButton = forwardRef<HTMLButtonElement, GhostButtonProps>(
+  function GhostButton({ icon, children, variant = 'muted', size = 'sm', className, ...props }, ref) {
+    return (
+      <button
+        ref={ref}
+        type="button"
+        className={cn(
+          'inline-flex items-center gap-1 transition-colors disabled:opacity-50',
+          size === 'xs' ? 'text-xs' : 'text-sm',
+          variant === 'primary'
+            ? 'text-primary hover:text-primary/80'
+            : 'text-muted hover:text-foreground',
+          className,
+        )}
+        {...props}
+      >
+        {icon}
+        {children}
+      </button>
+    );
+  },
+);
