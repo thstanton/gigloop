@@ -333,6 +333,15 @@ export const communicationFixtures: Record<string, unknown[]> = {
   ],
 };
 
+const publicProfile = {
+  id: 'pp1', userId: 'user_storybook_test',
+  createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z',
+  businessName: 'Jane Smith Music', displayName: 'Jane Smith',
+  bio: null, email: 'jane@example.com', phone: null,
+  logoUrl: null, photo: null, website: null, socials: null,
+  clientPortalConfig: { theme: 'LIGHT_MODERN', brandColour: '#000000', heroImage: null, showContactPhoto: false, showContactEmail: true, showContactPhone: true },
+};
+
 const userProfile = {
   id: 'up1', userId: 'user_storybook_test',
   addressLine1: null, addressLine2: null, city: null, county: null, postcode: null, country: null,
@@ -426,6 +435,7 @@ export const mswHandlers = {
   ],
   me: [
     http.get('/api/me', () => HttpResponse.json(userProfile)),
+    http.get('/api/me/public', () => HttpResponse.json(publicProfile)),
   ],
   dashboard: [
     http.get('/api/bookings/actions', () => HttpResponse.json(dashboardActions)),
