@@ -1,15 +1,17 @@
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, Plus } from 'lucide-react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { LabelValue } from '@/components/common/LabelValue';
 import { Badge } from '@/components/ui/badge';
 import { VenueMapWidget } from '@/components/common/VenueMapWidget';
 import { Button } from '@/components/ui/button';
 import BookingStatusPill from '@/components/common/BookingStatusPill';
 import { useContact } from '@/lib/hooks/useContact';
+import { apiGet } from '@/lib/api';
 import { formatDate } from '@/lib/formatters';
 import { EVENT_TYPE_LABELS } from '@/lib/constants';
 import ContactEditDrawer from '@/features/contacts/ContactEditDrawer';
-import type { BookingRef, BookingStatus, ContactDetail as ContactDetailType } from '@/types/api';
+import type { BookingRef, BookingStatus, ContactDetail as ContactDetailType, TravelTimeResponse } from '@/types/api';
 
 const PRIMARY_ROLE_LABELS: Record<string, string> = {
   CUSTOMER: 'Customer',
@@ -110,7 +112,12 @@ export default function ContactDetailPage() {
   const [, setSearchParams] = useSearchParams();
   const backNav = (location.state as { from?: string; label?: string } | null);
 
+  const queryClient = useQueryClient();
   const { data: contact, isLoading, isError } = useContact(id!);
+  const { mutate: refreshTravelTime, isPending: isRefreshingTravelTime } = useMutation({
+    mutationFn: () => apiGet<TravelTimeResponse>(`/contacts/${id}/travel-time`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['contact', id] }),
+  });
 
   if (isLoading) return <DetailSkeleton />;
   if (isError || !contact) {
@@ -194,7 +201,8 @@ export default function ContactDetailPage() {
                     ? { minutes: contact.travelTimeMinutes, distanceMetres: contact.travelDistanceMetres }
                     : null
                 }
-                onRefreshTravelTime={() => {}}
+                isLoadingTravelTime={isRefreshingTravelTime}
+                onRefreshTravelTime={() => refreshTravelTime()}
               />
             </div>
           )}
