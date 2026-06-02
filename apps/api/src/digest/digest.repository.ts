@@ -19,6 +19,8 @@ type DigestBooking = {
   title: string | null;
   eventType: string;
   status: string;
+  customer: { name: string };
+  venue: { name: string } | null;
 };
 
 @Injectable()
@@ -68,6 +70,8 @@ export class DigestRepository {
           title: true,
           eventType: true,
           status: true,
+          customer: { select: { name: true } },
+          venue: { select: { name: true } },
         },
       }),
       this.prisma.booking.findMany({
@@ -84,6 +88,8 @@ export class DigestRepository {
           title: true,
           eventType: true,
           status: true,
+          customer: { select: { name: true } },
+          venue: { select: { name: true } },
           checklistItems: {
             where: {
               completedBy: 'USER',

@@ -139,6 +139,18 @@ export class MailService {
     return { subject, missingVariables: [...new Set(missingVariables)] };
   }
 
+  async sendBatch(emails: MailTransportOptions[]): Promise<void> {
+    if (emails.length === 0) return;
+    await this.resend.batch.send(
+      emails.map(({ subject, body, to }) => ({
+        from: process.env.RESEND_FROM ?? 'noreply@gigman.com',
+        to,
+        subject,
+        html: body,
+      })),
+    );
+  }
+
   async send(options: MailTransportOptions): Promise<void> {
     const { subject, body, attachments } = options;
 

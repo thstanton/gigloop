@@ -52,6 +52,8 @@ function makeBooking(overrides: Partial<{
   title: string | null;
   eventType: string;
   status: string;
+  customer: { name: string };
+  venue: { name: string } | null;
   checklistItems: ReturnType<typeof makeItem>[];
 }> = {}) {
   return {
@@ -61,6 +63,8 @@ function makeBooking(overrides: Partial<{
     title: 'Wedding',
     eventType: 'Wedding',
     status: 'CONFIRMED',
+    customer: { name: 'Alice Smith' },
+    venue: null,
     checklistItems: [],
     ...overrides,
   };
