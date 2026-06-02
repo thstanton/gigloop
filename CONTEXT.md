@@ -50,6 +50,7 @@ Status transitions are not enforced by the API — a Booking can move freely bet
 - **customerId** (required FK → Contact)
 - **venueId** (optional FK → Contact): venue address/info lives on the Contact record, not duplicated
 - **bookingAgentId** (optional FK → Contact)
+- **travelMode** (optional String — `'DRIVING'` | `'TRANSIT'`): per-booking override for travel mode when calculating travel time to the venue. Null means use the musician's global `UserProfile.preferences.defaultTravelMode`. Driving-only for MVP; field reserved for when transit support ships.
 - **contracts**: zero-to-many [[Contract]] entities; at most one is in a non-VOID state at any time
 - **sets**: ordered list of [[Set]] entities
 - **songList** (optional): song requirements for the booking — deferred to [[song-library]] feature
@@ -79,10 +80,12 @@ A person or organisation the musician does business with. Role-agnostic — the 
 
 **Fields (all optional except name):**
 - name (required)
-- email, phone, address (freeform text), notes
+- email, phone, notes
+- **Address (structured):** `addressLine1`, `addressLine2`, `city`, `county`, `postcode`, `country` (default `"GB"`), `latitude` (Float), `longitude` (Float), `placeId` (Google Places ID — stored for future route/mileage lookups). All nullable. Populated via Google Places Autocomplete at entry time. The freeform `address` field has been replaced by these columns.
 - **primaryRole** (optional string — one of `CUSTOMER | VENUE | BOOKING_AGENT`): the role this contact most commonly plays. Used to pre-populate the correct field when creating a booking from their detail page, and to show a role badge in contact lists and detail views. Stored as a plain string (not a Prisma enum) — validated in application code against the constants list. A contact can still appear in any role on any booking regardless of `primaryRole`; this is a hint for the UI, not a constraint.
 - *Venue extras:* parkingInfo, accessInfo, equipmentAvailable
 - *Booking agent extras:* website, commissionArrangement (freeform text)
+- **Travel time cache (venue contacts):** `travelTimeMinutes` (Int?), `travelDistanceMetres` (Int?), `travelTimeCalculatedAt` (DateTime?), `travelMode` (String? — the mode the cached result was calculated for; defaults to `'DRIVING'`). Lazily populated by the backend on first page visit that shows the venue map widget. Invalidated when this Contact's address changes, or when the musician's home address changes (all venue Contacts cleared). Refreshable via a manual button on the map widget.
 
 All fields live on the Contact table as nullable columns — no sub-type tables. A Contact can serve as both a venue and a booking agent on different Bookings; the extra fields are always available regardless of role.
 
@@ -215,7 +218,7 @@ The client-facing [[Portal]] is musician-branded: displays the musician's logo, 
 ### UserProfile
 The private, authenticated-only half of the musician's settings (one per `userId`). Never returned to portal clients. See ADR-0002.
 
-**Business fields (explicit columns):** address, bankDetails (encrypted at rest — see ADR-0003), vatNumber, defaultPaymentTermsDays, invoiceNumberSequence, invoiceSequenceYear, depositPercentage (nullable integer 1–100 — the default deposit % of the booking fee; null means no default set), digestEmailEnabled, songRequestFormEnabled, onboardingCompletedAt (nullable timestamp — null until the musician completes or skips all [[OnboardingFlow]] steps; used as the gate for admin access). `depositTrackingMode` has been removed — deposit tracking is now fully handled by the [[BookingChecklistItem]] model. `songRequestFormEnabled` remains a column but is surfaced in **Booking settings → General** (not Notifications).
+**Business fields (explicit columns):** `addressLine1`, `addressLine2`, `city`, `county`, `postcode`, `country`, `latitude` (Float?), `longitude` (Float?), `placeId` (String?) — structured address replacing the former freeform `address` field; populated via Google Places Autocomplete; used as the travel time origin for the venue map widget. Also: bankDetails (encrypted at rest — see ADR-0003), vatNumber, defaultPaymentTermsDays, invoiceNumberSequence, invoiceSequenceYear, depositPercentage (nullable integer 1–100 — the default deposit % of the booking fee; null means no default set), digestEmailEnabled, songRequestFormEnabled, onboardingCompletedAt (nullable timestamp — null until the musician completes or skips all [[OnboardingFlow]] steps; used as the gate for admin access). `depositTrackingMode` has been removed — deposit tracking is now fully handled by the [[BookingChecklistItem]] model. `songRequestFormEnabled` remains a column but is surfaced in **Booking settings → General** (not Notifications).
 
 **`preferences` (JSON column):** all workflow and behaviour preferences, gated by subscription tier at write time. See ADR-0015. Contains:
 - `checklistDefaults` — the musician's default [[BookingChecklistItem]] template; an ordered array of item definitions (key, label, completedBy, dependsOn, autoCompleteRule, requiredForStatus, dueDateRule, enabled). Seeded from system defaults on first access. The system defaults represent the current 12-item workflow. System items carry a `key` and may be disabled (`enabled: false`) — disabled items are not seeded into new bookings, and any `dependsOn` references to missing items are stripped at seeding time. Custom items (no `key`) are always enabled and can be appended.
@@ -321,12 +324,12 @@ Stage visibility by booking status:
 **Sort order — cross-booking surfaces (Dashboard Actions widget, [[DigestNotification]]):** `dueDate` ascending; undated items appear after dated items. Surfaces the most urgent items first across all bookings.
 
 ### DigestNotification
-A daily summary email sent to the musician via Resend. MVP scope. Contains upcoming Bookings and their outstanding [[BookingChecklistItem]] records. Two surfacing rules:
+A weekly summary email sent to the musician via Resend every Monday at 7am UTC. MVP scope. Contains two sections: upcoming Bookings this week (Mon–Sun, excluding ENQUIRY and CANCELLED), and outstanding [[BookingChecklistItem]] records across all upcoming bookings. Both sections always appear — empty states use a positive message ("Your calendar's clear this week!", "You're all caught up!"). No email is sent if both sections have nothing to show. Two surfacing rules for checklist items:
 
 1. **Dated items:** `dueDate` is set and `today >= dueDate - reminderLeadDays` (from `UserProfile.preferences.reminderLeadDays`).
 2. **Undated status-gate items:** `dueDate` is null, `requiredForStatus` is set, and this is the last PENDING or FAILED item for that status (all others with the same `requiredForStatus` are COMPLETE). Surfaces as "This booking could move to [status] if this task was done."
 
-Items sorted by `dueDate` ascending within each booking; undated status-gate items follow dated items.
+Only USER-completedBy items are included — CUSTOMER-completedBy items (passive waits) are omitted. Items are grouped by booking (sorted by booking date, soonest first); each booking links to `/admin/bookings/:id`. Item display: label + day of week if due this week (e.g. "Thursday"), "overdue" if past due, label only if undated. Subject line: "Your week ahead: N bookings" if gigs exist this week, otherwise "Your week ahead". HTML email, hardcoded layout (not a musician-editable Template). Implemented via `@nestjs/schedule` cron job in the API.
 
 ### MusicFormConfig
 The per-booking configuration for a [[MusicForm]]. Created at booking creation (if [[Package]]s are applied) or from the Music Form section on the booking detail page. Independent of the send invite action — the config may exist before the invite is sent.
