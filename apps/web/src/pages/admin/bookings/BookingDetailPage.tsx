@@ -531,6 +531,13 @@ export default function BookingDetailPage() {
   const backState = { from: `/admin/bookings/${id}`, label: title };
   const backUrl = encodeURIComponent(`/admin/bookings/${booking.id}`);
 
+  let venueTravelTime: { minutes: number; distanceMetres: number } | null = null;
+  if (travelTimeData) {
+    venueTravelTime = { minutes: travelTimeData.minutes, distanceMetres: travelTimeData.distanceMetres };
+  } else if (booking.venue?.travelTimeMinutes != null && booking.venue?.travelDistanceMetres != null) {
+    venueTravelTime = { minutes: booking.venue.travelTimeMinutes, distanceMetres: booking.venue.travelDistanceMetres };
+  }
+
   return (
     <div className="px-4 md:px-6 py-6 max-w-7xl mx-auto">
 
@@ -643,13 +650,7 @@ export default function BookingDetailPage() {
                     </button>
                   }
                   contactHref={`/admin/contacts/${booking.venue.id}`}
-                  travelTime={
-                    travelTimeData
-                      ? { minutes: travelTimeData.minutes, distanceMetres: travelTimeData.distanceMetres }
-                      : booking.venue.travelTimeMinutes != null && booking.venue.travelDistanceMetres != null
-                        ? { minutes: booking.venue.travelTimeMinutes, distanceMetres: booking.venue.travelDistanceMetres }
-                        : null
-                  }
+                  travelTime={venueTravelTime}
                   isLoadingTravelTime={isFetchingTravelTime}
                   onRefreshTravelTime={() => queryClient.invalidateQueries({ queryKey: ['contact-travel-time', bookingVenueId] })}
                 />

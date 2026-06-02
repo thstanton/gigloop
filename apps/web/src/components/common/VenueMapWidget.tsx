@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Car, KeyRound, MapPin, RefreshCw, Speaker } from 'lucide-react';
 import { Card } from '@/components/common/Card';
@@ -122,6 +122,35 @@ export function VenueMapWidget({
     };
   }, [hasCoords, venue.latitude, venue.longitude]);
 
+  let travelTimeStatus: ReactNode;
+  if (isLoadingTravelTime) {
+    travelTimeStatus = <RefreshCw size={14} className="animate-spin text-muted-foreground" />;
+  } else if (travelTime) {
+    travelTimeStatus = <span className="text-sm text-foreground">~{travelTime.minutes} min · {distanceKm} km driving</span>;
+  } else {
+    travelTimeStatus = <span className="text-sm text-muted-foreground">Travel time unavailable</span>;
+  }
+
+  let mapContent: ReactNode;
+  if (!hasCoords) {
+    mapContent = (
+      <EmptyState
+        icon={<MapPin size={24} />}
+        heading="No map yet"
+        description="Add a full address to see the venue on a map."
+        className="h-full py-4"
+      />
+    );
+  } else if (mapFailed) {
+    mapContent = (
+      <div className="h-full flex items-center justify-center text-sm text-muted-foreground p-4 text-center">
+        Map unavailable
+      </div>
+    );
+  } else {
+    mapContent = <div ref={mapDivRef} className="h-full w-full" />;
+  }
+
   return (
     <Card title={cardTitle} action={cardAction}>
       <div className="flex flex-col md:flex-row gap-4">
@@ -168,15 +197,7 @@ export function VenueMapWidget({
               </a>
               {onRefreshTravelTime !== undefined && (
                 <div className="flex items-center gap-2 pt-1">
-                  {isLoadingTravelTime ? (
-                    <RefreshCw size={14} className="animate-spin text-muted-foreground" />
-                  ) : travelTime ? (
-                    <span className="text-sm text-foreground">
-                      ~{travelTime.minutes} min · {distanceKm} km driving
-                    </span>
-                  ) : (
-                    <span className="text-sm text-muted-foreground">Travel time unavailable</span>
-                  )}
+                  {travelTimeStatus}
                   {!isLoadingTravelTime && (
                     <IconButton label="Refresh travel time" onClick={onRefreshTravelTime}>
                       <RefreshCw size={14} />
@@ -224,22 +245,7 @@ export function VenueMapWidget({
         </div>
 
         <div className={`md:w-64 h-48 rounded-md overflow-hidden flex-shrink-0 ${hasCoords ? 'bg-muted' : 'bg-surface border border-border'}`}>
-          {hasCoords ? (
-            mapFailed ? (
-              <div className="h-full flex items-center justify-center text-sm text-muted-foreground p-4 text-center">
-                Map unavailable
-              </div>
-            ) : (
-              <div ref={mapDivRef} className="h-full w-full" />
-            )
-          ) : (
-            <EmptyState
-              icon={<MapPin size={24} />}
-              heading="No map yet"
-              description="Add a full address to see the venue on a map."
-              className="h-full py-4"
-            />
-          )}
+          {mapContent}
         </div>
       </div>
     </Card>
