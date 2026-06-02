@@ -1159,16 +1159,18 @@ function BookingSettingsSection({ profile }: { profile: UserProfile }) {
                     </div>
                   </div>
                 ) : (
-                  <div key={`custom-${idx}`} className="flex items-center gap-3">
+                  <div key={`custom-${idx}`} className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
                     <Toggle checked={item.enabled !== false} onChange={(v) => toggleCustomEnabled(idx, v)} />
                     <div className="flex-1 min-w-0 flex items-center gap-2 flex-wrap">
                       <span className={cn('text-sm', item.enabled !== false ? 'text-foreground' : 'text-muted')}>{item.label}</span>
                       <span className="text-xs text-muted border border-border rounded px-1 py-0.5 leading-none">{item.completedBy === 'CUSTOMER' ? 'Client' : 'Me'}</span>
                       <span className="text-xs text-primary/60 border border-primary/30 rounded px-1 py-0.5 leading-none">Custom</span>
                     </div>
-                    <button type="button" onClick={() => startEditCustom(idx)} className="flex items-center gap-1 text-xs text-primary hover:underline flex-shrink-0" aria-label={`Edit ${item.label}`}>
-                      {formatDueDateRule(item.dueDateRule)}<Pencil size={11} aria-hidden="true" />
-                    </button>
+                    <div className="w-full sm:w-auto pl-12 sm:pl-0">
+                      <button type="button" onClick={() => startEditCustom(idx)} className="flex items-center gap-1 text-xs text-primary hover:underline" aria-label={`Edit ${item.label}`}>
+                        {formatDueDateRule(item.dueDateRule)}<Pencil size={11} aria-hidden="true" />
+                      </button>
+                    </div>
                   </div>
                 )
               )}
@@ -1187,7 +1189,7 @@ function BookingSettingsSection({ profile }: { profile: UserProfile }) {
                     const effective = isGated ? false : itemEnabled;
                     return (
                       <div key={item.key}>
-                        <div className="flex items-center gap-3">
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
                           <Toggle checked={effective} onChange={(v) => !isGated && toggleItemEnabled(item.key, v)} disabled={isGated} />
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
@@ -1196,27 +1198,29 @@ function BookingSettingsSection({ profile }: { profile: UserProfile }) {
                             </div>
                             {isGated && <p className="text-xs text-muted mt-0.5">Enable song request form to include this item</p>}
                           </div>
-                          {editingKey === item.key ? (
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <input type="number" min={0} value={Math.abs(editOffset)} onChange={(e) => setEditOffset((editOffset < 0 ? -1 : 1) * Number(e.target.value))} className="w-14 text-xs border border-border rounded px-2 py-1 bg-background" placeholder="14" />
-                              <span className="text-xs text-muted">days</span>
-                              <select value={editOffset < 0 ? 'before' : 'after'} onChange={(e) => setEditOffset(e.target.value === 'before' ? -Math.abs(editOffset) : Math.abs(editOffset))} className="text-xs border border-border rounded px-2 py-1 bg-background">
-                                <option value="before">before</option>
-                                <option value="after">after</option>
-                              </select>
-                              <select value={editBasis} onChange={(e) => setEditBasis(e.target.value as 'bookingDate' | 'bookingCreation')} className="text-xs border border-border rounded px-2 py-1 bg-background">
-                                <option value="bookingDate">booking date</option>
-                                <option value="bookingCreation">booking creation</option>
-                              </select>
-                              <Button type="button" size="sm" variant="outline" className="text-xs h-7" onClick={() => saveEdit(item.key, true)}>Save</Button>
-                              <Button type="button" size="sm" variant="ghost" className="text-xs h-7" onClick={() => saveEdit(item.key, false)}>No date</Button>
-                              <Button type="button" size="sm" variant="ghost" className="text-xs h-7" onClick={() => setEditingKey(null)}>Cancel</Button>
-                            </div>
-                          ) : (
-                            <button type="button" onClick={() => startEdit(item.key)} className="flex items-center gap-1 text-xs text-primary hover:underline flex-shrink-0">
-                              {formatDueDateRule(overrides[item.key]?.dueDateRule ?? null)}<Pencil size={11} aria-hidden="true" />
-                            </button>
-                          )}
+                          <div className="w-full sm:w-auto pl-12 sm:pl-0">
+                            {editingKey === item.key ? (
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <input type="number" min={0} value={Math.abs(editOffset)} onChange={(e) => setEditOffset((editOffset < 0 ? -1 : 1) * Number(e.target.value))} className="w-14 text-xs border border-border rounded px-2 py-1 bg-background" placeholder="14" />
+                                <span className="text-xs text-muted">days</span>
+                                <select value={editOffset < 0 ? 'before' : 'after'} onChange={(e) => setEditOffset(e.target.value === 'before' ? -Math.abs(editOffset) : Math.abs(editOffset))} className="text-xs border border-border rounded px-2 py-1 bg-background">
+                                  <option value="before">before</option>
+                                  <option value="after">after</option>
+                                </select>
+                                <select value={editBasis} onChange={(e) => setEditBasis(e.target.value as 'bookingDate' | 'bookingCreation')} className="text-xs border border-border rounded px-2 py-1 bg-background">
+                                  <option value="bookingDate">booking date</option>
+                                  <option value="bookingCreation">booking creation</option>
+                                </select>
+                                <Button type="button" size="sm" variant="outline" className="text-xs h-7" onClick={() => saveEdit(item.key, true)}>Save</Button>
+                                <Button type="button" size="sm" variant="ghost" className="text-xs h-7" onClick={() => saveEdit(item.key, false)}>No date</Button>
+                                <Button type="button" size="sm" variant="ghost" className="text-xs h-7" onClick={() => setEditingKey(null)}>Cancel</Button>
+                              </div>
+                            ) : (
+                              <button type="button" onClick={() => startEdit(item.key)} className="flex items-center gap-1 text-xs text-primary hover:underline">
+                                {formatDueDateRule(overrides[item.key]?.dueDateRule ?? null)}<Pencil size={11} aria-hidden="true" />
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     );
@@ -1274,16 +1278,18 @@ function BookingSettingsSection({ profile }: { profile: UserProfile }) {
                         </div>
                       </div>
                     ) : (
-                      <div key={`custom-${idx}`} className="flex items-center gap-3">
+                      <div key={`custom-${idx}`} className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
                         <Toggle checked={item.enabled !== false} onChange={(v) => toggleCustomEnabled(idx, v)} />
                         <div className="flex-1 min-w-0 flex items-center gap-2 flex-wrap">
                           <span className={cn('text-sm', item.enabled !== false ? 'text-foreground' : 'text-muted')}>{item.label}</span>
                           <span className="text-xs text-muted border border-border rounded px-1 py-0.5 leading-none">{item.completedBy === 'CUSTOMER' ? 'Client' : 'Me'}</span>
                           <span className="text-xs text-primary/60 border border-primary/30 rounded px-1 py-0.5 leading-none">Custom</span>
                         </div>
-                        <button type="button" onClick={() => startEditCustom(idx)} className="flex items-center gap-1 text-xs text-primary hover:underline flex-shrink-0" aria-label={`Edit ${item.label}`}>
-                          {formatDueDateRule(item.dueDateRule)}<Pencil size={11} aria-hidden="true" />
-                        </button>
+                        <div className="w-full sm:w-auto pl-12 sm:pl-0">
+                          <button type="button" onClick={() => startEditCustom(idx)} className="flex items-center gap-1 text-xs text-primary hover:underline" aria-label={`Edit ${item.label}`}>
+                            {formatDueDateRule(item.dueDateRule)}<Pencil size={11} aria-hidden="true" />
+                          </button>
+                        </div>
                       </div>
                     )
                   )}
