@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { MapPin } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import { LabelValue } from '@/components/common/LabelValue';
 import { FormField } from '@/components/common/FormField';
 
@@ -23,8 +25,6 @@ const MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string;
 const SCRIPT_ID = 'google-maps-script';
 const CALLBACK = '__gmapsReady';
 
-// With loading=async, script.onload fires before google.maps is initialised.
-// The correct pattern is: load bootstrap with callback=, then importLibrary('places').
 let placesPromise: Promise<void> | null = null;
 
 function loadPlaces(): Promise<void> {
@@ -32,26 +32,17 @@ function loadPlaces(): Promise<void> {
   placesPromise = new Promise<void>((resolve, reject) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const win = window as any;
-
     const importPlaces = () =>
       win.google.maps.importLibrary('places').then(resolve).catch(reject);
-
-    if (win.google?.maps?.importLibrary) {
-      importPlaces();
-      return;
-    }
-
+    if (win.google?.maps?.importLibrary) { importPlaces(); return; }
     if (document.getElementById(SCRIPT_ID)) {
-      // Script already injected by another instance — wait for callback
       const prev = win[CALLBACK];
       win[CALLBACK] = () => { prev?.(); importPlaces(); };
       return;
     }
-
     win[CALLBACK] = importPlaces;
     const script = document.createElement('script');
     script.id = SCRIPT_ID;
-    // Do NOT include libraries= here; importLibrary handles dynamic loading.
     script.src = `https://maps.googleapis.com/maps/api/js?key=${MAPS_API_KEY}&loading=async&callback=${CALLBACK}`;
     script.async = true;
     script.defer = true;
@@ -65,7 +56,6 @@ function parseAddressComponents(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   components: any[],
 ): Pick<AddressFields, 'addressLine1' | 'addressLine2' | 'city' | 'county' | 'postcode' | 'country'> {
-  // New Places API (v2) uses longText/shortText instead of long_name/short_name
   const get = (type: string): string =>
     components.find((c) => c.types?.includes(type))?.longText ?? '';
   const getShort = (type: string): string =>
@@ -135,83 +125,123 @@ function ManualEntry({
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function AddressAutocomplete({ value, onChange }: AddressAutocompleteProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  // Keep latest onChange in a ref so the effect closure is never stale,
-  // without including onChange in the deps (which would destroy/recreate the
-  // element on every setValue call triggered by a selection).
   const onChangeRef = useRef(onChange);
   useEffect(() => { onChangeRef.current = onChange; });
 
+  const [query, setQuery] = useState('');
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [suggestions, setSuggestions] = useState<any[]>([]);
   const [loadFailed, setLoadFailed] = useState(false);
   const [manual, setManual] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sessionTokenRef = useRef<any>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const hasSelection = !!value.placeId;
 
+  // Pre-load Places on mount so the first keystroke isn't delayed.
   useEffect(() => {
-    if (manual || loadFailed) return;
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let el: any = null;
-    let active = true;
-
     loadPlaces()
       .then(() => {
-        // Cleanup may have run before loadPlaces resolved (React Strict Mode runs
-        // effects twice in dev; cleanup fires synchronously while el is still null).
-        if (!active || !containerRef.current) return;
-
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        el = new (window as any).google.maps.places.PlaceAutocompleteElement({
-          componentRestrictions: { country: ['gb'] },
-        });
-
-        containerRef.current.appendChild(el);
-
-        // PlaceAutocompleteElement fires gmp-placeselect with event.place (Place),
-        // not event.placePrediction — that belongs to the Autocomplete Suggestions API.
-        el.addEventListener('gmp-placeselect', async (event: Event) => {
-          try {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const place = (event as any).place;
-            if (!place) { console.error('[AddressAutocomplete] gmp-placeselect: event.place missing', event); return; }
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            await (place as any).fetchFields({ fields: ['addressComponents', 'location'] });
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const parsed = parseAddressComponents((place as any).addressComponents ?? []);
-            onChangeRef.current({
-              ...parsed,
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              latitude: (place as any).location?.lat() ?? null,
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              longitude: (place as any).location?.lng() ?? null,
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              placeId: (place as any).id ?? null,
-            });
-          } catch (err) {
-            console.error('[AddressAutocomplete] failed to fetch place details', err);
-          }
-        });
+        const win = window as any;
+        sessionTokenRef.current = new win.google.maps.places.AutocompleteSessionToken();
       })
-      .catch(() => { if (active) setLoadFailed(true); });
+      .catch(() => setLoadFailed(true));
+  }, []);
 
-    return () => {
-      active = false;
-      if (el && containerRef.current?.contains(el)) {
-        containerRef.current.removeChild(el);
+  // Close suggestions when clicking outside.
+  useEffect(() => {
+    function onPointerDown(e: PointerEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setSuggestions([]);
       }
-    };
-  }, [manual, loadFailed]); // onChange intentionally excluded — onChangeRef stays current
+    }
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, []);
 
-  if (loadFailed) {
-    return <ManualEntry value={value} onChange={onChange} />;
-  }
+  const fetchSuggestions = useCallback(async (input: string) => {
+    if (!input.trim()) { setSuggestions([]); return; }
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const win = window as any;
+      const { AutocompleteSuggestion } = await win.google.maps.importLibrary('places');
+      const { suggestions: results } = await AutocompleteSuggestion.fetchAutocompleteSuggestions({
+        input,
+        includedRegionCodes: ['gb'],
+        sessionToken: sessionTokenRef.current,
+      });
+      setSuggestions(results ?? []);
+    } catch (err) {
+      console.error('[AddressAutocomplete] suggestions fetch failed', err);
+      setSuggestions([]);
+    }
+  }, []);
 
-  if (manual) {
-    return <ManualEntry value={value} onChange={onChange} onBack={() => setManual(false)} />;
+  useEffect(() => {
+    if (loadFailed || manual) return;
+    const t = setTimeout(() => fetchSuggestions(query), 300);
+    return () => clearTimeout(t);
+  }, [query, fetchSuggestions, loadFailed, manual]);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const selectSuggestion = async (suggestion: any) => {
+    setSuggestions([]);
+    setQuery('');
+    try {
+      const place = suggestion.placePrediction.toPlace();
+      await place.fetchFields({ fields: ['addressComponents', 'location'] });
+      const parsed = parseAddressComponents(place.addressComponents ?? []);
+      onChangeRef.current({
+        ...parsed,
+        latitude: place.location?.lat() ?? null,
+        longitude: place.location?.lng() ?? null,
+        placeId: place.id ?? null,
+      });
+      // Refresh token — the previous session is now closed by fetchFields.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const win = window as any;
+      sessionTokenRef.current = new win.google.maps.places.AutocompleteSessionToken();
+    } catch (err) {
+      console.error('[AddressAutocomplete] place detail fetch failed', err);
+    }
+  };
+
+  if (loadFailed || manual) {
+    return <ManualEntry value={value} onChange={onChange} onBack={loadFailed ? undefined : () => setManual(false)} />;
   }
 
   return (
-    <div className="space-y-3">
-      <div ref={containerRef} className="[&_gmp-placeautocomplete]:block [&_gmp-placeautocomplete]:w-full" />
+    <div ref={containerRef} className="space-y-3">
+      <div className="relative">
+        <MapPin size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+        <Input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search for an address…"
+          autoComplete="off"
+          className="pl-9"
+        />
+        {suggestions.length > 0 && (
+          <ul className="absolute z-50 w-full mt-1 bg-background border border-border rounded-md overflow-hidden shadow-md">
+            {suggestions.map((s, i) => (
+              <li key={i}>
+                <button
+                  type="button"
+                  className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors"
+                  onPointerDown={(e) => {
+                    // Use pointerdown so the value is set before onBlur fires on the input.
+                    e.preventDefault();
+                    void selectSuggestion(s);
+                  }}
+                >
+                  {s.placePrediction?.text?.toString() ?? ''}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
       {hasSelection && (
         <div className="rounded-md border border-border px-3 py-1">
           {value.addressLine1 && <LabelValue label="Address">{value.addressLine1}</LabelValue>}
