@@ -166,23 +166,29 @@ export function AddressAutocomplete({ value, onChange }: AddressAutocompleteProp
 
         containerRef.current.appendChild(el);
 
+        // PlaceAutocompleteElement fires gmp-placeselect with event.place (Place),
+        // not event.placePrediction — that belongs to the Autocomplete Suggestions API.
         el.addEventListener('gmp-placeselect', async (event: Event) => {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const place = (event as any).placePrediction.toPlace();
-          // 'id' is always present on Place — only fetch what needs a round-trip
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await (place as any).fetchFields({ fields: ['addressComponents', 'location'] });
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const parsed = parseAddressComponents((place as any).addressComponents ?? []);
-          onChangeRef.current({
-            ...parsed,
+          try {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            latitude: (place as any).location?.lat() ?? null,
+            const place = (event as any).place;
+            if (!place) { console.error('[AddressAutocomplete] gmp-placeselect: event.place missing', event); return; }
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            longitude: (place as any).location?.lng() ?? null,
+            await (place as any).fetchFields({ fields: ['addressComponents', 'location'] });
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            placeId: (place as any).id ?? null,
-          });
+            const parsed = parseAddressComponents((place as any).addressComponents ?? []);
+            onChangeRef.current({
+              ...parsed,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              latitude: (place as any).location?.lat() ?? null,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              longitude: (place as any).location?.lng() ?? null,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              placeId: (place as any).id ?? null,
+            });
+          } catch (err) {
+            console.error('[AddressAutocomplete] failed to fetch place details', err);
+          }
         });
       })
       .catch(() => { if (active) setLoadFailed(true); });
