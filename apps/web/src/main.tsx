@@ -33,6 +33,31 @@ import OnboardingChecklistPage from './pages/onboarding/OnboardingChecklistPage'
 
 const queryClient = new QueryClient();
 
+const clerkAppearance = {
+  variables: {
+    colorPrimary: 'hsl(152, 45%, 25%)',
+    colorBackground: 'hsl(38, 30%, 98%)',
+    colorInputBackground: 'hsl(38, 25%, 95%)',
+    colorText: 'hsl(30, 8%, 13%)',
+    colorTextSecondary: 'hsl(30, 8%, 48%)',
+    borderRadius: '0.25rem',
+    fontFamily: "'Commissioner', sans-serif",
+  },
+  elements: {
+    card: {
+      backgroundColor: 'hsl(38, 30%, 98%)',
+      boxShadow: 'none',
+      border: '1px solid hsl(35, 18%, 87%)',
+    },
+    headerTitle: {
+      fontFamily: "'Playfair Display', serif",
+    },
+    formButtonPrimary: {
+      boxShadow: 'none',
+    },
+  },
+};
+
 const router = createBrowserRouter([
   {
     path: '/',
@@ -93,7 +118,7 @@ const router = createBrowserRouter([
 ]);
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
-  <ClerkProvider publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY}>
+  <ClerkProvider publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY} appearance={clerkAppearance}>
     <QueryClientProvider client={queryClient}>
       <React.StrictMode>
         <RouterProvider router={router} />
