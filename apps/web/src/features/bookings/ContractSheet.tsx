@@ -89,7 +89,14 @@ interface Props {
   onClose: () => void;
 }
 
-export default function ContractSheet({ bookingId, contract, readOnly, open, onClose }: Props) {
+interface BodyProps {
+  bookingId: string;
+  contract: Contract | null;
+  readOnly: boolean;
+  onClose: () => void;
+}
+
+function ContractSheetBody({ bookingId, contract, readOnly, onClose }: BodyProps) {
   const queryClient = useQueryClient();
   const content = contract?.content ?? null;
 
@@ -112,7 +119,7 @@ export default function ContractSheet({ bookingId, contract, readOnly, open, onC
     },
   });
 
-  // Sync content and editable when sheet opens or props change
+  // Sync content and editable when props change
   useEffect(() => {
     if (!editor) return;
     editor.setEditable(!readOnly);
@@ -135,27 +142,42 @@ export default function ContractSheet({ bookingId, contract, readOnly, open, onC
   }, [saveMutation]);
 
   return (
+    <>
+      <SheetHeader className="px-6 pt-6 pb-4 border-b border-border shrink-0">
+        <SheetTitle>{readOnly ? 'Contract preview' : 'Edit contract'}</SheetTitle>
+      </SheetHeader>
+
+      {!readOnly && <Toolbar editor={editor} />}
+
+      <div className="flex-1 overflow-y-auto px-6 py-4">
+        <EditorContent editor={editor} />
+      </div>
+
+      {!readOnly && (
+        <div className="px-6 py-4 border-t border-border shrink-0 flex justify-end gap-3">
+          <Button variant="outline" onClick={onClose} disabled={saveMutation.isPending}>
+            Cancel
+          </Button>
+          <Button onClick={handleSave} disabled={saveMutation.isPending}>
+            {saveMutation.isPending ? 'Saving…' : 'Save'}
+          </Button>
+        </div>
+      )}
+    </>
+  );
+}
+
+export default function ContractSheet({ bookingId, contract, readOnly, open, onClose }: Props) {
+  return (
     <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <SheetContent side="right" className="w-full sm:max-w-2xl flex flex-col p-0">
-        <SheetHeader className="px-6 pt-6 pb-4 border-b border-border shrink-0">
-          <SheetTitle>{readOnly ? 'Contract preview' : 'Edit contract'}</SheetTitle>
-        </SheetHeader>
-
-        {!readOnly && <Toolbar editor={editor} />}
-
-        <div className="flex-1 overflow-y-auto px-6 py-4">
-          <EditorContent editor={editor} />
-        </div>
-
-        {!readOnly && (
-          <div className="px-6 py-4 border-t border-border shrink-0 flex justify-end gap-3">
-            <Button variant="outline" onClick={onClose} disabled={saveMutation.isPending}>
-              Cancel
-            </Button>
-            <Button onClick={handleSave} disabled={saveMutation.isPending}>
-              {saveMutation.isPending ? 'Saving…' : 'Save'}
-            </Button>
-          </div>
+        {open && (
+          <ContractSheetBody
+            bookingId={bookingId}
+            contract={contract}
+            readOnly={readOnly}
+            onClose={onClose}
+          />
         )}
       </SheetContent>
     </Sheet>
