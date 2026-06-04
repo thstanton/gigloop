@@ -56,7 +56,10 @@ type Story = StoryObj<typeof meta>;
 export const NotConfigured: Story = {
   args: { booking: { ...baseBooking, hasMusicFormConfig: false } },
   play: async ({ canvas }) => {
+    await expect(canvas.getByText('Music form')).toBeVisible();
     await expect(canvas.getByText('Configure song request form')).toBeVisible();
+    const ghost = canvas.getByText('Music form').closest('div');
+    await expect(ghost).not.toHaveClass('border');
   },
 };
 

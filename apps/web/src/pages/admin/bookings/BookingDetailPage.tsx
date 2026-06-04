@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@clerk/react';
 import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, Check, X, FolderOpen, FileText, Download } from 'lucide-react';
+import { ChevronLeft, Check, X, FolderOpen, FileText, Download, MapPin } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import {
@@ -109,18 +109,9 @@ function InlineVenueAdd({ bookingId }: { bookingId: string }) {
     },
   });
 
-  return (
-    <Card
-      title="Venue"
-      action={
-        !editing
-          ? <button type="button" onClick={() => setEditing(true)} className="text-xs text-primary hover:text-primary/80 transition-colors">+ Add</button>
-          : undefined
-      }
-    >
-      {!editing ? (
-        <p className="text-sm text-muted">No venue linked.</p>
-      ) : (
+  if (editing) {
+    return (
+      <Card title="Venue">
         <div className="flex items-center gap-2">
           <div className="flex-1">
             <ContactPicker
@@ -144,8 +135,22 @@ function InlineVenueAdd({ bookingId }: { bookingId: string }) {
             <X size={16} />
           </IconButton>
         </div>
-      )}
-    </Card>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="flex flex-col items-center text-center gap-2 py-4 text-muted min-h-[5rem]">
+      <MapPin size={20} />
+      <span className="text-sm font-medium">Venue</span>
+      <button
+        type="button"
+        onClick={() => setEditing(true)}
+        className="text-sm text-primary hover:text-primary/80 transition-colors"
+      >
+        + Add
+      </button>
+    </div>
   );
 }
 
