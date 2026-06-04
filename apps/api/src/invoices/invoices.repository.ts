@@ -251,4 +251,11 @@ export class InvoicesRepository {
   deleteLineItem(itemId: string) {
     return this.prisma.invoiceLineItem.delete({ where: { id: itemId } });
   }
+
+  findDepositInvoice(bookingId: string, userId: string) {
+    return this.prisma.invoice.findFirst({
+      where: { bookingId, userId, isDeposit: true, status: 'SENT' },
+      select: { dueDate: true },
+    });
+  }
 }

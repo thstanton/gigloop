@@ -44,6 +44,22 @@ export class SongsRepository {
     });
   }
 
+  findByGenres(userId: string, genres: string[]) {
+    return this.prisma.song.findMany({
+      where: { userId, genre: { in: genres }, active: true },
+      select: { id: true, title: true, artist: true, genre: true },
+      orderBy: [{ genre: 'asc' }, { title: 'asc' }],
+    });
+  }
+
+  findByIds(userId: string, ids: string[]) {
+    if (!ids.length) return Promise.resolve([]);
+    return this.prisma.song.findMany({
+      where: { id: { in: ids }, userId },
+      select: { id: true, title: true, artist: true, genre: true },
+    });
+  }
+
   async seedSongs(userId: string, entries: CatalogueEntry[]) {
     if (entries.length === 0) return [];
 

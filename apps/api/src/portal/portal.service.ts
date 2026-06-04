@@ -1,5 +1,9 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PortalRepository } from './portal.repository';
+import { PublicProfileRepository } from '../user-profile/public-profile.repository';
+import { SongsRepository } from '../songs/songs.repository';
+import { BookingsRepository } from '../bookings/bookings.repository';
+import { InvoicesRepository } from '../invoices/invoices.repository';
 import { MailService } from '../mail/mail.service';
 import { DocumentsService } from '../documents/documents.service';
 import { StorageService } from '../storage/storage.service';
@@ -82,10 +86,66 @@ function groupBy<T>(items: T[], key: (item: T) => string): Map<string, T[]> {
   return map;
 }
 
+function buildBookingSummary(
+  booking: {
+    id: string;
+    date: Date;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    fee: any;
+    title: string | null;
+    status: string;
+    customer: { name: string; greetingName: string | null };
+    venue: { name: string } | null;
+    sets: Array<{
+      order: number;
+      label: string | null;
+      startTime: string | null;
+      duration: number;
+      packageId: string | null;
+    }>;
+    packages: Array<{
+      packageId: string;
+      order: number;
+      package: { label: string; icon: string | null };
+    }>;
+  },
+  activeContract: { status: string; signedAt: Date | null } | null,
+) {
+  return {
+    id: booking.id,
+    date: booking.date.toISOString(),
+    fee: booking.fee != null ? Number(booking.fee).toFixed(2) : null,
+    title: booking.title,
+    status: booking.status,
+    customerName: booking.customer.name,
+    customerGreetingName: booking.customer.greetingName ?? null,
+    venueName: booking.venue?.name ?? null,
+    sets: booking.sets.map((s) => ({
+      order: s.order,
+      label: s.label,
+      startTime: s.startTime,
+      duration: s.duration,
+      packageId: s.packageId,
+    })),
+    formats: booking.packages.map((bpf) => ({
+      id: bpf.packageId,
+      label: bpf.package.label,
+      icon: bpf.package.icon,
+      order: bpf.order,
+    })),
+    contractSignedAt:
+      activeContract?.status === 'SIGNED' ? activeContract.signedAt?.toISOString() ?? null : null,
+  };
+}
+
 @Injectable()
 export class PortalService {
   constructor(
     private repo: PortalRepository,
+    private publicProfileRepo: PublicProfileRepository,
+    private songsRepo: SongsRepository,
+    private bookingsRepo: BookingsRepository,
+    private invoicesRepo: InvoicesRepository,
     private mail: MailService,
     private documents: DocumentsService,
     private storage: StorageService,
@@ -96,17 +156,16 @@ export class PortalService {
     const booking = await this.repo.findBookingByToken(token);
     if (!booking) throw new NotFoundException('Booking not found');
 
-    const publicProfile = await this.repo.findPublicProfile(booking.userId);
+    const publicProfile = await this.publicProfileRepo.findByUserId(booking.userId);
     if (!publicProfile) throw new NotFoundException('Booking not found');
 
     const sentDepositInvoice = booking.invoices[0] ?? null;
     const activeContract = booking.contracts?.[0] ?? null;
-    // Only SENT and SIGNED are meaningful states for the client
-    const contractStatus = activeContract?.status === 'SENT' || activeContract?.status === 'SIGNED'
-      ? activeContract.status
-      : null;
+    const contractStatus =
+      activeContract?.status === 'SENT' || activeContract?.status === 'SIGNED'
+        ? activeContract.status
+        : null;
 
-    // Exclude voided contract PDFs from the portal — clients only see the active signed contract
     const activeContractId = activeContract?.id ?? null;
     const portalDocs = booking.documents.filter(
       (doc) => doc.type !== 'CONTRACT' || doc.contractId === activeContractId,
@@ -125,32 +184,7 @@ export class PortalService {
       : null;
 
     return {
-      booking: {
-        id: booking.id,
-        date: booking.date.toISOString(),
-        fee: booking.fee != null ? Number(booking.fee).toFixed(2) : null,
-        title: booking.title,
-        status: booking.status,
-        customerName: booking.customer.name,
-        customerGreetingName: booking.customer.greetingName ?? null,
-        venueName: booking.venue?.name ?? null,
-        sets: booking.sets.map((s) => ({
-          order: s.order,
-          label: s.label,
-          startTime: s.startTime,
-          duration: s.duration,
-          packageId: s.packageId,
-        })),
-        formats: booking.packages.map((bpf) => ({
-          id: bpf.packageId,
-          label: bpf.package.label,
-          icon: bpf.package.icon,
-          order: bpf.order,
-        })),
-        contractSignedAt: activeContract?.status === 'SIGNED'
-          ? activeContract.signedAt?.toISOString() ?? null
-          : null,
-      },
+      booking: buildBookingSummary(booking, activeContract),
       publicProfile: buildPortalPublicProfile(publicProfile),
       signedContractUrl,
       documents,
@@ -166,10 +200,8 @@ export class PortalService {
     if (!booking) throw new NotFoundException('Booking not found');
 
     const contract = booking.contracts?.[0] ?? null;
-    if (!contract || contract.status !== 'SENT') {
-      if (contract?.status === 'SIGNED') throw new BadRequestException('already_signed');
-      throw new NotFoundException('Contract not found');
-    }
+    if (contract?.status === 'SIGNED') throw new BadRequestException('already_signed');
+    if (!contract || contract.status !== 'SENT') throw new NotFoundException('Contract not found');
 
     return { content: contract.content, title: bookingDisplayTitle(booking) };
   }
@@ -179,14 +211,10 @@ export class PortalService {
     if (!booking) throw new NotFoundException('Booking not found');
 
     const contract = booking.contracts?.[0] ?? null;
-    if (!contract) throw new NotFoundException('Contract not found');
-    if (contract.status === 'SIGNED') throw new BadRequestException('Contract already signed');
-    if (contract.status !== 'SENT') throw new BadRequestException('Contract must be in SENT status to sign');
+    this.validateContractForSigning(contract);
 
-    // Context still needed for musicianName/customerName resolution used inside generateAndStoreSignedContractPdf.
-    // The second substitution pass on already-substituted content is a no-op.
     const [publicProfile, context] = await Promise.all([
-      this.repo.findPublicProfile(booking.userId),
+      this.publicProfileRepo.findByUserId(booking.userId),
       this.mail.buildContext(booking.userId, booking.id),
     ]);
     if (!publicProfile) throw new NotFoundException('Booking not found');
@@ -197,8 +225,8 @@ export class PortalService {
     await this.documents.generateAndStoreSignedContractPdf(
       booking.userId,
       booking.id,
-      contract.id,
-      contract.content,
+      contract!.id,
+      contract!.content,
       context,
       resolveDisplayName(publicProfile),
       booking.customer.name,
@@ -207,7 +235,7 @@ export class PortalService {
       ip,
     );
 
-    await this.repo.markContractSigned(contract.id, ip, signatureBase64);
+    await this.bookingsRepo.markContractSigned(contract!.id, ip, signatureBase64);
     await this.evaluator.evaluate(booking.id).catch(() => {});
 
     await this.sendSigningNotification(booking, publicProfile, signedAt);
@@ -220,8 +248,8 @@ export class PortalService {
 
     const config = data.musicFormConfig as { keyMoments: unknown; enabledGenres: string[] };
     const [songs, allSongs] = await Promise.all([
-      this.repo.findSongsByUserId(data.userId, config.enabledGenres),
-      this.repo.findAllSongsByUserId(data.userId),
+      this.songsRepo.findByGenres(data.userId, config.enabledGenres),
+      this.songsRepo.findAll(data.userId, undefined, true),
     ]);
 
     return {
@@ -247,7 +275,7 @@ export class PortalService {
     if (!data.musicFormConfig) throw new NotFoundException('Music form not found');
 
     const submittedAt = new Date();
-    await this.repo.upsertMusicFormResponse(
+    await this.bookingsRepo.upsertMusicFormResponse(
       data.id,
       data.userId,
       dto.selectedSongIds,
@@ -257,7 +285,6 @@ export class PortalService {
 
     await this.evaluator.evaluate(data.id).catch(() => {});
 
-    // Fire-and-forget: PDF generation + email (do not fail the submission)
     this.generateSongListAndNotify(data, dto, submittedAt).catch(() => {});
   }
 
@@ -268,9 +295,9 @@ export class PortalService {
     submittedAt: Date,
   ) {
     const [booking, publicProfile, songs] = await Promise.all([
-      this.repo.findBookingForSongList(bookingData.id),
-      this.repo.findPublicProfile(bookingData.userId),
-      this.repo.findSongsByIds(bookingData.userId, [
+      this.bookingsRepo.findBookingForSongList(bookingData.id),
+      this.publicProfileRepo.findByUserId(bookingData.userId),
+      this.songsRepo.findByIds(bookingData.userId, [
         ...dto.selectedSongIds,
         ...dto.specialRequests.map((r) => r.songId).filter((id): id is string => !!id),
       ]),
@@ -279,7 +306,10 @@ export class PortalService {
     if (!booking || !publicProfile) return;
 
     const songMap = new Map(songs.map((s) => [s.id, s]));
-    const config = bookingData.musicFormConfig as { keyMoments: Array<{ label: string; section: string }>; enabledGenres: string[] };
+    const config = bookingData.musicFormConfig as {
+      keyMoments: Array<{ label: string; section: string }>;
+      enabledGenres: string[];
+    };
 
     const selectedSongs = dto.selectedSongIds
       .map((id) => songMap.get(id))
@@ -333,7 +363,12 @@ export class PortalService {
   }
 
   private groupSongsForEmail(
-    specialRequests: Array<{ key: string; section: string; song?: { title: string; artist?: string | null }; freeText?: string }>,
+    specialRequests: Array<{
+      key: string;
+      section: string;
+      song?: { title: string; artist?: string | null };
+      freeText?: string;
+    }>,
     selectedSongs: Array<{ title: string; artist?: string | null; genre: string }>,
   ) {
     return {
@@ -343,7 +378,10 @@ export class PortalService {
   }
 
   private buildKeyMomentsText(
-    bySection: Map<string, Array<{ key: string; song?: { title: string; artist?: string | null }; freeText?: string }>>,
+    bySection: Map<
+      string,
+      Array<{ key: string; song?: { title: string; artist?: string | null }; freeText?: string }>
+    >,
   ): string {
     if (bySection.size === 0) return '';
     let text = 'KEY MOMENTS\n';
@@ -401,7 +439,7 @@ export class PortalService {
 
     const depositInvoice = booking.depositReceivedAt
       ? null
-      : await this.repo.findDepositInvoice(booking.id, booking.userId);
+      : await this.invoicesRepo.findDepositInvoice(booking.id, booking.userId);
 
     const bookingTitle = bookingDisplayTitle(booking);
     const body = this.buildSigningNotificationBody({
@@ -432,7 +470,16 @@ export class PortalService {
     depositReceivedAt: Date | null;
     depositInvoice: { dueDate: Date | null } | null;
   }): string {
-    const { bookingId, bookingTitle, bookingDate, customerName, venueName, signedAt, depositReceivedAt, depositInvoice } = params;
+    const {
+      bookingId,
+      bookingTitle,
+      bookingDate,
+      customerName,
+      venueName,
+      signedAt,
+      depositReceivedAt,
+      depositInvoice,
+    } = params;
     const adminUrl = `${process.env.APP_BASE_URL}/admin/bookings/${bookingId}`;
     const venueLine = venueName ? `\nVenue: ${venueName}` : '';
 
@@ -447,6 +494,13 @@ export class PortalService {
     }
 
     return `${customerName} has signed the contract for ${bookingTitle}.\n\nBooking date: ${bookingDate}${venueLine}\nSigned at: ${signedAt.toISOString()}\n\nView booking: ${adminUrl}${depositSection}`;
+  }
+
+  private validateContractForSigning(contract: { status: string } | null) {
+    if (!contract) throw new NotFoundException('Contract not found');
+    if (contract.status === 'SIGNED') throw new BadRequestException('Contract already signed');
+    if (contract.status !== 'SENT')
+      throw new BadRequestException('Contract must be in SENT status to sign');
   }
 
   private extractIp(req: Request): string {
