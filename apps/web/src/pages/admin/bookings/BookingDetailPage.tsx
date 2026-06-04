@@ -666,7 +666,7 @@ export default function BookingDetailPage() {
             <SeriesEventsCard
               bookings={seriesBookings.filter((b) => b.id !== booking.id)}
               isLoading={seriesBookingsLoading}
-              onAddToSeries={() => navigate('/admin/bookings/new')}
+              onAddToSeries={() => navigate('/admin/bookings/new', { state: { seriesId: booking.series.id } })}
             />
           )}
 

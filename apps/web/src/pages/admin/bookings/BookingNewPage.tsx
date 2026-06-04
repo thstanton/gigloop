@@ -56,7 +56,7 @@ export default function BookingNewPage() {
   const [step, setStep] = useState<1 | 2>(1);
   const [pendingValues, setPendingValues] = useState<BookingFormValues | null>(null);
 
-  const locationState = location.state as { customerId?: string; venueId?: string; bookingAgentId?: string; date?: string } | null;
+  const locationState = location.state as { customerId?: string; venueId?: string; bookingAgentId?: string; date?: string; seriesId?: string } | null;
 
   const { data: userProfile } = useQuery({
     queryKey: ['me'],
@@ -100,7 +100,11 @@ export default function BookingNewPage() {
     if (locationState?.venueId) setValue('venueId', locationState.venueId);
     if (locationState?.bookingAgentId) setValue('bookingAgentId', locationState.bookingAgentId);
     if (locationState?.date) setValue('date', locationState.date);
-  }, [locationState?.customerId, locationState?.venueId, locationState?.bookingAgentId, locationState?.date, setValue]);
+    if (locationState?.seriesId) {
+      setValue('seriesMode', 'existing');
+      setValue('seriesId', locationState.seriesId);
+    }
+  }, [locationState?.customerId, locationState?.venueId, locationState?.bookingAgentId, locationState?.date, locationState?.seriesId, setValue]);
 
   useEffect(() => {
     if (!userProfile) return;
