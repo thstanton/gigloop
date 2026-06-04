@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CheckCircle2, Download, Music2, Plus } from 'lucide-react';
+import { CheckCircle2, ClipboardList, Download, Music2, Plus } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { SubLabel } from '@/components/common/SubLabel';
 import {
@@ -128,7 +128,9 @@ export default function MusicFormSection({
 
   if (!booking.hasMusicFormConfig) {
     return (
-      <Card title="Music form">
+      <div className="flex flex-col items-center text-center gap-2 py-4 text-muted min-h-[5rem]">
+        <ClipboardList size={20} />
+        <span className="text-sm font-medium">Music form</span>
         <button
           type="button"
           onClick={onUpdateConfig}
@@ -137,15 +139,17 @@ export default function MusicFormSection({
           <Plus size={14} />
           Configure song request form
         </button>
-      </Card>
+      </div>
     );
   }
 
   if (isLoading || !config) {
     return (
-      <Card title="Music form">
-        <div className="h-16 bg-border rounded animate-pulse" />
-      </Card>
+      <div className="flex flex-col items-center text-center gap-2 py-4 text-muted min-h-[5rem]">
+        <ClipboardList size={20} />
+        <span className="text-sm font-medium">Music form</span>
+        <div className="h-2 w-24 bg-border rounded animate-pulse" />
+      </div>
     );
   }
 

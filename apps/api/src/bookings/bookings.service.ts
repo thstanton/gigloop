@@ -132,6 +132,11 @@ export class BookingsService {
     return this.repo.upsertMusicFormConfig(userId, bookingId, dto);
   }
 
+  async deleteMusicFormConfig(userId: string, bookingId: string) {
+    await this.findOne(userId, bookingId);
+    return this.repo.deleteMusicFormConfig(bookingId);
+  }
+
   async applyFormat(userId: string, bookingId: string, formatId: string) {
     await this.findOne(userId, bookingId);
     const formats = await this.repo.findFormats(userId, [formatId]);

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@clerk/react';
 import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, Check, X, FolderOpen, FileText, Download } from 'lucide-react';
+import { ChevronLeft, Check, X, FolderOpen, FileText, Download, MapPin } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import {
@@ -43,7 +43,7 @@ import BookingStatusDropdown from '@/features/bookings/BookingStatusDropdown';
 import InlineNotes from '@/features/bookings/InlineNotes';
 import InlineFeeAdd from '@/features/bookings/InlineFeeAdd';
 import { toast } from '@/lib/hooks/use-toast';
-import { apiGet, apiPatch, apiPost, apiPostVoid, apiPut, apiDelete } from '@/lib/api';
+import { apiGet, apiPatch, apiPost, apiPostVoid, apiDelete } from '@/lib/api';
 import {
   formatDate,
   formatCurrency,
@@ -109,18 +109,9 @@ function InlineVenueAdd({ bookingId }: { bookingId: string }) {
     },
   });
 
-  return (
-    <Card
-      title="Venue"
-      action={
-        !editing
-          ? <button type="button" onClick={() => setEditing(true)} className="text-xs text-primary hover:text-primary/80 transition-colors">+ Add</button>
-          : undefined
-      }
-    >
-      {!editing ? (
-        <p className="text-sm text-muted">No venue linked.</p>
-      ) : (
+  if (editing) {
+    return (
+      <Card title="Venue">
         <div className="flex items-center gap-2">
           <div className="flex-1">
             <ContactPicker
@@ -144,8 +135,22 @@ function InlineVenueAdd({ bookingId }: { bookingId: string }) {
             <X size={16} />
           </IconButton>
         </div>
-      )}
-    </Card>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="flex flex-col items-center text-center gap-2 py-4 text-muted min-h-[5rem]">
+      <MapPin size={20} />
+      <span className="text-sm font-medium">Venue</span>
+      <button
+        type="button"
+        onClick={() => setEditing(true)}
+        className="text-sm text-primary hover:text-primary/80 transition-colors"
+      >
+        + Add
+      </button>
+    </div>
   );
 }
 
@@ -392,22 +397,12 @@ export default function BookingDetailPage() {
     onError: () => toast({ title: 'Failed to add item', variant: 'destructive' }),
   });
 
-  const configureMusicForm = useMutation({
-    mutationFn: () => {
-      if (!booking) return Promise.reject(new Error('No booking'));
-      const seedKeyMoments = (booking.packages ?? []).flatMap((bpf) =>
-        bpf.package.keyMoments.map((km) => ({ label: km, section: bpf.package.label })),
-      );
-      const seedGenres = [...new Set((booking.packages ?? []).flatMap((bpf) => bpf.package.defaultGenreSelection))];
-      return apiPut<MusicFormConfig>(`/bookings/${id}/music-form-config`, {
-        keyMoments: seedKeyMoments,
-        enabledGenres: seedGenres,
-      });
-    },
+  const unlinkVenueMutation = useMutation({
+    mutationFn: () => apiPatch(`/bookings/${id}`, { venueId: null }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['booking-music-form-config', id] });
       queryClient.invalidateQueries({ queryKey: ['booking', id] });
-      setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('edit', 'true'); return next; });
+      queryClient.invalidateQueries({ queryKey: ['bookings'] });
+      setEditingContact(null);
     },
   });
 
@@ -609,8 +604,8 @@ export default function BookingDetailPage() {
           {/* 4. For the day */}
           <section>
             <SectionHeader label="For the day" />
-            {booking.venue && (
-              <div className="mb-4">
+            <div className="mb-4">
+              {booking.venue ? (
                 <VenueMapWidget
                   venue={booking.venue}
                   showHeader={true}
@@ -625,8 +620,10 @@ export default function BookingDetailPage() {
                   isLoadingTravelTime={isFetchingTravelTime}
                   onRefreshTravelTime={() => queryClient.invalidateQueries({ queryKey: ['contact-travel-time', bookingVenueId] })}
                 />
-              </div>
-            )}
+              ) : (
+                <InlineVenueAdd bookingId={booking.id} />
+              )}
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <PerformanceSection
                 booking={booking}
@@ -637,24 +634,21 @@ export default function BookingDetailPage() {
                   return next;
                 })}
               />
-              {!booking.venue && <InlineVenueAdd bookingId={booking.id} />}
-              <div className={booking.venue ? 'sm:col-span-2' : undefined}>
-                <MusicFormSection
-                  booking={booking}
-                  documents={documents}
-                  config={musicFormConfig ?? null}
-                  isLoading={musicFormConfigLoading}
-                  response={musicFormResponse ?? null}
-                  onUpdateConfig={() => configureMusicForm.mutate()}
-                  onViewResponse={() => setViewingMusicFormResponse(true)}
-                  onEdit={() => setSearchParams((prev) => {
-                    const next = new URLSearchParams(prev);
-                    next.set('edit', 'true');
-                    next.set('section', 'musicForm');
-                    return next;
-                  })}
-                />
-              </div>
+              <MusicFormSection
+                booking={booking}
+                documents={documents}
+                config={musicFormConfig ?? null}
+                isLoading={musicFormConfigLoading}
+                response={musicFormResponse ?? null}
+                onUpdateConfig={() => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('edit', 'true'); next.set('section', 'musicForm'); return next; })}
+                onViewResponse={() => setViewingMusicFormResponse(true)}
+                onEdit={() => setSearchParams((prev) => {
+                  const next = new URLSearchParams(prev);
+                  next.set('edit', 'true');
+                  next.set('section', 'musicForm');
+                  return next;
+                })}
+              />
             </div>
           </section>
 
@@ -860,7 +854,11 @@ export default function BookingDetailPage() {
         onClose={() => { setContractSheetOpen(false); setPendingContract(null); }}
       />
       <BookingEditDrawer booking={booking} />
-      <ContactEditSheet contact={editingContact} onClose={() => setEditingContact(null)} />
+      <ContactEditSheet
+        contact={editingContact}
+        onClose={() => setEditingContact(null)}
+        onUnlink={editingContact?.id === booking.venue?.id ? () => unlinkVenueMutation.mutate() : undefined}
+      />
       <InvoiceSheet
         bookingId={id!}
         invoice={editingInvoice}

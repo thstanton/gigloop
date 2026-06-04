@@ -41,7 +41,8 @@ type Story = StoryObj<typeof meta>;
 export const NoPackages: Story = {
   args: { booking: baseBooking },
   play: async ({ canvas }) => {
-    await expect(canvas.getByText('No formats applied')).toBeVisible();
+    await expect(canvas.getByText('Performance')).toBeVisible();
+    await expect(canvas.getByText('+ Add packages')).toBeVisible();
   },
 };
 

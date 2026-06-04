@@ -4,7 +4,7 @@ import { useAuth } from '@clerk/react';
 import { Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SubLabel } from '@/components/common/SubLabel';
-import { apiGet, apiPut } from '@/lib/api';
+import { apiGet, apiPut, apiDelete } from '@/lib/api';
 import { ALL_GENRES, GENRE_LABELS } from '@/lib/constants';
 import type { BookingDetail, KeyMoment, MusicFormConfig } from '@/types/api';
 
@@ -21,6 +21,7 @@ export default function MusicFormEditor({
   const [localKeyMoments, setLocalKeyMoments] = useState<KeyMoment[]>([]);
   const [localGenres, setLocalGenres] = useState<string[]>([]);
   const [initialized, setInitialized] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState(false);
 
   const { data: config, isLoading } = useQuery({
     queryKey: ['booking-music-form-config', booking.id],
@@ -33,9 +34,24 @@ export default function MusicFormEditor({
     if (isOpen) setInitialized(false);
   }, [isOpen]);
 
-  // Initialize local state from fetched config
+  // Initialize local state from fetched config (or seed from packages for first-time setup)
   useEffect(() => {
-    if (!config || initialized) return;
+    if (initialized) return;
+
+    if (!booking.hasMusicFormConfig) {
+      const seedKeyMoments = (booking.packages ?? []).flatMap((bpf) =>
+        bpf.package.keyMoments.map((km) => ({ label: km, section: bpf.package.label })),
+      );
+      const seedGenres = [
+        ...new Set((booking.packages ?? []).flatMap((bpf) => bpf.package.defaultGenreSelection)),
+      ];
+      setLocalKeyMoments(seedKeyMoments);
+      setLocalGenres(seedGenres);
+      setInitialized(true);
+      return;
+    }
+
+    if (!config) return;
 
     const existing = config.keyMoments ?? [];
     const existingKeys = new Set(existing.map((km) => `${km.section}::${km.label}`));
@@ -57,7 +73,7 @@ export default function MusicFormEditor({
     setLocalKeyMoments(merged);
     setLocalGenres(config.enabledGenres?.length ? config.enabledGenres : seedGenres);
     setInitialized(true);
-  }, [config, initialized, booking.packages]);
+  }, [config, initialized, booking.packages, booking.hasMusicFormConfig]);
 
   const save = useMutation({
     mutationFn: () =>
@@ -71,9 +87,15 @@ export default function MusicFormEditor({
     },
   });
 
-  if (!booking.hasMusicFormConfig) return null;
+  const remove = useMutation({
+    mutationFn: () => apiDelete(`/bookings/${booking.id}/music-form-config`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['booking-music-form-config', booking.id] });
+      queryClient.invalidateQueries({ queryKey: ['booking', booking.id] });
+    },
+  });
 
-  if (isLoading || !initialized) {
+  if (booking.hasMusicFormConfig && (isLoading || !initialized)) {
     return (
       <div>
         <p className="text-sm font-medium text-foreground mb-3">Music form</p>
@@ -163,13 +185,39 @@ export default function MusicFormEditor({
           </div>
         </div>
 
-        <div className="flex items-center gap-3 pt-1">
-          <Button size="sm" onClick={() => save.mutate()} disabled={save.isPending}>
+        <div className="flex items-center gap-3 pt-1 flex-wrap">
+          <Button size="sm" onClick={() => save.mutate()} disabled={save.isPending || remove.isPending}>
             {save.isPending ? 'Saving…' : 'Save music form'}
           </Button>
-          {save.isSuccess && (
+          {save.isSuccess && !confirmRemove && (
             <span className="text-xs text-muted">Saved</span>
           )}
+          {booking.hasMusicFormConfig && (!confirmRemove ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setConfirmRemove(true)}
+              disabled={save.isPending || remove.isPending}
+              className="text-status-cancelled hover:text-status-cancelled/80"
+            >
+              <Trash2 size={14} className="mr-1" />
+              Remove music form
+            </Button>
+          ) : (
+            <>
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={() => remove.mutate()}
+                disabled={remove.isPending}
+              >
+                {remove.isPending ? 'Removing…' : 'Yes, remove'}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setConfirmRemove(false)}>
+                Cancel
+              </Button>
+            </>
+          ))}
         </div>
       </div>
     </div>

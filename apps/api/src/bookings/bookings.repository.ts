@@ -249,6 +249,10 @@ export class BookingsRepository {
     });
   }
 
+  deleteMusicFormConfig(bookingId: string) {
+    return this.prisma.musicFormConfig.delete({ where: { bookingId } });
+  }
+
   findBookingFormat(userId: string, bookingId: string, bookingFormatId: string) {
     return this.prisma.bookingPackage.findFirst({
       where: { id: bookingFormatId, bookingId, userId },

@@ -13,7 +13,7 @@ import {
   ParseBoolPipe,
   DefaultValuePipe,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { BookingStatus } from '@prisma/client';
 import { BookingsService } from './bookings.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
@@ -192,6 +192,13 @@ export class BookingsController {
     @Body() dto: UpsertMusicFormConfigDto,
   ) {
     return this.service.upsertMusicFormConfig(req.userId, id, dto);
+  }
+
+  @ApiOperation({ summary: 'Remove the music form config for a booking' })
+  @ApiResponse({ status: 200, description: 'Config deleted' })
+  @Delete(':id/music-form-config')
+  deleteMusicFormConfig(@Req() req: AuthedRequest, @Param('id') id: string) {
+    return this.service.deleteMusicFormConfig(req.userId, id);
   }
 
   @ApiOperation({ summary: 'Apply a performance format to a booking' })
