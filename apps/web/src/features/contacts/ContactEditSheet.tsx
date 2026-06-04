@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Sheet,
@@ -22,6 +22,8 @@ export default function ContactEditSheet({ contact, onClose, onUnlink }: Props) 
   const queryClient = useQueryClient();
   const open = contact !== null;
   const [confirmUnlink, setConfirmUnlink] = useState(false);
+
+  useEffect(() => { if (!open) setConfirmUnlink(false); }, [open]);
 
   const saveMutation = useMutation({
     mutationFn: (values: ContactFormValues) =>
@@ -64,13 +66,17 @@ export default function ContactEditSheet({ contact, onClose, onUnlink }: Props) 
         {onUnlink && (
           <div className="px-6 py-4 border-t border-border shrink-0">
             {!confirmUnlink ? (
-              <Button variant="destructive" size="sm" onClick={() => setConfirmUnlink(true)}>
-                Unlink venue
-              </Button>
+              <button
+                type="button"
+                onClick={() => setConfirmUnlink(true)}
+                className="text-sm text-status-enquiry hover:text-status-enquiry/80 transition-colors"
+              >
+                Remove venue from booking
+              </button>
             ) : (
               <div className="flex items-center gap-3">
                 <Button variant="destructive" size="sm" onClick={onUnlink}>
-                  Yes, unlink
+                  Yes, remove
                 </Button>
                 <Button variant="ghost" size="sm" onClick={() => setConfirmUnlink(false)}>
                   Cancel
