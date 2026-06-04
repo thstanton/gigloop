@@ -54,6 +54,34 @@ function buildPortalPublicProfile(p: {
   };
 }
 
+function bookingDisplayTitle(booking: { title: string | null; customer: { name: string }; date: Date }): string {
+  return booking.title ?? `${booking.customer.name} · ${booking.date.toISOString().split('T')[0]}`;
+}
+
+function resolveDisplayName(profile: { displayName: string | null; businessName: string }): string {
+  return profile.displayName ?? profile.businessName;
+}
+
+function labelDocument(doc: {
+  type: string;
+  invoice?: { invoiceNumber: string | null; isDeposit: boolean } | null;
+}): string {
+  if (doc.type === 'CONTRACT') return 'Signed contract';
+  if (doc.type === 'SONG_LIST') return 'Song list';
+  const num = doc.invoice?.invoiceNumber ? ` ${doc.invoice.invoiceNumber}` : '';
+  return doc.invoice?.isDeposit ? `Deposit invoice${num}` : `Invoice${num}`;
+}
+
+function groupBy<T>(items: T[], key: (item: T) => string): Map<string, T[]> {
+  const map = new Map<string, T[]>();
+  for (const item of items) {
+    const k = key(item);
+    if (!map.has(k)) map.set(k, []);
+    map.get(k)!.push(item);
+  }
+  return map;
+}
+
 @Injectable()
 export class PortalService {
   constructor(
@@ -80,33 +108,18 @@ export class PortalService {
 
     // Exclude voided contract PDFs from the portal — clients only see the active signed contract
     const activeContractId = activeContract?.id ?? null;
-    const documents = booking.documents
-      .filter((doc) => doc.type !== 'CONTRACT' || doc.contractId === activeContractId)
-      .map((doc) => {
-        let label: string;
-        if (doc.type === 'CONTRACT') {
-          label = 'Signed contract';
-        } else if (doc.type === 'SONG_LIST') {
-          label = 'Song list';
-        } else if (doc.invoice?.isDeposit) {
-          const num = doc.invoice.invoiceNumber ? ` ${doc.invoice.invoiceNumber}` : '';
-          label = `Deposit invoice${num}`;
-        } else {
-          const num = doc.invoice?.invoiceNumber ? ` ${doc.invoice.invoiceNumber}` : '';
-          label = `Invoice${num}`;
-        }
-        return {
-          id: doc.id,
-          type: doc.type as 'CONTRACT' | 'INVOICE' | 'SONG_LIST',
-          label,
-          url: this.storage.getPublicUrl(doc.storageKey),
-          createdAt: doc.createdAt.toISOString(),
-        };
-      });
-
-    const signedContractDoc = booking.documents.find(
-      (d) => d.type === 'CONTRACT' && d.contractId === activeContractId,
+    const portalDocs = booking.documents.filter(
+      (doc) => doc.type !== 'CONTRACT' || doc.contractId === activeContractId,
     );
+    const signedContractDoc = portalDocs.find((d) => d.type === 'CONTRACT') ?? null;
+    const documents = portalDocs.map((doc) => ({
+      id: doc.id,
+      type: doc.type as 'CONTRACT' | 'INVOICE' | 'SONG_LIST',
+      label: labelDocument(doc),
+      url: this.storage.getPublicUrl(doc.storageKey),
+      createdAt: doc.createdAt.toISOString(),
+    }));
+
     const signedContractUrl = signedContractDoc
       ? this.storage.getPublicUrl(signedContractDoc.storageKey)
       : null;
@@ -158,9 +171,7 @@ export class PortalService {
       throw new NotFoundException('Contract not found');
     }
 
-    const title = booking.title ?? `${booking.customer.name} · ${booking.date.toISOString().split('T')[0]}`;
-
-    return { content: contract.content, title };
+    return { content: contract.content, title: bookingDisplayTitle(booking) };
   }
 
   async signContract(token: string, signatureBase64: string, req: Request) {
@@ -172,12 +183,13 @@ export class PortalService {
     if (contract.status === 'SIGNED') throw new BadRequestException('Contract already signed');
     if (contract.status !== 'SENT') throw new BadRequestException('Contract must be in SENT status to sign');
 
-    const publicProfile = await this.repo.findPublicProfile(booking.userId);
-    if (!publicProfile) throw new NotFoundException('Booking not found');
-
     // Context still needed for musicianName/customerName resolution used inside generateAndStoreSignedContractPdf.
     // The second substitution pass on already-substituted content is a no-op.
-    const context = await this.mail.buildContext(booking.userId, booking.id);
+    const [publicProfile, context] = await Promise.all([
+      this.repo.findPublicProfile(booking.userId),
+      this.mail.buildContext(booking.userId, booking.id),
+    ]);
+    if (!publicProfile) throw new NotFoundException('Booking not found');
 
     const signedAt = new Date();
     const ip = this.extractIp(req);
@@ -188,7 +200,7 @@ export class PortalService {
       contract.id,
       contract.content,
       context,
-      publicProfile.displayName ?? publicProfile.businessName,
+      resolveDisplayName(publicProfile),
       booking.customer.name,
       signatureBase64,
       signedAt,
@@ -283,9 +295,8 @@ export class PortalService {
       };
     });
 
-    const bookingTitle = booking.title ?? `${booking.customer.name} · ${booking.date.toISOString().split('T')[0]}`;
-    const bookingDate = booking.date.toISOString().split('T')[0];
-    const musicianName = publicProfile.displayName ?? publicProfile.businessName;
+    const title = bookingDisplayTitle(booking);
+    const musicianName = resolveDisplayName(publicProfile);
 
     const { buffer } = await this.documents.generateAndStoreSongListPdf(
       bookingData.userId,
@@ -293,7 +304,7 @@ export class PortalService {
       {
         musicianName,
         customerName: booking.customer.name,
-        bookingDate,
+        bookingDate: booking.date.toISOString().split('T')[0],
         venueName: booking.venue?.name ?? null,
         specialRequests,
         selectedSongs,
@@ -305,11 +316,17 @@ export class PortalService {
     if (!publicProfile.email) return;
 
     const grouped = this.groupSongsForEmail(specialRequests, selectedSongs);
-    const body = this.buildSongListEmailBody(grouped, dto.notes ?? null, booking.customer.name, bookingTitle, bookingData.id);
+    const body = this.buildSongListEmailBody({
+      grouped,
+      notes: dto.notes ?? null,
+      customerName: booking.customer.name,
+      bookingTitle: title,
+      bookingId: bookingData.id,
+    });
 
     await this.mail.send({
       to: publicProfile.email,
-      subject: `${booking.customer.name} has submitted their song requests for ${bookingTitle}`,
+      subject: `${booking.customer.name} has submitted their song requests for ${title}`,
       body: body.replace(/\n/g, '<br>'),
       attachments: [{ filename: 'song-list.pdf', content: buffer }],
     });
@@ -319,19 +336,10 @@ export class PortalService {
     specialRequests: Array<{ key: string; section: string; song?: { title: string; artist?: string | null }; freeText?: string }>,
     selectedSongs: Array<{ title: string; artist?: string | null; genre: string }>,
   ) {
-    const bySection = new Map<string, typeof specialRequests>();
-    for (const req of specialRequests) {
-      if (!bySection.has(req.section)) bySection.set(req.section, []);
-      bySection.get(req.section)!.push(req);
-    }
-
-    const byGenre = new Map<string, typeof selectedSongs>();
-    for (const song of selectedSongs) {
-      if (!byGenre.has(song.genre)) byGenre.set(song.genre, []);
-      byGenre.get(song.genre)!.push(song);
-    }
-
-    return { bySection, byGenre };
+    return {
+      bySection: groupBy(specialRequests, (r) => r.section),
+      byGenre: groupBy(selectedSongs, (s) => s.genre),
+    };
   }
 
   private buildKeyMomentsText(
@@ -365,13 +373,14 @@ export class PortalService {
     return text + '\n';
   }
 
-  private buildSongListEmailBody(
-    grouped: ReturnType<PortalService['groupSongsForEmail']>,
-    notes: string | null,
-    customerName: string,
-    bookingTitle: string,
-    bookingId: string,
-  ): string {
+  private buildSongListEmailBody(params: {
+    grouped: ReturnType<PortalService['groupSongsForEmail']>;
+    notes: string | null;
+    customerName: string;
+    bookingTitle: string;
+    bookingId: string;
+  }): string {
+    const { grouped, notes, customerName, bookingTitle, bookingId } = params;
     const adminUrl = `${process.env.APP_BASE_URL}/admin/bookings/${bookingId}`;
     let body = `${customerName} has submitted their song requests for ${bookingTitle}.\n\n`;
     body += this.buildKeyMomentsText(grouped.bySection);
@@ -394,7 +403,7 @@ export class PortalService {
       ? null
       : await this.repo.findDepositInvoice(booking.id, booking.userId);
 
-    const bookingTitle = booking.title ?? `${booking.customer.name} · ${booking.date.toISOString().split('T')[0]}`;
+    const bookingTitle = bookingDisplayTitle(booking);
     const body = this.buildSigningNotificationBody({
       bookingId: booking.id,
       bookingTitle,
