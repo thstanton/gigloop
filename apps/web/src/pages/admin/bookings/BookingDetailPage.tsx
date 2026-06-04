@@ -604,8 +604,8 @@ export default function BookingDetailPage() {
           {/* 4. For the day */}
           <section>
             <SectionHeader label="For the day" />
-            {booking.venue && (
-              <div className="mb-4">
+            <div className="mb-4">
+              {booking.venue ? (
                 <VenueMapWidget
                   venue={booking.venue}
                   showHeader={true}
@@ -620,8 +620,10 @@ export default function BookingDetailPage() {
                   isLoadingTravelTime={isFetchingTravelTime}
                   onRefreshTravelTime={() => queryClient.invalidateQueries({ queryKey: ['contact-travel-time', bookingVenueId] })}
                 />
-              </div>
-            )}
+              ) : (
+                <InlineVenueAdd bookingId={booking.id} />
+              )}
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <PerformanceSection
                 booking={booking}
@@ -632,7 +634,6 @@ export default function BookingDetailPage() {
                   return next;
                 })}
               />
-              {!booking.venue && <InlineVenueAdd bookingId={booking.id} />}
               <MusicFormSection
                 booking={booking}
                 documents={documents}
