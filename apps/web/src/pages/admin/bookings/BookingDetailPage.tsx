@@ -643,23 +643,21 @@ export default function BookingDetailPage() {
                 })}
               />
               {!booking.venue && <InlineVenueAdd bookingId={booking.id} />}
-              <div className={booking.venue ? 'sm:col-span-2' : undefined}>
-                <MusicFormSection
-                  booking={booking}
-                  documents={documents}
-                  config={musicFormConfig ?? null}
-                  isLoading={musicFormConfigLoading}
-                  response={musicFormResponse ?? null}
-                  onUpdateConfig={() => configureMusicForm.mutate()}
-                  onViewResponse={() => setViewingMusicFormResponse(true)}
-                  onEdit={() => setSearchParams((prev) => {
-                    const next = new URLSearchParams(prev);
-                    next.set('edit', 'true');
-                    next.set('section', 'musicForm');
-                    return next;
-                  })}
-                />
-              </div>
+              <MusicFormSection
+                booking={booking}
+                documents={documents}
+                config={musicFormConfig ?? null}
+                isLoading={musicFormConfigLoading}
+                response={musicFormResponse ?? null}
+                onUpdateConfig={() => configureMusicForm.mutate()}
+                onViewResponse={() => setViewingMusicFormResponse(true)}
+                onEdit={() => setSearchParams((prev) => {
+                  const next = new URLSearchParams(prev);
+                  next.set('edit', 'true');
+                  next.set('section', 'musicForm');
+                  return next;
+                })}
+              />
             </div>
           </section>
 
