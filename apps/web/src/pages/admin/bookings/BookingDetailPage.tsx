@@ -661,15 +661,6 @@ export default function BookingDetailPage() {
         {/* ─── Right column ─── */}
         <div className="mt-8 md:mt-0 space-y-6">
 
-          {/* Series events */}
-          {booking.series && (
-            <SeriesEventsCard
-              bookings={seriesBookings.filter((b) => b.id !== booking.id)}
-              isLoading={seriesBookingsLoading}
-              onAddToSeries={() => navigate('/admin/bookings/new', { state: { seriesId: booking.series.id } })}
-            />
-          )}
-
           {/* Checklist */}
           {booking.status !== 'CANCELLED' && (
             <ChecklistSection
@@ -684,6 +675,15 @@ export default function BookingDetailPage() {
               onAddItem={(data) => addChecklistItem.mutate(data)}
               isAddingItem={addChecklistItem.isPending}
               isActionPending={actions.isPending || markPaid.isPending}
+            />
+          )}
+
+          {/* Series events */}
+          {booking.series && (
+            <SeriesEventsCard
+              bookings={seriesBookings.filter((b) => b.id !== booking.id)}
+              isLoading={seriesBookingsLoading}
+              onAddToSeries={() => navigate('/admin/bookings/new', { state: { seriesId: booking.series.id } })}
             />
           )}
 
