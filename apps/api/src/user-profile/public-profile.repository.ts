@@ -15,6 +15,10 @@ export class PublicProfileRepository {
     });
   }
 
+  findByUserId(userId: string) {
+    return this.prisma.publicProfile.findUnique({ where: { userId } });
+  }
+
   updateByUserId(userId: string, data: UpdatePublicProfileDto) {
     const { socials, clientPortalConfig, ...rest } = data;
     const payload: Record<string, unknown> = {

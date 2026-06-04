@@ -469,6 +469,52 @@ export class BookingsRepository {
     });
   }
 
+  markContractSigned(contractId: string, signedFromIp: string, signatureDataUrl: string) {
+    return this.prisma.contract.update({
+      where: { id: contractId },
+      data: { status: 'SIGNED', signedAt: new Date(), signedFromIp, signatureDataUrl },
+    });
+  }
+
+  upsertMusicFormResponse(
+    bookingId: string,
+    userId: string,
+    selectedSongIds: string[],
+    specialRequests: readonly unknown[],
+    notes: string | undefined,
+  ) {
+    return this.prisma.musicFormResponse.upsert({
+      where: { bookingId },
+      create: {
+        bookingId,
+        userId,
+        selectedSongIds,
+        specialRequests: specialRequests as unknown as Prisma.InputJsonValue,
+        notes,
+        submittedAt: new Date(),
+      },
+      update: {
+        selectedSongIds,
+        specialRequests: specialRequests as unknown as Prisma.InputJsonValue,
+        notes,
+        submittedAt: new Date(),
+      },
+    });
+  }
+
+  findBookingForSongList(bookingId: string) {
+    return this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      select: {
+        id: true,
+        title: true,
+        date: true,
+        customer: { select: { name: true } },
+        venue: { select: { name: true } },
+      },
+    });
+  }
+
   async recomputeChecklistDueDates(bookingId: string, bookingDate: Date, bookingCreatedAt: Date) {
     const items = await this.prisma.bookingChecklistItem.findMany({
       where: { bookingId },

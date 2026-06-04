@@ -11,5 +11,6 @@ import { SeriesModule } from '../series/series.module';
   imports: [MailModule, ChecklistModule, SeriesModule],
   controllers: [BookingsController],
   providers: [BookingsService, BookingsRepository, BookingActionsService],
+  exports: [BookingsRepository],
 })
 export class BookingsModule {}
