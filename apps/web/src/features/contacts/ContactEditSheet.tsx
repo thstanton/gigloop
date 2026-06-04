@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Sheet,
@@ -5,6 +6,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import { Button } from '@/components/ui/button';
 import ContactForm, { toContactPayload, contactToFormValues } from './ContactForm';
 import type { ContactFormValues } from './ContactForm';
 import { apiPatch } from '@/lib/api';
@@ -13,11 +15,13 @@ import type { Contact } from '@/types/api';
 interface Props {
   contact: Contact | null;
   onClose: () => void;
+  onUnlink?: () => void;
 }
 
-export default function ContactEditSheet({ contact, onClose }: Props) {
+export default function ContactEditSheet({ contact, onClose, onUnlink }: Props) {
   const queryClient = useQueryClient();
   const open = contact !== null;
+  const [confirmUnlink, setConfirmUnlink] = useState(false);
 
   const saveMutation = useMutation({
     mutationFn: (values: ContactFormValues) =>
@@ -31,8 +35,15 @@ export default function ContactEditSheet({ contact, onClose }: Props) {
     },
   });
 
+  function handleOpenChange(o: boolean) {
+    if (!o) {
+      setConfirmUnlink(false);
+      onClose();
+    }
+  }
+
   return (
-    <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+    <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetContent side="right" className="w-full sm:max-w-lg flex flex-col p-0">
         <SheetHeader className="px-6 pt-6 pb-4 border-b border-border shrink-0">
           <SheetTitle>Edit contact</SheetTitle>
@@ -50,6 +61,24 @@ export default function ContactEditSheet({ contact, onClose }: Props) {
             />
           )}
         </div>
+        {onUnlink && (
+          <div className="px-6 py-4 border-t border-border shrink-0">
+            {!confirmUnlink ? (
+              <Button variant="destructive" size="sm" onClick={() => setConfirmUnlink(true)}>
+                Unlink venue
+              </Button>
+            ) : (
+              <div className="flex items-center gap-3">
+                <Button variant="destructive" size="sm" onClick={onUnlink}>
+                  Yes, unlink
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setConfirmUnlink(false)}>
+                  Cancel
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
       </SheetContent>
     </Sheet>
   );

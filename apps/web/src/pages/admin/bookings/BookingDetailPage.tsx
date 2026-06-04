@@ -416,6 +416,15 @@ export default function BookingDetailPage() {
     },
   });
 
+  const unlinkVenueMutation = useMutation({
+    mutationFn: () => apiPatch(`/bookings/${id}`, { venueId: null }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['booking', id] });
+      queryClient.invalidateQueries({ queryKey: ['bookings'] });
+      setEditingContact(null);
+    },
+  });
+
   // ─── Helpers ─────────────────────────────────────────────────────────────
 
   function openCompose(templateType?: string) {
@@ -863,7 +872,11 @@ export default function BookingDetailPage() {
         onClose={() => { setContractSheetOpen(false); setPendingContract(null); }}
       />
       <BookingEditDrawer booking={booking} />
-      <ContactEditSheet contact={editingContact} onClose={() => setEditingContact(null)} />
+      <ContactEditSheet
+        contact={editingContact}
+        onClose={() => setEditingContact(null)}
+        onUnlink={editingContact?.id === booking.venue?.id ? () => unlinkVenueMutation.mutate() : undefined}
+      />
       <InvoiceSheet
         bookingId={id!}
         invoice={editingInvoice}
