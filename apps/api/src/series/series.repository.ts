@@ -92,6 +92,20 @@ export class SeriesRepository {
     });
   }
 
+  findSeriesBookings(userId: string, seriesId: string) {
+    return this.prisma.booking.findMany({
+      where: { seriesId, userId },
+      include: {
+        customer: { select: { id: true, name: true, email: true } },
+        venue: { select: { id: true, name: true } },
+        bookingAgent: { select: { id: true, name: true } },
+        sets: { select: { startTime: true }, orderBy: { order: 'asc' as const }, take: 1 },
+        series: { select: { id: true, label: true } },
+      },
+      orderBy: { date: 'asc' },
+    });
+  }
+
   findMemberBookingsForInvoice(userId: string, seriesId: string) {
     return this.prisma.booking.findMany({
       where: { seriesId, userId },

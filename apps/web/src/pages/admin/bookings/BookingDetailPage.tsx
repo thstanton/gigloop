@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@clerk/react';
-import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, Check, X, FolderOpen, FileText, Download, MapPin } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
@@ -22,6 +22,8 @@ import { useBooking } from '@/lib/hooks/useBooking';
 import { useBookingActions } from '@/lib/hooks/useBookingActions';
 import { useBookingInvoices } from '@/lib/hooks/useBookingInvoices';
 import SeriesInvoiceCard from '@/features/bookings/SeriesInvoiceCard';
+import { SeriesEventsCard } from '@/features/bookings/SeriesEventsCard';
+import { useSeriesBookings } from '@/lib/hooks/useSeriesBookings';
 import { useBookingCommunications } from '@/lib/hooks/useBookingCommunications';
 import { useBookingDocuments } from '@/lib/hooks/useBookingDocuments';
 import BookingEditDrawer from '@/features/bookings/BookingEditDrawer';
@@ -180,6 +182,7 @@ function PageSkeleton() {
 export default function BookingDetailPage() {
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
+  const navigate = useNavigate();
   const backNav = (location.state as { from?: string; label?: string } | null);
   const [, setSearchParams] = useSearchParams();
 
@@ -221,6 +224,7 @@ export default function BookingDetailPage() {
 
   const actions = useBookingActions(id!);
   const queryClient = useQueryClient();
+  const { data: seriesBookings = [], isLoading: seriesBookingsLoading } = useSeriesBookings(booking?.series?.id);
 
   const { data: seriesList } = useQuery({
     queryKey: ['series'],
@@ -671,6 +675,15 @@ export default function BookingDetailPage() {
               onAddItem={(data) => addChecklistItem.mutate(data)}
               isAddingItem={addChecklistItem.isPending}
               isActionPending={actions.isPending || markPaid.isPending}
+            />
+          )}
+
+          {/* Series events */}
+          {booking.series && (
+            <SeriesEventsCard
+              bookings={seriesBookings.filter((b) => b.id !== booking.id)}
+              isLoading={seriesBookingsLoading}
+              onAddToSeries={() => navigate('/admin/bookings/new', { state: { seriesId: booking.series!.id } })}
             />
           )}
 
