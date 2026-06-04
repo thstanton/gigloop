@@ -34,9 +34,24 @@ export default function MusicFormEditor({
     if (isOpen) setInitialized(false);
   }, [isOpen]);
 
-  // Initialize local state from fetched config
+  // Initialize local state from fetched config (or seed from packages for first-time setup)
   useEffect(() => {
-    if (!config || initialized) return;
+    if (initialized) return;
+
+    if (!booking.hasMusicFormConfig) {
+      const seedKeyMoments = (booking.packages ?? []).flatMap((bpf) =>
+        bpf.package.keyMoments.map((km) => ({ label: km, section: bpf.package.label })),
+      );
+      const seedGenres = [
+        ...new Set((booking.packages ?? []).flatMap((bpf) => bpf.package.defaultGenreSelection)),
+      ];
+      setLocalKeyMoments(seedKeyMoments);
+      setLocalGenres(seedGenres);
+      setInitialized(true);
+      return;
+    }
+
+    if (!config) return;
 
     const existing = config.keyMoments ?? [];
     const existingKeys = new Set(existing.map((km) => `${km.section}::${km.label}`));
@@ -58,7 +73,7 @@ export default function MusicFormEditor({
     setLocalKeyMoments(merged);
     setLocalGenres(config.enabledGenres?.length ? config.enabledGenres : seedGenres);
     setInitialized(true);
-  }, [config, initialized, booking.packages]);
+  }, [config, initialized, booking.packages, booking.hasMusicFormConfig]);
 
   const save = useMutation({
     mutationFn: () =>
@@ -80,9 +95,7 @@ export default function MusicFormEditor({
     },
   });
 
-  if (!booking.hasMusicFormConfig) return null;
-
-  if (isLoading || !initialized) {
+  if (booking.hasMusicFormConfig && (isLoading || !initialized)) {
     return (
       <div>
         <p className="text-sm font-medium text-foreground mb-3">Music form</p>
@@ -179,7 +192,7 @@ export default function MusicFormEditor({
           {save.isSuccess && !confirmRemove && (
             <span className="text-xs text-muted">Saved</span>
           )}
-          {!confirmRemove ? (
+          {booking.hasMusicFormConfig && (!confirmRemove ? (
             <Button
               size="sm"
               variant="ghost"
@@ -204,7 +217,7 @@ export default function MusicFormEditor({
                 Cancel
               </Button>
             </>
-          )}
+          ))}
         </div>
       </div>
     </div>

@@ -43,7 +43,7 @@ import BookingStatusDropdown from '@/features/bookings/BookingStatusDropdown';
 import InlineNotes from '@/features/bookings/InlineNotes';
 import InlineFeeAdd from '@/features/bookings/InlineFeeAdd';
 import { toast } from '@/lib/hooks/use-toast';
-import { apiGet, apiPatch, apiPost, apiPostVoid, apiPut, apiDelete } from '@/lib/api';
+import { apiGet, apiPatch, apiPost, apiPostVoid, apiDelete } from '@/lib/api';
 import {
   formatDate,
   formatCurrency,
@@ -397,25 +397,6 @@ export default function BookingDetailPage() {
     onError: () => toast({ title: 'Failed to add item', variant: 'destructive' }),
   });
 
-  const configureMusicForm = useMutation({
-    mutationFn: () => {
-      if (!booking) return Promise.reject(new Error('No booking'));
-      const seedKeyMoments = (booking.packages ?? []).flatMap((bpf) =>
-        bpf.package.keyMoments.map((km) => ({ label: km, section: bpf.package.label })),
-      );
-      const seedGenres = [...new Set((booking.packages ?? []).flatMap((bpf) => bpf.package.defaultGenreSelection))];
-      return apiPut<MusicFormConfig>(`/bookings/${id}/music-form-config`, {
-        keyMoments: seedKeyMoments,
-        enabledGenres: seedGenres,
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['booking-music-form-config', id] });
-      queryClient.invalidateQueries({ queryKey: ['booking', id] });
-      setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('edit', 'true'); return next; });
-    },
-  });
-
   const unlinkVenueMutation = useMutation({
     mutationFn: () => apiPatch(`/bookings/${id}`, { venueId: null }),
     onSuccess: () => {
@@ -658,7 +639,7 @@ export default function BookingDetailPage() {
                 config={musicFormConfig ?? null}
                 isLoading={musicFormConfigLoading}
                 response={musicFormResponse ?? null}
-                onUpdateConfig={() => configureMusicForm.mutate()}
+                onUpdateConfig={() => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('edit', 'true'); next.set('section', 'musicForm'); return next; })}
                 onViewResponse={() => setViewingMusicFormResponse(true)}
                 onEdit={() => setSearchParams((prev) => {
                   const next = new URLSearchParams(prev);
