@@ -28,6 +28,13 @@ export async function apiGet<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+export async function apiGetNullable<T>(path: string): Promise<T | null> {
+  const res = await authedFetch(path);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Response(res.statusText, { status: res.status });
+  return res.json() as Promise<T>;
+}
+
 export async function apiPost<T>(path: string, body: unknown): Promise<T> {
   const res = await authedFetch(path, { method: 'POST', body: JSON.stringify(body) });
   if (!res.ok) throw new Response(res.statusText, { status: res.status });
