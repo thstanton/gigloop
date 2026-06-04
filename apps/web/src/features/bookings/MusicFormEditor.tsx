@@ -4,7 +4,7 @@ import { useAuth } from '@clerk/react';
 import { Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SubLabel } from '@/components/common/SubLabel';
-import { apiGet, apiPut } from '@/lib/api';
+import { apiGet, apiPut, apiDelete } from '@/lib/api';
 import { ALL_GENRES, GENRE_LABELS } from '@/lib/constants';
 import type { BookingDetail, KeyMoment, MusicFormConfig } from '@/types/api';
 
@@ -21,6 +21,7 @@ export default function MusicFormEditor({
   const [localKeyMoments, setLocalKeyMoments] = useState<KeyMoment[]>([]);
   const [localGenres, setLocalGenres] = useState<string[]>([]);
   const [initialized, setInitialized] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState(false);
 
   const { data: config, isLoading } = useQuery({
     queryKey: ['booking-music-form-config', booking.id],
@@ -65,6 +66,14 @@ export default function MusicFormEditor({
         keyMoments: localKeyMoments,
         enabledGenres: localGenres,
       }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['booking-music-form-config', booking.id] });
+      queryClient.invalidateQueries({ queryKey: ['booking', booking.id] });
+    },
+  });
+
+  const remove = useMutation({
+    mutationFn: () => apiDelete(`/bookings/${booking.id}/music-form-config`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['booking-music-form-config', booking.id] });
       queryClient.invalidateQueries({ queryKey: ['booking', booking.id] });
@@ -163,12 +172,38 @@ export default function MusicFormEditor({
           </div>
         </div>
 
-        <div className="flex items-center gap-3 pt-1">
-          <Button size="sm" onClick={() => save.mutate()} disabled={save.isPending}>
+        <div className="flex items-center gap-3 pt-1 flex-wrap">
+          <Button size="sm" onClick={() => save.mutate()} disabled={save.isPending || remove.isPending}>
             {save.isPending ? 'Saving…' : 'Save music form'}
           </Button>
-          {save.isSuccess && (
+          {save.isSuccess && !confirmRemove && (
             <span className="text-xs text-muted">Saved</span>
+          )}
+          {!confirmRemove ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setConfirmRemove(true)}
+              disabled={save.isPending || remove.isPending}
+              className="text-status-cancelled hover:text-status-cancelled/80"
+            >
+              <Trash2 size={14} className="mr-1" />
+              Remove music form
+            </Button>
+          ) : (
+            <>
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={() => remove.mutate()}
+                disabled={remove.isPending}
+              >
+                {remove.isPending ? 'Removing…' : 'Yes, remove'}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setConfirmRemove(false)}>
+                Cancel
+              </Button>
+            </>
           )}
         </div>
       </div>

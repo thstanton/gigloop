@@ -338,7 +338,7 @@ export default function PerformanceEditor({ booking }: { booking: BookingDetail 
           variant="primary"
           icon={<Plus size={14} aria-hidden="true" />}
         >
-          Add format
+          Add packages
         </GhostButton>
       ) : (
         <div className="space-y-2">
