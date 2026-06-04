@@ -160,18 +160,70 @@ function InlineVenueAdd({ bookingId }: { bookingId: string }) {
 
 function PageSkeleton() {
   return (
-    <div className="px-4 md:px-6 py-6 max-w-2xl animate-pulse space-y-6">
-      <div className="h-4 w-24 bg-border rounded" />
-      <div className="space-y-2">
-        <div className="h-7 w-56 bg-border rounded" />
-        <div className="h-4 w-32 bg-border rounded" />
-      </div>
-      <div className="space-y-2.5">
-        {[1, 2, 3].map((i) => <div key={i} className="h-4 w-48 bg-border rounded" />)}
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="h-32 bg-border rounded-lg" />
-        <div className="h-32 bg-border rounded-lg" />
+    <div className="px-4 md:px-6 py-6 max-w-7xl mx-auto animate-pulse">
+      {/* Back link */}
+      <div className="h-4 w-20 bg-border rounded" />
+
+      <div className="mt-6 md:grid md:grid-cols-[3fr_2fr] md:gap-8 md:items-start">
+
+        {/* Left column */}
+        <div className="space-y-8">
+
+          {/* Header */}
+          <div className="space-y-3">
+            <div className="flex items-start justify-between gap-4">
+              <div className="h-8 w-48 bg-border rounded" />
+              <div className="flex gap-2">
+                <div className="h-8 w-24 bg-border rounded" />
+                <div className="h-8 w-16 bg-border rounded" />
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <div className="h-6 w-24 bg-border rounded-full" />
+              <div className="h-6 w-28 bg-border rounded" />
+              <div className="h-6 w-20 bg-border rounded" />
+            </div>
+          </div>
+
+          {/* People */}
+          <div className="space-y-2">
+            <div className="h-4 w-16 bg-border rounded" />
+            <div className="border-t border-border divide-y divide-border">
+              <div className="flex items-center gap-3 py-3">
+                <div className="h-8 w-8 bg-border rounded-full flex-shrink-0" />
+                <div className="space-y-1.5 flex-1">
+                  <div className="h-4 w-32 bg-border rounded" />
+                  <div className="h-3 w-20 bg-border rounded" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Notes */}
+          <div className="space-y-2">
+            <div className="h-4 w-12 bg-border rounded" />
+            <div className="h-16 w-full bg-border rounded" />
+          </div>
+
+          {/* For the day */}
+          <div className="space-y-4">
+            <div className="h-4 w-24 bg-border rounded" />
+            <div className="h-40 w-full bg-border rounded-lg" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="h-28 bg-border rounded-lg" />
+              <div className="h-28 bg-border rounded-lg" />
+            </div>
+          </div>
+        </div>
+
+        {/* Right column */}
+        <div className="mt-8 md:mt-0 space-y-6">
+          <div className="h-48 bg-border rounded-lg" />
+          <div className="h-32 bg-border rounded-lg" />
+          <div className="h-40 bg-border rounded-lg" />
+          <div className="h-24 bg-border rounded-lg" />
+          <div className="h-24 bg-border rounded-lg" />
+        </div>
       </div>
     </div>
   );
