@@ -70,7 +70,7 @@ export const Loading: Story = {
 export const Empty: Story = {
   args: { bookings: [], isLoading: false },
   play: async ({ canvas }) => {
-    await expect(canvas.getByText('No events in this series yet.')).toBeVisible();
+    await expect(canvas.getByText('No other events in this series yet.')).toBeVisible();
     await expect(canvas.getByText('Add to series')).toBeVisible();
   },
 };

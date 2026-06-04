@@ -31,7 +31,7 @@ export function SeriesEventsCard({ bookings, isLoading, onAddToSeries }: SeriesE
   if (bookings.length === 0) {
     return (
       <Card title="Events in Series" action={action}>
-        <p className="text-sm text-muted py-1">No events in this series yet.</p>
+        <p className="text-sm text-muted py-1">No other events in this series yet.</p>
       </Card>
     );
   }
