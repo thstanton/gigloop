@@ -145,9 +145,11 @@ export default function MusicFormSection({
 
   if (isLoading || !config) {
     return (
-      <Card title="Music form">
-        <div className="h-16 bg-border rounded animate-pulse" />
-      </Card>
+      <div className="flex flex-col items-center text-center gap-2 py-4 text-muted min-h-[5rem]">
+        <ClipboardList size={20} />
+        <span className="text-sm font-medium">Music form</span>
+        <div className="h-2 w-24 bg-border rounded animate-pulse" />
+      </div>
     );
   }
 

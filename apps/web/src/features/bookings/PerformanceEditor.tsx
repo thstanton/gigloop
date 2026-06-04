@@ -211,7 +211,7 @@ export default function PerformanceEditor({ booking }: { booking: BookingDetail 
       <p className="text-sm font-medium text-foreground mb-3">Performance</p>
 
       {(booking.packages ?? []).length === 0 && unassigned.length === 0 && (
-        <p className="text-sm text-muted mb-3">No formats applied yet.</p>
+        <p className="text-sm text-muted mb-3">No packages added yet.</p>
       )}
 
       {(booking.packages ?? []).map((bpf) => {

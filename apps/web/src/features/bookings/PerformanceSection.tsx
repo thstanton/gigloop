@@ -24,6 +24,22 @@ export default function PerformanceSection({ booking, onEdit }: PerformanceSecti
   }
   const unassigned = setsByFormatId.get(null) ?? [];
 
+  if ((booking.packages ?? []).length === 0 && unassigned.length === 0) {
+    return (
+      <div className="flex flex-col items-center text-center gap-2 py-4 text-muted min-h-[5rem]">
+        <Music size={20} />
+        <span className="text-sm font-medium">Performance</span>
+        <button
+          type="button"
+          onClick={onEdit}
+          className="text-sm text-primary hover:text-primary/80 transition-colors"
+        >
+          + Add packages
+        </button>
+      </div>
+    );
+  }
+
   return (
     <Card
       title="Performance"
@@ -37,12 +53,6 @@ export default function PerformanceSection({ booking, onEdit }: PerformanceSecti
         </button>
       }
     >
-      {(booking.packages ?? []).length === 0 && unassigned.length === 0 && (
-        <div className="flex items-center gap-2 text-muted py-1">
-          <Music size={14} />
-          <span className="text-sm">No formats applied</span>
-        </div>
-      )}
 
       {(booking.packages ?? []).map((bpf) => {
         const sets = setsByFormatId.get(bpf.packageId) ?? [];
