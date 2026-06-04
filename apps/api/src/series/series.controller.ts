@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Post, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, NotFoundException, Param, Post, Req } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { SeriesService } from './series.service';
 import { SendInvoiceDto } from '../invoices/dto/send-invoice.dto';
@@ -37,10 +37,12 @@ export class SeriesController {
     return this.service.createInvoice(req.userId, id);
   }
 
-  @ApiOperation({ summary: 'Get the active (non-VOID) series invoice' })
+  @ApiOperation({ summary: 'Get the active (non-VOID) series invoice; 404 when none exists' })
   @Get(':id/invoices/current')
-  getActiveInvoice(@Req() req: AuthedRequest, @Param('id') id: string) {
-    return this.service.getActiveInvoice(req.userId, id);
+  async getActiveInvoice(@Req() req: AuthedRequest, @Param('id') id: string) {
+    const invoice = await this.service.getActiveInvoice(req.userId, id);
+    if (!invoice) throw new NotFoundException('No active series invoice');
+    return invoice;
   }
 
   @ApiOperation({ summary: 'Send a series invoice by email' })
