@@ -165,11 +165,9 @@ export default function BookingEditDrawer({ booking }: Props) {
             <PerformanceEditor booking={booking} />
           </div>
 
-          {booking.hasMusicFormConfig && (
-            <div ref={musicFormRef} className="mt-8 pt-6 border-t border-border">
-              <MusicFormEditor booking={booking} isOpen={isOpen} />
-            </div>
-          )}
+          <div ref={musicFormRef} className="mt-8 pt-6 border-t border-border">
+            <MusicFormEditor booking={booking} isOpen={isOpen} />
+          </div>
 
           <div className="mt-8 pt-6 border-t border-border">
             {deleteConfirm ? (
