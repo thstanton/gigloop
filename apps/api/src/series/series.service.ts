@@ -68,6 +68,12 @@ export class SeriesService {
     };
   }
 
+  async getBookings(userId: string, id: string) {
+    const series = await this.repo.findExists(userId, id);
+    if (!series) throw new NotFoundException('Series not found');
+    return this.repo.findSeriesBookings(userId, id);
+  }
+
   // ─── Invoice operations ────────────────────────────────────────────────────
 
   private async requireSeries(userId: string, seriesId: string) {

@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, HttpCode, NotFoundException, Param, Post, Req } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { SeriesService } from './series.service';
 import { SendInvoiceDto } from '../invoices/dto/send-invoice.dto';
 import { MarkSentDto } from '../invoices/dto/mark-sent.dto';
@@ -23,6 +23,14 @@ export class SeriesController {
   @Get(':id')
   findOne(@Req() req: AuthedRequest, @Param('id') id: string) {
     return this.service.findOne(req.userId, id);
+  }
+
+  @ApiOperation({ summary: 'List all bookings in a series' })
+  @ApiResponse({ status: 200, description: 'Booking list items for the series, ordered by date ascending' })
+  @ApiResponse({ status: 404, description: 'Series not found' })
+  @Get(':id/bookings')
+  getBookings(@Req() req: AuthedRequest, @Param('id') id: string) {
+    return this.service.getBookings(req.userId, id);
   }
 
   @ApiOperation({ summary: 'Get pre-population defaults from the earliest member booking' })
