@@ -455,6 +455,13 @@ export class BookingsRepository {
     });
   }
 
+  clearDepositReceivedAt(bookingId: string) {
+    return this.prisma.booking.update({
+      where: { id: bookingId },
+      data: { depositReceivedAt: null },
+    });
+  }
+
   countNonVoidInvoices(bookingId: string) {
     return this.prisma.invoice.count({
       where: { bookingId, status: { not: 'VOID' } },

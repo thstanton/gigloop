@@ -4,39 +4,9 @@ import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { CreateLineItemDto } from './dto/create-line-item.dto';
 import { UpdateLineItemDto } from './dto/update-line-item.dto';
+import { allocate } from './invoice-number-allocator';
 
-export type PaddingWidth = 1 | 3 | 4 | 6;
-
-export interface InvoiceNumberFormat {
-  prefix: string;
-  includeYear: boolean;
-  paddingWidth: PaddingWidth;
-}
-
-const FORMAT_DEFAULTS: InvoiceNumberFormat = { prefix: 'INV', includeYear: true, paddingWidth: 3 };
-
-export function buildInvoiceNumber(seq: number, year: number, format: InvoiceNumberFormat): string {
-  const { prefix, includeYear, paddingWidth } = format;
-  const seq_str = String(seq).padStart(paddingWidth, '0');
-  const parts = [
-    ...(prefix ? [prefix] : []),
-    ...(includeYear ? [String(year)] : []),
-    seq_str,
-  ];
-  return parts.join('-');
-}
-
-function resolveFormat(preferences: Record<string, unknown>): InvoiceNumberFormat {
-  const raw = preferences.invoiceNumberFormat as Partial<InvoiceNumberFormat> | undefined;
-  if (!raw) return FORMAT_DEFAULTS;
-  return {
-    prefix: typeof raw.prefix === 'string' ? raw.prefix : FORMAT_DEFAULTS.prefix,
-    includeYear: typeof raw.includeYear === 'boolean' ? raw.includeYear : FORMAT_DEFAULTS.includeYear,
-    paddingWidth: ([1, 3, 4, 6] as PaddingWidth[]).includes(raw.paddingWidth as PaddingWidth)
-      ? (raw.paddingWidth as PaddingWidth)
-      : FORMAT_DEFAULTS.paddingWidth,
-  };
-}
+export { buildInvoiceNumber, PaddingWidth, InvoiceNumberFormat } from './invoice-number-allocator';
 
 export const invoiceIncludes = {
   lineItems: { orderBy: { order: 'asc' } },
@@ -54,6 +24,15 @@ export class InvoicesRepository {
     return this.prisma.booking
       .findFirst({ where: { id: bookingId, userId }, select: { customerId: true } })
       .then((b) => b?.customerId ?? null);
+  }
+
+  findBookingInfo(
+    userId: string,
+    bookingId: string,
+  ): Promise<{ customerId: string; seriesId: string | null } | null> {
+    return this.prisma.booking
+      .findFirst({ where: { id: bookingId, userId }, select: { customerId: true, seriesId: true } })
+      .then((b) => (b ? { customerId: b.customerId, seriesId: b.seriesId } : null));
   }
 
   findAll(userId: string, bookingId: string) {
@@ -137,30 +116,24 @@ export class InvoicesRepository {
         select: { invoiceNumber: true },
       });
 
-      if (voided?.invoiceNumber) {
-        return tx.invoice.update({
-          where: { id },
-          data: { invoiceNumber: voided.invoiceNumber, issueDate, dueDate, status: 'SENT' },
-          include: invoiceIncludes,
-        });
-      }
-
       const profile = await tx.userProfile.findUnique({ where: { userId } });
       if (!profile) throw new Error('User profile not found');
 
-      const format = resolveFormat((profile.preferences as Record<string, unknown>) ?? {});
-      const isNewYear = format.includeYear && profile.invoiceSequenceYear !== currentYear;
-      const nextSeq = isNewYear ? 1 : profile.invoiceNumberSequence + 1;
+      const prefs = (profile.preferences as Record<string, unknown>) ?? {};
+      const { invoiceNumber, nextSeq, nextYear } = allocate(
+        prefs,
+        currentYear,
+        profile.invoiceNumberSequence,
+        profile.invoiceSequenceYear,
+        voided?.invoiceNumber,
+      );
 
-      await tx.userProfile.update({
-        where: { userId },
-        data: {
-          invoiceNumberSequence: nextSeq,
-          ...(format.includeYear ? { invoiceSequenceYear: currentYear } : {}),
-        },
-      });
-
-      const invoiceNumber = buildInvoiceNumber(nextSeq, currentYear, format);
+      if (nextSeq !== profile.invoiceNumberSequence) {
+        await tx.userProfile.update({
+          where: { userId },
+          data: { invoiceNumberSequence: nextSeq, invoiceSequenceYear: nextYear },
+        });
+      }
 
       return tx.invoice.update({
         where: { id },
@@ -184,19 +157,18 @@ export class InvoicesRepository {
       const profile = await tx.userProfile.findUnique({ where: { userId } });
       if (!profile) throw new Error('User profile not found');
 
-      const format = resolveFormat((profile.preferences as Record<string, unknown>) ?? {});
-      const isNewYear = format.includeYear && profile.invoiceSequenceYear !== currentYear;
-      const nextSeq = isNewYear ? 1 : profile.invoiceNumberSequence + 1;
+      const prefs = (profile.preferences as Record<string, unknown>) ?? {};
+      const { invoiceNumber, nextSeq, nextYear } = allocate(
+        prefs,
+        currentYear,
+        profile.invoiceNumberSequence,
+        profile.invoiceSequenceYear,
+      );
 
       await tx.userProfile.update({
         where: { userId },
-        data: {
-          invoiceNumberSequence: nextSeq,
-          ...(format.includeYear ? { invoiceSequenceYear: currentYear } : {}),
-        },
+        data: { invoiceNumberSequence: nextSeq, invoiceSequenceYear: nextYear },
       });
-
-      const invoiceNumber = buildInvoiceNumber(nextSeq, currentYear, format);
 
       return tx.invoice.update({
         where: { id: invoiceId },
