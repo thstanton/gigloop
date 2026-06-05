@@ -15,6 +15,46 @@ import { ChecklistEvaluatorService } from '../checklist/checklist-evaluator.serv
 
 const VALID_STATUSES = new Set<string>(Object.values(BookingStatus));
 
+const BOOKING_FIELD_SHORTCUT: Readonly<Record<string, string>> = {
+  activeContract: 'create_contract',
+  depositReceivedAt: 'mark_deposit_received',
+};
+
+function resolveContractTemplate(items: Array<{ key: string | null }>): string {
+  return items.some((i) => i.key === 'deposit_received')
+    ? 'contract_and_deposit_cover'
+    : 'contract_cover';
+}
+
+function deriveShortcut(
+  rule: Record<string, unknown> | null,
+  items: Array<{ key: string | null }>,
+): { shortcutType?: string; shortcutTemplateType?: string } {
+  if (!rule) return {};
+  const type = rule['type'] as string | undefined;
+  switch (type) {
+    case 'communicationSent': {
+      const templateTypes = (rule['templateTypes'] as string[] | undefined) ?? [];
+      const isContractEmail =
+        templateTypes.includes('contract_cover') || templateTypes.includes('contract_and_deposit_cover');
+      return {
+        shortcutType: 'send_email',
+        shortcutTemplateType: isContractEmail ? resolveContractTemplate(items) : templateTypes[0],
+      };
+    }
+    case 'invoiceExists': {
+      const isDeposit = rule['isDeposit'] as boolean | undefined;
+      return { shortcutType: isDeposit ? 'create_deposit_invoice' : 'create_balance_invoice' };
+    }
+    case 'bookingField':
+      return { shortcutType: BOOKING_FIELD_SHORTCUT[rule['field'] as string] };
+    case 'contractSigned':
+      return { shortcutType: 'mark_contract_signed' };
+    default:
+      return {};
+  }
+}
+
 @Injectable()
 export class BookingsService {
   constructor(
@@ -290,6 +330,7 @@ export class BookingsService {
       updatedAt: item.updatedAt.toISOString(),
       completedAt: item.completedAt?.toISOString() ?? null,
       dueDate: item.dueDate?.toISOString() ?? null,
+      ...deriveShortcut(item.autoCompleteRule as Record<string, unknown> | null, items),
     }));
   }
 

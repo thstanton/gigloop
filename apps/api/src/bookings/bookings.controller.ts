@@ -25,6 +25,7 @@ import { UpsertMusicFormConfigDto } from './dto/upsert-music-form-config.dto';
 import { UpdateContractDto } from './dto/update-contract.dto';
 import { UpdateChecklistItemDto } from './dto/update-checklist-item.dto';
 import { CreateChecklistItemDto } from './dto/create-checklist-item.dto';
+import { BookingChecklistItemResponseDto } from './dto/checklist-item-response.dto';
 import { UpdateBookingSeriesDto } from './dto/update-booking-series.dto';
 import type { Request } from 'express';
 
@@ -140,6 +141,7 @@ export class BookingsController {
   }
 
   @ApiOperation({ summary: 'Get checklist items for a booking' })
+  @ApiResponse({ status: 200, type: [BookingChecklistItemResponseDto] })
   @Get(':id/checklist')
   getChecklist(@Req() req: AuthedRequest, @Param('id') id: string) {
     return this.service.getChecklist(req.userId, id);

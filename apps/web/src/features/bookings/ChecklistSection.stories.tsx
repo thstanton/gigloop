@@ -26,12 +26,12 @@ function item(overrides: Partial<ChecklistItem> & { label: string }): ChecklistI
 }
 
 const pendingItems: ChecklistItem[] = [
-  item({ label: 'Send quote', key: 'send_quote', requiredForStatus: 'PROVISIONAL' }),
-  item({ label: 'Create contract', key: 'create_contract', requiredForStatus: 'CONFIRMED' }),
-  item({ label: 'Send contract', key: 'send_contract', requiredForStatus: 'CONFIRMED' }),
-  item({ label: 'Contract signed', key: 'contract_signed', requiredForStatus: 'CONFIRMED' }),
-  item({ label: 'Create deposit invoice', key: 'create_deposit_invoice', requiredForStatus: 'CONFIRMED' }),
-  item({ label: 'Deposit received', key: 'deposit_received', requiredForStatus: 'CONFIRMED' }),
+  item({ label: 'Send quote', key: 'send_quote', shortcutType: 'send_email', shortcutTemplateType: 'quote', requiredForStatus: 'PROVISIONAL' }),
+  item({ label: 'Create contract', key: 'create_contract', shortcutType: 'create_contract', requiredForStatus: 'CONFIRMED' }),
+  item({ label: 'Send contract', key: 'send_contract', shortcutType: 'send_email', shortcutTemplateType: 'contract_cover', requiredForStatus: 'CONFIRMED' }),
+  item({ label: 'Contract signed', key: 'contract_signed', shortcutType: 'mark_contract_signed', requiredForStatus: 'CONFIRMED' }),
+  item({ label: 'Create deposit invoice', key: 'create_deposit_invoice', shortcutType: 'create_deposit_invoice', requiredForStatus: 'CONFIRMED' }),
+  item({ label: 'Deposit received', key: 'deposit_received', shortcutType: 'mark_deposit_received', requiredForStatus: 'CONFIRMED' }),
 ];
 
 const noop = () => {};
@@ -43,7 +43,6 @@ const meta = {
   args: {
     isLoading: false,
     bookingStatus: 'CONFIRMED',
-    contractTemplateType: 'contract_cover',
     onToggle: noop,
     onChecklistAction: noop,
     onOpenCompose: noop,
@@ -91,7 +90,7 @@ export const WithFailedItem: Story = {
   args: {
     bookingStatus: 'PROVISIONAL',
     items: [
-      item({ label: 'Send confirmation', key: 'send_quote', state: 'FAILED', requiredForStatus: 'PROVISIONAL' }),
+      item({ label: 'Send confirmation', key: 'send_quote', state: 'FAILED', shortcutType: 'send_email', shortcutTemplateType: 'quote', requiredForStatus: 'PROVISIONAL' }),
       item({ label: 'Create contract', state: 'PENDING', requiredForStatus: 'CONFIRMED' }),
     ],
   },

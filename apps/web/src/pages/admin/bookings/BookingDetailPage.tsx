@@ -719,7 +719,6 @@ export default function BookingDetailPage() {
               items={checklist}
               isLoading={checklistLoading}
               bookingStatus={booking.status}
-              contractTemplateType={contractShortcutType}
               onToggle={(itemId, state) => toggleChecklistItem.mutate({ itemId, state })}
               onChecklistAction={handleChecklistAction}
               onOpenCompose={openCompose}

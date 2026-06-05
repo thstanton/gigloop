@@ -55,12 +55,6 @@ function dueDateDisplay(dueDate: string | null | undefined): { text: string; cla
 type ChecklistAction = 'create_deposit_invoice' | 'create_balance_invoice' | 'create_contract';
 type MarkDoneKey = 'mark_contract_signed' | 'mark_deposit_received';
 
-interface ChecklistItemShortcut {
-  shortcutTemplateType?: string;
-  shortcutAction?: ChecklistAction;
-  shortcutMarkDone?: MarkDoneKey;
-}
-
 interface ChecklistItemIconProps {
   state: ChecklistItemState;
   isPlayTheGig: boolean;
@@ -105,7 +99,8 @@ function ChecklistItemIcon({ state, isPlayTheGig, itemId, onToggle }: Readonly<C
 }
 
 interface ChecklistItemShortcutsProps {
-  shortcuts: ChecklistItemShortcut;
+  shortcutType?: string;
+  shortcutTemplateType?: string;
   isFailed: boolean;
   isPlayTheGig: boolean;
   isActionPending: boolean;
@@ -116,16 +111,16 @@ interface ChecklistItemShortcutsProps {
   onMarkDone: (key: MarkDoneKey) => void;
 }
 
-function ChecklistItemShortcuts({ shortcuts, isFailed, isPlayTheGig, isActionPending, itemId, onToggle, onOpenCompose, onChecklistAction, onMarkDone }: ChecklistItemShortcutsProps) {
+function ChecklistItemShortcuts({ shortcutType, shortcutTemplateType, isFailed, isPlayTheGig, isActionPending, itemId, onToggle, onOpenCompose, onChecklistAction, onMarkDone }: ChecklistItemShortcutsProps) {
   const label = isFailed ? 'Retry' : undefined;
-  if (shortcuts.shortcutTemplateType) {
-    return <button onClick={() => onOpenCompose(shortcuts.shortcutTemplateType)} className="text-xs text-primary hover:underline">{label ?? 'Send'}</button>;
+  if (shortcutType === 'send_email') {
+    return <button onClick={() => onOpenCompose(shortcutTemplateType)} className="text-xs text-primary hover:underline">{label ?? 'Send'}</button>;
   }
-  if (shortcuts.shortcutAction) {
-    return <button onClick={() => onChecklistAction(shortcuts.shortcutAction!)} className="text-xs text-primary hover:underline">{label ?? 'Create'}</button>;
+  if (shortcutType === 'create_contract' || shortcutType === 'create_deposit_invoice' || shortcutType === 'create_balance_invoice') {
+    return <button onClick={() => onChecklistAction(shortcutType as ChecklistAction)} className="text-xs text-primary hover:underline">{label ?? 'Create'}</button>;
   }
-  if (shortcuts.shortcutMarkDone) {
-    return <button onClick={() => onMarkDone(shortcuts.shortcutMarkDone!)} disabled={isActionPending} className="text-xs text-primary hover:underline disabled:opacity-50">{label ?? 'Mark done'}</button>;
+  if (shortcutType === 'mark_contract_signed' || shortcutType === 'mark_deposit_received') {
+    return <button onClick={() => onMarkDone(shortcutType as MarkDoneKey)} disabled={isActionPending} className="text-xs text-primary hover:underline disabled:opacity-50">{label ?? 'Mark done'}</button>;
   }
   if (!isPlayTheGig) {
     return <button onClick={() => onToggle(itemId, 'COMPLETE')} className="text-xs text-primary hover:underline">Mark done</button>;
@@ -135,7 +130,6 @@ function ChecklistItemShortcuts({ shortcuts, isFailed, isPlayTheGig, isActionPen
 
 interface ChecklistItemRowProps {
   item: ChecklistItem;
-  shortcuts: ChecklistItemShortcut;
   isActionPending: boolean;
   onToggle: (itemId: string, newState: 'COMPLETE' | 'PENDING') => void;
   onOpenCompose: (templateType?: string) => void;
@@ -149,7 +143,7 @@ function labelClass(isDone: boolean, isFailed: boolean): string {
   return 'text-foreground';
 }
 
-function ChecklistItemRow({ item, shortcuts, isActionPending, onToggle, onOpenCompose, onChecklistAction, onMarkDone }: Readonly<ChecklistItemRowProps>) {
+function ChecklistItemRow({ item, isActionPending, onToggle, onOpenCompose, onChecklistAction, onMarkDone }: Readonly<ChecklistItemRowProps>) {
   const isDone = item.state === 'COMPLETE';
   const isFailed = item.state === 'FAILED';
   const isBlocked = item.state === 'BLOCKED';
@@ -170,7 +164,8 @@ function ChecklistItemRow({ item, shortcuts, isActionPending, onToggle, onOpenCo
       {!isDone && !isBlocked && (
         <div className="flex items-center gap-2 flex-shrink-0">
           <ChecklistItemShortcuts
-            shortcuts={shortcuts}
+            shortcutType={item.shortcutType}
+            shortcutTemplateType={item.shortcutTemplateType}
             isFailed={isFailed}
             isPlayTheGig={isPlayTheGig}
             isActionPending={isActionPending}
@@ -234,7 +229,6 @@ export interface ChecklistSectionProps {
   items: ChecklistItem[];
   isLoading: boolean;
   bookingStatus: BookingStatus;
-  contractTemplateType: string;
   onToggle: (itemId: string, newState: 'COMPLETE' | 'PENDING') => void;
   onChecklistAction: (action: ChecklistAction) => void;
   onOpenCompose: (templateType?: string) => void;
@@ -248,7 +242,6 @@ export default function ChecklistSection({
   items,
   isLoading,
   bookingStatus,
-  contractTemplateType,
   onToggle,
   onChecklistAction,
   onOpenCompose,
@@ -259,18 +252,6 @@ export default function ChecklistSection({
 }: ChecklistSectionProps) {
   const [showAllChecklist, setShowAllChecklist] = useState(false);
   const [showAddItem, setShowAddItem] = useState(false);
-
-  const CHECKLIST_SHORTCUTS: Record<string, ChecklistItemShortcut> = {
-    send_quote: { shortcutTemplateType: 'quote' },
-    create_contract: { shortcutAction: 'create_contract' },
-    create_deposit_invoice: { shortcutAction: 'create_deposit_invoice' },
-    send_contract: { shortcutTemplateType: contractTemplateType },
-    contract_signed: { shortcutMarkDone: 'mark_contract_signed' },
-    deposit_received: { shortcutMarkDone: 'mark_deposit_received' },
-    create_balance_invoice: { shortcutAction: 'create_balance_invoice' },
-    music_form_invite: { shortcutTemplateType: 'music_form_invite' },
-    send_thank_you: { shortcutTemplateType: 'thank_you' },
-  };
 
   if (isLoading) {
     return (
@@ -326,7 +307,7 @@ export default function ChecklistSection({
       )}
 
       {(itemsByStage.get(null) ?? []).map((item) => (
-        <ChecklistItemRow key={item.id} item={item} shortcuts={item.key ? (CHECKLIST_SHORTCUTS[item.key] ?? {}) : {}} {...rowProps} />
+        <ChecklistItemRow key={item.id} item={item} {...rowProps} />
       ))}
 
       {STAGE_DISPLAY_ORDER.map((stage) => {
@@ -335,7 +316,7 @@ export default function ChecklistSection({
         return (
           <div key={stage}>
             {stageItems.map((item) => (
-              <ChecklistItemRow key={item.id} item={item} shortcuts={item.key ? (CHECKLIST_SHORTCUTS[item.key] ?? {}) : {}} {...rowProps} />
+              <ChecklistItemRow key={item.id} item={item} {...rowProps} />
             ))}
             <div className="flex items-center gap-2 my-2">
               <div className="flex-1 h-px bg-border" />

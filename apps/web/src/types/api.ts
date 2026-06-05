@@ -265,6 +265,8 @@ export interface ChecklistItem {
   completedAt: string | null;
   dueDate: string | null;
   dueDateRule: DueDateRule | null;
+  shortcutType?: string;
+  shortcutTemplateType?: string;
 }
 
 export interface BookingDetail extends Omit<BookingListItem, 'customer' | 'venue' | 'bookingAgent'> {
