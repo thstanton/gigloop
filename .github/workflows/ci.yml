@@ -87,28 +87,29 @@ jobs:
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lockb') }}
       - run: bun install --frozen-lockfile
         if: steps.cache.outputs.cache-hit != 'true'
-      - name: Provision Neon branch
+      - name: Create Neon branch
         id: neon
-        run: bash scripts/neon-provision.sh
-        env:
-          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
-          NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+        uses: neondatabase/create-branch-action@v6
+        with:
+          api_key: ${{ secrets.NEON_API_KEY }}
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          branch_name: ci-integration-${{ github.run_id }}
       - name: Run migrations
         run: cd apps/api && bunx prisma migrate deploy
         env:
-          DATABASE_URL: ${{ env.DATABASE_URL }}
+          DATABASE_URL: ${{ steps.neon.outputs.db_url }}
       - name: Generate Prisma client
         run: cd apps/api && bunx prisma generate
         env:
-          DATABASE_URL: ${{ env.DATABASE_URL }}
+          DATABASE_URL: ${{ steps.neon.outputs.db_url }}
       - name: Run integration tests
         run: cd apps/api && bun run test:integration
         env:
-          DATABASE_URL: ${{ env.DATABASE_URL }}
-      - name: Teardown Neon branch
+          DATABASE_URL: ${{ steps.neon.outputs.db_url }}
+      - name: Delete Neon branch
         if: always()
-        run: bash scripts/neon-teardown.sh
-        env:
-          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
-          NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
-          NEON_BRANCH_ID: ${{ steps.neon.outputs.NEON_BRANCH_ID }}
+        uses: neondatabase/delete-branch-action@v3
+        with:
+          api_key: ${{ secrets.NEON_API_KEY }}
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          branch: ${{ steps.neon.outputs.branch_id }}
