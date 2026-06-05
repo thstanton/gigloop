@@ -13,7 +13,7 @@ import { TestAuthGuard } from './test-auth.guard';
 @Module({ providers: [{ provide: APP_GUARD, useClass: TestAuthGuard }] })
 class TestAuthModule {}
 
-const mockStorageService = {
+export const mockStorageService = {
   getPresignedUploadUrl: jest.fn().mockResolvedValue('https://mock-storage.test/presigned'),
   putObject: jest.fn().mockResolvedValue(undefined),
   deleteObject: jest.fn().mockResolvedValue(undefined),
