@@ -136,7 +136,8 @@ export class InvoicesService {
     id: string,
     dto: CreateLineItemDto,
   ) {
-    await this.findOne(userId, bookingId, id);
+    const invoice = await this.findOne(userId, bookingId, id);
+    if (invoice.status !== 'DRAFT') throw new BadRequestException('Line items can only be modified on DRAFT invoices');
     return this.repo.addLineItem(userId, id, dto);
   }
 
@@ -147,7 +148,10 @@ export class InvoicesService {
     itemId: string,
     dto: UpdateLineItemDto,
   ) {
-    const item = await this.resolveLineItem(userId, bookingId, id, itemId);
+    const invoice = await this.findOne(userId, bookingId, id);
+    if (invoice.status !== 'DRAFT') throw new BadRequestException('Line items can only be modified on DRAFT invoices');
+    const item = await this.repo.findLineItem(userId, id, itemId);
+    if (!item) throw new NotFoundException('Line item not found');
     return this.repo.updateLineItem(item.id, dto);
   }
 
@@ -157,14 +161,12 @@ export class InvoicesService {
     id: string,
     itemId: string,
   ) {
-    const item = await this.resolveLineItem(userId, bookingId, id, itemId);
+    const invoice = await this.findOne(userId, bookingId, id);
+    if (invoice.status !== 'DRAFT') throw new BadRequestException('Line items can only be modified on DRAFT invoices');
+    const item = await this.repo.findLineItem(userId, id, itemId);
+    if (!item) throw new NotFoundException('Line item not found');
     return this.repo.deleteLineItem(item.id);
   }
 
-  private async resolveLineItem(userId: string, bookingId: string, invoiceId: string, itemId: string) {
-    await this.findOne(userId, bookingId, invoiceId);
-    const item = await this.repo.findLineItem(userId, invoiceId, itemId);
-    if (!item) throw new NotFoundException('Line item not found');
-    return item;
-  }
 }
+

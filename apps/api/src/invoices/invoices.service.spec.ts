@@ -184,6 +184,14 @@ describe('InvoicesService', () => {
       ).rejects.toThrow(NotFoundException);
       expect(repo.addLineItem).not.toHaveBeenCalled();
     });
+
+    it('throws BadRequestException when invoice is not DRAFT', async () => {
+      repo.findOne.mockResolvedValue({ ...invoice, status: 'SENT' });
+      await expect(
+        service.addLineItem('u1', 'b1', 'i1', { description: 'Fee', amount: 100 }),
+      ).rejects.toThrow(BadRequestException);
+      expect(repo.addLineItem).not.toHaveBeenCalled();
+    });
   });
 
   describe('updateLineItem', () => {
@@ -217,6 +225,13 @@ describe('InvoicesService', () => {
       await service.updateLineItem('u1', 'b1', 'i1', 'li1', {});
       expect(repo.findLineItem).toHaveBeenCalledWith('u1', 'i1', 'li1');
     });
+
+    it('throws BadRequestException when invoice is not DRAFT', async () => {
+      repo.findOne.mockResolvedValue({ ...invoice, status: 'SENT' });
+      repo.findLineItem.mockResolvedValue(lineItem);
+      await expect(service.updateLineItem('u1', 'b1', 'i1', 'li1', { amount: 200 })).rejects.toThrow(BadRequestException);
+      expect(repo.updateLineItem).not.toHaveBeenCalled();
+    });
   });
 
   describe('deleteLineItem', () => {
@@ -238,6 +253,13 @@ describe('InvoicesService', () => {
       repo.findOne.mockResolvedValue(invoice);
       repo.findLineItem.mockResolvedValue(null);
       await expect(service.deleteLineItem('u1', 'b1', 'i1', 'missing')).rejects.toThrow(NotFoundException);
+      expect(repo.deleteLineItem).not.toHaveBeenCalled();
+    });
+
+    it('throws BadRequestException when invoice is not DRAFT', async () => {
+      repo.findOne.mockResolvedValue({ ...invoice, status: 'SENT' });
+      repo.findLineItem.mockResolvedValue(lineItem);
+      await expect(service.deleteLineItem('u1', 'b1', 'i1', 'li1')).rejects.toThrow(BadRequestException);
       expect(repo.deleteLineItem).not.toHaveBeenCalled();
     });
   });
