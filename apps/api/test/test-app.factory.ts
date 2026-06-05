@@ -1,12 +1,17 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { Global, INestApplication, Module, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { APP_GUARD } from '@nestjs/core';
 import { AppModule } from '../src/app.module';
-import { AuthGuard } from '../src/auth/auth.guard';
+import { AuthModule } from '../src/auth/auth.module';
 import { StorageService } from '../src/storage/storage.service';
 import { MailService } from '../src/mail/mail.service';
 import { DistanceMatrixClient } from '../src/contacts/distance-matrix.client';
 import { TestAuthGuard } from './test-auth.guard';
+
+// Replaces AuthModule: provides TestAuthGuard as the global APP_GUARD.
+@Global()
+@Module({ providers: [{ provide: APP_GUARD, useClass: TestAuthGuard }] })
+class TestAuthModule {}
 
 const mockStorageService = {
   getPresignedUploadUrl: jest.fn().mockResolvedValue('https://mock-storage.test/presigned'),
@@ -27,10 +32,8 @@ const mockDistanceMatrixClient = {
 
 export async function createTestApp(): Promise<INestApplication> {
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
-    .overrideProvider(APP_GUARD)
-    .useClass(TestAuthGuard)
-    .overrideGuard(AuthGuard)
-    .useClass(TestAuthGuard)
+    .overrideModule(AuthModule)
+    .useModule(TestAuthModule)
     .overrideProvider(StorageService)
     .useValue(mockStorageService)
     .overrideProvider(MailService)
