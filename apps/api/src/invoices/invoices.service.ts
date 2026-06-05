@@ -32,8 +32,12 @@ export class InvoicesService {
   }
 
   async create(userId: string, bookingId: string, dto: CreateInvoiceDto) {
-    const customerId = await this.repo.findBookingCustomerId(userId, bookingId);
-    if (customerId === null) throw new NotFoundException('Booking not found');
+    const booking = await this.repo.findBookingInfo(userId, bookingId);
+    if (!booking) throw new NotFoundException('Booking not found');
+
+    if (booking.seriesId) {
+      throw new ConflictException('This booking is part of a series — invoices are managed at the series level');
+    }
 
     const isDeposit = dto.isDeposit ?? false;
     const activeCount = await this.repo.countActiveByType(bookingId, isDeposit);
@@ -42,7 +46,7 @@ export class InvoicesService {
       throw new ConflictException(`A ${type} invoice already exists for this booking — void it before creating a new one`);
     }
 
-    const billToContactId = dto.billToContactId ?? customerId;
+    const billToContactId = dto.billToContactId ?? booking.customerId;
     const result = await this.repo.create(userId, bookingId, billToContactId, dto);
     await this.evaluator.evaluate(bookingId).catch(() => {});
     return result;

@@ -56,6 +56,15 @@ export class InvoicesRepository {
       .then((b) => b?.customerId ?? null);
   }
 
+  findBookingInfo(
+    userId: string,
+    bookingId: string,
+  ): Promise<{ customerId: string; seriesId: string | null } | null> {
+    return this.prisma.booking
+      .findFirst({ where: { id: bookingId, userId }, select: { customerId: true, seriesId: true } })
+      .then((b) => (b ? { customerId: b.customerId, seriesId: b.seriesId } : null));
+  }
+
   findAll(userId: string, bookingId: string) {
     return this.prisma.invoice.findMany({
       where: { userId, bookingId },

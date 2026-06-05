@@ -12,6 +12,7 @@ jest.mock('../documents/documents.service', () => ({
 
 type MockRepo = {
   findBookingCustomerId: jest.Mock;
+  findBookingInfo: jest.Mock;
   findAll: jest.Mock;
   findOne: jest.Mock;
   create: jest.Mock;
@@ -30,6 +31,7 @@ type MockRepo = {
 function makeRepo(): MockRepo {
   return {
     findBookingCustomerId: jest.fn(),
+    findBookingInfo: jest.fn(),
     findAll: jest.fn(),
     findOne: jest.fn(),
     create: jest.fn(),
@@ -96,7 +98,7 @@ describe('InvoicesService', () => {
 
   describe('create', () => {
     beforeEach(() => {
-      repo.findBookingCustomerId.mockResolvedValue('c1');
+      repo.findBookingInfo.mockResolvedValue({ customerId: 'c1', seriesId: null });
       repo.countActiveByType.mockResolvedValue(0);
       repo.create.mockResolvedValue(invoice);
     });
@@ -112,7 +114,7 @@ describe('InvoicesService', () => {
     });
 
     it('throws NotFoundException when booking is not found', async () => {
-      repo.findBookingCustomerId.mockResolvedValue(null);
+      repo.findBookingInfo.mockResolvedValue(null);
       await expect(service.create('u1', 'missing', {})).rejects.toThrow(NotFoundException);
       expect(repo.create).not.toHaveBeenCalled();
     });
@@ -132,6 +134,14 @@ describe('InvoicesService', () => {
     it('checks the correct isDeposit type when guarding against duplicates', async () => {
       await service.create('u1', 'b1', { isDeposit: true });
       expect(repo.countActiveByType).toHaveBeenCalledWith('b1', true);
+    });
+
+    it('throws ConflictException when booking belongs to a series', async () => {
+      repo.findBookingInfo.mockResolvedValue({ customerId: 'c1', seriesId: 's1' });
+      await expect(service.create('u1', 'b1', {})).rejects.toThrow(
+        new ConflictException('This booking is part of a series — invoices are managed at the series level'),
+      );
+      expect(repo.create).not.toHaveBeenCalled();
     });
   });
 
