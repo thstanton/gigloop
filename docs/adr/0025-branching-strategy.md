@@ -2,7 +2,28 @@
 
 ## Status
 Accepted  
-**Amended:** 2026-06-01 — "one branch per feature" made explicit and enforced; the "open a PR per branch, immediately start the next" guidance is withdrawn. See "Amendment 2026-06-01" below and ADR-0030.
+**Amended:** 2026-06-01 — "one branch per feature" made explicit and enforced; the "open a PR per branch, immediately start the next" guidance is withdrawn. See "Amendment 2026-06-01" below and ADR-0030.  
+**Amended:** 2026-06-05 — Persistent `release` branch introduced as a staging gate. Integration tests moved to `release → main` PRs only. See "Amendment 2026-06-05" below.
+
+## Amendment (2026-06-05): two-tier branch model with `release` gate
+
+Integration tests take ~5 minutes per run. Running them on every feature PR makes CI too slow for a tight feedback loop. A persistent `release` branch now sits between `feature/*` and `main`:
+
+- **`feature/*` → `release` PR:** Lint, Test, Build required. Integration skipped.
+- **`release` → `main` PR:** Lint, Test, Build, and Integration all required.
+
+`release` always reflects the set of features queued for production. `main` is the production-ready state. Feature branches target `release`; the `release → main` PR is opened when a batch of features is ready to ship.
+
+**Branch protection:**
+
+| Branch | Required checks |
+|--------|----------------|
+| `release` | Lint, Test, Build |
+| `main` | Lint, Test, Build, Integration |
+
+**CI behaviour:** The `integration` job in `ci.yml` runs conditionally — only when the PR targets `main` or on a push to `main`. On `release` PRs it is skipped (GitHub marks it "skipped", not "passing"), so branch protection on `main` correctly blocks until it actually runs.
+
+**Exception — doc-only changes:** `CLAUDE.md`, `CONTEXT.md`, `docs/adr/`, `SPEC.md` may still be committed directly to `main` per the original exception.
 
 ## Amendment (2026-06-01): one branch per feature, never parallel siblings
 
