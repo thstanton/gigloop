@@ -298,8 +298,12 @@ export class BookingsService {
     const item = await this.repo.findChecklistItemById(userId, bookingId, itemId);
     const result = await this.repo.updateChecklistItemState(userId, bookingId, itemId, state);
     if (result.count === 0) throw new NotFoundException('Checklist item not found');
-    if (state === 'COMPLETE' && item?.key === 'deposit_received') {
-      await this.repo.setDepositReceivedAt(bookingId, new Date()).catch(() => {});
+    if (item?.key === 'deposit_received') {
+      if (state === 'COMPLETE') {
+        await this.repo.setDepositReceivedAt(bookingId, new Date()).catch(() => {});
+      } else {
+        await this.repo.clearDepositReceivedAt(bookingId).catch(() => {});
+      }
     }
     await this.evaluator.evaluate(bookingId).catch(() => {});
     return { success: true };

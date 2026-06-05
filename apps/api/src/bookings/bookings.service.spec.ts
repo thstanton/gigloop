@@ -38,6 +38,10 @@ type MockRepo = {
   recomputeChecklistDueDates: jest.Mock;
   countNonVoidInvoices: jest.Mock;
   updateSeries: jest.Mock;
+  findChecklistItemById: jest.Mock;
+  updateChecklistItemState: jest.Mock;
+  setDepositReceivedAt: jest.Mock;
+  clearDepositReceivedAt: jest.Mock;
 };
 
 type MockSeriesRepo = { findOne: jest.Mock; findOneLight: jest.Mock; findExists: jest.Mock; create: jest.Mock };
@@ -76,6 +80,10 @@ function makeRepo(): MockRepo {
     recomputeChecklistDueDates: jest.fn().mockResolvedValue(undefined),
     countNonVoidInvoices: jest.fn(),
     updateSeries: jest.fn(),
+    findChecklistItemById: jest.fn(),
+    updateChecklistItemState: jest.fn().mockResolvedValue({ count: 1 }),
+    setDepositReceivedAt: jest.fn().mockResolvedValue(undefined),
+    clearDepositReceivedAt: jest.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -739,6 +747,30 @@ describe('BookingsService', () => {
       seriesRepo.findOneLight.mockResolvedValue(null);
 
       await expect(service.updateSeries('u1', 'b1', 's1')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('updateChecklistItem', () => {
+    it('clears depositReceivedAt when deposit_received is un-marked to PENDING', async () => {
+      repo.findOne.mockResolvedValue(booking);
+      repo.findChecklistItemById.mockResolvedValue({ id: 'i1', key: 'deposit_received' });
+      repo.updateChecklistItemState.mockResolvedValue({ count: 1 });
+
+      await service.updateChecklistItem('u1', 'b1', 'i1', 'PENDING');
+
+      expect(repo.clearDepositReceivedAt).toHaveBeenCalledWith('b1');
+      expect(repo.setDepositReceivedAt).not.toHaveBeenCalled();
+    });
+
+    it('sets depositReceivedAt when deposit_received is marked COMPLETE', async () => {
+      repo.findOne.mockResolvedValue(booking);
+      repo.findChecklistItemById.mockResolvedValue({ id: 'i1', key: 'deposit_received' });
+      repo.updateChecklistItemState.mockResolvedValue({ count: 1 });
+
+      await service.updateChecklistItem('u1', 'b1', 'i1', 'COMPLETE');
+
+      expect(repo.setDepositReceivedAt).toHaveBeenCalledWith('b1', expect.any(Date));
+      expect(repo.clearDepositReceivedAt).not.toHaveBeenCalled();
     });
   });
 });
