@@ -19,7 +19,6 @@ interface Props {
   communications: Communication[];
   checklist: ChecklistItem[];
   checklistLoading: boolean;
-  contractShortcutType: string;
   isCreatingContract: boolean;
   invoicesPending: boolean;
   isAddingItem: boolean;
@@ -48,7 +47,7 @@ interface Props {
 
 export function BookingRightColumn({
   booking, invoices, documents, communications,
-  checklist, checklistLoading, contractShortcutType,
+  checklist, checklistLoading,
   isCreatingContract, invoicesPending, isAddingItem, isActionPending,
   onToggleChecklist, onChecklistAction, onOpenCompose, onMarkDone, onAddItem,
   onCreateContract, onEditContract, onPreviewContract, onSendContract,
@@ -67,7 +66,6 @@ export function BookingRightColumn({
           items={checklist}
           isLoading={checklistLoading}
           bookingStatus={booking.status}
-          contractTemplateType={contractShortcutType}
           onToggle={onToggleChecklist}
           onChecklistAction={onChecklistAction}
           onOpenCompose={onOpenCompose}
