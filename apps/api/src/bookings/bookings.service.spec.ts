@@ -2,7 +2,7 @@ import { BadRequestException, ConflictException, NotFoundException } from '@nest
 import { BookingStatus } from '@prisma/client';
 import { BookingsService } from './bookings.service';
 import { BookingsRepository } from './bookings.repository';
-import { BookingActionsService } from './bookings-actions.service';
+import { ChecklistRepository } from '../checklist/checklist.repository';
 import { SeriesRepository } from '../series/series.repository';
 import { MailService } from '../mail/mail.service';
 import { ChecklistEvaluatorService } from '../checklist/checklist-evaluator.service';
@@ -25,7 +25,6 @@ type MockRepo = {
   deleteSet: jest.Mock;
   findMusicFormConfig: jest.Mock;
   upsertMusicFormConfig: jest.Mock;
-  findBookingsForActions: jest.Mock;
   findUserProfile: jest.Mock;
   findContractTemplate: jest.Mock;
   findActiveContract: jest.Mock;
@@ -44,7 +43,7 @@ type MockRepo = {
 type MockSeriesRepo = { findOne: jest.Mock; findOneLight: jest.Mock; findExists: jest.Mock; create: jest.Mock };
 type MockMail = { buildContext: jest.Mock };
 type MockEvaluator = { evaluate: jest.Mock };
-type MockActions = { computeActionItem: jest.Mock };
+type MockChecklistRepo = { findActionItems: jest.Mock };
 
 function makeRepo(): MockRepo {
   return {
@@ -64,7 +63,6 @@ function makeRepo(): MockRepo {
     deleteSet: jest.fn(),
     findMusicFormConfig: jest.fn(),
     upsertMusicFormConfig: jest.fn(),
-    findBookingsForActions: jest.fn(),
     findUserProfile: jest.fn(),
     findContractTemplate: jest.fn(),
     findActiveContract: jest.fn(),
@@ -93,8 +91,8 @@ function makeSeriesRepo(): MockSeriesRepo {
   return { findOne: jest.fn(), findOneLight: jest.fn(), findExists: jest.fn(), create: jest.fn() };
 }
 
-function makeActions(): MockActions {
-  return { computeActionItem: jest.fn().mockReturnValue(null) };
+function makeChecklistRepo(): MockChecklistRepo {
+  return { findActionItems: jest.fn().mockResolvedValue([]) };
 }
 
 const booking = { id: 'b1', userId: 'u1', status: BookingStatus.CONFIRMED };
@@ -121,20 +119,20 @@ describe('BookingsService', () => {
   let seriesRepo: MockSeriesRepo;
   let mail: MockMail;
   let evaluator: MockEvaluator;
-  let actions: MockActions;
+  let checklistRepo: MockChecklistRepo;
 
   beforeEach(() => {
     repo = makeRepo();
     seriesRepo = makeSeriesRepo();
     mail = makeMail();
     evaluator = makeEvaluator();
-    actions = makeActions();
+    checklistRepo = makeChecklistRepo();
     service = new BookingsService(
       repo as unknown as BookingsRepository,
       seriesRepo as unknown as SeriesRepository,
       mail as unknown as MailService,
       evaluator as unknown as ChecklistEvaluatorService,
-      actions as unknown as BookingActionsService,
+      checklistRepo as unknown as ChecklistRepository,
     );
   });
 

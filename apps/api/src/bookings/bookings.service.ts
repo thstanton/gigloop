@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { BookingStatus } from '@prisma/client';
 import { BookingsRepository } from './bookings.repository';
-import { BookingActionsService } from './bookings-actions.service';
+import { ChecklistRepository } from '../checklist/checklist.repository';
 import { SeriesRepository } from '../series/series.repository';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
@@ -22,7 +22,7 @@ export class BookingsService {
     private seriesRepo: SeriesRepository,
     private mail: MailService,
     private evaluator: ChecklistEvaluatorService,
-    private actions: BookingActionsService,
+    private checklistRepo: ChecklistRepository,
   ) {}
 
   findAll(userId: string, status?: string) {
@@ -359,29 +359,24 @@ export class BookingsService {
   async getActions(userId: string) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const from = new Date(today);
-    from.setDate(from.getDate() - 30); // 30-day past window for thank-you items
-    const to = new Date(today);
-    to.setDate(to.getDate() + 90);
 
-    const [bookings, profile] = await Promise.all([
-      this.repo.findBookingsForActions(userId, from, to),
-      this.repo.findUserProfile(userId),
-    ]);
+    const profile = await this.repo.findUserProfile(userId);
+    const prefs = profile?.preferences as { reminderLeadDays?: number } | null;
+    const reminderLeadDays = prefs?.reminderLeadDays ?? 7;
 
-    return bookings
-      .map((b) => {
-        const item = this.actions.computeActionItem(b, profile, today);
-        if (!item) return null;
-        return {
-          bookingId: b.id,
-          bookingDate: b.date.toISOString(),
-          bookingTitle: b.title,
-          customerName: b.customer.name,
-          venueName: b.venue?.name ?? null,
-          item,
-        };
-      })
-      .filter((a): a is NonNullable<typeof a> => a !== null);
+    const actions = await this.checklistRepo.findActionItems(userId, today, reminderLeadDays);
+
+    return actions.map(({ booking, item }) => ({
+      bookingId: booking.id,
+      bookingDate: booking.date.toISOString(),
+      bookingTitle: booking.title,
+      customerName: booking.customer.name,
+      venueName: booking.venue?.name ?? null,
+      item: {
+        key: item.key ?? '',
+        label: item.label,
+        state: (item.state === 'FAILED' ? 'failed' : 'outstanding') as 'failed' | 'outstanding',
+      },
+    }));
   }
 }
