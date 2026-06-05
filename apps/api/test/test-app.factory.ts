@@ -20,10 +20,27 @@ const mockStorageService = {
   getPublicUrl: jest.fn().mockReturnValue('https://mock-storage.test/file'),
 };
 
+const mockEmailContext = {
+  customerName: 'Test Customer',
+  greetingName: 'Test',
+  bookingDate: '2027-09-15',
+  venueName: '',
+  bookingFee: '',
+  setsSchedule: '',
+  musicianName: 'Test Band',
+  musicianEmail: '',
+  portalLink: 'https://test.example.com/booking/test-token',
+  issueDate: '',
+  invoiceTotal: '',
+  invoiceDueDate: '',
+};
+
 const mockMailService = {
   send: jest.fn().mockResolvedValue(undefined),
   sendBatch: jest.fn().mockResolvedValue(undefined),
-  renderTemplate: jest.fn().mockResolvedValue({ html: '<p>mock</p>', missingVariables: [] }),
+  renderTemplate: jest.fn().mockReturnValue({ html: '<p>mock</p>', missingVariables: [] }),
+  renderSubject: jest.fn().mockReturnValue({ subject: 'Mock Subject', missingVariables: [] }),
+  buildContext: jest.fn().mockResolvedValue(mockEmailContext),
 };
 
 const mockDistanceMatrixClient = {
