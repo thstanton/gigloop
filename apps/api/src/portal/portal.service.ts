@@ -3,6 +3,7 @@ import { PortalRepository } from './portal.repository';
 import { PublicProfileRepository } from '../user-profile/public-profile.repository';
 import { SongsRepository } from '../songs/songs.repository';
 import { BookingsRepository } from '../bookings/bookings.repository';
+import { ContractRepository } from '../bookings/contract.repository';
 import { InvoicesRepository } from '../invoices/invoices.repository';
 import { MailService } from '../mail/mail.service';
 import { DocumentsService } from '../documents/documents.service';
@@ -150,6 +151,7 @@ export class PortalService {
     private documents: DocumentsService,
     private storage: StorageService,
     private evaluator: ChecklistEvaluatorService,
+    private contractRepo: ContractRepository,
   ) {}
 
   async getBookingData(token: string) {
@@ -235,7 +237,7 @@ export class PortalService {
       ip,
     );
 
-    await this.bookingsRepo.markContractSigned(contract!.id, ip, signatureBase64);
+    await this.contractRepo.markContractSigned(contract!.id, ip, signatureBase64);
     await this.evaluator.evaluate(booking.id).catch(() => {});
 
     await this.sendSigningNotification(booking, publicProfile, signedAt);

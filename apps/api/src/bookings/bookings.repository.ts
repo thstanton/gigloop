@@ -3,7 +3,6 @@ import { BookingStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
-import { UpdateContractDto } from './dto/update-contract.dto';
 import { CreateSetDto } from './dto/create-set.dto';
 import { UpdateSetDto } from './dto/update-set.dto';
 import { UpsertMusicFormConfigDto } from './dto/upsert-music-form-config.dto';
@@ -289,65 +288,6 @@ export class BookingsRepository {
     return this.prisma.booking.findFirst({ where: { id: bookingId }, include: bookingIncludes });
   }
 
-  findContractTemplate(userId: string) {
-    return this.prisma.template.findFirst({
-      where: { userId, builtInType: 'contract' },
-      select: { content: true },
-    });
-  }
-
-  findActiveContract(bookingId: string) {
-    return this.prisma.contract.findFirst({
-      where: { bookingId, status: { not: 'VOID' } },
-      orderBy: { createdAt: 'desc' },
-    });
-  }
-
-  createContractRecord(userId: string, bookingId: string, content: unknown) {
-    return this.prisma.contract.create({
-      data: {
-        userId,
-        bookingId,
-        status: 'DRAFT',
-        content: content as Prisma.InputJsonValue,
-      },
-    });
-  }
-
-  markContractSent(contractId: string) {
-    return this.prisma.contract.update({
-      where: { id: contractId },
-      data: { status: 'SENT' },
-    });
-  }
-
-  voidContract(contractId: string) {
-    return this.prisma.contract.update({
-      where: { id: contractId },
-      data: { status: 'VOID', voidedAt: new Date() },
-    });
-  }
-
-  updateContract(contractId: string, dto: UpdateContractDto) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const data: Record<string, any> = {};
-    if (dto.content !== undefined) data.content = dto.content as Prisma.InputJsonValue;
-    if (dto.status !== undefined) data.status = dto.status;
-    if (dto.signedAt !== undefined) data.signedAt = new Date(dto.signedAt);
-    if (dto.status === 'VOID') data.voidedAt = new Date();
-    return this.prisma.contract.update({ where: { id: contractId }, data });
-  }
-
-  findContractById(userId: string, bookingId: string, contractId: string) {
-    return this.prisma.contract.findFirst({
-      where: { id: contractId, bookingId, userId },
-    });
-  }
-
-  deleteContract(contractId: string) {
-    return this.prisma.contract.delete({ where: { id: contractId } });
-  }
-
   findChecklistItems(userId: string, bookingId: string) {
     return this.prisma.bookingChecklistItem.findMany({
       where: { bookingId, userId, state: { not: 'SKIPPED' } },
@@ -419,13 +359,6 @@ export class BookingsRepository {
       where: { id: bookingId },
       data: { seriesId },
       include: bookingIncludes,
-    });
-  }
-
-  markContractSigned(contractId: string, signedFromIp: string, signatureDataUrl: string) {
-    return this.prisma.contract.update({
-      where: { id: contractId },
-      data: { status: 'SIGNED', signedAt: new Date(), signedFromIp, signatureDataUrl },
     });
   }
 

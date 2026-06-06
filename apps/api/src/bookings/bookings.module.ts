@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { BookingsController } from './bookings.controller';
 import { BookingsService } from './bookings.service';
 import { BookingsRepository } from './bookings.repository';
+import { ContractRepository } from './contract.repository';
 import { MailModule } from '../mail/mail.module';
 import { ChecklistModule } from '../checklist/checklist.module';
 import { SeriesModule } from '../series/series.module';
@@ -9,7 +10,7 @@ import { SeriesModule } from '../series/series.module';
 @Module({
   imports: [MailModule, ChecklistModule, SeriesModule],
   controllers: [BookingsController],
-  providers: [BookingsService, BookingsRepository],
-  exports: [BookingsRepository],
+  providers: [BookingsService, BookingsRepository, ContractRepository],
+  exports: [BookingsRepository, ContractRepository],
 })
 export class BookingsModule {}

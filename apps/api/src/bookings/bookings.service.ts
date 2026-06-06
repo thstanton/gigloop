@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { BookingStatus } from '@prisma/client';
 import { BookingsRepository } from './bookings.repository';
+import { ContractRepository } from './contract.repository';
 import { ChecklistRepository } from '../checklist/checklist.repository';
 import { SeriesRepository } from '../series/series.repository';
 import { CreateBookingDto } from './dto/create-booking.dto';
@@ -63,6 +64,7 @@ export class BookingsService {
     private mail: MailService,
     private evaluator: ChecklistEvaluatorService,
     private checklistRepo: ChecklistRepository,
+    private contractRepo: ContractRepository,
   ) {}
 
   findAll(userId: string, status?: string) {
@@ -247,17 +249,17 @@ export class BookingsService {
   async createContract(userId: string, bookingId: string) {
     await this.findOne(userId, bookingId);
 
-    const template = await this.repo.findContractTemplate(userId);
+    const template = await this.contractRepo.findContractTemplate(userId);
     if (!template) throw new NotFoundException('Contract template not found');
 
     const context = await this.mail.buildContext(userId, bookingId);
     const substituted = substituteTiptapVariables(template.content, context);
 
     // Void any existing active contract before creating the new one
-    const existing = await this.repo.findActiveContract(bookingId);
-    if (existing) await this.repo.voidContract(existing.id);
+    const existing = await this.contractRepo.findActiveContract(bookingId);
+    if (existing) await this.contractRepo.voidContract(existing.id);
 
-    const contract = await this.repo.createContractRecord(userId, bookingId, substituted);
+    const contract = await this.contractRepo.createContractRecord(userId, bookingId, substituted);
     await this.evaluator.evaluate(bookingId).catch(() => {});
     return {
       id: contract.id,
@@ -271,9 +273,9 @@ export class BookingsService {
 
   async updateContract(userId: string, bookingId: string, contractId: string, dto: UpdateContractDto) {
     await this.findOne(userId, bookingId);
-    const contract = await this.repo.findContractById(userId, bookingId, contractId);
+    const contract = await this.contractRepo.findContractById(userId, bookingId, contractId);
     if (!contract) throw new NotFoundException('Contract not found');
-    const updated = await this.repo.updateContract(contractId, dto);
+    const updated = await this.contractRepo.updateContract(contractId, dto);
     return {
       id: updated.id,
       createdAt: updated.createdAt.toISOString(),
@@ -286,10 +288,10 @@ export class BookingsService {
 
   async sendContract(userId: string, bookingId: string, contractId: string) {
     await this.findOne(userId, bookingId);
-    const contract = await this.repo.findContractById(userId, bookingId, contractId);
+    const contract = await this.contractRepo.findContractById(userId, bookingId, contractId);
     if (!contract) throw new NotFoundException('Contract not found');
     if (contract.status !== 'DRAFT') throw new BadRequestException('Only DRAFT contracts can be sent');
-    const updated = await this.repo.markContractSent(contractId);
+    const updated = await this.contractRepo.markContractSent(contractId);
     await this.evaluator.evaluate(bookingId).catch(() => {});
     return {
       id: updated.id,
@@ -303,21 +305,21 @@ export class BookingsService {
 
   async deleteContract(userId: string, bookingId: string, contractId: string) {
     await this.findOne(userId, bookingId);
-    const contract = await this.repo.findContractById(userId, bookingId, contractId);
+    const contract = await this.contractRepo.findContractById(userId, bookingId, contractId);
     if (!contract) throw new NotFoundException('Contract not found');
     if (contract.status !== 'DRAFT') throw new BadRequestException('Only DRAFT contracts can be deleted');
-    await this.repo.deleteContract(contractId);
+    await this.contractRepo.deleteContract(contractId);
   }
 
   async voidContract(userId: string, bookingId: string, contractId: string, confirmSignedVoid?: boolean) {
     await this.findOne(userId, bookingId);
-    const contract = await this.repo.findContractById(userId, bookingId, contractId);
+    const contract = await this.contractRepo.findContractById(userId, bookingId, contractId);
     if (!contract) throw new NotFoundException('Contract not found');
     if (contract.status === 'VOID') throw new BadRequestException('Contract is already VOID');
     if (contract.status === 'SIGNED' && !confirmSignedVoid) {
       throw new BadRequestException('Voiding a signed contract requires confirmSignedVoid: true');
     }
-    await this.repo.voidContract(contractId);
+    await this.contractRepo.voidContract(contractId);
     await this.evaluator.evaluate(bookingId).catch(() => {});
   }
 
