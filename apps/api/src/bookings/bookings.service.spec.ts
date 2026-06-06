@@ -33,13 +33,10 @@ type MockRepo = {
   voidContract: jest.Mock;
   updateContract: jest.Mock;
   findContractById: jest.Mock;
-  seedChecklistItems: jest.Mock;
   findChecklistItems: jest.Mock;
-  recomputeChecklistDueDates: jest.Mock;
   countNonVoidInvoices: jest.Mock;
   updateSeries: jest.Mock;
   findChecklistItemById: jest.Mock;
-  updateChecklistItemState: jest.Mock;
   setDepositReceivedAt: jest.Mock;
   clearDepositReceivedAt: jest.Mock;
 };
@@ -47,7 +44,12 @@ type MockRepo = {
 type MockSeriesRepo = { findOne: jest.Mock; findOneLight: jest.Mock; findExists: jest.Mock; create: jest.Mock };
 type MockMail = { buildContext: jest.Mock };
 type MockEvaluator = { evaluate: jest.Mock };
-type MockChecklistRepo = { findActionItems: jest.Mock };
+type MockChecklistRepo = {
+  findActionItems: jest.Mock;
+  seedChecklistItems: jest.Mock;
+  recomputeChecklistDueDates: jest.Mock;
+  updateChecklistItemState: jest.Mock;
+};
 
 function makeRepo(): MockRepo {
   return {
@@ -75,13 +77,10 @@ function makeRepo(): MockRepo {
     voidContract: jest.fn(),
     updateContract: jest.fn(),
     findContractById: jest.fn(),
-    seedChecklistItems: jest.fn().mockResolvedValue({ count: 10 }),
     findChecklistItems: jest.fn(),
-    recomputeChecklistDueDates: jest.fn().mockResolvedValue(undefined),
     countNonVoidInvoices: jest.fn(),
     updateSeries: jest.fn(),
     findChecklistItemById: jest.fn(),
-    updateChecklistItemState: jest.fn().mockResolvedValue({ count: 1 }),
     setDepositReceivedAt: jest.fn().mockResolvedValue(undefined),
     clearDepositReceivedAt: jest.fn().mockResolvedValue(undefined),
   };
@@ -100,7 +99,12 @@ function makeSeriesRepo(): MockSeriesRepo {
 }
 
 function makeChecklistRepo(): MockChecklistRepo {
-  return { findActionItems: jest.fn().mockResolvedValue([]) };
+  return {
+    findActionItems: jest.fn().mockResolvedValue([]),
+    seedChecklistItems: jest.fn().mockResolvedValue({ count: 10 }),
+    recomputeChecklistDueDates: jest.fn().mockResolvedValue(undefined),
+    updateChecklistItemState: jest.fn().mockResolvedValue({ count: 1 }),
+  };
 }
 
 const booking = { id: 'b1', userId: 'u1', status: BookingStatus.CONFIRMED };
@@ -214,7 +218,7 @@ describe('BookingsService', () => {
       const checklistItems = [{ label: 'Send quote', key: 'send_quote', completedBy: 'USER' as const, dependsOn: [], autoCompleteRule: null, requiredForStatus: 'PROVISIONAL' as const, dueDateRule: null }];
       const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', checklistItems };
       await service.create('u1', dto);
-      expect(repo.seedChecklistItems).toHaveBeenCalledWith(
+      expect(checklistRepo.seedChecklistItems).toHaveBeenCalledWith(
         'u1', createdBooking.id, checklistItems, createdBooking.date, createdBooking.createdAt,
       );
     });
@@ -223,7 +227,7 @@ describe('BookingsService', () => {
       repo.create.mockResolvedValue(createdBooking);
       const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', checklistItems: [] };
       await service.create('u1', dto);
-      expect(repo.seedChecklistItems).not.toHaveBeenCalled();
+      expect(checklistRepo.seedChecklistItems).not.toHaveBeenCalled();
     });
 
     it('fetches formats and calls createWithFormats when formatIds provided', async () => {
@@ -284,7 +288,7 @@ describe('BookingsService', () => {
       repo.findOne.mockResolvedValue(booking);
       repo.update.mockResolvedValue(updated);
       await service.update('u1', 'b1', { date: newDate });
-      expect(repo.recomputeChecklistDueDates).toHaveBeenCalledWith('b1', updated.date, updated.createdAt);
+      expect(checklistRepo.recomputeChecklistDueDates).toHaveBeenCalledWith('b1', updated.date, updated.createdAt);
     });
 
     it('does not recompute checklist due dates when date does not change', async () => {
@@ -292,7 +296,7 @@ describe('BookingsService', () => {
       repo.findOne.mockResolvedValue(booking);
       repo.update.mockResolvedValue(updated);
       await service.update('u1', 'b1', { status: BookingStatus.CONFIRMED });
-      expect(repo.recomputeChecklistDueDates).not.toHaveBeenCalled();
+      expect(checklistRepo.recomputeChecklistDueDates).not.toHaveBeenCalled();
     });
   });
 
@@ -754,7 +758,7 @@ describe('BookingsService', () => {
     it('clears depositReceivedAt when deposit_received is un-marked to PENDING', async () => {
       repo.findOne.mockResolvedValue(booking);
       repo.findChecklistItemById.mockResolvedValue({ id: 'i1', key: 'deposit_received' });
-      repo.updateChecklistItemState.mockResolvedValue({ count: 1 });
+      checklistRepo.updateChecklistItemState.mockResolvedValue({ count: 1 });
 
       await service.updateChecklistItem('u1', 'b1', 'i1', 'PENDING');
 
@@ -765,7 +769,7 @@ describe('BookingsService', () => {
     it('sets depositReceivedAt when deposit_received is marked COMPLETE', async () => {
       repo.findOne.mockResolvedValue(booking);
       repo.findChecklistItemById.mockResolvedValue({ id: 'i1', key: 'deposit_received' });
-      repo.updateChecklistItemState.mockResolvedValue({ count: 1 });
+      checklistRepo.updateChecklistItemState.mockResolvedValue({ count: 1 });
 
       await service.updateChecklistItem('u1', 'b1', 'i1', 'COMPLETE');
 

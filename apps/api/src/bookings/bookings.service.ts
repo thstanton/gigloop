@@ -119,7 +119,7 @@ export class BookingsService {
     }
 
     if (dto.checklistItems.length > 0) {
-      await this.repo.seedChecklistItems(userId, booking.id, dto.checklistItems, booking.date, booking.createdAt);
+      await this.checklistRepo.seedChecklistItems(userId, booking.id, dto.checklistItems, booking.date, booking.createdAt);
     }
     return booking;
   }
@@ -128,7 +128,7 @@ export class BookingsService {
     await this.findOne(userId, id);
     const updated = await this.repo.update(id, dto);
     if (dto.date !== undefined) {
-      await this.repo.recomputeChecklistDueDates(id, updated.date, updated.createdAt);
+      await this.checklistRepo.recomputeChecklistDueDates(id, updated.date, updated.createdAt);
     }
     if (dto.status !== undefined) {
       await this.evaluator.evaluate(id).catch(() => {});
@@ -337,7 +337,7 @@ export class BookingsService {
   async updateChecklistItem(userId: string, bookingId: string, itemId: string, state: 'COMPLETE' | 'PENDING') {
     await this.findOne(userId, bookingId);
     const item = await this.repo.findChecklistItemById(userId, bookingId, itemId);
-    const result = await this.repo.updateChecklistItemState(userId, bookingId, itemId, state);
+    const result = await this.checklistRepo.updateChecklistItemState(userId, bookingId, itemId, state);
     if (result.count === 0) throw new NotFoundException('Checklist item not found');
     if (item?.key === 'deposit_received') {
       if (state === 'COMPLETE') {
