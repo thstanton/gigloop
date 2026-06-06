@@ -3,10 +3,11 @@ FROM node:20-alpine
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm install --include=dev
+# bust cache: force fresh install so build layer always re-runs
+RUN npm install --include=dev --prefer-offline=false
 
 COPY . .
-RUN npx prisma generate && npm run build
+RUN npx prisma generate && npm run build && ls -la dist/ && test -f dist/main.js
 
 EXPOSE 3000
 
