@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@clerk/react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, Check, X, FolderOpen, FileText, Download, MapPin } from 'lucide-react';
+import { ChevronLeft, X, FolderOpen, FileText, Download, MapPin } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import {
   Dialog,
   DialogContent,
@@ -98,61 +99,50 @@ const STATUS_LABELS: Record<BookingStatus, string> = {
 
 function InlineVenueAdd({ bookingId }: { bookingId: string }) {
   const queryClient = useQueryClient();
-  const [editing, setEditing] = useState(false);
-  const [venueId, setVenueId] = useState<string | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   const mutation = useMutation({
     mutationFn: (id: string) => apiPatch(`/bookings/${bookingId}`, { venueId: id }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['booking', bookingId] });
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
-      setEditing(false);
-      setVenueId(null);
+      setSheetOpen(false);
     },
   });
 
-  if (editing) {
-    return (
-      <Card title="Venue">
-        <div className="flex items-center gap-2">
-          <div className="flex-1">
-            <ContactPicker
-              value={venueId}
-              onChange={setVenueId}
-              placeholder="Select venue..."
-              label="venue"
-              preferredRole="VENUE"
-            />
-          </div>
-          <button
-            type="button"
-            disabled={!venueId || mutation.isPending}
-            onClick={() => { if (venueId) mutation.mutate(venueId); }}
-            className="text-status-confirmed hover:text-status-confirmed/70 disabled:opacity-40 transition-colors flex-shrink-0"
-            aria-label="Save venue"
-          >
-            <Check size={16} />
-          </button>
-          <IconButton label="Cancel" className="flex-shrink-0" onClick={() => { setEditing(false); setVenueId(null); }}>
-            <X size={16} />
-          </IconButton>
-        </div>
-      </Card>
-    );
-  }
-
   return (
-    <div className="flex flex-col items-center text-center gap-2 py-4 text-muted min-h-[5rem]">
-      <MapPin size={20} />
-      <span className="text-sm font-medium">Venue</span>
-      <button
-        type="button"
-        onClick={() => setEditing(true)}
-        className="text-sm text-primary hover:text-primary/80 transition-colors"
-      >
-        + Add
-      </button>
-    </div>
+    <>
+      <div className="flex flex-col items-center text-center gap-2 py-4 text-muted min-h-[5rem]">
+        <MapPin size={20} />
+        <span className="text-sm font-medium">Venue</span>
+        <button
+          type="button"
+          onClick={() => setSheetOpen(true)}
+          className="text-sm text-primary hover:text-primary/80 transition-colors"
+        >
+          + Add
+        </button>
+      </div>
+      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+        <SheetContent side="bottom">
+          <SheetHeader className="mb-4">
+            <SheetTitle>Add venue</SheetTitle>
+          </SheetHeader>
+          <ContactPicker
+            value={null}
+            onChange={(id) => { if (id) mutation.mutate(id); }}
+            placeholder="Select venue..."
+            label="venue"
+            preferredRole="VENUE"
+          />
+          <div className="mt-4 flex justify-end">
+            <Button variant="outline" onClick={() => setSheetOpen(false)}>
+              Cancel
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
+    </>
   );
 }
 
