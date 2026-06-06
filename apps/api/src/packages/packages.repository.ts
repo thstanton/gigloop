@@ -70,7 +70,7 @@ export class PackagesRepository {
     for (const slot of slots) {
       if (slot.id) {
         await this.prisma.packageSlot.update({
-          where: { id: slot.id },
+          where: { id: slot.id, packageId },
           data: {
             label: slot.label,
             duration: slot.duration,

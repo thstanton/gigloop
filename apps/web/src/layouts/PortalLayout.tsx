@@ -41,7 +41,7 @@ export function PortalLayout({ profile, children, wide = false, hero }: PortalLa
             <img
               src={profile.logoUrl}
               alt={profile.businessName}
-              className={`h-9 w-auto object-contain ${bold ? 'brightness-0 invert' : ''}`}
+              className={`h-9 w-auto object-contain ${bold ? 'brightness-0 invert' : 'bg-white'}`}
             />
           )}
           <p

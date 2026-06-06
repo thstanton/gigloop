@@ -51,6 +51,28 @@ describe('renderTiptap', () => {
     expect(renderTiptap(doc)).toBe('<p><a href="https://example.com">click here</a></p>');
   });
 
+  it('blocks javascript: href in link marks', () => {
+    const doc = {
+      type: 'doc',
+      content: [{
+        type: 'paragraph',
+        content: [{ type: 'text', text: 'click', marks: [{ type: 'link', attrs: { href: 'javascript:alert(1)' } }] }],
+      }],
+    };
+    expect(renderTiptap(doc)).toBe('<p><a href="#">click</a></p>');
+  });
+
+  it('allows mailto: href in link marks', () => {
+    const doc = {
+      type: 'doc',
+      content: [{
+        type: 'paragraph',
+        content: [{ type: 'text', text: 'email', marks: [{ type: 'link', attrs: { href: 'mailto:hello@example.com' } }] }],
+      }],
+    };
+    expect(renderTiptap(doc)).toBe('<p><a href="mailto:hello@example.com">email</a></p>');
+  });
+
   it('renders a bullet list', () => {
     const doc = {
       type: 'doc',
