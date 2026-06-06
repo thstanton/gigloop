@@ -60,8 +60,8 @@ Governing principle: **deterministic checks belong to automation; judgement belo
 ```
 commit (hook):  lint                          (changed workspace only)   — fast, blocking
 push   (hook):  test + build                  (changed workspace)        — build subsumes typecheck
-CI (→ release): lint + test + build           (both apps)                — backstop
-CI (→ main):    lint + test + build + integration                        — full gate
+CI (→ main):    lint + test + build           (both apps)                — required gate
+                integration                                              — informational only (continue-on-error)
 ```
 
 There is **no pre-flight check and no pre-commit checklist.** Lint runs automatically at commit; test + build run automatically at push; CI re-runs everything. You never need to invoke these manually — if a hook fails, fix the cause and let the hook re-run.
@@ -124,12 +124,9 @@ All three are declared as providers in the feature module.
 ## Branching Strategy
 
 ### Model
-Feature branches → `release` → `main`. No direct pushes to `main` — the GitHub ruleset enforces this for everyone including repo owner.
+Feature branches → `main`. No direct pushes to `main` — the GitHub ruleset enforces this for everyone including repo owner.
 
-- **`feature/*` → `release`:** fast CI gate (Lint, Test, Build). Integration tests skipped.
-- **`release` → `main`:** full CI gate (Lint, Test, Build, Integration). Opened when a batch of features is ready to ship.
-
-`release` is a persistent branch that accumulates merged features. It always sits ahead of or equal to `main`.
+- **`feature/*` → `main`:** Lint, Test, Build required. Integration runs but is not a required check (informational only).
 
 ### Branch naming
 - `feature/<issue-number>-short-description` — new functionality (references tracking issue number)
@@ -166,25 +163,18 @@ This keeps each commit a reviewable unit of work and CI bisectable, while the wh
 ### My responsibilities (Claude Code)
 - At the start of any feature session: confirm we are on the feature's branch, or create it; read the tracking issue to find the next unblocked sub-issue.
 - Work **one feature branch at a time.** Do not open parallel sibling branches for a single feature — sub-issues are commits, not branches.
-- Open the PR targeting **`release`** (not `main`) when the whole feature is done, with `gh pr create --base release`. Do not open a PR per sub-issue.
-- Never push application code directly to `main` or `release`.
+- Open the PR targeting **`main`** when the whole feature is done, with `gh pr create --base main`. Do not open a PR per sub-issue.
+- Never push application code directly to `main`.
 
 ### Merging
 - Squash merge only (configured in GitHub repo settings — disable merge commits and rebase merge).
-- PRs require CI to pass before merging. Required checks by target branch:
-  - `release`: Lint, Test, Build
-  - `main`: Lint, Test, Build, Integration
+- PRs require CI to pass before merging. Required checks: Lint, Test, Build. Integration runs on every PR but is not a required check.
 - Only the user merges PRs.
 
 ### Branch protection (configure in GitHub → Settings → Branches)
-Protect `release` with:
-- Require a pull request before merging
-- Require status checks: `Lint`, `Test`, `Build`
-- Do not require approvals (solo project)
-
 Protect `main` with:
 - Require a pull request before merging
-- Require status checks: `Lint`, `Test`, `Build`, `Integration`
+- Require status checks: `Lint`, `Test`, `Build`
 - Do not require approvals (solo project)
 
 ## Package Discipline

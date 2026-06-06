@@ -3,7 +3,17 @@
 ## Status
 Accepted  
 **Amended:** 2026-06-01 — "one branch per feature" made explicit and enforced; the "open a PR per branch, immediately start the next" guidance is withdrawn. See "Amendment 2026-06-01" below and ADR-0030.  
-**Amended:** 2026-06-05 — Persistent `release` branch introduced as a staging gate. Integration tests moved to `release → main` PRs only. See "Amendment 2026-06-05" below.
+**Amended:** 2026-06-05 — Persistent `release` branch introduced as a staging gate. Integration tests moved to `release → main` PRs only. See "Amendment 2026-06-05" below.  
+**Amended:** 2026-06-06 — `release` branch retired; single-tier model restored. See "Amendment 2026-06-06" below.
+
+## Amendment (2026-06-06): single-tier model restored; integration tests informational
+
+The two-tier model added friction (two PRs per feature, frequent conflicts on `release → main`, double CI runs post-merge) that outweighed the benefit during an active deployment stabilisation phase. The `release` branch is deleted.
+
+- **`feature/*` → `main` PR:** Lint, Test, Build required. Integration runs on every PR but with `continue-on-error: true` — it is informational, not a gate.
+- No push triggers in CI — CI only fires on pull requests. Post-merge push runs are eliminated.
+
+The intent is to revisit a more formal pipeline (possibly re-introducing a staging gate or deployment gating) once the production deployment is stable. See Amendment 2026-06-05 for the reasoning that motivated the two-tier model; those concerns remain valid and may lead to a different solution at that point.
 
 ## Amendment (2026-06-05): two-tier branch model with `release` gate
 
@@ -14,14 +24,7 @@ Integration tests take ~5 minutes per run. Running them on every feature PR make
 
 `release` always reflects the set of features queued for production. `main` is the production-ready state. Feature branches target `release`; the `release → main` PR is opened when a batch of features is ready to ship.
 
-**Branch protection:**
-
-| Branch | Required checks |
-|--------|----------------|
-| `release` | Lint, Test, Build |
-| `main` | Lint, Test, Build, Integration |
-
-**CI behaviour:** The `integration` job in `ci.yml` runs conditionally — only when the PR targets `main` or on a push to `main`. On `release` PRs it is skipped (GitHub marks it "skipped", not "passing"), so branch protection on `main` correctly blocks until it actually runs.
+**Retired 2026-06-06.** See Amendment 2026-06-06 above.
 
 **Exception — doc-only changes:** `CLAUDE.md`, `CONTEXT.md`, `docs/adr/`, `SPEC.md` may still be committed directly to `main` per the original exception.
 
