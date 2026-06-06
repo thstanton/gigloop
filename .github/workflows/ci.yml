@@ -75,9 +75,7 @@ jobs:
   integration:
     name: Integration
     runs-on: ubuntu-latest
-    if: >
-      github.base_ref == 'main' ||
-      (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    if: github.base_ref == 'main'
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
