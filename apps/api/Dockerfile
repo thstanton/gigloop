@@ -7,7 +7,7 @@ COPY package*.json ./
 RUN npm install --include=dev --prefer-offline=false
 
 COPY . .
-RUN npx prisma generate && npm run build && ls -la dist/ && test -f dist/main.js
+RUN npx prisma generate && npm run build && test -f dist/main.js
 
 EXPOSE 3000
 
