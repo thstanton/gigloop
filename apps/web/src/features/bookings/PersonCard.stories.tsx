@@ -55,3 +55,15 @@ export const BookingAgentWithCommission: Story = {
     await expect(canvas.getByText(/15% of gross fee/)).toBeVisible();
   },
 };
+
+export const DesktopWithAvatar: Story = {
+  name: 'Desktop — avatar visible',
+  args: { role: 'Customer', contact: customer },
+  parameters: {
+    viewport: { defaultViewport: 'tablet' },
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('JS')).toBeVisible();
+    await expect(canvas.getByText('Jane Smith')).toBeVisible();
+  },
+};
