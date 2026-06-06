@@ -37,6 +37,7 @@ import ContractCard from '@/features/bookings/ContractCard';
 import InvoiceSection from '@/features/bookings/InvoiceSection';
 import { VenueMapWidget } from '@/components/common/VenueMapWidget';
 import PersonCard from '@/features/bookings/PersonCard';
+import PersonChip from '@/features/bookings/PersonChip';
 import CommunicationsSection from '@/features/bookings/CommunicationsSection';
 import PerformanceSection from '@/features/bookings/PerformanceSection';
 import MusicFormSection from '@/features/bookings/MusicFormSection';
@@ -636,7 +637,20 @@ export default function BookingDetailPage() {
           {/* 2. People */}
           <section>
             <SectionHeader label="People" />
-            <div className="border-t border-border">
+            {/* Mobile: compact chips */}
+            <div className="flex flex-row gap-4 md:hidden">
+              <PersonChip role="Customer" contact={booking.customer} linkState={backState} onEdit={() => setEditingContact(booking.customer)} />
+              {booking.bookingAgent && (
+                <PersonChip
+                  role="Booking agent"
+                  contact={booking.bookingAgent}
+                  linkState={backState}
+                  onEdit={() => setEditingContact(booking.bookingAgent!)}
+                />
+              )}
+            </div>
+            {/* Desktop: full cards */}
+            <div className="hidden md:block border-t border-border">
               <PersonCard role="Customer" contact={booking.customer} linkState={backState} onEdit={() => setEditingContact(booking.customer)} />
               {booking.bookingAgent && (
                 <PersonCard
