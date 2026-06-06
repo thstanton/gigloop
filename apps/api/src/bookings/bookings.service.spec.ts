@@ -2,6 +2,8 @@ import { BadRequestException, ConflictException, NotFoundException } from '@nest
 import { BookingStatus } from '@prisma/client';
 import { BookingsService } from './bookings.service';
 import { BookingsRepository } from './bookings.repository';
+import { ContractRepository } from './contract.repository';
+import { MusicFormConfigRepository } from './music-form-config.repository';
 import { ChecklistRepository } from '../checklist/checklist.repository';
 import { SeriesRepository } from '../series/series.repository';
 import { MailService } from '../mail/mail.service';
@@ -23,9 +25,16 @@ type MockRepo = {
   addSet: jest.Mock;
   updateSet: jest.Mock;
   deleteSet: jest.Mock;
-  findMusicFormConfig: jest.Mock;
-  upsertMusicFormConfig: jest.Mock;
   findUserProfile: jest.Mock;
+  findChecklistItems: jest.Mock;
+  countNonVoidInvoices: jest.Mock;
+  updateSeries: jest.Mock;
+  findChecklistItemById: jest.Mock;
+  setDepositReceivedAt: jest.Mock;
+  clearDepositReceivedAt: jest.Mock;
+};
+
+type MockContractRepo = {
   findContractTemplate: jest.Mock;
   findActiveContract: jest.Mock;
   createContractRecord: jest.Mock;
@@ -33,21 +42,26 @@ type MockRepo = {
   voidContract: jest.Mock;
   updateContract: jest.Mock;
   findContractById: jest.Mock;
-  seedChecklistItems: jest.Mock;
-  findChecklistItems: jest.Mock;
-  recomputeChecklistDueDates: jest.Mock;
-  countNonVoidInvoices: jest.Mock;
-  updateSeries: jest.Mock;
-  findChecklistItemById: jest.Mock;
-  updateChecklistItemState: jest.Mock;
-  setDepositReceivedAt: jest.Mock;
-  clearDepositReceivedAt: jest.Mock;
+  deleteContract: jest.Mock;
+};
+
+type MockMusicFormRepo = {
+  findMusicFormConfig: jest.Mock;
+  upsertMusicFormConfig: jest.Mock;
+  deleteMusicFormConfig: jest.Mock;
+  findMusicFormResponse: jest.Mock;
+  findSongsByIds: jest.Mock;
 };
 
 type MockSeriesRepo = { findOne: jest.Mock; findOneLight: jest.Mock; findExists: jest.Mock; create: jest.Mock };
 type MockMail = { buildContext: jest.Mock };
 type MockEvaluator = { evaluate: jest.Mock };
-type MockChecklistRepo = { findActionItems: jest.Mock };
+type MockChecklistRepo = {
+  findActionItems: jest.Mock;
+  seedChecklistItems: jest.Mock;
+  recomputeChecklistDueDates: jest.Mock;
+  updateChecklistItemState: jest.Mock;
+};
 
 function makeRepo(): MockRepo {
   return {
@@ -65,23 +79,11 @@ function makeRepo(): MockRepo {
     addSet: jest.fn(),
     updateSet: jest.fn(),
     deleteSet: jest.fn(),
-    findMusicFormConfig: jest.fn(),
-    upsertMusicFormConfig: jest.fn(),
     findUserProfile: jest.fn(),
-    findContractTemplate: jest.fn(),
-    findActiveContract: jest.fn(),
-    createContractRecord: jest.fn(),
-    markContractSent: jest.fn(),
-    voidContract: jest.fn(),
-    updateContract: jest.fn(),
-    findContractById: jest.fn(),
-    seedChecklistItems: jest.fn().mockResolvedValue({ count: 10 }),
     findChecklistItems: jest.fn(),
-    recomputeChecklistDueDates: jest.fn().mockResolvedValue(undefined),
     countNonVoidInvoices: jest.fn(),
     updateSeries: jest.fn(),
     findChecklistItemById: jest.fn(),
-    updateChecklistItemState: jest.fn().mockResolvedValue({ count: 1 }),
     setDepositReceivedAt: jest.fn().mockResolvedValue(undefined),
     clearDepositReceivedAt: jest.fn().mockResolvedValue(undefined),
   };
@@ -100,7 +102,35 @@ function makeSeriesRepo(): MockSeriesRepo {
 }
 
 function makeChecklistRepo(): MockChecklistRepo {
-  return { findActionItems: jest.fn().mockResolvedValue([]) };
+  return {
+    findActionItems: jest.fn().mockResolvedValue([]),
+    seedChecklistItems: jest.fn().mockResolvedValue({ count: 10 }),
+    recomputeChecklistDueDates: jest.fn().mockResolvedValue(undefined),
+    updateChecklistItemState: jest.fn().mockResolvedValue({ count: 1 }),
+  };
+}
+
+function makeContractRepo(): MockContractRepo {
+  return {
+    findContractTemplate: jest.fn(),
+    findActiveContract: jest.fn(),
+    createContractRecord: jest.fn(),
+    markContractSent: jest.fn(),
+    voidContract: jest.fn(),
+    updateContract: jest.fn(),
+    findContractById: jest.fn(),
+    deleteContract: jest.fn(),
+  };
+}
+
+function makeMusicFormRepo(): MockMusicFormRepo {
+  return {
+    findMusicFormConfig: jest.fn(),
+    upsertMusicFormConfig: jest.fn(),
+    deleteMusicFormConfig: jest.fn(),
+    findMusicFormResponse: jest.fn(),
+    findSongsByIds: jest.fn(),
+  };
 }
 
 const booking = { id: 'b1', userId: 'u1', status: BookingStatus.CONFIRMED };
@@ -128,6 +158,8 @@ describe('BookingsService', () => {
   let mail: MockMail;
   let evaluator: MockEvaluator;
   let checklistRepo: MockChecklistRepo;
+  let contractRepo: MockContractRepo;
+  let musicFormRepo: MockMusicFormRepo;
 
   beforeEach(() => {
     repo = makeRepo();
@@ -135,12 +167,16 @@ describe('BookingsService', () => {
     mail = makeMail();
     evaluator = makeEvaluator();
     checklistRepo = makeChecklistRepo();
+    contractRepo = makeContractRepo();
+    musicFormRepo = makeMusicFormRepo();
     service = new BookingsService(
       repo as unknown as BookingsRepository,
       seriesRepo as unknown as SeriesRepository,
       mail as unknown as MailService,
       evaluator as unknown as ChecklistEvaluatorService,
       checklistRepo as unknown as ChecklistRepository,
+      contractRepo as unknown as ContractRepository,
+      musicFormRepo as unknown as MusicFormConfigRepository,
     );
   });
 
@@ -214,7 +250,7 @@ describe('BookingsService', () => {
       const checklistItems = [{ label: 'Send quote', key: 'send_quote', completedBy: 'USER' as const, dependsOn: [], autoCompleteRule: null, requiredForStatus: 'PROVISIONAL' as const, dueDateRule: null }];
       const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', checklistItems };
       await service.create('u1', dto);
-      expect(repo.seedChecklistItems).toHaveBeenCalledWith(
+      expect(checklistRepo.seedChecklistItems).toHaveBeenCalledWith(
         'u1', createdBooking.id, checklistItems, createdBooking.date, createdBooking.createdAt,
       );
     });
@@ -223,7 +259,7 @@ describe('BookingsService', () => {
       repo.create.mockResolvedValue(createdBooking);
       const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', checklistItems: [] };
       await service.create('u1', dto);
-      expect(repo.seedChecklistItems).not.toHaveBeenCalled();
+      expect(checklistRepo.seedChecklistItems).not.toHaveBeenCalled();
     });
 
     it('fetches formats and calls createWithFormats when formatIds provided', async () => {
@@ -284,7 +320,7 @@ describe('BookingsService', () => {
       repo.findOne.mockResolvedValue(booking);
       repo.update.mockResolvedValue(updated);
       await service.update('u1', 'b1', { date: newDate });
-      expect(repo.recomputeChecklistDueDates).toHaveBeenCalledWith('b1', updated.date, updated.createdAt);
+      expect(checklistRepo.recomputeChecklistDueDates).toHaveBeenCalledWith('b1', updated.date, updated.createdAt);
     });
 
     it('does not recompute checklist due dates when date does not change', async () => {
@@ -292,7 +328,7 @@ describe('BookingsService', () => {
       repo.findOne.mockResolvedValue(booking);
       repo.update.mockResolvedValue(updated);
       await service.update('u1', 'b1', { status: BookingStatus.CONFIRMED });
-      expect(repo.recomputeChecklistDueDates).not.toHaveBeenCalled();
+      expect(checklistRepo.recomputeChecklistDueDates).not.toHaveBeenCalled();
     });
   });
 
@@ -433,22 +469,22 @@ describe('BookingsService', () => {
     it('returns config when booking and config exist', async () => {
       const config = { id: 'mfc1', bookingId: 'b1' };
       repo.findOne.mockResolvedValue({ ...booking, musicFormConfig: { id: 'mfc1' }, musicFormResponse: null });
-      repo.findMusicFormConfig.mockResolvedValue(config);
+      musicFormRepo.findMusicFormConfig.mockResolvedValue(config);
       const result = await service.getMusicFormConfig('u1', 'b1');
-      expect(repo.findMusicFormConfig).toHaveBeenCalledWith('b1');
+      expect(musicFormRepo.findMusicFormConfig).toHaveBeenCalledWith('b1');
       expect(result).toBe(config);
     });
 
     it('throws NotFoundException when config does not exist', async () => {
       repo.findOne.mockResolvedValue({ ...booking, musicFormConfig: null, musicFormResponse: null });
-      repo.findMusicFormConfig.mockResolvedValue(null);
+      musicFormRepo.findMusicFormConfig.mockResolvedValue(null);
       await expect(service.getMusicFormConfig('u1', 'b1')).rejects.toThrow(NotFoundException);
     });
 
     it('throws NotFoundException when booking is not found', async () => {
       repo.findOne.mockResolvedValue(null);
       await expect(service.getMusicFormConfig('u1', 'missing')).rejects.toThrow(NotFoundException);
-      expect(repo.findMusicFormConfig).not.toHaveBeenCalled();
+      expect(musicFormRepo.findMusicFormConfig).not.toHaveBeenCalled();
     });
   });
 
@@ -458,16 +494,16 @@ describe('BookingsService', () => {
     it('upserts config when booking exists', async () => {
       const config = { id: 'mfc1', bookingId: 'b1', ...dto };
       repo.findOne.mockResolvedValue({ ...booking, musicFormConfig: null, musicFormResponse: null });
-      repo.upsertMusicFormConfig.mockResolvedValue(config);
+      musicFormRepo.upsertMusicFormConfig.mockResolvedValue(config);
       const result = await service.upsertMusicFormConfig('u1', 'b1', dto);
-      expect(repo.upsertMusicFormConfig).toHaveBeenCalledWith('u1', 'b1', dto);
+      expect(musicFormRepo.upsertMusicFormConfig).toHaveBeenCalledWith('u1', 'b1', dto);
       expect(result).toBe(config);
     });
 
     it('throws NotFoundException when booking is not found', async () => {
       repo.findOne.mockResolvedValue(null);
       await expect(service.upsertMusicFormConfig('u1', 'missing', dto)).rejects.toThrow(NotFoundException);
-      expect(repo.upsertMusicFormConfig).not.toHaveBeenCalled();
+      expect(musicFormRepo.upsertMusicFormConfig).not.toHaveBeenCalled();
     });
   });
 
@@ -540,23 +576,23 @@ describe('BookingsService', () => {
 
     beforeEach(() => {
       repo.findOne.mockResolvedValue(rawBooking);
-      repo.findContractTemplate.mockResolvedValue(contractTemplate);
+      contractRepo.findContractTemplate.mockResolvedValue(contractTemplate);
       mail.buildContext.mockResolvedValue(baseContext);
-      repo.findActiveContract.mockResolvedValue(null);
-      repo.createContractRecord.mockResolvedValue(mockContract);
+      contractRepo.findActiveContract.mockResolvedValue(null);
+      contractRepo.createContractRecord.mockResolvedValue(mockContract);
     });
 
     it('substitutes variables and creates a Contract record', async () => {
       const result = await service.createContract('u1', 'b1');
 
-      expect(repo.findContractTemplate).toHaveBeenCalledWith('u1');
+      expect(contractRepo.findContractTemplate).toHaveBeenCalledWith('u1');
       expect(mail.buildContext).toHaveBeenCalledWith('u1', 'b1');
-      expect(repo.createContractRecord).toHaveBeenCalledWith('u1', 'b1', expect.any(Object));
+      expect(contractRepo.createContractRecord).toHaveBeenCalledWith('u1', 'b1', expect.any(Object));
       expect(result.content).toBeDefined();
     });
 
     it('replaces variable chip nodes with plain text in the stored content', async () => {
-      repo.createContractRecord.mockImplementation((_u, _b, content) =>
+      contractRepo.createContractRecord.mockImplementation((_u, _b, content) =>
         Promise.resolve({ ...mockContract, content }),
       );
       const result = await service.createContract('u1', 'b1');
@@ -569,26 +605,26 @@ describe('BookingsService', () => {
 
     it('voids existing active contract before creating new one', async () => {
       const existing = { id: 'old-contract' };
-      repo.findActiveContract.mockResolvedValue(existing);
-      repo.voidContract.mockResolvedValue({});
+      contractRepo.findActiveContract.mockResolvedValue(existing);
+      contractRepo.voidContract.mockResolvedValue({});
 
       await service.createContract('u1', 'b1');
 
-      expect(repo.voidContract).toHaveBeenCalledWith('old-contract');
-      expect(repo.createContractRecord).toHaveBeenCalled();
+      expect(contractRepo.voidContract).toHaveBeenCalledWith('old-contract');
+      expect(contractRepo.createContractRecord).toHaveBeenCalled();
     });
 
     it('throws NotFoundException when the booking does not exist', async () => {
       repo.findOne.mockResolvedValue(null);
       await expect(service.createContract('u1', 'missing')).rejects.toThrow(NotFoundException);
-      expect(repo.findContractTemplate).not.toHaveBeenCalled();
-      expect(repo.createContractRecord).not.toHaveBeenCalled();
+      expect(contractRepo.findContractTemplate).not.toHaveBeenCalled();
+      expect(contractRepo.createContractRecord).not.toHaveBeenCalled();
     });
 
     it('throws NotFoundException when no contract template exists', async () => {
-      repo.findContractTemplate.mockResolvedValue(null);
+      contractRepo.findContractTemplate.mockResolvedValue(null);
       await expect(service.createContract('u1', 'b1')).rejects.toThrow(NotFoundException);
-      expect(repo.createContractRecord).not.toHaveBeenCalled();
+      expect(contractRepo.createContractRecord).not.toHaveBeenCalled();
     });
 
     it('does not mutate the original template content', async () => {
@@ -605,24 +641,24 @@ describe('BookingsService', () => {
 
     beforeEach(() => {
       repo.findOne.mockResolvedValue(rawBooking);
-      repo.findContractById.mockResolvedValue(draftContract);
-      repo.markContractSent.mockResolvedValue({ ...draftContract, status: 'SENT' });
+      contractRepo.findContractById.mockResolvedValue(draftContract);
+      contractRepo.markContractSent.mockResolvedValue({ ...draftContract, status: 'SENT' });
     });
 
     it('transitions a DRAFT contract to SENT', async () => {
       const result = await service.sendContract('u1', 'b1', 'c1');
-      expect(repo.markContractSent).toHaveBeenCalledWith('c1');
+      expect(contractRepo.markContractSent).toHaveBeenCalledWith('c1');
       expect(result.status).toBe('SENT');
     });
 
     it('throws BadRequestException when contract is not DRAFT', async () => {
-      repo.findContractById.mockResolvedValue({ ...draftContract, status: 'SENT' });
+      contractRepo.findContractById.mockResolvedValue({ ...draftContract, status: 'SENT' });
       await expect(service.sendContract('u1', 'b1', 'c1')).rejects.toThrow(BadRequestException);
-      expect(repo.markContractSent).not.toHaveBeenCalled();
+      expect(contractRepo.markContractSent).not.toHaveBeenCalled();
     });
 
     it('throws NotFoundException when contract does not exist', async () => {
-      repo.findContractById.mockResolvedValue(null);
+      contractRepo.findContractById.mockResolvedValue(null);
       await expect(service.sendContract('u1', 'b1', 'c1')).rejects.toThrow(NotFoundException);
     });
   });
@@ -634,46 +670,46 @@ describe('BookingsService', () => {
 
     beforeEach(() => {
       repo.findOne.mockResolvedValue(rawBooking);
-      repo.findContractById.mockResolvedValue(sentContract);
-      repo.voidContract.mockResolvedValue({ ...sentContract, status: 'VOID' });
+      contractRepo.findContractById.mockResolvedValue(sentContract);
+      contractRepo.voidContract.mockResolvedValue({ ...sentContract, status: 'VOID' });
     });
 
     it('voids a non-SIGNED contract without confirmation', async () => {
       await service.voidContract('u1', 'b1', 'c1');
-      expect(repo.voidContract).toHaveBeenCalledWith('c1');
+      expect(contractRepo.voidContract).toHaveBeenCalledWith('c1');
     });
 
     it('throws BadRequestException when voiding a SIGNED contract without confirmation', async () => {
-      repo.findContractById.mockResolvedValue({ ...sentContract, status: 'SIGNED' });
+      contractRepo.findContractById.mockResolvedValue({ ...sentContract, status: 'SIGNED' });
       await expect(service.voidContract('u1', 'b1', 'c1')).rejects.toThrow(BadRequestException);
-      expect(repo.voidContract).not.toHaveBeenCalled();
+      expect(contractRepo.voidContract).not.toHaveBeenCalled();
     });
 
     it('voids a SIGNED contract when confirmSignedVoid is true', async () => {
-      repo.findContractById.mockResolvedValue({ ...sentContract, status: 'SIGNED' });
+      contractRepo.findContractById.mockResolvedValue({ ...sentContract, status: 'SIGNED' });
       await service.voidContract('u1', 'b1', 'c1', true);
-      expect(repo.voidContract).toHaveBeenCalledWith('c1');
+      expect(contractRepo.voidContract).toHaveBeenCalledWith('c1');
     });
 
     it('throws BadRequestException when contract is already VOID', async () => {
-      repo.findContractById.mockResolvedValue({ ...sentContract, status: 'VOID' });
+      contractRepo.findContractById.mockResolvedValue({ ...sentContract, status: 'VOID' });
       await expect(service.voidContract('u1', 'b1', 'c1')).rejects.toThrow(BadRequestException);
     });
 
     it('throws NotFoundException when contract does not exist', async () => {
-      repo.findContractById.mockResolvedValue(null);
+      contractRepo.findContractById.mockResolvedValue(null);
       await expect(service.voidContract('u1', 'b1', 'c1')).rejects.toThrow(NotFoundException);
     });
 
     it('allows void-then-recreate flow: voiding clears the way for a new contract', async () => {
       await service.voidContract('u1', 'b1', 'c1');
-      expect(repo.voidContract).toHaveBeenCalledWith('c1');
+      expect(contractRepo.voidContract).toHaveBeenCalledWith('c1');
 
       // New contract can now be created
-      repo.findContractTemplate.mockResolvedValue({ content: { type: 'doc', content: [] } });
+      contractRepo.findContractTemplate.mockResolvedValue({ content: { type: 'doc', content: [] } });
       mail.buildContext.mockResolvedValue(baseContext);
-      repo.findActiveContract.mockResolvedValue(null);
-      repo.createContractRecord.mockResolvedValue({ ...sentContract, id: 'c2', status: 'DRAFT' });
+      contractRepo.findActiveContract.mockResolvedValue(null);
+      contractRepo.createContractRecord.mockResolvedValue({ ...sentContract, id: 'c2', status: 'DRAFT' });
 
       const newContract = await service.createContract('u1', 'b1');
       expect(newContract.status).toBe('DRAFT');
@@ -754,7 +790,7 @@ describe('BookingsService', () => {
     it('clears depositReceivedAt when deposit_received is un-marked to PENDING', async () => {
       repo.findOne.mockResolvedValue(booking);
       repo.findChecklistItemById.mockResolvedValue({ id: 'i1', key: 'deposit_received' });
-      repo.updateChecklistItemState.mockResolvedValue({ count: 1 });
+      checklistRepo.updateChecklistItemState.mockResolvedValue({ count: 1 });
 
       await service.updateChecklistItem('u1', 'b1', 'i1', 'PENDING');
 
@@ -765,7 +801,7 @@ describe('BookingsService', () => {
     it('sets depositReceivedAt when deposit_received is marked COMPLETE', async () => {
       repo.findOne.mockResolvedValue(booking);
       repo.findChecklistItemById.mockResolvedValue({ id: 'i1', key: 'deposit_received' });
-      repo.updateChecklistItemState.mockResolvedValue({ count: 1 });
+      checklistRepo.updateChecklistItemState.mockResolvedValue({ count: 1 });
 
       await service.updateChecklistItem('u1', 'b1', 'i1', 'COMPLETE');
 

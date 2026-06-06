@@ -2,7 +2,8 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { PortalRepository } from './portal.repository';
 import { PublicProfileRepository } from '../user-profile/public-profile.repository';
 import { SongsRepository } from '../songs/songs.repository';
-import { BookingsRepository } from '../bookings/bookings.repository';
+import { ContractRepository } from '../bookings/contract.repository';
+import { MusicFormConfigRepository } from '../bookings/music-form-config.repository';
 import { InvoicesRepository } from '../invoices/invoices.repository';
 import { MailService } from '../mail/mail.service';
 import { DocumentsService } from '../documents/documents.service';
@@ -144,12 +145,13 @@ export class PortalService {
     private repo: PortalRepository,
     private publicProfileRepo: PublicProfileRepository,
     private songsRepo: SongsRepository,
-    private bookingsRepo: BookingsRepository,
     private invoicesRepo: InvoicesRepository,
     private mail: MailService,
     private documents: DocumentsService,
     private storage: StorageService,
     private evaluator: ChecklistEvaluatorService,
+    private contractRepo: ContractRepository,
+    private musicFormRepo: MusicFormConfigRepository,
   ) {}
 
   async getBookingData(token: string) {
@@ -235,7 +237,7 @@ export class PortalService {
       ip,
     );
 
-    await this.bookingsRepo.markContractSigned(contract!.id, ip, signatureBase64);
+    await this.contractRepo.markContractSigned(contract!.id, ip, signatureBase64);
     await this.evaluator.evaluate(booking.id).catch(() => {});
 
     await this.sendSigningNotification(booking, publicProfile, signedAt);
@@ -275,7 +277,7 @@ export class PortalService {
     if (!data.musicFormConfig) throw new NotFoundException('Music form not found');
 
     const submittedAt = new Date();
-    await this.bookingsRepo.upsertMusicFormResponse(
+    await this.musicFormRepo.upsertMusicFormResponse(
       data.id,
       data.userId,
       dto.selectedSongIds,
@@ -295,7 +297,7 @@ export class PortalService {
     submittedAt: Date,
   ) {
     const [booking, publicProfile, songs] = await Promise.all([
-      this.bookingsRepo.findBookingForSongList(bookingData.id),
+      this.musicFormRepo.findBookingForSongList(bookingData.id),
       this.publicProfileRepo.findByUserId(bookingData.userId),
       this.songsRepo.findByIds(bookingData.userId, [
         ...dto.selectedSongIds,

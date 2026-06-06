@@ -1,24 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { BookingStatus, Prisma } from '@prisma/client';
+import { BookingStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
-import { UpdateContractDto } from './dto/update-contract.dto';
 import { CreateSetDto } from './dto/create-set.dto';
 import { UpdateSetDto } from './dto/update-set.dto';
-import { UpsertMusicFormConfigDto } from './dto/upsert-music-form-config.dto';
-import { computeDueDate } from './checklist-defaults';
 import { CONTRACT_INCLUDE } from './booking.includes';
-
-type ChecklistItemSeed = {
-  key?: string | null;
-  label: string;
-  completedBy?: 'USER' | 'CUSTOMER' | 'BAND_MEMBER';
-  dependsOn?: string[];
-  autoCompleteRule?: Record<string, unknown> | null;
-  requiredForStatus?: string | null;
-  dueDateRule?: { basis: 'bookingDate' | 'bookingCreation'; offsetDays: number } | null;
-};
 
 type FormatWithSlots = {
   id: string;
@@ -217,42 +204,6 @@ export class BookingsRepository {
     return this.prisma.userProfile.findUnique({ where: { userId } });
   }
 
-  findMusicFormConfig(bookingId: string) {
-    return this.prisma.musicFormConfig.findUnique({ where: { bookingId } });
-  }
-
-  findMusicFormResponse(userId: string, bookingId: string) {
-    return this.prisma.musicFormResponse.findUnique({
-      where: { bookingId },
-      select: {
-        selectedSongIds: true,
-        specialRequests: true,
-        notes: true,
-        submittedAt: true,
-        booking: { select: { userId: true } },
-      },
-    });
-  }
-
-  findSongsByIds(userId: string, ids: string[]) {
-    return this.prisma.song.findMany({
-      where: { id: { in: ids }, userId },
-      select: { id: true, title: true, artist: true, genre: true },
-    });
-  }
-
-  upsertMusicFormConfig(userId: string, bookingId: string, dto: UpsertMusicFormConfigDto) {
-    return this.prisma.musicFormConfig.upsert({
-      where: { bookingId },
-      create: { userId, bookingId, keyMoments: dto.keyMoments as unknown as Prisma.InputJsonValue, enabledGenres: dto.enabledGenres },
-      update: { keyMoments: dto.keyMoments as unknown as Prisma.InputJsonValue, enabledGenres: dto.enabledGenres },
-    });
-  }
-
-  deleteMusicFormConfig(bookingId: string) {
-    return this.prisma.musicFormConfig.delete({ where: { bookingId } });
-  }
-
   findBookingFormat(userId: string, bookingId: string, bookingFormatId: string) {
     return this.prisma.bookingPackage.findFirst({
       where: { id: bookingFormatId, bookingId, userId },
@@ -298,98 +249,6 @@ export class BookingsRepository {
       this.prisma.bookingPackage.delete({ where: { id: bookingFormatId } }),
     ]);
     return this.prisma.booking.findFirst({ where: { id: bookingId }, include: bookingIncludes });
-  }
-
-  findContractTemplate(userId: string) {
-    return this.prisma.template.findFirst({
-      where: { userId, builtInType: 'contract' },
-      select: { content: true },
-    });
-  }
-
-  findActiveContract(bookingId: string) {
-    return this.prisma.contract.findFirst({
-      where: { bookingId, status: { not: 'VOID' } },
-      orderBy: { createdAt: 'desc' },
-    });
-  }
-
-  createContractRecord(userId: string, bookingId: string, content: unknown) {
-    return this.prisma.contract.create({
-      data: {
-        userId,
-        bookingId,
-        status: 'DRAFT',
-        content: content as Prisma.InputJsonValue,
-      },
-    });
-  }
-
-  markContractSent(contractId: string) {
-    return this.prisma.contract.update({
-      where: { id: contractId },
-      data: { status: 'SENT' },
-    });
-  }
-
-  voidContract(contractId: string) {
-    return this.prisma.contract.update({
-      where: { id: contractId },
-      data: { status: 'VOID', voidedAt: new Date() },
-    });
-  }
-
-  updateContract(contractId: string, dto: UpdateContractDto) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const data: Record<string, any> = {};
-    if (dto.content !== undefined) data.content = dto.content as Prisma.InputJsonValue;
-    if (dto.status !== undefined) data.status = dto.status;
-    if (dto.signedAt !== undefined) data.signedAt = new Date(dto.signedAt);
-    if (dto.status === 'VOID') data.voidedAt = new Date();
-    return this.prisma.contract.update({ where: { id: contractId }, data });
-  }
-
-  findContractById(userId: string, bookingId: string, contractId: string) {
-    return this.prisma.contract.findFirst({
-      where: { id: contractId, bookingId, userId },
-    });
-  }
-
-  deleteContract(contractId: string) {
-    return this.prisma.contract.delete({ where: { id: contractId } });
-  }
-
-  seedChecklistItems(
-    userId: string,
-    bookingId: string,
-    defaults: ChecklistItemSeed[],
-    bookingDate: Date,
-    bookingCreatedAt: Date,
-  ) {
-    const data = defaults.map((item, idx) => {
-      const dependsOn = item.dependsOn ?? [];
-      const autoCompleteRule = item.autoCompleteRule ?? null;
-      const dueDateRule = item.dueDateRule ?? null;
-      return {
-        userId,
-        bookingId,
-        key: item.key ?? null,
-        label: item.label,
-        completedBy: item.completedBy ?? 'USER',
-        state: dependsOn.length > 0 ? 'BLOCKED' : 'PENDING',
-        order: idx + 1,
-        dependsOn,
-        ...(autoCompleteRule !== null
-          ? { autoCompleteRule: autoCompleteRule as Prisma.InputJsonValue }
-          : {}),
-        requiredForStatus: item.requiredForStatus ?? null,
-        dueDate: computeDueDate(dueDateRule, bookingDate, bookingCreatedAt),
-        ...(dueDateRule !== null
-          ? { dueDateRule: dueDateRule as unknown as Prisma.InputJsonValue }
-          : {}),
-      };
-    });
-    return this.prisma.bookingChecklistItem.createMany({ data });
   }
 
   findChecklistItems(userId: string, bookingId: string) {
@@ -438,16 +297,6 @@ export class BookingsRepository {
     });
   }
 
-  updateChecklistItemState(userId: string, bookingId: string, itemId: string, state: 'COMPLETE' | 'PENDING') {
-    return this.prisma.bookingChecklistItem.updateMany({
-      where: { id: itemId, bookingId, userId },
-      data: {
-        state,
-        completedAt: state === 'COMPLETE' ? new Date() : null,
-      },
-    });
-  }
-
   setDepositReceivedAt(bookingId: string, date: Date) {
     return this.prisma.booking.update({
       where: { id: bookingId },
@@ -476,67 +325,4 @@ export class BookingsRepository {
     });
   }
 
-  markContractSigned(contractId: string, signedFromIp: string, signatureDataUrl: string) {
-    return this.prisma.contract.update({
-      where: { id: contractId },
-      data: { status: 'SIGNED', signedAt: new Date(), signedFromIp, signatureDataUrl },
-    });
-  }
-
-  upsertMusicFormResponse(
-    bookingId: string,
-    userId: string,
-    selectedSongIds: string[],
-    specialRequests: readonly unknown[],
-    notes: string | undefined,
-  ) {
-    return this.prisma.musicFormResponse.upsert({
-      where: { bookingId },
-      create: {
-        bookingId,
-        userId,
-        selectedSongIds,
-        specialRequests: specialRequests as unknown as Prisma.InputJsonValue,
-        notes,
-        submittedAt: new Date(),
-      },
-      update: {
-        selectedSongIds,
-        specialRequests: specialRequests as unknown as Prisma.InputJsonValue,
-        notes,
-        submittedAt: new Date(),
-      },
-    });
-  }
-
-  findBookingForSongList(bookingId: string) {
-    return this.prisma.booking.findUnique({
-      where: { id: bookingId },
-      select: {
-        id: true,
-        title: true,
-        date: true,
-        customer: { select: { name: true } },
-        venue: { select: { name: true } },
-      },
-    });
-  }
-
-  async recomputeChecklistDueDates(bookingId: string, bookingDate: Date, bookingCreatedAt: Date) {
-    const items = await this.prisma.bookingChecklistItem.findMany({
-      where: { bookingId },
-      select: { id: true, dueDateRule: true },
-    });
-    const toUpdate = items.filter((item) => item.dueDateRule !== null);
-    if (!toUpdate.length) return;
-    await Promise.all(
-      toUpdate.map((item) => {
-        const rule = item.dueDateRule as { basis: 'bookingDate' | 'bookingCreation'; offsetDays: number };
-        return this.prisma.bookingChecklistItem.update({
-          where: { id: item.id },
-          data: { dueDate: computeDueDate(rule, bookingDate, bookingCreatedAt) },
-        });
-      }),
-    );
-  }
 }

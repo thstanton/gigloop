@@ -1,6 +1,8 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { BookingStatus } from '@prisma/client';
 import { BookingsRepository } from './bookings.repository';
+import { ContractRepository } from './contract.repository';
+import { MusicFormConfigRepository } from './music-form-config.repository';
 import { ChecklistRepository } from '../checklist/checklist.repository';
 import { SeriesRepository } from '../series/series.repository';
 import { CreateBookingDto } from './dto/create-booking.dto';
@@ -63,6 +65,8 @@ export class BookingsService {
     private mail: MailService,
     private evaluator: ChecklistEvaluatorService,
     private checklistRepo: ChecklistRepository,
+    private contractRepo: ContractRepository,
+    private musicFormRepo: MusicFormConfigRepository,
   ) {}
 
   findAll(userId: string, status?: string) {
@@ -119,7 +123,7 @@ export class BookingsService {
     }
 
     if (dto.checklistItems.length > 0) {
-      await this.repo.seedChecklistItems(userId, booking.id, dto.checklistItems, booking.date, booking.createdAt);
+      await this.checklistRepo.seedChecklistItems(userId, booking.id, dto.checklistItems, booking.date, booking.createdAt);
     }
     return booking;
   }
@@ -128,7 +132,7 @@ export class BookingsService {
     await this.findOne(userId, id);
     const updated = await this.repo.update(id, dto);
     if (dto.date !== undefined) {
-      await this.repo.recomputeChecklistDueDates(id, updated.date, updated.createdAt);
+      await this.checklistRepo.recomputeChecklistDueDates(id, updated.date, updated.createdAt);
     }
     if (dto.status !== undefined) {
       await this.evaluator.evaluate(id).catch(() => {});
@@ -162,19 +166,19 @@ export class BookingsService {
 
   async getMusicFormConfig(userId: string, bookingId: string) {
     await this.findOne(userId, bookingId);
-    const config = await this.repo.findMusicFormConfig(bookingId);
+    const config = await this.musicFormRepo.findMusicFormConfig(bookingId);
     if (!config) throw new NotFoundException('Music form config not found');
     return config;
   }
 
   async upsertMusicFormConfig(userId: string, bookingId: string, dto: UpsertMusicFormConfigDto) {
     await this.findOne(userId, bookingId);
-    return this.repo.upsertMusicFormConfig(userId, bookingId, dto);
+    return this.musicFormRepo.upsertMusicFormConfig(userId, bookingId, dto);
   }
 
   async deleteMusicFormConfig(userId: string, bookingId: string) {
     await this.findOne(userId, bookingId);
-    return this.repo.deleteMusicFormConfig(bookingId);
+    return this.musicFormRepo.deleteMusicFormConfig(bookingId);
   }
 
   async applyFormat(userId: string, bookingId: string, formatId: string) {
@@ -218,7 +222,7 @@ export class BookingsService {
 
   async getMusicFormResponse(userId: string, bookingId: string) {
     await this.findOne(userId, bookingId);
-    const response = await this.repo.findMusicFormResponse(userId, bookingId);
+    const response = await this.musicFormRepo.findMusicFormResponse(userId, bookingId);
     if (!response) throw new NotFoundException('Music form response not found');
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -227,7 +231,7 @@ export class BookingsService {
       ...response.selectedSongIds,
       ...requests.map((r: { songId?: string }) => r.songId).filter((id): id is string => !!id),
     ];
-    const songs = await this.repo.findSongsByIds(userId, allSongIds);
+    const songs = await this.musicFormRepo.findSongsByIds(userId, allSongIds);
     const songMap = new Map(songs.map((s) => [s.id, s]));
 
     return {
@@ -247,17 +251,17 @@ export class BookingsService {
   async createContract(userId: string, bookingId: string) {
     await this.findOne(userId, bookingId);
 
-    const template = await this.repo.findContractTemplate(userId);
+    const template = await this.contractRepo.findContractTemplate(userId);
     if (!template) throw new NotFoundException('Contract template not found');
 
     const context = await this.mail.buildContext(userId, bookingId);
     const substituted = substituteTiptapVariables(template.content, context);
 
     // Void any existing active contract before creating the new one
-    const existing = await this.repo.findActiveContract(bookingId);
-    if (existing) await this.repo.voidContract(existing.id);
+    const existing = await this.contractRepo.findActiveContract(bookingId);
+    if (existing) await this.contractRepo.voidContract(existing.id);
 
-    const contract = await this.repo.createContractRecord(userId, bookingId, substituted);
+    const contract = await this.contractRepo.createContractRecord(userId, bookingId, substituted);
     await this.evaluator.evaluate(bookingId).catch(() => {});
     return {
       id: contract.id,
@@ -271,9 +275,9 @@ export class BookingsService {
 
   async updateContract(userId: string, bookingId: string, contractId: string, dto: UpdateContractDto) {
     await this.findOne(userId, bookingId);
-    const contract = await this.repo.findContractById(userId, bookingId, contractId);
+    const contract = await this.contractRepo.findContractById(userId, bookingId, contractId);
     if (!contract) throw new NotFoundException('Contract not found');
-    const updated = await this.repo.updateContract(contractId, dto);
+    const updated = await this.contractRepo.updateContract(contractId, dto);
     return {
       id: updated.id,
       createdAt: updated.createdAt.toISOString(),
@@ -286,10 +290,10 @@ export class BookingsService {
 
   async sendContract(userId: string, bookingId: string, contractId: string) {
     await this.findOne(userId, bookingId);
-    const contract = await this.repo.findContractById(userId, bookingId, contractId);
+    const contract = await this.contractRepo.findContractById(userId, bookingId, contractId);
     if (!contract) throw new NotFoundException('Contract not found');
     if (contract.status !== 'DRAFT') throw new BadRequestException('Only DRAFT contracts can be sent');
-    const updated = await this.repo.markContractSent(contractId);
+    const updated = await this.contractRepo.markContractSent(contractId);
     await this.evaluator.evaluate(bookingId).catch(() => {});
     return {
       id: updated.id,
@@ -303,21 +307,21 @@ export class BookingsService {
 
   async deleteContract(userId: string, bookingId: string, contractId: string) {
     await this.findOne(userId, bookingId);
-    const contract = await this.repo.findContractById(userId, bookingId, contractId);
+    const contract = await this.contractRepo.findContractById(userId, bookingId, contractId);
     if (!contract) throw new NotFoundException('Contract not found');
     if (contract.status !== 'DRAFT') throw new BadRequestException('Only DRAFT contracts can be deleted');
-    await this.repo.deleteContract(contractId);
+    await this.contractRepo.deleteContract(contractId);
   }
 
   async voidContract(userId: string, bookingId: string, contractId: string, confirmSignedVoid?: boolean) {
     await this.findOne(userId, bookingId);
-    const contract = await this.repo.findContractById(userId, bookingId, contractId);
+    const contract = await this.contractRepo.findContractById(userId, bookingId, contractId);
     if (!contract) throw new NotFoundException('Contract not found');
     if (contract.status === 'VOID') throw new BadRequestException('Contract is already VOID');
     if (contract.status === 'SIGNED' && !confirmSignedVoid) {
       throw new BadRequestException('Voiding a signed contract requires confirmSignedVoid: true');
     }
-    await this.repo.voidContract(contractId);
+    await this.contractRepo.voidContract(contractId);
     await this.evaluator.evaluate(bookingId).catch(() => {});
   }
 
@@ -337,7 +341,7 @@ export class BookingsService {
   async updateChecklistItem(userId: string, bookingId: string, itemId: string, state: 'COMPLETE' | 'PENDING') {
     await this.findOne(userId, bookingId);
     const item = await this.repo.findChecklistItemById(userId, bookingId, itemId);
-    const result = await this.repo.updateChecklistItemState(userId, bookingId, itemId, state);
+    const result = await this.checklistRepo.updateChecklistItemState(userId, bookingId, itemId, state);
     if (result.count === 0) throw new NotFoundException('Checklist item not found');
     if (item?.key === 'deposit_received') {
       if (state === 'COMPLETE') {
