@@ -3,6 +3,7 @@ import { BookingStatus } from '@prisma/client';
 import { BookingsService } from './bookings.service';
 import { BookingsRepository } from './bookings.repository';
 import { ContractRepository } from './contract.repository';
+import { MusicFormConfigRepository } from './music-form-config.repository';
 import { ChecklistRepository } from '../checklist/checklist.repository';
 import { SeriesRepository } from '../series/series.repository';
 import { MailService } from '../mail/mail.service';
@@ -24,8 +25,6 @@ type MockRepo = {
   addSet: jest.Mock;
   updateSet: jest.Mock;
   deleteSet: jest.Mock;
-  findMusicFormConfig: jest.Mock;
-  upsertMusicFormConfig: jest.Mock;
   findUserProfile: jest.Mock;
   findChecklistItems: jest.Mock;
   countNonVoidInvoices: jest.Mock;
@@ -44,6 +43,14 @@ type MockContractRepo = {
   updateContract: jest.Mock;
   findContractById: jest.Mock;
   deleteContract: jest.Mock;
+};
+
+type MockMusicFormRepo = {
+  findMusicFormConfig: jest.Mock;
+  upsertMusicFormConfig: jest.Mock;
+  deleteMusicFormConfig: jest.Mock;
+  findMusicFormResponse: jest.Mock;
+  findSongsByIds: jest.Mock;
 };
 
 type MockSeriesRepo = { findOne: jest.Mock; findOneLight: jest.Mock; findExists: jest.Mock; create: jest.Mock };
@@ -72,8 +79,6 @@ function makeRepo(): MockRepo {
     addSet: jest.fn(),
     updateSet: jest.fn(),
     deleteSet: jest.fn(),
-    findMusicFormConfig: jest.fn(),
-    upsertMusicFormConfig: jest.fn(),
     findUserProfile: jest.fn(),
     findChecklistItems: jest.fn(),
     countNonVoidInvoices: jest.fn(),
@@ -118,6 +123,16 @@ function makeContractRepo(): MockContractRepo {
   };
 }
 
+function makeMusicFormRepo(): MockMusicFormRepo {
+  return {
+    findMusicFormConfig: jest.fn(),
+    upsertMusicFormConfig: jest.fn(),
+    deleteMusicFormConfig: jest.fn(),
+    findMusicFormResponse: jest.fn(),
+    findSongsByIds: jest.fn(),
+  };
+}
+
 const booking = { id: 'b1', userId: 'u1', status: BookingStatus.CONFIRMED };
 const set = { id: 's1', bookingId: 'b1', userId: 'u1' };
 
@@ -144,6 +159,7 @@ describe('BookingsService', () => {
   let evaluator: MockEvaluator;
   let checklistRepo: MockChecklistRepo;
   let contractRepo: MockContractRepo;
+  let musicFormRepo: MockMusicFormRepo;
 
   beforeEach(() => {
     repo = makeRepo();
@@ -152,6 +168,7 @@ describe('BookingsService', () => {
     evaluator = makeEvaluator();
     checklistRepo = makeChecklistRepo();
     contractRepo = makeContractRepo();
+    musicFormRepo = makeMusicFormRepo();
     service = new BookingsService(
       repo as unknown as BookingsRepository,
       seriesRepo as unknown as SeriesRepository,
@@ -159,6 +176,7 @@ describe('BookingsService', () => {
       evaluator as unknown as ChecklistEvaluatorService,
       checklistRepo as unknown as ChecklistRepository,
       contractRepo as unknown as ContractRepository,
+      musicFormRepo as unknown as MusicFormConfigRepository,
     );
   });
 
@@ -451,22 +469,22 @@ describe('BookingsService', () => {
     it('returns config when booking and config exist', async () => {
       const config = { id: 'mfc1', bookingId: 'b1' };
       repo.findOne.mockResolvedValue({ ...booking, musicFormConfig: { id: 'mfc1' }, musicFormResponse: null });
-      repo.findMusicFormConfig.mockResolvedValue(config);
+      musicFormRepo.findMusicFormConfig.mockResolvedValue(config);
       const result = await service.getMusicFormConfig('u1', 'b1');
-      expect(repo.findMusicFormConfig).toHaveBeenCalledWith('b1');
+      expect(musicFormRepo.findMusicFormConfig).toHaveBeenCalledWith('b1');
       expect(result).toBe(config);
     });
 
     it('throws NotFoundException when config does not exist', async () => {
       repo.findOne.mockResolvedValue({ ...booking, musicFormConfig: null, musicFormResponse: null });
-      repo.findMusicFormConfig.mockResolvedValue(null);
+      musicFormRepo.findMusicFormConfig.mockResolvedValue(null);
       await expect(service.getMusicFormConfig('u1', 'b1')).rejects.toThrow(NotFoundException);
     });
 
     it('throws NotFoundException when booking is not found', async () => {
       repo.findOne.mockResolvedValue(null);
       await expect(service.getMusicFormConfig('u1', 'missing')).rejects.toThrow(NotFoundException);
-      expect(repo.findMusicFormConfig).not.toHaveBeenCalled();
+      expect(musicFormRepo.findMusicFormConfig).not.toHaveBeenCalled();
     });
   });
 
@@ -476,16 +494,16 @@ describe('BookingsService', () => {
     it('upserts config when booking exists', async () => {
       const config = { id: 'mfc1', bookingId: 'b1', ...dto };
       repo.findOne.mockResolvedValue({ ...booking, musicFormConfig: null, musicFormResponse: null });
-      repo.upsertMusicFormConfig.mockResolvedValue(config);
+      musicFormRepo.upsertMusicFormConfig.mockResolvedValue(config);
       const result = await service.upsertMusicFormConfig('u1', 'b1', dto);
-      expect(repo.upsertMusicFormConfig).toHaveBeenCalledWith('u1', 'b1', dto);
+      expect(musicFormRepo.upsertMusicFormConfig).toHaveBeenCalledWith('u1', 'b1', dto);
       expect(result).toBe(config);
     });
 
     it('throws NotFoundException when booking is not found', async () => {
       repo.findOne.mockResolvedValue(null);
       await expect(service.upsertMusicFormConfig('u1', 'missing', dto)).rejects.toThrow(NotFoundException);
-      expect(repo.upsertMusicFormConfig).not.toHaveBeenCalled();
+      expect(musicFormRepo.upsertMusicFormConfig).not.toHaveBeenCalled();
     });
   });
 

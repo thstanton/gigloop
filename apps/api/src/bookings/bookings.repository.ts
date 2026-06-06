@@ -1,11 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { BookingStatus, Prisma } from '@prisma/client';
+import { BookingStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
 import { CreateSetDto } from './dto/create-set.dto';
 import { UpdateSetDto } from './dto/update-set.dto';
-import { UpsertMusicFormConfigDto } from './dto/upsert-music-form-config.dto';
 import { CONTRACT_INCLUDE } from './booking.includes';
 
 type FormatWithSlots = {
@@ -205,42 +204,6 @@ export class BookingsRepository {
     return this.prisma.userProfile.findUnique({ where: { userId } });
   }
 
-  findMusicFormConfig(bookingId: string) {
-    return this.prisma.musicFormConfig.findUnique({ where: { bookingId } });
-  }
-
-  findMusicFormResponse(userId: string, bookingId: string) {
-    return this.prisma.musicFormResponse.findUnique({
-      where: { bookingId },
-      select: {
-        selectedSongIds: true,
-        specialRequests: true,
-        notes: true,
-        submittedAt: true,
-        booking: { select: { userId: true } },
-      },
-    });
-  }
-
-  findSongsByIds(userId: string, ids: string[]) {
-    return this.prisma.song.findMany({
-      where: { id: { in: ids }, userId },
-      select: { id: true, title: true, artist: true, genre: true },
-    });
-  }
-
-  upsertMusicFormConfig(userId: string, bookingId: string, dto: UpsertMusicFormConfigDto) {
-    return this.prisma.musicFormConfig.upsert({
-      where: { bookingId },
-      create: { userId, bookingId, keyMoments: dto.keyMoments as unknown as Prisma.InputJsonValue, enabledGenres: dto.enabledGenres },
-      update: { keyMoments: dto.keyMoments as unknown as Prisma.InputJsonValue, enabledGenres: dto.enabledGenres },
-    });
-  }
-
-  deleteMusicFormConfig(bookingId: string) {
-    return this.prisma.musicFormConfig.delete({ where: { bookingId } });
-  }
-
   findBookingFormat(userId: string, bookingId: string, bookingFormatId: string) {
     return this.prisma.bookingPackage.findFirst({
       where: { id: bookingFormatId, bookingId, userId },
@@ -359,45 +322,6 @@ export class BookingsRepository {
       where: { id: bookingId },
       data: { seriesId },
       include: bookingIncludes,
-    });
-  }
-
-  upsertMusicFormResponse(
-    bookingId: string,
-    userId: string,
-    selectedSongIds: string[],
-    specialRequests: readonly unknown[],
-    notes: string | undefined,
-  ) {
-    return this.prisma.musicFormResponse.upsert({
-      where: { bookingId },
-      create: {
-        bookingId,
-        userId,
-        selectedSongIds,
-        specialRequests: specialRequests as unknown as Prisma.InputJsonValue,
-        notes,
-        submittedAt: new Date(),
-      },
-      update: {
-        selectedSongIds,
-        specialRequests: specialRequests as unknown as Prisma.InputJsonValue,
-        notes,
-        submittedAt: new Date(),
-      },
-    });
-  }
-
-  findBookingForSongList(bookingId: string) {
-    return this.prisma.booking.findUnique({
-      where: { id: bookingId },
-      select: {
-        id: true,
-        title: true,
-        date: true,
-        customer: { select: { name: true } },
-        venue: { select: { name: true } },
-      },
     });
   }
 

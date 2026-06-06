@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import { BookingStatus } from '@prisma/client';
 import { BookingsRepository } from './bookings.repository';
 import { ContractRepository } from './contract.repository';
+import { MusicFormConfigRepository } from './music-form-config.repository';
 import { ChecklistRepository } from '../checklist/checklist.repository';
 import { SeriesRepository } from '../series/series.repository';
 import { CreateBookingDto } from './dto/create-booking.dto';
@@ -65,6 +66,7 @@ export class BookingsService {
     private evaluator: ChecklistEvaluatorService,
     private checklistRepo: ChecklistRepository,
     private contractRepo: ContractRepository,
+    private musicFormRepo: MusicFormConfigRepository,
   ) {}
 
   findAll(userId: string, status?: string) {
@@ -164,19 +166,19 @@ export class BookingsService {
 
   async getMusicFormConfig(userId: string, bookingId: string) {
     await this.findOne(userId, bookingId);
-    const config = await this.repo.findMusicFormConfig(bookingId);
+    const config = await this.musicFormRepo.findMusicFormConfig(bookingId);
     if (!config) throw new NotFoundException('Music form config not found');
     return config;
   }
 
   async upsertMusicFormConfig(userId: string, bookingId: string, dto: UpsertMusicFormConfigDto) {
     await this.findOne(userId, bookingId);
-    return this.repo.upsertMusicFormConfig(userId, bookingId, dto);
+    return this.musicFormRepo.upsertMusicFormConfig(userId, bookingId, dto);
   }
 
   async deleteMusicFormConfig(userId: string, bookingId: string) {
     await this.findOne(userId, bookingId);
-    return this.repo.deleteMusicFormConfig(bookingId);
+    return this.musicFormRepo.deleteMusicFormConfig(bookingId);
   }
 
   async applyFormat(userId: string, bookingId: string, formatId: string) {
@@ -220,7 +222,7 @@ export class BookingsService {
 
   async getMusicFormResponse(userId: string, bookingId: string) {
     await this.findOne(userId, bookingId);
-    const response = await this.repo.findMusicFormResponse(userId, bookingId);
+    const response = await this.musicFormRepo.findMusicFormResponse(userId, bookingId);
     if (!response) throw new NotFoundException('Music form response not found');
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -229,7 +231,7 @@ export class BookingsService {
       ...response.selectedSongIds,
       ...requests.map((r: { songId?: string }) => r.songId).filter((id): id is string => !!id),
     ];
-    const songs = await this.repo.findSongsByIds(userId, allSongIds);
+    const songs = await this.musicFormRepo.findSongsByIds(userId, allSongIds);
     const songMap = new Map(songs.map((s) => [s.id, s]));
 
     return {
