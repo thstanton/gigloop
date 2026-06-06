@@ -76,7 +76,7 @@ export function ContactCard({ profile, bold }: { profile: PortalPublicProfile; b
           <img
             src={profile.photo!}
             alt={contactName}
-            className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+            className="w-10 h-10 rounded-full object-cover flex-shrink-0 bg-white"
           />
         )}
         <p className={`font-semibold ${bold ? 'text-white' : 'text-[#1a1a1a]'}`}>{contactName}</p>
