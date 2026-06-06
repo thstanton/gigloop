@@ -55,7 +55,6 @@ import {
 import { EVENT_TYPE_LABELS, STATUS_ORDER } from '@/lib/constants';
 import { Card } from '@/components/common/Card';
 import { SectionHeader } from '@/components/common/SectionHeader';
-import { IconButton } from '@/components/common/IconButton';
 import type {
   BookingDetail,
   BookingSeries,
