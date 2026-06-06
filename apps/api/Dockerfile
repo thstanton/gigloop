@@ -1,10 +1,9 @@
-FROM node:20-alpine
+FROM node:22-alpine
 
 WORKDIR /app
 
 COPY package*.json ./
-# bust cache: force fresh install so build layer always re-runs
-RUN npm install --include=dev --prefer-offline=false
+RUN npm install --include=dev
 
 COPY . .
 RUN npx prisma generate && npm run build && test -f dist/main.js
