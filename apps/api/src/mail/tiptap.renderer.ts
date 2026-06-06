@@ -32,8 +32,9 @@ function applyMarks(html: string, marks: TiptapMark[]): string {
       case 'strike': return `<s>${acc}</s>`;
       case 'code': return `<code>${acc}</code>`;
       case 'link': {
-        const href = escapeHtml(String(mark.attrs?.href ?? ''));
-        return `<a href="${href}">${acc}</a>`;
+        const rawHref = String(mark.attrs?.href ?? '');
+        const safeHref = /^https?:|^mailto:/i.test(rawHref) ? escapeHtml(rawHref) : '#';
+        return `<a href="${safeHref}">${acc}</a>`;
       }
       default: return acc;
     }

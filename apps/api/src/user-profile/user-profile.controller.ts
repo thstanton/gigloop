@@ -5,6 +5,7 @@ import { PublicProfileService } from './public-profile.service';
 import { UpdateUserProfileDto } from './dto/update-user-profile.dto';
 import { UpdatePublicProfileDto } from './dto/update-public-profile.dto';
 import { UpdateChecklistDefaultsDto } from './dto/update-checklist-defaults.dto';
+import { UploadUrlDto } from './dto/upload-url.dto';
 import type { Request } from 'express';
 
 type AuthedRequest = Request & { userId: string };
@@ -61,9 +62,9 @@ export class UserProfileController {
   @Post('logo-upload-url')
   getLogoUploadUrl(
     @Req() req: AuthedRequest,
-    @Body('contentType') contentType: string,
+    @Body() dto: UploadUrlDto,
   ) {
-    return this.publicProfileService.getLogoUploadUrl(req.userId, contentType);
+    return this.publicProfileService.getLogoUploadUrl(req.userId, dto.contentType);
   }
 
   @ApiOperation({ summary: 'Get a presigned upload URL for the musician photo' })
@@ -71,9 +72,9 @@ export class UserProfileController {
   @Post('photo-upload-url')
   getPhotoUploadUrl(
     @Req() req: AuthedRequest,
-    @Body('contentType') contentType: string,
+    @Body() dto: UploadUrlDto,
   ) {
-    return this.publicProfileService.getPhotoUploadUrl(req.userId, contentType);
+    return this.publicProfileService.getPhotoUploadUrl(req.userId, dto.contentType);
   }
 
   @ApiOperation({ summary: 'Delete the logo from storage and clear the logoUrl field' })
