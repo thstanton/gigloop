@@ -40,7 +40,6 @@ import { VenueMapWidget } from '@/components/common/VenueMapWidget';
 import PersonCard from '@/features/bookings/PersonCard';
 import PersonChip from '@/features/bookings/PersonChip';
 import CommunicationsSection from '@/features/bookings/CommunicationsSection';
-import PerformanceSection from '@/features/bookings/PerformanceSection';
 import MusicFormSection from '@/features/bookings/MusicFormSection';
 import ChecklistSection from '@/features/bookings/ChecklistSection';
 import BookingStatusDropdown from '@/features/bookings/BookingStatusDropdown';
@@ -562,10 +561,10 @@ export default function BookingDetailPage() {
         {backNav?.label ?? 'Bookings'}
       </Link>
 
-      <div className="mt-6 md:grid md:grid-cols-[3fr_2fr] md:gap-8 md:items-start">
+      <div className="mt-6 flex flex-col gap-8 md:grid md:grid-cols-[3fr_2fr] md:gap-8 md:items-start">
 
-        {/* ─── Left column ─── */}
-        <div className="space-y-8">
+        {/* ─── Left column top: Header + For the Day ─── */}
+        <div className="space-y-8 md:col-start-1">
 
           {/* 1. Header */}
           <section>
@@ -623,7 +622,59 @@ export default function BookingDetailPage() {
             </div>
           </section>
 
-          {/* 2. People */}
+          {/* 2. For the day */}
+          <section>
+            <SectionHeader label="For the day" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+              <Card title="Itinerary">
+                <p className="text-sm text-muted">No itinerary yet.</p>
+              </Card>
+              <Card title="Details">
+                <p className="text-sm text-muted">No details yet.</p>
+              </Card>
+            </div>
+            {booking.venue ? (
+              <VenueMapWidget
+                venue={booking.venue}
+                showHeader={true}
+                cardTitle="Venue"
+                cardAction={
+                  <button type="button" onClick={() => setEditingContact(booking.venue!)} className="text-xs text-primary hover:text-primary/80 transition-colors">
+                    Edit
+                  </button>
+                }
+                contactHref={`/admin/contacts/${booking.venue.id}`}
+                travelTime={venueTravelTime}
+                isLoadingTravelTime={isFetchingTravelTime}
+                onRefreshTravelTime={() => queryClient.invalidateQueries({ queryKey: ['contact-travel-time', bookingVenueId] })}
+              />
+            ) : (
+              <InlineVenueAdd bookingId={booking.id} />
+            )}
+          </section>
+
+        </div>
+
+        {/* ─── Right column ─── */}
+        <div className="space-y-6 md:col-start-2 md:row-span-2">
+
+          {/* Checklist */}
+          {booking.status !== 'CANCELLED' && (
+            <ChecklistSection
+              items={checklist}
+              isLoading={checklistLoading}
+              bookingStatus={booking.status}
+              onToggle={(itemId, state) => toggleChecklistItem.mutate({ itemId, state })}
+              onChecklistAction={handleChecklistAction}
+              onOpenCompose={openCompose}
+              onMarkDone={handleMarkDone}
+              onAddItem={(data) => addChecklistItem.mutate(data)}
+              isAddingItem={addChecklistItem.isPending}
+              isActionPending={actions.isPending || markPaid.isPending}
+            />
+          )}
+
+          {/* People */}
           <section>
             <SectionHeader label="People" />
             {/* Mobile: compact chips */}
@@ -652,85 +703,6 @@ export default function BookingDetailPage() {
               )}
             </div>
           </section>
-
-          {/* 3. Notes */}
-          <InlineNotes
-            notes={booking.notes}
-            onSave={(notes) => updateNotesMutation.mutate(notes)}
-            isSaving={updateNotesMutation.isPending}
-          />
-
-          {/* 4. For the day */}
-          <section>
-            <SectionHeader label="For the day" />
-            <div className="mb-4">
-              {booking.venue ? (
-                <VenueMapWidget
-                  venue={booking.venue}
-                  showHeader={true}
-                  cardTitle="Venue"
-                  cardAction={
-                    <button type="button" onClick={() => setEditingContact(booking.venue!)} className="text-xs text-primary hover:text-primary/80 transition-colors">
-                      Edit
-                    </button>
-                  }
-                  contactHref={`/admin/contacts/${booking.venue.id}`}
-                  travelTime={venueTravelTime}
-                  isLoadingTravelTime={isFetchingTravelTime}
-                  onRefreshTravelTime={() => queryClient.invalidateQueries({ queryKey: ['contact-travel-time', bookingVenueId] })}
-                />
-              ) : (
-                <InlineVenueAdd bookingId={booking.id} />
-              )}
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <PerformanceSection
-                booking={booking}
-                onEdit={() => setSearchParams((prev) => {
-                  const next = new URLSearchParams(prev);
-                  next.set('edit', 'true');
-                  next.set('section', 'performance');
-                  return next;
-                })}
-              />
-              <MusicFormSection
-                booking={booking}
-                documents={documents}
-                config={musicFormConfig ?? null}
-                isLoading={musicFormConfigLoading}
-                response={musicFormResponse ?? null}
-                onUpdateConfig={() => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('edit', 'true'); next.set('section', 'musicForm'); return next; })}
-                onViewResponse={() => setViewingMusicFormResponse(true)}
-                onEdit={() => setSearchParams((prev) => {
-                  const next = new URLSearchParams(prev);
-                  next.set('edit', 'true');
-                  next.set('section', 'musicForm');
-                  return next;
-                })}
-              />
-            </div>
-          </section>
-
-        </div>
-
-        {/* ─── Right column ─── */}
-        <div className="mt-8 md:mt-0 space-y-6">
-
-          {/* Checklist */}
-          {booking.status !== 'CANCELLED' && (
-            <ChecklistSection
-              items={checklist}
-              isLoading={checklistLoading}
-              bookingStatus={booking.status}
-              onToggle={(itemId, state) => toggleChecklistItem.mutate({ itemId, state })}
-              onChecklistAction={handleChecklistAction}
-              onOpenCompose={openCompose}
-              onMarkDone={handleMarkDone}
-              onAddItem={(data) => addChecklistItem.mutate(data)}
-              isAddingItem={addChecklistItem.isPending}
-              isActionPending={actions.isPending || markPaid.isPending}
-            />
-          )}
 
           {/* Series events */}
           {booking.series && (
@@ -808,6 +780,23 @@ export default function BookingDetailPage() {
             />
           )}
 
+          {/* Music Form */}
+          <MusicFormSection
+            booking={booking}
+            documents={documents}
+            config={musicFormConfig ?? null}
+            isLoading={musicFormConfigLoading}
+            response={musicFormResponse ?? null}
+            onUpdateConfig={() => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('edit', 'true'); next.set('section', 'musicForm'); return next; })}
+            onViewResponse={() => setViewingMusicFormResponse(true)}
+            onEdit={() => setSearchParams((prev) => {
+              const next = new URLSearchParams(prev);
+              next.set('edit', 'true');
+              next.set('section', 'musicForm');
+              return next;
+            })}
+          />
+
           {/* Documents */}
           <Card title="Documents">
             {documents.length === 0 ? (
@@ -859,13 +848,24 @@ export default function BookingDetailPage() {
             )}
           </Card>
 
-          {/* Communications */}
+        </div>{/* end right column */}
+
+        {/* ─── Left column bottom: Notes + Communications ─── */}
+        <div className="space-y-8 md:col-start-1">
+
+          <InlineNotes
+            notes={booking.notes}
+            onSave={(notes) => updateNotesMutation.mutate(notes)}
+            isSaving={updateNotesMutation.isPending}
+          />
+
           <CommunicationsSection
             communications={communications}
             onCompose={() => openCompose()}
           />
 
-        </div>{/* end right column */}
+        </div>
+
       </div>{/* end two-column grid */}
 
       {readyDialogStatus && (

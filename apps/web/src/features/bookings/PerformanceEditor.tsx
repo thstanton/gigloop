@@ -208,7 +208,7 @@ export default function PerformanceEditor({ booking }: { booking: BookingDetail 
 
   return (
     <div>
-      <p className="text-sm font-medium text-foreground mb-3">Performance</p>
+      <p className="text-sm font-medium text-foreground mb-3">Packages</p>
 
       {(booking.packages ?? []).length === 0 && unassigned.length === 0 && (
         <p className="text-sm text-muted mb-3">No packages added yet.</p>
