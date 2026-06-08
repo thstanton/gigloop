@@ -53,7 +53,7 @@ export default function BookingEditDrawer({ booking }: Props) {
   const section = searchParams.get('section');
   const queryClient = useQueryClient();
   const [deleteConfirm, setDeleteConfirm] = useState(false);
-  const performanceRef = useRef<HTMLDivElement>(null);
+  const packagesRef = useRef<HTMLDivElement>(null);
   const musicFormRef = useRef<HTMLDivElement>(null);
 
   function close() {
@@ -121,8 +121,8 @@ export default function BookingEditDrawer({ booking }: Props) {
         onOpenAutoFocus={(e) => {
           if (!section) return;
           e.preventDefault();
-          let ref: typeof performanceRef | null = null;
-          if (section === 'performance') ref = performanceRef;
+          let ref: typeof packagesRef | null = null;
+          if (section === 'packages') ref = packagesRef;
           else if (section === 'musicForm') ref = musicFormRef;
           if (!ref?.current) return;
           requestAnimationFrame(() => {
@@ -161,7 +161,7 @@ export default function BookingEditDrawer({ booking }: Props) {
             </div>
           </form>
 
-          <div ref={performanceRef} className="mt-8 pt-6 border-t border-border">
+          <div ref={packagesRef} className="mt-8 pt-6 border-t border-border">
             <PerformanceEditor booking={booking} />
           </div>
 
