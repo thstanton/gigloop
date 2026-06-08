@@ -13,7 +13,7 @@ The question was whether to split into two repos or fix the triggers in place.
 
 Stay monorepo. Add a `detect-changes` job (using `dorny/paths-filter`) that runs first on every PR and outputs which app directories were touched. The `Lint`, `Test`, and `Build` jobs always run (preserving branch protection check names), but steps within each job execute conditionally based on the filter output. The `Integration` job has a job-level `if:` condition since it is not a required check.
 
-Deployment platforms are configured to watch only their relevant directory: Vercel ignores builds where `apps/web/` has not changed; Railway watches `apps/api/**` only.
+Deployment platforms are configured to watch only their relevant directory: Vercel uses the "Ignored Build Step" setting with `git diff HEAD^ HEAD --quiet -- ./apps/web` (exits 0 = skip, exits 1 = build); Railway watches `apps/api/**` only.
 
 ## Consequences
 
