@@ -32,6 +32,7 @@ jobs:
   lint:
     name: Lint
     needs: detect-changes
+    if: needs.detect-changes.outputs.api == 'true' || needs.detect-changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -60,6 +61,7 @@ jobs:
   test:
     name: Test
     needs: detect-changes
+    if: needs.detect-changes.outputs.api == 'true' || needs.detect-changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -85,6 +87,7 @@ jobs:
   build:
     name: Build
     needs: detect-changes
+    if: needs.detect-changes.outputs.api == 'true' || needs.detect-changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -151,3 +154,15 @@ jobs:
           api_key: ${{ secrets.NEON_API_KEY }}
           project_id: ${{ vars.NEON_PROJECT_ID }}
           branch: ${{ steps.neon.outputs.branch_id }}
+
+  ci-result:
+    name: CI
+    needs: [lint, test, build]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pass if all required jobs succeeded or were skipped
+        run: |
+          if [[ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
+            exit 1
+          fi
