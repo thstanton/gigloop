@@ -5,8 +5,33 @@ on:
     branches: [main]
 
 jobs:
+  detect-changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      api: ${{ steps.filter.outputs.api }}
+      web: ${{ steps.filter.outputs.web }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            api:
+              - 'apps/api/**'
+              - 'package.json'
+              - 'bun.lockb'
+              - '.github/workflows/**'
+            web:
+              - 'apps/web/**'
+              - 'package.json'
+              - 'bun.lockb'
+              - 'scripts/**'
+              - '.github/workflows/**'
+
   lint:
     name: Lint
+    needs: detect-changes
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,15 +46,20 @@ jobs:
       - run: bun install --frozen-lockfile
         if: steps.cache.outputs.cache-hit != 'true'
       - run: cd apps/api && bunx prisma generate
+        if: needs.detect-changes.outputs.api == 'true'
         env:
           DATABASE_URL: postgresql://user:password@localhost/db
       - run: cd apps/api && bun run lint
+        if: needs.detect-changes.outputs.api == 'true'
       - run: cd apps/web && bun run lint
+        if: needs.detect-changes.outputs.web == 'true'
       - name: Story presence (ADR-0030)
+        if: needs.detect-changes.outputs.web == 'true'
         run: node scripts/check-stories.mjs
 
   test:
     name: Test
+    needs: detect-changes
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -44,13 +74,17 @@ jobs:
       - run: bun install --frozen-lockfile
         if: steps.cache.outputs.cache-hit != 'true'
       - run: cd apps/api && bunx prisma generate
+        if: needs.detect-changes.outputs.api == 'true'
         env:
           DATABASE_URL: postgresql://user:password@localhost/db
       - run: cd apps/api && bun run test
+        if: needs.detect-changes.outputs.api == 'true'
       - run: cd apps/web && bun run test
+        if: needs.detect-changes.outputs.web == 'true'
 
   build:
     name: Build
+    needs: detect-changes
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -65,13 +99,18 @@ jobs:
       - run: bun install --frozen-lockfile
         if: steps.cache.outputs.cache-hit != 'true'
       - run: cd apps/api && bunx prisma generate
+        if: needs.detect-changes.outputs.api == 'true'
         env:
           DATABASE_URL: postgresql://user:password@localhost/db
       - run: cd apps/api && bun run build
+        if: needs.detect-changes.outputs.api == 'true'
       - run: cd apps/web && bun run build
+        if: needs.detect-changes.outputs.web == 'true'
 
   integration:
     name: Integration
+    needs: detect-changes
+    if: needs.detect-changes.outputs.api == 'true'
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
