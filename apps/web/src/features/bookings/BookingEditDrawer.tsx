@@ -18,6 +18,7 @@ import {
 import { apiDelete, apiPatch } from '@/lib/api';
 import PerformanceEditor from './PerformanceEditor';
 import MusicFormEditor from './MusicFormEditor';
+import OnTheDayEditor from './OnTheDayEditor';
 import type { BookingDetail, EventType, BookingStatus } from '@/types/api';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -55,6 +56,7 @@ export default function BookingEditDrawer({ booking }: Props) {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const packagesRef = useRef<HTMLDivElement>(null);
   const musicFormRef = useRef<HTMLDivElement>(null);
+  const onTheDayRef = useRef<HTMLDivElement>(null);
 
   function close() {
     setSearchParams((prev) => {
@@ -124,6 +126,7 @@ export default function BookingEditDrawer({ booking }: Props) {
           let ref: typeof packagesRef | null = null;
           if (section === 'packages') ref = packagesRef;
           else if (section === 'musicForm') ref = musicFormRef;
+          else if (section === 'onTheDay') ref = onTheDayRef;
           if (!ref?.current) return;
           requestAnimationFrame(() => {
             ref.current!.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -160,6 +163,10 @@ export default function BookingEditDrawer({ booking }: Props) {
               </Button>
             </div>
           </form>
+
+          <div ref={onTheDayRef} className="mt-8 pt-6 border-t border-border">
+            <OnTheDayEditor booking={booking} isOpen={isOpen} />
+          </div>
 
           <div ref={packagesRef} className="mt-8 pt-6 border-t border-border">
             <PerformanceEditor booking={booking} />

@@ -269,6 +269,14 @@ export interface ChecklistItem {
   shortcutTemplateType?: string;
 }
 
+export interface BookingLogisticsEntry {
+  value: string;
+  icon?: string;
+  shareWithBand: boolean;
+  shareWithClient: boolean;
+  label?: string;
+}
+
 export interface BookingDetail extends Omit<BookingListItem, 'customer' | 'venue' | 'bookingAgent'> {
   customer: Contact;
   venue: Contact | null;
@@ -282,6 +290,7 @@ export interface BookingDetail extends Omit<BookingListItem, 'customer' | 'venue
   hasMusicFormResponse: boolean;
   seriesId: string | null;
   series: { id: string; label: string; customerId: string } | null;
+  logistics: Record<string, BookingLogisticsEntry> | null;
 }
 
 export interface CreateSetInput {

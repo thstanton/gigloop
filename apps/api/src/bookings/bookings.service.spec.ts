@@ -330,6 +330,20 @@ describe('BookingsService', () => {
       await service.update('u1', 'b1', { status: BookingStatus.CONFIRMED });
       expect(checklistRepo.recomputeChecklistDueDates).not.toHaveBeenCalled();
     });
+
+    it('round-trips logistics without modification', async () => {
+      const logistics = {
+        arrivalTime:    { value: '14:00', shareWithBand: true,  shareWithClient: false },
+        soundCheckTime: { value: '15:00', shareWithBand: false, shareWithClient: false },
+      };
+      const updated = { ...booking, date: new Date(), createdAt: new Date(), logistics };
+      repo.findOne.mockResolvedValue(booking);
+      repo.update.mockResolvedValue(updated);
+      const result = await service.update('u1', 'b1', { logistics });
+      expect(repo.update).toHaveBeenCalledWith('b1', { logistics });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      expect((result as any).logistics).toBe(logistics);
+    });
   });
 
   describe('delete', () => {

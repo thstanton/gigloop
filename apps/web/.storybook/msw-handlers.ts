@@ -228,6 +228,8 @@ const baseDetail = {
   activeContract: null, depositReceivedAt: null,
   portalToken: 'tok_storybook',
   hasMusicFormConfig: false, hasMusicFormResponse: false,
+  seriesId: null, series: null,
+  logistics: null,
 };
 
 const sentContract = {

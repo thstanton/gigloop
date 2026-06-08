@@ -30,6 +30,7 @@ const baseBooking: BookingDetail = {
   hasMusicFormResponse: false,
   seriesId: null,
   series: null,
+  logistics: null,
 };
 
 const contractDoc: Document = {

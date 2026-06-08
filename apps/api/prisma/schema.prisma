@@ -171,6 +171,7 @@ model Booking {
   series   BookingSeries? @relation(fields: [seriesId], references: [id], onDelete: SetNull)
 
   travelMode String?
+  logistics  Json?
 
   sets     PerformanceSet[]
   packages BookingPackage[]

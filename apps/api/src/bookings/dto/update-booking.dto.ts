@@ -6,6 +6,7 @@ import {
   IsIn,
   IsNotEmpty,
   IsNumber,
+  IsObject,
   IsOptional,
   IsString,
   IsUUID,
@@ -70,4 +71,9 @@ export class UpdateBookingDto {
   @ValidateIf((_, v) => v !== null)
   @IsDateString()
   depositReceivedAt?: string | null;
+
+  @ApiPropertyOptional({ type: Object, description: 'Logistics JSON (pass-through, no per-key validation)' })
+  @IsOptional()
+  @IsObject()
+  logistics?: Record<string, unknown>;
 }
