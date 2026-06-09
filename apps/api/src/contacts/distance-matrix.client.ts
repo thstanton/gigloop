@@ -1,4 +1,4 @@
-import { Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { Injectable, OnModuleInit, ServiceUnavailableException } from '@nestjs/common';
 
 export interface LatLng {
   lat: number;
@@ -21,7 +21,13 @@ interface DistanceMatrixApiResponse {
 }
 
 @Injectable()
-export class DistanceMatrixClient {
+export class DistanceMatrixClient implements OnModuleInit {
+  onModuleInit() {
+    if (!process.env.GOOGLE_MAPS_API_KEY) {
+      throw new Error('GOOGLE_MAPS_API_KEY environment variable is not set');
+    }
+  }
+
   async getDistance(origin: LatLng, destination: LatLng): Promise<DistanceResult> {
     const key = process.env.GOOGLE_MAPS_API_KEY ?? '';
     const params = new URLSearchParams({
