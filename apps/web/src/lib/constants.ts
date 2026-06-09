@@ -1,3 +1,8 @@
+import {
+  Music, Mic2, Guitar, Piano, Drum, Church, Cake, Wine, Star, Heart,
+  GlassWater, Utensils, Moon, Briefcase, Music2, Sparkles, Radio, Headphones,
+  Volume2, Users, type LucideIcon,
+} from 'lucide-react';
 import type { BookingStatus, EventType, SongGenre } from '@/types/api';
 
 export const GENRE_LABELS: Record<SongGenre, string> = {
@@ -78,6 +83,31 @@ export const LOGISTICS_FIELD_LABELS: Record<string, string> = {
   greenRoom:      'Green room',
   equipmentRequired: 'Equipment required',
 };
+
+export const PACKAGE_ICON_MAP: Record<string, LucideIcon> = {
+  music: Music,
+  'mic-2': Mic2,
+  guitar: Guitar,
+  piano: Piano,
+  drum: Drum,
+  church: Church,
+  cake: Cake,
+  wine: Wine,
+  star: Star,
+  heart: Heart,
+  'glass-water': GlassWater,
+  utensils: Utensils,
+  moon: Moon,
+  briefcase: Briefcase,
+  'music-2': Music2,
+  sparkles: Sparkles,
+  radio: Radio,
+  headphones: Headphones,
+  'volume-2': Volume2,
+  users: Users,
+};
+
+export const PACKAGE_ICON_OPTIONS = Object.keys(PACKAGE_ICON_MAP);
 
 export const LOGISTICS_FIELD_ICONS: Record<string, string> = {
   arrivalTime:    'clock',

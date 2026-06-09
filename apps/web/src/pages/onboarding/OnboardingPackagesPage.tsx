@@ -2,30 +2,17 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@clerk/react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, useEffect } from 'react';
-import {
-  Music, Mic2, Guitar, Piano, Drum, Church, Cake, Wine, Star, Heart,
-  GlassWater, Utensils, Moon, Briefcase, Music2, Sparkles, Radio,
-  Headphones, Volume2, Users,
-} from 'lucide-react';
+import { Music } from 'lucide-react';
 import { apiGet, apiPatch } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { PACKAGE_CATEGORY_LABELS } from '@/lib/constants';
+import { PACKAGE_CATEGORY_LABELS, PACKAGE_ICON_MAP } from '@/lib/constants';
 import { PageHeader } from '@/components/common/PageHeader';
 import { PageSection } from '@/components/common/PageSection';
 import type { Package } from '@/types/api';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const ICON_MAP: Record<string, React.ComponentType<any>> = {
-  music: Music, 'mic-2': Mic2, guitar: Guitar, piano: Piano, drum: Drum,
-  church: Church, cake: Cake, wine: Wine, star: Star, heart: Heart,
-  'glass-water': GlassWater, utensils: Utensils, moon: Moon,
-  briefcase: Briefcase, 'music-2': Music2, sparkles: Sparkles,
-  radio: Radio, headphones: Headphones, 'volume-2': Volume2, users: Users,
-};
-
 function PackageIcon({ icon }: { icon: string }) {
-  const Icon = ICON_MAP[icon] ?? Music;
+  const Icon = PACKAGE_ICON_MAP[icon] ?? Music;
   return <Icon size={18} strokeWidth={1.75} />;
 }
 

@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2, Heart, GlassWater, Utensils, Moon, Briefcase, Music, Music2 } from 'lucide-react';
+import { Plus, Trash2, Music } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { GhostButton } from '@/components/common/GhostButton';
 import { SubLabel } from '@/components/common/SubLabel';
 import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
+import { PACKAGE_ICON_MAP } from '@/lib/constants';
 import type {
   BookingDetail,
   BookingPackageSummary,
@@ -12,19 +13,8 @@ import type {
   PerformanceSet,
 } from '@/types/api';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const FORMAT_ICON_MAP: Record<string, React.ComponentType<any>> = {
-  heart: Heart,
-  'glass-water': GlassWater,
-  utensils: Utensils,
-  moon: Moon,
-  briefcase: Briefcase,
-  music: Music,
-  'music-2': Music2,
-};
-
 function FormatIcon({ icon, size = 14 }: { icon: string; size?: number }) {
-  const Icon = FORMAT_ICON_MAP[icon] ?? Music;
+  const Icon = PACKAGE_ICON_MAP[icon] ?? Music;
   return <Icon size={size} />;
 }
 

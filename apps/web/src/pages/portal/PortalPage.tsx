@@ -1,9 +1,10 @@
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { PreviewBanner } from './PreviewBanner';
 import { useQuery } from '@tanstack/react-query';
-import { FileText, Download, CheckCircle, Clock, Music, Music2, ClipboardCheck, Mail, Phone, Heart, GlassWater, Utensils, Moon, Briefcase } from 'lucide-react';
+import { FileText, Download, CheckCircle, Clock, Music, ClipboardCheck, Mail, Phone } from 'lucide-react';
 import { getPortalData } from '../../lib/portalApi';
 import { PortalLayout, getDisplayFontClass, isRomantic } from '../../layouts/PortalLayout';
+import { PACKAGE_ICON_MAP } from '../../lib/constants';
 import type { PortalData, PortalDocument, PortalPublicProfile, PortalBookingSet, PortalBookingFormat } from '../../types/api';
 
 // ─── Colour utilities ─────────────────────────────────────────────────────────
@@ -32,19 +33,6 @@ function relativeLuminance(hex: string): number {
 export function pickTextColour(bgHex: string): '#ffffff' | '#1a1a1a' {
   return relativeLuminance(bgHex) < 0.208 ? '#ffffff' : '#1a1a1a';
 }
-
-// ─── Format icon map (mirrors admin PerformanceSection) ───────────────────────
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const FORMAT_ICON_MAP: Record<string, React.ComponentType<any>> = {
-  heart: Heart,
-  'glass-water': GlassWater,
-  utensils: Utensils,
-  moon: Moon,
-  briefcase: Briefcase,
-  music: Music,
-  'music-2': Music2,
-};
 
 // ─── Status message ───────────────────────────────────────────────────────────
 
@@ -211,7 +199,7 @@ export function SetsCard({ sets, formats, bold }: { sets: PortalBookingSet[]; fo
         {formats.map((fmt) => {
           const fmtSets = setsByFormatId.get(fmt.id) ?? [];
           if (fmtSets.length === 0) return null;
-          const Icon = FORMAT_ICON_MAP[fmt.icon] ?? Music;
+          const Icon = PACKAGE_ICON_MAP[fmt.icon] ?? Music;
 
           if (fmtSets.length === 1) {
             // Single set: merge into one row — icon + format label + duration, time on right

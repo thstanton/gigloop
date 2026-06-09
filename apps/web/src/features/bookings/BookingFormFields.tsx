@@ -1,7 +1,8 @@
 import { Controller } from 'react-hook-form';
 import type { Control, UseFormRegister, FieldErrors } from 'react-hook-form';
 import { z } from 'zod';
-import { ChevronUp, ChevronDown, Heart, GlassWater, Utensils, Moon, Briefcase, Music, Music2, Check } from 'lucide-react';
+import { ChevronUp, ChevronDown, Music, Check } from 'lucide-react';
+import { PACKAGE_ICON_MAP } from '@/lib/constants';
 import { Input } from '@/components/ui/input';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Textarea } from '@/components/ui/textarea';
@@ -41,21 +42,8 @@ export const bookingFormSchema = z.object({
 
 export type BookingFormValues = z.infer<typeof bookingFormSchema>;
 
-// ─── Icon map ─────────────────────────────────────────────────────────────────
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const ICON_MAP: Record<string, React.ComponentType<any>> = {
-  heart: Heart,
-  'glass-water': GlassWater,
-  utensils: Utensils,
-  moon: Moon,
-  briefcase: Briefcase,
-  music: Music,
-  'music-2': Music2,
-};
-
 function FormatIcon({ icon, size = 16 }: { icon: string; size?: number }) {
-  const Icon = ICON_MAP[icon] ?? Music;
+  const Icon = PACKAGE_ICON_MAP[icon] ?? Music;
   return <Icon size={size} />;
 }
 
