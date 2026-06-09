@@ -47,19 +47,20 @@ export const Empty: Story = {
     await expect(canvas.getByLabelText('Arrival time')).toBeVisible();
     await expect(canvas.getByLabelText('Soundcheck time')).toBeVisible();
     await expect(canvas.getByLabelText('Finish time')).toBeVisible();
-    await expect(canvas.getByLabelText('Dress code')).toBeVisible();
+    await expect(canvas.getByRole('combobox', { name: 'Dress code' })).toBeVisible();
     await expect(canvas.getByLabelText('Performance space')).toBeVisible();
     await expect(canvas.getByLabelText('Equipment required')).toBeVisible();
-    await expect(canvas.getByPlaceholderText('Add custom option…')).toBeVisible();
   },
 };
 
 export const AddCustomDressCode: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const addInput = canvas.getByPlaceholderText('Add custom option…');
-    await userEvent.type(addInput, 'Beach Formal');
-    await userEvent.click(canvas.getByRole('button', { name: '+ Add' }));
+    await userEvent.click(canvas.getByRole('combobox', { name: 'Dress code' }));
+    const body = within(document.body);
+    const searchInput = await body.findByPlaceholderText('Search or add new…');
+    await userEvent.type(searchInput, 'Beach Formal');
+    await userEvent.click(body.getByText('Add "Beach Formal"'));
   },
 };
 
