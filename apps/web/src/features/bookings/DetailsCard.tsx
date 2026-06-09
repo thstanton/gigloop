@@ -2,8 +2,8 @@ import { Info } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { GhostButton } from '@/components/common/GhostButton';
 import { EmptyState } from '@/components/common/EmptyState';
-import { LabelValue } from '@/components/common/LabelValue';
-import { LOGISTICS_FIELD_LABELS } from '@/lib/constants';
+import { LOGISTICS_FIELD_ICONS, LOGISTICS_FIELD_LABELS } from '@/lib/constants';
+import FormatIcon from './FormatIcon';
 import type { BookingLogisticsEntry } from '@/types/api';
 
 const DETAIL_FIELDS = [
@@ -40,11 +40,20 @@ export default function DetailsCard({ logistics, onEdit }: DetailsCardProps) {
         />
       ) : (
         <div>
-          {entries.map(key => (
-            <LabelValue key={key} label={LOGISTICS_FIELD_LABELS[key]}>
-              {logistics![key].value}
-            </LabelValue>
-          ))}
+          {entries.map(key => {
+            const iconKey = logistics![key].icon || LOGISTICS_FIELD_ICONS[key] || '';
+            return (
+              <div key={key} className="py-3 flex items-start gap-2.5 border-b border-border last:border-0">
+                <span className="mt-0.5 text-muted flex-shrink-0">
+                  {iconKey && <FormatIcon icon={iconKey} size={16} />}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-muted">{LOGISTICS_FIELD_LABELS[key]}</p>
+                  <p className="text-sm text-foreground">{logistics![key].value}</p>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </Card>

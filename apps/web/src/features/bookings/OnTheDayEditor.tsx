@@ -10,7 +10,8 @@ import { FormField } from '@/components/common/FormField';
 import { SubLabel } from '@/components/common/SubLabel';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { apiGet, apiPatch } from '@/lib/api';
-import { DRESS_CODE_OPTIONS } from '@/lib/constants';
+import { DRESS_CODE_OPTIONS, LOGISTICS_FIELD_ICONS, PACKAGE_ICON_OPTIONS } from '@/lib/constants';
+import FormatIcon from './FormatIcon';
 import { cn } from '@/lib/utils';
 import type { BookingDetail, BookingLogisticsEntry, UserProfile } from '@/types/api';
 
@@ -31,7 +32,7 @@ const DETAIL_FIELDS: Array<{ key: DetailFieldKey; label: string; type: 'input' |
   { key: 'equipmentRequired',  label: 'Equipment required',  type: 'textarea' },
 ];
 
-type LocalEntry = Pick<BookingLogisticsEntry, 'value' | 'shareWithBand' | 'shareWithClient'>;
+type LocalEntry = Pick<BookingLogisticsEntry, 'value' | 'shareWithBand' | 'shareWithClient'> & { icon: string };
 type LocalState = Record<TimeFieldKey | DetailFieldKey, LocalEntry>;
 
 function entryFromBooking(
@@ -41,6 +42,7 @@ function entryFromBooking(
   const entry = logistics?.[key];
   return {
     value:           entry?.value ?? '',
+    icon:            entry?.icon ?? '',
     shareWithBand:   entry?.shareWithBand ?? false,
     shareWithClient: entry?.shareWithClient ?? false,
   };
@@ -91,7 +93,12 @@ export default function OnTheDayEditor({ booking, isOpen, onSaved }: Props) {
       for (const key of allFields) {
         const f = fields[key];
         if (f.value) {
-          logistics[key] = { value: f.value, shareWithBand: f.shareWithBand, shareWithClient: f.shareWithClient };
+          logistics[key] = {
+            value: f.value,
+            ...(f.icon && { icon: f.icon }),
+            shareWithBand: f.shareWithBand,
+            shareWithClient: f.shareWithClient,
+          };
         }
       }
       return apiPatch(`/bookings/${booking.id}`, { logistics });
@@ -123,6 +130,11 @@ export default function OnTheDayEditor({ booking, isOpen, onSaved }: Props) {
                   onChange={(e) => setEntry(key, { value: e.target.value })}
                 />
               </FormField>
+              <LogisticsIconPicker
+                value={entry.icon}
+                defaultIcon={LOGISTICS_FIELD_ICONS[key] ?? ''}
+                onChange={(icon) => setEntry(key, { icon })}
+              />
             </div>
           );
         })}
@@ -143,6 +155,11 @@ export default function OnTheDayEditor({ booking, isOpen, onSaved }: Props) {
                   onChange={(v) => setEntry(key, { value: v })}
                 />
               </FormField>
+              <LogisticsIconPicker
+                value={entry.icon}
+                defaultIcon={LOGISTICS_FIELD_ICONS[key] ?? ''}
+                onChange={(icon) => setEntry(key, { icon })}
+              />
             </div>
           );
         })}
@@ -158,6 +175,44 @@ export default function OnTheDayEditor({ booking, isOpen, onSaved }: Props) {
         </Button>
         {mutation.isSuccess && <span className="text-xs text-muted">Saved</span>}
       </div>
+    </div>
+  );
+}
+
+function LogisticsIconPicker({
+  value,
+  defaultIcon,
+  onChange,
+}: {
+  value: string;
+  defaultIcon: string;
+  onChange: (icon: string) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {PACKAGE_ICON_OPTIONS.map((icon) => {
+        const isSelected = icon === value;
+        const isDefault = !value && icon === defaultIcon;
+        return (
+          <button
+            key={icon}
+            type="button"
+            onClick={() => onChange(isSelected ? '' : icon)}
+            aria-label={icon}
+            title={icon}
+            className={cn(
+              'w-8 h-8 flex items-center justify-center rounded border transition-colors',
+              isSelected
+                ? 'border-primary bg-primary/10 text-primary'
+                : isDefault
+                ? 'border-border bg-surface text-foreground'
+                : 'border-border bg-surface text-muted hover:text-foreground',
+            )}
+          >
+            <FormatIcon icon={icon} size={16} />
+          </button>
+        );
+      })}
     </div>
   );
 }
