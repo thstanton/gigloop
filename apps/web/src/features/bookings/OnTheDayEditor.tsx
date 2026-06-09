@@ -4,8 +4,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@clerk/react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { FormField } from '@/components/common/FormField';
@@ -125,7 +123,6 @@ export default function OnTheDayEditor({ booking, isOpen, onSaved }: Props) {
                   onChange={(e) => setEntry(key, { value: e.target.value })}
                 />
               </FormField>
-              <SharingToggles fieldKey={key} entry={entry} onChange={(patch) => setEntry(key, patch)} />
             </div>
           );
         })}
@@ -146,7 +143,6 @@ export default function OnTheDayEditor({ booking, isOpen, onSaved }: Props) {
                   onChange={(v) => setEntry(key, { value: v })}
                 />
               </FormField>
-              <SharingToggles fieldKey={key} entry={entry} onChange={(patch) => setEntry(key, patch)} />
             </div>
           );
         })}
@@ -335,37 +331,3 @@ function DetailInput({
   );
 }
 
-function SharingToggles({
-  fieldKey,
-  entry,
-  onChange,
-}: {
-  fieldKey: string;
-  entry: LocalEntry;
-  onChange: (patch: Partial<LocalEntry>) => void;
-}) {
-  return (
-    <div className="flex gap-6 pl-1">
-      <div className="flex items-center gap-2">
-        <Switch
-          id={`${fieldKey}-band`}
-          checked={entry.shareWithBand}
-          onCheckedChange={(v) => onChange({ shareWithBand: v })}
-        />
-        <Label htmlFor={`${fieldKey}-band`} className="text-sm text-muted-foreground">
-          Share with band
-        </Label>
-      </div>
-      <div className="flex items-center gap-2">
-        <Switch
-          id={`${fieldKey}-client`}
-          checked={entry.shareWithClient}
-          onCheckedChange={(v) => onChange({ shareWithClient: v })}
-        />
-        <Label htmlFor={`${fieldKey}-client`} className="text-sm text-muted-foreground">
-          Share with client
-        </Label>
-      </div>
-    </div>
-  );
-}
