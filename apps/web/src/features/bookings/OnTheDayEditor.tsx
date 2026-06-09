@@ -215,11 +215,9 @@ function LogisticsIconPicker({
           {PACKAGE_ICON_OPTIONS.map((icon) => {
             const isSelected = icon === value;
             const isDefault = !value && icon === defaultIcon;
-            const activeClass = isSelected
-              ? 'border-primary bg-primary/10 text-primary'
-              : isDefault
-              ? 'border-border bg-surface text-foreground'
-              : 'border-border bg-surface text-muted hover:text-foreground';
+            let activeClass = 'border-border bg-surface text-muted hover:text-foreground';
+            if (isSelected) activeClass = 'border-primary bg-primary/10 text-primary';
+            else if (isDefault) activeClass = 'border-border bg-surface text-foreground';
             return (
               <button
                 key={icon}
