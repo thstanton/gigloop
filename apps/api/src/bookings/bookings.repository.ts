@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { BookingStatus } from '@prisma/client';
+import { BookingStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
@@ -130,12 +130,13 @@ export class BookingsRepository {
   }
 
   update(id: string, dto: UpdateBookingDto) {
-    const { date, ...rest } = dto;
+    const { date, logistics, ...rest } = dto;
     return this.prisma.booking.update({
       where: { id },
       data: {
         ...rest,
         ...(date !== undefined ? { date: new Date(date) } : {}),
+        ...(logistics !== undefined ? { logistics: logistics as Prisma.InputJsonValue } : {}),
       },
       include: bookingIncludes,
     });

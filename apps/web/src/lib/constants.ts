@@ -67,3 +67,25 @@ export const PACKAGE_CATEGORY_LABELS: Record<string, string> = {
 export const PACKAGE_CATEGORY_ORDER = [
   'WEDDING', 'CORPORATE', 'PRIVATE', 'RESIDENCY', 'FESTIVAL', 'OUTDOOR', 'FUNCTION', 'OTHER',
 ] as const;
+
+export const LOGISTICS_FIELD_LABELS: Record<string, string> = {
+  arrivalTime:    'Arrival time',
+  soundCheckTime: 'Soundcheck time',
+  finishTime:     'Finish time',
+  dressCode:      'Dress code',
+  performanceSpace: 'Performance space',
+  foodProvided:   'Food provided',
+  greenRoom:      'Green room',
+  equipmentRequired: 'Equipment required',
+};
+
+export const LOGISTICS_FIELD_ICONS: Record<string, string> = {
+  arrivalTime:    'clock',
+  soundCheckTime: 'music',
+  finishTime:     'clock-off',
+  dressCode:      'shirt',
+  performanceSpace: 'map-pin',
+  foodProvided:   'utensils',
+  greenRoom:      'sofa',
+  equipmentRequired: 'package',
+};
