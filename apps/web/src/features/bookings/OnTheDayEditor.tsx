@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ChevronDown, Plus, Search, Trash2, X } from 'lucide-react';
+import { ChevronDown, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@clerk/react';
 import { Input } from '@/components/ui/input';
@@ -18,6 +18,11 @@ import type { BookingDetail, BookingLogisticsEntry, UserProfile } from '@/types/
 type TimeFieldKey = 'arrivalTime' | 'soundCheckTime' | 'finishTime';
 type DetailFieldKey = 'dressCode' | 'performanceSpace' | 'foodProvided' | 'greenRoom' | 'equipmentRequired';
 
+const SYSTEM_KEYS = new Set<string>([
+  'arrivalTime', 'soundCheckTime', 'finishTime',
+  'dressCode', 'performanceSpace', 'foodProvided', 'greenRoom', 'equipmentRequired',
+]);
+
 const TIME_FIELDS: Array<{ key: TimeFieldKey; label: string }> = [
   { key: 'arrivalTime',    label: 'Arrival time' },
   { key: 'soundCheckTime', label: 'Soundcheck time' },
@@ -34,6 +39,16 @@ const DETAIL_FIELDS: Array<{ key: DetailFieldKey; label: string; type: 'input' |
 
 type LocalEntry = Pick<BookingLogisticsEntry, 'value' | 'shareWithBand' | 'shareWithClient'> & { icon: string };
 type LocalState = Record<TimeFieldKey | DetailFieldKey, LocalEntry>;
+
+type CustomFieldLocal = {
+  key: string;
+  label: string;
+  value: string;
+  icon: string;
+  shareWithBand: boolean;
+  shareWithClient: boolean;
+  isEditing: boolean;
+};
 
 function entryFromBooking(
   logistics: BookingDetail['logistics'],
@@ -61,6 +76,56 @@ function buildInitialState(logistics: BookingDetail['logistics']): LocalState {
   };
 }
 
+function buildCustomFields(logistics: BookingDetail['logistics']): CustomFieldLocal[] {
+  if (!logistics) return [];
+  return Object.entries(logistics)
+    .filter(([key]) => !SYSTEM_KEYS.has(key))
+    .map(([key, entry]) => ({
+      key,
+      label: entry.label ?? '',
+      value: entry.value ?? '',
+      icon: entry.icon ?? '',
+      shareWithBand: entry.shareWithBand,
+      shareWithClient: entry.shareWithClient,
+      isEditing: false,
+    }));
+}
+
+function getNextCustomFieldKey(
+  logistics: BookingDetail['logistics'],
+  currentCustomFields: CustomFieldLocal[],
+): string {
+  const existingKeys = new Set([
+    ...Object.keys(logistics ?? {}),
+    ...currentCustomFields.map(f => f.key),
+  ]);
+  let n = 1;
+  while (existingKeys.has(`customField${n}`)) n++;
+  return `customField${n}`;
+}
+
+function toSystemEntry(f: LocalEntry): BookingLogisticsEntry {
+  return { value: f.value, ...(f.icon && { icon: f.icon }), shareWithBand: f.shareWithBand, shareWithClient: f.shareWithClient };
+}
+
+function toCustomEntry(cf: CustomFieldLocal): BookingLogisticsEntry {
+  return { value: cf.value, label: cf.label, ...(cf.icon && { icon: cf.icon }), shareWithBand: cf.shareWithBand, shareWithClient: cf.shareWithClient };
+}
+
+function buildLogisticsPayload(
+  fields: LocalState,
+  customFields: CustomFieldLocal[],
+): Record<string, BookingLogisticsEntry> {
+  const systemKeys = [...TIME_FIELDS.map(f => f.key), ...DETAIL_FIELDS.map(f => f.key)];
+  const systemPairs = systemKeys
+    .filter(key => fields[key].value)
+    .map(key => [key, toSystemEntry(fields[key])] as const);
+  const customPairs = customFields
+    .filter(cf => cf.value || cf.label)
+    .map(cf => [cf.key, toCustomEntry(cf)] as const);
+  return Object.fromEntries([...systemPairs, ...customPairs]);
+}
+
 interface Props {
   booking: BookingDetail;
   isOpen: boolean;
@@ -72,10 +137,14 @@ export default function OnTheDayEditor({ booking, isOpen, onSaved }: Props) {
   const [fields, setFields] = useState<LocalState>(() =>
     buildInitialState(booking.logistics),
   );
+  const [customFields, setCustomFields] = useState<CustomFieldLocal[]>(() =>
+    buildCustomFields(booking.logistics),
+  );
 
   useEffect(() => {
     if (isOpen) {
       setFields(buildInitialState(booking.logistics));
+      setCustomFields(buildCustomFields(booking.logistics));
     }
   }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -83,26 +152,30 @@ export default function OnTheDayEditor({ booking, isOpen, onSaved }: Props) {
     setFields((prev) => ({ ...prev, [key]: { ...prev[key], ...patch } }));
   }
 
+  function addCustomField() {
+    const key = getNextCustomFieldKey(booking.logistics, customFields);
+    setCustomFields(prev => [...prev, {
+      key,
+      label: '',
+      value: '',
+      icon: '',
+      shareWithBand: false,
+      shareWithClient: false,
+      isEditing: true,
+    }]);
+  }
+
+  function updateCustomField(key: string, patch: Partial<CustomFieldLocal>) {
+    setCustomFields(prev => prev.map(f => f.key === key ? { ...f, ...patch } : f));
+  }
+
+  function removeCustomField(key: string) {
+    setCustomFields(prev => prev.filter(f => f.key !== key));
+  }
+
   const mutation = useMutation({
-    mutationFn: () => {
-      const logistics: Record<string, BookingLogisticsEntry> = {};
-      const allFields = [
-        ...TIME_FIELDS.map(f => f.key),
-        ...DETAIL_FIELDS.map(f => f.key),
-      ];
-      for (const key of allFields) {
-        const f = fields[key];
-        if (f.value) {
-          logistics[key] = {
-            value: f.value,
-            ...(f.icon && { icon: f.icon }),
-            shareWithBand: f.shareWithBand,
-            shareWithClient: f.shareWithClient,
-          };
-        }
-      }
-      return apiPatch(`/bookings/${booking.id}`, { logistics });
-    },
+    mutationFn: () =>
+      apiPatch(`/bookings/${booking.id}`, { logistics: buildLogisticsPayload(fields, customFields) }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['booking', booking.id] });
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
@@ -168,6 +241,13 @@ export default function OnTheDayEditor({ booking, isOpen, onSaved }: Props) {
         })}
       </div>
 
+      <CustomFieldsList
+        customFields={customFields}
+        onUpdate={updateCustomField}
+        onRemove={removeCustomField}
+        onAdd={addCustomField}
+      />
+
       {mutation.isError && (
         <p className="mt-4 text-sm text-status-cancelled">Failed to save. Please try again.</p>
       )}
@@ -177,6 +257,134 @@ export default function OnTheDayEditor({ booking, isOpen, onSaved }: Props) {
           {mutation.isPending ? 'Saving…' : 'Save'}
         </Button>
         {mutation.isSuccess && <span className="text-xs text-muted">Saved</span>}
+      </div>
+    </div>
+  );
+}
+
+function CustomFieldsList({
+  customFields,
+  onUpdate,
+  onRemove,
+  onAdd,
+}: {
+  customFields: CustomFieldLocal[];
+  onUpdate: (key: string, patch: Partial<CustomFieldLocal>) => void;
+  onRemove: (key: string) => void;
+  onAdd: () => void;
+}) {
+  return (
+    <div className="mt-5 space-y-3">
+      {customFields.map(cf =>
+        cf.isEditing ? (
+          <CustomFieldEditRow
+            key={cf.key}
+            field={cf}
+            onChange={(patch) => onUpdate(cf.key, patch)}
+            onDone={() => onUpdate(cf.key, { isEditing: false })}
+            onRemove={() => onRemove(cf.key)}
+          />
+        ) : (
+          <CustomFieldCompactRow
+            key={cf.key}
+            field={cf}
+            onEdit={() => onUpdate(cf.key, { isEditing: true })}
+            onRemove={() => onRemove(cf.key)}
+          />
+        )
+      )}
+      <Button type="button" variant="outline" size="sm" onClick={onAdd} className="w-full">
+        <Plus size={14} className="mr-1.5" aria-hidden="true" />
+        Add field
+      </Button>
+    </div>
+  );
+}
+
+function CustomFieldCompactRow({
+  field,
+  onEdit,
+  onRemove,
+}: {
+  field: CustomFieldLocal;
+  onEdit: () => void;
+  onRemove: () => void;
+}) {
+  const iconKey = field.icon || 'star';
+  return (
+    <div className="flex items-center gap-2 border border-border rounded-md px-3 py-2">
+      <span className="text-muted flex-shrink-0">
+        <FormatIcon icon={iconKey} size={16} />
+      </span>
+      <div className="flex-1 min-w-0">
+        <p className="text-xs text-muted truncate">{field.label || 'Untitled field'}</p>
+        <p className="text-sm truncate">{field.value || '—'}</p>
+      </div>
+      <button
+        type="button"
+        onClick={onEdit}
+        aria-label="Edit field"
+        className="text-muted hover:text-foreground transition-colors p-1"
+      >
+        <Pencil size={14} />
+      </button>
+      <button
+        type="button"
+        onClick={onRemove}
+        aria-label="Remove field"
+        className="text-muted hover:text-destructive transition-colors p-1"
+      >
+        <Trash2 size={14} />
+      </button>
+    </div>
+  );
+}
+
+function CustomFieldEditRow({
+  field,
+  onChange,
+  onDone,
+  onRemove,
+}: {
+  field: CustomFieldLocal;
+  onChange: (patch: Partial<CustomFieldLocal>) => void;
+  onDone: () => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div className="border border-border rounded-md p-3 space-y-3">
+      <div className="flex items-center gap-2">
+        <LogisticsIconPicker
+          value={field.icon}
+          defaultIcon="star"
+          onChange={(icon) => onChange({ icon })}
+        />
+        <Input
+          placeholder="Field label"
+          aria-label="Field label"
+          value={field.label}
+          onChange={(e) => onChange({ label: e.target.value })}
+          className="flex-1"
+        />
+      </div>
+      <Input
+        placeholder="Value"
+        aria-label="Field value"
+        value={field.value}
+        onChange={(e) => onChange({ value: e.target.value })}
+      />
+      <div className="flex items-center justify-between pt-1">
+        <button
+          type="button"
+          onClick={onRemove}
+          className="text-xs text-muted hover:text-destructive transition-colors flex items-center gap-1"
+        >
+          <Trash2 size={12} aria-hidden="true" />
+          Remove
+        </button>
+        <Button type="button" size="sm" variant="outline" onClick={onDone}>
+          Done
+        </Button>
       </div>
     </div>
   );
@@ -406,4 +614,3 @@ function DetailInput({
     />
   );
 }
-
