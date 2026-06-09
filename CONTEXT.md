@@ -8,6 +8,8 @@ A CRM for musicians. The central workflow is managing Bookings with Contacts.
 
 **Design principle — template + overrides:** System-provided defaults (seeded [[Package]]s, built-in [[Template]]s, [[UserProfile]] reminder offsets) act as templates. Per-booking configuration is always a copy of that template, editable by the musician without touching the original. Packages are fully user-customisable; further customisation of templates and other user-defined defaults is a P2 concern.
 
+**Design principle — itinerary vs packages:** A [[Set]] serves two separate concerns that must not be conflated. As an *operational* unit it is a time marker in the [[Booking]] itinerary — the musician cares when it happens on the day. As a *commercial* unit it belongs to a [[Package]] that defines what was agreed with the client, feeds into invoice line items, and is presented to the client on the [[Portal]]. The [[ItineraryCard]] view expresses the operational concern (time + label, no package context). The Packages view expresses the commercial concern (sets grouped under their package, with icon and key moments). Mixing the two in one view confuses the hierarchy.
+
 **Design principle — enums for closed lifecycles only:** Use Prisma enums for states that are genuinely exhaustive domain constants (e.g. `BookingStatus`, `InvoiceStatus`). Avoid them for extensible classifier fields (event categories, genres, format types) — store those as validated strings instead. Adding a new value to an extensible enum requires a DB migration and cascading code changes; a constants list requires only a deploy.
 
 ---
