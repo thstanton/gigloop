@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Trash2 } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@clerk/react';
 import { Input } from '@/components/ui/input';
@@ -183,6 +184,8 @@ function DressCodeField({ value, onChange }: { value: string; onChange: (v: stri
   const customOptions = me?.preferences?.customDressCodeOptions ?? [];
   const allOptions = [...new Set([...DRESS_CODE_OPTIONS, ...customOptions])];
 
+  const isCustomSelected = value !== '' && customOptions.includes(value);
+
   const addMutation = useMutation({
     mutationFn: (newOption: string) => {
       const updated = [...new Set([...customOptions, newOption])];
@@ -195,6 +198,17 @@ function DressCodeField({ value, onChange }: { value: string; onChange: (v: stri
     },
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (option: string) => {
+      const updated = customOptions.filter((o) => o !== option);
+      return apiPatch('/me', { preferences: { customDressCodeOptions: updated } });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['me'] });
+      onChange('');
+    },
+  });
+
   function handleAdd() {
     const trimmed = addValue.trim();
     if (!trimmed || allOptions.includes(trimmed)) return;
@@ -203,16 +217,31 @@ function DressCodeField({ value, onChange }: { value: string; onChange: (v: stri
 
   return (
     <div className="space-y-2">
-      <Select value={value} onValueChange={onChange}>
-        <SelectTrigger id="logistics-dressCode" aria-label="Dress code">
-          <SelectValue placeholder="Select…" />
-        </SelectTrigger>
-        <SelectContent>
-          {allOptions.map((opt) => (
-            <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <div className="flex gap-2">
+        <Select value={value} onValueChange={onChange}>
+          <SelectTrigger id="logistics-dressCode" aria-label="Dress code">
+            <SelectValue placeholder="Select…" />
+          </SelectTrigger>
+          <SelectContent>
+            {allOptions.map((opt) => (
+              <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {isCustomSelected && (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() => deleteMutation.mutate(value)}
+            disabled={deleteMutation.isPending}
+            className="h-10 w-10 shrink-0 text-muted-foreground hover:text-destructive"
+            aria-label="Delete custom option"
+          >
+            <Trash2 size={16} />
+          </Button>
+        )}
+      </div>
       <div className="flex gap-2">
         <Input
           placeholder="Add custom option…"
