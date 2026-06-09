@@ -215,6 +215,11 @@ function LogisticsIconPicker({
           {PACKAGE_ICON_OPTIONS.map((icon) => {
             const isSelected = icon === value;
             const isDefault = !value && icon === defaultIcon;
+            const activeClass = isSelected
+              ? 'border-primary bg-primary/10 text-primary'
+              : isDefault
+              ? 'border-border bg-surface text-foreground'
+              : 'border-border bg-surface text-muted hover:text-foreground';
             return (
               <button
                 key={icon}
@@ -222,14 +227,7 @@ function LogisticsIconPicker({
                 onClick={() => { onChange(isSelected ? '' : icon); setOpen(false); }}
                 aria-label={icon}
                 title={icon}
-                className={cn(
-                  'w-8 h-8 flex items-center justify-center rounded border transition-colors',
-                  isSelected
-                    ? 'border-primary bg-primary/10 text-primary'
-                    : isDefault
-                    ? 'border-border bg-surface text-foreground'
-                    : 'border-border bg-surface text-muted hover:text-foreground',
-                )}
+                className={cn('w-8 h-8 flex items-center justify-center rounded border transition-colors', activeClass)}
               >
                 <FormatIcon icon={icon} size={16} />
               </button>
