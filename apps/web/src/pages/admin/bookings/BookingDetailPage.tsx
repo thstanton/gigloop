@@ -4,7 +4,6 @@ import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'reac
 import { ChevronLeft, X, FolderOpen, FileText, Download, MapPin } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import {
   Dialog,
   DialogContent,
@@ -125,11 +124,11 @@ function InlineVenueAdd({ bookingId }: { bookingId: string }) {
           + Add
         </button>
       </div>
-      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetContent side="bottom">
-          <SheetHeader className="mb-4">
-            <SheetTitle>Add venue</SheetTitle>
-          </SheetHeader>
+      <Dialog open={sheetOpen} onOpenChange={setSheetOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add venue</DialogTitle>
+          </DialogHeader>
           <ContactPicker
             value={null}
             onChange={(id) => { if (id) mutation.mutate(id); }}
@@ -142,8 +141,8 @@ function InlineVenueAdd({ bookingId }: { bookingId: string }) {
               Cancel
             </Button>
           </div>
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
