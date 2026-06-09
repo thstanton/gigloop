@@ -25,6 +25,15 @@ export class UserProfileService {
   }
 
   update(userId: string, dto: UpdateUserProfileDto) {
+    if (dto.preferences?.customDressCodeOptions !== undefined) {
+      const raw = dto.preferences.customDressCodeOptions;
+      if (!Array.isArray(raw) || (raw as unknown[]).some((v) => typeof v !== 'string' || !(v as string).trim())) {
+        throw new BadRequestException('customDressCodeOptions must be an array of non-empty strings');
+      }
+      dto.preferences.customDressCodeOptions = [
+        ...new Set((raw as string[]).map((v) => v.trim()).filter(Boolean)),
+      ];
+    }
     return this.repo.updateByUserId(userId, dto);
   }
 

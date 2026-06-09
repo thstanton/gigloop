@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@clerk/react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
@@ -14,9 +15,9 @@ import {
 } from '@/components/ui/select';
 import { FormField } from '@/components/common/FormField';
 import { SubLabel } from '@/components/common/SubLabel';
-import { apiPatch } from '@/lib/api';
+import { apiGet, apiPatch } from '@/lib/api';
 import { DRESS_CODE_OPTIONS } from '@/lib/constants';
-import type { BookingDetail, BookingLogisticsEntry } from '@/types/api';
+import type { BookingDetail, BookingLogisticsEntry, UserProfile } from '@/types/api';
 
 type TimeFieldKey = 'arrivalTime' | 'soundCheckTime' | 'finishTime';
 type DetailFieldKey = 'dressCode' | 'performanceSpace' | 'foodProvided' | 'greenRoom' | 'equipmentRequired';
@@ -168,6 +169,73 @@ export default function OnTheDayEditor({ booking, isOpen, onSaved }: Props) {
   );
 }
 
+function DressCodeField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const { isLoaded } = useAuth();
+  const queryClient = useQueryClient();
+  const [addValue, setAddValue] = useState('');
+
+  const { data: me } = useQuery({
+    queryKey: ['me'],
+    queryFn: () => apiGet<UserProfile>('/me'),
+    enabled: isLoaded,
+  });
+
+  const customOptions = me?.preferences?.customDressCodeOptions ?? [];
+  const allOptions = [...new Set([...DRESS_CODE_OPTIONS, ...customOptions])];
+
+  const addMutation = useMutation({
+    mutationFn: (newOption: string) => {
+      const updated = [...new Set([...customOptions, newOption])];
+      return apiPatch('/me', { preferences: { customDressCodeOptions: updated } });
+    },
+    onSuccess: (_data, newOption) => {
+      queryClient.invalidateQueries({ queryKey: ['me'] });
+      onChange(newOption);
+      setAddValue('');
+    },
+  });
+
+  function handleAdd() {
+    const trimmed = addValue.trim();
+    if (!trimmed || allOptions.includes(trimmed)) return;
+    addMutation.mutate(trimmed);
+  }
+
+  return (
+    <div className="space-y-2">
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger id="logistics-dressCode" aria-label="Dress code">
+          <SelectValue placeholder="Select…" />
+        </SelectTrigger>
+        <SelectContent>
+          {allOptions.map((opt) => (
+            <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <div className="flex gap-2">
+        <Input
+          placeholder="Add custom option…"
+          value={addValue}
+          onChange={(e) => setAddValue(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAdd(); } }}
+          className="h-8 text-sm"
+        />
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={handleAdd}
+          disabled={!addValue.trim() || addMutation.isPending}
+          className="h-8 shrink-0"
+        >
+          + Add
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function DetailInput({
   fieldKey,
   label,
@@ -182,18 +250,7 @@ function DetailInput({
   onChange: (v: string) => void;
 }) {
   if (type === 'select') {
-    return (
-      <Select value={value} onValueChange={onChange}>
-        <SelectTrigger id={`logistics-${fieldKey}`} aria-label={label}>
-          <SelectValue placeholder="Select…" />
-        </SelectTrigger>
-        <SelectContent>
-          {DRESS_CODE_OPTIONS.map((opt) => (
-            <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    );
+    return <DressCodeField value={value} onChange={onChange} />;
   }
   if (type === 'textarea') {
     return (
