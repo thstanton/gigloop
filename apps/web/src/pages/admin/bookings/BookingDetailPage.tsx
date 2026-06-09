@@ -45,6 +45,8 @@ import ChecklistSection from '@/features/bookings/ChecklistSection';
 import BookingStatusDropdown from '@/features/bookings/BookingStatusDropdown';
 import InlineNotes from '@/features/bookings/InlineNotes';
 import InlineFeeAdd from '@/features/bookings/InlineFeeAdd';
+import ItineraryCard from '@/features/bookings/ItineraryCard';
+import PerformanceSection from '@/features/bookings/PerformanceSection';
 import { toast } from '@/lib/hooks/use-toast';
 import { apiGet, apiPatch, apiPost, apiPostVoid, apiDelete } from '@/lib/api';
 import {
@@ -626,9 +628,11 @@ export default function BookingDetailPage() {
           <section>
             <SectionHeader label="For the day" />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-              <Card title="Itinerary">
-                <p className="text-sm text-muted">No itinerary yet.</p>
-              </Card>
+              <ItineraryCard
+                logistics={booking.logistics}
+                sets={booking.sets}
+                onEdit={() => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('edit', 'true'); next.set('section', 'onTheDay'); return next; })}
+              />
               <Card title="Details">
                 <p className="text-sm text-muted">No details yet.</p>
               </Card>
@@ -651,6 +655,27 @@ export default function BookingDetailPage() {
             ) : (
               <InlineVenueAdd bookingId={booking.id} />
             )}
+          </section>
+
+          {/* 3. Packages */}
+          <section>
+            <SectionHeader label="Packages" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <PerformanceSection
+                booking={booking}
+                onEdit={() => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('edit', 'true'); next.set('section', 'packages'); return next; })}
+              />
+              <MusicFormSection
+                booking={booking}
+                documents={documents}
+                config={musicFormConfig ?? null}
+                isLoading={musicFormConfigLoading}
+                response={musicFormResponse ?? null}
+                onUpdateConfig={() => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('edit', 'true'); next.set('section', 'musicForm'); return next; })}
+                onViewResponse={() => setViewingMusicFormResponse(true)}
+                onEdit={() => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('edit', 'true'); next.set('section', 'musicForm'); return next; })}
+              />
+            </div>
           </section>
 
         </div>
@@ -779,23 +804,6 @@ export default function BookingDetailPage() {
               onVoid={(inv) => voidInvoiceMutation.mutate(inv.id)}
             />
           )}
-
-          {/* Music Form */}
-          <MusicFormSection
-            booking={booking}
-            documents={documents}
-            config={musicFormConfig ?? null}
-            isLoading={musicFormConfigLoading}
-            response={musicFormResponse ?? null}
-            onUpdateConfig={() => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('edit', 'true'); next.set('section', 'musicForm'); return next; })}
-            onViewResponse={() => setViewingMusicFormResponse(true)}
-            onEdit={() => setSearchParams((prev) => {
-              const next = new URLSearchParams(prev);
-              next.set('edit', 'true');
-              next.set('section', 'musicForm');
-              return next;
-            })}
-          />
 
           {/* Documents */}
           <Card title="Documents">
