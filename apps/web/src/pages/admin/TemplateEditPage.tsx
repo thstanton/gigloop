@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import DOMPurify from 'dompurify';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { PageHeader } from '@/components/common/PageHeader';
 import { useEditor, EditorContent } from '@tiptap/react';
@@ -296,7 +297,7 @@ function TemplateEditor({ template }: { template: Template }) {
         {previewMode ? (
           <div
             className="tiptap-content text-sm text-foreground min-h-[240px] px-4 py-3"
-            dangerouslySetInnerHTML={{ __html: applyPreview(editor?.getHTML() ?? '') }}
+            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(applyPreview(editor?.getHTML() ?? '')) }}
           />
         ) : (
           <>

@@ -222,7 +222,7 @@ export class PortalService {
     if (!publicProfile) throw new NotFoundException('Booking not found');
 
     const signedAt = new Date();
-    const ip = this.extractIp(req);
+    const ip = req.ip ?? 'unknown';
 
     await this.documents.generateAndStoreSignedContractPdf(
       booking.userId,
@@ -276,6 +276,8 @@ export class PortalService {
     if (!data) throw new NotFoundException('Booking not found');
     if (!data.musicFormConfig) throw new NotFoundException('Music form not found');
 
+    await this.assertSongIdsOwned(data.userId, dto);
+
     const submittedAt = new Date();
     await this.musicFormRepo.upsertMusicFormResponse(
       data.id,
@@ -288,6 +290,18 @@ export class PortalService {
     await this.evaluator.evaluate(data.id).catch(() => {});
 
     this.generateSongListAndNotify(data, dto, submittedAt).catch(() => {});
+  }
+
+  private async assertSongIdsOwned(userId: string, dto: SubmitMusicFormDto) {
+    const allIds = [
+      ...dto.selectedSongIds,
+      ...dto.specialRequests.map((r) => r.songId).filter((id): id is string => !!id),
+    ];
+    if (!allIds.length) return;
+    const owned = await this.songsRepo.findByIds(userId, allIds);
+    const ownedIds = new Set(owned.map((s) => s.id));
+    const unknown = allIds.filter((id) => !ownedIds.has(id));
+    if (unknown.length > 0) throw new BadRequestException('Unknown song IDs submitted');
   }
 
   private async generateSongListAndNotify(
@@ -505,11 +519,4 @@ export class PortalService {
       throw new BadRequestException('Contract must be in SENT status to sign');
   }
 
-  private extractIp(req: Request): string {
-    const forwarded = req.headers['x-forwarded-for'];
-    if (forwarded) {
-      return (Array.isArray(forwarded) ? forwarded[0] : forwarded).split(',')[0].trim();
-    }
-    return req.socket?.remoteAddress ?? 'unknown';
-  }
 }

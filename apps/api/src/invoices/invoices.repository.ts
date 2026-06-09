@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
@@ -117,7 +117,7 @@ export class InvoicesRepository {
       });
 
       const profile = await tx.userProfile.findUnique({ where: { userId } });
-      if (!profile) throw new Error('User profile not found');
+      if (!profile) throw new NotFoundException('User profile not found');
 
       const prefs = (profile.preferences as Record<string, unknown>) ?? {};
       const { invoiceNumber, nextSeq, nextYear } = allocate(
@@ -155,7 +155,7 @@ export class InvoicesRepository {
     const currentYear = new Date().getFullYear();
     return this.prisma.$transaction(async (tx) => {
       const profile = await tx.userProfile.findUnique({ where: { userId } });
-      if (!profile) throw new Error('User profile not found');
+      if (!profile) throw new NotFoundException('User profile not found');
 
       const prefs = (profile.preferences as Record<string, unknown>) ?? {};
       const { invoiceNumber, nextSeq, nextYear } = allocate(
