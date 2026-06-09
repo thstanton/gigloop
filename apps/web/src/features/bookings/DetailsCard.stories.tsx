@@ -63,6 +63,22 @@ export const Partial: Story = {
   args: { logistics: partialFields },
 };
 
+export const WithCustomFields: Story = {
+  args: {
+    logistics: {
+      dressCode: entry('Black tie'),
+      customField1: { value: 'Stage width 6m', label: 'Stage dimensions', shareWithBand: true, shareWithClient: false },
+      customField2: { value: 'Parking bay 12', label: 'Parking', icon: 'briefcase', shareWithBand: false, shareWithClient: false },
+    },
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Dress code')).toBeVisible();
+    await expect(canvas.getByText('Stage dimensions')).toBeVisible();
+    await expect(canvas.getByText('Stage width 6m')).toBeVisible();
+    await expect(canvas.getByText('Parking')).toBeVisible();
+  },
+};
+
 export const Empty: Story = {
   args: { logistics: null },
 };

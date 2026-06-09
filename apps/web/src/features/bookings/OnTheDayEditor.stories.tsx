@@ -102,3 +102,35 @@ export const SaveFlow: Story = {
     await expect(canvas.getByText('Saved')).toBeVisible();
   },
 };
+
+export const AddCustomField: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: 'Add field' }));
+    const labelInput = await canvas.findByLabelText('Field label');
+    await expect(labelInput).toBeVisible();
+    await userEvent.type(labelInput, 'Stage width');
+    const valueInput = canvas.getByLabelText('Field value');
+    await userEvent.type(valueInput, '6m');
+    await userEvent.click(canvas.getByRole('button', { name: 'Done' }));
+    await expect(canvas.getByText('Stage width')).toBeVisible();
+    await expect(canvas.getByText('6m')).toBeVisible();
+  },
+};
+
+export const WithExistingCustomFields: Story = {
+  args: {
+    booking: {
+      ...baseBooking,
+      logistics: {
+        dressCode: { value: 'Black Tie', shareWithBand: false, shareWithClient: true },
+        customField1: { value: 'Stage width 6m', label: 'Stage dimensions', shareWithBand: true, shareWithClient: false },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText('Stage dimensions')).toBeVisible();
+    await expect(canvas.getByText('6m', { exact: false })).toBeVisible();
+  },
+};
