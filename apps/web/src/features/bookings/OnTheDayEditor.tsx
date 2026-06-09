@@ -119,8 +119,13 @@ export default function OnTheDayEditor({ booking, isOpen, onSaved }: Props) {
         {TIME_FIELDS.map(({ key, label }) => {
           const entry = fields[key];
           return (
-            <div key={key} className="space-y-2">
-              <FormField label={label}>
+            <FormField key={key} label={label}>
+              <div className="flex items-center gap-2">
+                <LogisticsIconPicker
+                  value={entry.icon}
+                  defaultIcon={LOGISTICS_FIELD_ICONS[key] ?? ''}
+                  onChange={(icon) => setEntry(key, { icon })}
+                />
                 <Input
                   id={`logistics-${key}`}
                   aria-label={label}
@@ -128,14 +133,10 @@ export default function OnTheDayEditor({ booking, isOpen, onSaved }: Props) {
                   pattern="^([01]\d|2[0-3]):[0-5]\d$"
                   value={entry.value}
                   onChange={(e) => setEntry(key, { value: e.target.value })}
+                  className="flex-1"
                 />
-              </FormField>
-              <LogisticsIconPicker
-                value={entry.icon}
-                defaultIcon={LOGISTICS_FIELD_ICONS[key] ?? ''}
-                onChange={(icon) => setEntry(key, { icon })}
-              />
-            </div>
+              </div>
+            </FormField>
           );
         })}
       </div>
@@ -145,22 +146,24 @@ export default function OnTheDayEditor({ booking, isOpen, onSaved }: Props) {
         {DETAIL_FIELDS.map(({ key, label, type }) => {
           const entry = fields[key];
           return (
-            <div key={key} className="space-y-2">
-              <FormField label={label}>
-                <DetailInput
-                  fieldKey={key}
-                  label={label}
-                  type={type}
-                  value={entry.value}
-                  onChange={(v) => setEntry(key, { value: v })}
+            <FormField key={key} label={label}>
+              <div className={cn('flex gap-2', type === 'textarea' ? 'items-start' : 'items-center')}>
+                <LogisticsIconPicker
+                  value={entry.icon}
+                  defaultIcon={LOGISTICS_FIELD_ICONS[key] ?? ''}
+                  onChange={(icon) => setEntry(key, { icon })}
                 />
-              </FormField>
-              <LogisticsIconPicker
-                value={entry.icon}
-                defaultIcon={LOGISTICS_FIELD_ICONS[key] ?? ''}
-                onChange={(icon) => setEntry(key, { icon })}
-              />
-            </div>
+                <div className="flex-1 min-w-0">
+                  <DetailInput
+                    fieldKey={key}
+                    label={label}
+                    type={type}
+                    value={entry.value}
+                    onChange={(v) => setEntry(key, { value: v })}
+                  />
+                </div>
+              </div>
+            </FormField>
           );
         })}
       </div>
