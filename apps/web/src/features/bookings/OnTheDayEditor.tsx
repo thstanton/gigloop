@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Trash2 } from 'lucide-react';
+import { ChevronDown, Plus, Search, Trash2, X } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@clerk/react';
 import { Input } from '@/components/ui/input';
@@ -7,18 +7,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { FormField } from '@/components/common/FormField';
 import { SubLabel } from '@/components/common/SubLabel';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { apiGet, apiPatch } from '@/lib/api';
 import { DRESS_CODE_OPTIONS } from '@/lib/constants';
+import { cn } from '@/lib/utils';
 import type { BookingDetail, BookingLogisticsEntry, UserProfile } from '@/types/api';
 
 type TimeFieldKey = 'arrivalTime' | 'soundCheckTime' | 'finishTime';
@@ -174,7 +169,8 @@ export default function OnTheDayEditor({ booking, isOpen, onSaved }: Props) {
 function DressCodeField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const { isLoaded } = useAuth();
   const queryClient = useQueryClient();
-  const [addValue, setAddValue] = useState('');
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
 
   const { data: me } = useQuery({
     queryKey: ['me'],
@@ -184,8 +180,12 @@ function DressCodeField({ value, onChange }: { value: string; onChange: (v: stri
 
   const customOptions = me?.preferences?.customDressCodeOptions ?? [];
   const allOptions = [...new Set([...DRESS_CODE_OPTIONS, ...customOptions])];
-
   const isCustomSelected = value !== '' && customOptions.includes(value);
+
+  const filtered = search
+    ? allOptions.filter((o) => o.toLowerCase().includes(search.toLowerCase()))
+    : allOptions;
+  const hasExactMatch = allOptions.some((o) => o.toLowerCase() === search.toLowerCase());
 
   const addMutation = useMutation({
     mutationFn: (newOption: string) => {
@@ -195,7 +195,8 @@ function DressCodeField({ value, onChange }: { value: string; onChange: (v: stri
     onSuccess: (_data, newOption) => {
       queryClient.invalidateQueries({ queryKey: ['me'] });
       onChange(newOption);
-      setAddValue('');
+      setOpen(false);
+      setSearch('');
     },
   });
 
@@ -210,65 +211,89 @@ function DressCodeField({ value, onChange }: { value: string; onChange: (v: stri
     },
   });
 
-  function handleAdd() {
-    const trimmed = addValue.trim();
-    if (!trimmed || allOptions.includes(trimmed)) return;
-    addMutation.mutate(trimmed);
-  }
-
   return (
-    <div className="space-y-2">
-      <div className="flex gap-2">
-        <Select value={value} onValueChange={onChange}>
-          <SelectTrigger id="logistics-dressCode" aria-label="Dress code">
-            <SelectValue placeholder="Select…" />
-          </SelectTrigger>
-          <SelectContent>
-            {allOptions.map((opt) => (
-              <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+    <div className="flex gap-2">
+      <Popover open={open} onOpenChange={(next) => { setOpen(next); if (!next) setSearch(''); }}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            role="combobox"
+            aria-expanded={open}
+            aria-label="Dress code"
+            id="logistics-dressCode"
+            className="w-full flex items-center justify-between rounded-md border border-border bg-background px-3 h-10 text-sm hover:border-foreground/30 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
+          >
+            <span className={cn('truncate', value ? 'text-foreground' : 'text-muted')}>
+              {value || 'Select…'}
+            </span>
+            {value ? (
+              <X size={14} className="text-muted flex-shrink-0 ml-2 hover:text-foreground transition-colors"
+                onClick={(e) => { e.stopPropagation(); onChange(''); }} aria-hidden="true" />
+            ) : (
+              <ChevronDown size={14} className="text-muted flex-shrink-0 ml-2" aria-hidden="true" />
+            )}
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="start" sideOffset={4} style={{ width: 'var(--radix-popover-trigger-width)' }} className="p-0">
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
+            <Search size={14} className="text-muted flex-shrink-0" aria-hidden="true" />
+            <input
+              autoFocus
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search or add new…"
+              className="flex-1 text-sm bg-transparent outline-none text-foreground placeholder:text-muted"
+            />
+          </div>
+          <div className="max-h-52 overflow-y-auto">
+            {filtered.map((opt) => (
+              <button
+                key={opt}
+                type="button"
+                onClick={() => { onChange(opt); setOpen(false); setSearch(''); }}
+                className={cn(
+                  'w-full text-left px-3 py-2.5 text-sm hover:bg-accent transition-colors',
+                  opt === value && 'font-medium text-primary bg-accent',
+                )}
+              >
+                {opt}
+              </button>
             ))}
-          </SelectContent>
-        </Select>
-        {isCustomSelected && (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => deleteMutation.mutate(value)}
-                  disabled={deleteMutation.isPending}
-                  className="h-10 w-10 shrink-0 text-muted-foreground hover:text-destructive"
-                  aria-label="Delete custom option"
-                >
-                  <Trash2 size={16} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Remove custom option</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        )}
-      </div>
-      <div className="flex gap-2">
-        <Input
-          placeholder="Add custom option…"
-          value={addValue}
-          onChange={(e) => setAddValue(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAdd(); } }}
-          className="h-8 text-sm"
-        />
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          onClick={handleAdd}
-          disabled={!addValue.trim() || addMutation.isPending}
-          className="h-8 shrink-0"
-        >
-          + Add
-        </Button>
-      </div>
+            {search && !hasExactMatch && (
+              <button
+                type="button"
+                onClick={() => addMutation.mutate(search.trim())}
+                disabled={addMutation.isPending}
+                className="w-full text-left px-3 py-2.5 flex items-center gap-2 text-primary hover:bg-accent transition-colors border-t border-border text-sm"
+              >
+                <Plus size={14} className="flex-shrink-0" aria-hidden="true" />
+                Add "{search.trim()}"
+              </button>
+            )}
+          </div>
+        </PopoverContent>
+      </Popover>
+
+      {isCustomSelected && (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => deleteMutation.mutate(value)}
+                disabled={deleteMutation.isPending}
+                className="h-10 w-10 shrink-0 text-muted-foreground hover:text-destructive"
+                aria-label="Delete custom option"
+              >
+                <Trash2 size={16} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Remove custom option</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
     </div>
   );
 }
