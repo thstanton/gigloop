@@ -188,32 +188,53 @@ function LogisticsIconPicker({
   defaultIcon: string;
   onChange: (icon: string) => void;
 }) {
+  const [open, setOpen] = useState(false);
+  const effectiveIcon = value || defaultIcon;
+
   return (
-    <div className="flex flex-wrap gap-1.5">
-      {PACKAGE_ICON_OPTIONS.map((icon) => {
-        const isSelected = icon === value;
-        const isDefault = !value && icon === defaultIcon;
-        return (
-          <button
-            key={icon}
-            type="button"
-            onClick={() => onChange(isSelected ? '' : icon)}
-            aria-label={icon}
-            title={icon}
-            className={cn(
-              'w-8 h-8 flex items-center justify-center rounded border transition-colors',
-              isSelected
-                ? 'border-primary bg-primary/10 text-primary'
-                : isDefault
-                ? 'border-border bg-surface text-foreground'
-                : 'border-border bg-surface text-muted hover:text-foreground',
-            )}
-          >
-            <FormatIcon icon={icon} size={16} />
-          </button>
-        );
-      })}
-    </div>
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label="Change icon"
+          className={cn(
+            'w-8 h-8 flex items-center justify-center rounded border transition-colors',
+            value
+              ? 'border-primary bg-primary/10 text-primary'
+              : 'border-border bg-surface text-muted hover:text-foreground',
+          )}
+        >
+          <FormatIcon icon={effectiveIcon} size={16} />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" sideOffset={4} className="w-64 p-3">
+        <div className="flex flex-wrap gap-1.5">
+          {PACKAGE_ICON_OPTIONS.map((icon) => {
+            const isSelected = icon === value;
+            const isDefault = !value && icon === defaultIcon;
+            return (
+              <button
+                key={icon}
+                type="button"
+                onClick={() => { onChange(isSelected ? '' : icon); setOpen(false); }}
+                aria-label={icon}
+                title={icon}
+                className={cn(
+                  'w-8 h-8 flex items-center justify-center rounded border transition-colors',
+                  isSelected
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : isDefault
+                    ? 'border-border bg-surface text-foreground'
+                    : 'border-border bg-surface text-muted hover:text-foreground',
+                )}
+              >
+                <FormatIcon icon={icon} size={16} />
+              </button>
+            );
+          })}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 
