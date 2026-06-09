@@ -19,10 +19,10 @@ const allFields: Record<string, BookingLogisticsEntry> = {
 };
 
 const allFieldsWithCustomIcons: Record<string, BookingLogisticsEntry> = {
-  dressCode: entry('Black tie', 'star'),
-  performanceSpace: entry('Grand ballroom, raised stage', 'briefcase'),
+  dressCode: entry('Black tie', 'shirt'),
+  performanceSpace: entry('Grand ballroom, raised stage', 'mic-2'),
   foodProvided: entry('Full dinner provided', 'utensils'),
-  greenRoom: entry('Room 12 beside the stage', 'users'),
+  greenRoom: entry('Room 12 beside the stage', 'sofa'),
   equipmentRequired: entry('PA system and two XLR inputs', 'volume-2'),
 };
 

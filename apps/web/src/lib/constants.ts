@@ -1,7 +1,7 @@
 import {
   Music, Mic2, Guitar, Piano, Drum, Church, Cake, Wine, Star, Heart,
   GlassWater, Utensils, Moon, Briefcase, Music2, Sparkles, Radio, Headphones,
-  Volume2, Users, Clock, type LucideIcon,
+  Volume2, Users, Clock, Shirt, Sofa, type LucideIcon,
 } from 'lucide-react';
 import type { BookingStatus, EventType, SongGenre } from '@/types/api';
 
@@ -106,6 +106,8 @@ export const PACKAGE_ICON_MAP: Record<string, LucideIcon> = {
   headphones: Headphones,
   'volume-2': Volume2,
   users: Users,
+  shirt: Shirt,
+  sofa: Sofa,
 };
 
 export const PACKAGE_ICON_OPTIONS = Object.keys(PACKAGE_ICON_MAP);
@@ -114,10 +116,10 @@ export const LOGISTICS_FIELD_ICONS: Record<string, string> = {
   arrivalTime:       'clock',
   soundCheckTime:    'music',
   finishTime:        'moon',
-  dressCode:         'star',
-  performanceSpace:  'briefcase',
+  dressCode:         'shirt',
+  performanceSpace:  'mic-2',
   foodProvided:      'utensils',
-  greenRoom:         'users',
+  greenRoom:         'sofa',
   equipmentRequired: 'volume-2',
 };
 
