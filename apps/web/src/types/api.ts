@@ -620,6 +620,7 @@ export interface UserPreferences {
   checklistDefaults: ChecklistDefaultItem[];
   defaultBookingStatus?: 'ENQUIRY' | 'PROVISIONAL' | 'CONFIRMED';
   invoiceNumberFormat?: InvoiceNumberFormat;
+  customDressCodeOptions?: string[];
 }
 
 export interface UserProfile {

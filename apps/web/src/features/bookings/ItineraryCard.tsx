@@ -36,6 +36,11 @@ function buildRows(
   return rows;
 }
 
+function setLabel(set: PerformanceSet): string {
+  const dur = formatDuration(set.duration);
+  return set.label ? `${set.label} (${dur})` : dur;
+}
+
 export default function ItineraryCard({ logistics, sets, onEdit }: ItineraryCardProps) {
   const rows = buildRows(logistics, sets);
 
@@ -59,16 +64,18 @@ export default function ItineraryCard({ logistics, sets, onEdit }: ItineraryCard
         <div>
           {rows.map((row, i) => {
             const showBorder = !!rows[i + 1] && rows[i + 1].group !== row.group;
+            const timeCol = row.kind === 'time' ? row.time : (row.set.startTime ?? formatDuration(row.set.duration));
+            const labelCol = row.kind === 'time' ? row.label : setLabel(row.set);
             return (
               <div
                 key={row.rowKey}
                 className={`flex items-center gap-3 py-1.5${showBorder ? ' border-b border-border' : ''}`}
               >
                 <span className="w-14 flex-shrink-0 text-sm font-medium tabular-nums text-foreground">
-                  {row.kind === 'time' ? row.time : (row.set.startTime ?? formatDuration(row.set.duration))}
+                  {timeCol}
                 </span>
                 <span className="text-sm text-foreground">
-                  {row.kind === 'time' ? row.label : (row.set.label ?? formatDuration(row.set.duration))}
+                  {labelCol}
                 </span>
               </div>
             );

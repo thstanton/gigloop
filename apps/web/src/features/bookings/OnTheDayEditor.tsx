@@ -1,22 +1,18 @@
 import { useEffect, useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { ChevronDown, Plus, Search, Trash2, X } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@clerk/react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { FormField } from '@/components/common/FormField';
 import { SubLabel } from '@/components/common/SubLabel';
-import { apiPatch } from '@/lib/api';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { apiGet, apiPatch } from '@/lib/api';
 import { DRESS_CODE_OPTIONS } from '@/lib/constants';
-import type { BookingDetail, BookingLogisticsEntry } from '@/types/api';
+import { cn } from '@/lib/utils';
+import type { BookingDetail, BookingLogisticsEntry, UserProfile } from '@/types/api';
 
 type TimeFieldKey = 'arrivalTime' | 'soundCheckTime' | 'finishTime';
 type DetailFieldKey = 'dressCode' | 'performanceSpace' | 'foodProvided' | 'greenRoom' | 'equipmentRequired';
@@ -127,7 +123,6 @@ export default function OnTheDayEditor({ booking, isOpen, onSaved }: Props) {
                   onChange={(e) => setEntry(key, { value: e.target.value })}
                 />
               </FormField>
-              <SharingToggles fieldKey={key} entry={entry} onChange={(patch) => setEntry(key, patch)} />
             </div>
           );
         })}
@@ -148,7 +143,6 @@ export default function OnTheDayEditor({ booking, isOpen, onSaved }: Props) {
                   onChange={(v) => setEntry(key, { value: v })}
                 />
               </FormField>
-              <SharingToggles fieldKey={key} entry={entry} onChange={(patch) => setEntry(key, patch)} />
             </div>
           );
         })}
@@ -168,6 +162,138 @@ export default function OnTheDayEditor({ booking, isOpen, onSaved }: Props) {
   );
 }
 
+function DressCodeField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const { isLoaded } = useAuth();
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+
+  const { data: me } = useQuery({
+    queryKey: ['me'],
+    queryFn: () => apiGet<UserProfile>('/me'),
+    enabled: isLoaded,
+  });
+
+  const customOptions = me?.preferences?.customDressCodeOptions ?? [];
+  const allOptions = [...new Set([...DRESS_CODE_OPTIONS, ...customOptions])];
+  const isCustomSelected = value !== '' && customOptions.includes(value);
+
+  const filtered = search
+    ? allOptions.filter((o) => o.toLowerCase().includes(search.toLowerCase()))
+    : allOptions;
+  const hasExactMatch = allOptions.some((o) => o.toLowerCase() === search.toLowerCase());
+
+  const addMutation = useMutation({
+    mutationFn: (newOption: string) => {
+      const updated = [...new Set([...customOptions, newOption])];
+      return apiPatch('/me', { preferences: { customDressCodeOptions: updated } });
+    },
+    onSuccess: (_data, newOption) => {
+      queryClient.invalidateQueries({ queryKey: ['me'] });
+      onChange(newOption);
+      setOpen(false);
+      setSearch('');
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (option: string) => {
+      const updated = customOptions.filter((o) => o !== option);
+      return apiPatch('/me', { preferences: { customDressCodeOptions: updated } });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['me'] });
+      onChange('');
+    },
+  });
+
+  return (
+    <div className="flex gap-2">
+      <Popover open={open} onOpenChange={(next) => { setOpen(next); if (!next) setSearch(''); }}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            role="combobox"
+            aria-expanded={open}
+            aria-label="Dress code"
+            id="logistics-dressCode"
+            className="w-full flex items-center justify-between rounded-md border border-border bg-background px-3 h-10 text-sm hover:border-foreground/30 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
+          >
+            <span className={cn('truncate', value ? 'text-foreground' : 'text-muted')}>
+              {value || 'Select…'}
+            </span>
+            {value ? (
+              <X size={14} className="text-muted flex-shrink-0 ml-2 hover:text-foreground transition-colors"
+                onClick={(e) => { e.stopPropagation(); onChange(''); }} aria-hidden="true" />
+            ) : (
+              <ChevronDown size={14} className="text-muted flex-shrink-0 ml-2" aria-hidden="true" />
+            )}
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="start" sideOffset={4} style={{ width: 'var(--radix-popover-trigger-width)' }} className="p-0">
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
+            <Search size={14} className="text-muted flex-shrink-0" aria-hidden="true" />
+            <input
+              autoFocus
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search or add new…"
+              className="flex-1 text-sm bg-transparent outline-none text-foreground placeholder:text-muted"
+            />
+          </div>
+          <div className="max-h-52 overflow-y-auto">
+            {filtered.map((opt) => (
+              <button
+                key={opt}
+                type="button"
+                onClick={() => { onChange(opt); setOpen(false); setSearch(''); }}
+                className={cn(
+                  'w-full text-left px-3 py-2.5 text-sm hover:bg-accent transition-colors',
+                  opt === value && 'font-medium text-primary bg-accent',
+                )}
+              >
+                {opt}
+              </button>
+            ))}
+            {search && !hasExactMatch && (
+              <button
+                type="button"
+                onClick={() => addMutation.mutate(search.trim())}
+                disabled={addMutation.isPending}
+                className="w-full text-left px-3 py-2.5 flex items-center gap-2 text-primary hover:bg-accent transition-colors border-t border-border text-sm"
+              >
+                <Plus size={14} className="flex-shrink-0" aria-hidden="true" />
+                Add "{search.trim()}"
+              </button>
+            )}
+          </div>
+        </PopoverContent>
+      </Popover>
+
+      {isCustomSelected && (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => deleteMutation.mutate(value)}
+                disabled={deleteMutation.isPending}
+                className="h-10 w-10 shrink-0 text-muted-foreground hover:text-destructive"
+                aria-label="Delete custom option"
+              >
+                <Trash2 size={16} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Remove custom option</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
+    </div>
+  );
+}
+
 function DetailInput({
   fieldKey,
   label,
@@ -182,18 +308,7 @@ function DetailInput({
   onChange: (v: string) => void;
 }) {
   if (type === 'select') {
-    return (
-      <Select value={value} onValueChange={onChange}>
-        <SelectTrigger id={`logistics-${fieldKey}`} aria-label={label}>
-          <SelectValue placeholder="Select…" />
-        </SelectTrigger>
-        <SelectContent>
-          {DRESS_CODE_OPTIONS.map((opt) => (
-            <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    );
+    return <DressCodeField value={value} onChange={onChange} />;
   }
   if (type === 'textarea') {
     return (
@@ -216,37 +331,3 @@ function DetailInput({
   );
 }
 
-function SharingToggles({
-  fieldKey,
-  entry,
-  onChange,
-}: {
-  fieldKey: string;
-  entry: LocalEntry;
-  onChange: (patch: Partial<LocalEntry>) => void;
-}) {
-  return (
-    <div className="flex gap-6 pl-1">
-      <div className="flex items-center gap-2">
-        <Switch
-          id={`${fieldKey}-band`}
-          checked={entry.shareWithBand}
-          onCheckedChange={(v) => onChange({ shareWithBand: v })}
-        />
-        <Label htmlFor={`${fieldKey}-band`} className="text-sm text-muted-foreground">
-          Share with band
-        </Label>
-      </div>
-      <div className="flex items-center gap-2">
-        <Switch
-          id={`${fieldKey}-client`}
-          checked={entry.shareWithClient}
-          onCheckedChange={(v) => onChange({ shareWithClient: v })}
-        />
-        <Label htmlFor={`${fieldKey}-client`} className="text-sm text-muted-foreground">
-          Share with client
-        </Label>
-      </div>
-    </div>
-  );
-}

@@ -19,11 +19,17 @@ const baseBooking: BookingDetail = {
 };
 
 const patchHandler = http.patch('/api/bookings/bd1', () => HttpResponse.json({ ...baseBooking }));
+const meHandler = http.get('/api/me', () => HttpResponse.json({
+  preferences: { customDressCodeOptions: ['Lounge Suit'] },
+}));
+const mePatchHandler = http.patch('/api/me', () => HttpResponse.json({
+  preferences: { customDressCodeOptions: ['Lounge Suit', 'Beach Formal'] },
+}));
 
 const meta = {
   component: OnTheDayEditor,
   tags: ['ai-generated'],
-  parameters: { msw: { handlers: [patchHandler] } },
+  parameters: { msw: { handlers: [patchHandler, meHandler, mePatchHandler] } },
   args: {
     booking: baseBooking,
     isOpen: true,
@@ -41,8 +47,20 @@ export const Empty: Story = {
     await expect(canvas.getByLabelText('Arrival time')).toBeVisible();
     await expect(canvas.getByLabelText('Soundcheck time')).toBeVisible();
     await expect(canvas.getByLabelText('Finish time')).toBeVisible();
+    await expect(canvas.getByRole('combobox', { name: 'Dress code' })).toBeVisible();
     await expect(canvas.getByLabelText('Performance space')).toBeVisible();
     await expect(canvas.getByLabelText('Equipment required')).toBeVisible();
+  },
+};
+
+export const AddCustomDressCode: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('combobox', { name: 'Dress code' }));
+    const body = within(document.body);
+    const searchInput = await body.findByPlaceholderText('Search or add new…');
+    await userEvent.type(searchInput, 'Beach Formal');
+    await userEvent.click(body.getByText('Add "Beach Formal"'));
   },
 };
 

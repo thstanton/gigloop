@@ -39,7 +39,7 @@ export const FullTimeline: Story = {
     await expect(canvas.getByText('14:00')).toBeVisible();
     await expect(canvas.getByText('15:00')).toBeVisible();
     await expect(canvas.getByText('23:00')).toBeVisible();
-    await expect(canvas.getByText('Ceremony')).toBeVisible();
+    await expect(canvas.getByText('Ceremony (45 min)')).toBeVisible();
     await expect(canvas.getByText('15:30')).toBeVisible();
   },
 };
