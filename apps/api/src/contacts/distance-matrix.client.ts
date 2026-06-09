@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 
 export interface LatLng {
   lat: number;
@@ -33,13 +33,11 @@ export class DistanceMatrixClient {
     const res = await fetch(
       `https://maps.googleapis.com/maps/api/distancematrix/json?${params}`,
     );
-    if (!res.ok) throw new Error(`Distance Matrix API error: ${res.status}`);
+    if (!res.ok) throw new ServiceUnavailableException('Distance Matrix API unavailable');
     const data = (await res.json()) as DistanceMatrixApiResponse;
     const element = data.rows?.[0]?.elements?.[0];
     if (!element || element.status !== 'OK') {
-      throw new Error(
-        `Distance Matrix returned status: ${element?.status ?? 'unknown'}`,
-      );
+      throw new ServiceUnavailableException('Distance Matrix API returned an error');
     }
     return {
       minutes: Math.round(element.duration.value / 60),
