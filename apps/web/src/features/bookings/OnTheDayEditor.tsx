@@ -140,36 +140,13 @@ export default function OnTheDayEditor({ booking, isOpen, onSaved }: Props) {
           return (
             <div key={key} className="space-y-2">
               <FormField label={label}>
-                {type === 'select' ? (
-                  <Select
-                    value={entry.value}
-                    onValueChange={(v) => setEntry(key, { value: v })}
-                  >
-                    <SelectTrigger id={`logistics-${key}`} aria-label={label}>
-                      <SelectValue placeholder="Select…" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {DRESS_CODE_OPTIONS.map((opt) => (
-                        <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : type === 'textarea' ? (
-                  <Textarea
-                    id={`logistics-${key}`}
-                    aria-label={label}
-                    rows={2}
-                    value={entry.value}
-                    onChange={(e) => setEntry(key, { value: e.target.value })}
-                  />
-                ) : (
-                  <Input
-                    id={`logistics-${key}`}
-                    aria-label={label}
-                    value={entry.value}
-                    onChange={(e) => setEntry(key, { value: e.target.value })}
-                  />
-                )}
+                <DetailInput
+                  fieldKey={key}
+                  label={label}
+                  type={type}
+                  value={entry.value}
+                  onChange={(v) => setEntry(key, { value: v })}
+                />
               </FormField>
               <SharingToggles fieldKey={key} entry={entry} onChange={(patch) => setEntry(key, patch)} />
             </div>
@@ -188,6 +165,54 @@ export default function OnTheDayEditor({ booking, isOpen, onSaved }: Props) {
         {mutation.isSuccess && <span className="text-xs text-muted">Saved</span>}
       </div>
     </div>
+  );
+}
+
+function DetailInput({
+  fieldKey,
+  label,
+  type,
+  value,
+  onChange,
+}: {
+  fieldKey: string;
+  label: string;
+  type: 'input' | 'select' | 'textarea';
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  if (type === 'select') {
+    return (
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger id={`logistics-${fieldKey}`} aria-label={label}>
+          <SelectValue placeholder="Select…" />
+        </SelectTrigger>
+        <SelectContent>
+          {DRESS_CODE_OPTIONS.map((opt) => (
+            <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    );
+  }
+  if (type === 'textarea') {
+    return (
+      <Textarea
+        id={`logistics-${fieldKey}`}
+        aria-label={label}
+        rows={2}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    );
+  }
+  return (
+    <Input
+      id={`logistics-${fieldKey}`}
+      aria-label={label}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+    />
   );
 }
 
