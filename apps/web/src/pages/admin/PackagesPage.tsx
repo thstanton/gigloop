@@ -1,51 +1,21 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@clerk/react';
-import {
-  Music, Mic2, Guitar, Piano, Drum, Church, Cake, Wine, Star, Heart,
-  GlassWater, Utensils, Moon, Briefcase, Music2, Sparkles, Radio, Headphones,
-  Volume2, Users,
-} from 'lucide-react';
+import { Music } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Switch } from '@/components/ui/switch';
 import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
-import { PACKAGE_CATEGORY_LABELS, PACKAGE_CATEGORY_ORDER } from '@/lib/constants';
+import { PACKAGE_CATEGORY_LABELS, PACKAGE_CATEGORY_ORDER, PACKAGE_ICON_MAP, PACKAGE_ICON_OPTIONS } from '@/lib/constants';
 import type { CreatePackageInput, Package, SlotInput, UpdatePackageInput } from '@/types/api';
 import { cn } from '@/lib/utils';
 import { Card } from '@/components/common/Card';
 import { EmptyState } from '@/components/common/EmptyState';
 
-// ─── Icon registry ────────────────────────────────────────────────────────────
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const ICON_MAP: Record<string, React.ComponentType<any>> = {
-  music: Music,
-  'mic-2': Mic2,
-  guitar: Guitar,
-  piano: Piano,
-  drum: Drum,
-  church: Church,
-  cake: Cake,
-  wine: Wine,
-  star: Star,
-  heart: Heart,
-  'glass-water': GlassWater,
-  utensils: Utensils,
-  moon: Moon,
-  briefcase: Briefcase,
-  'music-2': Music2,
-  sparkles: Sparkles,
-  radio: Radio,
-  headphones: Headphones,
-  'volume-2': Volume2,
-  users: Users,
-};
-
-const ICON_OPTIONS = Object.keys(ICON_MAP);
+const ICON_OPTIONS = PACKAGE_ICON_OPTIONS;
 
 function PackageIcon({ icon, size = 16 }: { icon: string; size?: number }) {
-  const Icon = ICON_MAP[icon] ?? Music;
+  const Icon = PACKAGE_ICON_MAP[icon] ?? Music;
   return <Icon size={size} strokeWidth={1.75} />;
 }
 

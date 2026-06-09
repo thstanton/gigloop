@@ -1,16 +1,7 @@
-import { Heart, GlassWater, Utensils, Moon, Briefcase, Music, Music2, type LucideIcon } from 'lucide-react';
-
-const FORMAT_ICON_MAP: Record<string, LucideIcon> = {
-  heart: Heart,
-  'glass-water': GlassWater,
-  utensils: Utensils,
-  moon: Moon,
-  briefcase: Briefcase,
-  music: Music,
-  'music-2': Music2,
-};
+import { Music } from 'lucide-react';
+import { PACKAGE_ICON_MAP } from '@/lib/constants';
 
 export default function FormatIcon({ icon, size = 14 }: { icon: string; size?: number }) {
-  const Icon = FORMAT_ICON_MAP[icon] ?? Music;
+  const Icon = PACKAGE_ICON_MAP[icon] ?? Music;
   return <Icon size={size} />;
 }
