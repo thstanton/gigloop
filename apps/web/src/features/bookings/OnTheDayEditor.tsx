@@ -214,10 +214,6 @@ function LogisticsIconPicker({
         <div className="flex flex-wrap gap-1.5">
           {PACKAGE_ICON_OPTIONS.map((icon) => {
             const isSelected = icon === value;
-            const isDefault = !value && icon === defaultIcon;
-            let activeClass = 'border-border bg-surface text-muted hover:text-foreground';
-            if (isSelected) activeClass = 'border-primary bg-primary/10 text-primary';
-            else if (isDefault) activeClass = 'border-border bg-surface text-foreground';
             return (
               <button
                 key={icon}
@@ -225,7 +221,12 @@ function LogisticsIconPicker({
                 onClick={() => { onChange(isSelected ? '' : icon); setOpen(false); }}
                 aria-label={icon}
                 title={icon}
-                className={cn('w-8 h-8 flex items-center justify-center rounded border transition-colors', activeClass)}
+                className={cn(
+                  'w-8 h-8 flex items-center justify-center rounded border transition-colors',
+                  isSelected
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-border bg-surface text-muted hover:text-foreground',
+                )}
               >
                 <FormatIcon icon={icon} size={16} />
               </button>
