@@ -109,6 +109,15 @@ export const PACKAGE_ICON_MAP: Record<string, LucideIcon> = {
 
 export const PACKAGE_ICON_OPTIONS = Object.keys(PACKAGE_ICON_MAP);
 
+export const DRESS_CODE_OPTIONS = [
+  'Smart Casual',
+  'Formal',
+  'Black Tie',
+  'Morning Dress',
+  'Casual',
+  'Cocktail',
+];
+
 export const LOGISTICS_FIELD_ICONS: Record<string, string> = {
   arrivalTime:    'clock',
   soundCheckTime: 'music',

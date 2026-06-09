@@ -36,10 +36,13 @@ type Story = StoryObj<typeof meta>;
 export const Empty: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByText('On the day')).toBeVisible();
+    await expect(canvas.getByText('Itinerary')).toBeVisible();
+    await expect(canvas.getByText('Details')).toBeVisible();
     await expect(canvas.getByLabelText('Arrival time')).toBeVisible();
     await expect(canvas.getByLabelText('Soundcheck time')).toBeVisible();
     await expect(canvas.getByLabelText('Finish time')).toBeVisible();
+    await expect(canvas.getByLabelText('Performance space')).toBeVisible();
+    await expect(canvas.getByLabelText('Equipment required')).toBeVisible();
   },
 };
 
@@ -48,9 +51,14 @@ export const WithExistingData: Story = {
     booking: {
       ...baseBooking,
       logistics: {
-        arrivalTime:    { value: '14:00', shareWithBand: true,  shareWithClient: false },
-        soundCheckTime: { value: '15:00', shareWithBand: true,  shareWithClient: false },
-        finishTime:     { value: '23:00', shareWithBand: false, shareWithClient: false },
+        arrivalTime:       { value: '14:00', shareWithBand: true,  shareWithClient: false },
+        soundCheckTime:    { value: '15:00', shareWithBand: true,  shareWithClient: false },
+        finishTime:        { value: '23:00', shareWithBand: false, shareWithClient: false },
+        dressCode:         { value: 'Black Tie', shareWithBand: false, shareWithClient: true },
+        performanceSpace:  { value: 'Grand ballroom', shareWithBand: false, shareWithClient: false },
+        foodProvided:      { value: 'Full dinner', shareWithBand: false, shareWithClient: false },
+        greenRoom:         { value: 'Room 12', shareWithBand: false, shareWithClient: false },
+        equipmentRequired: { value: 'PA system', shareWithBand: false, shareWithClient: false },
       },
     },
   },
@@ -59,6 +67,8 @@ export const WithExistingData: Story = {
     await expect(canvas.getByLabelText('Arrival time')).toHaveValue('14:00');
     await expect(canvas.getByLabelText('Soundcheck time')).toHaveValue('15:00');
     await expect(canvas.getByLabelText('Finish time')).toHaveValue('23:00');
+    await expect(canvas.getByLabelText('Performance space')).toHaveValue('Grand ballroom');
+    await expect(canvas.getByLabelText('Equipment required')).toHaveValue('PA system');
   },
 };
 
@@ -68,6 +78,8 @@ export const SaveFlow: Story = {
     const arrivalInput = canvas.getByLabelText('Arrival time');
     await userEvent.clear(arrivalInput);
     await userEvent.type(arrivalInput, '14:30');
+    const spaceInput = canvas.getByLabelText('Performance space');
+    await userEvent.type(spaceInput, 'Main stage');
     await userEvent.click(canvas.getByRole('button', { name: 'Save' }));
     await expect(canvas.getByText('Saved')).toBeVisible();
   },

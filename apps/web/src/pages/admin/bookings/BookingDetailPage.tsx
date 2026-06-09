@@ -46,6 +46,7 @@ import BookingStatusDropdown from '@/features/bookings/BookingStatusDropdown';
 import InlineNotes from '@/features/bookings/InlineNotes';
 import InlineFeeAdd from '@/features/bookings/InlineFeeAdd';
 import ItineraryCard from '@/features/bookings/ItineraryCard';
+import DetailsCard from '@/features/bookings/DetailsCard';
 import PerformanceSection from '@/features/bookings/PerformanceSection';
 import { toast } from '@/lib/hooks/use-toast';
 import { apiGet, apiPatch, apiPost, apiPostVoid, apiDelete } from '@/lib/api';
@@ -633,9 +634,10 @@ export default function BookingDetailPage() {
                 sets={booking.sets}
                 onEdit={() => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('edit', 'true'); next.set('section', 'onTheDay'); return next; })}
               />
-              <Card title="Details">
-                <p className="text-sm text-muted">No details yet.</p>
-              </Card>
+              <DetailsCard
+                logistics={booking.logistics}
+                onEdit={() => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('edit', 'true'); next.set('section', 'onTheDay'); return next; })}
+              />
             </div>
             {booking.venue ? (
               <VenueMapWidget
