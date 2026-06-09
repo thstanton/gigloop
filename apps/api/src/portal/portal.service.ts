@@ -276,16 +276,7 @@ export class PortalService {
     if (!data) throw new NotFoundException('Booking not found');
     if (!data.musicFormConfig) throw new NotFoundException('Music form not found');
 
-    const allSubmittedIds = [
-      ...dto.selectedSongIds,
-      ...dto.specialRequests.map((r) => r.songId).filter((id): id is string => !!id),
-    ];
-    if (allSubmittedIds.length > 0) {
-      const owned = await this.songsRepo.findByIds(data.userId, allSubmittedIds);
-      const ownedIds = new Set(owned.map((s) => s.id));
-      const unknown = allSubmittedIds.filter((id) => !ownedIds.has(id));
-      if (unknown.length > 0) throw new BadRequestException('Unknown song IDs submitted');
-    }
+    await this.assertSongIdsOwned(data.userId, dto);
 
     const submittedAt = new Date();
     await this.musicFormRepo.upsertMusicFormResponse(
@@ -299,6 +290,18 @@ export class PortalService {
     await this.evaluator.evaluate(data.id).catch(() => {});
 
     this.generateSongListAndNotify(data, dto, submittedAt).catch(() => {});
+  }
+
+  private async assertSongIdsOwned(userId: string, dto: SubmitMusicFormDto) {
+    const allIds = [
+      ...dto.selectedSongIds,
+      ...dto.specialRequests.map((r) => r.songId).filter((id): id is string => !!id),
+    ];
+    if (!allIds.length) return;
+    const owned = await this.songsRepo.findByIds(userId, allIds);
+    const ownedIds = new Set(owned.map((s) => s.id));
+    const unknown = allIds.filter((id) => !ownedIds.has(id));
+    if (unknown.length > 0) throw new BadRequestException('Unknown song IDs submitted');
   }
 
   private async generateSongListAndNotify(
