@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/select';
 import { FormField } from '@/components/common/FormField';
 import { SubLabel } from '@/components/common/SubLabel';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { apiGet, apiPatch } from '@/lib/api';
 import { DRESS_CODE_OPTIONS } from '@/lib/constants';
 import type { BookingDetail, BookingLogisticsEntry, UserProfile } from '@/types/api';
@@ -229,17 +230,24 @@ function DressCodeField({ value, onChange }: { value: string; onChange: (v: stri
           </SelectContent>
         </Select>
         {isCustomSelected && (
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            onClick={() => deleteMutation.mutate(value)}
-            disabled={deleteMutation.isPending}
-            className="h-10 w-10 shrink-0 text-muted-foreground hover:text-destructive"
-            aria-label="Delete custom option"
-          >
-            <Trash2 size={16} />
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => deleteMutation.mutate(value)}
+                  disabled={deleteMutation.isPending}
+                  className="h-10 w-10 shrink-0 text-muted-foreground hover:text-destructive"
+                  aria-label="Delete custom option"
+                >
+                  <Trash2 size={16} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Remove custom option</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         )}
       </div>
       <div className="flex gap-2">
