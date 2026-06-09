@@ -222,7 +222,7 @@ export class PortalService {
     if (!publicProfile) throw new NotFoundException('Booking not found');
 
     const signedAt = new Date();
-    const ip = this.extractIp(req);
+    const ip = req.ip ?? 'unknown';
 
     await this.documents.generateAndStoreSignedContractPdf(
       booking.userId,
@@ -505,11 +505,4 @@ export class PortalService {
       throw new BadRequestException('Contract must be in SENT status to sign');
   }
 
-  private extractIp(req: Request): string {
-    const forwarded = req.headers['x-forwarded-for'];
-    if (forwarded) {
-      return (Array.isArray(forwarded) ? forwarded[0] : forwarded).split(',')[0].trim();
-    }
-    return req.socket?.remoteAddress ?? 'unknown';
-  }
 }
