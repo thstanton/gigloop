@@ -6,8 +6,6 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
 import { FormField } from '@/components/common/FormField';
 import { SubLabel } from '@/components/common/SubLabel';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -106,6 +104,28 @@ function getNextCustomFieldKey(
   return `customField${n}`;
 }
 
+function toSystemEntry(f: LocalEntry): BookingLogisticsEntry {
+  return { value: f.value, ...(f.icon && { icon: f.icon }), shareWithBand: f.shareWithBand, shareWithClient: f.shareWithClient };
+}
+
+function toCustomEntry(cf: CustomFieldLocal): BookingLogisticsEntry {
+  return { value: cf.value, label: cf.label, ...(cf.icon && { icon: cf.icon }), shareWithBand: cf.shareWithBand, shareWithClient: cf.shareWithClient };
+}
+
+function buildLogisticsPayload(
+  fields: LocalState,
+  customFields: CustomFieldLocal[],
+): Record<string, BookingLogisticsEntry> {
+  const systemKeys = [...TIME_FIELDS.map(f => f.key), ...DETAIL_FIELDS.map(f => f.key)];
+  const systemPairs = systemKeys
+    .filter(key => fields[key].value)
+    .map(key => [key, toSystemEntry(fields[key])] as const);
+  const customPairs = customFields
+    .filter(cf => cf.value || cf.label)
+    .map(cf => [cf.key, toCustomEntry(cf)] as const);
+  return Object.fromEntries([...systemPairs, ...customPairs]);
+}
+
 interface Props {
   booking: BookingDetail;
   isOpen: boolean;
@@ -154,36 +174,8 @@ export default function OnTheDayEditor({ booking, isOpen, onSaved }: Props) {
   }
 
   const mutation = useMutation({
-    mutationFn: () => {
-      const logistics: Record<string, BookingLogisticsEntry> = {};
-      const allFields = [
-        ...TIME_FIELDS.map(f => f.key),
-        ...DETAIL_FIELDS.map(f => f.key),
-      ];
-      for (const key of allFields) {
-        const f = fields[key];
-        if (f.value) {
-          logistics[key] = {
-            value: f.value,
-            ...(f.icon && { icon: f.icon }),
-            shareWithBand: f.shareWithBand,
-            shareWithClient: f.shareWithClient,
-          };
-        }
-      }
-      for (const cf of customFields) {
-        if (cf.value || cf.label) {
-          logistics[cf.key] = {
-            value: cf.value,
-            label: cf.label,
-            ...(cf.icon && { icon: cf.icon }),
-            shareWithBand: cf.shareWithBand,
-            shareWithClient: cf.shareWithClient,
-          };
-        }
-      }
-      return apiPatch(`/bookings/${booking.id}`, { logistics });
-    },
+    mutationFn: () =>
+      apiPatch(`/bookings/${booking.id}`, { logistics: buildLogisticsPayload(fields, customFields) }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['booking', booking.id] });
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
@@ -249,36 +241,12 @@ export default function OnTheDayEditor({ booking, isOpen, onSaved }: Props) {
         })}
       </div>
 
-      <div className="mt-5 space-y-3">
-        {customFields.map(cf =>
-          cf.isEditing ? (
-            <CustomFieldEditRow
-              key={cf.key}
-              field={cf}
-              onChange={(patch) => updateCustomField(cf.key, patch)}
-              onDone={() => updateCustomField(cf.key, { isEditing: false })}
-              onRemove={() => removeCustomField(cf.key)}
-            />
-          ) : (
-            <CustomFieldCompactRow
-              key={cf.key}
-              field={cf}
-              onEdit={() => updateCustomField(cf.key, { isEditing: true })}
-              onRemove={() => removeCustomField(cf.key)}
-            />
-          )
-        )}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={addCustomField}
-          className="w-full"
-        >
-          <Plus size={14} className="mr-1.5" aria-hidden="true" />
-          Add field
-        </Button>
-      </div>
+      <CustomFieldsList
+        customFields={customFields}
+        onUpdate={updateCustomField}
+        onRemove={removeCustomField}
+        onAdd={addCustomField}
+      />
 
       {mutation.isError && (
         <p className="mt-4 text-sm text-status-cancelled">Failed to save. Please try again.</p>
@@ -290,6 +258,45 @@ export default function OnTheDayEditor({ booking, isOpen, onSaved }: Props) {
         </Button>
         {mutation.isSuccess && <span className="text-xs text-muted">Saved</span>}
       </div>
+    </div>
+  );
+}
+
+function CustomFieldsList({
+  customFields,
+  onUpdate,
+  onRemove,
+  onAdd,
+}: {
+  customFields: CustomFieldLocal[];
+  onUpdate: (key: string, patch: Partial<CustomFieldLocal>) => void;
+  onRemove: (key: string) => void;
+  onAdd: () => void;
+}) {
+  return (
+    <div className="mt-5 space-y-3">
+      {customFields.map(cf =>
+        cf.isEditing ? (
+          <CustomFieldEditRow
+            key={cf.key}
+            field={cf}
+            onChange={(patch) => onUpdate(cf.key, patch)}
+            onDone={() => onUpdate(cf.key, { isEditing: false })}
+            onRemove={() => onRemove(cf.key)}
+          />
+        ) : (
+          <CustomFieldCompactRow
+            key={cf.key}
+            field={cf}
+            onEdit={() => onUpdate(cf.key, { isEditing: true })}
+            onRemove={() => onRemove(cf.key)}
+          />
+        )
+      )}
+      <Button type="button" variant="outline" size="sm" onClick={onAdd} className="w-full">
+        <Plus size={14} className="mr-1.5" aria-hidden="true" />
+        Add field
+      </Button>
     </div>
   );
 }
@@ -366,24 +373,6 @@ function CustomFieldEditRow({
         value={field.value}
         onChange={(e) => onChange({ value: e.target.value })}
       />
-      <div className="flex flex-col gap-2.5">
-        <div className="flex items-center gap-2">
-          <Switch
-            id={`${field.key}-band`}
-            checked={field.shareWithBand}
-            onCheckedChange={(v) => onChange({ shareWithBand: v })}
-          />
-          <Label htmlFor={`${field.key}-band`} className="text-sm text-muted">Share with band</Label>
-        </div>
-        <div className="flex items-center gap-2">
-          <Switch
-            id={`${field.key}-client`}
-            checked={field.shareWithClient}
-            onCheckedChange={(v) => onChange({ shareWithClient: v })}
-          />
-          <Label htmlFor={`${field.key}-client`} className="text-sm text-muted">Share with client</Label>
-        </div>
-      </div>
       <div className="flex items-center justify-between pt-1">
         <button
           type="button"
