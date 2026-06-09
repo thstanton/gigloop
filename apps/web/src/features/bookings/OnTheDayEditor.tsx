@@ -10,7 +10,8 @@ import { FormField } from '@/components/common/FormField';
 import { SubLabel } from '@/components/common/SubLabel';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { apiGet, apiPatch } from '@/lib/api';
-import { DRESS_CODE_OPTIONS } from '@/lib/constants';
+import { DRESS_CODE_OPTIONS, LOGISTICS_FIELD_ICONS, PACKAGE_ICON_OPTIONS } from '@/lib/constants';
+import FormatIcon from './FormatIcon';
 import { cn } from '@/lib/utils';
 import type { BookingDetail, BookingLogisticsEntry, UserProfile } from '@/types/api';
 
@@ -31,7 +32,7 @@ const DETAIL_FIELDS: Array<{ key: DetailFieldKey; label: string; type: 'input' |
   { key: 'equipmentRequired',  label: 'Equipment required',  type: 'textarea' },
 ];
 
-type LocalEntry = Pick<BookingLogisticsEntry, 'value' | 'shareWithBand' | 'shareWithClient'>;
+type LocalEntry = Pick<BookingLogisticsEntry, 'value' | 'shareWithBand' | 'shareWithClient'> & { icon: string };
 type LocalState = Record<TimeFieldKey | DetailFieldKey, LocalEntry>;
 
 function entryFromBooking(
@@ -41,6 +42,7 @@ function entryFromBooking(
   const entry = logistics?.[key];
   return {
     value:           entry?.value ?? '',
+    icon:            entry?.icon ?? '',
     shareWithBand:   entry?.shareWithBand ?? false,
     shareWithClient: entry?.shareWithClient ?? false,
   };
@@ -91,7 +93,12 @@ export default function OnTheDayEditor({ booking, isOpen, onSaved }: Props) {
       for (const key of allFields) {
         const f = fields[key];
         if (f.value) {
-          logistics[key] = { value: f.value, shareWithBand: f.shareWithBand, shareWithClient: f.shareWithClient };
+          logistics[key] = {
+            value: f.value,
+            ...(f.icon && { icon: f.icon }),
+            shareWithBand: f.shareWithBand,
+            shareWithClient: f.shareWithClient,
+          };
         }
       }
       return apiPatch(`/bookings/${booking.id}`, { logistics });
@@ -112,8 +119,13 @@ export default function OnTheDayEditor({ booking, isOpen, onSaved }: Props) {
         {TIME_FIELDS.map(({ key, label }) => {
           const entry = fields[key];
           return (
-            <div key={key} className="space-y-2">
-              <FormField label={label}>
+            <FormField key={key} label={label}>
+              <div className="flex items-center gap-2">
+                <LogisticsIconPicker
+                  value={entry.icon}
+                  defaultIcon={LOGISTICS_FIELD_ICONS[key] ?? ''}
+                  onChange={(icon) => setEntry(key, { icon })}
+                />
                 <Input
                   id={`logistics-${key}`}
                   aria-label={label}
@@ -121,9 +133,10 @@ export default function OnTheDayEditor({ booking, isOpen, onSaved }: Props) {
                   pattern="^([01]\d|2[0-3]):[0-5]\d$"
                   value={entry.value}
                   onChange={(e) => setEntry(key, { value: e.target.value })}
+                  className="flex-1"
                 />
-              </FormField>
-            </div>
+              </div>
+            </FormField>
           );
         })}
       </div>
@@ -133,17 +146,24 @@ export default function OnTheDayEditor({ booking, isOpen, onSaved }: Props) {
         {DETAIL_FIELDS.map(({ key, label, type }) => {
           const entry = fields[key];
           return (
-            <div key={key} className="space-y-2">
-              <FormField label={label}>
-                <DetailInput
-                  fieldKey={key}
-                  label={label}
-                  type={type}
-                  value={entry.value}
-                  onChange={(v) => setEntry(key, { value: v })}
+            <FormField key={key} label={label}>
+              <div className={cn('flex gap-2', type === 'textarea' ? 'items-start' : 'items-center')}>
+                <LogisticsIconPicker
+                  value={entry.icon}
+                  defaultIcon={LOGISTICS_FIELD_ICONS[key] ?? ''}
+                  onChange={(icon) => setEntry(key, { icon })}
                 />
-              </FormField>
-            </div>
+                <div className="flex-1 min-w-0">
+                  <DetailInput
+                    fieldKey={key}
+                    label={label}
+                    type={type}
+                    value={entry.value}
+                    onChange={(v) => setEntry(key, { value: v })}
+                  />
+                </div>
+              </div>
+            </FormField>
           );
         })}
       </div>
@@ -159,6 +179,62 @@ export default function OnTheDayEditor({ booking, isOpen, onSaved }: Props) {
         {mutation.isSuccess && <span className="text-xs text-muted">Saved</span>}
       </div>
     </div>
+  );
+}
+
+function LogisticsIconPicker({
+  value,
+  defaultIcon,
+  onChange,
+}: {
+  value: string;
+  defaultIcon: string;
+  onChange: (icon: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const effectiveIcon = value || defaultIcon;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label="Change icon"
+          className={cn(
+            'w-8 h-8 flex items-center justify-center rounded border transition-colors',
+            value
+              ? 'border-primary bg-primary/10 text-primary'
+              : 'border-border bg-surface text-muted hover:text-foreground',
+          )}
+        >
+          <FormatIcon icon={effectiveIcon} size={16} />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" sideOffset={4} className="w-64 p-3">
+        <div className="flex flex-wrap gap-1.5">
+          {PACKAGE_ICON_OPTIONS.map((icon) => {
+            const isSelected = icon === value;
+            return (
+              <button
+                key={icon}
+                type="button"
+                onClick={() => { onChange(isSelected ? '' : icon); setOpen(false); }}
+                aria-label={icon}
+                title={icon}
+                className={cn(
+                  'w-8 h-8 flex items-center justify-center rounded border transition-colors',
+                  isSelected
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-border bg-surface text-muted hover:text-foreground',
+                )}
+              >
+                <FormatIcon icon={icon} size={16} />
+              </button>
+            );
+          })}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 

@@ -3,6 +3,8 @@ import { Card } from '@/components/common/Card';
 import { GhostButton } from '@/components/common/GhostButton';
 import { EmptyState } from '@/components/common/EmptyState';
 import { formatDuration } from './PerformanceSection';
+import FormatIcon from './FormatIcon';
+import { LOGISTICS_FIELD_ICONS } from '@/lib/constants';
 import type { BookingLogisticsEntry, PerformanceSet } from '@/types/api';
 
 type TimelineRow =
@@ -23,15 +25,15 @@ function buildRows(
   const l = logistics ?? {};
 
   if (l.arrivalTime?.value)
-    rows.push({ kind: 'time', rowKey: 'arrival', label: 'Arrival', time: l.arrivalTime.value, group: 'arrival' });
+    rows.push({ kind: 'time', rowKey: 'arrivalTime', label: 'Arrival', time: l.arrivalTime.value, group: 'arrival' });
   if (l.soundCheckTime?.value)
-    rows.push({ kind: 'time', rowKey: 'soundcheck', label: 'Soundcheck', time: l.soundCheckTime.value, group: 'soundcheck' });
+    rows.push({ kind: 'time', rowKey: 'soundCheckTime', label: 'Soundcheck', time: l.soundCheckTime.value, group: 'soundcheck' });
 
   for (const set of [...sets].sort((a, b) => a.order - b.order))
     rows.push({ kind: 'set', rowKey: set.id, set, group: set.packageId ? `pkg-${set.packageId}` : `set-${set.id}` });
 
   if (l.finishTime?.value)
-    rows.push({ kind: 'time', rowKey: 'finish', label: 'Finish', time: l.finishTime.value, group: 'finish' });
+    rows.push({ kind: 'time', rowKey: 'finishTime', label: 'Finish', time: l.finishTime.value, group: 'finish' });
 
   return rows;
 }
@@ -74,6 +76,11 @@ export default function ItineraryCard({ logistics, sets, onEdit }: ItineraryCard
                 <span className="w-14 flex-shrink-0 text-sm font-medium tabular-nums text-foreground">
                   {timeCol}
                 </span>
+                {row.kind === 'time' && (
+                  <span className="flex-shrink-0 text-muted">
+                    <FormatIcon icon={LOGISTICS_FIELD_ICONS[row.rowKey] ?? 'clock'} size={14} />
+                  </span>
+                )}
                 <span className="text-sm text-foreground">
                   {labelCol}
                 </span>
