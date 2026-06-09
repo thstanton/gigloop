@@ -276,6 +276,17 @@ export class PortalService {
     if (!data) throw new NotFoundException('Booking not found');
     if (!data.musicFormConfig) throw new NotFoundException('Music form not found');
 
+    const allSubmittedIds = [
+      ...dto.selectedSongIds,
+      ...dto.specialRequests.map((r) => r.songId).filter((id): id is string => !!id),
+    ];
+    if (allSubmittedIds.length > 0) {
+      const owned = await this.songsRepo.findByIds(data.userId, allSubmittedIds);
+      const ownedIds = new Set(owned.map((s) => s.id));
+      const unknown = allSubmittedIds.filter((id) => !ownedIds.has(id));
+      if (unknown.length > 0) throw new BadRequestException('Unknown song IDs submitted');
+    }
+
     const submittedAt = new Date();
     await this.musicFormRepo.upsertMusicFormResponse(
       data.id,
