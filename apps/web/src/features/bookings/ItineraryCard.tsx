@@ -15,6 +15,7 @@ interface ItineraryCardProps {
   logistics: Record<string, BookingLogisticsEntry> | null;
   sets: PerformanceSet[];
   onEdit: () => void;
+  hideWhenEmpty?: boolean;
 }
 
 function buildRows(
@@ -43,8 +44,10 @@ function setLabel(set: PerformanceSet): string {
   return set.label ? `${set.label} (${dur})` : dur;
 }
 
-export default function ItineraryCard({ logistics, sets, onEdit }: ItineraryCardProps) {
+export default function ItineraryCard({ logistics, sets, onEdit, hideWhenEmpty = false }: ItineraryCardProps) {
   const rows = buildRows(logistics, sets);
+
+  if (hideWhenEmpty && rows.length === 0) return null;
 
   return (
     <Card

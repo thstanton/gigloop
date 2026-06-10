@@ -656,10 +656,12 @@ export default function BookingDetailPage() {
                 logistics={booking.logistics}
                 sets={booking.sets}
                 onEdit={() => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('edit', 'true'); next.set('section', 'onTheDay'); return next; })}
+                hideWhenEmpty
               />
               <DetailsCard
                 logistics={booking.logistics}
                 onEdit={() => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('edit', 'true'); next.set('section', 'onTheDay'); return next; })}
+                hideWhenEmpty
               />
             </div>
             {booking.venue ? (

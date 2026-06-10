@@ -15,9 +15,10 @@ const ALL_SYSTEM_KEYS = new Set([
 interface DetailsCardProps {
   logistics: Record<string, BookingLogisticsEntry> | null;
   onEdit: () => void;
+  hideWhenEmpty?: boolean;
 }
 
-export default function DetailsCard({ logistics, onEdit }: DetailsCardProps) {
+export default function DetailsCard({ logistics, onEdit, hideWhenEmpty = false }: DetailsCardProps) {
   const systemEntries = SYSTEM_DETAIL_KEYS
     .filter(key => logistics?.[key]?.value)
     .map(key => ({
@@ -39,6 +40,8 @@ export default function DetailsCard({ logistics, onEdit }: DetailsCardProps) {
     : [];
 
   const allEntries = [...systemEntries, ...customEntries];
+
+  if (hideWhenEmpty && allEntries.length === 0) return null;
 
   return (
     <Card
