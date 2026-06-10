@@ -13,9 +13,10 @@ export function formatDuration(minutes: number): string {
 export interface PerformanceSectionProps {
   booking: BookingDetail;
   onEdit: () => void;
+  hideWhenEmpty?: boolean;
 }
 
-export default function PerformanceSection({ booking, onEdit }: PerformanceSectionProps) {
+export default function PerformanceSection({ booking, onEdit, hideWhenEmpty = false }: PerformanceSectionProps) {
   const setsByFormatId = new Map<string | null, PerformanceSet[]>();
   for (const set of booking.sets ?? []) {
     const key = set.packageId ?? null;
@@ -25,6 +26,7 @@ export default function PerformanceSection({ booking, onEdit }: PerformanceSecti
   const unassigned = setsByFormatId.get(null) ?? [];
 
   if ((booking.packages ?? []).length === 0 && unassigned.length === 0) {
+    if (hideWhenEmpty) return null;
     return (
       <div className="flex flex-col items-center text-center gap-2 py-4 text-muted min-h-[5rem]">
         <Music size={20} />

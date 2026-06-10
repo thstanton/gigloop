@@ -664,7 +664,7 @@ export default function BookingDetailPage() {
                 hideWhenEmpty
               />
             </div>
-            {booking.venue ? (
+            {booking.venue && (
               <VenueMapWidget
                 venue={booking.venue}
                 showHeader={true}
@@ -679,8 +679,6 @@ export default function BookingDetailPage() {
                 isLoadingTravelTime={isFetchingTravelTime}
                 onRefreshTravelTime={() => queryClient.invalidateQueries({ queryKey: ['contact-travel-time', bookingVenueId] })}
               />
-            ) : (
-              <InlineVenueAdd bookingId={booking.id} />
             )}
             <InlineNotes
               notes={booking.notes}
@@ -691,31 +689,6 @@ export default function BookingDetailPage() {
         }
         info={
           <div className="space-y-6 pt-2">
-            <section>
-              <SectionHeader label="Series" />
-              {booking.series ? (
-                <span className="inline-flex items-center gap-1.5 text-sm text-foreground border border-border rounded-full px-3 py-1.5">
-                  {booking.series.label}
-                  <button
-                    type="button"
-                    onClick={() => updateSeriesMutation.mutate({ seriesId: null })}
-                    className="hover:text-foreground transition-colors"
-                    aria-label="Remove from series"
-                  >
-                    <X size={12} />
-                  </button>
-                </span>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setSeriesSheetOpen(true)}
-                  className="text-sm text-muted hover:text-foreground transition-colors underline underline-offset-2"
-                >
-                  + Add to series
-                </button>
-              )}
-            </section>
-
             <section>
               <SectionHeader label="People" />
               <div className="flex flex-row gap-4">
@@ -730,6 +703,23 @@ export default function BookingDetailPage() {
                 )}
               </div>
             </section>
+
+            {booking.series && (
+              <section>
+                <SectionHeader label="Series" />
+                <span className="inline-flex items-center gap-1.5 text-sm text-foreground border border-border rounded-full px-3 py-1.5">
+                  {booking.series.label}
+                  <button
+                    type="button"
+                    onClick={() => updateSeriesMutation.mutate({ seriesId: null })}
+                    className="hover:text-foreground transition-colors"
+                    aria-label="Remove from series"
+                  >
+                    <X size={12} />
+                  </button>
+                </span>
+              </section>
+            )}
 
             {booking.series && (
               <SeriesEventsCard
@@ -860,6 +850,7 @@ export default function BookingDetailPage() {
                 <PerformanceSection
                   booking={booking}
                   onEdit={() => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('edit', 'true'); next.set('section', 'packages'); return next; })}
+                  hideWhenEmpty
                 />
                 <MusicFormSection
                   booking={booking}
@@ -870,6 +861,7 @@ export default function BookingDetailPage() {
                   onUpdateConfig={() => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('edit', 'true'); next.set('section', 'musicForm'); return next; })}
                   onViewResponse={() => setViewingMusicFormResponse(true)}
                   onEdit={() => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('edit', 'true'); next.set('section', 'musicForm'); return next; })}
+                  hideWhenEmpty
                 />
               </div>
             </section>
