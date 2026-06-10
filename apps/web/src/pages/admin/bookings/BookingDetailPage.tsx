@@ -686,26 +686,6 @@ export default function BookingDetailPage() {
         info={
           <div className="space-y-6 pt-2">
             <section>
-              <SectionHeader label="Packages" />
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <PerformanceSection
-                  booking={booking}
-                  onEdit={() => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('edit', 'true'); next.set('section', 'packages'); return next; })}
-                />
-                <MusicFormSection
-                  booking={booking}
-                  documents={documents}
-                  config={musicFormConfig ?? null}
-                  isLoading={musicFormConfigLoading}
-                  response={musicFormResponse ?? null}
-                  onUpdateConfig={() => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('edit', 'true'); next.set('section', 'musicForm'); return next; })}
-                  onViewResponse={() => setViewingMusicFormResponse(true)}
-                  onEdit={() => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('edit', 'true'); next.set('section', 'musicForm'); return next; })}
-                />
-              </div>
-            </section>
-
-            <section>
               <SectionHeader label="People" />
               <div className="flex flex-row gap-4">
                 <PersonChip role="Customer" contact={booking.customer} linkState={backState} onEdit={() => setEditingContact(booking.customer)} />
@@ -842,6 +822,26 @@ export default function BookingDetailPage() {
                 </div>
               )}
             </Card>
+
+            <section>
+              <SectionHeader label="Packages" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <PerformanceSection
+                  booking={booking}
+                  onEdit={() => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('edit', 'true'); next.set('section', 'packages'); return next; })}
+                />
+                <MusicFormSection
+                  booking={booking}
+                  documents={documents}
+                  config={musicFormConfig ?? null}
+                  isLoading={musicFormConfigLoading}
+                  response={musicFormResponse ?? null}
+                  onUpdateConfig={() => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('edit', 'true'); next.set('section', 'musicForm'); return next; })}
+                  onViewResponse={() => setViewingMusicFormResponse(true)}
+                  onEdit={() => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('edit', 'true'); next.set('section', 'musicForm'); return next; })}
+                />
+              </div>
+            </section>
 
             <CommunicationsSection
               communications={communications}
