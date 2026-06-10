@@ -647,7 +647,6 @@ export default function BookingDetailPage() {
         }
         onTheDay={
           <div className="space-y-4 pt-2">
-            <SectionHeader label="For the day" />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <ItineraryCard
                 logistics={booking.logistics}
@@ -677,6 +676,11 @@ export default function BookingDetailPage() {
             ) : (
               <InlineVenueAdd bookingId={booking.id} />
             )}
+            <InlineNotes
+              notes={booking.notes}
+              onSave={(notes) => updateNotesMutation.mutate(notes)}
+              isSaving={updateNotesMutation.isPending}
+            />
           </div>
         }
         info={
@@ -789,11 +793,6 @@ export default function BookingDetailPage() {
               />
             )}
 
-            <CommunicationsSection
-              communications={communications}
-              onCompose={() => openCompose()}
-            />
-
             <Card title="Documents">
               {documents.length === 0 ? (
                 <div className="flex items-center gap-2 text-muted py-1">
@@ -844,10 +843,9 @@ export default function BookingDetailPage() {
               )}
             </Card>
 
-            <InlineNotes
-              notes={booking.notes}
-              onSave={(notes) => updateNotesMutation.mutate(notes)}
-              isSaving={updateNotesMutation.isPending}
+            <CommunicationsSection
+              communications={communications}
+              onCompose={() => openCompose()}
             />
           </div>
         }
