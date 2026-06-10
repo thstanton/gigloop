@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@clerk/react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, X, FolderOpen, FileText, Download, MapPin } from 'lucide-react';
+import { ChevronLeft, Eye, Pencil, X, FolderOpen, FileText, Download, MapPin } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import {
@@ -576,20 +576,22 @@ export default function BookingDetailPage() {
           <div className="flex items-center gap-2 flex-shrink-0">
             <a
               href={`/booking/${booking.portalToken}?preview=admin&from=${backUrl}`}
-              className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-foreground transition-colors border border-border rounded px-3 py-1.5"
+              className="inline-flex items-center justify-center gap-1.5 text-sm text-muted hover:text-foreground transition-colors border border-border rounded p-1.5 md:px-3 md:py-1.5"
             >
-              Client portal
+              <Eye size={16} />
+              <span className="hidden md:inline">Client portal</span>
             </a>
-            <Button
-              variant="outline"
-              size="sm"
+            <button
+              type="button"
               onClick={() => setSearchParams({ edit: 'true' })}
+              className="inline-flex items-center justify-center gap-1.5 text-sm text-muted hover:text-foreground transition-colors border border-border rounded p-1.5 md:px-3 md:py-1.5"
             >
-              Edit
-            </Button>
+              <Pencil size={16} />
+              <span className="hidden md:inline">Edit</span>
+            </button>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2">
+        <div className="flex items-center justify-between md:flex-wrap md:justify-start md:gap-x-3 md:gap-y-1 mt-2">
           <BookingStatusDropdown
             currentStatus={booking.status}
             checklist={checklist}
@@ -602,7 +604,7 @@ export default function BookingDetailPage() {
             : <InlineFeeAdd onSave={(fee) => updateFeeMutation.mutate(fee)} isSaving={updateFeeMutation.isPending} />
           }
           {booking.series ? (
-            <span className="inline-flex items-center gap-1.5 text-sm text-foreground border border-border rounded-full px-3 py-1.5">
+            <span className="hidden md:inline-flex items-center gap-1.5 text-sm text-foreground border border-border rounded-full px-3 py-1.5">
               {booking.series.label}
               <button
                 type="button"
@@ -617,7 +619,7 @@ export default function BookingDetailPage() {
             <button
               type="button"
               onClick={() => setSeriesSheetOpen(true)}
-              className="text-sm text-muted hover:text-foreground transition-colors underline underline-offset-2"
+              className="hidden md:inline text-sm text-muted hover:text-foreground transition-colors underline underline-offset-2"
             >
               + Add to series
             </button>
@@ -642,6 +644,7 @@ export default function BookingDetailPage() {
               onAddItem={(data) => addChecklistItem.mutate(data)}
               isAddingItem={addChecklistItem.isPending}
               isActionPending={actions.isPending || markPaid.isPending}
+              hideHeader
             />
           ) : null
         }
@@ -685,6 +688,31 @@ export default function BookingDetailPage() {
         }
         info={
           <div className="space-y-6 pt-2">
+            <section>
+              <SectionHeader label="Series" />
+              {booking.series ? (
+                <span className="inline-flex items-center gap-1.5 text-sm text-foreground border border-border rounded-full px-3 py-1.5">
+                  {booking.series.label}
+                  <button
+                    type="button"
+                    onClick={() => updateSeriesMutation.mutate({ seriesId: null })}
+                    className="hover:text-foreground transition-colors"
+                    aria-label="Remove from series"
+                  >
+                    <X size={12} />
+                  </button>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setSeriesSheetOpen(true)}
+                  className="text-sm text-muted hover:text-foreground transition-colors underline underline-offset-2"
+                >
+                  + Add to series
+                </button>
+              )}
+            </section>
+
             <section>
               <SectionHeader label="People" />
               <div className="flex flex-row gap-4">

@@ -236,6 +236,7 @@ export interface ChecklistSectionProps {
   onAddItem: (data: { label: string; requiredForStatus: string | null; dueDate: string | null }) => void;
   isAddingItem?: boolean;
   isActionPending?: boolean;
+  hideHeader?: boolean;
 }
 
 export default function ChecklistSection({
@@ -249,6 +250,7 @@ export default function ChecklistSection({
   onAddItem,
   isAddingItem = false,
   isActionPending = false,
+  hideHeader = false,
 }: ChecklistSectionProps) {
   const [showAllChecklist, setShowAllChecklist] = useState(false);
   const [showAddItem, setShowAddItem] = useState(false);
@@ -292,7 +294,7 @@ export default function ChecklistSection({
   return (
     <section>
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-sm font-semibold text-foreground">Checklist</h2>
+        {!hideHeader && <h2 className="text-sm font-semibold text-foreground">Checklist</h2>}
         <GhostButton onClick={() => setShowAddItem((v) => !v)} variant="primary" size="xs" icon={<Plus size={12} />}>
           Add item
         </GhostButton>
