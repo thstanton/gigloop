@@ -8,8 +8,8 @@ import {
   Plus,
   Sparkles,
 } from 'lucide-react';
-import { GhostButton } from '@/components/common/GhostButton';
 import { Button } from '@/components/ui/button';
+import { GhostButton } from '@/components/common/GhostButton';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -271,16 +271,26 @@ export default function ChecklistSection({
     );
   }
 
-  const baseList = showAllChecklist ? items : items.filter((i) => i.state !== 'BLOCKED');
+  const baseList = items.filter((i) => i.state !== 'BLOCKED' || showAllChecklist);
   if (baseList.length === 0 && !showAddItem) return null;
 
   const bookingIdx = STAGE_LIST.indexOf(bookingStatus as typeof STAGE_LIST[number]);
-  const defaultStageSet = new Set<string | null>([null]);
-  if (bookingIdx >= 0) defaultStageSet.add(STAGE_LIST[bookingIdx]);
-  if (bookingIdx >= 0 && bookingIdx + 1 < STAGE_LIST.length) defaultStageSet.add(STAGE_LIST[bookingIdx + 1]);
 
-  const filtered = showAllChecklist ? baseList : baseList.filter((i) => defaultStageSet.has(i.requiredForStatus));
-  const hiddenCount = baseList.length - filtered.length;
+  let filtered: ChecklistItem[];
+  let hiddenCount = 0;
+
+  if (hideHeader) {
+    // Tab view: show everything from current stage onwards; hide only past stages
+    const forwardSet = new Set<string | null>([null, ...STAGE_LIST.slice(bookingIdx >= 0 ? bookingIdx : 0)]);
+    filtered = baseList.filter((i) => forwardSet.has(i.requiredForStatus));
+  } else {
+    // Sidebar view: current + next stage only, with show-all toggle
+    const defaultStageSet = new Set<string | null>([null]);
+    if (bookingIdx >= 0) defaultStageSet.add(STAGE_LIST[bookingIdx]);
+    if (bookingIdx >= 0 && bookingIdx + 1 < STAGE_LIST.length) defaultStageSet.add(STAGE_LIST[bookingIdx + 1]);
+    filtered = showAllChecklist ? baseList : baseList.filter((i) => defaultStageSet.has(i.requiredForStatus));
+    hiddenCount = baseList.length - filtered.length;
+  }
 
   const itemsByStage = new Map<string | null, ChecklistItem[]>();
   for (const item of filtered) {
@@ -293,12 +303,14 @@ export default function ChecklistSection({
 
   return (
     <section>
-      <div className="flex items-center justify-between mb-3">
-        {!hideHeader && <h2 className="text-sm font-semibold text-foreground">Checklist</h2>}
-        <GhostButton onClick={() => setShowAddItem((v) => !v)} variant="primary" size="xs" icon={<Plus size={12} />}>
-          Add item
-        </GhostButton>
-      </div>
+      {!hideHeader && (
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold text-foreground">Checklist</h2>
+          <GhostButton onClick={() => setShowAddItem((v) => !v)} variant="primary" size="xs" icon={<Plus size={12} />}>
+            Add item
+          </GhostButton>
+        </div>
+      )}
 
       {showAddItem && (
         <AddChecklistItemForm
@@ -328,14 +340,23 @@ export default function ChecklistSection({
         );
       })}
 
-      <div className="mt-1 space-y-1.5">
-        {hiddenCount > 0 && !showAllChecklist && (
-          <button onClick={() => setShowAllChecklist(true)} className="text-xs text-muted hover:text-foreground transition-colors">Show all</button>
-        )}
-        {showAllChecklist && items.length > 0 && (
-          <button onClick={() => setShowAllChecklist(false)} className="text-xs text-muted hover:text-foreground transition-colors">Show fewer</button>
-        )}
-      </div>
+      {!hideHeader && (
+        <div className="mt-1 space-y-1.5">
+          {hiddenCount > 0 && !showAllChecklist && (
+            <button onClick={() => setShowAllChecklist(true)} className="text-xs text-muted hover:text-foreground transition-colors">Show all</button>
+          )}
+          {showAllChecklist && items.length > 0 && (
+            <button onClick={() => setShowAllChecklist(false)} className="text-xs text-muted hover:text-foreground transition-colors">Show fewer</button>
+          )}
+        </div>
+      )}
+
+      {hideHeader && (
+        <Button className="w-full mt-3" onClick={() => setShowAddItem((v) => !v)}>
+          <Plus size={16} />
+          Add item
+        </Button>
+      )}
     </section>
   );
 }
