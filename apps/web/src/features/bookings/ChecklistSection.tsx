@@ -183,18 +183,19 @@ function ChecklistItemRow({ item, isActionPending, onToggle, onOpenCompose, onCh
 }
 
 interface AddChecklistItemFormProps {
+  className?: string;
   onSave: (data: { label: string; requiredForStatus: string | null; dueDate: string | null }) => void;
   isSaving: boolean;
   onDone: () => void;
 }
 
-function AddChecklistItemForm({ onSave, isSaving, onDone }: AddChecklistItemFormProps) {
+function AddChecklistItemForm({ onSave, isSaving, onDone, className }: AddChecklistItemFormProps) {
   const [label, setLabel] = useState('');
   const [stage, setStage] = useState('NONE');
   const [dueDate, setDueDate] = useState('');
 
   return (
-    <div className="mb-4 p-3 bg-surface border border-border rounded-md space-y-2.5">
+    <div className={cn("mb-4 p-3 bg-surface border border-border rounded-md space-y-2.5", className)}>
       <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Item label" className="text-sm" autoFocus />
       <div className="space-y-1">
         <Select value={stage} onValueChange={setStage}>
@@ -329,13 +330,12 @@ export default function ChecklistSection({
             <SheetHeader>
               <SheetTitle>Add checklist item</SheetTitle>
             </SheetHeader>
-            <div className="pt-4">
-              <AddChecklistItemForm
-                onSave={(data) => { onAddItem(data); setShowAddItem(false); }}
-                isSaving={isAddingItem}
-                onDone={() => setShowAddItem(false)}
-              />
-            </div>
+            <AddChecklistItemForm
+              className="bg-transparent border-0 p-0 rounded-none mb-0"
+              onSave={(data) => { onAddItem(data); setShowAddItem(false); }}
+              isSaving={isAddingItem}
+              onDone={() => setShowAddItem(false)}
+            />
           </SheetContent>
         </Sheet>
       ) : showAddItem && (
