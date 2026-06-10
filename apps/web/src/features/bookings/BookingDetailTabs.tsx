@@ -32,9 +32,9 @@ export default function BookingDetailTabs({ defaultTab, checklist, onTheDay, inf
             Info
           </TabsTrigger>
         </TabsList>
-        <TabsContent value="checklist">{checklist}</TabsContent>
-        <TabsContent value="onTheDay">{onTheDay}</TabsContent>
-        <TabsContent value="info">{info}</TabsContent>
+        <TabsContent value="checklist" className="data-[state=active]:animate-in data-[state=active]:fade-in data-[state=active]:slide-in-from-bottom-2 data-[state=active]:duration-200">{checklist}</TabsContent>
+        <TabsContent value="onTheDay" className="data-[state=active]:animate-in data-[state=active]:fade-in data-[state=active]:slide-in-from-bottom-2 data-[state=active]:duration-200">{onTheDay}</TabsContent>
+        <TabsContent value="info" className="data-[state=active]:animate-in data-[state=active]:fade-in data-[state=active]:slide-in-from-bottom-2 data-[state=active]:duration-200">{info}</TabsContent>
       </Tabs>
     </div>
   );
