@@ -3,6 +3,8 @@ import confetti from 'canvas-confetti';
 import {
   AlertTriangle,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Circle,
   Lock,
   Plus,
@@ -321,6 +323,7 @@ export default function ChecklistSection({
         <GhostButton
           onClick={() => setShowAllChecklist((v) => !v)}
           size="xs"
+          icon={showAllChecklist ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
           className="w-full justify-center mb-2"
         >
           {showAllChecklist ? 'Show fewer' : `Show all${hiddenCount > 0 ? ` (${hiddenCount} hidden)` : ''}`}
