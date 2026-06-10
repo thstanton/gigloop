@@ -282,7 +282,8 @@ export default function ChecklistSection({
   if (hideHeader) {
     // Tab view: show everything from current stage onwards; hide only past stages
     const forwardSet = new Set<string | null>([null, ...STAGE_LIST.slice(bookingIdx >= 0 ? bookingIdx : 0)]);
-    filtered = baseList.filter((i) => forwardSet.has(i.requiredForStatus));
+    filtered = showAllChecklist ? baseList : baseList.filter((i) => forwardSet.has(i.requiredForStatus));
+    hiddenCount = baseList.length - filtered.length;
   } else {
     // Sidebar view: current + next stage only, with show-all toggle
     const defaultStageSet = new Set<string | null>([null]);
@@ -310,6 +311,15 @@ export default function ChecklistSection({
             Add item
           </GhostButton>
         </div>
+      )}
+
+      {hideHeader && (
+        <button
+          onClick={() => setShowAllChecklist((v) => !v)}
+          className="w-full text-xs text-muted hover:text-foreground transition-colors text-center py-1.5 mb-2 border border-border rounded"
+        >
+          {showAllChecklist ? 'Show fewer' : `Show all${hiddenCount > 0 ? ` (${hiddenCount} hidden)` : ''}`}
+        </button>
       )}
 
       {showAddItem && (
