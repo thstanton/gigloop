@@ -12,10 +12,25 @@ export default function BookingDetailTabs({ defaultTab, checklist, onTheDay, inf
   return (
     <div className="md:hidden">
       <Tabs defaultValue={defaultTab}>
-        <TabsList className="w-full">
-          <TabsTrigger value="checklist" className="flex-1">Checklist</TabsTrigger>
-          <TabsTrigger value="onTheDay" className="flex-1">On the Day</TabsTrigger>
-          <TabsTrigger value="info" className="flex-1">Info</TabsTrigger>
+        <TabsList className="w-full rounded-none bg-transparent border-b border-border h-auto p-0 gap-0">
+          <TabsTrigger
+            value="checklist"
+            className="flex-1 rounded-none bg-transparent shadow-none border-b-2 border-transparent text-muted py-3 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-primary data-[state=active]:text-foreground"
+          >
+            Checklist
+          </TabsTrigger>
+          <TabsTrigger
+            value="onTheDay"
+            className="flex-1 rounded-none bg-transparent shadow-none border-b-2 border-transparent text-muted py-3 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-primary data-[state=active]:text-foreground"
+          >
+            On the Day
+          </TabsTrigger>
+          <TabsTrigger
+            value="info"
+            className="flex-1 rounded-none bg-transparent shadow-none border-b-2 border-transparent text-muted py-3 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-primary data-[state=active]:text-foreground"
+          >
+            Info
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="checklist">{checklist}</TabsContent>
         <TabsContent value="onTheDay">{onTheDay}</TabsContent>
