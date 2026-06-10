@@ -318,12 +318,13 @@ export default function ChecklistSection({
       )}
 
       {hideHeader && (
-        <button
+        <GhostButton
           onClick={() => setShowAllChecklist((v) => !v)}
-          className="w-full text-xs text-muted hover:text-foreground transition-colors text-center py-1.5 mb-2 border border-border rounded"
+          size="xs"
+          className="w-full justify-center mb-2"
         >
           {showAllChecklist ? 'Show fewer' : `Show all${hiddenCount > 0 ? ` (${hiddenCount} hidden)` : ''}`}
-        </button>
+        </GhostButton>
       )}
 
       {hideHeader ? (
