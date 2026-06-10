@@ -10,8 +10,7 @@ interface BookingDetailTabsProps {
 
 export default function BookingDetailTabs({ defaultTab, checklist, onTheDay, info }: BookingDetailTabsProps) {
   return (
-    <div className="md:hidden">
-      <Tabs defaultValue={defaultTab}>
+    <Tabs defaultValue={defaultTab}>
         <TabsList className="w-full rounded-none bg-transparent border-b border-border h-auto p-0 gap-0">
           <TabsTrigger
             value="checklist"
@@ -36,6 +35,5 @@ export default function BookingDetailTabs({ defaultTab, checklist, onTheDay, inf
         <TabsContent value="onTheDay" className="data-[state=active]:animate-in data-[state=active]:fade-in data-[state=active]:slide-in-from-bottom-2 data-[state=active]:duration-200">{onTheDay}</TabsContent>
         <TabsContent value="info" className="data-[state=active]:animate-in data-[state=active]:fade-in data-[state=active]:slide-in-from-bottom-2 data-[state=active]:duration-200">{info}</TabsContent>
       </Tabs>
-    </div>
   );
 }

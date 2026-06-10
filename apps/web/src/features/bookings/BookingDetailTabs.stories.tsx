@@ -16,9 +16,6 @@ const InfoContent = () => (
 const meta = {
   component: BookingDetailTabs,
   tags: ['ai-generated'],
-  parameters: {
-    viewport: { defaultViewport: 'mobile2' },
-  },
   args: {
     defaultTab: 'checklist',
     checklist: <ChecklistContent />,

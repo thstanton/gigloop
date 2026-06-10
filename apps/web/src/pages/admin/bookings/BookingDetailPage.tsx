@@ -626,6 +626,7 @@ export default function BookingDetailPage() {
       </section>
 
       {/* ─── Mobile tabs ─── */}
+      <div className="md:hidden">
       <BookingDetailTabs
         defaultTab={defaultTab}
         checklist={
@@ -851,6 +852,7 @@ export default function BookingDetailPage() {
           </div>
         }
       />
+      </div>
 
       {/* ─── Desktop two-column grid ─── */}
       <div className="hidden md:grid md:grid-cols-[3fr_2fr] md:gap-8 md:items-start mt-6">
