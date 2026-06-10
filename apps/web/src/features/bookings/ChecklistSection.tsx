@@ -9,6 +9,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { GhostButton } from '@/components/common/GhostButton';
 import { Input } from '@/components/ui/input';
 import {
@@ -322,7 +323,22 @@ export default function ChecklistSection({
         </button>
       )}
 
-      {showAddItem && (
+      {hideHeader ? (
+        <Sheet open={showAddItem} onOpenChange={setShowAddItem}>
+          <SheetContent side="bottom">
+            <SheetHeader>
+              <SheetTitle>Add checklist item</SheetTitle>
+            </SheetHeader>
+            <div className="pt-4">
+              <AddChecklistItemForm
+                onSave={(data) => { onAddItem(data); setShowAddItem(false); }}
+                isSaving={isAddingItem}
+                onDone={() => setShowAddItem(false)}
+              />
+            </div>
+          </SheetContent>
+        </Sheet>
+      ) : showAddItem && (
         <AddChecklistItemForm
           onSave={(data) => { onAddItem(data); setShowAddItem(false); }}
           isSaving={isAddingItem}
