@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiPost, apiPostVoid, apiDelete } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
@@ -6,7 +5,6 @@ import type { Contract } from '@/types/api';
 
 export function useContractActions(bookingId: string) {
   const queryClient = useQueryClient();
-  const [contractSheetState, setContractSheetState] = useState<{ readOnly: boolean; contract?: Contract } | null>(null);
 
   function invalidateBooking() {
     queryClient.invalidateQueries({ queryKey: ['booking', bookingId] });
@@ -15,10 +13,7 @@ export function useContractActions(bookingId: string) {
 
   const createContractMutation = useMutation({
     mutationFn: () => apiPost<Contract>(`/bookings/${bookingId}/contracts`, {}),
-    onSuccess: (data) => {
-      invalidateBooking();
-      setContractSheetState({ readOnly: false, contract: data });
-    },
+    onSuccess: () => invalidateBooking(),
     onError: () => toast({ title: 'Failed to create contract', variant: 'destructive' }),
   });
 
@@ -44,8 +39,6 @@ export function useContractActions(bookingId: string) {
   });
 
   return {
-    contractSheetState,
-    setContractSheetState,
     createContract: () => createContractMutation.mutate(),
     isCreatingContract: createContractMutation.isPending,
     sendContract: (contractId: string) => sendContractMutation.mutate(contractId),

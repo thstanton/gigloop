@@ -30,6 +30,16 @@ export function useBookingFields(bookingId: string) {
     onSuccess: () => invalidateBookingList(),
   });
 
+  const updateVenueMutation = useMutation({
+    mutationFn: (venueId: string | null) => apiPatch(`/bookings/${bookingId}`, { venueId }),
+    onSuccess: () => invalidateBookingList(),
+  });
+
+  const updateSeriesMutation = useMutation({
+    mutationFn: (seriesId: string | null) => apiPatch(`/bookings/${bookingId}`, { seriesId }),
+    onSuccess: () => invalidateBookingList(),
+  });
+
   return {
     updateStatus: (status: BookingStatus) => updateStatusMutation.mutate(status),
     isStatusPending: updateStatusMutation.isPending,
@@ -37,5 +47,9 @@ export function useBookingFields(bookingId: string) {
     isNotesPending: updateNotesMutation.isPending,
     updateFee: (fee: number) => updateFeeMutation.mutate(fee),
     isFeePending: updateFeeMutation.isPending,
+    updateVenue: (venueId: string | null) => updateVenueMutation.mutate(venueId),
+    isVenuePending: updateVenueMutation.isPending,
+    updateSeries: (seriesId: string | null) => updateSeriesMutation.mutate(seriesId),
+    isSeriesPending: updateSeriesMutation.isPending,
   };
 }
