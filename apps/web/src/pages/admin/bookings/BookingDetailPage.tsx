@@ -581,14 +581,14 @@ export default function BookingDetailPage() {
               <Eye size={16} />
               <span className="hidden md:inline">Client portal</span>
             </a>
-            <button
-              type="button"
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => setSearchParams({ edit: 'true' })}
-              className="inline-flex items-center justify-center gap-1.5 text-sm text-muted hover:text-foreground transition-colors border border-border rounded p-1.5 md:px-3 md:py-1.5"
             >
               <Pencil size={16} />
               <span className="hidden md:inline">Edit</span>
-            </button>
+            </Button>
           </div>
         </div>
         <div className="flex items-center justify-between md:flex-wrap md:justify-start md:gap-x-3 md:gap-y-1 mt-2">
