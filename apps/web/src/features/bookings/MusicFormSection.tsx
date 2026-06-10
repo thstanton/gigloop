@@ -21,6 +21,7 @@ export interface MusicFormSectionProps {
   onUpdateConfig: () => void;
   onViewResponse: () => void;
   onEdit: () => void;
+  hideWhenEmpty?: boolean;
 }
 
 function groupByGenre(songs: MusicFormResponseSong[]): Map<string, MusicFormResponseSong[]> {
@@ -122,9 +123,12 @@ export default function MusicFormSection({
   onUpdateConfig,
   onViewResponse,
   onEdit,
+  hideWhenEmpty = false,
 }: Readonly<MusicFormSectionProps>) {
   const [viewingResponse, setViewingResponse] = useState(false);
   const songListDoc = documents.find((d) => d.type === 'SONG_LIST');
+
+  if (!booking.hasMusicFormConfig && hideWhenEmpty) return null;
 
   if (!booking.hasMusicFormConfig) {
     return (

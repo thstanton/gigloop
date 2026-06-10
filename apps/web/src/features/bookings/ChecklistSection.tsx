@@ -3,13 +3,16 @@ import confetti from 'canvas-confetti';
 import {
   AlertTriangle,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Circle,
   Lock,
   Plus,
   Sparkles,
 } from 'lucide-react';
-import { GhostButton } from '@/components/common/GhostButton';
 import { Button } from '@/components/ui/button';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { GhostButton } from '@/components/common/GhostButton';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -18,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { DatePicker } from '@/components/ui/date-picker';
 import { cn } from '@/lib/utils';
 import type { BookingStatus, ChecklistItem, ChecklistItemState } from '@/types/api';
 
@@ -182,22 +186,24 @@ function ChecklistItemRow({ item, isActionPending, onToggle, onOpenCompose, onCh
 }
 
 interface AddChecklistItemFormProps {
+  className?: string;
+  compact?: boolean;
   onSave: (data: { label: string; requiredForStatus: string | null; dueDate: string | null }) => void;
   isSaving: boolean;
   onDone: () => void;
 }
 
-function AddChecklistItemForm({ onSave, isSaving, onDone }: AddChecklistItemFormProps) {
+function AddChecklistItemForm({ onSave, isSaving, onDone, className, compact = true }: AddChecklistItemFormProps) {
   const [label, setLabel] = useState('');
   const [stage, setStage] = useState('NONE');
   const [dueDate, setDueDate] = useState('');
 
   return (
-    <div className="mb-4 p-3 bg-surface border border-border rounded-md space-y-2.5">
-      <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Item label" className="text-sm" autoFocus />
+    <div className={cn("mb-4 p-3 bg-surface border border-border rounded-md space-y-2.5", className)}>
+      <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Item label" className={compact ? 'text-sm' : ''} autoFocus />
       <div className="space-y-1">
         <Select value={stage} onValueChange={setStage}>
-          <SelectTrigger className="text-sm h-8 w-full">
+          <SelectTrigger className={compact ? 'text-sm h-8 w-full' : 'w-full'}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -210,7 +216,7 @@ function AddChecklistItemForm({ onSave, isSaving, onDone }: AddChecklistItemForm
         </Select>
         <p className="text-xs text-muted">Must be complete before advancing to this stage</p>
       </div>
-      <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="text-sm h-8" />
+      <DatePicker value={dueDate} onChange={setDueDate} placeholder="Due date (optional)" className={compact ? 'h-8 text-sm' : ''} />
       <div className="flex gap-2">
         <Button
           size="sm"
@@ -236,6 +242,7 @@ export interface ChecklistSectionProps {
   onAddItem: (data: { label: string; requiredForStatus: string | null; dueDate: string | null }) => void;
   isAddingItem?: boolean;
   isActionPending?: boolean;
+  hideHeader?: boolean;
 }
 
 export default function ChecklistSection({
@@ -249,6 +256,7 @@ export default function ChecklistSection({
   onAddItem,
   isAddingItem = false,
   isActionPending = false,
+  hideHeader = false,
 }: ChecklistSectionProps) {
   const [showAllChecklist, setShowAllChecklist] = useState(false);
   const [showAddItem, setShowAddItem] = useState(false);
@@ -269,16 +277,26 @@ export default function ChecklistSection({
     );
   }
 
-  const baseList = showAllChecklist ? items : items.filter((i) => i.state !== 'BLOCKED');
+  const baseList = items.filter((i) => i.state !== 'BLOCKED' || showAllChecklist);
   if (baseList.length === 0 && !showAddItem) return null;
 
   const bookingIdx = STAGE_LIST.indexOf(bookingStatus as typeof STAGE_LIST[number]);
-  const defaultStageSet = new Set<string | null>([null]);
-  if (bookingIdx >= 0) defaultStageSet.add(STAGE_LIST[bookingIdx]);
-  if (bookingIdx >= 0 && bookingIdx + 1 < STAGE_LIST.length) defaultStageSet.add(STAGE_LIST[bookingIdx + 1]);
 
-  const filtered = showAllChecklist ? baseList : baseList.filter((i) => defaultStageSet.has(i.requiredForStatus));
+  let filtered: ChecklistItem[];
+
+  if (hideHeader) {
+    // Tab view: show everything from current stage onwards; hide only past stages
+    const forwardSet = new Set<string | null>([null, ...STAGE_LIST.slice(bookingIdx >= 0 ? bookingIdx : 0)]);
+    filtered = showAllChecklist ? baseList : baseList.filter((i) => forwardSet.has(i.requiredForStatus));
+  } else {
+    // Sidebar view: current + next stage only, with show-all toggle
+    const defaultStageSet = new Set<string | null>([null]);
+    if (bookingIdx >= 0) defaultStageSet.add(STAGE_LIST[bookingIdx]);
+    if (bookingIdx >= 0 && bookingIdx + 1 < STAGE_LIST.length) defaultStageSet.add(STAGE_LIST[bookingIdx + 1]);
+    filtered = showAllChecklist ? baseList : baseList.filter((i) => defaultStageSet.has(i.requiredForStatus));
+  }
   const hiddenCount = baseList.length - filtered.length;
+  const showAllLabel = hiddenCount > 0 ? `Show all (${hiddenCount} hidden)` : 'Show all';
 
   const itemsByStage = new Map<string | null, ChecklistItem[]>();
   for (const item of filtered) {
@@ -291,14 +309,42 @@ export default function ChecklistSection({
 
   return (
     <section>
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-sm font-semibold text-foreground">Checklist</h2>
-        <GhostButton onClick={() => setShowAddItem((v) => !v)} variant="primary" size="xs" icon={<Plus size={12} />}>
-          Add item
-        </GhostButton>
-      </div>
+      {!hideHeader && (
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold text-foreground">Checklist</h2>
+          <GhostButton onClick={() => setShowAddItem((v) => !v)} variant="primary" size="xs" icon={<Plus size={12} />}>
+            Add item
+          </GhostButton>
+        </div>
+      )}
 
-      {showAddItem && (
+      {hideHeader && (
+        <GhostButton
+          onClick={() => setShowAllChecklist((v) => !v)}
+          size="xs"
+          icon={showAllChecklist ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
+          className="w-full justify-center mb-2"
+        >
+          {showAllChecklist ? 'Show fewer' : showAllLabel}
+        </GhostButton>
+      )}
+
+      {hideHeader ? (
+        <Sheet open={showAddItem} onOpenChange={setShowAddItem}>
+          <SheetContent side="bottom">
+            <SheetHeader>
+              <SheetTitle>Add checklist item</SheetTitle>
+            </SheetHeader>
+            <AddChecklistItemForm
+              className="bg-transparent border-0 p-0 rounded-none mb-0 mt-6"
+              compact={false}
+              onSave={(data) => { onAddItem(data); setShowAddItem(false); }}
+              isSaving={isAddingItem}
+              onDone={() => setShowAddItem(false)}
+            />
+          </SheetContent>
+        </Sheet>
+      ) : showAddItem && (
         <AddChecklistItemForm
           onSave={(data) => { onAddItem(data); setShowAddItem(false); }}
           isSaving={isAddingItem}
@@ -326,14 +372,23 @@ export default function ChecklistSection({
         );
       })}
 
-      <div className="mt-1 space-y-1.5">
-        {hiddenCount > 0 && !showAllChecklist && (
-          <button onClick={() => setShowAllChecklist(true)} className="text-xs text-muted hover:text-foreground transition-colors">Show all</button>
-        )}
-        {showAllChecklist && items.length > 0 && (
-          <button onClick={() => setShowAllChecklist(false)} className="text-xs text-muted hover:text-foreground transition-colors">Show fewer</button>
-        )}
-      </div>
+      {!hideHeader && (
+        <div className="mt-1 space-y-1.5">
+          {hiddenCount > 0 && !showAllChecklist && (
+            <button onClick={() => setShowAllChecklist(true)} className="text-xs text-muted hover:text-foreground transition-colors">Show all</button>
+          )}
+          {showAllChecklist && items.length > 0 && (
+            <button onClick={() => setShowAllChecklist(false)} className="text-xs text-muted hover:text-foreground transition-colors">Show fewer</button>
+          )}
+        </div>
+      )}
+
+      {hideHeader && (
+        <Button className="w-full mt-3" onClick={() => setShowAddItem((v) => !v)}>
+          <Plus size={16} />
+          Add item
+        </Button>
+      )}
     </section>
   );
 }
