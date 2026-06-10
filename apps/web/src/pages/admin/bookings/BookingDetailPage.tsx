@@ -557,6 +557,23 @@ export default function BookingDetailPage() {
       ? 'checklist'
       : 'onTheDay';
 
+  const editSection = (section: string) => setSearchParams((prev) => {
+    const next = new URLSearchParams(prev);
+    next.set('edit', 'true');
+    next.set('section', section);
+    return next;
+  });
+
+  const downloadDoc = async (url: string, filename: string) => {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    const a = window.document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
   return (
     <div className="px-4 md:px-6 py-6 max-w-7xl mx-auto">
 
@@ -655,12 +672,12 @@ export default function BookingDetailPage() {
               <ItineraryCard
                 logistics={booking.logistics}
                 sets={booking.sets}
-                onEdit={() => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('edit', 'true'); next.set('section', 'onTheDay'); return next; })}
+                onEdit={() => editSection('onTheDay')}
                 hideWhenEmpty
               />
               <DetailsCard
                 logistics={booking.logistics}
-                onEdit={() => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('edit', 'true'); next.set('section', 'onTheDay'); return next; })}
+                onEdit={() => editSection('onTheDay')}
                 hideWhenEmpty
               />
             </div>
@@ -809,15 +826,6 @@ export default function BookingDetailPage() {
                     const invoiceLabel = invoice?.isDeposit ? 'Deposit invoice' : 'Balance invoice';
                     const label = doc.type === 'CONTRACT' ? contractLabel : invoiceLabel;
                     const filename = `${label.toLowerCase().replace(' ', '-')}.pdf`;
-                    const handleDownload = async () => {
-                      const res = await fetch(doc.url);
-                      const blob = await res.blob();
-                      const a = window.document.createElement('a');
-                      a.href = URL.createObjectURL(blob);
-                      a.download = filename;
-                      a.click();
-                      URL.revokeObjectURL(a.href);
-                    };
                     return (
                       <div key={doc.id} className="flex items-center gap-2 py-2">
                         <FileText size={14} className="flex-shrink-0 text-muted mt-0.5 self-start" />
@@ -831,7 +839,7 @@ export default function BookingDetailPage() {
                           {new Date(doc.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                         </span>
                         <button
-                          onClick={handleDownload}
+                          onClick={() => downloadDoc(doc.url, filename)}
                           title="Download"
                           className="text-muted hover:text-foreground shrink-0"
                         >
@@ -849,7 +857,7 @@ export default function BookingDetailPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <PerformanceSection
                   booking={booking}
-                  onEdit={() => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('edit', 'true'); next.set('section', 'packages'); return next; })}
+                  onEdit={() => editSection('packages')}
                   hideWhenEmpty
                 />
                 <MusicFormSection
@@ -858,9 +866,9 @@ export default function BookingDetailPage() {
                   config={musicFormConfig ?? null}
                   isLoading={musicFormConfigLoading}
                   response={musicFormResponse ?? null}
-                  onUpdateConfig={() => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('edit', 'true'); next.set('section', 'musicForm'); return next; })}
+                  onUpdateConfig={() => editSection('musicForm')}
                   onViewResponse={() => setViewingMusicFormResponse(true)}
-                  onEdit={() => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('edit', 'true'); next.set('section', 'musicForm'); return next; })}
+                  onEdit={() => editSection('musicForm')}
                   hideWhenEmpty
                 />
               </div>
@@ -888,11 +896,11 @@ export default function BookingDetailPage() {
               <ItineraryCard
                 logistics={booking.logistics}
                 sets={booking.sets}
-                onEdit={() => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('edit', 'true'); next.set('section', 'onTheDay'); return next; })}
+                onEdit={() => editSection('onTheDay')}
               />
               <DetailsCard
                 logistics={booking.logistics}
-                onEdit={() => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('edit', 'true'); next.set('section', 'onTheDay'); return next; })}
+                onEdit={() => editSection('onTheDay')}
               />
             </div>
             {booking.venue ? (
@@ -921,7 +929,7 @@ export default function BookingDetailPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <PerformanceSection
                 booking={booking}
-                onEdit={() => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('edit', 'true'); next.set('section', 'packages'); return next; })}
+                onEdit={() => editSection('packages')}
               />
               <MusicFormSection
                 booking={booking}
@@ -929,9 +937,9 @@ export default function BookingDetailPage() {
                 config={musicFormConfig ?? null}
                 isLoading={musicFormConfigLoading}
                 response={musicFormResponse ?? null}
-                onUpdateConfig={() => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('edit', 'true'); next.set('section', 'musicForm'); return next; })}
+                onUpdateConfig={() => editSection('musicForm')}
                 onViewResponse={() => setViewingMusicFormResponse(true)}
-                onEdit={() => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('edit', 'true'); next.set('section', 'musicForm'); return next; })}
+                onEdit={() => editSection('musicForm')}
               />
             </div>
           </section>
@@ -1066,15 +1074,6 @@ export default function BookingDetailPage() {
                   const invoiceLabel = invoice?.isDeposit ? 'Deposit invoice' : 'Balance invoice';
                   const label = doc.type === 'CONTRACT' ? contractLabel : invoiceLabel;
                   const filename = `${label.toLowerCase().replace(' ', '-')}.pdf`;
-                  const handleDownload = async () => {
-                    const res = await fetch(doc.url);
-                    const blob = await res.blob();
-                    const a = window.document.createElement('a');
-                    a.href = URL.createObjectURL(blob);
-                    a.download = filename;
-                    a.click();
-                    URL.revokeObjectURL(a.href);
-                  };
                   return (
                     <div key={doc.id} className="flex items-center gap-2 py-2">
                       <FileText size={14} className="flex-shrink-0 text-muted mt-0.5 self-start" />
@@ -1088,7 +1087,7 @@ export default function BookingDetailPage() {
                         {new Date(doc.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                       </span>
                       <button
-                        onClick={handleDownload}
+                        onClick={() => downloadDoc(doc.url, filename)}
                         title="Download"
                         className="text-muted hover:text-foreground shrink-0"
                       >

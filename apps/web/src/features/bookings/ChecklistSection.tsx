@@ -289,15 +289,14 @@ export default function ChecklistSection({
     // Tab view: show everything from current stage onwards; hide only past stages
     const forwardSet = new Set<string | null>([null, ...STAGE_LIST.slice(bookingIdx >= 0 ? bookingIdx : 0)]);
     filtered = showAllChecklist ? baseList : baseList.filter((i) => forwardSet.has(i.requiredForStatus));
-    hiddenCount = baseList.length - filtered.length;
   } else {
     // Sidebar view: current + next stage only, with show-all toggle
     const defaultStageSet = new Set<string | null>([null]);
     if (bookingIdx >= 0) defaultStageSet.add(STAGE_LIST[bookingIdx]);
     if (bookingIdx >= 0 && bookingIdx + 1 < STAGE_LIST.length) defaultStageSet.add(STAGE_LIST[bookingIdx + 1]);
     filtered = showAllChecklist ? baseList : baseList.filter((i) => defaultStageSet.has(i.requiredForStatus));
-    hiddenCount = baseList.length - filtered.length;
   }
+  const hiddenCount = baseList.length - filtered.length;
 
   const itemsByStage = new Map<string | null, ChecklistItem[]>();
   for (const item of filtered) {
