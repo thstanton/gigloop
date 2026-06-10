@@ -19,6 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { DatePicker } from '@/components/ui/date-picker';
 import { cn } from '@/lib/utils';
 import type { BookingStatus, ChecklistItem, ChecklistItemState } from '@/types/api';
 
@@ -213,7 +214,7 @@ function AddChecklistItemForm({ onSave, isSaving, onDone, className, compact = t
         </Select>
         <p className="text-xs text-muted">Must be complete before advancing to this stage</p>
       </div>
-      <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className={compact ? 'text-sm h-8' : ''} />
+      <DatePicker value={dueDate} onChange={setDueDate} placeholder="Due date (optional)" className={compact ? 'h-8 text-sm' : ''} />
       <div className="flex gap-2">
         <Button
           size="sm"
