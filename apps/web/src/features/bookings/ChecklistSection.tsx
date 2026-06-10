@@ -332,7 +332,7 @@ export default function ChecklistSection({
               <SheetTitle>Add checklist item</SheetTitle>
             </SheetHeader>
             <AddChecklistItemForm
-              className="bg-transparent border-0 p-0 rounded-none mb-0"
+              className="bg-transparent border-0 p-0 rounded-none mb-0 mt-6"
               compact={false}
               onSave={(data) => { onAddItem(data); setShowAddItem(false); }}
               isSaving={isAddingItem}
