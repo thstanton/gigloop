@@ -184,22 +184,23 @@ function ChecklistItemRow({ item, isActionPending, onToggle, onOpenCompose, onCh
 
 interface AddChecklistItemFormProps {
   className?: string;
+  compact?: boolean;
   onSave: (data: { label: string; requiredForStatus: string | null; dueDate: string | null }) => void;
   isSaving: boolean;
   onDone: () => void;
 }
 
-function AddChecklistItemForm({ onSave, isSaving, onDone, className }: AddChecklistItemFormProps) {
+function AddChecklistItemForm({ onSave, isSaving, onDone, className, compact = true }: AddChecklistItemFormProps) {
   const [label, setLabel] = useState('');
   const [stage, setStage] = useState('NONE');
   const [dueDate, setDueDate] = useState('');
 
   return (
     <div className={cn("mb-4 p-3 bg-surface border border-border rounded-md space-y-2.5", className)}>
-      <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Item label" className="text-sm" autoFocus />
+      <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Item label" className={compact ? 'text-sm' : ''} autoFocus />
       <div className="space-y-1">
         <Select value={stage} onValueChange={setStage}>
-          <SelectTrigger className="text-sm h-8 w-full">
+          <SelectTrigger className={compact ? 'text-sm h-8 w-full' : 'w-full'}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -212,7 +213,7 @@ function AddChecklistItemForm({ onSave, isSaving, onDone, className }: AddCheckl
         </Select>
         <p className="text-xs text-muted">Must be complete before advancing to this stage</p>
       </div>
-      <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="text-sm h-8" />
+      <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className={compact ? 'text-sm h-8' : ''} />
       <div className="flex gap-2">
         <Button
           size="sm"
@@ -332,6 +333,7 @@ export default function ChecklistSection({
             </SheetHeader>
             <AddChecklistItemForm
               className="bg-transparent border-0 p-0 rounded-none mb-0"
+              compact={false}
               onSave={(data) => { onAddItem(data); setShowAddItem(false); }}
               isSaving={isAddingItem}
               onDone={() => setShowAddItem(false)}
