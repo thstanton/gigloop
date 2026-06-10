@@ -576,7 +576,7 @@ export default function BookingDetailPage() {
           <div className="flex items-center gap-2 flex-shrink-0">
             <a
               href={`/booking/${booking.portalToken}?preview=admin&from=${backUrl}`}
-              className="inline-flex items-center justify-center gap-1.5 text-sm text-muted hover:text-foreground transition-colors border border-border rounded p-1.5 md:px-3 md:py-1.5"
+              className="inline-flex items-center justify-center gap-1.5 text-sm text-muted hover:text-foreground transition-colors border border-border rounded h-9 w-9 md:w-auto md:px-3"
             >
               <Eye size={16} />
               <span className="hidden md:inline">Client portal</span>
@@ -584,6 +584,7 @@ export default function BookingDetailPage() {
             <Button
               variant="outline"
               size="sm"
+              className="w-9 px-0 md:w-auto md:px-3"
               onClick={() => setSearchParams({ edit: 'true' })}
             >
               <Pencil size={16} />
