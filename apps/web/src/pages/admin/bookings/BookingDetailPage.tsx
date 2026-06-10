@@ -47,6 +47,7 @@ import InlineFeeAdd from '@/features/bookings/InlineFeeAdd';
 import ItineraryCard from '@/features/bookings/ItineraryCard';
 import DetailsCard from '@/features/bookings/DetailsCard';
 import PerformanceSection from '@/features/bookings/PerformanceSection';
+import BookingDetailTabs from '@/features/bookings/BookingDetailTabs';
 import { toast } from '@/lib/hooks/use-toast';
 import { apiGet, apiPatch, apiPost, apiPostVoid, apiDelete } from '@/lib/api';
 import {
@@ -551,6 +552,11 @@ export default function BookingDetailPage() {
     venueTravelTime = { minutes: booking.venue.travelTimeMinutes, distanceMetres: booking.venue.travelDistanceMetres };
   }
 
+  const defaultTab: 'checklist' | 'onTheDay' =
+    booking.status === 'ENQUIRY' || booking.status === 'PROVISIONAL' || booking.status === 'CONFIRMED'
+      ? 'checklist'
+      : 'onTheDay';
+
   return (
     <div className="px-4 md:px-6 py-6 max-w-7xl mx-auto">
 
@@ -563,68 +569,296 @@ export default function BookingDetailPage() {
         {backNav?.label ?? 'Bookings'}
       </Link>
 
-      <div className="mt-6 flex flex-col gap-8 md:grid md:grid-cols-[3fr_2fr] md:gap-8 md:items-start">
+      {/* ─── Overview strip (always visible) ─── */}
+      <section className="mt-6">
+        <div className="flex items-start justify-between gap-4">
+          <h1 className="font-display text-2xl font-semibold text-foreground">{title}</h1>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <a
+              href={`/booking/${booking.portalToken}?preview=admin&from=${backUrl}`}
+              className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-foreground transition-colors border border-border rounded px-3 py-1.5"
+            >
+              Client portal
+            </a>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSearchParams({ edit: 'true' })}
+            >
+              Edit
+            </Button>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2">
+          <BookingStatusDropdown
+            currentStatus={booking.status}
+            checklist={checklist}
+            onStatusChange={(status) => updateStatusMutation.mutate(status)}
+            isPending={updateStatusMutation.isPending}
+          />
+          <span className="text-sm text-muted">{formatDate(booking.date)}</span>
+          {feeWithVat
+            ? <span className="text-sm text-muted">{feeWithVat}</span>
+            : <InlineFeeAdd onSave={(fee) => updateFeeMutation.mutate(fee)} isSaving={updateFeeMutation.isPending} />
+          }
+          {booking.series ? (
+            <span className="inline-flex items-center gap-1.5 text-sm text-foreground border border-border rounded-full px-3 py-1.5">
+              {booking.series.label}
+              <button
+                type="button"
+                onClick={() => updateSeriesMutation.mutate({ seriesId: null })}
+                className="hover:text-foreground transition-colors"
+                aria-label="Remove from series"
+              >
+                <X size={12} />
+              </button>
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setSeriesSheetOpen(true)}
+              className="text-sm text-muted hover:text-foreground transition-colors underline underline-offset-2"
+            >
+              + Add to series
+            </button>
+          )}
+        </div>
+      </section>
 
-        {/* ─── Left column top: Header + For the Day ─── */}
+      {/* ─── Mobile tabs ─── */}
+      <BookingDetailTabs
+        defaultTab={defaultTab}
+        checklist={
+          booking.status !== 'CANCELLED' ? (
+            <ChecklistSection
+              items={checklist}
+              isLoading={checklistLoading}
+              bookingStatus={booking.status}
+              onToggle={(itemId, state) => toggleChecklistItem.mutate({ itemId, state })}
+              onChecklistAction={handleChecklistAction}
+              onOpenCompose={openCompose}
+              onMarkDone={handleMarkDone}
+              onAddItem={(data) => addChecklistItem.mutate(data)}
+              isAddingItem={addChecklistItem.isPending}
+              isActionPending={actions.isPending || markPaid.isPending}
+            />
+          ) : null
+        }
+        onTheDay={
+          <div className="space-y-4 pt-2">
+            <SectionHeader label="For the day" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <ItineraryCard
+                logistics={booking.logistics}
+                sets={booking.sets}
+                onEdit={() => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('edit', 'true'); next.set('section', 'onTheDay'); return next; })}
+              />
+              <DetailsCard
+                logistics={booking.logistics}
+                onEdit={() => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('edit', 'true'); next.set('section', 'onTheDay'); return next; })}
+              />
+            </div>
+            {booking.venue ? (
+              <VenueMapWidget
+                venue={booking.venue}
+                showHeader={true}
+                cardTitle="Venue"
+                cardAction={
+                  <button type="button" onClick={() => setEditingContact(booking.venue!)} className="text-xs text-primary hover:text-primary/80 transition-colors">
+                    Edit
+                  </button>
+                }
+                contactHref={`/admin/contacts/${booking.venue.id}`}
+                travelTime={venueTravelTime}
+                isLoadingTravelTime={isFetchingTravelTime}
+                onRefreshTravelTime={() => queryClient.invalidateQueries({ queryKey: ['contact-travel-time', bookingVenueId] })}
+              />
+            ) : (
+              <InlineVenueAdd bookingId={booking.id} />
+            )}
+          </div>
+        }
+        info={
+          <div className="space-y-6 pt-2">
+            <section>
+              <SectionHeader label="Packages" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <PerformanceSection
+                  booking={booking}
+                  onEdit={() => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('edit', 'true'); next.set('section', 'packages'); return next; })}
+                />
+                <MusicFormSection
+                  booking={booking}
+                  documents={documents}
+                  config={musicFormConfig ?? null}
+                  isLoading={musicFormConfigLoading}
+                  response={musicFormResponse ?? null}
+                  onUpdateConfig={() => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('edit', 'true'); next.set('section', 'musicForm'); return next; })}
+                  onViewResponse={() => setViewingMusicFormResponse(true)}
+                  onEdit={() => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('edit', 'true'); next.set('section', 'musicForm'); return next; })}
+                />
+              </div>
+            </section>
+
+            <section>
+              <SectionHeader label="People" />
+              <div className="flex flex-row gap-4">
+                <PersonChip role="Customer" contact={booking.customer} linkState={backState} onEdit={() => setEditingContact(booking.customer)} />
+                {booking.bookingAgent && (
+                  <PersonChip
+                    role="Booking agent"
+                    contact={booking.bookingAgent}
+                    linkState={backState}
+                    onEdit={() => setEditingContact(booking.bookingAgent!)}
+                  />
+                )}
+              </div>
+            </section>
+
+            {booking.series && (
+              <SeriesEventsCard
+                bookings={seriesBookings.filter((b) => b.id !== booking.id)}
+                isLoading={seriesBookingsLoading}
+                onAddToSeries={() => navigate('/admin/bookings/new', { state: { seriesId: booking.series!.id } })}
+              />
+            )}
+
+            {booking.status !== 'CANCELLED' && (
+              <ContractCard
+                booking={booking}
+                documents={documents}
+                isCreating={createContract.isPending}
+                onCreateContract={() => createContract.mutate()}
+                onEdit={() => { setContractSheetReadOnly(false); setContractSheetOpen(true); }}
+                onPreview={() => { setContractSheetReadOnly(true); setContractSheetOpen(true); }}
+                onSend={() => openCompose(contractShortcutType)}
+                onVoid={(confirmSignedVoid) => {
+                  const contractId = booking.activeContract?.id;
+                  if (contractId) voidContractMutation.mutate({ contractId, confirmSignedVoid });
+                }}
+                onDelete={() => {
+                  const contractId = booking.activeContract?.id;
+                  if (contractId) deleteContractMutation.mutate(contractId);
+                }}
+              />
+            )}
+
+            {booking.series ? (
+              <SeriesInvoiceCard
+                seriesId={booking.series.id}
+                seriesLabel={booking.series.label}
+                onEdit={(inv) => {
+                  setEditingInvoice(inv as unknown as Invoice);
+                  setInvoiceSheetOpen(true);
+                }}
+                onSend={(inv) => {
+                  setComposeTemplateType('balance_invoice_cover');
+                  setComposeOpen(true);
+                  setEditingInvoice(inv as unknown as Invoice);
+                }}
+                onMarkSent={(inv) => setMarkSentInvoice(inv as unknown as Invoice)}
+              />
+            ) : (
+              <InvoiceSection
+                invoices={invoices}
+                documents={documents}
+                isPending={invoicesPending}
+                onNewDepositInvoice={() => {
+                  const fee = booking.fee ? parseFloat(booking.fee) : null;
+                  const pct = userProfile?.depositPercentage;
+                  openCreateInvoice({
+                    isDeposit: true,
+                    amount: fee && pct ? Math.round((fee * pct / 100) * 100) / 100 : undefined,
+                  });
+                }}
+                onNewBalanceInvoice={() => {
+                  const fee = booking.fee ? parseFloat(booking.fee) : null;
+                  const pct = userProfile?.depositPercentage;
+                  openCreateInvoice({
+                    isDeposit: false,
+                    amount: fee && pct ? Math.round((fee * (1 - pct / 100)) * 100) / 100 : undefined,
+                  });
+                }}
+                onEdit={openEditInvoice}
+                onDelete={(inv) => actions.deleteInvoice(inv.id)}
+                onSend={openSendInvoice}
+                onMarkSent={setMarkSentInvoice}
+                onMarkPaid={(inv) => markPaid.mutate(inv.id)}
+                onVoid={(inv) => voidInvoiceMutation.mutate(inv.id)}
+              />
+            )}
+
+            <CommunicationsSection
+              communications={communications}
+              onCompose={() => openCompose()}
+            />
+
+            <Card title="Documents">
+              {documents.length === 0 ? (
+                <div className="flex items-center gap-2 text-muted py-1">
+                  <FolderOpen size={14} />
+                  <span className="text-sm">No documents yet</span>
+                </div>
+              ) : (
+                <div className="divide-y divide-border">
+                  {documents.map((doc: Document) => {
+                    const invoice = invoices.find((i) => i.id === doc.invoiceId);
+                    const isVoidContract = doc.type === 'CONTRACT' && doc.contractStatus === 'VOID';
+                    const contractLabel = isVoidContract ? 'Contract [VOID]' : 'Contract';
+                    const invoiceLabel = invoice?.isDeposit ? 'Deposit invoice' : 'Balance invoice';
+                    const label = doc.type === 'CONTRACT' ? contractLabel : invoiceLabel;
+                    const filename = `${label.toLowerCase().replace(' ', '-')}.pdf`;
+                    const handleDownload = async () => {
+                      const res = await fetch(doc.url);
+                      const blob = await res.blob();
+                      const a = window.document.createElement('a');
+                      a.href = URL.createObjectURL(blob);
+                      a.download = filename;
+                      a.click();
+                      URL.revokeObjectURL(a.href);
+                    };
+                    return (
+                      <div key={doc.id} className="flex items-center gap-2 py-2">
+                        <FileText size={14} className="flex-shrink-0 text-muted mt-0.5 self-start" />
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-sm text-foreground">{label}</span>
+                          {invoice?.invoiceNumber && (
+                            <span className="text-xs text-muted">{invoice.invoiceNumber}</span>
+                          )}
+                        </div>
+                        <span className="text-muted ml-auto text-xs shrink-0">
+                          {new Date(doc.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </span>
+                        <button
+                          onClick={handleDownload}
+                          title="Download"
+                          className="text-muted hover:text-foreground shrink-0"
+                        >
+                          <Download size={14} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </Card>
+
+            <InlineNotes
+              notes={booking.notes}
+              onSave={(notes) => updateNotesMutation.mutate(notes)}
+              isSaving={updateNotesMutation.isPending}
+            />
+          </div>
+        }
+      />
+
+      {/* ─── Desktop two-column grid ─── */}
+      <div className="hidden md:grid md:grid-cols-[3fr_2fr] md:gap-8 md:items-start mt-6">
+
+        {/* ─── Left column top: For the Day + Packages ─── */}
         <div className="space-y-8 md:col-start-1">
 
-          {/* 1. Header */}
-          <section>
-            <div className="flex items-start justify-between gap-4">
-              <h1 className="font-display text-2xl font-semibold text-foreground">{title}</h1>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <a
-                  href={`/booking/${booking.portalToken}?preview=admin&from=${backUrl}`}
-                  className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-foreground transition-colors border border-border rounded px-3 py-1.5"
-                >
-                  Client portal
-                </a>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setSearchParams({ edit: 'true' })}
-                >
-                  Edit
-                </Button>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2">
-              <BookingStatusDropdown
-                currentStatus={booking.status}
-                checklist={checklist}
-                onStatusChange={(status) => updateStatusMutation.mutate(status)}
-                isPending={updateStatusMutation.isPending}
-              />
-              <span className="text-sm text-muted">{formatDate(booking.date)}</span>
-              {feeWithVat
-                ? <span className="text-sm text-muted">{feeWithVat}</span>
-                : <InlineFeeAdd onSave={(fee) => updateFeeMutation.mutate(fee)} isSaving={updateFeeMutation.isPending} />
-              }
-              {booking.series ? (
-                <span className="inline-flex items-center gap-1.5 text-sm text-foreground border border-border rounded-full px-3 py-1.5">
-                  {booking.series.label}
-                  <button
-                    type="button"
-                    onClick={() => updateSeriesMutation.mutate({ seriesId: null })}
-                    className="hover:text-foreground transition-colors"
-                    aria-label="Remove from series"
-                  >
-                    <X size={12} />
-                  </button>
-                </span>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setSeriesSheetOpen(true)}
-                  className="text-sm text-muted hover:text-foreground transition-colors underline underline-offset-2"
-                >
-                  + Add to series
-                </button>
-              )}
-            </div>
-          </section>
-
-          {/* 2. For the day */}
+          {/* For the day */}
           <section>
             <SectionHeader label="For the day" />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
@@ -658,7 +892,7 @@ export default function BookingDetailPage() {
             )}
           </section>
 
-          {/* 3. Packages */}
+          {/* Packages */}
           <section>
             <SectionHeader label="Packages" />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -703,20 +937,7 @@ export default function BookingDetailPage() {
           {/* People */}
           <section>
             <SectionHeader label="People" />
-            {/* Mobile: compact chips */}
-            <div className="flex flex-row gap-4 md:hidden">
-              <PersonChip role="Customer" contact={booking.customer} linkState={backState} onEdit={() => setEditingContact(booking.customer)} />
-              {booking.bookingAgent && (
-                <PersonChip
-                  role="Booking agent"
-                  contact={booking.bookingAgent}
-                  linkState={backState}
-                  onEdit={() => setEditingContact(booking.bookingAgent!)}
-                />
-              )}
-            </div>
-            {/* Desktop: full cards */}
-            <div className="hidden md:block border-t border-border">
+            <div className="border-t border-border">
               <PersonCard role="Customer" contact={booking.customer} linkState={backState} onEdit={() => setEditingContact(booking.customer)} />
               {booking.bookingAgent && (
                 <PersonCard
