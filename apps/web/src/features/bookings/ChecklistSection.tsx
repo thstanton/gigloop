@@ -283,7 +283,6 @@ export default function ChecklistSection({
   const bookingIdx = STAGE_LIST.indexOf(bookingStatus as typeof STAGE_LIST[number]);
 
   let filtered: ChecklistItem[];
-  let hiddenCount = 0;
 
   if (hideHeader) {
     // Tab view: show everything from current stage onwards; hide only past stages
@@ -297,6 +296,7 @@ export default function ChecklistSection({
     filtered = showAllChecklist ? baseList : baseList.filter((i) => defaultStageSet.has(i.requiredForStatus));
   }
   const hiddenCount = baseList.length - filtered.length;
+  const showAllLabel = hiddenCount > 0 ? `Show all (${hiddenCount} hidden)` : 'Show all';
 
   const itemsByStage = new Map<string | null, ChecklistItem[]>();
   for (const item of filtered) {
@@ -325,7 +325,7 @@ export default function ChecklistSection({
           icon={showAllChecklist ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
           className="w-full justify-center mb-2"
         >
-          {showAllChecklist ? 'Show fewer' : `Show all${hiddenCount > 0 ? ` (${hiddenCount} hidden)` : ''}`}
+          {showAllChecklist ? 'Show fewer' : showAllLabel}
         </GhostButton>
       )}
 
