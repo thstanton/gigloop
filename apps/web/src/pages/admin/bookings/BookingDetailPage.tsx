@@ -512,7 +512,6 @@ export default function BookingDetailPage() {
 
             <CommunicationsSection
               communications={communications}
-              onCompose={() => openCompose()}
             />
           </div>
         }

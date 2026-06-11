@@ -313,7 +313,6 @@ export function BookingDetailDesktop({ bookingId, onCreateContract }: BookingDet
         />
         <CommunicationsSection
           communications={communications}
-          onCompose={() => openCompose()}
         />
       </div>
 

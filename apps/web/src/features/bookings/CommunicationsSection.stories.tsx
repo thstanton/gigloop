@@ -35,7 +35,6 @@ const meta = {
   component: CommunicationsSection,
   tags: ['ai-generated'],
   decorators: [(Story) => React.createElement(MemoryRouter, {}, React.createElement(Story))],
-  args: { onCompose: () => {} },
 } satisfies Meta<typeof CommunicationsSection>;
 
 export default meta;

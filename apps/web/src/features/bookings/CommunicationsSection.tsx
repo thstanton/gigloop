@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { AlertTriangle, FileText, Mail } from 'lucide-react';
 import { GhostButton } from '@/components/common/GhostButton';
 import {
@@ -102,15 +103,15 @@ function CommunicationRow({ comm }: Readonly<{ comm: Communication }>) {
 
 export interface CommunicationsSectionProps {
   communications: Communication[];
-  onCompose: () => void;
 }
 
-export default function CommunicationsSection({ communications, onCompose }: Readonly<CommunicationsSectionProps>) {
+export default function CommunicationsSection({ communications }: Readonly<CommunicationsSectionProps>) {
+  const [, setSearchParams] = useSearchParams();
   return (
     <section>
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm font-semibold text-foreground">Communications</h2>
-        <GhostButton onClick={onCompose} variant="primary" size="xs" icon={<Mail size={12} />}>
+        <GhostButton onClick={() => setSearchParams({ sheet: 'compose' })} variant="primary" size="xs" icon={<Mail size={12} />}>
           Send email
         </GhostButton>
       </div>
