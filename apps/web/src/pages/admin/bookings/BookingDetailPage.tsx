@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '@clerk/react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, Eye, Pencil, X, FolderOpen, FileText, Download } from 'lucide-react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { useBooking } from '@/lib/hooks/useBooking';
 import { useBookingActions } from '@/lib/hooks/useBookingActions';
@@ -20,7 +20,7 @@ import ContractCard from '@/features/bookings/ContractCard';
 import InvoiceSection from '@/features/bookings/InvoiceSection';
 import { BookingDetailSheets } from '@/features/bookings/BookingDetailSheets';
 import { BookingDetailDesktop } from '@/features/bookings/BookingDetailDesktop';
-import { VenueMapWidget } from '@/components/common/VenueMapWidget';
+import { BookingVenueMapWidget } from '@/features/bookings/BookingVenueMapWidget';
 import PersonChip from '@/features/bookings/PersonChip';
 import CommunicationsSection from '@/features/bookings/CommunicationsSection';
 import MusicFormSection from '@/features/bookings/MusicFormSection';
@@ -46,7 +46,6 @@ import type {
   Document,
   Invoice,
   MusicFormConfig,
-  TravelTimeResponse,
   UserProfile,
 } from '@/types/api';
 
@@ -146,13 +145,6 @@ export default function BookingDetailPage() {
     enabled: isLoaded,
   });
 
-  const bookingVenueId = booking?.venue?.id;
-  const { data: travelTimeData, isFetching: isFetchingTravelTime } = useQuery({
-    queryKey: ['contact-travel-time', bookingVenueId],
-    queryFn: () => apiGet<TravelTimeResponse>(`/contacts/${bookingVenueId}/travel-time`),
-    enabled: isLoaded && !!bookingVenueId && !!booking?.venue?.latitude && !!booking?.venue?.longitude && !!userProfile?.latitude && !!userProfile?.longitude,
-  });
-
   const actions = useBookingActions(id!);
   const contractActions = useContractActions(id!);
   const invoiceActions = useInvoiceActions(id!);
@@ -168,7 +160,6 @@ export default function BookingDetailPage() {
     addItem,
     isAddingItem,
   } = useBookingChecklist(id!, booking, isLoaded);
-  const queryClient = useQueryClient();
   const { data: seriesBookings = [], isLoading: seriesBookingsLoading } = useSeriesBookings(booking?.series?.id);
 
   const { data: musicFormConfig, isLoading: musicFormConfigLoading } = useQuery({
@@ -269,13 +260,6 @@ export default function BookingDetailPage() {
 
   const backState = { from: `/admin/bookings/${id}`, label: title };
   const backUrl = encodeURIComponent(`/admin/bookings/${booking.id}`);
-
-  let venueTravelTime: { minutes: number; distanceMetres: number } | null = null;
-  if (travelTimeData) {
-    venueTravelTime = { minutes: travelTimeData.minutes, distanceMetres: travelTimeData.distanceMetres };
-  } else if (booking.venue?.travelTimeMinutes != null && booking.venue?.travelDistanceMetres != null) {
-    venueTravelTime = { minutes: booking.venue.travelTimeMinutes, distanceMetres: booking.venue.travelDistanceMetres };
-  }
 
   const defaultTab: 'checklist' | 'onTheDay' =
     booking.status === 'ENQUIRY' || booking.status === 'PROVISIONAL' || booking.status === 'CONFIRMED'
@@ -401,22 +385,10 @@ export default function BookingDetailPage() {
                 hideWhenEmpty
               />
             </div>
-            {booking.venue && (
-              <VenueMapWidget
-                venue={booking.venue}
-                showHeader={true}
-                cardTitle="Venue"
-                cardAction={
-                  <button type="button" onClick={() => setSearchParams({ sheet: 'contactEdit', contactId: booking.venue!.id })} className="text-xs text-primary hover:text-primary/80 transition-colors">
-                    Edit
-                  </button>
-                }
-                contactHref={`/admin/contacts/${booking.venue.id}`}
-                travelTime={venueTravelTime}
-                isLoadingTravelTime={isFetchingTravelTime}
-                onRefreshTravelTime={() => queryClient.invalidateQueries({ queryKey: ['contact-travel-time', bookingVenueId] })}
-              />
-            )}
+            <BookingVenueMapWidget
+              bookingId={id!}
+              contactHref={`/admin/contacts/${booking.venue?.id ?? ''}`}
+            />
             <InlineNotes
               notes={booking.notes}
               onSave={(notes) => fields.updateNotes(notes)}
