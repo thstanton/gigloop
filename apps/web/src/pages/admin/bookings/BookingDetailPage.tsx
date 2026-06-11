@@ -301,12 +301,10 @@ export default function BookingDetailPage() {
               <ItineraryCard
                 logistics={booking.logistics}
                 sets={booking.sets}
-                onEdit={() => editSection('onTheDay')}
                 hideWhenEmpty
               />
               <DetailsCard
                 logistics={booking.logistics}
-                onEdit={() => editSection('onTheDay')}
                 hideWhenEmpty
               />
             </div>
@@ -405,7 +403,6 @@ export default function BookingDetailPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <PerformanceSection
                   booking={booking}
-                  onEdit={() => editSection('packages')}
                   hideWhenEmpty
                 />
                 <MusicFormSection

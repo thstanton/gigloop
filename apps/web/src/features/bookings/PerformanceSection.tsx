@@ -1,3 +1,4 @@
+import { useSearchParams } from 'react-router-dom';
 import { Music } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import FormatIcon from './FormatIcon';
@@ -12,11 +13,11 @@ export function formatDuration(minutes: number): string {
 
 export interface PerformanceSectionProps {
   booking: BookingDetail;
-  onEdit: () => void;
   hideWhenEmpty?: boolean;
 }
 
-export default function PerformanceSection({ booking, onEdit, hideWhenEmpty = false }: PerformanceSectionProps) {
+export default function PerformanceSection({ booking, hideWhenEmpty = false }: PerformanceSectionProps) {
+  const [, setSearchParams] = useSearchParams();
   const setsByFormatId = new Map<string | null, PerformanceSet[]>();
   for (const set of booking.sets ?? []) {
     const key = set.packageId ?? null;
@@ -33,7 +34,7 @@ export default function PerformanceSection({ booking, onEdit, hideWhenEmpty = fa
         <span className="text-sm font-medium">Performance</span>
         <button
           type="button"
-          onClick={onEdit}
+          onClick={() => setSearchParams({ sheet: 'bookingEdit', section: 'packages' })}
           className="text-sm text-primary hover:text-primary/80 transition-colors"
         >
           + Add packages
@@ -48,7 +49,7 @@ export default function PerformanceSection({ booking, onEdit, hideWhenEmpty = fa
       action={
         <button
           type="button"
-          onClick={onEdit}
+          onClick={() => setSearchParams({ sheet: 'bookingEdit', section: 'packages' })}
           className="text-xs text-primary hover:text-primary/80 transition-colors"
         >
           Edit

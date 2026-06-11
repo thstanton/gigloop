@@ -1,3 +1,4 @@
+import { useSearchParams } from 'react-router-dom';
 import { Info } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { GhostButton } from '@/components/common/GhostButton';
@@ -14,11 +15,11 @@ const ALL_SYSTEM_KEYS = new Set([
 
 interface DetailsCardProps {
   logistics: Record<string, BookingLogisticsEntry> | null;
-  onEdit: () => void;
   hideWhenEmpty?: boolean;
 }
 
-export default function DetailsCard({ logistics, onEdit, hideWhenEmpty = false }: DetailsCardProps) {
+export default function DetailsCard({ logistics, hideWhenEmpty = false }: DetailsCardProps) {
+  const [, setSearchParams] = useSearchParams();
   const systemEntries = SYSTEM_DETAIL_KEYS
     .filter(key => logistics?.[key]?.value)
     .map(key => ({
@@ -47,7 +48,7 @@ export default function DetailsCard({ logistics, onEdit, hideWhenEmpty = false }
     <Card
       title="Details"
       action={
-        <GhostButton variant="primary" size="xs" onClick={onEdit}>
+        <GhostButton variant="primary" size="xs" onClick={() => setSearchParams({ sheet: 'bookingEdit', section: 'onTheDay' })}>
           Edit
         </GhostButton>
       }

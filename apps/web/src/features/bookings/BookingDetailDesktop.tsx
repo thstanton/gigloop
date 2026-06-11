@@ -88,11 +88,9 @@ export function BookingDetailDesktop({ bookingId, onCreateContract }: BookingDet
             <ItineraryCard
               logistics={booking.logistics}
               sets={booking.sets}
-              onEdit={() => editSection('onTheDay')}
             />
             <DetailsCard
               logistics={booking.logistics}
-              onEdit={() => editSection('onTheDay')}
             />
           </div>
           <BookingVenueMapWidget
@@ -108,7 +106,6 @@ export function BookingDetailDesktop({ bookingId, onCreateContract }: BookingDet
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <PerformanceSection
               booking={booking}
-              onEdit={() => editSection('packages')}
             />
             <MusicFormSection
               booking={booking}
