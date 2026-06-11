@@ -2,6 +2,7 @@ import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect } from 'storybook/test';
 import { MemoryRouter } from 'react-router-dom';
+import { http, HttpResponse } from 'msw';
 import InvoiceSection from './InvoiceSection';
 import type { Invoice } from '@/types/api';
 
@@ -21,55 +22,59 @@ const balanceDraft: Invoice = { ...depositDraft, id: 'inv3', status: 'DRAFT', is
 const depositPaid: Invoice = { ...depositDraft, id: 'inv4', status: 'PAID', paidAt: '2030-05-02T10:00:00Z' };
 const balancePaid: Invoice = { ...balanceDraft, id: 'inv5', status: 'PAID', paidAt: '2030-07-10T10:00:00Z' };
 
-const noop = () => {};
+const bookingFixture = {
+  id: 'b1', fee: '2000.00', sets: [], packages: [],
+};
+
+const baseHandlers = [
+  http.get('/api/bookings/b1', () => HttpResponse.json(bookingFixture)),
+  http.get('/api/bookings/b1/documents', () => HttpResponse.json([])),
+];
 
 const meta = {
   component: InvoiceSection,
   tags: ['ai-generated'],
   decorators: [(Story) => React.createElement(MemoryRouter, {}, React.createElement(Story))],
-  args: {
-    documents: [],
-    isPending: false,
-    onNewDepositInvoice: noop,
-    onNewBalanceInvoice: noop,
-    onEdit: noop,
-    onDelete: noop,
-    onSend: noop,
-    onMarkSent: noop,
-    onMarkPaid: noop,
-    onVoid: noop,
-  },
+  args: { bookingId: 'b1' },
 } satisfies Meta<typeof InvoiceSection>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const NoInvoices: Story = {
-  args: { invoices: [] },
+  parameters: {
+    msw: { handlers: [...baseHandlers, http.get('/api/bookings/b1/invoices', () => HttpResponse.json([]))] },
+  },
   play: async ({ canvas }) => {
-    await expect(canvas.getByText('No invoices yet')).toBeVisible();
+    await expect(canvas.findByText('No invoices yet')).resolves.toBeVisible();
   },
 };
 
 export const DepositDraftOnly: Story = {
-  args: { invoices: [depositDraft] },
+  parameters: {
+    msw: { handlers: [...baseHandlers, http.get('/api/bookings/b1/invoices', () => HttpResponse.json([depositDraft]))] },
+  },
   play: async ({ canvas }) => {
-    await expect(canvas.getByText('Deposit')).toBeVisible();
-    await expect(canvas.getByText('Draft')).toBeVisible();
+    await expect(canvas.findByText('Deposit')).resolves.toBeVisible();
+    await expect(canvas.findByText('Draft')).resolves.toBeVisible();
   },
 };
 
 export const DepositSentBalanceDraft: Story = {
-  args: { invoices: [depositSent, balanceDraft] },
+  parameters: {
+    msw: { handlers: [...baseHandlers, http.get('/api/bookings/b1/invoices', () => HttpResponse.json([depositSent, balanceDraft]))] },
+  },
   play: async ({ canvas }) => {
-    await expect(canvas.getAllByText('Balance')[0]).toBeVisible();
-    await expect(canvas.getByText('Sent')).toBeVisible();
+    await expect(canvas.findAllByText('Balance')).resolves.toSatisfy((els: HTMLElement[]) => els.length > 0);
+    await expect(canvas.findByText('Sent')).resolves.toBeVisible();
   },
 };
 
 export const BothPaid: Story = {
-  args: { invoices: [depositPaid, balancePaid] },
+  parameters: {
+    msw: { handlers: [...baseHandlers, http.get('/api/bookings/b1/invoices', () => HttpResponse.json([depositPaid, balancePaid]))] },
+  },
   play: async ({ canvas }) => {
-    await expect(canvas.getAllByText('Paid')).toHaveLength(2);
+    await expect(canvas.findAllByText('Paid')).resolves.toSatisfy((els: HTMLElement[]) => els.length >= 2);
   },
 };

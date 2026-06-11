@@ -33,7 +33,6 @@ const meta = {
   component: PerformanceSection,
   tags: ['ai-generated'],
   decorators: [(Story) => React.createElement(MemoryRouter, {}, React.createElement(Story))],
-  args: { onEdit: () => {} },
 } satisfies Meta<typeof PerformanceSection>;
 
 export default meta;

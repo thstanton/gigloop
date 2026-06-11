@@ -1,3 +1,4 @@
+import { useSearchParams } from 'react-router-dom';
 import { Clock } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { GhostButton } from '@/components/common/GhostButton';
@@ -14,7 +15,6 @@ type TimelineRow =
 interface ItineraryCardProps {
   logistics: Record<string, BookingLogisticsEntry> | null;
   sets: PerformanceSet[];
-  onEdit: () => void;
   hideWhenEmpty?: boolean;
 }
 
@@ -44,7 +44,8 @@ function setLabel(set: PerformanceSet): string {
   return set.label ? `${set.label} (${dur})` : dur;
 }
 
-export default function ItineraryCard({ logistics, sets, onEdit, hideWhenEmpty = false }: ItineraryCardProps) {
+export default function ItineraryCard({ logistics, sets, hideWhenEmpty = false }: ItineraryCardProps) {
+  const [, setSearchParams] = useSearchParams();
   const rows = buildRows(logistics, sets);
 
   if (hideWhenEmpty && rows.length === 0) return null;
@@ -53,7 +54,7 @@ export default function ItineraryCard({ logistics, sets, onEdit, hideWhenEmpty =
     <Card
       title="Itinerary"
       action={
-        <GhostButton variant="primary" size="xs" onClick={onEdit}>
+        <GhostButton variant="primary" size="xs" onClick={() => setSearchParams({ sheet: 'bookingEdit', section: 'onTheDay' })}>
           Edit
         </GhostButton>
       }

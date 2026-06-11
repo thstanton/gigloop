@@ -1,5 +1,7 @@
+import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect } from 'storybook/test';
+import { MemoryRouter } from 'react-router-dom';
 import ItineraryCard from './ItineraryCard';
 import type { BookingLogisticsEntry, PerformanceSet } from '@/types/api';
 
@@ -23,7 +25,7 @@ const setsWithDurationsOnly: PerformanceSet[] = [
 const meta = {
   component: ItineraryCard,
   tags: ['ai-generated'],
-  args: { onEdit: () => {} },
+  decorators: [(Story) => React.createElement(MemoryRouter, {}, React.createElement(Story))],
   parameters: { viewport: { defaultViewport: 'mobile1' } },
 } satisfies Meta<typeof ItineraryCard>;
 

@@ -14,6 +14,8 @@ A CRM for musicians. The central workflow is managing Bookings with Contacts.
 
 **Design principle — mobile space is a scarce resource:** Mobile layouts treat screen space as valuable currency. Concrete implications: hide cards and sections that have nothing to show (`hideWhenEmpty`); use tabs to give each concern its own breathing room rather than stacking everything into one long scroll; compress information density (e.g. `PersonChip` over `PersonCard`) when space is at a premium. The goal is that the content most relevant to the musician's current moment is reachable without scrolling — not that all content is always visible. See ADR-0037 for how this principle is applied on the booking detail page.
 
+**Design principle — feature components as self-contained units:** Components in `features/` own whatever is tightly scoped to them, using hooks as escape hatches to access shared state directly — TanStack Query for data, `useSearchParams` for sheet dispatch. A parent never passes down computed values or domain data that a child could reach itself; TanStack Query deduplicates reads so the same hook can be called in multiple components without double-fetching. Layout decisions — including breakpoint-driven conditional rendering — belong in the parent. Components render unconditionally; the parent decides when and whether to mount them. A container's remaining jobs are: (1) the loading/error gate for the page, and (2) orchestrating mutations that require genuine coordination between sibling components.
+
 ---
 
 ## Terms

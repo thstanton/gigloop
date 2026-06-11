@@ -1,15 +1,11 @@
-import { useState } from 'react';
 import { useAuth } from '@clerk/react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { FolderOpen, FileText, Download } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { DocumentsCard } from '@/features/bookings/DocumentsCard';
 import { useBooking } from '@/lib/hooks/useBooking';
-import { useBookingActions } from '@/lib/hooks/useBookingActions';
 import { useBookingChecklist } from '@/lib/hooks/useBookingChecklist';
 import { useBookingFields } from '@/lib/hooks/useBookingFields';
 import { useContractActions } from '@/lib/hooks/useContractActions';
-import { useInvoiceActions } from '@/lib/hooks/useInvoiceActions';
-import { useBookingInvoices } from '@/lib/hooks/useBookingInvoices';
 import { useBookingCommunications } from '@/lib/hooks/useBookingCommunications';
 import { useBookingDocuments } from '@/lib/hooks/useBookingDocuments';
 import { useSeriesBookings } from '@/lib/hooks/useSeriesBookings';
@@ -26,19 +22,14 @@ import DetailsCard from '@/features/bookings/DetailsCard';
 import PerformanceSection from '@/features/bookings/PerformanceSection';
 import MusicFormSection from '@/features/bookings/MusicFormSection';
 import { InlineVenueAdd } from '@/features/bookings/InlineVenueAdd';
-import { VenueMapWidget } from '@/components/common/VenueMapWidget';
-import { Card } from '@/components/common/Card';
+import { BookingVenueMapWidget } from '@/features/bookings/BookingVenueMapWidget';
 import { SectionHeader } from '@/components/common/SectionHeader';
 import { apiGet } from '@/lib/api';
 import { EVENT_TYPE_LABELS } from '@/lib/constants';
 import type {
   Contract,
-  Document,
   Invoice,
   MusicFormConfig,
-  MusicFormResponse,
-  TravelTimeResponse,
-  UserProfile,
 } from '@/types/api';
 
 interface BookingDetailDesktopProps {
@@ -50,27 +41,10 @@ export function BookingDetailDesktop({ bookingId, onCreateContract }: BookingDet
   const navigate = useNavigate();
   const [, setSearchParams] = useSearchParams();
   const { isLoaded } = useAuth();
-  const queryClient = useQueryClient();
-  const [viewingMusicFormResponse, setViewingMusicFormResponse] = useState(false);
-
   const { data: booking } = useBooking(bookingId);
-  const { data: invoices = [], isPending: invoicesPending } = useBookingInvoices(bookingId);
   const { data: communications = [] } = useBookingCommunications(bookingId);
   const { data: documents = [] } = useBookingDocuments(bookingId);
   const { data: seriesBookings = [], isLoading: seriesBookingsLoading } = useSeriesBookings(booking?.series?.id);
-
-  const { data: userProfile } = useQuery({
-    queryKey: ['me'],
-    queryFn: () => apiGet<UserProfile>('/me'),
-    enabled: isLoaded,
-  });
-
-  const bookingVenueId = booking?.venue?.id;
-  const { data: travelTimeData, isFetching: isFetchingTravelTime } = useQuery({
-    queryKey: ['contact-travel-time', bookingVenueId],
-    queryFn: () => apiGet<TravelTimeResponse>(`/contacts/${bookingVenueId}/travel-time`),
-    enabled: isLoaded && !!bookingVenueId && !!booking?.venue?.latitude && !!booking?.venue?.longitude && !!userProfile?.latitude && !!userProfile?.longitude,
-  });
 
   const { data: musicFormConfig, isLoading: musicFormConfigLoading } = useQuery({
     queryKey: ['booking-music-form-config', bookingId],
@@ -78,15 +52,7 @@ export function BookingDetailDesktop({ bookingId, onCreateContract }: BookingDet
     enabled: isLoaded && !!booking && booking.hasMusicFormConfig,
   });
 
-  const { data: musicFormResponse } = useQuery({
-    queryKey: ['booking-music-form-response', bookingId],
-    queryFn: () => apiGet<MusicFormResponse>(`/bookings/${bookingId}/music-form-response`),
-    enabled: isLoaded && !!booking && booking.hasMusicFormResponse && viewingMusicFormResponse,
-  });
-
-  const actions = useBookingActions(bookingId);
   const contractActions = useContractActions(bookingId);
-  const invoiceActions = useInvoiceActions(bookingId);
   const fields = useBookingFields(bookingId);
   const { checklist, checklistLoading, toggleItem, addItem, isAddingItem } = useBookingChecklist(bookingId, booking, isLoaded);
 
@@ -97,88 +63,16 @@ export function BookingDetailDesktop({ bookingId, onCreateContract }: BookingDet
   const hasDepositItem = checklist.some((item) => item.key === 'deposit_received');
   const contractShortcutType = hasDepositItem ? 'contract_and_deposit_cover' : 'contract_cover';
 
-  let venueTravelTime: { minutes: number; distanceMetres: number } | null = null;
-  if (travelTimeData) {
-    venueTravelTime = { minutes: travelTimeData.minutes, distanceMetres: travelTimeData.distanceMetres };
-  } else if (booking.venue?.travelTimeMinutes != null && booking.venue?.travelDistanceMetres != null) {
-    venueTravelTime = { minutes: booking.venue.travelTimeMinutes, distanceMetres: booking.venue.travelDistanceMetres };
-  }
-
   function openCompose(templateType?: string) {
     setSearchParams(templateType ? { sheet: 'compose', templateType } : { sheet: 'compose' });
-  }
-
-  function buildSetsDescription(): string {
-    if (!booking!.sets?.length) return '';
-    const formatById = new Map(
-      (booking!.packages ?? []).map((f) => [f.packageId, f.package.label]),
-    );
-    return booking!.sets
-      .map((s) => {
-        const label = s.label ?? (s.packageId ? formatById.get(s.packageId) : null) ?? null;
-        return label ? `${label} (${s.duration} min)` : `${s.duration} min`;
-      })
-      .join(', ');
-  }
-
-  function openCreateInvoice(prefill?: { isDeposit: boolean; amount?: number }) {
-    const params: Record<string, string> = { sheet: 'invoice', isDeposit: String(prefill?.isDeposit ?? false) };
-    if (prefill?.amount != null) params.amount = String(prefill.amount);
-    const desc = buildSetsDescription();
-    if (desc) params.description = desc;
-    setSearchParams(params);
   }
 
   function openEditInvoice(invoice: Invoice) {
     setSearchParams({ sheet: 'invoice', invoiceId: invoice.id });
   }
 
-  function openSendInvoice(invoice: Invoice) {
-    const templateType = invoice.isDeposit ? 'deposit_invoice_cover' : 'balance_invoice_cover';
-    openCompose(templateType);
-  }
-
-  function handleChecklistAction(action: 'create_deposit_invoice' | 'create_balance_invoice' | 'create_contract') {
-    if (action === 'create_contract') {
-      contractActions.createContract((contract) => {
-        onCreateContract(contract);
-        setSearchParams({ sheet: 'contract' });
-      });
-      return;
-    }
-    const isDeposit = action === 'create_deposit_invoice';
-    const fee = booking!.fee ? parseFloat(booking!.fee) : null;
-    const pct = userProfile?.depositPercentage;
-    if (fee && pct) {
-      const amount = isDeposit ? (fee * pct) / 100 : fee * (1 - pct / 100);
-      actions.autoCreateInvoice({ isDeposit, amount: Math.round(amount * 100) / 100 });
-    } else {
-      openCreateInvoice({ isDeposit });
-    }
-  }
-
-  function handleMarkDone(key: 'mark_contract_signed' | 'mark_deposit_received') {
-    if (key === 'mark_contract_signed') {
-      if (booking!.activeContract) actions.markContractSigned(booking!.activeContract.id);
-    } else {
-      const sentDeposit = invoices.find((inv) => inv.isDeposit && inv.status === 'SENT');
-      if (sentDeposit) invoiceActions.markPaid(sentDeposit.id);
-      else actions.markDepositReceived();
-    }
-  }
-
   function editSection(section: string) {
     setSearchParams({ sheet: 'bookingEdit', section });
-  }
-
-  async function downloadDoc(url: string, filename: string) {
-    const res = await fetch(url);
-    const blob = await res.blob();
-    const a = window.document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(a.href);
   }
 
   return (
@@ -194,31 +88,16 @@ export function BookingDetailDesktop({ bookingId, onCreateContract }: BookingDet
             <ItineraryCard
               logistics={booking.logistics}
               sets={booking.sets}
-              onEdit={() => editSection('onTheDay')}
             />
             <DetailsCard
               logistics={booking.logistics}
-              onEdit={() => editSection('onTheDay')}
             />
           </div>
-          {booking.venue ? (
-            <VenueMapWidget
-              venue={booking.venue}
-              showHeader={true}
-              cardTitle="Venue"
-              cardAction={
-                <button type="button" onClick={() => setSearchParams({ sheet: 'contactEdit', contactId: booking.venue!.id })} className="text-xs text-primary hover:text-primary/80 transition-colors">
-                  Edit
-                </button>
-              }
-              contactHref={`/admin/contacts/${booking.venue.id}`}
-              travelTime={venueTravelTime}
-              isLoadingTravelTime={isFetchingTravelTime}
-              onRefreshTravelTime={() => queryClient.invalidateQueries({ queryKey: ['contact-travel-time', bookingVenueId] })}
-            />
-          ) : (
-            <InlineVenueAdd bookingId={booking.id} />
-          )}
+          <BookingVenueMapWidget
+            bookingId={bookingId}
+            contactHref={`/admin/contacts/${booking.venue?.id ?? ''}`}
+          />
+          {!booking.venue && <InlineVenueAdd bookingId={booking.id} />}
         </section>
 
         {/* Packages */}
@@ -227,16 +106,13 @@ export function BookingDetailDesktop({ bookingId, onCreateContract }: BookingDet
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <PerformanceSection
               booking={booking}
-              onEdit={() => editSection('packages')}
             />
             <MusicFormSection
               booking={booking}
               documents={documents}
               config={musicFormConfig ?? null}
               isLoading={musicFormConfigLoading}
-              response={musicFormResponse ?? null}
               onUpdateConfig={() => editSection('musicForm')}
-              onViewResponse={() => setViewingMusicFormResponse(true)}
               onEdit={() => editSection('musicForm')}
             />
           </div>
@@ -250,16 +126,13 @@ export function BookingDetailDesktop({ bookingId, onCreateContract }: BookingDet
         {/* Checklist */}
         {booking.status !== 'CANCELLED' && (
           <ChecklistSection
+            bookingId={bookingId}
             items={checklist}
             isLoading={checklistLoading}
             bookingStatus={booking.status}
             onToggle={(itemId, state) => toggleItem(itemId, state)}
-            onChecklistAction={handleChecklistAction}
-            onOpenCompose={openCompose}
-            onMarkDone={handleMarkDone}
             onAddItem={(data) => addItem(data)}
             isAddingItem={isAddingItem}
-            isActionPending={actions.isPending || invoiceActions.isMarkingPaid}
           />
         )}
 
@@ -323,76 +196,11 @@ export function BookingDetailDesktop({ bookingId, onCreateContract }: BookingDet
             onMarkSent={(inv) => setSearchParams({ sheet: 'markSent', invoiceId: (inv as unknown as Invoice).id })}
           />
         ) : (
-          <InvoiceSection
-            invoices={invoices}
-            documents={documents}
-            isPending={invoicesPending}
-            onNewDepositInvoice={() => {
-              const fee = booking.fee ? parseFloat(booking.fee) : null;
-              const pct = userProfile?.depositPercentage;
-              openCreateInvoice({
-                isDeposit: true,
-                amount: fee && pct ? Math.round((fee * pct / 100) * 100) / 100 : undefined,
-              });
-            }}
-            onNewBalanceInvoice={() => {
-              const fee = booking.fee ? parseFloat(booking.fee) : null;
-              const pct = userProfile?.depositPercentage;
-              openCreateInvoice({
-                isDeposit: false,
-                amount: fee && pct ? Math.round((fee * (1 - pct / 100)) * 100) / 100 : undefined,
-              });
-            }}
-            onEdit={openEditInvoice}
-            onDelete={(inv) => actions.deleteInvoice(inv.id)}
-            onSend={openSendInvoice}
-            onMarkSent={(inv) => setSearchParams({ sheet: 'markSent', invoiceId: inv.id })}
-            onMarkPaid={(inv) => invoiceActions.markPaid(inv.id)}
-            onVoid={(inv) => invoiceActions.voidInvoice(inv.id)}
-          />
+          <InvoiceSection bookingId={bookingId} />
         )}
 
         {/* Documents */}
-        <Card title="Documents">
-          {documents.length === 0 ? (
-            <div className="flex items-center gap-2 text-muted py-1">
-              <FolderOpen size={14} />
-              <span className="text-sm">No documents yet</span>
-            </div>
-          ) : (
-            <div className="divide-y divide-border">
-              {documents.map((doc: Document) => {
-                const invoice = invoices.find((i) => i.id === doc.invoiceId);
-                const isVoidContract = doc.type === 'CONTRACT' && doc.contractStatus === 'VOID';
-                const contractLabel = isVoidContract ? 'Contract [VOID]' : 'Contract';
-                const invoiceLabel = invoice?.isDeposit ? 'Deposit invoice' : 'Balance invoice';
-                const label = doc.type === 'CONTRACT' ? contractLabel : invoiceLabel;
-                const filename = `${label.toLowerCase().replace(' ', '-')}.pdf`;
-                return (
-                  <div key={doc.id} className="flex items-center gap-2 py-2">
-                    <FileText size={14} className="flex-shrink-0 text-muted mt-0.5 self-start" />
-                    <div className="flex flex-col min-w-0">
-                      <span className="text-sm text-foreground">{label}</span>
-                      {invoice?.invoiceNumber && (
-                        <span className="text-xs text-muted">{invoice.invoiceNumber}</span>
-                      )}
-                    </div>
-                    <span className="text-muted ml-auto text-xs shrink-0">
-                      {new Date(doc.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                    </span>
-                    <button
-                      onClick={() => downloadDoc(doc.url, filename)}
-                      title="Download"
-                      className="text-muted hover:text-foreground shrink-0"
-                    >
-                      <Download size={14} />
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </Card>
+        <DocumentsCard bookingId={bookingId} />
 
       </div>{/* end right column */}
 
@@ -405,7 +213,6 @@ export function BookingDetailDesktop({ bookingId, onCreateContract }: BookingDet
         />
         <CommunicationsSection
           communications={communications}
-          onCompose={() => openCompose()}
         />
       </div>
 

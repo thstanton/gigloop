@@ -2,6 +2,7 @@ import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
 import { MemoryRouter } from 'react-router-dom';
+import { http, HttpResponse } from 'msw';
 import ChecklistSection from './ChecklistSection';
 import type { ChecklistItem } from '@/types/api';
 
@@ -36,20 +37,23 @@ const pendingItems: ChecklistItem[] = [
 
 const noop = () => {};
 
+const mswHandlers = [
+  http.get('/api/bookings/b1', () => HttpResponse.json({ id: 'b1', fee: null, sets: [], packages: [], activeContract: null })),
+  http.get('/api/bookings/b1/invoices', () => HttpResponse.json([])),
+];
+
 const meta = {
   component: ChecklistSection,
   tags: ['ai-generated'],
   decorators: [(Story) => React.createElement(MemoryRouter, {}, React.createElement(Story))],
+  parameters: { msw: { handlers: mswHandlers } },
   args: {
+    bookingId: 'b1',
     isLoading: false,
     bookingStatus: 'CONFIRMED',
     onToggle: noop,
-    onChecklistAction: noop,
-    onOpenCompose: noop,
-    onMarkDone: noop,
     onAddItem: noop,
     isAddingItem: false,
-    isActionPending: false,
   },
 } satisfies Meta<typeof ChecklistSection>;
 

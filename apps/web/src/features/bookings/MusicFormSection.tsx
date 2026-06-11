@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { CheckCircle2, ClipboardList, Download, Music2, Plus } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { SubLabel } from '@/components/common/SubLabel';
@@ -9,6 +10,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { GENRE_LABELS } from '@/lib/constants';
+import { apiGet } from '@/lib/api';
 import FormatIcon from './FormatIcon';
 import type { BookingDetail, Document, MusicFormConfig, MusicFormResponse, MusicFormResponseSong } from '@/types/api';
 
@@ -17,9 +19,7 @@ export interface MusicFormSectionProps {
   documents: Document[];
   config: MusicFormConfig | null;
   isLoading: boolean;
-  response: MusicFormResponse | null;
   onUpdateConfig: () => void;
-  onViewResponse: () => void;
   onEdit: () => void;
   hideWhenEmpty?: boolean;
 }
@@ -119,13 +119,18 @@ export default function MusicFormSection({
   documents,
   config,
   isLoading,
-  response,
   onUpdateConfig,
-  onViewResponse,
   onEdit,
   hideWhenEmpty = false,
 }: Readonly<MusicFormSectionProps>) {
   const [viewingResponse, setViewingResponse] = useState(false);
+  const [fetchResponse, setFetchResponse] = useState(false);
+
+  const { data: response = null } = useQuery({
+    queryKey: ['booking-music-form-response', booking.id],
+    queryFn: () => apiGet<MusicFormResponse>(`/bookings/${booking.id}/music-form-response`),
+    enabled: booking.hasMusicFormResponse && fetchResponse,
+  });
   const songListDoc = documents.find((d) => d.type === 'SONG_LIST');
 
   if (!booking.hasMusicFormConfig && hideWhenEmpty) return null;
@@ -182,7 +187,7 @@ export default function MusicFormSection({
             <div className="flex items-center gap-3">
               <button
                 type="button"
-                onClick={() => { onViewResponse(); setViewingResponse(true); }}
+                onClick={() => { setFetchResponse(true); setViewingResponse(true); }}
                 className="inline-flex items-center gap-1.5 text-xs font-medium text-status-confirmed bg-status-confirmed/10 rounded-full px-2.5 py-0.5 hover:bg-status-confirmed/20 transition-colors"
               >
                 <CheckCircle2 size={11} />

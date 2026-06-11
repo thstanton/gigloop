@@ -1,3 +1,5 @@
+import { useSearchParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { DollarSign, Plus } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { GhostButton } from '@/components/common/GhostButton';
@@ -8,7 +10,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import InvoiceRow from './InvoiceRow';
-import type { Invoice, Document, SeriesInvoice } from '@/types/api';
+import { apiGet } from '@/lib/api';
+import { useBookingActions } from '@/lib/hooks/useBookingActions';
+import { useInvoiceActions } from '@/lib/hooks/useInvoiceActions';
+import type { Invoice, Document, SeriesInvoice, BookingDetail, UserProfile } from '@/types/api';
 
 export interface SeriesInvoiceSectionProps {
   seriesLabel: string;
@@ -85,32 +90,87 @@ export function SeriesInvoiceSection({
 }
 
 export interface InvoiceSectionProps {
-  invoices: Invoice[];
-  documents: Document[];
-  isPending: boolean;
-  onNewDepositInvoice: () => void;
-  onNewBalanceInvoice: () => void;
-  onEdit: (invoice: Invoice) => void;
-  onDelete: (invoice: Invoice) => void;
-  onSend: (invoice: Invoice) => void;
-  onMarkSent: (invoice: Invoice) => void;
-  onMarkPaid: (invoice: Invoice) => void;
-  onVoid: (invoice: Invoice) => void;
+  bookingId: string;
 }
 
-export default function InvoiceSection({
-  invoices,
-  documents,
-  isPending,
-  onNewDepositInvoice,
-  onNewBalanceInvoice,
-  onEdit,
-  onDelete,
-  onSend,
-  onMarkSent,
-  onMarkPaid,
-  onVoid,
-}: Readonly<InvoiceSectionProps>) {
+export default function InvoiceSection({ bookingId }: Readonly<InvoiceSectionProps>) {
+  const [, setSearchParams] = useSearchParams();
+
+  const { data: booking } = useQuery({
+    queryKey: ['booking', bookingId],
+    queryFn: () => apiGet<BookingDetail>(`/bookings/${bookingId}`),
+    enabled: !!bookingId,
+  });
+
+  const { data: userProfile } = useQuery({
+    queryKey: ['me'],
+    queryFn: () => apiGet<UserProfile>('/me'),
+    enabled: !!bookingId,
+  });
+
+  const { data: invoices = [], isPending } = useQuery({
+    queryKey: ['bookingInvoices', bookingId],
+    queryFn: () => apiGet<Invoice[]>(`/bookings/${bookingId}/invoices`),
+    enabled: !!bookingId,
+  });
+
+  const { data: documents = [] } = useQuery({
+    queryKey: ['bookingDocuments', bookingId],
+    queryFn: () => apiGet<Document[]>(`/bookings/${bookingId}/documents`),
+    enabled: !!bookingId,
+  });
+
+  const actions = useBookingActions(bookingId);
+  const invoiceActions = useInvoiceActions(bookingId);
+
+  function buildSetsDescription(): string {
+    if (!booking?.sets?.length) return '';
+    const formatById = new Map(
+      (booking.packages ?? []).map((f) => [f.packageId, f.package.label]),
+    );
+    return booking.sets
+      .map((s) => {
+        const label = s.label ?? (s.packageId ? formatById.get(s.packageId) : null) ?? null;
+        return label ? `${label} (${s.duration} min)` : `${s.duration} min`;
+      })
+      .join(', ');
+  }
+
+  function openCreateInvoice(prefill?: { isDeposit: boolean; amount?: number }) {
+    const params: Record<string, string> = { sheet: 'invoice', isDeposit: String(prefill?.isDeposit ?? false) };
+    if (prefill?.amount != null) params.amount = String(prefill.amount);
+    const desc = buildSetsDescription();
+    if (desc) params.description = desc;
+    setSearchParams(params);
+  }
+
+  function openEditInvoice(invoice: Invoice) {
+    setSearchParams({ sheet: 'invoice', invoiceId: invoice.id });
+  }
+
+  function openSendInvoice(invoice: Invoice) {
+    const templateType = invoice.isDeposit ? 'deposit_invoice_cover' : 'balance_invoice_cover';
+    setSearchParams({ sheet: 'compose', templateType });
+  }
+
+  function newDepositInvoice() {
+    const fee = booking?.fee ? parseFloat(booking.fee) : null;
+    const pct = userProfile?.depositPercentage;
+    openCreateInvoice({
+      isDeposit: true,
+      amount: fee && pct ? Math.round((fee * pct / 100) * 100) / 100 : undefined,
+    });
+  }
+
+  function newBalanceInvoice() {
+    const fee = booking?.fee ? parseFloat(booking.fee) : null;
+    const pct = userProfile?.depositPercentage;
+    openCreateInvoice({
+      isDeposit: false,
+      amount: fee && pct ? Math.round((fee * (1 - pct / 100)) * 100) / 100 : undefined,
+    });
+  }
+
   const action = (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -119,8 +179,8 @@ export default function InvoiceSection({
         </GhostButton>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={onNewDepositInvoice}>Deposit invoice</DropdownMenuItem>
-        <DropdownMenuItem onClick={onNewBalanceInvoice}>Balance invoice</DropdownMenuItem>
+        <DropdownMenuItem onClick={newDepositInvoice}>Deposit invoice</DropdownMenuItem>
+        <DropdownMenuItem onClick={newBalanceInvoice}>Balance invoice</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -154,12 +214,12 @@ export default function InvoiceSection({
             key={inv.id}
             invoice={inv}
             pdfUrl={documents.find((d) => d.type === 'INVOICE' && d.invoiceId === inv.id)?.url ?? null}
-            onEdit={onEdit}
-            onDelete={onDelete}
-            onSend={onSend}
-            onMarkSent={onMarkSent}
-            onMarkPaid={onMarkPaid}
-            onVoid={onVoid}
+            onEdit={openEditInvoice}
+            onDelete={(inv) => actions.deleteInvoice(inv.id)}
+            onSend={openSendInvoice}
+            onMarkSent={(inv) => setSearchParams({ sheet: 'markSent', invoiceId: inv.id })}
+            onMarkPaid={(inv) => invoiceActions.markPaid(inv.id)}
+            onVoid={(inv) => invoiceActions.voidInvoice(inv.id)}
           />
         ))}
       </div>

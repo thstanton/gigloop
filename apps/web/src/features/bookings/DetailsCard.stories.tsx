@@ -1,5 +1,7 @@
+import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect } from 'storybook/test';
+import { MemoryRouter } from 'react-router-dom';
 import DetailsCard from './DetailsCard';
 import type { BookingLogisticsEntry } from '@/types/api';
 
@@ -34,7 +36,7 @@ const partialFields: Record<string, BookingLogisticsEntry> = {
 const meta = {
   component: DetailsCard,
   tags: ['ai-generated'],
-  args: { onEdit: () => {} },
+  decorators: [(Story) => React.createElement(MemoryRouter, {}, React.createElement(Story))],
   parameters: { viewport: { defaultViewport: 'mobile1' } },
 } satisfies Meta<typeof DetailsCard>;
 
