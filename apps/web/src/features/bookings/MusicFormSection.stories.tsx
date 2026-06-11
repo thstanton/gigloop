@@ -44,9 +44,7 @@ const meta = {
     documents: [],
     config: null,
     isLoading: false,
-    response: null,
     onUpdateConfig: noop,
-    onViewResponse: noop,
     onEdit: noop,
   },
 } satisfies Meta<typeof MusicFormSection>;

@@ -46,7 +46,6 @@ import type {
   Document,
   Invoice,
   MusicFormConfig,
-  MusicFormResponse,
   TravelTimeResponse,
   UserProfile,
 } from '@/types/api';
@@ -135,8 +134,6 @@ export default function BookingDetailPage() {
 
   // pendingContract: a full Contract object from createContract callback — not URL-serializable
   const [pendingContract, setPendingContract] = useState<Contract | null>(null);
-  // viewingMusicFormResponse: lazy-loads the music form response query
-  const [viewingMusicFormResponse, setViewingMusicFormResponse] = useState(false);
 
   const { isLoaded } = useAuth();
   const { data: booking, isLoading, isError } = useBooking(id!);
@@ -178,12 +175,6 @@ export default function BookingDetailPage() {
     queryKey: ['booking-music-form-config', id],
     queryFn: () => apiGet<MusicFormConfig>(`/bookings/${id}/music-form-config`),
     enabled: isLoaded && !!booking && booking.hasMusicFormConfig,
-  });
-
-  const { data: musicFormResponse } = useQuery({
-    queryKey: ['booking-music-form-response', id],
-    queryFn: () => apiGet<MusicFormResponse>(`/bookings/${id}/music-form-response`),
-    enabled: isLoaded && !!booking && booking.hasMusicFormResponse && viewingMusicFormResponse,
   });
 
   // ─── Helpers ─────────────────────────────────────────────────────────────
@@ -590,9 +581,7 @@ export default function BookingDetailPage() {
                   documents={documents}
                   config={musicFormConfig ?? null}
                   isLoading={musicFormConfigLoading}
-                  response={musicFormResponse ?? null}
                   onUpdateConfig={() => editSection('musicForm')}
-                  onViewResponse={() => setViewingMusicFormResponse(true)}
                   onEdit={() => editSection('musicForm')}
                   hideWhenEmpty
                 />

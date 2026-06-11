@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useAuth } from '@clerk/react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -36,7 +35,6 @@ import type {
   Document,
   Invoice,
   MusicFormConfig,
-  MusicFormResponse,
   TravelTimeResponse,
   UserProfile,
 } from '@/types/api';
@@ -51,8 +49,6 @@ export function BookingDetailDesktop({ bookingId, onCreateContract }: BookingDet
   const [, setSearchParams] = useSearchParams();
   const { isLoaded } = useAuth();
   const queryClient = useQueryClient();
-  const [viewingMusicFormResponse, setViewingMusicFormResponse] = useState(false);
-
   const { data: booking } = useBooking(bookingId);
   const { data: invoices = [], isPending: invoicesPending } = useBookingInvoices(bookingId);
   const { data: communications = [] } = useBookingCommunications(bookingId);
@@ -76,12 +72,6 @@ export function BookingDetailDesktop({ bookingId, onCreateContract }: BookingDet
     queryKey: ['booking-music-form-config', bookingId],
     queryFn: () => apiGet<MusicFormConfig>(`/bookings/${bookingId}/music-form-config`),
     enabled: isLoaded && !!booking && booking.hasMusicFormConfig,
-  });
-
-  const { data: musicFormResponse } = useQuery({
-    queryKey: ['booking-music-form-response', bookingId],
-    queryFn: () => apiGet<MusicFormResponse>(`/bookings/${bookingId}/music-form-response`),
-    enabled: isLoaded && !!booking && booking.hasMusicFormResponse && viewingMusicFormResponse,
   });
 
   const actions = useBookingActions(bookingId);
@@ -234,9 +224,7 @@ export function BookingDetailDesktop({ bookingId, onCreateContract }: BookingDet
               documents={documents}
               config={musicFormConfig ?? null}
               isLoading={musicFormConfigLoading}
-              response={musicFormResponse ?? null}
               onUpdateConfig={() => editSection('musicForm')}
-              onViewResponse={() => setViewingMusicFormResponse(true)}
               onEdit={() => editSection('musicForm')}
             />
           </div>
