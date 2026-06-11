@@ -1,42 +1,26 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { useAuth } from '@clerk/react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, Eye, Pencil, X, FolderOpen, FileText, Download, MapPin } from 'lucide-react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ChevronLeft, Eye, Pencil, X, FolderOpen, FileText, Download } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { useBooking } from '@/lib/hooks/useBooking';
 import { useBookingActions } from '@/lib/hooks/useBookingActions';
+import { useBookingChecklist } from '@/lib/hooks/useBookingChecklist';
+import { useBookingFields } from '@/lib/hooks/useBookingFields';
+import { useContractActions } from '@/lib/hooks/useContractActions';
+import { useInvoiceActions } from '@/lib/hooks/useInvoiceActions';
 import { useBookingInvoices } from '@/lib/hooks/useBookingInvoices';
 import SeriesInvoiceCard from '@/features/bookings/SeriesInvoiceCard';
 import { SeriesEventsCard } from '@/features/bookings/SeriesEventsCard';
 import { useSeriesBookings } from '@/lib/hooks/useSeriesBookings';
 import { useBookingCommunications } from '@/lib/hooks/useBookingCommunications';
 import { useBookingDocuments } from '@/lib/hooks/useBookingDocuments';
-import BookingEditDrawer from '@/features/bookings/BookingEditDrawer';
-import ContactPicker from '@/features/bookings/ContactPicker';
-import ContractSheet from '@/features/bookings/ContractSheet';
-import ContactEditSheet from '@/features/contacts/ContactEditSheet';
-import ComposeEmailSheet from '@/features/communications/ComposeEmailSheet';
-import InvoiceSheet from '@/features/invoices/InvoiceSheet';
-import MarkSentDialog from '@/features/invoices/MarkSentDialog';
 import ContractCard from '@/features/bookings/ContractCard';
 import InvoiceSection from '@/features/bookings/InvoiceSection';
+import { BookingDetailSheets } from '@/features/bookings/BookingDetailSheets';
+import { BookingDetailDesktop } from '@/features/bookings/BookingDetailDesktop';
 import { VenueMapWidget } from '@/components/common/VenueMapWidget';
-import PersonCard from '@/features/bookings/PersonCard';
 import PersonChip from '@/features/bookings/PersonChip';
 import CommunicationsSection from '@/features/bookings/CommunicationsSection';
 import MusicFormSection from '@/features/bookings/MusicFormSection';
@@ -48,105 +32,24 @@ import ItineraryCard from '@/features/bookings/ItineraryCard';
 import DetailsCard from '@/features/bookings/DetailsCard';
 import PerformanceSection from '@/features/bookings/PerformanceSection';
 import BookingDetailTabs from '@/features/bookings/BookingDetailTabs';
-import { toast } from '@/lib/hooks/use-toast';
-import { apiGet, apiPatch, apiPost, apiPostVoid, apiDelete } from '@/lib/api';
+import { apiGet } from '@/lib/api';
 import {
   formatDate,
   formatCurrency,
   formatFee,
 } from '@/lib/formatters';
-import { EVENT_TYPE_LABELS, STATUS_ORDER } from '@/lib/constants';
+import { EVENT_TYPE_LABELS } from '@/lib/constants';
 import { Card } from '@/components/common/Card';
 import { SectionHeader } from '@/components/common/SectionHeader';
 import type {
-  BookingDetail,
-  BookingSeries,
-  BookingStatus,
-  ChecklistItem,
-  Contact,
   Contract,
   Document,
   Invoice,
   MusicFormConfig,
   MusicFormResponse,
-  Template,
   TravelTimeResponse,
-  UpdateBookingSeriesResponse,
   UserProfile,
 } from '@/types/api';
-
-function isSeriesConfirmationRequired(r: object): r is Required<UpdateBookingSeriesResponse> {
-  return 'requiresConfirmation' in r;
-}
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-const CELEBRATORY_TITLES = [
-  "You're smashing it!",
-  "Nice work!",
-  "All done!",
-  "You're on a roll!",
-];
-
-const STATUS_LABELS: Record<BookingStatus, string> = {
-  ENQUIRY:      'Enquiry',
-  PROVISIONAL:  'Provisional',
-  CONFIRMED:    'Confirmed',
-  READY:        'Ready',
-  COMPLETE:     'Complete',
-  CANCELLED:    'Cancelled',
-};
-
-// ─── InlineVenueAdd ───────────────────────────────────────────────────────────
-
-function InlineVenueAdd({ bookingId }: { bookingId: string }) {
-  const queryClient = useQueryClient();
-  const [sheetOpen, setSheetOpen] = useState(false);
-
-  const mutation = useMutation({
-    mutationFn: (id: string) => apiPatch(`/bookings/${bookingId}`, { venueId: id }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['booking', bookingId] });
-      queryClient.invalidateQueries({ queryKey: ['bookings'] });
-      setSheetOpen(false);
-    },
-  });
-
-  return (
-    <>
-      <div className="flex flex-col items-center text-center gap-2 py-4 text-muted min-h-[5rem]">
-        <MapPin size={20} />
-        <span className="text-sm font-medium">Venue</span>
-        <button
-          type="button"
-          onClick={() => setSheetOpen(true)}
-          className="text-sm text-primary hover:text-primary/80 transition-colors"
-        >
-          + Add
-        </button>
-      </div>
-      <Dialog open={sheetOpen} onOpenChange={setSheetOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add venue</DialogTitle>
-          </DialogHeader>
-          <ContactPicker
-            value={null}
-            onChange={(id) => { if (id) mutation.mutate(id); }}
-            placeholder="Select venue..."
-            label="venue"
-            preferredRole="VENUE"
-          />
-          <div className="mt-4 flex justify-end">
-            <Button variant="outline" onClick={() => setSheetOpen(false)}>
-              Cancel
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </>
-  );
-}
 
 // ─── Skeleton ─────────────────────────────────────────────────────────────────
 
@@ -230,23 +133,10 @@ export default function BookingDetailPage() {
   const backNav = (location.state as { from?: string; label?: string } | null);
   const [, setSearchParams] = useSearchParams();
 
-  const [composeOpen, setComposeOpen] = useState(false);
-  const [composeTemplateType, setComposeTemplateType] = useState<string | undefined>();
-  const [invoiceSheetOpen, setInvoiceSheetOpen] = useState(false);
-  const [editingInvoice, setEditingInvoice] = useState<Invoice | undefined>();
-  const [invoiceSheetPrefill, setInvoiceSheetPrefill] = useState<{ isDeposit: boolean; amount?: number; description?: string } | undefined>();
-  const [markSentInvoice, setMarkSentInvoice] = useState<Invoice | undefined>();
-  const [editingContact, setEditingContact] = useState<Contact | null>(null);
-  const [contractSheetOpen, setContractSheetOpen] = useState(false);
-  const [contractSheetReadOnly, setContractSheetReadOnly] = useState(false);
+  // pendingContract: a full Contract object from createContract callback — not URL-serializable
   const [pendingContract, setPendingContract] = useState<Contract | null>(null);
-  const [readyDialogStatus, setReadyDialogStatus] = useState<BookingStatus | null>(null);
+  // viewingMusicFormResponse: lazy-loads the music form response query
   const [viewingMusicFormResponse, setViewingMusicFormResponse] = useState(false);
-  const [seriesSheetOpen, setSeriesSheetOpen] = useState(false);
-  const [selectedSeriesId, setSelectedSeriesId] = useState<string | null>(null);
-  const [seriesConfirm, setSeriesConfirm] = useState<{ warning: string; seriesId: string } | null>(null);
-  const dismissedTransitions = useRef(new Set<string>());
-  const celebratoryTitle = useRef(CELEBRATORY_TITLES[Math.floor(Math.random() * CELEBRATORY_TITLES.length)]);
 
   const { isLoaded } = useAuth();
   const { data: booking, isLoading, isError } = useBooking(id!);
@@ -267,37 +157,22 @@ export default function BookingDetailPage() {
   });
 
   const actions = useBookingActions(id!);
+  const contractActions = useContractActions(id!);
+  const invoiceActions = useInvoiceActions(id!);
+  const fields = useBookingFields(id!);
+  const {
+    checklist,
+    checklistLoading,
+    readyDialogStatus,
+    celebratoryTitle,
+    dismissReadyDialog,
+    confirmStatusTransition,
+    toggleItem,
+    addItem,
+    isAddingItem,
+  } = useBookingChecklist(id!, booking, isLoaded);
   const queryClient = useQueryClient();
   const { data: seriesBookings = [], isLoading: seriesBookingsLoading } = useSeriesBookings(booking?.series?.id);
-
-  const { data: seriesList } = useQuery({
-    queryKey: ['series'],
-    queryFn: () => apiGet<BookingSeries[]>('/series'),
-    enabled: isLoaded && seriesSheetOpen,
-  });
-
-  const updateSeriesMutation = useMutation({
-    mutationFn: (payload: { seriesId: string | null; confirm?: boolean }) =>
-      apiPatch<UpdateBookingSeriesResponse | BookingDetail>(`/bookings/${id}/series`, payload),
-    onSuccess: (result) => {
-      if (isSeriesConfirmationRequired(result) && selectedSeriesId) {
-        setSeriesConfirm({ warning: result.warning, seriesId: selectedSeriesId });
-        return;
-      }
-      setSeriesSheetOpen(false);
-      setSeriesConfirm(null);
-      setSelectedSeriesId(null);
-      queryClient.invalidateQueries({ queryKey: ['booking', id] });
-      queryClient.invalidateQueries({ queryKey: ['bookings'] });
-    },
-    onError: () => toast({ title: 'Failed to update series assignment', variant: 'destructive' }),
-  });
-
-  const { data: checklist = [], isPending: checklistLoading } = useQuery({
-    queryKey: ['bookingChecklist', id],
-    queryFn: () => apiGet<ChecklistItem[]>(`/bookings/${id}/checklist`),
-    enabled: isLoaded && !!booking && booking.status !== 'CANCELLED',
-  });
 
   const { data: musicFormConfig, isLoading: musicFormConfigLoading } = useQuery({
     queryKey: ['booking-music-form-config', id],
@@ -311,154 +186,10 @@ export default function BookingDetailPage() {
     enabled: isLoaded && !!booking && booking.hasMusicFormResponse && viewingMusicFormResponse,
   });
 
-  useQuery({
-    queryKey: ['templates'],
-    queryFn: () => apiGet<Template[]>('/templates'),
-    enabled: isLoaded,
-    staleTime: 5 * 60 * 1000,
-  });
-
-  useEffect(() => {
-    if (!booking || checklistLoading || checklist.length === 0) return;
-    const targetStatus = (['PROVISIONAL', 'CONFIRMED', 'READY', 'COMPLETE'] as const).find((s) => {
-      const targetIdx = STATUS_ORDER.indexOf(s);
-      const currentIdx = STATUS_ORDER.indexOf(booking.status);
-      if (targetIdx <= currentIdx) return false;
-      const key = `${id}:${booking.status}->${s}`;
-      if (dismissedTransitions.current.has(key)) return false;
-      const forStatus = checklist.filter((i) => i.requiredForStatus === s);
-      return forStatus.length > 0 && forStatus.every((i) => i.state === 'COMPLETE');
-    });
-    if (targetStatus) setReadyDialogStatus(targetStatus);
-  }, [booking, checklist, checklistLoading, id]);
-
-  function invalidateBooking() {
-    queryClient.invalidateQueries({ queryKey: ['booking', id] });
-    queryClient.invalidateQueries({ queryKey: ['bookingChecklist', id] });
-  }
-
-  // ─── Mutations ────────────────────────────────────────────────────────────
-
-  const updateStatusMutation = useMutation({
-    mutationFn: (status: BookingStatus) =>
-      apiPatch<BookingDetail>(`/bookings/${id}`, { status }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['booking', id] });
-      queryClient.invalidateQueries({ queryKey: ['bookings'] });
-      queryClient.invalidateQueries({ queryKey: ['bookingChecklist', id] });
-    },
-    onError: () => {
-      toast({ title: 'Failed to update status', variant: 'destructive' });
-    },
-  });
-
-  const updateNotesMutation = useMutation({
-    mutationFn: (notes: string) => apiPatch(`/bookings/${id}`, { notes: notes || null }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['booking', id] });
-      queryClient.invalidateQueries({ queryKey: ['bookings'] });
-    },
-  });
-
-  const updateFeeMutation = useMutation({
-    mutationFn: (fee: number) => apiPatch(`/bookings/${id}`, { fee }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['booking', id] });
-      queryClient.invalidateQueries({ queryKey: ['bookings'] });
-    },
-  });
-
-  const createContract = useMutation({
-    mutationFn: () => apiPost<Contract>(`/bookings/${id}/contracts`, {}),
-    onSuccess: (data) => {
-      setPendingContract(data);
-      invalidateBooking();
-      setContractSheetReadOnly(false);
-      setContractSheetOpen(true);
-    },
-    onError: () => toast({ title: 'Failed to create contract', variant: 'destructive' }),
-  });
-
-  const sendContractMutation = useMutation({
-    mutationFn: (contractId: string) => apiPostVoid(`/bookings/${id}/contracts/${contractId}/send`, {}),
-    onSuccess: () => invalidateBooking(),
-    onError: () => toast({ title: 'Failed to mark contract as sent', variant: 'destructive' }),
-  });
-
-  const voidContractMutation = useMutation({
-    mutationFn: ({ contractId, confirmSignedVoid }: { contractId: string; confirmSignedVoid: boolean }) =>
-      apiPostVoid(`/bookings/${id}/contracts/${contractId}/void`, { confirmSignedVoid }),
-    onSuccess: () => invalidateBooking(),
-    onError: () => toast({ title: 'Failed to void contract', variant: 'destructive' }),
-  });
-
-  const deleteContractMutation = useMutation({
-    mutationFn: (contractId: string) => apiDelete(`/bookings/${id}/contracts/${contractId}`),
-    onSuccess: () => invalidateBooking(),
-    onError: () => toast({ title: 'Failed to delete contract', variant: 'destructive' }),
-  });
-
-  const voidInvoiceMutation = useMutation({
-    mutationFn: (invoiceId: string) => apiPostVoid(`/bookings/${id}/invoices/${invoiceId}/void`, {}),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['bookingInvoices', id] });
-      queryClient.invalidateQueries({ queryKey: ['bookingChecklist', id] });
-    },
-    onError: () => toast({ title: 'Failed to void invoice', variant: 'destructive' }),
-  });
-
-  const markPaid = useMutation({
-    mutationFn: (invoiceId: string) => apiPost(`/bookings/${id}/invoices/${invoiceId}/mark-paid`, {}),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['bookingInvoices', id] });
-      invalidateBooking();
-    },
-    onError: () => toast({ title: 'Failed to mark invoice as paid', variant: 'destructive' }),
-  });
-
-  const toggleChecklistItem = useMutation({
-    mutationFn: ({ itemId, state }: { itemId: string; state: 'COMPLETE' | 'PENDING' }) =>
-      apiPatch(`/bookings/${id}/checklist/${itemId}`, { state }),
-    onMutate: async ({ itemId, state }) => {
-      await queryClient.cancelQueries({ queryKey: ['bookingChecklist', id] });
-      const previous = queryClient.getQueryData<ChecklistItem[]>(['bookingChecklist', id]);
-      queryClient.setQueryData<ChecklistItem[]>(['bookingChecklist', id], (old) =>
-        old?.map((item) => item.id === itemId ? { ...item, state } : item) ?? [],
-      );
-      return { previous };
-    },
-    onError: (_err, _vars, context) => {
-      if (context?.previous) queryClient.setQueryData(['bookingChecklist', id], context.previous);
-      toast({ title: 'Failed to update checklist item', variant: 'destructive' });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['bookingChecklist', id] });
-    },
-  });
-
-  const addChecklistItem = useMutation({
-    mutationFn: (data: { label: string; requiredForStatus: string | null; dueDate: string | null }) =>
-      apiPost(`/bookings/${id}/checklist`, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['bookingChecklist', id] });
-    },
-    onError: () => toast({ title: 'Failed to add item', variant: 'destructive' }),
-  });
-
-  const unlinkVenueMutation = useMutation({
-    mutationFn: () => apiPatch(`/bookings/${id}`, { venueId: null }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['booking', id] });
-      queryClient.invalidateQueries({ queryKey: ['bookings'] });
-      setEditingContact(null);
-    },
-  });
-
   // ─── Helpers ─────────────────────────────────────────────────────────────
 
   function openCompose(templateType?: string) {
-    setComposeTemplateType(templateType);
-    setComposeOpen(true);
+    setSearchParams(templateType ? { sheet: 'compose', templateType } : { sheet: 'compose' });
   }
 
   function buildSetsDescription(): string {
@@ -475,15 +206,15 @@ export default function BookingDetailPage() {
   }
 
   function openCreateInvoice(prefill?: { isDeposit: boolean; amount?: number }) {
-    setEditingInvoice(undefined);
-    setInvoiceSheetPrefill(prefill ? { ...prefill, description: buildSetsDescription() } : undefined);
-    setInvoiceSheetOpen(true);
+    const params: Record<string, string> = { sheet: 'invoice', isDeposit: String(prefill?.isDeposit ?? false) };
+    if (prefill?.amount != null) params.amount = String(prefill.amount);
+    const desc = buildSetsDescription();
+    if (desc) params.description = desc;
+    setSearchParams(params);
   }
 
   function openEditInvoice(invoice: Invoice) {
-    setEditingInvoice(invoice);
-    setInvoiceSheetPrefill(undefined);
-    setInvoiceSheetOpen(true);
+    setSearchParams({ sheet: 'invoice', invoiceId: invoice.id });
   }
 
   function openSendInvoice(invoice: Invoice) {
@@ -493,7 +224,10 @@ export default function BookingDetailPage() {
 
   function handleChecklistAction(action: 'create_deposit_invoice' | 'create_balance_invoice' | 'create_contract') {
     if (action === 'create_contract') {
-      createContract.mutate();
+      contractActions.createContract((contract) => {
+        setPendingContract(contract);
+        setSearchParams({ sheet: 'contract' });
+      });
       return;
     }
     const isDeposit = action === 'create_deposit_invoice';
@@ -513,7 +247,7 @@ export default function BookingDetailPage() {
       if (booking?.activeContract) actions.markContractSigned(booking.activeContract.id);
     } else {
       const sentDeposit = invoices.find((inv) => inv.isDeposit && inv.status === 'SENT');
-      if (sentDeposit) markPaid.mutate(sentDeposit.id);
+      if (sentDeposit) invoiceActions.markPaid(sentDeposit.id);
       else actions.markDepositReceived();
     }
   }
@@ -557,12 +291,7 @@ export default function BookingDetailPage() {
       ? 'checklist'
       : 'onTheDay';
 
-  const editSection = (section: string) => setSearchParams((prev) => {
-    const next = new URLSearchParams(prev);
-    next.set('edit', 'true');
-    next.set('section', section);
-    return next;
-  });
+  const editSection = (section: string) => setSearchParams({ sheet: 'bookingEdit', section });
 
   const downloadDoc = async (url: string, filename: string) => {
     const res = await fetch(url);
@@ -602,7 +331,7 @@ export default function BookingDetailPage() {
               variant="outline"
               size="sm"
               className="w-9 px-0 md:w-auto md:px-3"
-              onClick={() => setSearchParams({ edit: 'true' })}
+              onClick={() => setSearchParams({ sheet: 'bookingEdit' })}
             >
               <Pencil size={16} />
               <span className="hidden md:inline">Edit</span>
@@ -613,20 +342,20 @@ export default function BookingDetailPage() {
           <BookingStatusDropdown
             currentStatus={booking.status}
             checklist={checklist}
-            onStatusChange={(status) => updateStatusMutation.mutate(status)}
-            isPending={updateStatusMutation.isPending}
+            onStatusChange={(status) => fields.updateStatus(status)}
+            isPending={fields.isStatusPending}
           />
           <span className="text-sm text-muted">{formatDate(booking.date)}</span>
           {feeWithVat
             ? <span className="text-sm text-muted">{feeWithVat}</span>
-            : <InlineFeeAdd onSave={(fee) => updateFeeMutation.mutate(fee)} isSaving={updateFeeMutation.isPending} />
+            : <InlineFeeAdd onSave={(fee) => fields.updateFee(fee)} isSaving={fields.isFeePending} />
           }
           {booking.series ? (
             <span className="hidden md:inline-flex items-center gap-1.5 text-sm text-foreground border border-border rounded-full px-3 py-1.5">
               {booking.series.label}
               <button
                 type="button"
-                onClick={() => updateSeriesMutation.mutate({ seriesId: null })}
+                onClick={() => fields.updateSeries({ seriesId: null })}
                 className="hover:text-foreground transition-colors"
                 aria-label="Remove from series"
               >
@@ -636,7 +365,7 @@ export default function BookingDetailPage() {
           ) : (
             <button
               type="button"
-              onClick={() => setSeriesSheetOpen(true)}
+              onClick={() => setSearchParams({ sheet: 'series' })}
               className="hidden md:inline text-sm text-muted hover:text-foreground transition-colors underline underline-offset-2"
             >
               + Add to series
@@ -655,13 +384,13 @@ export default function BookingDetailPage() {
               items={checklist}
               isLoading={checklistLoading}
               bookingStatus={booking.status}
-              onToggle={(itemId, state) => toggleChecklistItem.mutate({ itemId, state })}
+              onToggle={(itemId, state) => toggleItem(itemId, state)}
               onChecklistAction={handleChecklistAction}
               onOpenCompose={openCompose}
               onMarkDone={handleMarkDone}
-              onAddItem={(data) => addChecklistItem.mutate(data)}
-              isAddingItem={addChecklistItem.isPending}
-              isActionPending={actions.isPending || markPaid.isPending}
+              onAddItem={(data) => addItem(data)}
+              isAddingItem={isAddingItem}
+              isActionPending={actions.isPending || invoiceActions.isMarkingPaid}
               hideHeader
             />
           ) : null
@@ -687,7 +416,7 @@ export default function BookingDetailPage() {
                 showHeader={true}
                 cardTitle="Venue"
                 cardAction={
-                  <button type="button" onClick={() => setEditingContact(booking.venue!)} className="text-xs text-primary hover:text-primary/80 transition-colors">
+                  <button type="button" onClick={() => setSearchParams({ sheet: 'contactEdit', contactId: booking.venue!.id })} className="text-xs text-primary hover:text-primary/80 transition-colors">
                     Edit
                   </button>
                 }
@@ -699,8 +428,8 @@ export default function BookingDetailPage() {
             )}
             <InlineNotes
               notes={booking.notes}
-              onSave={(notes) => updateNotesMutation.mutate(notes)}
-              isSaving={updateNotesMutation.isPending}
+              onSave={(notes) => fields.updateNotes(notes)}
+              isSaving={fields.isNotesPending}
             />
           </div>
         }
@@ -709,13 +438,13 @@ export default function BookingDetailPage() {
             <section>
               <SectionHeader label="People" />
               <div className="flex flex-row gap-4">
-                <PersonChip role="Customer" contact={booking.customer} linkState={backState} onEdit={() => setEditingContact(booking.customer)} />
+                <PersonChip role="Customer" contact={booking.customer} linkState={backState} onEdit={() => setSearchParams({ sheet: 'contactEdit', contactId: booking.customer.id })} />
                 {booking.bookingAgent && (
                   <PersonChip
                     role="Booking agent"
                     contact={booking.bookingAgent}
                     linkState={backState}
-                    onEdit={() => setEditingContact(booking.bookingAgent!)}
+                    onEdit={() => setSearchParams({ sheet: 'contactEdit', contactId: booking.bookingAgent!.id })}
                   />
                 )}
               </div>
@@ -728,7 +457,7 @@ export default function BookingDetailPage() {
                   {booking.series.label}
                   <button
                     type="button"
-                    onClick={() => updateSeriesMutation.mutate({ seriesId: null })}
+                    onClick={() => fields.updateSeries({ seriesId: null })}
                     className="hover:text-foreground transition-colors"
                     aria-label="Remove from series"
                   >
@@ -750,18 +479,21 @@ export default function BookingDetailPage() {
               <ContractCard
                 booking={booking}
                 documents={documents}
-                isCreating={createContract.isPending}
-                onCreateContract={() => createContract.mutate()}
-                onEdit={() => { setContractSheetReadOnly(false); setContractSheetOpen(true); }}
-                onPreview={() => { setContractSheetReadOnly(true); setContractSheetOpen(true); }}
+                isCreating={contractActions.isCreatingContract}
+                onCreateContract={() => contractActions.createContract((contract) => {
+                  setPendingContract(contract);
+                  setSearchParams({ sheet: 'contract' });
+                })}
+                onEdit={() => setSearchParams({ sheet: 'contract' })}
+                onPreview={() => setSearchParams({ sheet: 'contract', readOnly: 'true' })}
                 onSend={() => openCompose(contractShortcutType)}
                 onVoid={(confirmSignedVoid) => {
                   const contractId = booking.activeContract?.id;
-                  if (contractId) voidContractMutation.mutate({ contractId, confirmSignedVoid });
+                  if (contractId) contractActions.voidContract({ contractId, confirmSignedVoid });
                 }}
                 onDelete={() => {
                   const contractId = booking.activeContract?.id;
-                  if (contractId) deleteContractMutation.mutate(contractId);
+                  if (contractId) contractActions.deleteContract(contractId);
                 }}
               />
             )}
@@ -770,16 +502,9 @@ export default function BookingDetailPage() {
               <SeriesInvoiceCard
                 seriesId={booking.series.id}
                 seriesLabel={booking.series.label}
-                onEdit={(inv) => {
-                  setEditingInvoice(inv as unknown as Invoice);
-                  setInvoiceSheetOpen(true);
-                }}
-                onSend={(inv) => {
-                  setComposeTemplateType('balance_invoice_cover');
-                  setComposeOpen(true);
-                  setEditingInvoice(inv as unknown as Invoice);
-                }}
-                onMarkSent={(inv) => setMarkSentInvoice(inv as unknown as Invoice)}
+                onEdit={(inv) => openEditInvoice(inv as unknown as Invoice)}
+                onSend={() => openCompose('balance_invoice_cover')}
+                onMarkSent={(inv) => setSearchParams({ sheet: 'markSent', invoiceId: (inv as unknown as Invoice).id })}
               />
             ) : (
               <InvoiceSection
@@ -805,9 +530,9 @@ export default function BookingDetailPage() {
                 onEdit={openEditInvoice}
                 onDelete={(inv) => actions.deleteInvoice(inv.id)}
                 onSend={openSendInvoice}
-                onMarkSent={setMarkSentInvoice}
-                onMarkPaid={(inv) => markPaid.mutate(inv.id)}
-                onVoid={(inv) => voidInvoiceMutation.mutate(inv.id)}
+                onMarkSent={(inv) => setSearchParams({ sheet: 'markSent', invoiceId: inv.id })}
+                onMarkPaid={(inv) => invoiceActions.markPaid(inv.id)}
+                onVoid={(inv) => invoiceActions.voidInvoice(inv.id)}
               />
             )}
 
@@ -883,390 +608,20 @@ export default function BookingDetailPage() {
       />
       </div>
 
-      {/* ─── Desktop two-column grid ─── */}
-      <div className="hidden md:grid md:grid-cols-[3fr_2fr] md:gap-8 md:items-start mt-6">
-
-        {/* ─── Left column top: For the Day + Packages ─── */}
-        <div className="space-y-8 md:col-start-1">
-
-          {/* For the day */}
-          <section>
-            <SectionHeader label="For the day" />
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-              <ItineraryCard
-                logistics={booking.logistics}
-                sets={booking.sets}
-                onEdit={() => editSection('onTheDay')}
-              />
-              <DetailsCard
-                logistics={booking.logistics}
-                onEdit={() => editSection('onTheDay')}
-              />
-            </div>
-            {booking.venue ? (
-              <VenueMapWidget
-                venue={booking.venue}
-                showHeader={true}
-                cardTitle="Venue"
-                cardAction={
-                  <button type="button" onClick={() => setEditingContact(booking.venue!)} className="text-xs text-primary hover:text-primary/80 transition-colors">
-                    Edit
-                  </button>
-                }
-                contactHref={`/admin/contacts/${booking.venue.id}`}
-                travelTime={venueTravelTime}
-                isLoadingTravelTime={isFetchingTravelTime}
-                onRefreshTravelTime={() => queryClient.invalidateQueries({ queryKey: ['contact-travel-time', bookingVenueId] })}
-              />
-            ) : (
-              <InlineVenueAdd bookingId={booking.id} />
-            )}
-          </section>
-
-          {/* Packages */}
-          <section>
-            <SectionHeader label="Packages" />
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <PerformanceSection
-                booking={booking}
-                onEdit={() => editSection('packages')}
-              />
-              <MusicFormSection
-                booking={booking}
-                documents={documents}
-                config={musicFormConfig ?? null}
-                isLoading={musicFormConfigLoading}
-                response={musicFormResponse ?? null}
-                onUpdateConfig={() => editSection('musicForm')}
-                onViewResponse={() => setViewingMusicFormResponse(true)}
-                onEdit={() => editSection('musicForm')}
-              />
-            </div>
-          </section>
-
-        </div>
-
-        {/* ─── Right column ─── */}
-        <div className="space-y-6 md:col-start-2 md:row-span-2">
-
-          {/* Checklist */}
-          {booking.status !== 'CANCELLED' && (
-            <ChecklistSection
-              items={checklist}
-              isLoading={checklistLoading}
-              bookingStatus={booking.status}
-              onToggle={(itemId, state) => toggleChecklistItem.mutate({ itemId, state })}
-              onChecklistAction={handleChecklistAction}
-              onOpenCompose={openCompose}
-              onMarkDone={handleMarkDone}
-              onAddItem={(data) => addChecklistItem.mutate(data)}
-              isAddingItem={addChecklistItem.isPending}
-              isActionPending={actions.isPending || markPaid.isPending}
-            />
-          )}
-
-          {/* People */}
-          <section>
-            <SectionHeader label="People" />
-            <div className="border-t border-border">
-              <PersonCard role="Customer" contact={booking.customer} linkState={backState} onEdit={() => setEditingContact(booking.customer)} />
-              {booking.bookingAgent && (
-                <PersonCard
-                  role="Booking agent"
-                  contact={booking.bookingAgent}
-                  commissionArrangement={booking.bookingAgent.commissionArrangement}
-                  linkState={backState}
-                  onEdit={() => setEditingContact(booking.bookingAgent!)}
-                />
-              )}
-            </div>
-          </section>
-
-          {/* Series events */}
-          {booking.series && (
-            <SeriesEventsCard
-              bookings={seriesBookings.filter((b) => b.id !== booking.id)}
-              isLoading={seriesBookingsLoading}
-              onAddToSeries={() => navigate('/admin/bookings/new', { state: { seriesId: booking.series!.id } })}
-            />
-          )}
-
-          {/* Contract */}
-          {booking.status !== 'CANCELLED' && (
-            <ContractCard
-              booking={booking}
-              documents={documents}
-              isCreating={createContract.isPending}
-              onCreateContract={() => createContract.mutate()}
-              onEdit={() => { setContractSheetReadOnly(false); setContractSheetOpen(true); }}
-              onPreview={() => { setContractSheetReadOnly(true); setContractSheetOpen(true); }}
-              onSend={() => openCompose(contractShortcutType)}
-              onVoid={(confirmSignedVoid) => {
-                const contractId = booking.activeContract?.id;
-                if (contractId) voidContractMutation.mutate({ contractId, confirmSignedVoid });
-              }}
-              onDelete={() => {
-                const contractId = booking.activeContract?.id;
-                if (contractId) deleteContractMutation.mutate(contractId);
-              }}
-            />
-          )}
-
-          {/* Invoices */}
-          {booking.series ? (
-            <SeriesInvoiceCard
-              seriesId={booking.series.id}
-              seriesLabel={booking.series.label}
-              onEdit={(inv) => {
-                setEditingInvoice(inv as unknown as Invoice);
-                setInvoiceSheetOpen(true);
-              }}
-              onSend={(inv) => {
-                setComposeTemplateType('balance_invoice_cover');
-                setComposeOpen(true);
-                setEditingInvoice(inv as unknown as Invoice);
-              }}
-              onMarkSent={(inv) => setMarkSentInvoice(inv as unknown as Invoice)}
-            />
-          ) : (
-            <InvoiceSection
-              invoices={invoices}
-              documents={documents}
-              isPending={invoicesPending}
-              onNewDepositInvoice={() => {
-                const fee = booking.fee ? parseFloat(booking.fee) : null;
-                const pct = userProfile?.depositPercentage;
-                openCreateInvoice({
-                  isDeposit: true,
-                  amount: fee && pct ? Math.round((fee * pct / 100) * 100) / 100 : undefined,
-                });
-              }}
-              onNewBalanceInvoice={() => {
-                const fee = booking.fee ? parseFloat(booking.fee) : null;
-                const pct = userProfile?.depositPercentage;
-                openCreateInvoice({
-                  isDeposit: false,
-                  amount: fee && pct ? Math.round((fee * (1 - pct / 100)) * 100) / 100 : undefined,
-                });
-              }}
-              onEdit={openEditInvoice}
-              onDelete={(inv) => actions.deleteInvoice(inv.id)}
-              onSend={openSendInvoice}
-              onMarkSent={setMarkSentInvoice}
-              onMarkPaid={(inv) => markPaid.mutate(inv.id)}
-              onVoid={(inv) => voidInvoiceMutation.mutate(inv.id)}
-            />
-          )}
-
-          {/* Documents */}
-          <Card title="Documents">
-            {documents.length === 0 ? (
-              <div className="flex items-center gap-2 text-muted py-1">
-                <FolderOpen size={14} />
-                <span className="text-sm">No documents yet</span>
-              </div>
-            ) : (
-              <div className="divide-y divide-border">
-                {documents.map((doc: Document) => {
-                  const invoice = invoices.find((i) => i.id === doc.invoiceId);
-                  const isVoidContract = doc.type === 'CONTRACT' && doc.contractStatus === 'VOID';
-                  const contractLabel = isVoidContract ? 'Contract [VOID]' : 'Contract';
-                  const invoiceLabel = invoice?.isDeposit ? 'Deposit invoice' : 'Balance invoice';
-                  const label = doc.type === 'CONTRACT' ? contractLabel : invoiceLabel;
-                  const filename = `${label.toLowerCase().replace(' ', '-')}.pdf`;
-                  return (
-                    <div key={doc.id} className="flex items-center gap-2 py-2">
-                      <FileText size={14} className="flex-shrink-0 text-muted mt-0.5 self-start" />
-                      <div className="flex flex-col min-w-0">
-                        <span className="text-sm text-foreground">{label}</span>
-                        {invoice?.invoiceNumber && (
-                          <span className="text-xs text-muted">{invoice.invoiceNumber}</span>
-                        )}
-                      </div>
-                      <span className="text-muted ml-auto text-xs shrink-0">
-                        {new Date(doc.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                      </span>
-                      <button
-                        onClick={() => downloadDoc(doc.url, filename)}
-                        title="Download"
-                        className="text-muted hover:text-foreground shrink-0"
-                      >
-                        <Download size={14} />
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </Card>
-
-        </div>{/* end right column */}
-
-        {/* ─── Left column bottom: Notes + Communications ─── */}
-        <div className="space-y-8 md:col-start-1">
-
-          <InlineNotes
-            notes={booking.notes}
-            onSave={(notes) => updateNotesMutation.mutate(notes)}
-            isSaving={updateNotesMutation.isPending}
-          />
-
-          <CommunicationsSection
-            communications={communications}
-            onCompose={() => openCompose()}
-          />
-
-        </div>
-
-      </div>{/* end two-column grid */}
-
-      {readyDialogStatus && (
-        <Dialog open onOpenChange={() => {
-          const key = `${id}:${booking.status}->${readyDialogStatus}`;
-          dismissedTransitions.current.add(key);
-          celebratoryTitle.current = CELEBRATORY_TITLES[Math.floor(Math.random() * CELEBRATORY_TITLES.length)];
-          setReadyDialogStatus(null);
-        }}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle className="font-display text-xl">{celebratoryTitle.current}</DialogTitle>
-            </DialogHeader>
-            <DialogDescription>
-              You've completed all the tasks for this booking. Ready to move it to{' '}
-              <span className="font-medium text-foreground">{STATUS_LABELS[readyDialogStatus]}</span>?
-            </DialogDescription>
-            <div className="flex gap-2 justify-end mt-2">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  const key = `${id}:${booking.status}->${readyDialogStatus}`;
-                  dismissedTransitions.current.add(key);
-                  celebratoryTitle.current = CELEBRATORY_TITLES[Math.floor(Math.random() * CELEBRATORY_TITLES.length)];
-                  setReadyDialogStatus(null);
-                }}
-              >
-                Not yet
-              </Button>
-              <Button
-                onClick={() => {
-                  const next = readyDialogStatus;
-                  setReadyDialogStatus(null);
-                  apiPatch<BookingDetail>(`/bookings/${id}`, { status: next }).then(() => {
-                    queryClient.invalidateQueries({ queryKey: ['booking', id] });
-                    queryClient.invalidateQueries({ queryKey: ['bookings'] });
-                    queryClient.invalidateQueries({ queryKey: ['bookingChecklist', id] });
-                  });
-                }}
-              >
-                Mark as {STATUS_LABELS[readyDialogStatus]}
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
-
-      <ContractSheet
+      <BookingDetailDesktop
         bookingId={id!}
-        contract={pendingContract ?? booking.activeContract}
-        readOnly={contractSheetReadOnly}
-        open={contractSheetOpen}
-        onClose={() => { setContractSheetOpen(false); setPendingContract(null); }}
+        onCreateContract={(contract) => setPendingContract(contract)}
       />
-      <BookingEditDrawer booking={booking} />
-      <ContactEditSheet
-        contact={editingContact}
-        onClose={() => setEditingContact(null)}
-        onUnlink={editingContact?.id === booking.venue?.id ? () => unlinkVenueMutation.mutate() : undefined}
-      />
-      <InvoiceSheet
-        bookingId={id!}
-        invoice={editingInvoice}
-        hasDepositInvoice={invoices.some((inv) => inv.isDeposit)}
-        prefill={invoiceSheetPrefill}
-        open={invoiceSheetOpen}
-        onOpenChange={setInvoiceSheetOpen}
-      />
-      <ComposeEmailSheet
-        bookingId={id!}
-        booking={booking}
-        invoices={invoices}
-        defaultPaymentTermsDays={userProfile?.defaultPaymentTermsDays}
-        open={composeOpen}
-        onOpenChange={setComposeOpen}
-        initialTemplateType={composeTemplateType}
-        onAfterSend={(templateType) => {
-          const isContractEmail = templateType === 'contract_cover' || templateType === 'contract_and_deposit_cover';
-          const contractId = booking.activeContract?.id;
-          if (isContractEmail && contractId && booking.activeContract?.status === 'DRAFT') {
-            sendContractMutation.mutate(contractId);
-          }
-        }}
-      />
-      {markSentInvoice && (
-        <MarkSentDialog
-          bookingId={id!}
-          invoice={markSentInvoice}
-          userProfile={userProfile}
-          open={!!markSentInvoice}
-          onOpenChange={(open) => { if (!open) setMarkSentInvoice(undefined); }}
-        />
-      )}
 
-      {/* Add to series dialog */}
-      <Dialog open={seriesSheetOpen} onOpenChange={(open) => { setSeriesSheetOpen(open); if (!open) setSelectedSeriesId(null); }}>
-        <DialogContent aria-describedby={undefined}>
-          <DialogHeader>
-            <DialogTitle>Add to series</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 pt-2">
-            <Select value={selectedSeriesId ?? ''} onValueChange={setSelectedSeriesId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select series..." />
-              </SelectTrigger>
-              <SelectContent>
-                {seriesList?.length
-                  ? seriesList.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
-                    ))
-                  : <div className="py-2 px-2 text-sm text-muted-foreground">No series available</div>
-                }
-              </SelectContent>
-            </Select>
-            <div className="flex gap-3">
-              <Button
-                onClick={() => { if (selectedSeriesId) updateSeriesMutation.mutate({ seriesId: selectedSeriesId }); }}
-                disabled={!selectedSeriesId || updateSeriesMutation.isPending}
-              >
-                {updateSeriesMutation.isPending ? 'Saving…' : 'Add to series'}
-              </Button>
-              <Button variant="outline" onClick={() => setSeriesSheetOpen(false)}>Cancel</Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Customer mismatch confirmation dialog */}
-      <Dialog open={!!seriesConfirm} onOpenChange={(open) => { if (!open) setSeriesConfirm(null); }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Customer mismatch</DialogTitle>
-          </DialogHeader>
-          <DialogDescription className="pt-2">{seriesConfirm?.warning}</DialogDescription>
-          <div className="flex gap-3 pt-4">
-            <Button
-              onClick={() => {
-                if (seriesConfirm) {
-                  updateSeriesMutation.mutate({ seriesId: seriesConfirm.seriesId, confirm: true });
-                }
-              }}
-              disabled={updateSeriesMutation.isPending}
-            >
-              {updateSeriesMutation.isPending ? 'Saving…' : 'Continue anyway'}
-            </Button>
-            <Button variant="outline" onClick={() => setSeriesConfirm(null)}>Cancel</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <BookingDetailSheets
+        bookingId={id!}
+        pendingContract={pendingContract}
+        onPendingContractClear={() => setPendingContract(null)}
+        readyDialogStatus={readyDialogStatus}
+        celebratoryTitle={celebratoryTitle}
+        dismissReadyDialog={dismissReadyDialog}
+        confirmStatusTransition={confirmStatusTransition}
+      />
     </div>
   );
 }

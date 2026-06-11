@@ -12,6 +12,8 @@ A CRM for musicians. The central workflow is managing Bookings with Contacts.
 
 **Design principle — enums for closed lifecycles only:** Use Prisma enums for states that are genuinely exhaustive domain constants (e.g. `BookingStatus`, `InvoiceStatus`). Avoid them for extensible classifier fields (event categories, genres, format types) — store those as validated strings instead. Adding a new value to an extensible enum requires a DB migration and cascading code changes; a constants list requires only a deploy.
 
+**Design principle — mobile space is a scarce resource:** Mobile layouts treat screen space as valuable currency. Concrete implications: hide cards and sections that have nothing to show (`hideWhenEmpty`); use tabs to give each concern its own breathing room rather than stacking everything into one long scroll; compress information density (e.g. `PersonChip` over `PersonCard`) when space is at a premium. The goal is that the content most relevant to the musician's current moment is reachable without scrolling — not that all content is always visible. See ADR-0037 for how this principle is applied on the booking detail page.
+
 ---
 
 ## Terms

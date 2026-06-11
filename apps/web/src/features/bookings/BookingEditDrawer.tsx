@@ -50,7 +50,7 @@ interface Props {
 export default function BookingEditDrawer({ booking }: Props) {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
-  const isOpen = searchParams.get('edit') === 'true';
+  const isOpen = searchParams.get('sheet') === 'bookingEdit';
   const section = searchParams.get('section');
   const queryClient = useQueryClient();
   const [deleteConfirm, setDeleteConfirm] = useState(false);
@@ -59,12 +59,7 @@ export default function BookingEditDrawer({ booking }: Props) {
   const onTheDayRef = useRef<HTMLDivElement>(null);
 
   function close() {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.delete('edit');
-      next.delete('section');
-      return next;
-    });
+    setSearchParams({});
   }
 
   const {

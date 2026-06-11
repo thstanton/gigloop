@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiPatch } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
-import type { BookingStatus } from '@/types/api';
+import type { BookingDetail, BookingStatus, UpdateBookingSeriesResponse } from '@/types/api';
 
 export function useBookingFields(bookingId: string) {
   const queryClient = useQueryClient();
@@ -30,6 +30,18 @@ export function useBookingFields(bookingId: string) {
     onSuccess: () => invalidateBookingList(),
   });
 
+  const updateVenueMutation = useMutation({
+    mutationFn: (venueId: string | null) => apiPatch(`/bookings/${bookingId}`, { venueId }),
+    onSuccess: () => invalidateBookingList(),
+  });
+
+  const updateSeriesMutation = useMutation({
+    mutationFn: (payload: { seriesId: string | null; confirm?: boolean }) =>
+      apiPatch<UpdateBookingSeriesResponse | BookingDetail>(`/bookings/${bookingId}/series`, payload),
+    onSuccess: () => invalidateBookingList(),
+    onError: () => toast({ title: 'Failed to update series assignment', variant: 'destructive' }),
+  });
+
   return {
     updateStatus: (status: BookingStatus) => updateStatusMutation.mutate(status),
     isStatusPending: updateStatusMutation.isPending,
@@ -37,5 +49,12 @@ export function useBookingFields(bookingId: string) {
     isNotesPending: updateNotesMutation.isPending,
     updateFee: (fee: number) => updateFeeMutation.mutate(fee),
     isFeePending: updateFeeMutation.isPending,
+    updateVenue: (venueId: string | null) => updateVenueMutation.mutate(venueId),
+    isVenuePending: updateVenueMutation.isPending,
+    updateSeries: (
+      payload: { seriesId: string | null; confirm?: boolean },
+      callbacks?: { onSuccess?: (result: UpdateBookingSeriesResponse | BookingDetail) => void },
+    ) => updateSeriesMutation.mutate(payload, callbacks),
+    isSeriesPending: updateSeriesMutation.isPending,
   };
 }
