@@ -39,7 +39,8 @@ export function useContractActions(bookingId: string) {
   });
 
   return {
-    createContract: () => createContractMutation.mutate(),
+    createContract: (onCreated?: (contract: Contract) => void) =>
+      createContractMutation.mutate(undefined, { onSuccess: onCreated }),
     isCreatingContract: createContractMutation.isPending,
     sendContract: (contractId: string) => sendContractMutation.mutate(contractId),
     voidContract: (args: { contractId: string; confirmSignedVoid: boolean }) => voidContractMutation.mutate(args),

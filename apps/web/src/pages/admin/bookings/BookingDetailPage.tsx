@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { useAuth } from '@clerk/react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, Eye, Pencil, X, FolderOpen, FileText, Download } from 'lucide-react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -20,6 +20,10 @@ import {
 } from '@/components/ui/select';
 import { useBooking } from '@/lib/hooks/useBooking';
 import { useBookingActions } from '@/lib/hooks/useBookingActions';
+import { useBookingChecklist } from '@/lib/hooks/useBookingChecklist';
+import { useBookingFields } from '@/lib/hooks/useBookingFields';
+import { useContractActions } from '@/lib/hooks/useContractActions';
+import { useInvoiceActions } from '@/lib/hooks/useInvoiceActions';
 import { useBookingInvoices } from '@/lib/hooks/useBookingInvoices';
 import SeriesInvoiceCard from '@/features/bookings/SeriesInvoiceCard';
 import { SeriesEventsCard } from '@/features/bookings/SeriesEventsCard';
@@ -48,21 +52,19 @@ import DetailsCard from '@/features/bookings/DetailsCard';
 import PerformanceSection from '@/features/bookings/PerformanceSection';
 import BookingDetailTabs from '@/features/bookings/BookingDetailTabs';
 import { InlineVenueAdd } from '@/features/bookings/InlineVenueAdd';
-import { toast } from '@/lib/hooks/use-toast';
-import { apiGet, apiPatch, apiPost, apiPostVoid, apiDelete } from '@/lib/api';
+import { apiGet } from '@/lib/api';
 import {
   formatDate,
   formatCurrency,
   formatFee,
 } from '@/lib/formatters';
-import { EVENT_TYPE_LABELS, STATUS_ORDER } from '@/lib/constants';
+import { EVENT_TYPE_LABELS } from '@/lib/constants';
 import { Card } from '@/components/common/Card';
 import { SectionHeader } from '@/components/common/SectionHeader';
 import type {
   BookingDetail,
   BookingSeries,
   BookingStatus,
-  ChecklistItem,
   Contact,
   Contract,
   Document,
@@ -80,13 +82,6 @@ function isSeriesConfirmationRequired(r: object): r is Required<UpdateBookingSer
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-const CELEBRATORY_TITLES = [
-  "You're smashing it!",
-  "Nice work!",
-  "All done!",
-  "You're on a roll!",
-];
 
 const STATUS_LABELS: Record<BookingStatus, string> = {
   ENQUIRY:      'Enquiry',
@@ -189,13 +184,10 @@ export default function BookingDetailPage() {
   const [contractSheetOpen, setContractSheetOpen] = useState(false);
   const [contractSheetReadOnly, setContractSheetReadOnly] = useState(false);
   const [pendingContract, setPendingContract] = useState<Contract | null>(null);
-  const [readyDialogStatus, setReadyDialogStatus] = useState<BookingStatus | null>(null);
   const [viewingMusicFormResponse, setViewingMusicFormResponse] = useState(false);
   const [seriesSheetOpen, setSeriesSheetOpen] = useState(false);
   const [selectedSeriesId, setSelectedSeriesId] = useState<string | null>(null);
   const [seriesConfirm, setSeriesConfirm] = useState<{ warning: string; seriesId: string } | null>(null);
-  const dismissedTransitions = useRef(new Set<string>());
-  const celebratoryTitle = useRef(CELEBRATORY_TITLES[Math.floor(Math.random() * CELEBRATORY_TITLES.length)]);
 
   const { isLoaded } = useAuth();
   const { data: booking, isLoading, isError } = useBooking(id!);
@@ -216,6 +208,20 @@ export default function BookingDetailPage() {
   });
 
   const actions = useBookingActions(id!);
+  const contractActions = useContractActions(id!);
+  const invoiceActions = useInvoiceActions(id!);
+  const fields = useBookingFields(id!);
+  const {
+    checklist,
+    checklistLoading,
+    readyDialogStatus,
+    celebratoryTitle,
+    dismissReadyDialog,
+    confirmStatusTransition,
+    toggleItem,
+    addItem,
+    isAddingItem,
+  } = useBookingChecklist(id!, booking, isLoaded);
   const queryClient = useQueryClient();
   const { data: seriesBookings = [], isLoading: seriesBookingsLoading } = useSeriesBookings(booking?.series?.id);
 
@@ -223,29 +229,6 @@ export default function BookingDetailPage() {
     queryKey: ['series'],
     queryFn: () => apiGet<BookingSeries[]>('/series'),
     enabled: isLoaded && seriesSheetOpen,
-  });
-
-  const updateSeriesMutation = useMutation({
-    mutationFn: (payload: { seriesId: string | null; confirm?: boolean }) =>
-      apiPatch<UpdateBookingSeriesResponse | BookingDetail>(`/bookings/${id}/series`, payload),
-    onSuccess: (result) => {
-      if (isSeriesConfirmationRequired(result) && selectedSeriesId) {
-        setSeriesConfirm({ warning: result.warning, seriesId: selectedSeriesId });
-        return;
-      }
-      setSeriesSheetOpen(false);
-      setSeriesConfirm(null);
-      setSelectedSeriesId(null);
-      queryClient.invalidateQueries({ queryKey: ['booking', id] });
-      queryClient.invalidateQueries({ queryKey: ['bookings'] });
-    },
-    onError: () => toast({ title: 'Failed to update series assignment', variant: 'destructive' }),
-  });
-
-  const { data: checklist = [], isPending: checklistLoading } = useQuery({
-    queryKey: ['bookingChecklist', id],
-    queryFn: () => apiGet<ChecklistItem[]>(`/bookings/${id}/checklist`),
-    enabled: isLoaded && !!booking && booking.status !== 'CANCELLED',
   });
 
   const { data: musicFormConfig, isLoading: musicFormConfigLoading } = useQuery({
@@ -265,142 +248,6 @@ export default function BookingDetailPage() {
     queryFn: () => apiGet<Template[]>('/templates'),
     enabled: isLoaded,
     staleTime: 5 * 60 * 1000,
-  });
-
-  useEffect(() => {
-    if (!booking || checklistLoading || checklist.length === 0) return;
-    const targetStatus = (['PROVISIONAL', 'CONFIRMED', 'READY', 'COMPLETE'] as const).find((s) => {
-      const targetIdx = STATUS_ORDER.indexOf(s);
-      const currentIdx = STATUS_ORDER.indexOf(booking.status);
-      if (targetIdx <= currentIdx) return false;
-      const key = `${id}:${booking.status}->${s}`;
-      if (dismissedTransitions.current.has(key)) return false;
-      const forStatus = checklist.filter((i) => i.requiredForStatus === s);
-      return forStatus.length > 0 && forStatus.every((i) => i.state === 'COMPLETE');
-    });
-    if (targetStatus) setReadyDialogStatus(targetStatus);
-  }, [booking, checklist, checklistLoading, id]);
-
-  function invalidateBooking() {
-    queryClient.invalidateQueries({ queryKey: ['booking', id] });
-    queryClient.invalidateQueries({ queryKey: ['bookingChecklist', id] });
-  }
-
-  // ─── Mutations ────────────────────────────────────────────────────────────
-
-  const updateStatusMutation = useMutation({
-    mutationFn: (status: BookingStatus) =>
-      apiPatch<BookingDetail>(`/bookings/${id}`, { status }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['booking', id] });
-      queryClient.invalidateQueries({ queryKey: ['bookings'] });
-      queryClient.invalidateQueries({ queryKey: ['bookingChecklist', id] });
-    },
-    onError: () => {
-      toast({ title: 'Failed to update status', variant: 'destructive' });
-    },
-  });
-
-  const updateNotesMutation = useMutation({
-    mutationFn: (notes: string) => apiPatch(`/bookings/${id}`, { notes: notes || null }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['booking', id] });
-      queryClient.invalidateQueries({ queryKey: ['bookings'] });
-    },
-  });
-
-  const updateFeeMutation = useMutation({
-    mutationFn: (fee: number) => apiPatch(`/bookings/${id}`, { fee }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['booking', id] });
-      queryClient.invalidateQueries({ queryKey: ['bookings'] });
-    },
-  });
-
-  const createContract = useMutation({
-    mutationFn: () => apiPost<Contract>(`/bookings/${id}/contracts`, {}),
-    onSuccess: (data) => {
-      setPendingContract(data);
-      invalidateBooking();
-      setContractSheetReadOnly(false);
-      setContractSheetOpen(true);
-    },
-    onError: () => toast({ title: 'Failed to create contract', variant: 'destructive' }),
-  });
-
-  const sendContractMutation = useMutation({
-    mutationFn: (contractId: string) => apiPostVoid(`/bookings/${id}/contracts/${contractId}/send`, {}),
-    onSuccess: () => invalidateBooking(),
-    onError: () => toast({ title: 'Failed to mark contract as sent', variant: 'destructive' }),
-  });
-
-  const voidContractMutation = useMutation({
-    mutationFn: ({ contractId, confirmSignedVoid }: { contractId: string; confirmSignedVoid: boolean }) =>
-      apiPostVoid(`/bookings/${id}/contracts/${contractId}/void`, { confirmSignedVoid }),
-    onSuccess: () => invalidateBooking(),
-    onError: () => toast({ title: 'Failed to void contract', variant: 'destructive' }),
-  });
-
-  const deleteContractMutation = useMutation({
-    mutationFn: (contractId: string) => apiDelete(`/bookings/${id}/contracts/${contractId}`),
-    onSuccess: () => invalidateBooking(),
-    onError: () => toast({ title: 'Failed to delete contract', variant: 'destructive' }),
-  });
-
-  const voidInvoiceMutation = useMutation({
-    mutationFn: (invoiceId: string) => apiPostVoid(`/bookings/${id}/invoices/${invoiceId}/void`, {}),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['bookingInvoices', id] });
-      queryClient.invalidateQueries({ queryKey: ['bookingChecklist', id] });
-    },
-    onError: () => toast({ title: 'Failed to void invoice', variant: 'destructive' }),
-  });
-
-  const markPaid = useMutation({
-    mutationFn: (invoiceId: string) => apiPost(`/bookings/${id}/invoices/${invoiceId}/mark-paid`, {}),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['bookingInvoices', id] });
-      invalidateBooking();
-    },
-    onError: () => toast({ title: 'Failed to mark invoice as paid', variant: 'destructive' }),
-  });
-
-  const toggleChecklistItem = useMutation({
-    mutationFn: ({ itemId, state }: { itemId: string; state: 'COMPLETE' | 'PENDING' }) =>
-      apiPatch(`/bookings/${id}/checklist/${itemId}`, { state }),
-    onMutate: async ({ itemId, state }) => {
-      await queryClient.cancelQueries({ queryKey: ['bookingChecklist', id] });
-      const previous = queryClient.getQueryData<ChecklistItem[]>(['bookingChecklist', id]);
-      queryClient.setQueryData<ChecklistItem[]>(['bookingChecklist', id], (old) =>
-        old?.map((item) => item.id === itemId ? { ...item, state } : item) ?? [],
-      );
-      return { previous };
-    },
-    onError: (_err, _vars, context) => {
-      if (context?.previous) queryClient.setQueryData(['bookingChecklist', id], context.previous);
-      toast({ title: 'Failed to update checklist item', variant: 'destructive' });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['bookingChecklist', id] });
-    },
-  });
-
-  const addChecklistItem = useMutation({
-    mutationFn: (data: { label: string; requiredForStatus: string | null; dueDate: string | null }) =>
-      apiPost(`/bookings/${id}/checklist`, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['bookingChecklist', id] });
-    },
-    onError: () => toast({ title: 'Failed to add item', variant: 'destructive' }),
-  });
-
-  const unlinkVenueMutation = useMutation({
-    mutationFn: () => apiPatch(`/bookings/${id}`, { venueId: null }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['booking', id] });
-      queryClient.invalidateQueries({ queryKey: ['bookings'] });
-      setEditingContact(null);
-    },
   });
 
   // ─── Helpers ─────────────────────────────────────────────────────────────
@@ -442,7 +289,11 @@ export default function BookingDetailPage() {
 
   function handleChecklistAction(action: 'create_deposit_invoice' | 'create_balance_invoice' | 'create_contract') {
     if (action === 'create_contract') {
-      createContract.mutate();
+      contractActions.createContract((contract) => {
+        setPendingContract(contract);
+        setContractSheetReadOnly(false);
+        setContractSheetOpen(true);
+      });
       return;
     }
     const isDeposit = action === 'create_deposit_invoice';
@@ -462,7 +313,7 @@ export default function BookingDetailPage() {
       if (booking?.activeContract) actions.markContractSigned(booking.activeContract.id);
     } else {
       const sentDeposit = invoices.find((inv) => inv.isDeposit && inv.status === 'SENT');
-      if (sentDeposit) markPaid.mutate(sentDeposit.id);
+      if (sentDeposit) invoiceActions.markPaid(sentDeposit.id);
       else actions.markDepositReceived();
     }
   }
@@ -562,20 +413,20 @@ export default function BookingDetailPage() {
           <BookingStatusDropdown
             currentStatus={booking.status}
             checklist={checklist}
-            onStatusChange={(status) => updateStatusMutation.mutate(status)}
-            isPending={updateStatusMutation.isPending}
+            onStatusChange={(status) => fields.updateStatus(status)}
+            isPending={fields.isStatusPending}
           />
           <span className="text-sm text-muted">{formatDate(booking.date)}</span>
           {feeWithVat
             ? <span className="text-sm text-muted">{feeWithVat}</span>
-            : <InlineFeeAdd onSave={(fee) => updateFeeMutation.mutate(fee)} isSaving={updateFeeMutation.isPending} />
+            : <InlineFeeAdd onSave={(fee) => fields.updateFee(fee)} isSaving={fields.isFeePending} />
           }
           {booking.series ? (
             <span className="hidden md:inline-flex items-center gap-1.5 text-sm text-foreground border border-border rounded-full px-3 py-1.5">
               {booking.series.label}
               <button
                 type="button"
-                onClick={() => updateSeriesMutation.mutate({ seriesId: null })}
+                onClick={() => fields.updateSeries({ seriesId: null })}
                 className="hover:text-foreground transition-colors"
                 aria-label="Remove from series"
               >
@@ -604,13 +455,13 @@ export default function BookingDetailPage() {
               items={checklist}
               isLoading={checklistLoading}
               bookingStatus={booking.status}
-              onToggle={(itemId, state) => toggleChecklistItem.mutate({ itemId, state })}
+              onToggle={(itemId, state) => toggleItem(itemId, state)}
               onChecklistAction={handleChecklistAction}
               onOpenCompose={openCompose}
               onMarkDone={handleMarkDone}
-              onAddItem={(data) => addChecklistItem.mutate(data)}
-              isAddingItem={addChecklistItem.isPending}
-              isActionPending={actions.isPending || markPaid.isPending}
+              onAddItem={(data) => addItem(data)}
+              isAddingItem={isAddingItem}
+              isActionPending={actions.isPending || invoiceActions.isMarkingPaid}
               hideHeader
             />
           ) : null
@@ -648,8 +499,8 @@ export default function BookingDetailPage() {
             )}
             <InlineNotes
               notes={booking.notes}
-              onSave={(notes) => updateNotesMutation.mutate(notes)}
-              isSaving={updateNotesMutation.isPending}
+              onSave={(notes) => fields.updateNotes(notes)}
+              isSaving={fields.isNotesPending}
             />
           </div>
         }
@@ -677,7 +528,7 @@ export default function BookingDetailPage() {
                   {booking.series.label}
                   <button
                     type="button"
-                    onClick={() => updateSeriesMutation.mutate({ seriesId: null })}
+                    onClick={() => fields.updateSeries({ seriesId: null })}
                     className="hover:text-foreground transition-colors"
                     aria-label="Remove from series"
                   >
@@ -699,18 +550,22 @@ export default function BookingDetailPage() {
               <ContractCard
                 booking={booking}
                 documents={documents}
-                isCreating={createContract.isPending}
-                onCreateContract={() => createContract.mutate()}
+                isCreating={contractActions.isCreatingContract}
+                onCreateContract={() => contractActions.createContract((contract) => {
+                  setPendingContract(contract);
+                  setContractSheetReadOnly(false);
+                  setContractSheetOpen(true);
+                })}
                 onEdit={() => { setContractSheetReadOnly(false); setContractSheetOpen(true); }}
                 onPreview={() => { setContractSheetReadOnly(true); setContractSheetOpen(true); }}
                 onSend={() => openCompose(contractShortcutType)}
                 onVoid={(confirmSignedVoid) => {
                   const contractId = booking.activeContract?.id;
-                  if (contractId) voidContractMutation.mutate({ contractId, confirmSignedVoid });
+                  if (contractId) contractActions.voidContract({ contractId, confirmSignedVoid });
                 }}
                 onDelete={() => {
                   const contractId = booking.activeContract?.id;
-                  if (contractId) deleteContractMutation.mutate(contractId);
+                  if (contractId) contractActions.deleteContract(contractId);
                 }}
               />
             )}
@@ -755,8 +610,8 @@ export default function BookingDetailPage() {
                 onDelete={(inv) => actions.deleteInvoice(inv.id)}
                 onSend={openSendInvoice}
                 onMarkSent={setMarkSentInvoice}
-                onMarkPaid={(inv) => markPaid.mutate(inv.id)}
-                onVoid={(inv) => voidInvoiceMutation.mutate(inv.id)}
+                onMarkPaid={(inv) => invoiceActions.markPaid(inv.id)}
+                onVoid={(inv) => invoiceActions.voidInvoice(inv.id)}
               />
             )}
 
@@ -904,13 +759,13 @@ export default function BookingDetailPage() {
               items={checklist}
               isLoading={checklistLoading}
               bookingStatus={booking.status}
-              onToggle={(itemId, state) => toggleChecklistItem.mutate({ itemId, state })}
+              onToggle={(itemId, state) => toggleItem(itemId, state)}
               onChecklistAction={handleChecklistAction}
               onOpenCompose={openCompose}
               onMarkDone={handleMarkDone}
-              onAddItem={(data) => addChecklistItem.mutate(data)}
-              isAddingItem={addChecklistItem.isPending}
-              isActionPending={actions.isPending || markPaid.isPending}
+              onAddItem={(data) => addItem(data)}
+              isAddingItem={isAddingItem}
+              isActionPending={actions.isPending || invoiceActions.isMarkingPaid}
             />
           )}
 
@@ -945,18 +800,22 @@ export default function BookingDetailPage() {
             <ContractCard
               booking={booking}
               documents={documents}
-              isCreating={createContract.isPending}
-              onCreateContract={() => createContract.mutate()}
+              isCreating={contractActions.isCreatingContract}
+              onCreateContract={() => contractActions.createContract((contract) => {
+                setPendingContract(contract);
+                setContractSheetReadOnly(false);
+                setContractSheetOpen(true);
+              })}
               onEdit={() => { setContractSheetReadOnly(false); setContractSheetOpen(true); }}
               onPreview={() => { setContractSheetReadOnly(true); setContractSheetOpen(true); }}
               onSend={() => openCompose(contractShortcutType)}
               onVoid={(confirmSignedVoid) => {
                 const contractId = booking.activeContract?.id;
-                if (contractId) voidContractMutation.mutate({ contractId, confirmSignedVoid });
+                if (contractId) contractActions.voidContract({ contractId, confirmSignedVoid });
               }}
               onDelete={() => {
                 const contractId = booking.activeContract?.id;
-                if (contractId) deleteContractMutation.mutate(contractId);
+                if (contractId) contractActions.deleteContract(contractId);
               }}
             />
           )}
@@ -1002,8 +861,8 @@ export default function BookingDetailPage() {
               onDelete={(inv) => actions.deleteInvoice(inv.id)}
               onSend={openSendInvoice}
               onMarkSent={setMarkSentInvoice}
-              onMarkPaid={(inv) => markPaid.mutate(inv.id)}
-              onVoid={(inv) => voidInvoiceMutation.mutate(inv.id)}
+              onMarkPaid={(inv) => invoiceActions.markPaid(inv.id)}
+              onVoid={(inv) => invoiceActions.voidInvoice(inv.id)}
             />
           )}
 
@@ -1056,8 +915,8 @@ export default function BookingDetailPage() {
 
           <InlineNotes
             notes={booking.notes}
-            onSave={(notes) => updateNotesMutation.mutate(notes)}
-            isSaving={updateNotesMutation.isPending}
+            onSave={(notes) => fields.updateNotes(notes)}
+            isSaving={fields.isNotesPending}
           />
 
           <CommunicationsSection
@@ -1070,43 +929,20 @@ export default function BookingDetailPage() {
       </div>{/* end two-column grid */}
 
       {readyDialogStatus && (
-        <Dialog open onOpenChange={() => {
-          const key = `${id}:${booking.status}->${readyDialogStatus}`;
-          dismissedTransitions.current.add(key);
-          celebratoryTitle.current = CELEBRATORY_TITLES[Math.floor(Math.random() * CELEBRATORY_TITLES.length)];
-          setReadyDialogStatus(null);
-        }}>
+        <Dialog open onOpenChange={dismissReadyDialog}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle className="font-display text-xl">{celebratoryTitle.current}</DialogTitle>
+              <DialogTitle className="font-display text-xl">{celebratoryTitle}</DialogTitle>
             </DialogHeader>
             <DialogDescription>
               You've completed all the tasks for this booking. Ready to move it to{' '}
               <span className="font-medium text-foreground">{STATUS_LABELS[readyDialogStatus]}</span>?
             </DialogDescription>
             <div className="flex gap-2 justify-end mt-2">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  const key = `${id}:${booking.status}->${readyDialogStatus}`;
-                  dismissedTransitions.current.add(key);
-                  celebratoryTitle.current = CELEBRATORY_TITLES[Math.floor(Math.random() * CELEBRATORY_TITLES.length)];
-                  setReadyDialogStatus(null);
-                }}
-              >
+              <Button variant="outline" onClick={dismissReadyDialog}>
                 Not yet
               </Button>
-              <Button
-                onClick={() => {
-                  const next = readyDialogStatus;
-                  setReadyDialogStatus(null);
-                  apiPatch<BookingDetail>(`/bookings/${id}`, { status: next }).then(() => {
-                    queryClient.invalidateQueries({ queryKey: ['booking', id] });
-                    queryClient.invalidateQueries({ queryKey: ['bookings'] });
-                    queryClient.invalidateQueries({ queryKey: ['bookingChecklist', id] });
-                  });
-                }}
-              >
+              <Button onClick={() => confirmStatusTransition(readyDialogStatus)}>
                 Mark as {STATUS_LABELS[readyDialogStatus]}
               </Button>
             </div>
@@ -1125,7 +961,7 @@ export default function BookingDetailPage() {
       <ContactEditSheet
         contact={editingContact}
         onClose={() => setEditingContact(null)}
-        onUnlink={editingContact?.id === booking.venue?.id ? () => unlinkVenueMutation.mutate() : undefined}
+        onUnlink={editingContact?.id === booking.venue?.id ? () => { fields.updateVenue(null); setEditingContact(null); } : undefined}
       />
       <InvoiceSheet
         bookingId={id!}
@@ -1147,7 +983,7 @@ export default function BookingDetailPage() {
           const isContractEmail = templateType === 'contract_cover' || templateType === 'contract_and_deposit_cover';
           const contractId = booking.activeContract?.id;
           if (isContractEmail && contractId && booking.activeContract?.status === 'DRAFT') {
-            sendContractMutation.mutate(contractId);
+            contractActions.sendContract(contractId);
           }
         }}
       />
@@ -1183,10 +1019,24 @@ export default function BookingDetailPage() {
             </Select>
             <div className="flex gap-3">
               <Button
-                onClick={() => { if (selectedSeriesId) updateSeriesMutation.mutate({ seriesId: selectedSeriesId }); }}
-                disabled={!selectedSeriesId || updateSeriesMutation.isPending}
+                onClick={() => {
+                  if (selectedSeriesId) {
+                    fields.updateSeries({ seriesId: selectedSeriesId }, {
+                      onSuccess: (result) => {
+                        if (isSeriesConfirmationRequired(result) && selectedSeriesId) {
+                          setSeriesConfirm({ warning: result.warning, seriesId: selectedSeriesId });
+                          return;
+                        }
+                        setSeriesSheetOpen(false);
+                        setSeriesConfirm(null);
+                        setSelectedSeriesId(null);
+                      },
+                    });
+                  }
+                }}
+                disabled={!selectedSeriesId || fields.isSeriesPending}
               >
-                {updateSeriesMutation.isPending ? 'Saving…' : 'Add to series'}
+                {fields.isSeriesPending ? 'Saving…' : 'Add to series'}
               </Button>
               <Button variant="outline" onClick={() => setSeriesSheetOpen(false)}>Cancel</Button>
             </div>
@@ -1205,12 +1055,18 @@ export default function BookingDetailPage() {
             <Button
               onClick={() => {
                 if (seriesConfirm) {
-                  updateSeriesMutation.mutate({ seriesId: seriesConfirm.seriesId, confirm: true });
+                  fields.updateSeries({ seriesId: seriesConfirm.seriesId, confirm: true }, {
+                    onSuccess: () => {
+                      setSeriesSheetOpen(false);
+                      setSeriesConfirm(null);
+                      setSelectedSeriesId(null);
+                    },
+                  });
                 }
               }}
-              disabled={updateSeriesMutation.isPending}
+              disabled={fields.isSeriesPending}
             >
-              {updateSeriesMutation.isPending ? 'Saving…' : 'Continue anyway'}
+              {fields.isSeriesPending ? 'Saving…' : 'Continue anyway'}
             </Button>
             <Button variant="outline" onClick={() => setSeriesConfirm(null)}>Cancel</Button>
           </div>
