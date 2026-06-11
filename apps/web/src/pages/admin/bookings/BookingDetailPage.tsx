@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { useAuth } from '@clerk/react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, Eye, Pencil, X, FolderOpen, FileText, Download } from 'lucide-react';
@@ -65,7 +65,6 @@ import type {
   BookingDetail,
   BookingSeries,
   BookingStatus,
-  Contact,
   Contract,
   Document,
   Invoice,
@@ -172,22 +171,26 @@ export default function BookingDetailPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const backNav = (location.state as { from?: string; label?: string } | null);
-  const [, setSearchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  const [composeOpen, setComposeOpen] = useState(false);
-  const [composeTemplateType, setComposeTemplateType] = useState<string | undefined>();
-  const [invoiceSheetOpen, setInvoiceSheetOpen] = useState(false);
-  const [editingInvoice, setEditingInvoice] = useState<Invoice | undefined>();
-  const [invoiceSheetPrefill, setInvoiceSheetPrefill] = useState<{ isDeposit: boolean; amount?: number; description?: string } | undefined>();
-  const [markSentInvoice, setMarkSentInvoice] = useState<Invoice | undefined>();
-  const [editingContact, setEditingContact] = useState<Contact | null>(null);
-  const [contractSheetOpen, setContractSheetOpen] = useState(false);
-  const [contractSheetReadOnly, setContractSheetReadOnly] = useState(false);
+  // URL-driven sheet state — single ?sheet=<type> discriminated union
+  const sheet = searchParams.get('sheet');
+  const sheetInvoiceId = searchParams.get('invoiceId');
+  const sheetContactId = searchParams.get('contactId');
+  const sheetTemplateType = searchParams.get('templateType') ?? undefined;
+  const sheetIsDeposit = searchParams.get('isDeposit') === 'true';
+  const sheetAmount = searchParams.get('amount') ? parseFloat(searchParams.get('amount')!) : undefined;
+  const sheetDescription = searchParams.get('description') ?? undefined;
+  const sheetSeriesId = searchParams.get('seriesId') ?? null;
+  const sheetWarning = searchParams.get('warning') ?? '';
+  const sheetContractReadOnly = searchParams.get('readOnly') === 'true';
+
+  // pendingContract: a full Contract object from createContract callback — not URL-serializable
   const [pendingContract, setPendingContract] = useState<Contract | null>(null);
-  const [viewingMusicFormResponse, setViewingMusicFormResponse] = useState(false);
-  const [seriesSheetOpen, setSeriesSheetOpen] = useState(false);
+  // selectedSeriesId: transient form input within the series selector dialog
   const [selectedSeriesId, setSelectedSeriesId] = useState<string | null>(null);
-  const [seriesConfirm, setSeriesConfirm] = useState<{ warning: string; seriesId: string } | null>(null);
+  // viewingMusicFormResponse: lazy-loads the music form response query
+  const [viewingMusicFormResponse, setViewingMusicFormResponse] = useState(false);
 
   const { isLoaded } = useAuth();
   const { data: booking, isLoading, isError } = useBooking(id!);
@@ -228,7 +231,7 @@ export default function BookingDetailPage() {
   const { data: seriesList } = useQuery({
     queryKey: ['series'],
     queryFn: () => apiGet<BookingSeries[]>('/series'),
-    enabled: isLoaded && seriesSheetOpen,
+    enabled: isLoaded && sheet === 'series',
   });
 
   const { data: musicFormConfig, isLoading: musicFormConfigLoading } = useQuery({
@@ -253,8 +256,7 @@ export default function BookingDetailPage() {
   // ─── Helpers ─────────────────────────────────────────────────────────────
 
   function openCompose(templateType?: string) {
-    setComposeTemplateType(templateType);
-    setComposeOpen(true);
+    setSearchParams(templateType ? { sheet: 'compose', templateType } : { sheet: 'compose' });
   }
 
   function buildSetsDescription(): string {
@@ -271,15 +273,15 @@ export default function BookingDetailPage() {
   }
 
   function openCreateInvoice(prefill?: { isDeposit: boolean; amount?: number }) {
-    setEditingInvoice(undefined);
-    setInvoiceSheetPrefill(prefill ? { ...prefill, description: buildSetsDescription() } : undefined);
-    setInvoiceSheetOpen(true);
+    const params: Record<string, string> = { sheet: 'invoice', isDeposit: String(prefill?.isDeposit ?? false) };
+    if (prefill?.amount != null) params.amount = String(prefill.amount);
+    const desc = buildSetsDescription();
+    if (desc) params.description = desc;
+    setSearchParams(params);
   }
 
   function openEditInvoice(invoice: Invoice) {
-    setEditingInvoice(invoice);
-    setInvoiceSheetPrefill(undefined);
-    setInvoiceSheetOpen(true);
+    setSearchParams({ sheet: 'invoice', invoiceId: invoice.id });
   }
 
   function openSendInvoice(invoice: Invoice) {
@@ -291,8 +293,7 @@ export default function BookingDetailPage() {
     if (action === 'create_contract') {
       contractActions.createContract((contract) => {
         setPendingContract(contract);
-        setContractSheetReadOnly(false);
-        setContractSheetOpen(true);
+        setSearchParams({ sheet: 'contract' });
       });
       return;
     }
@@ -357,12 +358,7 @@ export default function BookingDetailPage() {
       ? 'checklist'
       : 'onTheDay';
 
-  const editSection = (section: string) => setSearchParams((prev) => {
-    const next = new URLSearchParams(prev);
-    next.set('edit', 'true');
-    next.set('section', section);
-    return next;
-  });
+  const editSection = (section: string) => setSearchParams({ sheet: 'bookingEdit', section });
 
   const downloadDoc = async (url: string, filename: string) => {
     const res = await fetch(url);
@@ -373,6 +369,20 @@ export default function BookingDetailPage() {
     a.click();
     URL.revokeObjectURL(a.href);
   };
+
+  // Derive sheet-specific data from URL params + loaded data
+  const editingInvoice = sheet === 'invoice' && sheetInvoiceId
+    ? invoices.find((inv) => inv.id === sheetInvoiceId)
+    : undefined;
+  const invoiceSheetPrefill = sheet === 'invoice' && !sheetInvoiceId && searchParams.has('isDeposit')
+    ? { isDeposit: sheetIsDeposit, amount: sheetAmount, description: sheetDescription }
+    : undefined;
+  const markSentInvoice = sheet === 'markSent' && sheetInvoiceId
+    ? invoices.find((inv) => inv.id === sheetInvoiceId)
+    : undefined;
+  const editingContact = sheet === 'contactEdit' && sheetContactId
+    ? ([booking.customer, booking.bookingAgent, booking.venue].find((c) => c?.id === sheetContactId) ?? null)
+    : null;
 
   return (
     <div className="px-4 md:px-6 py-6 max-w-7xl mx-auto">
@@ -402,7 +412,7 @@ export default function BookingDetailPage() {
               variant="outline"
               size="sm"
               className="w-9 px-0 md:w-auto md:px-3"
-              onClick={() => setSearchParams({ edit: 'true' })}
+              onClick={() => setSearchParams({ sheet: 'bookingEdit' })}
             >
               <Pencil size={16} />
               <span className="hidden md:inline">Edit</span>
@@ -436,7 +446,7 @@ export default function BookingDetailPage() {
           ) : (
             <button
               type="button"
-              onClick={() => setSeriesSheetOpen(true)}
+              onClick={() => setSearchParams({ sheet: 'series' })}
               className="hidden md:inline text-sm text-muted hover:text-foreground transition-colors underline underline-offset-2"
             >
               + Add to series
@@ -487,7 +497,7 @@ export default function BookingDetailPage() {
                 showHeader={true}
                 cardTitle="Venue"
                 cardAction={
-                  <button type="button" onClick={() => setEditingContact(booking.venue!)} className="text-xs text-primary hover:text-primary/80 transition-colors">
+                  <button type="button" onClick={() => setSearchParams({ sheet: 'contactEdit', contactId: booking.venue!.id })} className="text-xs text-primary hover:text-primary/80 transition-colors">
                     Edit
                   </button>
                 }
@@ -509,13 +519,13 @@ export default function BookingDetailPage() {
             <section>
               <SectionHeader label="People" />
               <div className="flex flex-row gap-4">
-                <PersonChip role="Customer" contact={booking.customer} linkState={backState} onEdit={() => setEditingContact(booking.customer)} />
+                <PersonChip role="Customer" contact={booking.customer} linkState={backState} onEdit={() => setSearchParams({ sheet: 'contactEdit', contactId: booking.customer.id })} />
                 {booking.bookingAgent && (
                   <PersonChip
                     role="Booking agent"
                     contact={booking.bookingAgent}
                     linkState={backState}
-                    onEdit={() => setEditingContact(booking.bookingAgent!)}
+                    onEdit={() => setSearchParams({ sheet: 'contactEdit', contactId: booking.bookingAgent!.id })}
                   />
                 )}
               </div>
@@ -553,11 +563,10 @@ export default function BookingDetailPage() {
                 isCreating={contractActions.isCreatingContract}
                 onCreateContract={() => contractActions.createContract((contract) => {
                   setPendingContract(contract);
-                  setContractSheetReadOnly(false);
-                  setContractSheetOpen(true);
+                  setSearchParams({ sheet: 'contract' });
                 })}
-                onEdit={() => { setContractSheetReadOnly(false); setContractSheetOpen(true); }}
-                onPreview={() => { setContractSheetReadOnly(true); setContractSheetOpen(true); }}
+                onEdit={() => setSearchParams({ sheet: 'contract' })}
+                onPreview={() => setSearchParams({ sheet: 'contract', readOnly: 'true' })}
                 onSend={() => openCompose(contractShortcutType)}
                 onVoid={(confirmSignedVoid) => {
                   const contractId = booking.activeContract?.id;
@@ -574,16 +583,9 @@ export default function BookingDetailPage() {
               <SeriesInvoiceCard
                 seriesId={booking.series.id}
                 seriesLabel={booking.series.label}
-                onEdit={(inv) => {
-                  setEditingInvoice(inv as unknown as Invoice);
-                  setInvoiceSheetOpen(true);
-                }}
-                onSend={(inv) => {
-                  setComposeTemplateType('balance_invoice_cover');
-                  setComposeOpen(true);
-                  setEditingInvoice(inv as unknown as Invoice);
-                }}
-                onMarkSent={(inv) => setMarkSentInvoice(inv as unknown as Invoice)}
+                onEdit={(inv) => openEditInvoice(inv as unknown as Invoice)}
+                onSend={() => openCompose('balance_invoice_cover')}
+                onMarkSent={(inv) => setSearchParams({ sheet: 'markSent', invoiceId: (inv as unknown as Invoice).id })}
               />
             ) : (
               <InvoiceSection
@@ -609,7 +611,7 @@ export default function BookingDetailPage() {
                 onEdit={openEditInvoice}
                 onDelete={(inv) => actions.deleteInvoice(inv.id)}
                 onSend={openSendInvoice}
-                onMarkSent={setMarkSentInvoice}
+                onMarkSent={(inv) => setSearchParams({ sheet: 'markSent', invoiceId: inv.id })}
                 onMarkPaid={(inv) => invoiceActions.markPaid(inv.id)}
                 onVoid={(inv) => invoiceActions.voidInvoice(inv.id)}
               />
@@ -713,7 +715,7 @@ export default function BookingDetailPage() {
                 showHeader={true}
                 cardTitle="Venue"
                 cardAction={
-                  <button type="button" onClick={() => setEditingContact(booking.venue!)} className="text-xs text-primary hover:text-primary/80 transition-colors">
+                  <button type="button" onClick={() => setSearchParams({ sheet: 'contactEdit', contactId: booking.venue!.id })} className="text-xs text-primary hover:text-primary/80 transition-colors">
                     Edit
                   </button>
                 }
@@ -773,14 +775,14 @@ export default function BookingDetailPage() {
           <section>
             <SectionHeader label="People" />
             <div className="border-t border-border">
-              <PersonCard role="Customer" contact={booking.customer} linkState={backState} onEdit={() => setEditingContact(booking.customer)} />
+              <PersonCard role="Customer" contact={booking.customer} linkState={backState} onEdit={() => setSearchParams({ sheet: 'contactEdit', contactId: booking.customer.id })} />
               {booking.bookingAgent && (
                 <PersonCard
                   role="Booking agent"
                   contact={booking.bookingAgent}
                   commissionArrangement={booking.bookingAgent.commissionArrangement}
                   linkState={backState}
-                  onEdit={() => setEditingContact(booking.bookingAgent!)}
+                  onEdit={() => setSearchParams({ sheet: 'contactEdit', contactId: booking.bookingAgent!.id })}
                 />
               )}
             </div>
@@ -803,11 +805,10 @@ export default function BookingDetailPage() {
               isCreating={contractActions.isCreatingContract}
               onCreateContract={() => contractActions.createContract((contract) => {
                 setPendingContract(contract);
-                setContractSheetReadOnly(false);
-                setContractSheetOpen(true);
+                setSearchParams({ sheet: 'contract' });
               })}
-              onEdit={() => { setContractSheetReadOnly(false); setContractSheetOpen(true); }}
-              onPreview={() => { setContractSheetReadOnly(true); setContractSheetOpen(true); }}
+              onEdit={() => setSearchParams({ sheet: 'contract' })}
+              onPreview={() => setSearchParams({ sheet: 'contract', readOnly: 'true' })}
               onSend={() => openCompose(contractShortcutType)}
               onVoid={(confirmSignedVoid) => {
                 const contractId = booking.activeContract?.id;
@@ -825,16 +826,9 @@ export default function BookingDetailPage() {
             <SeriesInvoiceCard
               seriesId={booking.series.id}
               seriesLabel={booking.series.label}
-              onEdit={(inv) => {
-                setEditingInvoice(inv as unknown as Invoice);
-                setInvoiceSheetOpen(true);
-              }}
-              onSend={(inv) => {
-                setComposeTemplateType('balance_invoice_cover');
-                setComposeOpen(true);
-                setEditingInvoice(inv as unknown as Invoice);
-              }}
-              onMarkSent={(inv) => setMarkSentInvoice(inv as unknown as Invoice)}
+              onEdit={(inv) => openEditInvoice(inv as unknown as Invoice)}
+              onSend={() => openCompose('balance_invoice_cover')}
+              onMarkSent={(inv) => setSearchParams({ sheet: 'markSent', invoiceId: (inv as unknown as Invoice).id })}
             />
           ) : (
             <InvoiceSection
@@ -860,7 +854,7 @@ export default function BookingDetailPage() {
               onEdit={openEditInvoice}
               onDelete={(inv) => actions.deleteInvoice(inv.id)}
               onSend={openSendInvoice}
-              onMarkSent={setMarkSentInvoice}
+              onMarkSent={(inv) => setSearchParams({ sheet: 'markSent', invoiceId: inv.id })}
               onMarkPaid={(inv) => invoiceActions.markPaid(inv.id)}
               onVoid={(inv) => invoiceActions.voidInvoice(inv.id)}
             />
@@ -953,32 +947,32 @@ export default function BookingDetailPage() {
       <ContractSheet
         bookingId={id!}
         contract={pendingContract ?? booking.activeContract}
-        readOnly={contractSheetReadOnly}
-        open={contractSheetOpen}
-        onClose={() => { setContractSheetOpen(false); setPendingContract(null); }}
+        readOnly={sheetContractReadOnly}
+        open={sheet === 'contract'}
+        onClose={() => { setSearchParams({}); setPendingContract(null); }}
       />
       <BookingEditDrawer booking={booking} />
       <ContactEditSheet
         contact={editingContact}
-        onClose={() => setEditingContact(null)}
-        onUnlink={editingContact?.id === booking.venue?.id ? () => { fields.updateVenue(null); setEditingContact(null); } : undefined}
+        onClose={() => setSearchParams({})}
+        onUnlink={editingContact?.id === booking.venue?.id ? () => { fields.updateVenue(null); setSearchParams({}); } : undefined}
       />
       <InvoiceSheet
         bookingId={id!}
         invoice={editingInvoice}
         hasDepositInvoice={invoices.some((inv) => inv.isDeposit)}
         prefill={invoiceSheetPrefill}
-        open={invoiceSheetOpen}
-        onOpenChange={setInvoiceSheetOpen}
+        open={sheet === 'invoice'}
+        onOpenChange={(open) => { if (!open) setSearchParams({}); }}
       />
       <ComposeEmailSheet
         bookingId={id!}
         booking={booking}
         invoices={invoices}
         defaultPaymentTermsDays={userProfile?.defaultPaymentTermsDays}
-        open={composeOpen}
-        onOpenChange={setComposeOpen}
-        initialTemplateType={composeTemplateType}
+        open={sheet === 'compose'}
+        onOpenChange={(open) => { if (!open) setSearchParams({}); }}
+        initialTemplateType={sheet === 'compose' ? sheetTemplateType : undefined}
         onAfterSend={(templateType) => {
           const isContractEmail = templateType === 'contract_cover' || templateType === 'contract_and_deposit_cover';
           const contractId = booking.activeContract?.id;
@@ -987,18 +981,18 @@ export default function BookingDetailPage() {
           }
         }}
       />
-      {markSentInvoice && (
+      {sheet === 'markSent' && markSentInvoice && (
         <MarkSentDialog
           bookingId={id!}
           invoice={markSentInvoice}
           userProfile={userProfile}
-          open={!!markSentInvoice}
-          onOpenChange={(open) => { if (!open) setMarkSentInvoice(undefined); }}
+          open={true}
+          onOpenChange={(open) => { if (!open) setSearchParams({}); }}
         />
       )}
 
       {/* Add to series dialog */}
-      <Dialog open={seriesSheetOpen} onOpenChange={(open) => { setSeriesSheetOpen(open); if (!open) setSelectedSeriesId(null); }}>
+      <Dialog open={sheet === 'series'} onOpenChange={(open) => { if (!open) { setSearchParams({}); setSelectedSeriesId(null); } }}>
         <DialogContent aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>Add to series</DialogTitle>
@@ -1024,11 +1018,10 @@ export default function BookingDetailPage() {
                     fields.updateSeries({ seriesId: selectedSeriesId }, {
                       onSuccess: (result) => {
                         if (isSeriesConfirmationRequired(result) && selectedSeriesId) {
-                          setSeriesConfirm({ warning: result.warning, seriesId: selectedSeriesId });
+                          setSearchParams({ sheet: 'customerMismatch', seriesId: selectedSeriesId, warning: result.warning });
                           return;
                         }
-                        setSeriesSheetOpen(false);
-                        setSeriesConfirm(null);
+                        setSearchParams({});
                         setSelectedSeriesId(null);
                       },
                     });
@@ -1038,27 +1031,26 @@ export default function BookingDetailPage() {
               >
                 {fields.isSeriesPending ? 'Saving…' : 'Add to series'}
               </Button>
-              <Button variant="outline" onClick={() => setSeriesSheetOpen(false)}>Cancel</Button>
+              <Button variant="outline" onClick={() => { setSearchParams({}); setSelectedSeriesId(null); }}>Cancel</Button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
 
       {/* Customer mismatch confirmation dialog */}
-      <Dialog open={!!seriesConfirm} onOpenChange={(open) => { if (!open) setSeriesConfirm(null); }}>
+      <Dialog open={sheet === 'customerMismatch'} onOpenChange={(open) => { if (!open) setSearchParams({ sheet: 'series' }); }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Customer mismatch</DialogTitle>
           </DialogHeader>
-          <DialogDescription className="pt-2">{seriesConfirm?.warning}</DialogDescription>
+          <DialogDescription className="pt-2">{sheetWarning}</DialogDescription>
           <div className="flex gap-3 pt-4">
             <Button
               onClick={() => {
-                if (seriesConfirm) {
-                  fields.updateSeries({ seriesId: seriesConfirm.seriesId, confirm: true }, {
+                if (sheetSeriesId) {
+                  fields.updateSeries({ seriesId: sheetSeriesId, confirm: true }, {
                     onSuccess: () => {
-                      setSeriesSheetOpen(false);
-                      setSeriesConfirm(null);
+                      setSearchParams({});
                       setSelectedSeriesId(null);
                     },
                   });
@@ -1068,7 +1060,7 @@ export default function BookingDetailPage() {
             >
               {fields.isSeriesPending ? 'Saving…' : 'Continue anyway'}
             </Button>
-            <Button variant="outline" onClick={() => setSeriesConfirm(null)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setSearchParams({ sheet: 'series' })}>Cancel</Button>
           </div>
         </DialogContent>
       </Dialog>
