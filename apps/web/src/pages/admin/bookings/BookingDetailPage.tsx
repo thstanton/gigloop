@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { useAuth } from '@clerk/react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, Eye, Pencil, X } from 'lucide-react';
+import { ChevronLeft, X } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import { Button } from '@/components/ui/button';
 import { useBooking } from '@/lib/hooks/useBooking';
 import { useBookingChecklist } from '@/lib/hooks/useBookingChecklist';
 import { useBookingFields } from '@/lib/hooks/useBookingFields';
@@ -23,26 +22,19 @@ import PersonChip from '@/features/bookings/PersonChip';
 import CommunicationsSection from '@/features/bookings/CommunicationsSection';
 import MusicFormSection from '@/features/bookings/MusicFormSection';
 import ChecklistSection from '@/features/bookings/ChecklistSection';
-import BookingStatusDropdown from '@/features/bookings/BookingStatusDropdown';
+import BookingOverviewStrip from '@/features/bookings/BookingOverviewStrip';
 import InlineNotes from '@/features/bookings/InlineNotes';
-import InlineFeeAdd from '@/features/bookings/InlineFeeAdd';
 import ItineraryCard from '@/features/bookings/ItineraryCard';
 import DetailsCard from '@/features/bookings/DetailsCard';
 import PerformanceSection from '@/features/bookings/PerformanceSection';
 import BookingDetailTabs from '@/features/bookings/BookingDetailTabs';
 import { apiGet } from '@/lib/api';
-import {
-  formatDate,
-  formatCurrency,
-  formatFee,
-} from '@/lib/formatters';
 import { EVENT_TYPE_LABELS } from '@/lib/constants';
 import { SectionHeader } from '@/components/common/SectionHeader';
 import type {
   Contract,
   Invoice,
   MusicFormConfig,
-  UserProfile,
 } from '@/types/api';
 
 // ─── Skeleton ─────────────────────────────────────────────────────────────────
@@ -134,11 +126,6 @@ export default function BookingDetailPage() {
   const { data: booking, isLoading, isError } = useBooking(id!);
   const { data: communications = [] } = useBookingCommunications(id!);
   const { data: documents = [] } = useBookingDocuments(id!);
-  const { data: userProfile } = useQuery({
-    queryKey: ['me'],
-    queryFn: () => apiGet<UserProfile>('/me'),
-    enabled: isLoaded,
-  });
 
   const contractActions = useContractActions(id!);
 
@@ -189,15 +176,10 @@ export default function BookingDetailPage() {
   }
 
   const title = booking.title ?? EVENT_TYPE_LABELS[booking.eventType];
-  const fee = formatFee(booking.fee);
-  const feeWithVat = userProfile?.vatNumber && booking.fee
-    ? `${fee} (${formatCurrency(parseFloat(booking.fee) * (1 + (userProfile.vatRate ?? 20) / 100))} inc. VAT)`
-    : fee;
   const hasDepositItem = checklist.some((item) => item.key === 'deposit_received');
   const contractShortcutType = hasDepositItem ? 'contract_and_deposit_cover' : 'contract_cover';
 
   const backState = { from: `/admin/bookings/${id}`, label: title };
-  const backUrl = encodeURIComponent(`/admin/bookings/${booking.id}`);
 
   const defaultTab: 'checklist' | 'onTheDay' =
     booking.status === 'ENQUIRY' || booking.status === 'PROVISIONAL' || booking.status === 'CONFIRMED'
@@ -219,63 +201,7 @@ export default function BookingDetailPage() {
       </Link>
 
       {/* ─── Overview strip (always visible) ─── */}
-      <section className="mt-6">
-        <div className="flex items-start justify-between gap-4">
-          <h1 className="font-display text-2xl font-semibold text-foreground">{title}</h1>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <a
-              href={`/booking/${booking.portalToken}?preview=admin&from=${backUrl}`}
-              className="inline-flex items-center justify-center gap-1.5 text-sm text-muted hover:text-foreground transition-colors border border-border rounded h-9 w-9 md:w-auto md:px-3"
-            >
-              <Eye size={16} />
-              <span className="hidden md:inline">Client portal</span>
-            </a>
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-9 px-0 md:w-auto md:px-3"
-              onClick={() => setSearchParams({ sheet: 'bookingEdit' })}
-            >
-              <Pencil size={16} />
-              <span className="hidden md:inline">Edit</span>
-            </Button>
-          </div>
-        </div>
-        <div className="flex items-center justify-between md:flex-wrap md:justify-start md:gap-x-3 md:gap-y-1 mt-2">
-          <BookingStatusDropdown
-            currentStatus={booking.status}
-            checklist={checklist}
-            onStatusChange={(status) => fields.updateStatus(status)}
-            isPending={fields.isStatusPending}
-          />
-          <span className="text-sm text-muted">{formatDate(booking.date)}</span>
-          {feeWithVat
-            ? <span className="text-sm text-muted">{feeWithVat}</span>
-            : <InlineFeeAdd onSave={(fee) => fields.updateFee(fee)} isSaving={fields.isFeePending} />
-          }
-          {booking.series ? (
-            <span className="hidden md:inline-flex items-center gap-1.5 text-sm text-foreground border border-border rounded-full px-3 py-1.5">
-              {booking.series.label}
-              <button
-                type="button"
-                onClick={() => fields.updateSeries({ seriesId: null })}
-                className="hover:text-foreground transition-colors"
-                aria-label="Remove from series"
-              >
-                <X size={12} />
-              </button>
-            </span>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setSearchParams({ sheet: 'series' })}
-              className="hidden md:inline text-sm text-muted hover:text-foreground transition-colors underline underline-offset-2"
-            >
-              + Add to series
-            </button>
-          )}
-        </div>
-      </section>
+      <BookingOverviewStrip bookingId={id!} />
 
       {/* ─── Mobile tabs ─── */}
       <div className="md:hidden">
