@@ -1,5 +1,7 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import confetti from 'canvas-confetti';
+import { useChecklistActions } from '@/lib/hooks/useChecklistActions';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -232,32 +234,31 @@ function AddChecklistItemForm({ onSave, isSaving, onDone, className, compact = t
 }
 
 export interface ChecklistSectionProps {
+  bookingId: string;
   items: ChecklistItem[];
   isLoading: boolean;
   bookingStatus: BookingStatus;
   onToggle: (itemId: string, newState: 'COMPLETE' | 'PENDING') => void;
-  onChecklistAction: (action: ChecklistAction) => void;
-  onOpenCompose: (templateType?: string) => void;
-  onMarkDone: (key: MarkDoneKey) => void;
   onAddItem: (data: { label: string; requiredForStatus: string | null; dueDate: string | null }) => void;
   isAddingItem?: boolean;
-  isActionPending?: boolean;
   hideHeader?: boolean;
 }
 
 export default function ChecklistSection({
+  bookingId,
   items,
   isLoading,
   bookingStatus,
   onToggle,
-  onChecklistAction,
-  onOpenCompose,
-  onMarkDone,
   onAddItem,
   isAddingItem = false,
-  isActionPending = false,
   hideHeader = false,
 }: ChecklistSectionProps) {
+  const { handleChecklistAction, handleMarkDone, isActionPending } = useChecklistActions(bookingId);
+  const [, setSearchParams] = useSearchParams();
+  function openCompose(templateType?: string) {
+    setSearchParams(templateType ? { sheet: 'compose', templateType } : { sheet: 'compose' });
+  }
   const [showAllChecklist, setShowAllChecklist] = useState(false);
   const [showAddItem, setShowAddItem] = useState(false);
 
@@ -305,7 +306,7 @@ export default function ChecklistSection({
     itemsByStage.get(k)!.push(item);
   }
 
-  const rowProps = { onToggle, onOpenCompose, onChecklistAction, onMarkDone, isActionPending };
+  const rowProps = { onToggle, onOpenCompose: openCompose, onChecklistAction: handleChecklistAction, onMarkDone: handleMarkDone, isActionPending };
 
   return (
     <section>

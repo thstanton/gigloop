@@ -5,12 +5,9 @@ import { ChevronLeft, Eye, Pencil, X } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { useBooking } from '@/lib/hooks/useBooking';
-import { useBookingActions } from '@/lib/hooks/useBookingActions';
 import { useBookingChecklist } from '@/lib/hooks/useBookingChecklist';
 import { useBookingFields } from '@/lib/hooks/useBookingFields';
 import { useContractActions } from '@/lib/hooks/useContractActions';
-import { useInvoiceActions } from '@/lib/hooks/useInvoiceActions';
-import { useBookingInvoices } from '@/lib/hooks/useBookingInvoices';
 import SeriesInvoiceCard from '@/features/bookings/SeriesInvoiceCard';
 import { SeriesEventsCard } from '@/features/bookings/SeriesEventsCard';
 import { useSeriesBookings } from '@/lib/hooks/useSeriesBookings';
@@ -135,7 +132,6 @@ export default function BookingDetailPage() {
 
   const { isLoaded } = useAuth();
   const { data: booking, isLoading, isError } = useBooking(id!);
-  const { data: invoices = [] } = useBookingInvoices(id!);
   const { data: communications = [] } = useBookingCommunications(id!);
   const { data: documents = [] } = useBookingDocuments(id!);
   const { data: userProfile } = useQuery({
@@ -144,9 +140,8 @@ export default function BookingDetailPage() {
     enabled: isLoaded,
   });
 
-  const actions = useBookingActions(id!);
   const contractActions = useContractActions(id!);
-  const invoiceActions = useInvoiceActions(id!);
+
   const fields = useBookingFields(id!);
   const {
     checklist,
@@ -173,59 +168,8 @@ export default function BookingDetailPage() {
     setSearchParams(templateType ? { sheet: 'compose', templateType } : { sheet: 'compose' });
   }
 
-  function buildSetsDescription(): string {
-    if (!booking?.sets?.length) return '';
-    const formatById = new Map(
-      (booking.packages ?? []).map((f) => [f.packageId, f.package.label]),
-    );
-    return booking.sets
-      .map((s) => {
-        const label = s.label ?? (s.packageId ? formatById.get(s.packageId) : null) ?? null;
-        return label ? `${label} (${s.duration} min)` : `${s.duration} min`;
-      })
-      .join(', ');
-  }
-
-  function openCreateInvoice(prefill?: { isDeposit: boolean; amount?: number }) {
-    const params: Record<string, string> = { sheet: 'invoice', isDeposit: String(prefill?.isDeposit ?? false) };
-    if (prefill?.amount != null) params.amount = String(prefill.amount);
-    const desc = buildSetsDescription();
-    if (desc) params.description = desc;
-    setSearchParams(params);
-  }
-
   function openEditInvoice(invoice: Invoice) {
     setSearchParams({ sheet: 'invoice', invoiceId: invoice.id });
-  }
-
-  function handleChecklistAction(action: 'create_deposit_invoice' | 'create_balance_invoice' | 'create_contract') {
-    if (action === 'create_contract') {
-      contractActions.createContract((contract) => {
-        setPendingContract(contract);
-        setSearchParams({ sheet: 'contract' });
-      });
-      return;
-    }
-    const isDeposit = action === 'create_deposit_invoice';
-    const fee = booking?.fee ? parseFloat(booking.fee) : null;
-    const pct = userProfile?.depositPercentage;
-
-    if (fee && pct) {
-      const amount = isDeposit ? (fee * pct) / 100 : fee * (1 - pct / 100);
-      actions.autoCreateInvoice({ isDeposit, amount: Math.round(amount * 100) / 100 });
-    } else {
-      openCreateInvoice({ isDeposit });
-    }
-  }
-
-  function handleMarkDone(key: 'mark_contract_signed' | 'mark_deposit_received') {
-    if (key === 'mark_contract_signed') {
-      if (booking?.activeContract) actions.markContractSigned(booking.activeContract.id);
-    } else {
-      const sentDeposit = invoices.find((inv) => inv.isDeposit && inv.status === 'SENT');
-      if (sentDeposit) invoiceActions.markPaid(sentDeposit.id);
-      else actions.markDepositReceived();
-    }
   }
 
   if (isLoading) return <PageSkeleton />;
@@ -340,16 +284,13 @@ export default function BookingDetailPage() {
         checklist={
           booking.status !== 'CANCELLED' ? (
             <ChecklistSection
+              bookingId={id!}
               items={checklist}
               isLoading={checklistLoading}
               bookingStatus={booking.status}
               onToggle={(itemId, state) => toggleItem(itemId, state)}
-              onChecklistAction={handleChecklistAction}
-              onOpenCompose={openCompose}
-              onMarkDone={handleMarkDone}
               onAddItem={(data) => addItem(data)}
               isAddingItem={isAddingItem}
-              isActionPending={actions.isPending || invoiceActions.isMarkingPaid}
               hideHeader
             />
           ) : null

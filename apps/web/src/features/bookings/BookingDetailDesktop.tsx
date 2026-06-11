@@ -3,12 +3,9 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { DocumentsCard } from '@/features/bookings/DocumentsCard';
 import { useBooking } from '@/lib/hooks/useBooking';
-import { useBookingActions } from '@/lib/hooks/useBookingActions';
 import { useBookingChecklist } from '@/lib/hooks/useBookingChecklist';
 import { useBookingFields } from '@/lib/hooks/useBookingFields';
 import { useContractActions } from '@/lib/hooks/useContractActions';
-import { useInvoiceActions } from '@/lib/hooks/useInvoiceActions';
-import { useBookingInvoices } from '@/lib/hooks/useBookingInvoices';
 import { useBookingCommunications } from '@/lib/hooks/useBookingCommunications';
 import { useBookingDocuments } from '@/lib/hooks/useBookingDocuments';
 import { useSeriesBookings } from '@/lib/hooks/useSeriesBookings';
@@ -33,7 +30,6 @@ import type {
   Contract,
   Invoice,
   MusicFormConfig,
-  UserProfile,
 } from '@/types/api';
 
 interface BookingDetailDesktopProps {
@@ -46,16 +42,9 @@ export function BookingDetailDesktop({ bookingId, onCreateContract }: BookingDet
   const [, setSearchParams] = useSearchParams();
   const { isLoaded } = useAuth();
   const { data: booking } = useBooking(bookingId);
-  const { data: invoices = [] } = useBookingInvoices(bookingId);
   const { data: communications = [] } = useBookingCommunications(bookingId);
   const { data: documents = [] } = useBookingDocuments(bookingId);
   const { data: seriesBookings = [], isLoading: seriesBookingsLoading } = useSeriesBookings(booking?.series?.id);
-
-  const { data: userProfile } = useQuery({
-    queryKey: ['me'],
-    queryFn: () => apiGet<UserProfile>('/me'),
-    enabled: isLoaded,
-  });
 
   const { data: musicFormConfig, isLoading: musicFormConfigLoading } = useQuery({
     queryKey: ['booking-music-form-config', bookingId],
@@ -63,9 +52,7 @@ export function BookingDetailDesktop({ bookingId, onCreateContract }: BookingDet
     enabled: isLoaded && !!booking && booking.hasMusicFormConfig,
   });
 
-  const actions = useBookingActions(bookingId);
   const contractActions = useContractActions(bookingId);
-  const invoiceActions = useInvoiceActions(bookingId);
   const fields = useBookingFields(bookingId);
   const { checklist, checklistLoading, toggleItem, addItem, isAddingItem } = useBookingChecklist(bookingId, booking, isLoaded);
 
@@ -80,58 +67,8 @@ export function BookingDetailDesktop({ bookingId, onCreateContract }: BookingDet
     setSearchParams(templateType ? { sheet: 'compose', templateType } : { sheet: 'compose' });
   }
 
-  function buildSetsDescription(): string {
-    if (!booking!.sets?.length) return '';
-    const formatById = new Map(
-      (booking!.packages ?? []).map((f) => [f.packageId, f.package.label]),
-    );
-    return booking!.sets
-      .map((s) => {
-        const label = s.label ?? (s.packageId ? formatById.get(s.packageId) : null) ?? null;
-        return label ? `${label} (${s.duration} min)` : `${s.duration} min`;
-      })
-      .join(', ');
-  }
-
-  function openCreateInvoice(prefill?: { isDeposit: boolean; amount?: number }) {
-    const params: Record<string, string> = { sheet: 'invoice', isDeposit: String(prefill?.isDeposit ?? false) };
-    if (prefill?.amount != null) params.amount = String(prefill.amount);
-    const desc = buildSetsDescription();
-    if (desc) params.description = desc;
-    setSearchParams(params);
-  }
-
   function openEditInvoice(invoice: Invoice) {
     setSearchParams({ sheet: 'invoice', invoiceId: invoice.id });
-  }
-
-  function handleChecklistAction(action: 'create_deposit_invoice' | 'create_balance_invoice' | 'create_contract') {
-    if (action === 'create_contract') {
-      contractActions.createContract((contract) => {
-        onCreateContract(contract);
-        setSearchParams({ sheet: 'contract' });
-      });
-      return;
-    }
-    const isDeposit = action === 'create_deposit_invoice';
-    const fee = booking!.fee ? parseFloat(booking!.fee) : null;
-    const pct = userProfile?.depositPercentage;
-    if (fee && pct) {
-      const amount = isDeposit ? (fee * pct) / 100 : fee * (1 - pct / 100);
-      actions.autoCreateInvoice({ isDeposit, amount: Math.round(amount * 100) / 100 });
-    } else {
-      openCreateInvoice({ isDeposit });
-    }
-  }
-
-  function handleMarkDone(key: 'mark_contract_signed' | 'mark_deposit_received') {
-    if (key === 'mark_contract_signed') {
-      if (booking!.activeContract) actions.markContractSigned(booking!.activeContract.id);
-    } else {
-      const sentDeposit = invoices.find((inv) => inv.isDeposit && inv.status === 'SENT');
-      if (sentDeposit) invoiceActions.markPaid(sentDeposit.id);
-      else actions.markDepositReceived();
-    }
   }
 
   function editSection(section: string) {
@@ -192,16 +129,13 @@ export function BookingDetailDesktop({ bookingId, onCreateContract }: BookingDet
         {/* Checklist */}
         {booking.status !== 'CANCELLED' && (
           <ChecklistSection
+            bookingId={bookingId}
             items={checklist}
             isLoading={checklistLoading}
             bookingStatus={booking.status}
             onToggle={(itemId, state) => toggleItem(itemId, state)}
-            onChecklistAction={handleChecklistAction}
-            onOpenCompose={openCompose}
-            onMarkDone={handleMarkDone}
             onAddItem={(data) => addItem(data)}
             isAddingItem={isAddingItem}
-            isActionPending={actions.isPending || invoiceActions.isMarkingPaid}
           />
         )}
 

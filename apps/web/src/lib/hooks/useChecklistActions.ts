@@ -1,26 +1,30 @@
 import { useState } from 'react';
-import { useAuth } from '@clerk/react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { useBooking } from '@/lib/hooks/useBooking';
 import { useBookingActions } from '@/lib/hooks/useBookingActions';
-import { useBookingInvoices } from '@/lib/hooks/useBookingInvoices';
 import { useContractActions } from '@/lib/hooks/useContractActions';
 import { useInvoiceActions } from '@/lib/hooks/useInvoiceActions';
 import { apiGet } from '@/lib/api';
-import type { Contract, UserProfile } from '@/types/api';
+import type { BookingDetail, Contract, Invoice, UserProfile } from '@/types/api';
 
 export function useChecklistActions(bookingId: string) {
-  const { isLoaded } = useAuth();
   const [, setSearchParams] = useSearchParams();
   const [pendingContract, setPendingContract] = useState<Contract | null>(null);
 
-  const { data: booking } = useBooking(bookingId);
-  const { data: invoices = [] } = useBookingInvoices(bookingId);
+  const { data: booking } = useQuery({
+    queryKey: ['booking', bookingId],
+    queryFn: () => apiGet<BookingDetail>(`/bookings/${bookingId}`),
+    enabled: !!bookingId,
+  });
+  const { data: invoices = [] } = useQuery({
+    queryKey: ['bookingInvoices', bookingId],
+    queryFn: () => apiGet<Invoice[]>(`/bookings/${bookingId}/invoices`),
+    enabled: !!bookingId,
+  });
   const { data: userProfile } = useQuery({
     queryKey: ['me'],
     queryFn: () => apiGet<UserProfile>('/me'),
-    enabled: isLoaded,
+    enabled: !!bookingId,
   });
 
   const actions = useBookingActions(bookingId);
