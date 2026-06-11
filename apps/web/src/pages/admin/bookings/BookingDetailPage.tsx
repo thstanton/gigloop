@@ -4,20 +4,6 @@ import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'reac
 import { ChevronLeft, Eye, Pencil, X, FolderOpen, FileText, Download } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { useBooking } from '@/lib/hooks/useBooking';
 import { useBookingActions } from '@/lib/hooks/useBookingActions';
 import { useBookingChecklist } from '@/lib/hooks/useBookingChecklist';
@@ -30,14 +16,9 @@ import { SeriesEventsCard } from '@/features/bookings/SeriesEventsCard';
 import { useSeriesBookings } from '@/lib/hooks/useSeriesBookings';
 import { useBookingCommunications } from '@/lib/hooks/useBookingCommunications';
 import { useBookingDocuments } from '@/lib/hooks/useBookingDocuments';
-import BookingEditDrawer from '@/features/bookings/BookingEditDrawer';
-import ContractSheet from '@/features/bookings/ContractSheet';
-import ContactEditSheet from '@/features/contacts/ContactEditSheet';
-import ComposeEmailSheet from '@/features/communications/ComposeEmailSheet';
-import InvoiceSheet from '@/features/invoices/InvoiceSheet';
-import MarkSentDialog from '@/features/invoices/MarkSentDialog';
 import ContractCard from '@/features/bookings/ContractCard';
 import InvoiceSection from '@/features/bookings/InvoiceSection';
+import { BookingDetailSheets } from '@/features/bookings/BookingDetailSheets';
 import { VenueMapWidget } from '@/components/common/VenueMapWidget';
 import PersonCard from '@/features/bookings/PersonCard';
 import PersonChip from '@/features/bookings/PersonChip';
@@ -62,34 +43,14 @@ import { EVENT_TYPE_LABELS } from '@/lib/constants';
 import { Card } from '@/components/common/Card';
 import { SectionHeader } from '@/components/common/SectionHeader';
 import type {
-  BookingDetail,
-  BookingSeries,
-  BookingStatus,
   Contract,
   Document,
   Invoice,
   MusicFormConfig,
   MusicFormResponse,
-  Template,
   TravelTimeResponse,
-  UpdateBookingSeriesResponse,
   UserProfile,
 } from '@/types/api';
-
-function isSeriesConfirmationRequired(r: object): r is Required<UpdateBookingSeriesResponse> {
-  return 'requiresConfirmation' in r;
-}
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-const STATUS_LABELS: Record<BookingStatus, string> = {
-  ENQUIRY:      'Enquiry',
-  PROVISIONAL:  'Provisional',
-  CONFIRMED:    'Confirmed',
-  READY:        'Ready',
-  COMPLETE:     'Complete',
-  CANCELLED:    'Cancelled',
-};
 
 // ─── Skeleton ─────────────────────────────────────────────────────────────────
 
@@ -171,24 +132,10 @@ export default function BookingDetailPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const backNav = (location.state as { from?: string; label?: string } | null);
-  const [searchParams, setSearchParams] = useSearchParams();
-
-  // URL-driven sheet state — single ?sheet=<type> discriminated union
-  const sheet = searchParams.get('sheet');
-  const sheetInvoiceId = searchParams.get('invoiceId');
-  const sheetContactId = searchParams.get('contactId');
-  const sheetTemplateType = searchParams.get('templateType') ?? undefined;
-  const sheetIsDeposit = searchParams.get('isDeposit') === 'true';
-  const sheetAmount = searchParams.get('amount') ? parseFloat(searchParams.get('amount')!) : undefined;
-  const sheetDescription = searchParams.get('description') ?? undefined;
-  const sheetSeriesId = searchParams.get('seriesId') ?? null;
-  const sheetWarning = searchParams.get('warning') ?? '';
-  const sheetContractReadOnly = searchParams.get('readOnly') === 'true';
+  const [, setSearchParams] = useSearchParams();
 
   // pendingContract: a full Contract object from createContract callback — not URL-serializable
   const [pendingContract, setPendingContract] = useState<Contract | null>(null);
-  // selectedSeriesId: transient form input within the series selector dialog
-  const [selectedSeriesId, setSelectedSeriesId] = useState<string | null>(null);
   // viewingMusicFormResponse: lazy-loads the music form response query
   const [viewingMusicFormResponse, setViewingMusicFormResponse] = useState(false);
 
@@ -228,12 +175,6 @@ export default function BookingDetailPage() {
   const queryClient = useQueryClient();
   const { data: seriesBookings = [], isLoading: seriesBookingsLoading } = useSeriesBookings(booking?.series?.id);
 
-  const { data: seriesList } = useQuery({
-    queryKey: ['series'],
-    queryFn: () => apiGet<BookingSeries[]>('/series'),
-    enabled: isLoaded && sheet === 'series',
-  });
-
   const { data: musicFormConfig, isLoading: musicFormConfigLoading } = useQuery({
     queryKey: ['booking-music-form-config', id],
     queryFn: () => apiGet<MusicFormConfig>(`/bookings/${id}/music-form-config`),
@@ -244,13 +185,6 @@ export default function BookingDetailPage() {
     queryKey: ['booking-music-form-response', id],
     queryFn: () => apiGet<MusicFormResponse>(`/bookings/${id}/music-form-response`),
     enabled: isLoaded && !!booking && booking.hasMusicFormResponse && viewingMusicFormResponse,
-  });
-
-  useQuery({
-    queryKey: ['templates'],
-    queryFn: () => apiGet<Template[]>('/templates'),
-    enabled: isLoaded,
-    staleTime: 5 * 60 * 1000,
   });
 
   // ─── Helpers ─────────────────────────────────────────────────────────────
@@ -369,20 +303,6 @@ export default function BookingDetailPage() {
     a.click();
     URL.revokeObjectURL(a.href);
   };
-
-  // Derive sheet-specific data from URL params + loaded data
-  const editingInvoice = sheet === 'invoice' && sheetInvoiceId
-    ? invoices.find((inv) => inv.id === sheetInvoiceId)
-    : undefined;
-  const invoiceSheetPrefill = sheet === 'invoice' && !sheetInvoiceId && searchParams.has('isDeposit')
-    ? { isDeposit: sheetIsDeposit, amount: sheetAmount, description: sheetDescription }
-    : undefined;
-  const markSentInvoice = sheet === 'markSent' && sheetInvoiceId
-    ? invoices.find((inv) => inv.id === sheetInvoiceId)
-    : undefined;
-  const editingContact = sheet === 'contactEdit' && sheetContactId
-    ? ([booking.customer, booking.bookingAgent, booking.venue].find((c) => c?.id === sheetContactId) ?? null)
-    : null;
 
   return (
     <div className="px-4 md:px-6 py-6 max-w-7xl mx-auto">
@@ -922,148 +842,15 @@ export default function BookingDetailPage() {
 
       </div>{/* end two-column grid */}
 
-      {readyDialogStatus && (
-        <Dialog open onOpenChange={dismissReadyDialog}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle className="font-display text-xl">{celebratoryTitle}</DialogTitle>
-            </DialogHeader>
-            <DialogDescription>
-              You've completed all the tasks for this booking. Ready to move it to{' '}
-              <span className="font-medium text-foreground">{STATUS_LABELS[readyDialogStatus]}</span>?
-            </DialogDescription>
-            <div className="flex gap-2 justify-end mt-2">
-              <Button variant="outline" onClick={dismissReadyDialog}>
-                Not yet
-              </Button>
-              <Button onClick={() => confirmStatusTransition(readyDialogStatus)}>
-                Mark as {STATUS_LABELS[readyDialogStatus]}
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
-
-      <ContractSheet
+      <BookingDetailSheets
         bookingId={id!}
-        contract={pendingContract ?? booking.activeContract}
-        readOnly={sheetContractReadOnly}
-        open={sheet === 'contract'}
-        onClose={() => { setSearchParams({}); setPendingContract(null); }}
+        pendingContract={pendingContract}
+        onPendingContractClear={() => setPendingContract(null)}
+        readyDialogStatus={readyDialogStatus}
+        celebratoryTitle={celebratoryTitle}
+        dismissReadyDialog={dismissReadyDialog}
+        confirmStatusTransition={confirmStatusTransition}
       />
-      <BookingEditDrawer booking={booking} />
-      <ContactEditSheet
-        contact={editingContact}
-        onClose={() => setSearchParams({})}
-        onUnlink={editingContact?.id === booking.venue?.id ? () => { fields.updateVenue(null); setSearchParams({}); } : undefined}
-      />
-      <InvoiceSheet
-        bookingId={id!}
-        invoice={editingInvoice}
-        hasDepositInvoice={invoices.some((inv) => inv.isDeposit)}
-        prefill={invoiceSheetPrefill}
-        open={sheet === 'invoice'}
-        onOpenChange={(open) => { if (!open) setSearchParams({}); }}
-      />
-      <ComposeEmailSheet
-        bookingId={id!}
-        booking={booking}
-        invoices={invoices}
-        defaultPaymentTermsDays={userProfile?.defaultPaymentTermsDays}
-        open={sheet === 'compose'}
-        onOpenChange={(open) => { if (!open) setSearchParams({}); }}
-        initialTemplateType={sheet === 'compose' ? sheetTemplateType : undefined}
-        onAfterSend={(templateType) => {
-          const isContractEmail = templateType === 'contract_cover' || templateType === 'contract_and_deposit_cover';
-          const contractId = booking.activeContract?.id;
-          if (isContractEmail && contractId && booking.activeContract?.status === 'DRAFT') {
-            contractActions.sendContract(contractId);
-          }
-        }}
-      />
-      {sheet === 'markSent' && markSentInvoice && (
-        <MarkSentDialog
-          bookingId={id!}
-          invoice={markSentInvoice}
-          userProfile={userProfile}
-          open={true}
-          onOpenChange={(open) => { if (!open) setSearchParams({}); }}
-        />
-      )}
-
-      {/* Add to series dialog */}
-      <Dialog open={sheet === 'series'} onOpenChange={(open) => { if (!open) { setSearchParams({}); setSelectedSeriesId(null); } }}>
-        <DialogContent aria-describedby={undefined}>
-          <DialogHeader>
-            <DialogTitle>Add to series</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 pt-2">
-            <Select value={selectedSeriesId ?? ''} onValueChange={setSelectedSeriesId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select series..." />
-              </SelectTrigger>
-              <SelectContent>
-                {seriesList?.length
-                  ? seriesList.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
-                    ))
-                  : <div className="py-2 px-2 text-sm text-muted-foreground">No series available</div>
-                }
-              </SelectContent>
-            </Select>
-            <div className="flex gap-3">
-              <Button
-                onClick={() => {
-                  if (selectedSeriesId) {
-                    fields.updateSeries({ seriesId: selectedSeriesId }, {
-                      onSuccess: (result) => {
-                        if (isSeriesConfirmationRequired(result) && selectedSeriesId) {
-                          setSearchParams({ sheet: 'customerMismatch', seriesId: selectedSeriesId, warning: result.warning });
-                          return;
-                        }
-                        setSearchParams({});
-                        setSelectedSeriesId(null);
-                      },
-                    });
-                  }
-                }}
-                disabled={!selectedSeriesId || fields.isSeriesPending}
-              >
-                {fields.isSeriesPending ? 'Saving…' : 'Add to series'}
-              </Button>
-              <Button variant="outline" onClick={() => { setSearchParams({}); setSelectedSeriesId(null); }}>Cancel</Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Customer mismatch confirmation dialog */}
-      <Dialog open={sheet === 'customerMismatch'} onOpenChange={(open) => { if (!open) setSearchParams({ sheet: 'series' }); }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Customer mismatch</DialogTitle>
-          </DialogHeader>
-          <DialogDescription className="pt-2">{sheetWarning}</DialogDescription>
-          <div className="flex gap-3 pt-4">
-            <Button
-              onClick={() => {
-                if (sheetSeriesId) {
-                  fields.updateSeries({ seriesId: sheetSeriesId, confirm: true }, {
-                    onSuccess: () => {
-                      setSearchParams({});
-                      setSelectedSeriesId(null);
-                    },
-                  });
-                }
-              }}
-              disabled={fields.isSeriesPending}
-            >
-              {fields.isSeriesPending ? 'Saving…' : 'Continue anyway'}
-            </Button>
-            <Button variant="outline" onClick={() => setSearchParams({ sheet: 'series' })}>Cancel</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
