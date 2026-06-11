@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '@clerk/react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, Eye, Pencil, X, FolderOpen, FileText, Download } from 'lucide-react';
+import { ChevronLeft, Eye, Pencil, X } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { useBooking } from '@/lib/hooks/useBooking';
@@ -17,6 +17,7 @@ import { useSeriesBookings } from '@/lib/hooks/useSeriesBookings';
 import { useBookingCommunications } from '@/lib/hooks/useBookingCommunications';
 import { useBookingDocuments } from '@/lib/hooks/useBookingDocuments';
 import ContractCard from '@/features/bookings/ContractCard';
+import { DocumentsCard } from '@/features/bookings/DocumentsCard';
 import InvoiceSection from '@/features/bookings/InvoiceSection';
 import { BookingDetailSheets } from '@/features/bookings/BookingDetailSheets';
 import { BookingDetailDesktop } from '@/features/bookings/BookingDetailDesktop';
@@ -39,11 +40,9 @@ import {
   formatFee,
 } from '@/lib/formatters';
 import { EVENT_TYPE_LABELS } from '@/lib/constants';
-import { Card } from '@/components/common/Card';
 import { SectionHeader } from '@/components/common/SectionHeader';
 import type {
   Contract,
-  Document,
   Invoice,
   MusicFormConfig,
   UserProfile,
@@ -268,16 +267,6 @@ export default function BookingDetailPage() {
 
   const editSection = (section: string) => setSearchParams({ sheet: 'bookingEdit', section });
 
-  const downloadDoc = async (url: string, filename: string) => {
-    const res = await fetch(url);
-    const blob = await res.blob();
-    const a = window.document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  };
-
   return (
     <div className="px-4 md:px-6 py-6 max-w-7xl mx-auto">
 
@@ -499,46 +488,7 @@ export default function BookingDetailPage() {
               />
             )}
 
-            <Card title="Documents">
-              {documents.length === 0 ? (
-                <div className="flex items-center gap-2 text-muted py-1">
-                  <FolderOpen size={14} />
-                  <span className="text-sm">No documents yet</span>
-                </div>
-              ) : (
-                <div className="divide-y divide-border">
-                  {documents.map((doc: Document) => {
-                    const invoice = invoices.find((i) => i.id === doc.invoiceId);
-                    const isVoidContract = doc.type === 'CONTRACT' && doc.contractStatus === 'VOID';
-                    const contractLabel = isVoidContract ? 'Contract [VOID]' : 'Contract';
-                    const invoiceLabel = invoice?.isDeposit ? 'Deposit invoice' : 'Balance invoice';
-                    const label = doc.type === 'CONTRACT' ? contractLabel : invoiceLabel;
-                    const filename = `${label.toLowerCase().replace(' ', '-')}.pdf`;
-                    return (
-                      <div key={doc.id} className="flex items-center gap-2 py-2">
-                        <FileText size={14} className="flex-shrink-0 text-muted mt-0.5 self-start" />
-                        <div className="flex flex-col min-w-0">
-                          <span className="text-sm text-foreground">{label}</span>
-                          {invoice?.invoiceNumber && (
-                            <span className="text-xs text-muted">{invoice.invoiceNumber}</span>
-                          )}
-                        </div>
-                        <span className="text-muted ml-auto text-xs shrink-0">
-                          {new Date(doc.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                        </span>
-                        <button
-                          onClick={() => downloadDoc(doc.url, filename)}
-                          title="Download"
-                          className="text-muted hover:text-foreground shrink-0"
-                        >
-                          <Download size={14} />
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </Card>
+            <DocumentsCard bookingId={id!} />
 
             <section>
               <SectionHeader label="Packages" />
