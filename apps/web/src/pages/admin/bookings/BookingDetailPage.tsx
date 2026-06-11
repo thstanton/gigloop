@@ -135,7 +135,7 @@ export default function BookingDetailPage() {
 
   const { isLoaded } = useAuth();
   const { data: booking, isLoading, isError } = useBooking(id!);
-  const { data: invoices = [], isPending: invoicesPending } = useBookingInvoices(id!);
+  const { data: invoices = [] } = useBookingInvoices(id!);
   const { data: communications = [] } = useBookingCommunications(id!);
   const { data: documents = [] } = useBookingDocuments(id!);
   const { data: userProfile } = useQuery({
@@ -196,11 +196,6 @@ export default function BookingDetailPage() {
 
   function openEditInvoice(invoice: Invoice) {
     setSearchParams({ sheet: 'invoice', invoiceId: invoice.id });
-  }
-
-  function openSendInvoice(invoice: Invoice) {
-    const templateType = invoice.isDeposit ? 'deposit_invoice_cover' : 'balance_invoice_cover';
-    openCompose(templateType);
   }
 
   function handleChecklistAction(action: 'create_deposit_invoice' | 'create_balance_invoice' | 'create_contract') {
@@ -459,33 +454,7 @@ export default function BookingDetailPage() {
                 onMarkSent={(inv) => setSearchParams({ sheet: 'markSent', invoiceId: (inv as unknown as Invoice).id })}
               />
             ) : (
-              <InvoiceSection
-                invoices={invoices}
-                documents={documents}
-                isPending={invoicesPending}
-                onNewDepositInvoice={() => {
-                  const fee = booking.fee ? parseFloat(booking.fee) : null;
-                  const pct = userProfile?.depositPercentage;
-                  openCreateInvoice({
-                    isDeposit: true,
-                    amount: fee && pct ? Math.round((fee * pct / 100) * 100) / 100 : undefined,
-                  });
-                }}
-                onNewBalanceInvoice={() => {
-                  const fee = booking.fee ? parseFloat(booking.fee) : null;
-                  const pct = userProfile?.depositPercentage;
-                  openCreateInvoice({
-                    isDeposit: false,
-                    amount: fee && pct ? Math.round((fee * (1 - pct / 100)) * 100) / 100 : undefined,
-                  });
-                }}
-                onEdit={openEditInvoice}
-                onDelete={(inv) => actions.deleteInvoice(inv.id)}
-                onSend={openSendInvoice}
-                onMarkSent={(inv) => setSearchParams({ sheet: 'markSent', invoiceId: inv.id })}
-                onMarkPaid={(inv) => invoiceActions.markPaid(inv.id)}
-                onVoid={(inv) => invoiceActions.voidInvoice(inv.id)}
-              />
+              <InvoiceSection bookingId={id!} />
             )}
 
             <DocumentsCard bookingId={id!} />
