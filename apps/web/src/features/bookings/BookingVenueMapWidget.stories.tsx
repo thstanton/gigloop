@@ -67,8 +67,8 @@ type Story = StoryObj<typeof meta>;
 
 export const WithTravelTime: Story = {
   play: async ({ canvas }) => {
-    await expect(canvas.getByText('The Grand Hotel')).toBeVisible();
-    await expect(canvas.getByText('Venue')).toBeVisible();
+    await expect(canvas.findByText('The Grand Hotel')).resolves.toBeVisible();
+    await expect(canvas.findByText('Venue')).resolves.toBeVisible();
   },
 };
 

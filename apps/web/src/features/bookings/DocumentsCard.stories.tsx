@@ -56,6 +56,7 @@ const meta = {
       handlers: [
         http.get('/api/bookings/bd1/documents', () => HttpResponse.json([contractDoc, invoiceDoc])),
         http.get('/api/bookings/bd1/invoices', () => HttpResponse.json([depositInvoice])),
+        http.get('https://example.com/:file', () => new HttpResponse(null, { status: 200 })),
       ],
     },
   },
