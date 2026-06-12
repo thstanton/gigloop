@@ -34,8 +34,8 @@ pdfmake.addFonts({
   Commissioner: {
     normal: join(customFontsDir, 'Commissioner-Regular.ttf'),
     bold: join(customFontsDir, 'Commissioner-Medium.ttf'),
-    italics: join(customFontsDir, 'Commissioner-Italic.ttf'),
-    bolditalics: join(customFontsDir, 'Commissioner-MediumItalic.ttf'),
+    italics: join(customFontsDir, 'Commissioner-Regular.ttf'),
+    bolditalics: join(customFontsDir, 'Commissioner-Medium.ttf'),
   },
 });
 pdfmake.setLocalAccessPolicy(() => true);
