@@ -9,6 +9,7 @@ import { DocumentsRepository } from './documents.repository';
 import { buildInvoiceDefinition, type InvoicePdfData } from './invoice-document';
 import { buildSongListDefinition, type SongListPdfData } from './song-list-document';
 import { renderTiptapToPdfmake } from '../mail/tiptap-pdfmake';
+import { buildDocumentTitle, buildPdfHeader, buildPdfFooter } from './pdf-shared';
 import type { EmailContext } from '../mail/mail.service';
 import { substituteTiptapVariables } from '../mail/tiptap-portal';
 
@@ -192,6 +193,15 @@ export class DocumentsService {
     const substituted = substituteTiptapVariables(tiptapContent, context);
     const contractContent = renderTiptapToPdfmake(substituted);
 
+    const publicProfile = await this.prisma.publicProfile.findUnique({ where: { userId } });
+    if (!publicProfile) throw new NotFoundException('Public profile not found');
+
+    const brandColour = (publicProfile.clientPortalConfig as { brandColour?: string } | null)?.brandColour ?? '#1a1a1a';
+    let logoDataUrl: string | undefined;
+    if (publicProfile.logoUrl) {
+      logoDataUrl = await fetchAsDataUrl(publicProfile.logoUrl);
+    }
+
     const signatureDataUrl = signatureBase64.startsWith('data:')
       ? signatureBase64
       : `data:image/png;base64,${signatureBase64}`;
@@ -200,21 +210,26 @@ export class DocumentsService {
     const docDef: any = {
       pageSize: 'A4',
       pageMargins: [54, 48, 54, 60],
-      defaultStyle: { font: 'Roboto', fontSize: 10, color: '#1a1a1a', lineHeight: 1.4 },
+      defaultStyle: { font: 'Commissioner', fontSize: 10, color: '#1a1a1a', lineHeight: 1.4 },
       content: [
-        { text: musicianName, style: 'header', margin: [0, 0, 0, 4] },
-        { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 487, y2: 0, lineWidth: 0.5, lineColor: '#e5e5e5' }], margin: [0, 0, 0, 24] },
+        ...buildPdfHeader(
+          {
+            logoUrl: logoDataUrl,
+            businessName: publicProfile.businessName,
+            email: publicProfile.email ?? undefined,
+          },
+          brandColour,
+        ),
+        buildDocumentTitle('Contract'),
         ...contractContent,
         { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 487, y2: 0, lineWidth: 0.5, lineColor: '#e5e5e5' }], margin: [0, 16, 0, 16] },
-        { text: 'Electronic Signature', bold: true, fontSize: 11, margin: [0, 0, 0, 8] },
-        { text: `Signed by: ${customerName}`, margin: [0, 0, 0, 2] },
-        { text: `Date: ${signedAt.toISOString().split('T')[0]}`, margin: [0, 0, 0, 2] },
-        { text: `IP address: ${signedFromIp}`, color: '#666666', margin: [0, 0, 0, 12] },
+        { text: 'Electronic Signature', font: 'Commissioner', bold: true, fontSize: 11, margin: [0, 0, 0, 8] },
+        { text: `Signed by: ${customerName}`, font: 'Commissioner', margin: [0, 0, 0, 2] },
+        { text: `Date: ${signedAt.toISOString().split('T')[0]}`, font: 'Commissioner', margin: [0, 0, 0, 2] },
+        { text: `IP address: ${signedFromIp}`, font: 'Commissioner', color: '#666666', margin: [0, 0, 0, 12] },
         { image: signatureDataUrl, width: 200, margin: [0, 0, 0, 4] },
       ],
-      styles: {
-        header: { fontSize: 14, bold: true },
-      },
+      footer: buildPdfFooter(),
     };
 
     const buffer: Buffer = await (pdfmake.createPdf(docDef).getBuffer() as Promise<Buffer>);
