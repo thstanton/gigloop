@@ -344,6 +344,8 @@ export class PortalService {
     const title = bookingDisplayTitle(booking);
     const musicianName = resolveDisplayName(publicProfile);
 
+    const brandColour = (publicProfile.clientPortalConfig as { brandColour?: string } | null)?.brandColour ?? '#1a1a1a';
+
     const { buffer } = await this.documents.generateAndStoreSongListPdf(
       bookingData.userId,
       bookingData.id,
@@ -356,6 +358,10 @@ export class PortalService {
         selectedSongs,
         notes: dto.notes ?? null,
         submittedAt: submittedAt.toISOString().replace('T', ' ').split('.')[0] + ' UTC',
+        logoUrl: publicProfile.logoUrl ?? null,
+        businessName: publicProfile.businessName,
+        email: publicProfile.email ?? null,
+        brandColour,
       },
     );
 
