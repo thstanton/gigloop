@@ -128,7 +128,7 @@ export const WithUploadDocument: Story = {
 
 export const DownloadClick: Story = {
   play: async ({ canvas }) => {
-    const btn = await canvas.findAllByRole('button', { name: 'Download' });
-    await userEvent.click(btn[0]);
+    const buttons = await canvas.findAllByRole('button', { name: 'Download' });
+    await userEvent.click(buttons[0]);
   },
 };
