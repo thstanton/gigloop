@@ -100,7 +100,7 @@ export function RowActions({ actions, label, sublabel }: Props) {
 
       {/* Mobile bottom sheet */}
       <Sheet open={sheetOpen} onOpenChange={handleSheetOpenChange}>
-        <SheetContent side="bottom">
+        <SheetContent side="bottom" className="border-t-0">
           <SheetTitle className={label ? undefined : 'sr-only'}>
             {label ?? 'Actions'}
           </SheetTitle>
