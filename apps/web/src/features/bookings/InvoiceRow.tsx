@@ -1,12 +1,7 @@
-import { CheckCircle2, ChevronDown, Download, Pencil, Send } from 'lucide-react';
+import { CheckCircle2, Download, Pencil, Send } from 'lucide-react';
 import InvoiceStatusPill from '@/components/common/InvoiceStatusPill';
-import { IconButton } from '@/components/common/IconButton';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import { RowActions } from '@/components/common/RowActions';
+import type { RowAction } from '@/components/common/RowActions';
 import { cn } from '@/lib/utils';
 import { formatDate, formatCurrency } from '@/lib/formatters';
 import type { Invoice } from '@/types/api';
@@ -15,65 +10,58 @@ function invoiceLineTotal(invoice: Invoice): number {
   return invoice.lineItems.reduce((sum, item) => sum + Number.parseFloat(item.amount), 0);
 }
 
-interface InvoiceRowActionsProps {
-  invoice: Invoice;
-  pdfUrl: string | null;
-  onEdit: (invoice: Invoice) => void;
-  onDelete: (invoice: Invoice) => void;
-  onSend: (invoice: Invoice) => void;
-  onMarkSent: (invoice: Invoice) => void;
-  onMarkPaid: (invoice: Invoice) => void;
-  onVoid: (invoice: Invoice) => void;
-}
-
-function InvoiceRowActions({ invoice, pdfUrl, onEdit, onDelete, onSend, onMarkSent, onMarkPaid, onVoid }: Readonly<InvoiceRowActionsProps>) {
-  const isDraft = invoice.status === 'DRAFT';
-  const isSent = invoice.status === 'SENT';
-  const isPaid = invoice.status === 'PAID';
-
-  if (isDraft) {
-    return (
-      <>
-        <IconButton label="Send invoice" onClick={() => onSend(invoice)}><Send size={14} /></IconButton>
-        <IconButton label="Edit invoice" onClick={() => onEdit(invoice)}><Pencil size={14} /></IconButton>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <IconButton label="More actions"><ChevronDown size={14} /></IconButton>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => onMarkSent(invoice)}>Mark as sent</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onDelete(invoice)} className="text-status-cancelled focus:text-status-cancelled">Delete</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </>
-    );
+function getInvoiceActions(
+  invoice: Invoice,
+  pdfUrl: string | null,
+  onEdit: (i: Invoice) => void,
+  onDelete: (i: Invoice) => void,
+  onSend: (i: Invoice) => void,
+  onMarkSent: (i: Invoice) => void,
+  onMarkPaid: (i: Invoice) => void,
+  onVoid: (i: Invoice) => void,
+): RowAction[] | null {
+  if (invoice.status === 'DRAFT') {
+    return [
+      { label: 'Send', icon: <Send size={14} />, onClick: () => onSend(invoice) },
+      { label: 'Edit', icon: <Pencil size={14} />, onClick: () => onEdit(invoice) },
+      { label: 'Mark as sent', onClick: () => onMarkSent(invoice) },
+      {
+        label: 'Delete',
+        variant: 'destructive',
+        confirmation: { title: 'Delete invoice?', description: 'This invoice will be permanently removed.' },
+        onClick: () => onDelete(invoice),
+      },
+    ];
   }
 
-  if (isSent || isPaid) {
-    return (
-      <>
-        {isSent && (
-          <button onClick={() => onMarkPaid(invoice)} className="text-muted hover:text-foreground transition-colors" aria-label="Mark invoice as paid">
-            <CheckCircle2 size={14} />
-          </button>
-        )}
-        {pdfUrl && (
-          <a href={pdfUrl} target="_blank" rel="noopener noreferrer" className="text-muted hover:text-foreground transition-colors" aria-label="Download invoice PDF">
-            <Download size={14} />
-          </a>
-        )}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button className="text-muted hover:text-foreground transition-colors" aria-label="More actions">
-              <ChevronDown size={14} />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => onVoid(invoice)} className="text-status-cancelled focus:text-status-cancelled">Void invoice</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </>
-    );
+  if (invoice.status === 'SENT') {
+    const acts: RowAction[] = [
+      { label: 'Mark as paid', icon: <CheckCircle2 size={14} />, onClick: () => onMarkPaid(invoice) },
+    ];
+    if (pdfUrl) {
+      acts.push({ label: 'Download', icon: <Download size={14} />, onClick: () => window.open(pdfUrl, '_blank', 'noopener,noreferrer') });
+    }
+    acts.push({
+      label: 'Void',
+      variant: 'destructive',
+      confirmation: { title: 'Void invoice?', description: 'The invoice will be marked void. You can create a new one if needed.' },
+      onClick: () => onVoid(invoice),
+    });
+    return acts;
+  }
+
+  if (invoice.status === 'PAID') {
+    const acts: RowAction[] = [];
+    if (pdfUrl) {
+      acts.push({ label: 'Download', icon: <Download size={14} />, onClick: () => window.open(pdfUrl, '_blank', 'noopener,noreferrer') });
+    }
+    acts.push({
+      label: 'Void',
+      variant: 'destructive',
+      confirmation: { title: 'Void invoice?', description: 'The invoice will be marked void.' },
+      onClick: () => onVoid(invoice),
+    });
+    return acts;
   }
 
   return null;
@@ -95,6 +83,8 @@ export default function InvoiceRow({ invoice, pdfUrl, onEdit, onDelete, onSend, 
   const isVoid = invoice.status === 'VOID';
   const isPaid = invoice.status === 'PAID';
 
+  const actions = getInvoiceActions(invoice, pdfUrl, onEdit, onDelete, onSend, onMarkSent, onMarkPaid, onVoid);
+
   return (
     <div className="flex items-start justify-between gap-3 py-2.5 border-b border-border last:border-0">
       <div className="min-w-0">
@@ -114,7 +104,7 @@ export default function InvoiceRow({ invoice, pdfUrl, onEdit, onDelete, onSend, 
         <span className={cn('text-sm font-medium tabular-nums', isVoid ? 'text-muted' : 'text-foreground')}>
           {formatCurrency(invoiceLineTotal(invoice))}
         </span>
-        <InvoiceRowActions invoice={invoice} pdfUrl={pdfUrl} onEdit={onEdit} onDelete={onDelete} onSend={onSend} onMarkSent={onMarkSent} onMarkPaid={onMarkPaid} onVoid={onVoid} />
+        {actions && <RowActions actions={actions} />}
       </div>
     </div>
   );

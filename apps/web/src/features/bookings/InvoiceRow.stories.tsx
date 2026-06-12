@@ -49,8 +49,10 @@ export const DepositDraft: Story = {
   args: { invoice: { ...baseInvoice, status: 'DRAFT', isDeposit: true } },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Deposit')).toBeVisible();
-    await expect(canvas.getByLabelText('Send invoice')).toBeVisible();
-    await expect(canvas.getByLabelText('Edit invoice')).toBeVisible();
+    // Mobile trigger
+    await expect(canvas.getByRole('button', { name: 'Actions' })).toBeVisible();
+    // Desktop primary shortcut
+    await expect(canvas.getByRole('button', { name: 'Send' })).toBeVisible();
   },
 };
 
@@ -64,7 +66,8 @@ export const BalanceDraft: Story = {
 export const Sent: Story = {
   args: { invoice: { ...baseInvoice, status: 'SENT' } },
   play: async ({ canvas }) => {
-    await expect(canvas.getByLabelText('Mark invoice as paid')).toBeVisible();
+    // Desktop primary shortcut for SENT = Mark as paid
+    await expect(canvas.getByRole('button', { name: 'Mark as paid' })).toBeVisible();
   },
 };
 
@@ -74,7 +77,9 @@ export const SentWithPdf: Story = {
     pdfUrl: 'https://example.com/invoice.pdf',
   },
   play: async ({ canvas }) => {
-    await expect(canvas.getByLabelText('Download invoice PDF')).toBeVisible();
+    // Download is secondary (not primary shortcut) for SENT — primary remains Mark as paid
+    await expect(canvas.getByRole('button', { name: 'Mark as paid' })).toBeVisible();
+    await expect(canvas.getByRole('button', { name: 'More actions' })).toBeVisible();
   },
 };
 
@@ -94,7 +99,8 @@ export const Paid: Story = {
   },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Paid')).toBeVisible();
-    await expect(canvas.getByLabelText('Download invoice PDF')).toBeVisible();
+    // Download is primary action for PAID with pdfUrl
+    await expect(canvas.getByRole('button', { name: 'Download' })).toBeVisible();
   },
 };
 
