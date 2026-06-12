@@ -54,6 +54,13 @@ async function bootstrap() {
 </html>`);
   });
 
+  const baseUrl = process.env.APP_BASE_URL ?? '';
+  if (!baseUrl || baseUrl.includes('localhost')) {
+    console.warn(
+      `[config] APP_BASE_URL is "${baseUrl}" — email links will point to localhost`,
+    );
+  }
+
   await app.listen(process.env.PORT ?? 3000);
 }
 bootstrap();
