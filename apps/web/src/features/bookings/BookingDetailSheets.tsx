@@ -31,7 +31,6 @@ import { apiGet } from '@/lib/api';
 import type {
   BookingSeries,
   BookingStatus,
-  Contract,
   Template,
   UpdateBookingSeriesResponse,
   UserProfile,
@@ -52,8 +51,6 @@ function isSeriesConfirmationRequired(r: object): r is Required<UpdateBookingSer
 
 interface BookingDetailSheetsProps {
   bookingId: string;
-  pendingContract: Contract | null;
-  onPendingContractClear: () => void;
   readyDialogStatus: BookingStatus | null;
   celebratoryTitle: string;
   dismissReadyDialog: () => void;
@@ -62,8 +59,6 @@ interface BookingDetailSheetsProps {
 
 export function BookingDetailSheets({
   bookingId,
-  pendingContract,
-  onPendingContractClear,
   readyDialogStatus,
   celebratoryTitle,
   dismissReadyDialog,
@@ -149,10 +144,9 @@ export function BookingDetailSheets({
 
       <ContractSheet
         bookingId={bookingId}
-        contract={pendingContract ?? booking.activeContract}
         readOnly={sheetContractReadOnly}
         open={sheet === 'contract'}
-        onClose={() => { setSearchParams({}); onPendingContractClear(); }}
+        onClose={() => { setSearchParams({}); }}
       />
       <BookingEditDrawer booking={booking} />
       <ContactEditSheet

@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useAuth } from '@clerk/react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { ChevronLeft } from 'lucide-react';
@@ -8,7 +7,6 @@ import { BookingDetailSheets } from '@/features/bookings/BookingDetailSheets';
 import { BookingDetailDesktop } from '@/features/bookings/BookingDetailDesktop';
 import { BookingDetailMobile } from '@/features/bookings/BookingDetailMobile';
 import BookingOverviewStrip from '@/features/bookings/BookingOverviewStrip';
-import type { Contract } from '@/types/api';
 
 // ─── Skeleton ─────────────────────────────────────────────────────────────────
 
@@ -90,9 +88,6 @@ export default function BookingDetailPage() {
   const location = useLocation();
   const backNav = (location.state as { from?: string; label?: string } | null);
 
-  // pendingContract: a full Contract object from createContract callback — not URL-serializable
-  const [pendingContract, setPendingContract] = useState<Contract | null>(null);
-
   const { isLoaded } = useAuth();
   const { data: booking, isLoading, isError } = useBooking(id!);
 
@@ -142,13 +137,10 @@ export default function BookingDetailPage() {
 
       <BookingDetailDesktop
         bookingId={id!}
-        onCreateContract={(contract) => setPendingContract(contract)}
       />
 
       <BookingDetailSheets
         bookingId={id!}
-        pendingContract={pendingContract}
-        onPendingContractClear={() => setPendingContract(null)}
         readyDialogStatus={readyDialogStatus}
         celebratoryTitle={celebratoryTitle}
         dismissReadyDialog={dismissReadyDialog}
