@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { Paperclip } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -26,6 +27,7 @@ interface Props {
 export function UploadDocumentSheet({ bookingId, open, onOpenChange }: Props) {
   const queryClient = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
 
   const {
@@ -49,13 +51,19 @@ export function UploadDocumentSheet({ bookingId, open, onOpenChange }: Props) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bookingDocuments', bookingId] });
       reset();
+      setFileName(null);
       if (fileRef.current) fileRef.current.value = '';
       onOpenChange(false);
     },
   });
 
   function handleOpenChange(next: boolean) {
-    if (!next) { reset(); setFileError(null); if (fileRef.current) fileRef.current.value = ''; }
+    if (!next) {
+      reset();
+      setFileError(null);
+      setFileName(null);
+      if (fileRef.current) fileRef.current.value = '';
+    }
     onOpenChange(next);
   }
 
@@ -79,9 +87,26 @@ export function UploadDocumentSheet({ bookingId, open, onOpenChange }: Props) {
               type="file"
               accept=".pdf,application/pdf"
               aria-label="PDF file"
-              className="text-sm"
-              onChange={() => setFileError(null)}
+              className="sr-only"
+              onChange={(e) => {
+                setFileError(null);
+                setFileName(e.target.files?.[0]?.name ?? null);
+              }}
             />
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => fileRef.current?.click()}
+              >
+                <Paperclip size={14} className="mr-1" />
+                Choose file
+              </Button>
+              <span className="text-sm text-muted truncate">
+                {fileName ?? 'No file chosen'}
+              </span>
+            </div>
           </FormField>
           <Button type="submit" disabled={mutation.isPending}>
             {mutation.isPending ? 'Uploading…' : 'Upload'}
