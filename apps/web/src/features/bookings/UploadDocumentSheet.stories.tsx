@@ -1,6 +1,6 @@
 import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect } from 'storybook/test';
+import { expect, within } from 'storybook/test';
 import { MemoryRouter } from 'react-router-dom';
 import { UploadDocumentSheet } from './UploadDocumentSheet';
 
@@ -19,8 +19,9 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const OpenEmpty: Story = {
-  play: async ({ canvas }) => {
-    await expect(canvas.findByLabelText('Document name')).resolves.toBeVisible();
-    await expect(canvas.findByLabelText('PDF file')).resolves.toBeVisible();
+  play: async () => {
+    const body = within(document.body);
+    await expect(body.findByLabelText('Document name')).resolves.toBeVisible();
+    await expect(body.findByLabelText('PDF file')).resolves.toBeVisible();
   },
 };
