@@ -83,7 +83,11 @@ export function DocumentList({ bookingId, documents, invoices }: Props) {
               {new Date(doc.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
             </span>
             <div className="flex items-center gap-2 flex-shrink-0">
-              <RowActions actions={actions} />
+              <RowActions
+                actions={actions}
+                label={label}
+                sublabel={new Date(doc.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+              />
             </div>
           </div>
         );

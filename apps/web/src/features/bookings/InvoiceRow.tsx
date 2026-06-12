@@ -84,6 +84,8 @@ export default function InvoiceRow({ invoice, pdfUrl, onEdit, onDelete, onSend, 
   const isPaid = invoice.status === 'PAID';
 
   const actions = getInvoiceActions(invoice, pdfUrl, onEdit, onDelete, onSend, onMarkSent, onMarkPaid, onVoid);
+  const invoiceLabel = invoice.isDeposit ? 'Deposit' : 'Balance';
+  const invoiceSublabel = `${formatCurrency(invoiceLineTotal(invoice))} · ${invoice.issueDate ? formatDate(invoice.issueDate) : '—'}`;
 
   return (
     <div className="flex items-start justify-between gap-3 py-2.5 border-b border-border last:border-0">
@@ -104,7 +106,7 @@ export default function InvoiceRow({ invoice, pdfUrl, onEdit, onDelete, onSend, 
         <span className={cn('text-sm font-medium tabular-nums', isVoid ? 'text-muted' : 'text-foreground')}>
           {formatCurrency(invoiceLineTotal(invoice))}
         </span>
-        {actions && <RowActions actions={actions} />}
+        {actions && <RowActions actions={actions} label={invoiceLabel} sublabel={invoiceSublabel} />}
       </div>
     </div>
   );
