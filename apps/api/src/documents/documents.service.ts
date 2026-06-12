@@ -18,6 +18,7 @@ const require_ = createRequire(__filename);
 const pdfmake = require_('pdfmake');
 
 const fontDir = join(dirname(require_.resolve('pdfmake/package.json')), 'build/fonts/Roboto');
+const customFontsDir = join(dirname(__filename), 'fonts');
 
 pdfmake.addFonts({
   Roboto: {
@@ -25,6 +26,15 @@ pdfmake.addFonts({
     bold: join(fontDir, 'Roboto-Medium.ttf'),
     italics: join(fontDir, 'Roboto-Italic.ttf'),
     bolditalics: join(fontDir, 'Roboto-MediumItalic.ttf'),
+  },
+  Caveat: {
+    normal: join(customFontsDir, 'Caveat-Regular.ttf'),
+  },
+  Commissioner: {
+    normal: join(customFontsDir, 'Commissioner-Regular.ttf'),
+    bold: join(customFontsDir, 'Commissioner-Medium.ttf'),
+    italics: join(customFontsDir, 'Commissioner-Italic.ttf'),
+    bolditalics: join(customFontsDir, 'Commissioner-MediumItalic.ttf'),
   },
 });
 pdfmake.setLocalAccessPolicy(() => true);
@@ -105,6 +115,8 @@ export class DocumentsService {
       }
     }
 
+    const brandColour = (publicProfile.clientPortalConfig as { brandColour?: string } | null)?.brandColour ?? '#1a1a1a';
+
     return {
       businessName: publicProfile.businessName,
       musicianName: publicProfile.displayName ?? publicProfile.businessName,
@@ -114,6 +126,7 @@ export class DocumentsService {
       vatNumber: userProfile?.vatNumber ?? null,
       vatRate: userProfile?.vatNumber ? (userProfile.vatRate ?? 20) : null,
       logoUrl: publicProfile.logoUrl ?? null,
+      brandColour,
 
       invoiceNumber: invoice.invoiceNumber,
       issueDate: invoice.issueDate ? invoice.issueDate.toISOString().split('T')[0] : '',

@@ -1,4 +1,5 @@
 import type { TDocumentDefinitions, Content } from 'pdfmake/interfaces';
+import { buildDocumentTitle, buildPdfHeader, buildPdfFooter } from './pdf-shared';
 
 export interface InvoiceLineItemData {
   description: string;
@@ -14,6 +15,7 @@ export interface InvoicePdfData {
   vatNumber: string | null;
   vatRate: number | null;
   logoUrl: string | null;
+  brandColour: string;
 
   invoiceNumber: string;
   issueDate: string;
@@ -57,26 +59,6 @@ function totalRow(label: string, value: string, style?: string): Content {
     ],
     margin: [0, 0, 0, 3],
   };
-}
-
-function buildBusinessHeader(data: InvoicePdfData): Content {
-  const addressLines: Content[] = (data.address ?? '').split('\n').filter(Boolean).map((line) => ({
-    text: line,
-    style: 'muted',
-  }));
-
-  const businessInfoStack: Content[] = [
-    ...(data.logoUrl ? [{ text: data.businessName, style: 'businessNameRight' as string }] : []),
-    ...(data.email ? [{ text: data.email, style: 'muted' as string }] : []),
-    ...addressLines,
-    ...(data.vatNumber ? [{ text: `VAT: ${data.vatNumber}`, style: 'muted' as string }] : []),
-  ];
-
-  const headerLeft: Content = data.logoUrl
-    ? { image: data.logoUrl, width: 120, fit: [120, 40] }
-    : { text: data.businessName, style: 'businessNameLeft' };
-
-  return { columns: [headerLeft, { stack: businessInfoStack, alignment: 'right' }], margin: [0, 0, 0, 36] };
 }
 
 function buildTotalsSection(
@@ -155,12 +137,12 @@ export function buildInvoiceDefinition(data: InvoicePdfData): TDocumentDefinitio
   return {
     pageSize: 'A4',
     pageMargins: [54, 48, 54, 60],
-    defaultStyle: { font: 'Roboto', fontSize: 10, color: '#1a1a1a' },
+    defaultStyle: { font: 'Commissioner', fontSize: 10, color: '#1a1a1a' },
 
     content: [
-      buildBusinessHeader(data),
-      { columns: [{ text: invoiceTypeLabel, style: 'title' }, { stack: metaRows, alignment: 'right' }], margin: [0, 0, 0, 12] },
-      { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 487, y2: 0, lineWidth: 0.5, lineColor: '#e5e5e5' }], margin: [0, 0, 0, 20] },
+      ...buildPdfHeader({ logoUrl: data.logoUrl, businessName: data.businessName, email: data.email }, data.brandColour),
+      buildDocumentTitle(invoiceTypeLabel),
+      { columns: [{ text: '' }, { stack: metaRows, alignment: 'right' }], margin: [0, 0, 0, 12] },
       { text: 'Bill to', style: 'sectionLabel', margin: [0, 0, 0, 4] },
       { text: data.clientName, style: 'clientName', margin: [0, 0, 0, 24] },
       {
@@ -181,13 +163,14 @@ export function buildInvoiceDefinition(data: InvoicePdfData): TDocumentDefinitio
       ...paymentContent,
     ],
 
+    footer: buildPdfFooter(),
+
     styles: {
-      title: { fontSize: 22, bold: true },
-      businessNameLeft: { fontSize: 14, bold: true },
-      businessNameRight: { fontSize: 12, bold: true, margin: [0, 0, 0, 2] },
+      headerBusinessName: { font: 'Commissioner', fontSize: 12, bold: true },
+      headerMuted: { font: 'Commissioner', fontSize: 9, color: '#666666' },
       muted: { color: '#666666' },
       metaLabel: { color: '#666666' },
-      sectionLabel: { fontSize: 8, bold: true, color: '#888888', characterSpacing: 0.8 },
+      sectionLabel: { font: 'Commissioner', fontSize: 8, bold: true, color: '#888888', characterSpacing: 0.8 },
       clientName: { fontSize: 11, bold: true },
       tableHeader: { fontSize: 8, bold: true, color: '#888888', characterSpacing: 0.6 },
       totalLabel: { color: '#666666' },
