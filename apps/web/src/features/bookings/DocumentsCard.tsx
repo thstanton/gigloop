@@ -3,10 +3,11 @@ import { Upload } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { apiGet } from '@/lib/api';
 import { Card } from '@/components/common/Card';
-import { Button } from '@/components/ui/button';
+import { GhostButton } from '@/components/common/GhostButton';
 import { DocumentList } from '@/features/bookings/DocumentList';
 import { UploadDocumentSheet } from '@/features/bookings/UploadDocumentSheet';
 import type { Document, Invoice } from '@/types/api';
+
 
 interface Props {
   bookingId: string;
@@ -31,10 +32,9 @@ export function DocumentsCard({ bookingId }: Props) {
       <Card
         title="Documents"
         action={
-          <Button variant="ghost" size="sm" onClick={() => setUploadOpen(true)}>
-            <Upload size={14} className="mr-1" />
+          <GhostButton variant="primary" size="xs" icon={<Upload size={12} />} onClick={() => setUploadOpen(true)}>
             Upload
-          </Button>
+          </GhostButton>
         }
       >
         <DocumentList bookingId={bookingId} documents={documents} invoices={invoices} />
