@@ -152,7 +152,11 @@ export default function ContractCard({
           </div>
           {actions && (
             <div className="flex items-center gap-2 flex-shrink-0">
-              <RowActions actions={actions} />
+              <RowActions
+                actions={actions}
+                label="Contract"
+                sublabel={[CONTRACT_PILL_LABELS[status!], contractDate].filter(Boolean).join(' · ')}
+              />
             </div>
           )}
         </div>

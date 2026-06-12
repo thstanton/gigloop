@@ -33,9 +33,11 @@ export interface RowAction {
 
 interface Props {
   actions: RowAction[];
+  label?: string;
+  sublabel?: string;
 }
 
-export function RowActions({ actions }: Props) {
+export function RowActions({ actions, label, sublabel }: Props) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [confirmingAction, setConfirmingAction] = useState<RowAction | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -99,9 +101,14 @@ export function RowActions({ actions }: Props) {
       {/* Mobile bottom sheet */}
       <Sheet open={sheetOpen} onOpenChange={handleSheetOpenChange}>
         <SheetContent side="bottom">
-          <SheetTitle className="sr-only">Actions</SheetTitle>
+          <SheetTitle className={label ? undefined : 'sr-only'}>
+            {label ?? 'Actions'}
+          </SheetTitle>
+          {label && sublabel && (
+            <p className="text-sm text-muted-foreground">{sublabel}</p>
+          )}
           {confirmingAction ? (
-            <div className="space-y-4 pb-2">
+            <div className={`space-y-4 pb-2${label ? ' mt-3' : ''}`}>
               <p className="font-semibold">{confirmingAction.confirmation!.title}</p>
               <p className="text-sm text-muted-foreground">
                 {confirmingAction.confirmation!.description}
@@ -116,7 +123,9 @@ export function RowActions({ actions }: Props) {
               </div>
             </div>
           ) : (
-            <div className="space-y-1">
+            <>
+              {label && <Separator />}
+              <div className="space-y-1">
               {defaultActions.map((action) => (
                 <button
                   key={action.label}
@@ -145,6 +154,7 @@ export function RowActions({ actions }: Props) {
                 </>
               )}
             </div>
+            </>
           )}
         </SheetContent>
       </Sheet>
