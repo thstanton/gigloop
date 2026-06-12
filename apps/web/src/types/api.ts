@@ -272,6 +272,7 @@ export interface ChecklistItem {
 export interface BookingLogisticsEntry {
   value: string;
   icon?: string;
+  notes?: string;
   shareWithBand: boolean;
   shareWithClient: boolean;
   label?: string;
@@ -503,7 +504,7 @@ export interface UpdatePackageInput {
 // Documents
 // ─────────────────────────────────────────
 
-export type DocumentType = 'INVOICE' | 'CONTRACT' | 'SONG_LIST';
+export type DocumentType = 'INVOICE' | 'CONTRACT' | 'SONG_LIST' | 'UPLOAD';
 
 export interface Document {
   id: string;
@@ -512,6 +513,7 @@ export interface Document {
   url: string;
   invoiceId: string | null;
   contractStatus: string | null;
+  name: string | null;
 }
 
 // ─────────────────────────────────────────

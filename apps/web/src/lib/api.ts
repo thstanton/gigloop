@@ -62,3 +62,14 @@ export async function apiDelete(path: string): Promise<void> {
   const res = await authedFetch(path, { method: 'DELETE' });
   if (!res.ok) throw new Response(res.statusText, { status: res.status });
 }
+
+export async function apiPostFormData<T>(path: string, formData: FormData): Promise<T> {
+  const token = await getToken();
+  const res = await fetch(`/api${path}`, {
+    method: 'POST',
+    body: formData,
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) throw new Response(res.statusText, { status: res.status });
+  return res.json() as Promise<T>;
+}

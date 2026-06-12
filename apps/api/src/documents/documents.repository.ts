@@ -6,10 +6,14 @@ import { PrismaService } from '../prisma/prisma.service';
 export class DocumentsRepository {
   constructor(private prisma: PrismaService) {}
 
-  create(userId: string, bookingId: string, type: DocumentType, storageKey: string, invoiceId?: string, contractId?: string) {
+  create(userId: string, bookingId: string, type: DocumentType, storageKey: string, invoiceId?: string, contractId?: string, name?: string) {
     return this.prisma.document.create({
-      data: { userId, bookingId, type, storageKey, invoiceId, contractId },
+      data: { userId, bookingId, type, storageKey, invoiceId, contractId, name },
     });
+  }
+
+  findById(id: string, userId: string) {
+    return this.prisma.document.findFirst({ where: { id, userId } });
   }
 
   findByBooking(userId: string, bookingId: string) {

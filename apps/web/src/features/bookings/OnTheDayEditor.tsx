@@ -37,7 +37,7 @@ const DETAIL_FIELDS: Array<{ key: DetailFieldKey; label: string; type: 'input' |
   { key: 'equipmentRequired',  label: 'Equipment required',  type: 'textarea' },
 ];
 
-type LocalEntry = Pick<BookingLogisticsEntry, 'value' | 'shareWithBand' | 'shareWithClient'> & { icon: string };
+type LocalEntry = Pick<BookingLogisticsEntry, 'value' | 'shareWithBand' | 'shareWithClient'> & { icon: string; notes: string };
 type LocalState = Record<TimeFieldKey | DetailFieldKey, LocalEntry>;
 
 type CustomFieldLocal = {
@@ -58,6 +58,7 @@ function entryFromBooking(
   return {
     value:           entry?.value ?? '',
     icon:            entry?.icon ?? '',
+    notes:           entry?.notes ?? '',
     shareWithBand:   entry?.shareWithBand ?? false,
     shareWithClient: entry?.shareWithClient ?? false,
   };
@@ -105,7 +106,7 @@ function getNextCustomFieldKey(
 }
 
 function toSystemEntry(f: LocalEntry): BookingLogisticsEntry {
-  return { value: f.value, ...(f.icon && { icon: f.icon }), shareWithBand: f.shareWithBand, shareWithClient: f.shareWithClient };
+  return { value: f.value, ...(f.icon && { icon: f.icon }), ...(f.notes && { notes: f.notes }), shareWithBand: f.shareWithBand, shareWithClient: f.shareWithClient };
 }
 
 function toCustomEntry(cf: CustomFieldLocal): BookingLogisticsEntry {
@@ -201,14 +202,20 @@ export default function OnTheDayEditor({ booking, isOpen, onSaved }: Props) {
                 />
                 <Input
                   id={`logistics-${key}`}
+                  type="time"
                   aria-label={label}
-                  placeholder="HH:MM"
-                  pattern="^([01]\d|2[0-3]):[0-5]\d$"
                   value={entry.value}
                   onChange={(e) => setEntry(key, { value: e.target.value })}
                   className="flex-1"
                 />
               </div>
+              <Input
+                aria-label={`${label} notes`}
+                placeholder="Additional notes…"
+                value={entry.notes}
+                onChange={(e) => setEntry(key, { notes: e.target.value })}
+                className="mt-2"
+              />
             </FormField>
           );
         })}
