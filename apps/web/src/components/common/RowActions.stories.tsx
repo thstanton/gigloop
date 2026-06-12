@@ -74,7 +74,7 @@ export const MobileSheetFlow: Story = {
     // Confirm fires onClick and closes sheet
     const confirmBtn = await body.findByRole('button', { name: 'Confirm' });
     await userEvent.click(confirmBtn);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any — spy cast: Storybook wraps fn() args as vitest spies at runtime
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- spy cast: Storybook wraps fn() args as vitest spies at runtime
     expect(args.actions[1].onClick as any).toHaveBeenCalledOnce();
   },
 };
