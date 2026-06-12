@@ -9,7 +9,7 @@ import { LOGISTICS_FIELD_ICONS } from '@/lib/constants';
 import type { BookingLogisticsEntry, PerformanceSet } from '@/types/api';
 
 type TimelineRow =
-  | { kind: 'time'; rowKey: string; label: string; time: string; group: string }
+  | { kind: 'time'; rowKey: string; label: string; time: string; notes?: string; group: string }
   | { kind: 'set'; rowKey: string; set: PerformanceSet; group: string };
 
 interface ItineraryCardProps {
@@ -26,15 +26,15 @@ function buildRows(
   const l = logistics ?? {};
 
   if (l.arrivalTime?.value)
-    rows.push({ kind: 'time', rowKey: 'arrivalTime', label: 'Arrival', time: l.arrivalTime.value, group: 'arrival' });
+    rows.push({ kind: 'time', rowKey: 'arrivalTime', label: 'Arrival', time: l.arrivalTime.value, notes: l.arrivalTime.notes, group: 'arrival' });
   if (l.soundCheckTime?.value)
-    rows.push({ kind: 'time', rowKey: 'soundCheckTime', label: 'Soundcheck', time: l.soundCheckTime.value, group: 'soundcheck' });
+    rows.push({ kind: 'time', rowKey: 'soundCheckTime', label: 'Soundcheck', time: l.soundCheckTime.value, notes: l.soundCheckTime.notes, group: 'soundcheck' });
 
   for (const set of [...sets].sort((a, b) => a.order - b.order))
     rows.push({ kind: 'set', rowKey: set.id, set, group: set.packageId ? `pkg-${set.packageId}` : `set-${set.id}` });
 
   if (l.finishTime?.value)
-    rows.push({ kind: 'time', rowKey: 'finishTime', label: 'Finish', time: l.finishTime.value, group: 'finish' });
+    rows.push({ kind: 'time', rowKey: 'finishTime', label: 'Finish', time: l.finishTime.value, notes: l.finishTime.notes, group: 'finish' });
 
   return rows;
 }
@@ -75,7 +75,7 @@ export default function ItineraryCard({ logistics, sets, hideWhenEmpty = false }
             return (
               <div
                 key={row.rowKey}
-                className={`flex items-center gap-3 py-1.5${showBorder ? ' border-b border-border' : ''}`}
+                className={`flex gap-3 py-1.5${(row.kind === 'time' && row.notes) ? ' items-start' : ' items-center'}${showBorder ? ' border-b border-border' : ''}`}
               >
                 <span className="w-14 flex-shrink-0 text-sm font-medium tabular-nums text-foreground">
                   {timeCol}
@@ -85,9 +85,14 @@ export default function ItineraryCard({ logistics, sets, hideWhenEmpty = false }
                     <FormatIcon icon={LOGISTICS_FIELD_ICONS[row.rowKey] ?? 'clock'} size={14} />
                   </span>
                 )}
-                <span className="text-sm text-foreground">
-                  {labelCol}
-                </span>
+                {row.kind === 'time' && row.notes ? (
+                  <div className="flex flex-col">
+                    <span className="text-sm text-foreground">{labelCol}</span>
+                    <span className="text-xs text-muted">{row.notes}</span>
+                  </div>
+                ) : (
+                  <span className="text-sm text-foreground">{labelCol}</span>
+                )}
               </div>
             );
           })}

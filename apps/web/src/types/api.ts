@@ -272,6 +272,7 @@ export interface ChecklistItem {
 export interface BookingLogisticsEntry {
   value: string;
   icon?: string;
+  notes?: string;
   shareWithBand: boolean;
   shareWithClient: boolean;
   label?: string;

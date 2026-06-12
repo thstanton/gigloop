@@ -75,3 +75,18 @@ export const Empty: Story = {
     sets: [],
   },
 };
+
+export const WithTimeNotes: Story = {
+  args: {
+    logistics: {
+      arrivalTime: { value: '18:45', notes: 'Gate closes at 9', shareWithBand: true, shareWithClient: false },
+      soundCheckTime: { value: '19:30', shareWithBand: true, shareWithClient: false },
+      finishTime: { value: '23:00', notes: 'Hard finish — venue curfew', shareWithBand: true, shareWithClient: false },
+    },
+    sets: setsWithStartTimes,
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Gate closes at 9')).toBeVisible();
+    await expect(canvas.getByText('Hard finish — venue curfew')).toBeVisible();
+  },
+};
