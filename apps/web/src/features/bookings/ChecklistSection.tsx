@@ -108,7 +108,6 @@ interface ChecklistItemShortcutsProps {
   shortcutType?: string;
   shortcutTemplateType?: string;
   isFailed: boolean;
-  isPlayTheGig: boolean;
   isActionPending: boolean;
   itemId: string;
   onToggle: (itemId: string, newState: 'COMPLETE' | 'PENDING') => void;
@@ -117,7 +116,7 @@ interface ChecklistItemShortcutsProps {
   onMarkDone: (key: MarkDoneKey) => void;
 }
 
-function ChecklistItemShortcuts({ shortcutType, shortcutTemplateType, isFailed, isPlayTheGig, isActionPending, itemId, onToggle, onOpenCompose, onChecklistAction, onMarkDone }: ChecklistItemShortcutsProps) {
+function ChecklistItemShortcuts({ shortcutType, shortcutTemplateType, isFailed, isActionPending, itemId, onToggle, onOpenCompose, onChecklistAction, onMarkDone }: ChecklistItemShortcutsProps) {
   const label = isFailed ? 'Retry' : undefined;
   if (shortcutType === 'send_email') {
     return <button onClick={() => onOpenCompose(shortcutTemplateType)} className="text-xs text-primary hover:underline">{label ?? 'Send'}</button>;
@@ -128,10 +127,7 @@ function ChecklistItemShortcuts({ shortcutType, shortcutTemplateType, isFailed, 
   if (shortcutType === 'mark_contract_signed' || shortcutType === 'mark_deposit_received') {
     return <button onClick={() => onMarkDone(shortcutType as MarkDoneKey)} disabled={isActionPending} className="text-xs text-primary hover:underline disabled:opacity-50">{label ?? 'Mark done'}</button>;
   }
-  if (!isPlayTheGig) {
-    return <button onClick={() => onToggle(itemId, 'COMPLETE')} className="text-xs text-primary hover:underline">Mark done</button>;
-  }
-  return null;
+  return <button onClick={() => onToggle(itemId, 'COMPLETE')} className="text-xs text-primary hover:underline">Mark done</button>;
 }
 
 interface ChecklistItemRowProps {
@@ -173,7 +169,6 @@ function ChecklistItemRow({ item, isActionPending, onToggle, onOpenCompose, onCh
             shortcutType={item.shortcutType}
             shortcutTemplateType={item.shortcutTemplateType}
             isFailed={isFailed}
-            isPlayTheGig={isPlayTheGig}
             isActionPending={isActionPending}
             itemId={item.id}
             onToggle={onToggle}

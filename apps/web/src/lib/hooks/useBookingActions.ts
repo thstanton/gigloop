@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiPatch, apiPost, apiDelete } from '@/lib/api';
+import { toast } from '@/lib/hooks/use-toast';
 import type { Invoice } from '@/types/api';
 
 export function useBookingActions(bookingId: string) {
@@ -34,6 +35,9 @@ export function useBookingActions(bookingId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bookingInvoices', bookingId] });
       invalidateBooking();
+    },
+    onError: () => {
+      toast({ title: 'Failed to create invoice — please try again', variant: 'destructive' });
     },
   });
 
