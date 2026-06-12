@@ -1,7 +1,11 @@
-import { FileText, Download, FolderOpen } from 'lucide-react';
+import { Trash2, FileText, Download, FolderOpen } from 'lucide-react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { apiDelete } from '@/lib/api';
+import { IconButton } from '@/components/common/IconButton';
 import type { Document, Invoice } from '@/types/api';
 
 function getDocumentLabel(doc: Document, invoice: Invoice | undefined): string {
+  if (doc.type === 'UPLOAD') return doc.name ?? 'Uploaded document';
   if (doc.type !== 'CONTRACT') {
     return invoice?.isDeposit ? 'Deposit invoice' : 'Balance invoice';
   }
@@ -20,11 +24,18 @@ async function downloadDocument(url: string, label: string) {
 }
 
 interface Props {
+  bookingId: string;
   documents: Document[];
   invoices: Invoice[];
 }
 
-export function DocumentList({ documents, invoices }: Props) {
+export function DocumentList({ bookingId, documents, invoices }: Props) {
+  const queryClient = useQueryClient();
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => apiDelete(`/bookings/${bookingId}/documents/${id}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['bookingDocuments', bookingId] }),
+  });
+
   if (documents.length === 0) {
     return (
       <div className="flex items-center gap-2 text-muted py-1">
@@ -51,13 +62,19 @@ export function DocumentList({ documents, invoices }: Props) {
             <span className="text-muted ml-auto text-xs shrink-0">
               {new Date(doc.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
             </span>
-            <button
-              onClick={() => downloadDocument(doc.url, label)}
-              title="Download"
-              className="text-muted hover:text-foreground shrink-0"
-            >
+            <IconButton label="Download" onClick={() => downloadDocument(doc.url, label)}>
               <Download size={14} />
-            </button>
+            </IconButton>
+            {doc.type === 'UPLOAD' && (
+              <IconButton
+                label="Delete"
+                className="text-muted hover:text-destructive"
+                onClick={() => deleteMutation.mutate(doc.id)}
+                disabled={deleteMutation.isPending}
+              >
+                <Trash2 size={14} />
+              </IconButton>
+            )}
           </div>
         );
       })}

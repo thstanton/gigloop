@@ -44,6 +44,17 @@ const invoiceDoc = {
   url: 'https://example.com/invoice.pdf',
   invoiceId: 'inv1',
   contractStatus: null,
+  name: null,
+};
+
+const uploadDoc = {
+  id: 'd4',
+  createdAt: '2030-04-05T10:00:00Z',
+  type: 'UPLOAD',
+  url: 'https://example.com/upload.pdf',
+  invoiceId: null,
+  contractStatus: null,
+  name: 'O2 Academy Contract',
 };
 
 const meta = {
@@ -98,6 +109,20 @@ export const VoidContract: Story = {
   },
   play: async ({ canvas }) => {
     await expect(canvas.findByText('Contract [VOID]')).resolves.toBeVisible();
+  },
+};
+
+export const WithUploadDocument: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.get('/api/bookings/bd1/documents', () => HttpResponse.json([contractDoc, uploadDoc])),
+        http.get('/api/bookings/bd1/invoices', () => HttpResponse.json([])),
+      ],
+    },
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.findByText('O2 Academy Contract')).resolves.toBeVisible();
   },
 };
 
