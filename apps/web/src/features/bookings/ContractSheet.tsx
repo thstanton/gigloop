@@ -16,9 +16,9 @@ import {
 } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { VariableNode } from '@/features/templates/VariableNode';
+import { useBooking } from '@/lib/hooks/useBooking';
 import { apiPatch } from '@/lib/api';
 import { cn } from '@/lib/utils';
-import type { Contract } from '@/types/api';
 
 // ─── Toolbar ─────────────────────────────────────────────────────────────────
 
@@ -83,7 +83,6 @@ function Toolbar({ editor }: { editor: ReturnType<typeof useEditor> }) {
 
 interface Props {
   bookingId: string;
-  contract: Contract | null;
   readOnly: boolean;
   open: boolean;
   onClose: () => void;
@@ -91,13 +90,14 @@ interface Props {
 
 interface BodyProps {
   bookingId: string;
-  contract: Contract | null;
   readOnly: boolean;
   onClose: () => void;
 }
 
-function ContractSheetBody({ bookingId, contract, readOnly, onClose }: BodyProps) {
+function ContractSheetBody({ bookingId, readOnly, onClose }: BodyProps) {
   const queryClient = useQueryClient();
+  const { data: booking } = useBooking(bookingId);
+  const contract = booking?.activeContract ?? null;
   const content = contract?.content ?? null;
 
   const editor = useEditor({
@@ -167,14 +167,13 @@ function ContractSheetBody({ bookingId, contract, readOnly, onClose }: BodyProps
   );
 }
 
-export default function ContractSheet({ bookingId, contract, readOnly, open, onClose }: Props) {
+export default function ContractSheet({ bookingId, readOnly, open, onClose }: Props) {
   return (
     <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <SheetContent side="right" className="w-full sm:max-w-2xl flex flex-col p-0">
         {open && (
           <ContractSheetBody
             bookingId={bookingId}
-            contract={contract}
             readOnly={readOnly}
             onClose={onClose}
           />

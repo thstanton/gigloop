@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useBooking } from '@/lib/hooks/useBooking';
+import { useBookingChecklist } from '@/lib/hooks/useBookingChecklist';
 import { useBookingFields } from '@/lib/hooks/useBookingFields';
 import { useContractActions } from '@/lib/hooks/useContractActions';
 import { useBookingInvoices } from '@/lib/hooks/useBookingInvoices';
@@ -31,7 +32,6 @@ import { apiGet } from '@/lib/api';
 import type {
   BookingSeries,
   BookingStatus,
-  Contract,
   Template,
   UpdateBookingSeriesResponse,
   UserProfile,
@@ -52,23 +52,9 @@ function isSeriesConfirmationRequired(r: object): r is Required<UpdateBookingSer
 
 interface BookingDetailSheetsProps {
   bookingId: string;
-  pendingContract: Contract | null;
-  onPendingContractClear: () => void;
-  readyDialogStatus: BookingStatus | null;
-  celebratoryTitle: string;
-  dismissReadyDialog: () => void;
-  confirmStatusTransition: (status: BookingStatus) => void;
 }
 
-export function BookingDetailSheets({
-  bookingId,
-  pendingContract,
-  onPendingContractClear,
-  readyDialogStatus,
-  celebratoryTitle,
-  dismissReadyDialog,
-  confirmStatusTransition,
-}: BookingDetailSheetsProps) {
+export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedSeriesId, setSelectedSeriesId] = useState<string | null>(null);
 
@@ -85,6 +71,12 @@ export function BookingDetailSheets({
 
   const { isLoaded } = useAuth();
   const { data: booking } = useBooking(bookingId);
+  const {
+    readyDialogStatus,
+    celebratoryTitle,
+    dismissReadyDialog,
+    confirmStatusTransition,
+  } = useBookingChecklist(bookingId, booking, isLoaded);
   const { data: invoices = [] } = useBookingInvoices(bookingId);
   const contractActions = useContractActions(bookingId);
   const fields = useBookingFields(bookingId);
@@ -149,10 +141,9 @@ export function BookingDetailSheets({
 
       <ContractSheet
         bookingId={bookingId}
-        contract={pendingContract ?? booking.activeContract}
         readOnly={sheetContractReadOnly}
         open={sheet === 'contract'}
-        onClose={() => { setSearchParams({}); onPendingContractClear(); }}
+        onClose={() => { setSearchParams({}); }}
       />
       <BookingEditDrawer booking={booking} />
       <ContactEditSheet

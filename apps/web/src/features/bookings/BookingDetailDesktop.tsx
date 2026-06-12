@@ -27,17 +27,15 @@ import { SectionHeader } from '@/components/common/SectionHeader';
 import { apiGet } from '@/lib/api';
 import { EVENT_TYPE_LABELS } from '@/lib/constants';
 import type {
-  Contract,
   Invoice,
   MusicFormConfig,
 } from '@/types/api';
 
 interface BookingDetailDesktopProps {
   bookingId: string;
-  onCreateContract: (contract: Contract) => void;
 }
 
-export function BookingDetailDesktop({ bookingId, onCreateContract }: BookingDetailDesktopProps) {
+export function BookingDetailDesktop({ bookingId }: BookingDetailDesktopProps) {
   const navigate = useNavigate();
   const [, setSearchParams] = useSearchParams();
   const { isLoaded } = useAuth();
@@ -76,7 +74,7 @@ export function BookingDetailDesktop({ bookingId, onCreateContract }: BookingDet
   }
 
   return (
-    <div className="hidden md:grid md:grid-cols-[3fr_2fr] md:gap-8 md:items-start mt-6">
+    <div className="grid grid-cols-[3fr_2fr] gap-8 items-start mt-6">
 
       {/* ─── Left column top: For the Day + Packages ─── */}
       <div className="space-y-8 md:col-start-1">
@@ -168,10 +166,10 @@ export function BookingDetailDesktop({ bookingId, onCreateContract }: BookingDet
             booking={booking}
             documents={documents}
             isCreating={contractActions.isCreatingContract}
-            onCreateContract={() => contractActions.createContract((contract) => {
-              onCreateContract(contract);
+            onCreateContract={() => {
+              contractActions.createContract();
               setSearchParams({ sheet: 'contract' });
-            })}
+            }}
             onEdit={() => setSearchParams({ sheet: 'contract' })}
             onPreview={() => setSearchParams({ sheet: 'contract', readOnly: 'true' })}
             onSend={() => openCompose(contractShortcutType)}
