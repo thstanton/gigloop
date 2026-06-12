@@ -397,7 +397,9 @@ This is a system-generated email (not a [[Template]]).
 **Cancelled bookings:** the portal still loads for cancelled bookings (the token remains valid). A notice is shown ("This booking has been cancelled"). The booking summary is visible. Contract signing is hidden. Signed contract download remains visible if it exists.
 
 ### Document
-A generated PDF stored in Cloudflare R2, associated with a Booking. Three types (stored as `DocumentType` Prisma enum): **INVOICE**, **CONTRACT**, **SONG_LIST**.
+A PDF stored in Cloudflare R2, associated with a Booking. Four types (stored as `DocumentType` Prisma enum): **INVOICE**, **CONTRACT**, **SONG_LIST**, **UPLOAD**.
+
+The first three types are *system-generated* — GigMan creates the PDF automatically as part of a workflow (invoice send, contract signing, music form submission). **UPLOAD** documents are *musician-uploaded* — the musician receives a PDF from an external party (e.g. a booking agent contract) and uploads it manually. Uploaded documents carry a user-provided `name` (displayed in the Documents list); system-generated documents derive their label from their type and associated records. Uploaded documents may be deleted by the musician; system-generated documents are immutable.
 
 **Invoice PDF:** generated at invoice send time (`POST /invoices/:id/send`), stored in R2, and attached to the outbound email. Uses a fixed `@react-pdf/renderer` layout with Tiptap-JSON-driven content sections (variable substitution + line items table). Balance invoices include a deposit deduction section (subtotal, less deposit, balance due) when a deposit [[Invoice]] exists on the booking.
 

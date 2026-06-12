@@ -30,6 +30,22 @@ Before writing the issue, do the **component inventory pass** (see `apps/web/src
 ### 5. Story-task-bearing (UI issues)
 Story creation is an **explicit task**, sequenced **before** the component build (presentational-first, ADR-0023). The story is a deliberate review checkpoint: the human reviews the presentational component in Storybook *before* the container is wired up. Structure UI work so the story is its own commit boundary — "build story → STOP → review → build component" lines up exactly with the session-stop rule (CLAUDE.md → Session Behaviour).
 
+### 6. Model-annotated
+Every sub-issue states the recommended model at the top and flags individual tasks as **Haiku candidates** where applicable. This is decided at planning time so it can be applied dynamically during implementation — Claude spawns a Haiku subagent for flagged tasks rather than handling them in the main Sonnet session.
+
+**Cut point:** Haiku for tasks where the full context fits in one file and the pattern is visible from a single example (smoke stories, small DTO changes, isolated label/display tweaks). Sonnet for anything requiring reading multiple files to infer the correct pattern (new components, API endpoints, mutation wiring).
+
+Format in the issue body:
+
+```
+## Recommended model: Sonnet
+
+[Overall rationale. Name any individual tasks as Haiku candidates inline, e.g.:]
+The DTO update and smoke story are Haiku candidates — flag them as such in the task list.
+```
+
+At implementation time: when a Haiku-candidate task is reached, spawn a Haiku subagent via the Agent tool with `model: "haiku"`, passing the target file path, an existing file to use as a pattern, and the exact change required. Log the spawn so the human can observe success/failure and build intuition for future calibration.
+
 ## Branch & PR shape (set at planning time)
 
 - **One feature = one branch = one PR.** Sub-issues are commits on that branch (`Closes #N` in the commit body; all closed in the PR description). **Never** split a dependent feature into sibling branches — that is the squash-merge conflict footgun (see ADR-0025).
@@ -44,4 +60,5 @@ Before coding starts, the human should be able to see, in the issues:
 - [ ] Dependencies are mapped on the tracking issue
 - [ ] UI sub-issues name the components to reuse
 - [ ] UI sub-issues include a story task, sequenced before the build
+- [ ] Each sub-issue has a model recommendation; Haiku candidates are flagged inline
 - [ ] One branch / one PR for the whole feature (or an explicit sequential split)
