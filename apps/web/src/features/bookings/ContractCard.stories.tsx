@@ -88,8 +88,8 @@ export const Draft: Story = {
   },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Draft')).toBeVisible();
-    await expect(canvas.getByLabelText('Send contract')).toBeVisible();
-    await expect(canvas.getByLabelText('Edit contract')).toBeVisible();
+    await expect(canvas.getByLabelText('Actions')).toBeVisible();
+    await expect(canvas.getByLabelText('Send')).toBeVisible();
   },
 };
 
@@ -109,7 +109,7 @@ export const Sent: Story = {
   },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Sent')).toBeVisible();
-    await expect(canvas.getByLabelText('Preview contract')).toBeVisible();
+    await expect(canvas.getByLabelText('Preview')).toBeVisible();
   },
 };
 
@@ -130,8 +130,8 @@ export const Signed: Story = {
   },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Signed')).toBeVisible();
-    await expect(canvas.getByLabelText('Preview contract')).toBeVisible();
-    await expect(canvas.getByLabelText('Download signed contract PDF')).toBeVisible();
+    await expect(canvas.getByLabelText('Preview')).toBeVisible();
+    await expect(canvas.getByLabelText('More actions')).toBeVisible();
   },
 };
 
@@ -155,7 +155,7 @@ export const Void: Story = {
   },
 };
 
-export const ConfirmVoidSignedDialog: Story = {
+export const ConfirmVoidSignedFlow: Story = {
   args: {
     booking: {
       ...baseBooking,
@@ -173,7 +173,7 @@ export const ConfirmVoidSignedDialog: Story = {
   play: async ({ canvas }) => {
     const moreBtn = canvas.getByLabelText('More actions');
     await userEvent.click(moreBtn);
-    const voidMenuItem = await within(document.body).findByText('Void contract');
+    const voidMenuItem = await within(document.body).findByText('Void');
     await userEvent.click(voidMenuItem);
     await expect(within(document.body).getByText('Void signed contract?')).toBeVisible();
   },
