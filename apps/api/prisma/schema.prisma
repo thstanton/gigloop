@@ -31,6 +31,7 @@ enum DocumentType {
   CONTRACT
   INVOICE
   SONG_LIST
+  UPLOAD
 }
 
 enum CommunicationStatus {
@@ -442,6 +443,9 @@ model Document {
   // null for non-CONTRACT documents; set when a signed contract PDF is generated
   contractId String?
   contract   Contract? @relation(fields: [contractId], references: [id], onDelete: SetNull)
+
+  // null for system-generated documents; required for UPLOAD type
+  name String?
 
   @@index([userId])
   @@index([bookingId])

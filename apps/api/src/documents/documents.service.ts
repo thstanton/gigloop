@@ -1,5 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { join, dirname } from 'path';
+import { randomUUID } from 'crypto';
 import { createRequire } from 'module';
 import type { Document } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -247,6 +248,27 @@ export class DocumentsService {
     const doc = await this.repo.findContractForBooking(userId, bookingId);
     if (!doc) return null;
     return { ...doc, url: this.storage.getPublicUrl(doc.storageKey) };
+  }
+
+  async uploadDocument(
+    userId: string,
+    bookingId: string,
+    buffer: Buffer,
+    name: string,
+  ): Promise<DocumentWithUrl> {
+    const documentId = randomUUID();
+    const key = `uploads/${userId}/${bookingId}/${documentId}.pdf`;
+    await this.storage.putObject(key, buffer, 'application/pdf');
+    const doc = await this.repo.create(userId, bookingId, 'UPLOAD', key, undefined, undefined, name);
+    return { ...doc, url: this.storage.getPublicUrl(key) };
+  }
+
+  async deleteDocument(userId: string, id: string): Promise<void> {
+    const doc = await this.repo.findById(id, userId);
+    if (!doc) throw new NotFoundException('Document not found');
+    if (doc.type !== 'UPLOAD') throw new ForbiddenException('System-generated documents cannot be deleted');
+    await this.storage.deleteObject(doc.storageKey);
+    await this.repo.delete(id);
   }
 
   async generateAndStoreSongListPdf(

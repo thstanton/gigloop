@@ -40,6 +40,7 @@ const contractDoc: Document = {
   url: 'https://example.com/contract.pdf',
   invoiceId: null,
   contractStatus: 'SIGNED',
+  name: null,
 };
 
 const noop = () => {};
