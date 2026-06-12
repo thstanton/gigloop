@@ -124,7 +124,7 @@ export function RowActions({ actions, label, sublabel }: Props) {
             </div>
           ) : (
             <>
-              {label && <Separator />}
+              {label && <Separator className="my-3" />}
               <div className="space-y-1">
               {defaultActions.map((action) => (
                 <button
