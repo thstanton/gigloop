@@ -35,7 +35,7 @@ interface BookingDetailMobileProps {
   bookingId: string;
 }
 
-function MobileTabsSkeleton() {
+export function MobileTabsSkeleton() {
   return (
     <div className="animate-pulse">
       {/* Tab bar */}
@@ -253,4 +253,3 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
   );
 }
 
-export { MobileTabsSkeleton };

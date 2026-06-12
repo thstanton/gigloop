@@ -117,16 +117,13 @@ const mockUserProfile: UserProfile = {
 export const Closed: Story = {
   args: {
     bookingId: 'b1',
-    readyDialogStatus: null,
-    celebratoryTitle: '',
-    dismissReadyDialog: () => {},
-    confirmStatusTransition: () => {},
   },
   parameters: {
     msw: {
       handlers: [
         http.get('/api/bookings/b1', () => HttpResponse.json(mockBooking)),
         http.get('/api/bookings/b1/invoices', () => HttpResponse.json([])),
+        http.get('/api/bookings/b1/checklist', () => HttpResponse.json([])),
         http.get('/api/me', () => HttpResponse.json(mockUserProfile)),
       ],
     },

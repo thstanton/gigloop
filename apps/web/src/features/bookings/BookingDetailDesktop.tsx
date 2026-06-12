@@ -74,7 +74,7 @@ export function BookingDetailDesktop({ bookingId }: BookingDetailDesktopProps) {
   }
 
   return (
-    <div className="hidden md:grid md:grid-cols-[3fr_2fr] md:gap-8 md:items-start mt-6">
+    <div className="grid grid-cols-[3fr_2fr] gap-8 items-start mt-6">
 
       {/* ─── Left column top: For the Day + Packages ─── */}
       <div className="space-y-8 md:col-start-1">
