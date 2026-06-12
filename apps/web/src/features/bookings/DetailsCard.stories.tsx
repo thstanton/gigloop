@@ -83,4 +83,8 @@ export const WithCustomFields: Story = {
 
 export const Empty: Story = {
   args: { logistics: null },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Details')).toBeVisible();
+    await expect(canvas.getByText('Add details')).toBeVisible();
+  },
 };

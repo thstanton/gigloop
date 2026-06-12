@@ -1,8 +1,7 @@
 import { useSearchParams } from 'react-router-dom';
-import { Info } from 'lucide-react';
+import { Info, Plus } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { GhostButton } from '@/components/common/GhostButton';
-import { EmptyState } from '@/components/common/EmptyState';
 import { LOGISTICS_FIELD_ICONS, LOGISTICS_FIELD_LABELS } from '@/lib/constants';
 import FormatIcon from './FormatIcon';
 import type { BookingLogisticsEntry } from '@/types/api';
@@ -44,6 +43,23 @@ export default function DetailsCard({ logistics, hideWhenEmpty = false }: Detail
 
   if (hideWhenEmpty && allEntries.length === 0) return null;
 
+  if (allEntries.length === 0) {
+    return (
+      <div className="flex flex-col items-center text-center gap-2 py-4 text-muted min-h-[5rem]">
+        <Info size={20} />
+        <span className="text-sm font-medium">Details</span>
+        <button
+          type="button"
+          onClick={() => setSearchParams({ sheet: 'bookingEdit', section: 'onTheDay' })}
+          className="inline-flex items-center gap-1 text-sm text-primary hover:text-primary/80 transition-colors disabled:opacity-50"
+        >
+          <Plus size={14} />
+          Add details
+        </button>
+      </div>
+    );
+  }
+
   return (
     <Card
       title="Details"
@@ -53,31 +69,22 @@ export default function DetailsCard({ logistics, hideWhenEmpty = false }: Detail
         </GhostButton>
       }
     >
-      {allEntries.length === 0 ? (
-        <EmptyState
-          icon={<Info size={24} />}
-          heading="No details yet"
-          description="Add dress code, performance space, and other logistics."
-          className="py-6"
-        />
-      ) : (
-        <div>
-          {allEntries.map(({ key, label, entry, iconFallback }) => {
-            const iconKey = entry.icon || iconFallback;
-            return (
-              <div key={key} className="py-3 flex items-start gap-2.5 border-b border-border last:border-0">
-                <span className="mt-0.5 text-muted flex-shrink-0">
-                  {iconKey && <FormatIcon icon={iconKey} size={16} />}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-muted">{label}</p>
-                  <p className="text-sm text-foreground">{entry.value}</p>
-                </div>
+      <div>
+        {allEntries.map(({ key, label, entry, iconFallback }) => {
+          const iconKey = entry.icon || iconFallback;
+          return (
+            <div key={key} className="py-3 flex items-start gap-2.5 border-b border-border last:border-0">
+              <span className="mt-0.5 text-muted flex-shrink-0">
+                {iconKey && <FormatIcon icon={iconKey} size={16} />}
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-muted">{label}</p>
+                <p className="text-sm text-foreground">{entry.value}</p>
               </div>
-            );
-          })}
-        </div>
-      )}
+            </div>
+          );
+        })}
+      </div>
     </Card>
   );
 }
