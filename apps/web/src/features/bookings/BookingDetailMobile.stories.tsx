@@ -129,12 +129,14 @@ export const Confirmed: Story = {
         http.get('/api/bookings/b1/communications', () => HttpResponse.json([])),
         http.get('/api/bookings/b1/documents', () => HttpResponse.json([])),
         http.get('/api/bookings/b1/music-form-config', () => HttpResponse.json(null)),
+        http.get('/api/bookings/b1/invoices', () => HttpResponse.json([])),
         http.get('/api/me', () => HttpResponse.json(mockUserProfile)),
+        http.get('/api/series', () => HttpResponse.json([])),
       ],
     },
   },
   play: async ({ canvas }) => {
-    await expect(canvas.getByText('Checklist')).toBeVisible();
+    await expect(await canvas.findByText('Checklist')).toBeVisible();
     await expect(canvas.getByText('On the Day')).toBeVisible();
     await expect(canvas.getByText('Info')).toBeVisible();
   },
