@@ -65,24 +65,25 @@ function convertNode(node: TiptapNode): PdfContent | PdfContent[] | null {
     case 'paragraph': {
       const inlines = node.content ? convertInlines(node.content) : [];
       const text = inlines.length ? inlines : ' ';
-      return { text, margin: [0, 0, 0, 8] };
+      return { text, font: 'Commissioner', margin: [0, 0, 0, 8] };
     }
 
     case 'heading': {
       const level = Number(node.attrs?.level ?? 2);
       const inlines = node.content ? convertInlines(node.content) : [];
-      return { text: inlines, bold: true, fontSize: headingFontSize(level), margin: [0, 12, 0, 6] };
+      return { text: inlines, font: 'Commissioner', bold: true, fontSize: headingFontSize(level), margin: [0, 12, 0, 6] };
     }
 
     case 'bulletList':
-      return { ul: convertListItems(node.content ?? []), margin: [0, 0, 0, 8] };
+      return { ul: convertListItems(node.content ?? []), font: 'Commissioner', margin: [0, 0, 0, 8] };
 
     case 'orderedList':
-      return { ol: convertListItems(node.content ?? []), margin: [0, 0, 0, 8] };
+      return { ol: convertListItems(node.content ?? []), font: 'Commissioner', margin: [0, 0, 0, 8] };
 
     case 'blockquote':
       return {
         text: node.content ? convertInlines(node.content as TiptapNode[]) : '',
+        font: 'Commissioner',
         margin: [16, 0, 0, 8],
         color: '#555555',
       };
