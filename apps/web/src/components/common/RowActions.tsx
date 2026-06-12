@@ -123,9 +123,7 @@ export function RowActions({ actions, label, sublabel }: Props) {
               </div>
             </div>
           ) : (
-            <>
-              {label && <Separator className="my-3" />}
-              <div className="space-y-1">
+            <div className={`space-y-1${label ? ' mt-3' : ''}`}>
               {defaultActions.map((action) => (
                 <button
                   key={action.label}
@@ -154,7 +152,6 @@ export function RowActions({ actions, label, sublabel }: Props) {
                 </>
               )}
             </div>
-            </>
           )}
         </SheetContent>
       </Sheet>
