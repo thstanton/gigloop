@@ -171,7 +171,11 @@ export default function InvoiceSection({ bookingId }: Readonly<InvoiceSectionPro
     });
   }
 
-  const action = (
+  const hasNonVoidDeposit = invoices.some((inv) => inv.isDeposit && inv.status !== 'VOID');
+  const hasNonVoidBalance = invoices.some((inv) => !inv.isDeposit && inv.status !== 'VOID');
+  const canAddInvoice = !hasNonVoidDeposit || !hasNonVoidBalance;
+
+  const action = canAddInvoice ? (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <GhostButton variant="primary" size="xs" icon={<Plus size={12} />}>
@@ -179,11 +183,15 @@ export default function InvoiceSection({ bookingId }: Readonly<InvoiceSectionPro
         </GhostButton>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={newDepositInvoice}>Deposit invoice</DropdownMenuItem>
-        <DropdownMenuItem onClick={newBalanceInvoice}>Balance invoice</DropdownMenuItem>
+        {!hasNonVoidDeposit && (
+          <DropdownMenuItem onClick={newDepositInvoice}>Deposit invoice</DropdownMenuItem>
+        )}
+        {!hasNonVoidBalance && (
+          <DropdownMenuItem onClick={newBalanceInvoice}>Balance invoice</DropdownMenuItem>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
-  );
+  ) : null;
 
   if (isPending) {
     return (

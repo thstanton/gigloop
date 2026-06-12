@@ -5,6 +5,7 @@ import { useBookingActions } from '@/lib/hooks/useBookingActions';
 import { useContractActions } from '@/lib/hooks/useContractActions';
 import { useInvoiceActions } from '@/lib/hooks/useInvoiceActions';
 import { apiGet } from '@/lib/api';
+import { toast } from '@/lib/hooks/use-toast';
 import type { BookingDetail, Contract, Invoice, UserProfile } from '@/types/api';
 
 export function useChecklistActions(bookingId: string) {
@@ -61,6 +62,17 @@ export function useChecklistActions(bookingId: string) {
       return;
     }
     const isDeposit = action === 'create_deposit_invoice';
+    const invoiceType = isDeposit ? 'deposit' : 'balance';
+    const hasInvoiceType = invoices.some((inv) => inv.isDeposit === isDeposit && inv.status !== 'VOID');
+
+    if (hasInvoiceType) {
+      toast({
+        title: `A ${invoiceType} invoice already exists — void it before creating a new one`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
     const fee = booking?.fee ? parseFloat(booking.fee) : null;
     const pct = userProfile?.depositPercentage;
     if (fee && pct) {
