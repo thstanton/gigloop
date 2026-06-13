@@ -50,6 +50,7 @@ jobs:
         if: needs.detect-changes.outputs.api == 'true'
         env:
           DATABASE_URL: postgresql://user:password@localhost/db
+          DIRECT_URL: postgresql://user:password@localhost/db
       - run: cd apps/api && bun run lint
         if: needs.detect-changes.outputs.api == 'true'
       - run: cd apps/web && bun run lint
@@ -79,6 +80,7 @@ jobs:
         if: needs.detect-changes.outputs.api == 'true'
         env:
           DATABASE_URL: postgresql://user:password@localhost/db
+          DIRECT_URL: postgresql://user:password@localhost/db
       - run: cd apps/api && bun run test
         if: needs.detect-changes.outputs.api == 'true'
       - run: cd apps/web && bun run test
@@ -105,6 +107,7 @@ jobs:
         if: needs.detect-changes.outputs.api == 'true'
         env:
           DATABASE_URL: postgresql://user:password@localhost/db
+          DIRECT_URL: postgresql://user:password@localhost/db
       - run: cd apps/api && bun run build
         if: needs.detect-changes.outputs.api == 'true'
       - run: cd apps/web && bun run build
@@ -139,14 +142,17 @@ jobs:
         run: cd apps/api && bunx prisma migrate deploy
         env:
           DATABASE_URL: ${{ steps.neon.outputs.db_url }}
+          DIRECT_URL: ${{ steps.neon.outputs.db_url }}
       - name: Generate Prisma client
         run: cd apps/api && bunx prisma generate
         env:
           DATABASE_URL: ${{ steps.neon.outputs.db_url }}
+          DIRECT_URL: ${{ steps.neon.outputs.db_url }}
       - name: Run integration tests
         run: cd apps/api && bun run test:integration
         env:
           DATABASE_URL: ${{ steps.neon.outputs.db_url }}
+          DIRECT_URL: ${{ steps.neon.outputs.db_url }}
       - name: Delete Neon branch
         if: always()
         uses: neondatabase/delete-branch-action@v3
