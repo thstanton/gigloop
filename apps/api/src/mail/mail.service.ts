@@ -163,7 +163,9 @@ export class MailService {
       html: body,
       attachments: attachments?.map((a) => ({
         filename: a.filename,
-        content: a.content,
+        // Resend API expects base64 string; JSON.stringify(Buffer) produces
+        // {type:'Buffer',data:[...]} which the API silently drops.
+        content: a.content.toString('base64'),
       })),
     });
   }
