@@ -154,7 +154,10 @@ export class MailService {
   async send(options: MailTransportOptions): Promise<void> {
     const { subject, body, attachments } = options;
 
-    await this.resend.emails.send({
+    // Resend SDK v6 never throws — it returns { data, error }. Check explicitly
+    // so that rejected requests (invalid attachment, quota, etc.) surface as
+    // errors rather than silently succeeding and leaving invoices in a bad state.
+    const { error } = await this.resend.emails.send({
       from: process.env.RESEND_FROM ?? 'noreply@gigman.com',
       // TODO: For testing purposes only send emails to my address. When domain is set up this can be changed.
       // to,
@@ -168,5 +171,9 @@ export class MailService {
         content: a.content.toString('base64'),
       })),
     });
+
+    if (error) {
+      throw new Error(`Resend rejected the email: ${error.name} — ${JSON.stringify(error)}`);
+    }
   }
 }
