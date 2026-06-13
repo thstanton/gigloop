@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { CheckCircle2, ClipboardList, Download, Music2, Plus } from 'lucide-react';
+import { ClipboardList, Download, Music2, Plus } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { SubLabel } from '@/components/common/SubLabel';
 import {
@@ -124,12 +124,11 @@ export default function MusicFormSection({
   hideWhenEmpty = false,
 }: Readonly<MusicFormSectionProps>) {
   const [viewingResponse, setViewingResponse] = useState(false);
-  const [fetchResponse, setFetchResponse] = useState(false);
 
   const { data: response = null } = useQuery({
     queryKey: ['booking-music-form-response', booking.id],
     queryFn: () => apiGet<MusicFormResponse>(`/bookings/${booking.id}/music-form-response`),
-    enabled: booking.hasMusicFormResponse && fetchResponse,
+    enabled: booking.hasMusicFormResponse,
   });
   const songListDoc = documents.find((d) => d.type === 'SONG_LIST');
 
@@ -172,41 +171,27 @@ export default function MusicFormSection({
     sectionMap.get(km.section)!.push(km);
   }
 
+  const responseByKey = new Map(
+    (response?.specialRequests ?? []).map((req) => [req.key, req]),
+  );
+
   return (
     <>
       <Card
         title="Music form"
         action={
-          <button type="button" onClick={onEdit} className="text-xs text-primary hover:text-primary/80 transition-colors">
-            Edit
-          </button>
+          booking.hasMusicFormResponse ? (
+            <button type="button" onClick={() => setViewingResponse(true)} className="text-xs text-primary hover:text-primary/80 transition-colors">
+              Preview
+            </button>
+          ) : (
+            <button type="button" onClick={onEdit} className="text-xs text-primary hover:text-primary/80 transition-colors">
+              Edit
+            </button>
+          )
         }
       >
         <div className="space-y-4">
-          {booking.hasMusicFormResponse && (
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => { setFetchResponse(true); setViewingResponse(true); }}
-                className="inline-flex items-center gap-1.5 text-xs font-medium text-status-confirmed bg-status-confirmed/10 rounded-full px-2.5 py-0.5 hover:bg-status-confirmed/20 transition-colors"
-              >
-                <CheckCircle2 size={11} />
-                Response received · View
-              </button>
-              {songListDoc && (
-                <a
-                  href={songListDoc.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors"
-                  aria-label="Download song list PDF"
-                >
-                  <Download size={12} />
-                  Song list
-                </a>
-              )}
-            </div>
-          )}
           {Array.from(sectionMap.entries()).map(([section, moments]) => (
             <div key={section}>
               <div className="flex items-center gap-1.5 text-sm font-medium text-foreground mb-1">
@@ -214,9 +199,22 @@ export default function MusicFormSection({
                 {section}
               </div>
               <div className="space-y-0.5">
-                {moments.map((km) => (
-                  <p key={km.label} className="text-sm text-foreground">{km.label}</p>
-                ))}
+                {moments.map((km) => {
+                  const req = responseByKey.get(km.label);
+                  if (req) {
+                    const artistSuffix = req.song?.artist ? ` — ${req.song.artist}` : '';
+                    const choice = req.song
+                      ? `${req.song.title}${artistSuffix}`
+                      : req.freeText ?? null;
+                    return (
+                      <p key={km.label} className="text-sm text-foreground">
+                        {km.label}{' — '}
+                        {choice ?? <span className="text-muted italic">No selection</span>}
+                      </p>
+                    );
+                  }
+                  return <p key={km.label} className="text-sm text-foreground">{km.label}</p>;
+                })}
               </div>
             </div>
           ))}
