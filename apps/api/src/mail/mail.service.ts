@@ -163,7 +163,9 @@ export class MailService {
       html: body,
       attachments: attachments?.map((a) => ({
         filename: a.filename,
-        content: a.content,
+        // Resend SDK v6 uses JSON.stringify internally; Buffer serialises as
+        // {type:'Buffer',data:[...]} which the API silently drops as invalid.
+        content: a.content.toString('base64'),
       })),
     });
   }

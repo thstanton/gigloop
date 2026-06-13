@@ -473,12 +473,12 @@ describe('MailService', () => {
       await expect(service.send(sendOptions)).rejects.toThrow('Resend error');
     });
 
-    it('passes attachments to Resend when provided', async () => {
+    it('passes attachments to Resend as base64 strings', async () => {
       const content = Buffer.from('pdf');
       await service.send({ ...sendOptions, attachments: [{ filename: 'inv.pdf', content }] });
       const resendInstance = (service as unknown as { resend: { emails: { send: jest.Mock } } }).resend;
       expect(resendInstance.emails.send).toHaveBeenCalledWith(
-        expect.objectContaining({ attachments: [{ filename: 'inv.pdf', content }] }),
+        expect.objectContaining({ attachments: [{ filename: 'inv.pdf', content: content.toString('base64') }] }),
       );
     });
   });
