@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { BookingStatus } from '@prisma/client';
 import { BookingsRepository } from './bookings.repository';
 import { ContractRepository } from './contract.repository';
@@ -59,8 +59,6 @@ function deriveShortcut(
 
 @Injectable()
 export class BookingsService {
-  private readonly logger = new Logger(BookingsService.name);
-
   constructor(
     private repo: BookingsRepository,
     private seriesRepo: SeriesRepository,
@@ -131,11 +129,8 @@ export class BookingsService {
   }
 
   async update(userId: string, id: string, dto: UpdateBookingDto) {
-    this.logger.log('[DEBUG-b7c1] update booking start');
     await this.findOne(userId, id);
-    this.logger.log('[DEBUG-b7c1] update booking repo.update start');
     const updated = await this.repo.update(id, dto);
-    this.logger.log('[DEBUG-b7c1] update booking repo.update done');
     if (dto.date !== undefined) {
       await this.checklistRepo.recomputeChecklistDueDates(id, updated.date, updated.createdAt);
     }
