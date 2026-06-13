@@ -3,7 +3,7 @@ import type { Response, Request } from 'express';
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
-  private readonly logger = new Logger('ExceptionFilter');
+  private readonly logger = new Logger('http');
 
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
@@ -12,22 +12,40 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
-      if (status >= 500) {
-        this.logger.error(`${request.method} ${request.url} → ${status}: ${exception.message}`);
-      }
-      response.status(status).json(exception.getResponse());
+      const body = exception.getResponse();
+      const message = typeof body === 'object' && 'message' in body
+        ? (body as Record<string, unknown>).message
+        : exception.message;
+
+      this.log(status, request, String(message), status >= 500 ? exception.stack : undefined);
+      response.status(status).json(body);
       return;
     }
 
-    // Unhandled non-HTTP exception — always log with full stack
-    this.logger.error(
-      `${request.method} ${request.url} → 500 (unhandled): ${exception instanceof Error ? exception.message : String(exception)}`,
-      exception instanceof Error ? exception.stack : undefined,
-    );
+    const message = exception instanceof Error ? exception.message : String(exception);
+    const stack = exception instanceof Error ? exception.stack : undefined;
+    this.log(HttpStatus.INTERNAL_SERVER_ERROR, request, message, stack);
 
     response.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
       statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
       message: 'Internal Server Error',
     });
+  }
+
+  private log(status: number, request: Request, message: string, stack?: string) {
+    const entry = {
+      level: status >= 500 ? 'error' : 'warn',
+      method: request.method,
+      path: request.path,
+      status,
+      message,
+      ...(stack && process.env.NODE_ENV !== 'production' ? { stack } : {}),
+    };
+
+    if (status >= 500) {
+      this.logger.error(JSON.stringify(entry));
+    } else {
+      this.logger.warn(JSON.stringify(entry));
+    }
   }
 }
