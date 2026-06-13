@@ -82,6 +82,7 @@ export class InvoicesController {
     @Param('id') id: string,
     @Body() dto: SendInvoiceDto,
   ) {
+    process.stdout.write(`[PDF-DEBUG-a4f2] invoices controller send bookingId=${bookingId} id=${id}\n`);
     return this.service.send(req.userId, bookingId, id, dto);
   }
 

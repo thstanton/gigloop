@@ -61,6 +61,7 @@ export class SeriesController {
     @Param('invoiceId') invoiceId: string,
     @Body() dto: SendInvoiceDto,
   ) {
+    process.stdout.write(`[PDF-DEBUG-a4f2] series controller sendInvoice id=${id} invoiceId=${invoiceId}\n`);
     return this.service.sendInvoice(req.userId, id, invoiceId, dto);
   }
 
