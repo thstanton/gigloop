@@ -35,10 +35,16 @@ function filterByStartingStatus(
 ): ChecklistDefaultItem[] {
   const startStage = STATUS_TO_STAGE[startingStatus] ?? null;
   const startIdx = STAGE_ORDER.indexOf(startStage);
-  return items.filter((item) => {
+  const filtered = items.filter((item) => {
     if (item.requiredForStatus === null) return true;
     return STAGE_ORDER.indexOf(item.requiredForStatus) > startIdx;
   });
+
+  const filteredKeys = new Set(filtered.map(i => i.key).filter(Boolean));
+  return filtered.map(item => ({
+    ...item,
+    dependsOn: item.dependsOn.filter(dep => filteredKeys.has(dep)),
+  }));
 }
 
 interface Props {

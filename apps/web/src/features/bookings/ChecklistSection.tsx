@@ -73,7 +73,7 @@ function ChecklistItemIcon({ state, isPlayTheGig, itemId, onToggle }: Readonly<C
     return (
       <button
         onClick={() => onToggle(itemId, 'PENDING')}
-        className={cn('flex-shrink-0 transition-colors', isPlayTheGig ? 'text-status-ready hover:text-status-ready/70' : 'text-status-confirmed hover:text-status-confirmed/70')}
+        className={cn('flex-shrink-0 p-2 -m-2 transition-colors', isPlayTheGig ? 'text-status-ready hover:text-status-ready/70' : 'text-status-confirmed hover:text-status-confirmed/70')}
         aria-label="Mark as incomplete"
       >
         {isPlayTheGig ? <Sparkles size={16} /> : <CheckCircle2 size={16} />}
@@ -82,7 +82,7 @@ function ChecklistItemIcon({ state, isPlayTheGig, itemId, onToggle }: Readonly<C
   }
   if (state === 'FAILED') {
     return (
-      <button onClick={() => onToggle(itemId, 'PENDING')} className="flex-shrink-0 text-status-cancelled hover:text-status-cancelled/70 transition-colors" aria-label="Retry">
+      <button onClick={() => onToggle(itemId, 'PENDING')} className={cn('flex-shrink-0 p-2 -m-2 transition-colors', 'text-status-cancelled hover:text-status-cancelled/70')} aria-label="Retry">
         <AlertTriangle size={16} />
       </button>
     );
@@ -96,7 +96,7 @@ function ChecklistItemIcon({ state, isPlayTheGig, itemId, onToggle }: Readonly<C
         if (isPlayTheGig) confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
         onToggle(itemId, 'COMPLETE');
       }}
-      className={cn('flex-shrink-0 transition-colors', isPlayTheGig ? 'text-muted hover:text-status-ready' : 'text-muted hover:text-status-confirmed')}
+      className={cn('flex-shrink-0 p-2 -m-2 transition-colors', isPlayTheGig ? 'text-muted hover:text-status-ready' : 'text-muted hover:text-status-confirmed')}
       aria-label="Mark as complete"
     >
       {isPlayTheGig ? <Sparkles size={16} /> : <Circle size={16} />}
