@@ -6,10 +6,10 @@ export function getInvoiceIdForTemplate(
   invoices: Invoice[],
 ): string | undefined {
   if (type === 'deposit_invoice_cover' || type === 'contract_and_deposit_cover') {
-    return invoices.find((i) => i.isDeposit)?.id;
+    return invoices.find((i) => i.isDeposit && i.status !== 'VOID')?.id;
   }
   if (type === 'balance_invoice_cover') {
-    return invoices.find((i) => !i.isDeposit)?.id;
+    return invoices.find((i) => !i.isDeposit && i.status !== 'VOID')?.id;
   }
   return undefined;
 }
