@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PortalRepository } from './portal.repository';
 import { PublicProfileRepository } from '../user-profile/public-profile.repository';
 import { SongsRepository } from '../songs/songs.repository';
@@ -141,6 +141,8 @@ function buildBookingSummary(
 
 @Injectable()
 export class PortalService {
+  private readonly logger = new Logger(PortalService.name);
+
   constructor(
     private repo: PortalRepository,
     private publicProfileRepo: PublicProfileRepository,
@@ -272,13 +274,16 @@ export class PortalService {
   }
 
   async submitMusicForm(token: string, dto: SubmitMusicFormDto) {
+    this.logger.log('[DEBUG-b7c1] submitMusicForm start');
     const data = await this.repo.findMusicFormDataByToken(token);
     if (!data) throw new NotFoundException('Booking not found');
     if (!data.musicFormConfig) throw new NotFoundException('Music form not found');
 
+    this.logger.log('[DEBUG-b7c1] assertSongIdsOwned start');
     await this.assertSongIdsOwned(data.userId, dto);
 
     const submittedAt = new Date();
+    this.logger.log('[DEBUG-b7c1] upsertMusicFormResponse start');
     await this.musicFormRepo.upsertMusicFormResponse(
       data.id,
       data.userId,
@@ -286,6 +291,7 @@ export class PortalService {
       dto.specialRequests,
       dto.notes,
     );
+    this.logger.log('[DEBUG-b7c1] upsertMusicFormResponse done');
 
     await this.evaluator.evaluate(data.id).catch(() => {});
 
