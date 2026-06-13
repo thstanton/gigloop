@@ -133,13 +133,17 @@ export class SeriesService {
   }
 
   async sendInvoice(userId: string, seriesId: string, invoiceId: string, dto: SendInvoiceDto) {
+    process.stdout.write(`[PDF-DEBUG-a4f2] series.sendInvoice START invoiceId=${invoiceId}\n`);
     const invoice = await this.repo.findSeriesInvoiceById(userId, seriesId, invoiceId);
     if (!invoice) throw new NotFoundException('Invoice not found');
     if (invoice.status !== 'DRAFT') throw new BadRequestException('Only draft invoices can be sent');
 
     const sentInvoice = await this.assignSeriesInvoiceNumber(userId, seriesId, invoiceId, dto);
+    process.stdout.write(`[PDF-DEBUG-a4f2] assignSeriesInvoiceNumber OK invoiceNumber=${sentInvoice.invoiceNumber}\n`);
 
     const pdfBuffer = await this.documents.generatePreviewPdf(userId, invoiceId);
+    process.stdout.write(`[PDF-DEBUG-a4f2] generatePreviewPdf OK bufferLength=${pdfBuffer?.length} isBuffer=${Buffer.isBuffer(pdfBuffer)}\n`);
+
     await this.comms.sendEmail({
       userId,
       contactId: dto.contactId,
@@ -149,6 +153,7 @@ export class SeriesService {
       templateId: dto.templateId,
       attachments: [{ filename: `${sentInvoice.invoiceNumber ?? 'invoice'}.pdf`, content: pdfBuffer }],
     });
+    process.stdout.write(`[PDF-DEBUG-a4f2] sendEmail OK\n`);
   }
 
   async markSentInvoice(userId: string, seriesId: string, invoiceId: string, dto: MarkSentDto) {
