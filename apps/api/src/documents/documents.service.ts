@@ -167,6 +167,9 @@ export class DocumentsService {
     const buffer = await this.generatePdfBuffer(data);
     const key = `invoices/${userId}/${bookingId}/${invoiceId}.pdf`;
     await this.storage.putObject(key, buffer, 'application/pdf');
+    // Replace any existing document record (idempotent on retry)
+    const existing = await this.repo.findByInvoice(userId, invoiceId);
+    if (existing) await this.repo.delete(existing.id);
     await this.repo.create(userId, bookingId, 'INVOICE', key, invoiceId);
     return { buffer };
   }

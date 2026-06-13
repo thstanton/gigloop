@@ -143,6 +143,64 @@ export class InvoicesRepository {
     });
   }
 
+  async assignInvoiceNumberOnly(
+    userId: string,
+    params: { id: string; bookingId: string; isDeposit: boolean; issueDate: Date; dueDate: Date | null },
+  ) {
+    const { id, bookingId, isDeposit, issueDate, dueDate } = params;
+
+    // Idempotent on retry: if number already assigned on a previous failed attempt, skip allocation
+    const existing = await this.prisma.invoice.findUnique({ where: { id }, select: { invoiceNumber: true } });
+    if (existing?.invoiceNumber) {
+      return this.prisma.invoice.update({
+        where: { id },
+        data: { issueDate, dueDate },
+        include: invoiceIncludes,
+      });
+    }
+
+    const currentYear = new Date().getFullYear();
+    return this.prisma.$transaction(async (tx) => {
+      const voided = await tx.invoice.findFirst({
+        where: { bookingId, userId, isDeposit, status: 'VOID', invoiceNumber: { not: null } },
+        select: { invoiceNumber: true },
+      });
+
+      const profile = await tx.userProfile.findUnique({ where: { userId } });
+      if (!profile) throw new NotFoundException('User profile not found');
+
+      const prefs = (profile.preferences as Record<string, unknown>) ?? {};
+      const { invoiceNumber, nextSeq, nextYear } = allocate(
+        prefs,
+        currentYear,
+        profile.invoiceNumberSequence,
+        profile.invoiceSequenceYear,
+        voided?.invoiceNumber,
+      );
+
+      if (nextSeq !== profile.invoiceNumberSequence) {
+        await tx.userProfile.update({
+          where: { userId },
+          data: { invoiceNumberSequence: nextSeq, invoiceSequenceYear: nextYear },
+        });
+      }
+
+      return tx.invoice.update({
+        where: { id },
+        data: { invoiceNumber, issueDate, dueDate },
+        include: invoiceIncludes,
+      });
+    });
+  }
+
+  markSentById(id: string) {
+    return this.prisma.invoice.update({
+      where: { id },
+      data: { status: 'SENT' },
+      include: invoiceIncludes,
+    });
+  }
+
   assignWithInheritedNumber(id: string, invoiceNumber: string, issueDate: Date, dueDate: Date | null) {
     return this.prisma.invoice.update({
       where: { id },
