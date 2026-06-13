@@ -29,11 +29,6 @@ export default function MusicFormEditor({
     enabled: isLoaded && booking.hasMusicFormConfig,
   });
 
-  // Reset when drawer re-opens
-  useEffect(() => {
-    if (isOpen) setInitialized(false);
-  }, [isOpen]);
-
   // Initialize local state from fetched config (or seed from packages for first-time setup)
   useEffect(() => {
     if (initialized) return;
@@ -90,10 +85,24 @@ export default function MusicFormEditor({
   const remove = useMutation({
     mutationFn: () => apiDelete(`/bookings/${booking.id}/music-form-config`),
     onSuccess: () => {
+      setConfirmRemove(false);
       queryClient.invalidateQueries({ queryKey: ['booking-music-form-config', booking.id] });
       queryClient.invalidateQueries({ queryKey: ['booking', booking.id] });
     },
   });
+
+  const { reset: saveReset } = save;
+  const { reset: removeReset } = remove;
+
+  // Reset when drawer re-opens
+  useEffect(() => {
+    if (isOpen) {
+      setInitialized(false);
+      setConfirmRemove(false);
+      saveReset();
+      removeReset();
+    }
+  }, [isOpen, saveReset, removeReset]);
 
   if (booking.hasMusicFormConfig && (isLoading || !initialized)) {
     return (
