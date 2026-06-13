@@ -89,8 +89,7 @@ const mockTemplate: Template = {
   updatedAt: '2026-01-01T00:00:00Z',
   name: 'Confirmation',
   builtInType: 'confirmation',
-  subject: 'Booking confirmed',
-  body: {},
+  content: {},
 };
 
 const mockRenderResult = {
