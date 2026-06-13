@@ -91,16 +91,16 @@ describe('PortalService.signContract (integration)', () => {
     markContractSignedMock = jest.fn().mockResolvedValue({ id: contractId, status: 'SIGNED' });
 
     service = new PortalService(
-      { findBookingByToken: jest.fn().mockResolvedValue(booking) } as any,
-      { findByUserId: jest.fn().mockResolvedValue(publicProfile) } as any,
-      {} as any,
-      { findDepositInvoice: jest.fn().mockResolvedValue(null) } as any,
-      { buildContext: jest.fn().mockResolvedValue(emailContext), send: jest.fn().mockResolvedValue(undefined) } as any,
+      { findBookingByToken: jest.fn().mockResolvedValue(booking) } as unknown as import('./portal.repository').PortalRepository,
+      { findByUserId: jest.fn().mockResolvedValue(publicProfile) } as unknown as import('../user-profile/public-profile.repository').PublicProfileRepository,
+      {} as unknown as import('../songs/songs.repository').SongsRepository,
+      { findDepositInvoice: jest.fn().mockResolvedValue(null) } as unknown as import('../invoices/invoices.repository').InvoicesRepository,
+      { buildContext: jest.fn().mockResolvedValue(emailContext), send: jest.fn().mockResolvedValue(undefined) } as unknown as import('../mail/mail.service').MailService,
       documents,
-      { getPublicUrl: jest.fn() } as any,
-      { evaluate: jest.fn().mockResolvedValue(undefined) } as any,
-      { markContractSigned: markContractSignedMock } as any,
-      {} as any,
+      { getPublicUrl: jest.fn() } as unknown as StorageService,
+      { evaluate: jest.fn().mockResolvedValue(undefined) } as unknown as import('../checklist/checklist-evaluator.service').ChecklistEvaluatorService,
+      { markContractSigned: markContractSignedMock } as unknown as import('../bookings/contract.repository').ContractRepository,
+      {} as unknown as import('../bookings/music-form-config.repository').MusicFormConfigRepository,
     );
   });
 
@@ -155,22 +155,22 @@ describe('PortalService.submitMusicForm (integration)', () => {
     const documents = makeDocumentsService(putObjectMock);
 
     service = new PortalService(
-      { findMusicFormDataByToken: jest.fn().mockResolvedValue(bookingData) } as any,
-      { findByUserId: jest.fn().mockResolvedValue(publicProfile) } as any,
+      { findMusicFormDataByToken: jest.fn().mockResolvedValue(bookingData) } as unknown as import('./portal.repository').PortalRepository,
+      { findByUserId: jest.fn().mockResolvedValue(publicProfile) } as unknown as import('../user-profile/public-profile.repository').PublicProfileRepository,
       {
         findByIds: jest.fn().mockResolvedValue([song]),
         findAll: jest.fn().mockResolvedValue([song]),
-      } as any,
-      {} as any,
-      { send: jest.fn().mockResolvedValue(undefined) } as any,
+      } as unknown as import('../songs/songs.repository').SongsRepository,
+      {} as unknown as import('../invoices/invoices.repository').InvoicesRepository,
+      { send: jest.fn().mockResolvedValue(undefined) } as unknown as import('../mail/mail.service').MailService,
       documents,
-      { getPublicUrl: jest.fn() } as any,
-      { evaluate: jest.fn().mockResolvedValue(undefined) } as any,
-      {} as any,
+      { getPublicUrl: jest.fn() } as unknown as StorageService,
+      { evaluate: jest.fn().mockResolvedValue(undefined) } as unknown as import('../checklist/checklist-evaluator.service').ChecklistEvaluatorService,
+      {} as unknown as import('../bookings/contract.repository').ContractRepository,
       {
         upsertMusicFormResponse: jest.fn().mockResolvedValue(undefined),
         findBookingForSongList: jest.fn().mockResolvedValue(bookingForSongList),
-      } as any,
+      } as unknown as import('../bookings/music-form-config.repository').MusicFormConfigRepository,
     );
   });
 

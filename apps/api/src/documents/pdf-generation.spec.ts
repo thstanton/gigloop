@@ -74,7 +74,7 @@ describe('PDF generation', () => {
     const buffer: Buffer = await pdfmake.createPdf(docDef).getBuffer();
     expect(Buffer.isBuffer(buffer)).toBe(true);
     expect(buffer.length).toBeGreaterThan(0);
-    expect(buffer.slice(0, 4).toString()).toBe('%PDF');
+    expect(buffer.subarray(0, 4).toString()).toBe('%PDF');
   });
 
   it('generates song list PDF using Commissioner + Caveat fonts', async () => {
@@ -82,7 +82,7 @@ describe('PDF generation', () => {
     const buffer: Buffer = await pdfmake.createPdf(docDef).getBuffer();
     expect(Buffer.isBuffer(buffer)).toBe(true);
     expect(buffer.length).toBeGreaterThan(0);
-    expect(buffer.slice(0, 4).toString()).toBe('%PDF');
+    expect(buffer.subarray(0, 4).toString()).toBe('%PDF');
   });
 
   it('generates deposit invoice PDF', async () => {
@@ -93,6 +93,6 @@ describe('PDF generation', () => {
     };
     const docDef = buildInvoiceDefinition(depositData);
     const buffer: Buffer = await pdfmake.createPdf(docDef).getBuffer();
-    expect(buffer.slice(0, 4).toString()).toBe('%PDF');
+    expect(buffer.subarray(0, 4).toString()).toBe('%PDF');
   });
 });

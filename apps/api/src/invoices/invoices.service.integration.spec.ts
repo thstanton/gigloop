@@ -3,6 +3,7 @@
  * Verifies the full PDF generation path so font load failures are caught here, not in prod.
  */
 import { InvoicesService } from './invoices.service';
+import { InvoicesRepository } from './invoices.repository';
 import { DocumentsService } from '../documents/documents.service';
 import { StorageService } from '../storage/storage.service';
 import { DocumentsRepository } from '../documents/documents.repository';
@@ -67,7 +68,7 @@ describe('InvoicesService.send (integration)', () => {
     const documents = new DocumentsService(mockPrisma, mockDocsRepo, mockStorage);
 
     sendEmailMock = jest.fn().mockResolvedValue(undefined);
-    const mockComms = { sendEmail: sendEmailMock } as any;
+    const mockComms = { sendEmail: sendEmailMock } as unknown as import('../communications/communications.service').CommunicationsService;
 
     const mockRepo = {
       findOne: jest.fn().mockResolvedValue({ ...numberedInvoice, status: 'DRAFT', invoiceNumber: null }),
@@ -75,11 +76,11 @@ describe('InvoicesService.send (integration)', () => {
       markSentById: jest.fn().mockResolvedValue({ ...numberedInvoice, status: 'SENT' }),
     };
 
-    const mockEvaluator = { evaluate: jest.fn().mockResolvedValue(undefined) } as any;
-    const mockChecklistRepo = { resetItemByKey: jest.fn() } as any;
+    const mockEvaluator = { evaluate: jest.fn().mockResolvedValue(undefined) } as unknown as import('../checklist/checklist-evaluator.service').ChecklistEvaluatorService;
+    const mockChecklistRepo = { resetItemByKey: jest.fn() } as unknown as import('../checklist/checklist.repository').ChecklistRepository;
 
     service = new InvoicesService(
-      mockRepo as any,
+      mockRepo as unknown as InvoicesRepository,
       mockComms,
       documents,
       mockEvaluator,
