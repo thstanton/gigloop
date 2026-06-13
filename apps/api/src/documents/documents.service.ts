@@ -1,5 +1,6 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { join, dirname } from 'path';
+import { existsSync } from 'fs';
 import { randomUUID } from 'crypto';
 import { createRequire } from 'module';
 import type { Document } from '@prisma/client';
@@ -40,6 +41,19 @@ pdfmake.addFonts({
 });
 pdfmake.setLocalAccessPolicy(() => true);
 pdfmake.setUrlAccessPolicy(() => true);
+
+// Fail fast at startup if custom fonts are missing (e.g. not copied to dist/ after build).
+// Without this check, missing fonts cause opaque 500s on the first PDF request.
+const requiredFonts = [
+  join(customFontsDir, 'Commissioner-Regular.ttf'),
+  join(customFontsDir, 'Commissioner-Medium.ttf'),
+  join(customFontsDir, 'Caveat-Regular.ttf'),
+];
+for (const font of requiredFonts) {
+  if (!existsSync(font)) {
+    throw new Error(`Required PDF font missing: ${font} — run 'nest build' to copy fonts to dist/`);
+  }
+}
 
 async function fetchAsDataUrl(url: string): Promise<string> {
   const res = await fetch(url);
