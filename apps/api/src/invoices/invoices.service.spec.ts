@@ -19,6 +19,8 @@ type MockRepo = {
   update: jest.Mock;
   delete: jest.Mock;
   assignAndMarkSent: jest.Mock;
+  assignInvoiceNumberOnly: jest.Mock;
+  markSentById: jest.Mock;
   markPaid: jest.Mock;
   voidInvoice: jest.Mock;
   countActiveByType: jest.Mock;
@@ -38,6 +40,8 @@ function makeRepo(): MockRepo {
     update: jest.fn(),
     delete: jest.fn(),
     assignAndMarkSent: jest.fn(),
+    assignInvoiceNumberOnly: jest.fn(),
+    markSentById: jest.fn(),
     markPaid: jest.fn(),
     voidInvoice: jest.fn(),
     countActiveByType: jest.fn(),
@@ -275,7 +279,8 @@ describe('InvoicesService', () => {
   });
 
   describe('send', () => {
-    const sentInvoice = { ...invoice, status: 'SENT', invoiceNumber: 'INV-2026-001', issueDate: new Date('2026-05-26'), dueDate: new Date('2026-06-09') };
+    const numberedInvoice = { ...invoice, invoiceNumber: 'INV-2026-001', issueDate: new Date('2026-05-26'), dueDate: new Date('2026-06-09') };
+    const sentInvoice = { ...numberedInvoice, status: 'SENT' };
     const pdfBuffer = Buffer.from('pdf');
     const dto = {
       issueDate: '2026-05-26',
@@ -288,7 +293,8 @@ describe('InvoicesService', () => {
 
     beforeEach(() => {
       repo.findOne.mockResolvedValue(invoice);
-      repo.assignAndMarkSent.mockResolvedValue(sentInvoice);
+      repo.assignInvoiceNumberOnly.mockResolvedValue(numberedInvoice);
+      repo.markSentById.mockResolvedValue(sentInvoice);
       mockDocuments.generateAndStoreInvoicePdf.mockResolvedValue({ buffer: pdfBuffer });
       (mockComms.sendEmail as jest.Mock).mockResolvedValue(undefined);
     });
@@ -296,36 +302,36 @@ describe('InvoicesService', () => {
     it('throws NotFoundException when invoice is not found', async () => {
       repo.findOne.mockResolvedValue(null);
       await expect(service.send('u1', 'b1', 'missing', dto)).rejects.toThrow(NotFoundException);
-      expect(repo.assignAndMarkSent).not.toHaveBeenCalled();
+      expect(repo.assignInvoiceNumberOnly).not.toHaveBeenCalled();
     });
 
     it('throws BadRequestException when invoice is not DRAFT', async () => {
       repo.findOne.mockResolvedValue({ ...invoice, status: 'SENT' });
       await expect(service.send('u1', 'b1', 'i1', dto)).rejects.toThrow(BadRequestException);
-      expect(repo.assignAndMarkSent).not.toHaveBeenCalled();
+      expect(repo.assignInvoiceNumberOnly).not.toHaveBeenCalled();
     });
 
-    it('calls assignAndMarkSent with bookingId, isDeposit, parsed issueDate and dueDate', async () => {
+    it('calls assignInvoiceNumberOnly with bookingId, isDeposit, parsed issueDate and dueDate', async () => {
       await service.send('u1', 'b1', 'i1', dto);
-      expect(repo.assignAndMarkSent).toHaveBeenCalledWith('u1', {
+      expect(repo.assignInvoiceNumberOnly).toHaveBeenCalledWith('u1', {
         id: 'i1', bookingId: 'b1', isDeposit: false, issueDate: new Date('2026-05-26'), dueDate: new Date('2026-06-09'),
       });
     });
 
-    it('calls assignAndMarkSent with null dueDate when not provided', async () => {
+    it('calls assignInvoiceNumberOnly with null dueDate when not provided', async () => {
       await service.send('u1', 'b1', 'i1', { ...dto, dueDate: undefined });
-      expect(repo.assignAndMarkSent).toHaveBeenCalledWith('u1', expect.objectContaining({ dueDate: null }));
+      expect(repo.assignInvoiceNumberOnly).toHaveBeenCalledWith('u1', expect.objectContaining({ dueDate: null }));
     });
 
-    it('passes isDeposit: true to assignAndMarkSent for deposit invoices', async () => {
+    it('passes isDeposit: true to assignInvoiceNumberOnly for deposit invoices', async () => {
       repo.findOne.mockResolvedValue({ ...invoice, isDeposit: true });
       await service.send('u1', 'b1', 'i1', dto);
-      expect(repo.assignAndMarkSent).toHaveBeenCalledWith('u1', expect.objectContaining({ isDeposit: true }));
+      expect(repo.assignInvoiceNumberOnly).toHaveBeenCalledWith('u1', expect.objectContaining({ isDeposit: true }));
     });
 
-    it('calls generateAndStoreInvoicePdf with the sentInvoice to avoid a redundant DB fetch', async () => {
+    it('calls generateAndStoreInvoicePdf with the numbered invoice to avoid a redundant DB fetch', async () => {
       await service.send('u1', 'b1', 'i1', dto);
-      expect(mockDocuments.generateAndStoreInvoicePdf).toHaveBeenCalledWith('u1', 'b1', sentInvoice.id, sentInvoice);
+      expect(mockDocuments.generateAndStoreInvoicePdf).toHaveBeenCalledWith('u1', 'b1', numberedInvoice.id, numberedInvoice);
     });
 
     it('sends email with PDF attachment named after the invoice number', async () => {
@@ -336,6 +342,17 @@ describe('InvoicesService', () => {
         subject: dto.subject,
         body: dto.body,
       }));
+    });
+
+    it('calls markSentById after email succeeds', async () => {
+      await service.send('u1', 'b1', 'i1', dto);
+      expect(repo.markSentById).toHaveBeenCalledWith('i1');
+    });
+
+    it('does not call markSentById when PDF generation fails — invoice stays DRAFT', async () => {
+      mockDocuments.generateAndStoreInvoicePdf.mockRejectedValue(new Error('font not found'));
+      await expect(service.send('u1', 'b1', 'i1', dto)).rejects.toThrow('font not found');
+      expect(repo.markSentById).not.toHaveBeenCalled();
     });
   });
 

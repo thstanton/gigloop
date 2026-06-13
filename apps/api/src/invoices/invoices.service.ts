@@ -71,11 +71,12 @@ export class InvoicesService {
     const issueDate = new Date(dto.issueDate);
     const dueDate = dto.dueDate ? new Date(dto.dueDate) : null;
 
-    const sentInvoice = await this.repo.assignAndMarkSent(userId, { id, bookingId, isDeposit: invoice.isDeposit, issueDate, dueDate });
+    // Assign invoice number first (stays DRAFT — idempotent on retry if PDF later fails)
+    const numbered = await this.repo.assignInvoiceNumberOnly(userId, { id, bookingId, isDeposit: invoice.isDeposit, issueDate, dueDate });
 
-    const { buffer: pdfBuffer } = await this.documents.generateAndStoreInvoicePdf(userId, bookingId, sentInvoice.id, sentInvoice);
+    const { buffer: pdfBuffer } = await this.documents.generateAndStoreInvoicePdf(userId, bookingId, numbered.id, numbered);
 
-    const filename = `${sentInvoice.invoiceNumber ?? 'invoice'}.pdf`;
+    const filename = `${numbered.invoiceNumber ?? 'invoice'}.pdf`;
 
     await this.comms.sendEmail({
       userId,
@@ -87,6 +88,9 @@ export class InvoicesService {
       templateId: dto.templateId,
       attachments: [{ filename, content: pdfBuffer }],
     });
+
+    // Mark SENT only after PDF + email both succeed
+    await this.repo.markSentById(id);
   }
 
   async generatePreviewPdf(userId: string, bookingId: string, id: string): Promise<Buffer> {
