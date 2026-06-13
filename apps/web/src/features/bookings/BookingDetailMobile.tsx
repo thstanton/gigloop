@@ -140,6 +140,15 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
             bookingId={bookingId}
             contactHref={`/admin/contacts/${booking.venue?.id ?? ''}`}
           />
+          <MusicFormSection
+            booking={booking}
+            documents={documents}
+            config={musicFormConfig ?? null}
+            isLoading={musicFormConfigLoading}
+            onUpdateConfig={() => editSection('musicForm')}
+            onEdit={() => editSection('musicForm')}
+            hideWhenEmpty
+          />
           <InlineNotes
             notes={booking.notes}
             onSave={(notes) => fields.updateNotes(notes)}
@@ -225,24 +234,10 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
 
           <DocumentsCard bookingId={bookingId} />
 
-          <section>
-            <SectionHeader label="Packages" />
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <PerformanceSection
-                booking={booking}
-                hideWhenEmpty
-              />
-              <MusicFormSection
-                booking={booking}
-                documents={documents}
-                config={musicFormConfig ?? null}
-                isLoading={musicFormConfigLoading}
-                onUpdateConfig={() => editSection('musicForm')}
-                onEdit={() => editSection('musicForm')}
-                hideWhenEmpty
-              />
-            </div>
-          </section>
+          <PerformanceSection
+            booking={booking}
+            hideWhenEmpty
+          />
 
           <CommunicationsSection
             communications={communications}
