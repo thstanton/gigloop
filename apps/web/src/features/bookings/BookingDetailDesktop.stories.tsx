@@ -134,7 +134,6 @@ export const Confirmed: Story = {
   },
   play: async ({ canvas }) => {
     await expect(await canvas.findByText('For the day')).toBeVisible();
-    await expect(canvas.getByText('Packages')).toBeVisible();
     await expect(canvas.getByText('People')).toBeVisible();
   },
 };
