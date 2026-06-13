@@ -73,8 +73,10 @@ export class InvoicesService {
 
     // Assign invoice number first (stays DRAFT — idempotent on retry if PDF later fails)
     const numbered = await this.repo.assignInvoiceNumberOnly(userId, { id, bookingId, isDeposit: invoice.isDeposit, issueDate, dueDate });
+    console.error(`[PDF-DEBUG-a4f2] assignInvoiceNumberOnly OK invoiceNumber=${numbered.invoiceNumber}`);
 
     const { buffer: pdfBuffer } = await this.documents.generateAndStoreInvoicePdf(userId, bookingId, numbered.id, numbered);
+    console.error(`[PDF-DEBUG-a4f2] generateAndStoreInvoicePdf returned bufferLength=${pdfBuffer?.length}`);
 
     const filename = `${numbered.invoiceNumber ?? 'invoice'}.pdf`;
 

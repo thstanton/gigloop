@@ -177,14 +177,20 @@ export class DocumentsService {
     invoiceId: string,
     preloaded?: PreloadedInvoice,
   ): Promise<{ buffer: Buffer }> {
+    console.error(`[PDF-DEBUG-a4f2] generateAndStoreInvoicePdf START invoiceId=${invoiceId}`);
     const data = await this.buildInvoicePdfData(userId, invoiceId, preloaded);
+    console.error(`[PDF-DEBUG-a4f2] buildInvoicePdfData OK invoiceNumber=${data.invoiceNumber}`);
     const buffer = await this.generatePdfBuffer(data);
+    console.error(`[PDF-DEBUG-a4f2] generatePdfBuffer OK bufferLength=${buffer?.length}`);
     const key = `invoices/${userId}/${bookingId}/${invoiceId}.pdf`;
     await this.storage.putObject(key, buffer, 'application/pdf');
+    console.error(`[PDF-DEBUG-a4f2] putObject OK key=${key}`);
     // Replace any existing document record (idempotent on retry)
     const existing = await this.repo.findByInvoice(userId, invoiceId);
+    console.error(`[PDF-DEBUG-a4f2] findByInvoice existingId=${existing?.id ?? 'null'}`);
     if (existing) await this.repo.delete(existing.id);
     await this.repo.create(userId, bookingId, 'INVOICE', key, invoiceId);
+    console.error(`[PDF-DEBUG-a4f2] repo.create OK — returning buffer`);
     return { buffer };
   }
 
