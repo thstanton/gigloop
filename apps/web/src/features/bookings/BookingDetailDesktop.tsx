@@ -96,24 +96,15 @@ export function BookingDetailDesktop({ bookingId }: BookingDetailDesktopProps) {
             contactHref={`/admin/contacts/${booking.venue?.id ?? ''}`}
           />
           {!booking.venue && <InlineVenueAdd bookingId={booking.id} />}
-        </section>
-
-        {/* Packages */}
-        <section>
-          <SectionHeader label="Packages" />
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <PerformanceSection
-              booking={booking}
-            />
-            <MusicFormSection
-              booking={booking}
-              documents={documents}
-              config={musicFormConfig ?? null}
-              isLoading={musicFormConfigLoading}
-              onUpdateConfig={() => editSection('musicForm')}
-              onEdit={() => editSection('musicForm')}
-            />
-          </div>
+          <MusicFormSection
+            booking={booking}
+            documents={documents}
+            config={musicFormConfig ?? null}
+            isLoading={musicFormConfigLoading}
+            onUpdateConfig={() => editSection('musicForm')}
+            onEdit={() => editSection('musicForm')}
+            hideWhenEmpty
+          />
         </section>
 
       </div>
@@ -199,6 +190,11 @@ export function BookingDetailDesktop({ bookingId }: BookingDetailDesktopProps) {
 
         {/* Documents */}
         <DocumentsCard bookingId={bookingId} />
+
+        <PerformanceSection
+          booking={booking}
+          hideWhenEmpty
+        />
 
       </div>{/* end right column */}
 

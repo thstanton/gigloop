@@ -1,7 +1,8 @@
 import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect } from 'storybook/test';
+import { expect, userEvent, within } from 'storybook/test';
 import { MemoryRouter } from 'react-router-dom';
+import { http, HttpResponse } from 'msw';
 import MusicFormSection from './MusicFormSection';
 import type { BookingDetail, MusicFormConfig } from '@/types/api';
 
@@ -78,8 +79,49 @@ export const ResponseReceived: Story = {
     booking: { ...baseBooking, hasMusicFormConfig: true, hasMusicFormResponse: true },
     config,
   },
+  parameters: {
+    msw: {
+      handlers: [
+        http.get('/api/bookings/b1/music-form-response', () =>
+          HttpResponse.json({ selectedSongs: [], specialRequests: [], notes: null, submittedAt: '2030-08-01T12:00:00Z' }),
+        ),
+      ],
+    },
+  },
   play: async ({ canvas }) => {
-    await expect(canvas.getByText(/Response received/)).toBeVisible();
+    await expect(canvas.getByRole('button', { name: 'Preview' })).toBeVisible();
+  },
+};
+
+export const WithResponse: Story = {
+  args: {
+    booking: { ...baseBooking, hasMusicFormConfig: true, hasMusicFormResponse: true },
+    config,
+  },
+  parameters: {
+    msw: {
+      handlers: [
+        http.get('/api/bookings/b1/music-form-response', () =>
+          HttpResponse.json({
+            selectedSongs: [],
+            specialRequests: [
+              { key: 'First dance', song: { id: 's1', title: 'At Last', artist: 'Etta James', genre: 'JAZZ' }, freeText: null },
+              { key: 'Bridal walk-in', song: null, freeText: 'Something classical' },
+            ],
+            notes: null,
+            submittedAt: '2030-08-01T12:00:00Z',
+          }),
+        ),
+      ],
+    },
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.findByText(/At Last/)).resolves.toBeVisible();
+    await expect(canvas.findByText(/Something classical/)).resolves.toBeVisible();
+    await expect(canvas.getByRole('button', { name: 'Preview' })).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: 'Preview' }));
+    const sheet = within(document.body);
+    await expect(sheet.findByText('Song requests')).resolves.toBeVisible();
   },
 };
 
