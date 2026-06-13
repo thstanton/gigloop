@@ -147,7 +147,7 @@ export default function BookingNewPage() {
       <ChecklistStep
         defaults={checklistDefaults}
         startingStatus={pendingValues.status as BookingStatus}
-        onBack={() => setStep(1)}
+        onBack={() => { mutation.reset(); setStep(1); }}
         onCreate={(checklistItems) => mutation.mutate({ values: pendingValues, checklistItems })}
         isCreating={mutation.isPending}
         isError={mutation.isError}
