@@ -12,7 +12,7 @@ interface PageHeaderProps {
 }
 
 export function PageHeader({ title, subheading, backHref, backLabel = 'Back', onBack, action, className }: PageHeaderProps) {
-  const backLinkClass = 'inline-flex items-center gap-1 text-sm text-muted hover:text-foreground transition-colors';
+  const backLinkClass = 'inline-flex items-center gap-1 text-sm text-foreground/75 hover:text-foreground transition-colors';
 
   return (
     <div className={className}>

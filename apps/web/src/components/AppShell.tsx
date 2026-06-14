@@ -77,7 +77,7 @@ function SidebarNavGroup({ items }: { items: NavItem[] }) {
               )
             }
           >
-            <Icon size={16} strokeWidth={1.75} className="flex-shrink-0" />
+            <Icon size={16} strokeWidth={1.75} className="flex-shrink-0" aria-hidden="true" />
             {label}
           </NavLink>
         </li>
@@ -250,7 +250,7 @@ function BottomTabBar() {
               )
             }
           >
-            <Icon size={22} strokeWidth={1.75} />
+            <Icon size={22} strokeWidth={1.75} aria-hidden="true" />
             <span className="text-[10px] font-medium leading-none">{label}</span>
           </NavLink>
         ))}
@@ -262,7 +262,7 @@ function BottomTabBar() {
             moreIsActive ? 'text-chrome-foreground' : 'text-chrome-muted',
           )}
         >
-          <MoreHorizontal size={22} strokeWidth={1.75} />
+          <MoreHorizontal size={22} strokeWidth={1.75} aria-hidden="true" />
           <span className="text-[10px] font-medium leading-none">More</span>
         </button>
       </nav>
@@ -294,7 +294,7 @@ function BottomTabBar() {
                   )
                 }
               >
-                <Icon size={18} strokeWidth={1.75} className="flex-shrink-0" />
+                <Icon size={18} strokeWidth={1.75} className="flex-shrink-0" aria-hidden="true" />
                 {label}
               </NavLink>
             ))}
@@ -323,6 +323,13 @@ export default function AppShell() {
 
   return (
     <div className="min-h-screen bg-surface">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:px-4 focus:py-2 focus:bg-background focus:text-foreground"
+      >
+        Skip to main content
+      </a>
+
       {/* Desktop sidebar */}
       <Sidebar />
 
@@ -332,7 +339,7 @@ export default function AppShell() {
       {/* Content — offset for sidebar on desktop, top bar on mobile */}
       <div className="md:ml-60 flex flex-col min-h-screen pt-14 pb-16 md:pb-0">
         <DesktopTopBar businessName={businessName} isLoading={isLoading} />
-        <main className="flex-1 md:overflow-y-auto">
+        <main id="main-content" className="flex-1 md:overflow-y-auto">
           <Outlet />
         </main>
       </div>
