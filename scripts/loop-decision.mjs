@@ -8,6 +8,12 @@
 export const CONTINUE = 'CONTINUE';
 export const COMPLETE = 'COMPLETE';
 
+// CLI: node loop-decision.mjs <gateExitCode> <promisePresent> <remainingWorkCount>
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const [, , gate, promise, remaining] = process.argv;
+  console.log(decide(parseInt(gate, 10), promise === 'true', parseInt(remaining, 10)));
+}
+
 /**
  * @param {number} gateExitCode
  * @param {boolean} promisePresent
