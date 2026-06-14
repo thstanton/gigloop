@@ -11,6 +11,15 @@
 #   RALPH_MAX=20           global iteration cap per run (default 20)
 #   RALPH_UNSAFE=1         add --dangerously-skip-permissions (Docker sandbox only)
 #   RALPH_WEBHOOK_URL=url  POST target for ESCALATE/COMPLETE/MAX-HIT events (optional)
+#
+# Observing an AFK run (no extra tooling required):
+#   GitHub mobile is the zero-code dashboard — watch for ready-for-human label
+#   flips, per-slice commits on the branch, and the completion PR notification.
+#   For richer signals: `tail -f ralph.log` (one structured line per iteration);
+#   set RALPH_WEBHOOK_URL to push-notify on ESCALATE/COMPLETE/MAX-HIT.
+#   Note: agent clean-aborts (PROMPT.md step 7) relabel the issue inside the
+#   cold claude process — ralph.sh's escalate() never sees them, so no webhook
+#   fires on that path. Watch for ready-for-human label changes on the repo.
 
 set -euo pipefail
 
