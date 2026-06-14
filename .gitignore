@@ -4,5 +4,10 @@ storybook-static
 .env
 .env.local
 .agents/
-.claude/
+.claude/*
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/.gitkeep
 skills-lock.json
+progress.md
+.playwright-cli/
