@@ -10,6 +10,7 @@ import { DocumentsRepository } from './documents.repository';
 import { buildInvoiceDefinition, type InvoicePdfData } from './invoice-document';
 import { buildSongListDefinition, type SongListPdfData } from './song-list-document';
 import { renderTiptapToPdfmake } from '../mail/tiptap-pdfmake';
+import { decrypt } from '../common/crypto';
 import { buildDocumentTitle, buildPdfHeader, buildPdfFooter } from './pdf-shared';
 import type { EmailContext } from '../mail/mail.service';
 import { substituteTiptapVariables } from '../mail/tiptap-portal';
@@ -91,6 +92,16 @@ export class DocumentsService {
     return [profile.addressLine1, profile.addressLine2, profile.city, profile.postcode].filter(Boolean).join('\n') || null;
   }
 
+  private async getDepositTotal(userId: string, bookingId: string): Promise<string | null> {
+    const depositInvoice = await this.prisma.invoice.findFirst({
+      where: { bookingId, userId, isDeposit: true },
+      include: { lineItems: true },
+    });
+    if (!depositInvoice) return null;
+    const total = depositInvoice.lineItems.reduce((sum, item) => sum + Number(item.amount), 0);
+    return total.toFixed(2);
+  }
+
   // ─── PDF: private ──────────────────────────────────────────────────────────
 
   private async buildInvoicePdfData(
@@ -115,20 +126,9 @@ export class DocumentsService {
 
     if (!publicProfile) throw new NotFoundException('Public profile not found');
 
-    let depositTotal: string | null = null;
-    if (!invoice.isDeposit && invoice.bookingId) {
-      const depositInvoice = await this.prisma.invoice.findFirst({
-        where: { bookingId: invoice.bookingId, userId, isDeposit: true },
-        include: { lineItems: true },
-      });
-      if (depositInvoice) {
-        const total = depositInvoice.lineItems.reduce(
-          (sum, item) => sum + Number(item.amount),
-          0,
-        );
-        depositTotal = total.toFixed(2);
-      }
-    }
+    const depositTotal = (!invoice.isDeposit && invoice.bookingId)
+      ? await this.getDepositTotal(userId, invoice.bookingId)
+      : null;
 
     const brandColour = (publicProfile.clientPortalConfig as { brandColour?: string } | null)?.brandColour ?? '#1a1a1a';
 
@@ -137,7 +137,7 @@ export class DocumentsService {
       musicianName: publicProfile.displayName ?? publicProfile.businessName,
       email: publicProfile.email ?? '',
       address: this.formatAddress(userProfile),
-      bankDetails: userProfile?.bankDetails ?? null,
+      bankDetails: userProfile?.bankDetails ? decrypt(userProfile.bankDetails) : null,
       vatNumber: userProfile?.vatNumber ?? null,
       vatRate: userProfile?.vatNumber ? (userProfile.vatRate ?? 20) : null,
       logoUrl: publicProfile.logoUrl ?? null,
