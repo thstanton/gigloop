@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2, Music } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { GhostButton } from '@/components/common/GhostButton';
 import { SubLabel } from '@/components/common/SubLabel';
 import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
+import { toast } from '@/lib/hooks/use-toast';
 import { PACKAGE_ICON_MAP } from '@/lib/constants';
 import type {
   BookingDetail,
@@ -20,63 +20,109 @@ function FormatIcon({ icon, size = 14 }: { icon: string; size?: number }) {
 
 // ─── Set edit row ─────────────────────────────────────────────────────────────
 
-type SetValues = { label: string; duration: string; startTime: string };
-
 function SetEditRow({
   set,
-  onChange,
+  bookingId,
   onDelete,
 }: {
   set: PerformanceSet;
-  onChange: (setId: string, values: SetValues) => void;
+  bookingId: string;
   onDelete: (setId: string) => void;
 }) {
+  const queryClient = useQueryClient();
   const [label, setLabel] = useState(set.label ?? '');
   const [duration, setDuration] = useState(set.duration.toString());
   const [startTime, setStartTime] = useState(set.startTime ?? '');
+  const [savedVisible, setSavedVisible] = useState(false);
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => { if (savedTimerRef.current) clearTimeout(savedTimerRef.current); };
+  }, []);
+
+  // Sync from server after query invalidation
+  useEffect(() => {
+    setLabel(set.label ?? '');
+    setDuration(set.duration.toString());
+    setStartTime(set.startTime ?? '');
+  }, [set.label, set.duration, set.startTime]);
+
+  const saveMutation = useMutation({
+    mutationFn: (values: { label: string; duration: string; startTime: string }) =>
+      apiPatch(`/bookings/${bookingId}/sets/${set.id}`, {
+        label: values.label.trim() || null,
+        duration: parseInt(values.duration, 10) || 1,
+        startTime: values.startTime || null,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['booking', bookingId] });
+      setSavedVisible(true);
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+      savedTimerRef.current = setTimeout(() => setSavedVisible(false), 2000);
+    },
+    onError: () => {
+      toast({ title: 'Failed to save set. Please try again.', variant: 'destructive' });
+    },
+  });
+
+  function handleBlur() {
+    const dirty =
+      (label.trim() || null) !== (set.label ?? null) ||
+      (parseInt(duration, 10) || 0) !== set.duration ||
+      (startTime || null) !== (set.startTime ?? null);
+    if (!dirty || saveMutation.isPending) return;
+    saveMutation.mutate({ label, duration, startTime });
+  }
+
+  const isPending = saveMutation.isPending;
 
   return (
-    <div className="grid grid-cols-[1fr_5rem_5rem_1.25rem] items-center gap-2 py-2 border-b border-border last:border-0">
-      <input
-        type="text"
-        value={label}
-        placeholder="Label"
-        onChange={(e) => {
-          setLabel(e.target.value);
-          onChange(set.id, { label: e.target.value, duration, startTime });
-        }}
-        className="text-sm text-foreground border border-border rounded px-2 py-0.5 bg-background min-w-0"
-        aria-label="Set label"
-      />
-      <input
-        type="number"
-        value={duration}
-        min={1}
-        onChange={(e) => {
-          setDuration(e.target.value);
-          onChange(set.id, { label, duration: e.target.value, startTime });
-        }}
-        className="text-sm text-foreground border border-border rounded px-2 py-0.5 bg-background w-full"
-        aria-label="Duration in minutes"
-      />
-      <input
-        type="time"
-        value={startTime}
-        onChange={(e) => {
-          setStartTime(e.target.value);
-          onChange(set.id, { label, duration, startTime: e.target.value });
-        }}
-        className="text-sm text-muted border border-border rounded px-2 py-0.5 bg-background"
-        aria-label="Start time"
-      />
-      <button
-        type="button"
-        onClick={() => onDelete(set.id)}
-        className="text-muted hover:text-status-cancelled transition-colors"
-        aria-label="Remove set"
-      >
-        <Trash2 size={13} aria-hidden="true" />
-      </button>
+    <div className="border-b border-border last:border-0">
+      <div className="grid grid-cols-[1fr_5rem_5rem_1.25rem] items-center gap-2 py-2">
+        <input
+          type="text"
+          value={label}
+          placeholder="Label"
+          onChange={(e) => setLabel(e.target.value)}
+          onBlur={handleBlur}
+          disabled={isPending}
+          className="text-sm text-foreground border border-border rounded px-2 py-0.5 bg-background min-w-0 disabled:opacity-50"
+          aria-label="Set label"
+        />
+        <input
+          type="number"
+          value={duration}
+          min={1}
+          onChange={(e) => setDuration(e.target.value)}
+          onBlur={handleBlur}
+          disabled={isPending}
+          className="text-sm text-foreground border border-border rounded px-2 py-0.5 bg-background w-full disabled:opacity-50"
+          aria-label="Duration in minutes"
+        />
+        <input
+          type="time"
+          value={startTime}
+          onChange={(e) => setStartTime(e.target.value)}
+          onBlur={handleBlur}
+          disabled={isPending}
+          className="text-sm text-muted border border-border rounded px-2 py-0.5 bg-background disabled:opacity-50"
+          aria-label="Start time"
+        />
+        <button
+          type="button"
+          onClick={() => onDelete(set.id)}
+          disabled={isPending}
+          className="text-muted hover:text-status-cancelled transition-colors disabled:opacity-50"
+          aria-label="Remove set"
+        >
+          <Trash2 size={13} aria-hidden="true" />
+        </button>
+      </div>
+      {(isPending || savedVisible) && (
+        <p className={`text-xs pb-1.5 ${isPending ? 'text-muted' : 'text-status-confirmed'}`}>
+          {isPending ? 'Saving…' : 'Saved'}
+        </p>
+      )}
     </div>
   );
 }
@@ -86,8 +132,6 @@ function SetEditRow({
 export default function PerformanceEditor({ booking, isOpen }: { booking: BookingDetail; isOpen: boolean }) {
   const queryClient = useQueryClient();
   const [addOpen, setAddOpen] = useState(false);
-  const [pendingEdits, setPendingEdits] = useState<Map<string, SetValues>>(new Map());
-  const [discardKey, setDiscardKey] = useState(0);
   const [confirmRemoveFormatId, setConfirmRemoveFormatId] = useState<string | null>(null);
 
   const { data: allFormats = [], isLoading: formatsLoading } = useQuery({
@@ -106,50 +150,11 @@ export default function PerformanceEditor({ booking, isOpen }: { booking: Bookin
   const otherFormats = enabledUnapplied.filter((f) => f.category !== booking.eventType);
   const availableFormats = enabledUnapplied;
 
-  function handleSetChange(setId: string, values: SetValues) {
-    const original = (booking.sets ?? []).find((s) => s.id === setId);
-    if (!original) return;
-    const dirty =
-      (values.label.trim() || null) !== (original.label ?? null) ||
-      (parseInt(values.duration, 10) || 0) !== original.duration ||
-      (values.startTime || null) !== (original.startTime ?? null);
-    setPendingEdits((prev) => {
-      const next = new Map(prev);
-      if (dirty) next.set(setId, values);
-      else next.delete(setId);
-      return next;
-    });
-  }
-
-  const saveEdits = useMutation({
-    mutationFn: () =>
-      Promise.all(
-        Array.from(pendingEdits.entries()).map(([setId, values]) =>
-          apiPatch(`/bookings/${booking.id}/sets/${setId}`, {
-            label: values.label.trim() || null,
-            duration: parseInt(values.duration, 10) || 1,
-            startTime: values.startTime || null,
-          }),
-        ),
-      ),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['booking', booking.id] });
-      setPendingEdits(new Map());
-    },
-  });
-
-  const { reset: saveEditsReset } = saveEdits;
   useEffect(() => {
     if (isOpen) {
       setConfirmRemoveFormatId(null);
-      saveEditsReset();
     }
-  }, [isOpen, saveEditsReset]);
-
-  function handleDiscard() {
-    setPendingEdits(new Map());
-    setDiscardKey((k) => k + 1);
-  }
+  }, [isOpen]);
 
   const applyFormat = useMutation({
     mutationFn: (formatId: string) =>
@@ -158,12 +163,18 @@ export default function PerformanceEditor({ booking, isOpen }: { booking: Bookin
       queryClient.invalidateQueries({ queryKey: ['booking', booking.id] });
       setAddOpen(false);
     },
+    onError: () => {
+      toast({ title: 'Failed to add package. Please try again.', variant: 'destructive' });
+    },
   });
 
   const removeFormat = useMutation({
     mutationFn: (bookingFormatId: string) =>
       apiDelete(`/bookings/${booking.id}/formats/${bookingFormatId}`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['booking', booking.id] }),
+    onError: () => {
+      toast({ title: 'Failed to remove package. Please try again.', variant: 'destructive' });
+    },
   });
 
   const addSet = useMutation({
@@ -174,11 +185,17 @@ export default function PerformanceEditor({ booking, isOpen }: { booking: Bookin
         duration: 30,
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['booking', booking.id] }),
+    onError: () => {
+      toast({ title: 'Failed to add set. Please try again.', variant: 'destructive' });
+    },
   });
 
   const deleteSet = useMutation({
     mutationFn: (setId: string) => apiDelete(`/bookings/${booking.id}/sets/${setId}`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['booking', booking.id] }),
+    onError: () => {
+      toast({ title: 'Failed to delete set. Please try again.', variant: 'destructive' });
+    },
   });
 
   function handleRemoveFormat(bpf: BookingPackageSummary) {
@@ -263,9 +280,9 @@ export default function PerformanceEditor({ booking, isOpen }: { booking: Bookin
 
             {sets.map((set) => (
               <SetEditRow
-                key={`${set.id}-${discardKey}`}
+                key={set.id}
                 set={set}
-                onChange={handleSetChange}
+                bookingId={booking.id}
                 onDelete={(id) => deleteSet.mutate(id)}
               />
             ))}
@@ -289,45 +306,13 @@ export default function PerformanceEditor({ booking, isOpen }: { booking: Bookin
           <p className="text-sm font-medium text-foreground mb-1">Other sets</p>
           {unassigned.map((set) => (
             <SetEditRow
-              key={`${set.id}-${discardKey}`}
+              key={set.id}
               set={set}
-              onChange={handleSetChange}
+              bookingId={booking.id}
               onDelete={(id) => deleteSet.mutate(id)}
             />
           ))}
         </div>
-      )}
-
-      {/* Section-level save bar */}
-      {pendingEdits.size > 0 && (
-        <div className="mb-4 flex items-center justify-between border-t border-border pt-3">
-          <span className="text-xs text-muted">
-            {pendingEdits.size === 1 ? '1 unsaved change' : `${pendingEdits.size} unsaved changes`}
-          </span>
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={handleDiscard}
-              disabled={saveEdits.isPending}
-            >
-              Discard
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => saveEdits.mutate()}
-              disabled={saveEdits.isPending}
-            >
-              {saveEdits.isPending ? 'Saving…' : 'Save changes'}
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {saveEdits.isError && (
-        <p className="text-xs text-status-cancelled mb-3">Failed to save. Please try again.</p>
       )}
 
       {!addOpen ? (
