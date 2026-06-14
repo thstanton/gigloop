@@ -94,6 +94,14 @@ describe('BookingsRepository', () => {
       expect(call.where.userId).toBe('u1');
       expect(call.orderBy).toEqual({ date: 'asc' });
     });
+
+    it('passes search query through as AND clauses in the where clause', async () => {
+      prisma.booking.findMany.mockResolvedValue([]);
+      await repo.findAll('u1', [], 'smith');
+      const where = prisma.booking.findMany.mock.calls[0][0].where;
+      expect(where.AND).toBeDefined();
+      expect(where.userId).toBe('u1');
+    });
   });
 
   describe('findOne', () => {

@@ -42,3 +42,4 @@ export const LoadError: Story = {
     await expect(await canvas.findByText(/failed to load/i)).toBeVisible();
   },
 };
+

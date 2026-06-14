@@ -1,6 +1,7 @@
-import { useRef } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import BookingsTable from '@/features/bookings/BookingsTable';
 import { useBookings } from '@/lib/hooks/useBookings';
@@ -123,13 +124,63 @@ export default function BookingsListPage() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const statusParam = searchParams.get('status') as BookingStatus | null;
-  const { effectiveStatuses, highlightedTab } = resolveListScope({ tab: statusParam ?? undefined });
+  const qParam = searchParams.get('q') ?? '';
 
-  const { data = [], isLoading, isError } = useBookings({ statuses: effectiveStatuses });
+  // Local state drives the input immediately; URL is updated with a 300ms debounce.
+  const [inputValue, setInputValue] = useState(qParam);
+  const debounceTimer = useRef<ReturnType<typeof setTimeout>>();
+
+  // Sync the input when the URL q param changes externally (navigation or clear-search action).
+  useEffect(() => {
+    setInputValue(qParam);
+  }, [qParam]);
+
+  // Cleanup debounce timer on unmount.
+  useEffect(() => {
+    return () => clearTimeout(debounceTimer.current);
+  }, []);
+
+  function handleSearchChange(value: string) {
+    setInputValue(value);
+    clearTimeout(debounceTimer.current);
+    debounceTimer.current = setTimeout(() => {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        if (value.trim()) {
+          next.set('q', value);
+        } else {
+          next.delete('q');
+        }
+        return next;
+      });
+    }, 300);
+  }
+
+  function handleClearSearch() {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('q');
+      return next;
+    });
+  }
+
+  // q drives the API call only when >= 2 chars; resolveListScope handles the threshold internally.
+  const q = qParam.trim().length >= 2 ? qParam : undefined;
+  const { effectiveStatuses, highlightedTab } = resolveListScope({ tab: statusParam ?? undefined, q: qParam });
+
+  const { data = [], isLoading, isError } = useBookings({ statuses: effectiveStatuses, q });
 
   function handleFilterChange(value: ListTab) {
     // 'ACTIVE' clears the status param — it is the resting/default state
-    setSearchParams(value === 'ACTIVE' ? {} : { status: value });
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (value === 'ACTIVE') {
+        next.delete('status');
+      } else {
+        next.set('status', value);
+      }
+      return next;
+    });
   }
 
   const selectValue = highlightedTab ?? 'ACTIVE';
@@ -138,11 +189,22 @@ export default function BookingsListPage() {
   return (
     <div className="px-6 py-8 max-w-6xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <h1 className="font-display text-2xl font-semibold text-foreground">Bookings</h1>
         <Button onClick={() => navigate('/admin/bookings/new')}>
           New booking
         </Button>
+      </div>
+
+      {/* Search — always-visible, full-width */}
+      <div className="mb-4">
+        <Input
+          type="search"
+          placeholder="Search bookings…"
+          value={inputValue}
+          onChange={(e) => handleSearchChange(e.target.value)}
+          aria-label="Search bookings"
+        />
       </div>
 
       {/* Filter — tabs on desktop, select on mobile */}
@@ -184,6 +246,8 @@ export default function BookingsListPage() {
             data={data}
             onNew={() => navigate('/admin/bookings/new')}
             defaultSortDesc={defaultSortDesc}
+            searchQuery={q}
+            onClearSearch={handleClearSearch}
           />
         )}
       </div>

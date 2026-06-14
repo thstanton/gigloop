@@ -89,6 +89,10 @@ export const Empty: Story = {
   args: { data: [] },
 };
 
+export const NoResults: Story = {
+  args: { data: [], searchQuery: 'smith wedding', onClearSearch: () => {} },
+};
+
 export const WithNewCallback: Story = {
   args: { data: bookings, onNew: () => {} },
 };

@@ -8,7 +8,7 @@ import {
   useReactTable,
   type SortingState,
 } from '@tanstack/react-table';
-import { ChevronUp, ChevronDown, ChevronsUpDown, Calendar } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronsUpDown, Calendar, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import BookingStatusPill from '@/components/common/BookingStatusPill';
 import type { BookingListItem } from '@/types/api';
@@ -86,7 +86,7 @@ function SortIcon({ direction }: { direction: 'asc' | 'desc' | false }) {
   return <ChevronsUpDown size={13} className="text-muted opacity-0 group-hover/header:opacity-100 transition-opacity" />;
 }
 
-// ─── Empty state ─────────────────────────────────────────────────────────────
+// ─── Empty states ─────────────────────────────────────────────────────────────
 
 function BookingsEmptyState({ onNew }: { onNew?: () => void }) {
   return (
@@ -95,6 +95,17 @@ function BookingsEmptyState({ onNew }: { onNew?: () => void }) {
       heading="No bookings yet"
       description="Add your first booking to get started."
       action={onNew && <Button size="sm" onClick={onNew}>New booking</Button>}
+    />
+  );
+}
+
+function SearchEmptyState({ query, onClear }: { query: string; onClear?: () => void }) {
+  return (
+    <EmptyState
+      icon={<Search size={40} strokeWidth={1.5} />}
+      heading={`No bookings match "${query}"`}
+      description="Try a different search term or clear the search to return to the active pipeline."
+      action={onClear && <Button size="sm" variant="outline" onClick={onClear}>Clear search</Button>}
     />
   );
 }
@@ -156,9 +167,12 @@ interface BookingsTableProps {
   onNew?: () => void;
   /** When true, defaults to date-descending (most-recent-first). Re-mount via key to apply. */
   defaultSortDesc?: boolean;
+  /** Active search query — when set and data is empty, shows the no-results state instead of the first-run state. */
+  searchQuery?: string;
+  onClearSearch?: () => void;
 }
 
-export default function BookingsTable({ data, onNew, defaultSortDesc = false }: BookingsTableProps) {
+export default function BookingsTable({ data, onNew, defaultSortDesc = false, searchQuery, onClearSearch }: BookingsTableProps) {
   const navigate = useNavigate();
   const [sorting, setSorting] = useState<SortingState>([
     { id: 'date', desc: defaultSortDesc },
@@ -176,6 +190,9 @@ export default function BookingsTable({ data, onNew, defaultSortDesc = false }: 
   });
 
   if (data.length === 0) {
+    if (searchQuery) {
+      return <SearchEmptyState query={searchQuery} onClear={onClearSearch} />;
+    }
     return <BookingsEmptyState onNew={onNew} />;
   }
 
