@@ -12,6 +12,13 @@
 #   RALPH_UNSAFE=1         run inside Docker Sandbox + --dangerously-skip-permissions
 #   RALPH_WEBHOOK_URL=url  POST target for ESCALATE/COMPLETE/MAX-HIT events (optional)
 #
+# Sandbox one-time setup (RALPH_UNSAFE=1, ADR-0040 §7):
+#   1. sbx secret set-custom -g --host api.anthropic.com \
+#        --env CLAUDE_CODE_OAUTH_TOKEN --value "$CLAUDE_CODE_OAUTH_TOKEN"
+#   2. sbx policy set balanced   (allows Anthropic, GitHub, package registries)
+#   Mounts the repo as a direct RW passthrough — do NOT use --clone.
+#   Verified: sandbox cannot read ~/.ssh or ~/.claude; .claude/skills/ available.
+#
 # Observing an AFK run (no extra tooling required):
 #   GitHub mobile is the zero-code dashboard — watch for ready-for-human label
 #   flips, per-slice commits on the branch, and the completion PR notification.
