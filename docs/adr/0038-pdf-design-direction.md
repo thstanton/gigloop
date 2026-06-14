@@ -1,6 +1,6 @@
 # ADR-0038: PDF Document Design Direction
 
-**Status:** Accepted  
+**Status:** Accepted — **amended 2026-06-14** (title font Caveat → Playfair Display; see Amendment below)  
 **Date:** 2026-06-12
 
 ## Context
@@ -49,3 +49,13 @@ Every PDF shares the same three-zone layout:
 - The header and footer are extracted as shared builder functions, making future per-theme customisation straightforward.
 - "Powered by GigMan" footer is intentionally identical to the portal footer — consistent attribution across every client touchpoint.
 - Font file sourcing: Caveat and Commissioner are Google Fonts under the OFL licence, which permits embedding in generated documents.
+
+## Amendment (2026-06-14): title font Caveat → Playfair Display
+
+**What changed:** the document **title** font is changed from **Caveat** to **Playfair Display** (medium/semibold at display size) across all three PDFs. Caveat is removed entirely — it was used only for the title (*"Caveat does not appear elsewhere"*). Body, labels, and metadata remain **Commissioner**. Page structure, brand-colour accent, footer, and document titles are otherwise unchanged.
+
+**Why:** a user rejected the design — Caveat (the portal's "Romantic" display face) is too informal for a financial/legal document. The underlying principle: **system documents (invoice, contract) are formal, transactional artifacts and should not borrow the portal's expressive/romantic styling.** Playfair Display is a high-contrast serif that reads as appropriately formal and confident at title size.
+
+Note this is independent of portal theme — PDF fonts were never theme-coupled (the only theme-derived element is `brandColour` on the header rule). The original "per-theme PDFs in P2" idea should be read with this principle in mind: expressive per-theme title fonts are likely **never** appropriate for invoices/contracts, even in P2.
+
+**Mechanics:** bundle `PlayfairDisplay` TTF(s) (OFL) in `apps/api/src/documents/fonts/`, register with pdfmake in place of Caveat, update the `requiredFonts` guard list, and update the title style in the shared header/title builder. Mirror the registration change in `pdf-generation.spec.ts`.
