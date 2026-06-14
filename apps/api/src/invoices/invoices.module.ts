@@ -5,11 +5,12 @@ import { ChecklistModule } from '../checklist/checklist.module';
 import { InvoicesController } from './invoices.controller';
 import { InvoicesService } from './invoices.service';
 import { InvoicesRepository } from './invoices.repository';
+import { InvoiceLifecycleService } from './invoice-lifecycle.service';
 
 @Module({
   imports: [CommunicationsModule, DocumentsModule, ChecklistModule],
   controllers: [InvoicesController],
-  providers: [InvoicesService, InvoicesRepository],
-  exports: [InvoicesRepository],
+  providers: [InvoicesService, InvoicesRepository, InvoiceLifecycleService],
+  exports: [InvoicesRepository, InvoiceLifecycleService],
 })
 export class InvoicesModule {}

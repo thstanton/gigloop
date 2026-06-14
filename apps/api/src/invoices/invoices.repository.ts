@@ -259,6 +259,73 @@ export class InvoicesRepository {
     });
   }
 
+  markPaidBase(invoiceId: string) {
+    return this.prisma.invoice.update({
+      where: { id: invoiceId },
+      data: { status: 'PAID', paidAt: new Date() },
+      include: invoiceIncludes,
+    });
+  }
+
+  setBookingDepositReceivedAt(bookingId: string) {
+    return this.prisma.booking.update({
+      where: { id: bookingId },
+      data: { depositReceivedAt: new Date() },
+    });
+  }
+
+  async assignSeriesInvoiceNumberOnly(
+    userId: string,
+    params: { id: string; seriesId: string; issueDate: Date; dueDate: Date | null },
+  ) {
+    const { id, seriesId, issueDate, dueDate } = params;
+
+    // Idempotent: if already assigned on a previous failed attempt, skip allocation
+    const existing = await this.prisma.invoice.findUnique({ where: { id }, select: { invoiceNumber: true } });
+    if (existing?.invoiceNumber) {
+      return this.prisma.invoice.update({
+        where: { id },
+        data: { issueDate, dueDate },
+        include: invoiceIncludes,
+      });
+    }
+
+    const currentYear = new Date().getFullYear();
+    return this.prisma.$transaction(async (tx) => {
+      const voided = await tx.invoice.findFirst({
+        where: { seriesId, userId, status: 'VOID', invoiceNumber: { not: null } },
+        select: { invoiceNumber: true },
+        orderBy: { updatedAt: 'desc' },
+      });
+
+      const profile = await tx.userProfile.findUnique({ where: { userId } });
+      if (!profile) throw new NotFoundException('User profile not found');
+
+      const prefs = (profile.preferences as Record<string, unknown>) ?? {};
+      const { invoiceNumber, nextSeq, nextYear } = allocate(
+        prefs,
+        currentYear,
+        profile.invoiceNumberSequence,
+        profile.invoiceSequenceYear,
+        voided?.invoiceNumber,
+      );
+
+      if (nextSeq !== profile.invoiceNumberSequence) {
+        await tx.userProfile.update({
+          where: { userId },
+          data: { invoiceNumberSequence: nextSeq, invoiceSequenceYear: nextYear },
+        });
+      }
+
+      // Stays DRAFT — caller marks SENT after PDF generation and email succeed
+      return tx.invoice.update({
+        where: { id },
+        data: { invoiceNumber, issueDate, dueDate },
+        include: invoiceIncludes,
+      });
+    });
+  }
+
   findLineItem(userId: string, invoiceId: string, itemId: string) {
     return this.prisma.invoiceLineItem.findFirst({
       where: { id: itemId, invoiceId, userId },

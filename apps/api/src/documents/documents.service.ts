@@ -68,7 +68,7 @@ export type DocumentWithUrl = Document & { url: string; contract?: { status: str
 
 // Minimal shape needed to build PDF data from an already-fetched invoice.
 // Accepts Prisma Decimal for amount (hence the any — Number() handles it).
-type PreloadedInvoice = {
+export type PreloadedInvoice = {
   invoiceNumber: string | null;
   issueDate: Date | null;
   dueDate: Date | null;
@@ -173,13 +173,16 @@ export class DocumentsService {
 
   async generateAndStoreInvoicePdf(
     userId: string,
-    bookingId: string,
     invoiceId: string,
     preloaded?: PreloadedInvoice,
+    bookingId?: string,
   ): Promise<{ buffer: Buffer }> {
     const data = await this.buildInvoicePdfData(userId, invoiceId, preloaded);
     const buffer = await this.generatePdfBuffer(data);
-    const key = `invoices/${userId}/${bookingId}/${invoiceId}.pdf`;
+    // Series invoices have no bookingId — store under a flat per-invoice path.
+    const key = bookingId
+      ? `invoices/${userId}/${bookingId}/${invoiceId}.pdf`
+      : `invoices/${userId}/series/${invoiceId}.pdf`;
     await this.storage.putObject(key, buffer, 'application/pdf');
     // Replace any existing document record (idempotent on retry)
     const existing = await this.repo.findByInvoice(userId, invoiceId);

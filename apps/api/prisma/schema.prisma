@@ -434,8 +434,9 @@ model Document {
   type       DocumentType
   storageKey String
 
-  bookingId String
-  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  // null for series invoice documents which have no direct booking association
+  bookingId String?
+  booking   Booking? @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 
   // null for non-INVOICE documents; set for INVOICE documents
   invoiceId String?
@@ -450,6 +451,7 @@ model Document {
 
   @@index([userId])
   @@index([bookingId])
+  @@index([invoiceId])
   @@index([contractId])
 }
 

@@ -4,6 +4,7 @@
  */
 import { InvoicesService } from './invoices.service';
 import { InvoicesRepository } from './invoices.repository';
+import { InvoiceLifecycleService } from './invoice-lifecycle.service';
 import { DocumentsService } from '../documents/documents.service';
 import { StorageService } from '../storage/storage.service';
 import { DocumentsRepository } from '../documents/documents.repository';
@@ -70,18 +71,26 @@ describe('InvoicesService.send (integration)', () => {
     sendEmailMock = jest.fn().mockResolvedValue(undefined);
     const mockComms = { sendEmail: sendEmailMock } as unknown as import('../communications/communications.service').CommunicationsService;
 
-    const mockRepo = {
+    const mockInvoicesRepo = {
       findOne: jest.fn().mockResolvedValue({ ...numberedInvoice, status: 'DRAFT', invoiceNumber: null }),
       assignInvoiceNumberOnly: jest.fn().mockResolvedValue(numberedInvoice),
       markSentById: jest.fn().mockResolvedValue({ ...numberedInvoice, status: 'SENT' }),
+      markPaidBase: jest.fn(),
+      voidInvoice: jest.fn(),
     };
+
+    const lifecycle = new InvoiceLifecycleService(
+      mockInvoicesRepo as unknown as InvoicesRepository,
+      documents,
+      mockComms,
+    );
 
     const mockEvaluator = { evaluate: jest.fn().mockResolvedValue(undefined) } as unknown as import('../checklist/checklist-evaluator.service').ChecklistEvaluatorService;
     const mockChecklistRepo = { resetItemByKey: jest.fn() } as unknown as import('../checklist/checklist.repository').ChecklistRepository;
 
     service = new InvoicesService(
-      mockRepo as unknown as InvoicesRepository,
-      mockComms,
+      mockInvoicesRepo as unknown as InvoicesRepository,
+      lifecycle,
       documents,
       mockEvaluator,
       mockChecklistRepo,
