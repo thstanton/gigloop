@@ -92,10 +92,7 @@ function ChecklistItemIcon({ state, isPlayTheGig, itemId, onToggle }: Readonly<C
   }
   return (
     <button
-      onClick={() => {
-        if (isPlayTheGig) confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
-        onToggle(itemId, 'COMPLETE');
-      }}
+      onClick={() => onToggle(itemId, 'COMPLETE')}
       className={cn('flex-shrink-0 p-2 -m-2 transition-colors', isPlayTheGig ? 'text-muted hover:text-status-ready' : 'text-muted hover:text-status-confirmed')}
       aria-label="Mark as complete"
     >
@@ -152,10 +149,17 @@ function ChecklistItemRow({ item, isActionPending, onToggle, onOpenCompose, onCh
   const isPlayTheGig = item.key === 'play_the_gig';
   const due = dueDateDisplay(item.dueDate);
 
+  function handleToggle(id: string, state: 'COMPLETE' | 'PENDING') {
+    if (isPlayTheGig && state === 'COMPLETE') {
+      confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+    }
+    onToggle(id, state);
+  }
+
   return (
     <div className={cn('flex items-center justify-between gap-2.5 py-1.5', isBlocked && 'opacity-40')}>
       <div className="flex items-center gap-2.5 min-w-0">
-        <ChecklistItemIcon state={item.state} isPlayTheGig={isPlayTheGig} itemId={item.id} onToggle={onToggle} />
+        <ChecklistItemIcon state={item.state} isPlayTheGig={isPlayTheGig} itemId={item.id} onToggle={handleToggle} />
         <div className="min-w-0">
           <span className={cn('text-sm', labelClass(isDone, isFailed))}>
             {item.label}
@@ -171,7 +175,7 @@ function ChecklistItemRow({ item, isActionPending, onToggle, onOpenCompose, onCh
             isFailed={isFailed}
             isActionPending={isActionPending}
             itemId={item.id}
-            onToggle={onToggle}
+            onToggle={handleToggle}
             onOpenCompose={onOpenCompose}
             onChecklistAction={onChecklistAction}
             onMarkDone={onMarkDone}

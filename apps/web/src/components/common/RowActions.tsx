@@ -3,6 +3,9 @@ import { ChevronRight, MoreHorizontal } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
 import {
@@ -12,14 +15,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 
@@ -246,14 +241,14 @@ export function RowActions({ actions, label, sublabel }: Props) {
         </DropdownMenu>
       </div>
 
-      {/* Desktop confirmation dialog */}
-      <Dialog open={dialogOpen} onOpenChange={handleDialogOpenChange}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{confirmingAction?.confirmation?.title}</DialogTitle>
-            <DialogDescription>{confirmingAction?.confirmation?.description}</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
+      {/* Desktop confirmation sheet */}
+      <Sheet open={dialogOpen} onOpenChange={handleDialogOpenChange}>
+        <SheetContent side="bottom">
+          <SheetHeader>
+            <SheetTitle>{confirmingAction?.confirmation?.title}</SheetTitle>
+            <SheetDescription>{confirmingAction?.confirmation?.description}</SheetDescription>
+          </SheetHeader>
+          <SheetFooter className="mt-4">
             <Button
               variant="outline"
               disabled={isConfirmPending}
@@ -268,9 +263,9 @@ export function RowActions({ actions, label, sublabel }: Props) {
             <Button variant="destructive" disabled={isConfirmPending} onClick={handleDialogConfirm}>
               {isConfirmPending ? '…' : 'Confirm'}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
     </>
   );
 }

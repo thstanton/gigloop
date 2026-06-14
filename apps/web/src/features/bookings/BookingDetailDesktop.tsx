@@ -86,6 +86,7 @@ export function BookingDetailDesktop({ bookingId }: BookingDetailDesktopProps) {
             <ItineraryCard
               logistics={booking.logistics}
               sets={booking.sets}
+              packages={booking.packages}
             />
             <DetailsCard
               logistics={booking.logistics}

@@ -2,11 +2,11 @@ import { useState, useRef, useId } from 'react';
 import { Search, X, ChevronDown, Plus } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import ContactForm, { toContactPayload } from '@/features/contacts/ContactForm';
 import type { ContactFormValues } from '@/features/contacts/ContactForm';
@@ -225,11 +225,11 @@ export default function ContactPicker({
         </PopoverContent>
       </Popover>
 
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto" aria-describedby={undefined}>
-          <DialogHeader>
-            <DialogTitle>New {label}</DialogTitle>
-          </DialogHeader>
+      <Sheet open={createOpen} onOpenChange={setCreateOpen}>
+        <SheetContent side="bottom" className="max-h-[90vh] overflow-y-auto" aria-describedby={undefined}>
+          <SheetHeader>
+            <SheetTitle>New {label}</SheetTitle>
+          </SheetHeader>
           <ContactForm
             defaultValues={{
               name: pendingName,
@@ -247,8 +247,8 @@ export default function ContactPicker({
             onCancel={() => setCreateOpen(false)}
             autoSuggestGreetingName
           />
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
     </>
   );
 }

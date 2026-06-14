@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect } from 'storybook/test';
 import { MemoryRouter } from 'react-router-dom';
 import ItineraryCard from './ItineraryCard';
-import type { BookingLogisticsEntry, PerformanceSet } from '@/types/api';
+import type { BookingLogisticsEntry, BookingPackageSummary, PerformanceSet } from '@/types/api';
 
 const fullLogistics: Record<string, BookingLogisticsEntry> = {
   arrivalTime: { value: '14:00', shareWithBand: true, shareWithClient: false },
@@ -22,6 +22,15 @@ const setsWithDurationsOnly: PerformanceSet[] = [
   { id: 's2', order: 1, duration: 90, startTime: null, label: 'Evening', packageId: 'pkg1' },
 ];
 
+const packages: BookingPackageSummary[] = [
+  {
+    id: 'bp1',
+    order: 0,
+    packageId: 'pkg1',
+    package: { id: 'pkg1', label: 'Gold', icon: 'crown', keyMoments: [], defaultGenreSelection: [] },
+  },
+];
+
 const meta = {
   component: ItineraryCard,
   tags: ['ai-generated'],
@@ -36,6 +45,7 @@ export const FullTimeline: Story = {
   args: {
     logistics: fullLogistics,
     sets: setsWithStartTimes,
+    packages,
   },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('14:00')).toBeVisible();
@@ -52,6 +62,7 @@ export const PartialNoArrivalOrFinish: Story = {
       soundCheckTime: { value: '15:00', shareWithBand: true, shareWithClient: false },
     },
     sets: setsWithDurationsOnly,
+    packages,
   },
 };
 
@@ -59,6 +70,7 @@ export const SetsOnlyDurationFallback: Story = {
   args: {
     logistics: null,
     sets: setsWithDurationsOnly,
+    packages,
   },
 };
 
@@ -66,6 +78,7 @@ export const TimesOnly: Story = {
   args: {
     logistics: fullLogistics,
     sets: [],
+    packages: [],
   },
 };
 
@@ -73,6 +86,7 @@ export const Empty: Story = {
   args: {
     logistics: null,
     sets: [],
+    packages: [],
   },
 };
 
@@ -84,6 +98,7 @@ export const WithTimeNotes: Story = {
       finishTime: { value: '23:00', notes: 'Hard finish — venue curfew', shareWithBand: true, shareWithClient: false },
     },
     sets: setsWithStartTimes,
+    packages,
   },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Gate closes at 9')).toBeVisible();
