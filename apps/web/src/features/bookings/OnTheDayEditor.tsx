@@ -146,6 +146,7 @@ export default function OnTheDayEditor({ booking, isOpen, onSaved }: Props) {
     if (isOpen) {
       setFields(buildInitialState(booking.logistics));
       setCustomFields(buildCustomFields(booking.logistics));
+      mutation.reset();
     }
   }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2, Music } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -83,7 +83,7 @@ function SetEditRow({
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function PerformanceEditor({ booking }: { booking: BookingDetail }) {
+export default function PerformanceEditor({ booking, isOpen }: { booking: BookingDetail; isOpen: boolean }) {
   const queryClient = useQueryClient();
   const [addOpen, setAddOpen] = useState(false);
   const [pendingEdits, setPendingEdits] = useState<Map<string, SetValues>>(new Map());
@@ -137,6 +137,14 @@ export default function PerformanceEditor({ booking }: { booking: BookingDetail 
       setPendingEdits(new Map());
     },
   });
+
+  const { reset: saveEditsReset } = saveEdits;
+  useEffect(() => {
+    if (isOpen) {
+      setConfirmRemoveFormatId(null);
+      saveEditsReset();
+    }
+  }, [isOpen, saveEditsReset]);
 
   function handleDiscard() {
     setPendingEdits(new Map());
