@@ -191,7 +191,7 @@ describe('Booking lifecycle (integration)', () => {
   });
 
   describe('GET /bookings CANCELLED filter', () => {
-    it('excludes CANCELLED by default', async () => {
+    it('excludes CANCELLED when active-pipeline statuses are requested', async () => {
       const active = await createBooking({ status: 'PROVISIONAL' });
       const activeId = active.body.id as string;
 
@@ -199,7 +199,10 @@ describe('Booking lifecycle (integration)', () => {
       const cancelledId = cancelled.body.id as string;
       await request(app.getHttpServer()).delete(`/api/bookings/${cancelledId}`);
 
-      const res = await request(app.getHttpServer()).get('/api/bookings');
+      // The frontend resting state sends explicit active-pipeline statuses — no API-level default.
+      // No ?status= param means no filter (all statuses returned), per booking-search.spec.ts.
+      const res = await request(app.getHttpServer())
+        .get('/api/bookings?status=ENQUIRY&status=PROVISIONAL&status=CONFIRMED&status=READY');
       const ids = (res.body as Array<{ id: string }>).map((b) => b.id);
       expect(ids).toContain(activeId);
       expect(ids).not.toContain(cancelledId);
