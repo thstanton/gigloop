@@ -9,7 +9,7 @@
 # Env:
 #   RALPH_K=3              per-issue cold-restart cap before escalation (default 3)
 #   RALPH_MAX=20           global iteration cap per run (default 20)
-#   RALPH_UNSAFE=1         add --dangerously-skip-permissions (Docker sandbox only)
+#   RALPH_UNSAFE=1         run inside Docker Sandbox + --dangerously-skip-permissions
 #   RALPH_WEBHOOK_URL=url  POST target for ESCALATE/COMPLETE/MAX-HIT events (optional)
 #
 # Observing an AFK run (no extra tooling required):
@@ -235,11 +235,20 @@ run_cold() {
     "$progress_ctx" \
     "$work_block")
 
-  local claude_flags=("-p" "$prompt")
+  # --model sonnet: Agent SDK credit is capped; sonnet stretches it (ADR-0040 §7).
+  local claude_flags=("--model" "sonnet" "-p" "$prompt")
   [[ "${RALPH_UNSAFE:-}" == "1" ]] && claude_flags+=("--dangerously-skip-permissions")
 
-  # tee to stderr so the human can watch; capture stdout for promise/selection markers
-  claude "${claude_flags[@]}" 2>&1 | tee /dev/stderr || true
+  if [[ "${RALPH_UNSAFE:-}" == "1" ]]; then
+    # Run inside a Docker Sandbox microVM (ADR-0040 §7).
+    # Default RW passthrough mount — do NOT add --clone (strands commits in the VM).
+    # CLAUDE_CODE_OAUTH_TOKEN must be set in the host shell via `claude setup-token`.
+    sbx run -e "CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}" \
+      -- claude "${claude_flags[@]}" 2>&1 | tee /dev/stderr || true
+  else
+    # tee to stderr so the human can watch; capture stdout for promise/selection markers
+    claude "${claude_flags[@]}" 2>&1 | tee /dev/stderr || true
+  fi
 }
 
 # ---------------------------------------------------------------------------
