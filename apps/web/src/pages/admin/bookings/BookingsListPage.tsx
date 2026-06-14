@@ -12,6 +12,24 @@ import { EVENT_TYPE_LABELS } from '@/lib/constants';
 import type { BookingStatus, EventType } from '@/types/api';
 import { cn } from '@/lib/utils';
 
+type DatePreset = 'UPCOMING' | 'THIS_TAX_YEAR' | 'LAST_TAX_YEAR' | 'CUSTOM';
+
+const DATE_PRESET_OPTIONS: { value: DatePreset; label: string }[] = [
+  { value: 'UPCOMING', label: 'Upcoming' },
+  { value: 'THIS_TAX_YEAR', label: 'This tax year' },
+  { value: 'LAST_TAX_YEAR', label: 'Last tax year' },
+  { value: 'CUSTOM', label: 'Custom dates' },
+];
+
+// UK tax year runs 6 Apr → 5 Apr. yearsAgo=0 = current tax year, yearsAgo=1 = previous.
+function computeTaxYear(yearsAgo: 0 | 1): { from: string; to: string } {
+  const now = new Date();
+  const y = now.getFullYear();
+  const afterApril6 = now.getMonth() > 3 || (now.getMonth() === 3 && now.getDate() >= 6);
+  const startYear = (afterApril6 ? y : y - 1) - yearsAgo;
+  return { from: `${startYear}-04-06`, to: `${startYear + 1}-04-05` };
+}
+
 // ─── Filter tabs ─────────────────────────────────────────────────────────────
 
 const FILTERS: { label: string; value: ListTab }[] = [
@@ -80,12 +98,32 @@ const EVENT_TYPE_OPTIONS = Object.entries(EVENT_TYPE_LABELS) as [EventType, stri
 function FiltersSheet({
   eventType,
   onEventTypeChange,
+  datePreset,
+  from,
+  to,
+  onDatePresetChange,
+  onCustomFromChange,
+  onCustomToChange,
 }: {
   eventType: EventType | null;
   onEventTypeChange: (v: EventType | null) => void;
+  datePreset: DatePreset | null;
+  from: string | null;
+  to: string | null;
+  onDatePresetChange: (v: DatePreset | null) => void;
+  onCustomFromChange: (v: string) => void;
+  onCustomToChange: (v: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const activeCount = eventType ? 1 : 0;
+  const hasDateFilter = !!(from || to);
+  const activeCount = (eventType ? 1 : 0) + (hasDateFilter ? 1 : 0);
+  const filterAriaLabel = activeCount > 0 ? `Filters, ${activeCount} active` : 'Filters';
+
+  function clearAll() {
+    onEventTypeChange(null);
+    onDatePresetChange(null);
+    setOpen(false);
+  }
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -93,7 +131,7 @@ function FiltersSheet({
         <Button
           variant="outline"
           className="relative shrink-0"
-          aria-label={`Filters${activeCount > 0 ? `, ${activeCount} active` : ''}`}
+          aria-label={filterAriaLabel}
         >
           <SlidersHorizontal className="h-4 w-4 mr-2" aria-hidden />
           Filters
@@ -112,6 +150,7 @@ function FiltersSheet({
           <SheetTitle>Filters</SheetTitle>
         </SheetHeader>
         <div className="mt-6 space-y-6">
+          {/* Event type */}
           <div>
             <p className="text-sm font-medium mb-3">Event type</p>
             <div className="space-y-1">
@@ -138,12 +177,63 @@ function FiltersSheet({
               ))}
             </div>
           </div>
+
+          {/* Date range */}
+          <div>
+            <p className="text-sm font-medium mb-3">Date range</p>
+            <div className="space-y-1">
+              <button
+                onClick={() => { onDatePresetChange(null); setOpen(false); }}
+                className={cn(
+                  'w-full text-left px-3 py-2 rounded-md text-base',
+                  !datePreset ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted',
+                )}
+              >
+                Any date
+              </button>
+              {DATE_PRESET_OPTIONS.map(({ value, label }) => (
+                <button
+                  key={value}
+                  onClick={() => {
+                    onDatePresetChange(value);
+                    if (value !== 'CUSTOM') setOpen(false);
+                  }}
+                  className={cn(
+                    'w-full text-left px-3 py-2 rounded-md text-base',
+                    datePreset === value ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted',
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {datePreset === 'CUSTOM' && (
+              <div className="mt-3 space-y-3">
+                <div>
+                  <p className="text-sm text-muted mb-1">From</p>
+                  <Input
+                    type="date"
+                    value={from ?? ''}
+                    onChange={(e) => onCustomFromChange(e.target.value)}
+                    aria-label="From date"
+                  />
+                </div>
+                <div>
+                  <p className="text-sm text-muted mb-1">To</p>
+                  <Input
+                    type="date"
+                    value={to ?? ''}
+                    onChange={(e) => onCustomToChange(e.target.value)}
+                    aria-label="To date"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
           {activeCount > 0 && (
-            <Button
-              variant="ghost"
-              className="w-full"
-              onClick={() => { onEventTypeChange(null); setOpen(false); }}
-            >
+            <Button variant="ghost" className="w-full" onClick={clearAll}>
               Clear filters
             </Button>
           )}
@@ -209,6 +299,9 @@ export default function BookingsListPage() {
   const statusParam = searchParams.get('status') as BookingStatus | null;
   const qParam = searchParams.get('q') ?? '';
   const eventTypeParam = searchParams.get('eventType') as EventType | null;
+  const datePresetParam = searchParams.get('datePreset') as DatePreset | null;
+  const fromParam = searchParams.get('from');
+  const toParam = searchParams.get('to');
 
   // Local state drives the input immediately; URL is updated with a 300ms debounce.
   const [inputValue, setInputValue] = useState(qParam);
@@ -273,18 +366,71 @@ export default function BookingsListPage() {
     });
   }
 
+  function handleDatePresetChange(preset: DatePreset | null) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('from');
+      next.delete('to');
+      next.delete('datePreset');
+      if (!preset) return next;
+      next.set('datePreset', preset);
+      const today = new Date().toISOString().slice(0, 10);
+      switch (preset) {
+        case 'UPCOMING':
+          next.set('from', today);
+          break;
+        case 'THIS_TAX_YEAR': {
+          const bounds = computeTaxYear(0);
+          next.set('from', bounds.from);
+          next.set('to', bounds.to);
+          break;
+        }
+        case 'LAST_TAX_YEAR': {
+          const bounds = computeTaxYear(1);
+          next.set('from', bounds.from);
+          next.set('to', bounds.to);
+          break;
+        }
+        case 'CUSTOM':
+          // Preset only — user fills in from/to via custom pickers
+          break;
+      }
+      return next;
+    });
+  }
+
+  function handleCustomFromChange(value: string) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (value) next.set('from', value); else next.delete('from');
+      return next;
+    });
+  }
+
+  function handleCustomToChange(value: string) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (value) next.set('to', value); else next.delete('to');
+      return next;
+    });
+  }
+
   // q drives the API call only when >= 2 chars; resolveListScope handles the threshold internally.
   const q = qParam.trim().length >= 2 ? qParam : undefined;
   const { effectiveStatuses, highlightedTab } = resolveListScope({
     tab: statusParam ?? undefined,
     q: qParam,
     eventType: eventTypeParam ?? undefined,
+    from: fromParam ?? undefined,
+    to: toParam ?? undefined,
   });
 
   const { data = [], isLoading, isError } = useBookings({
     statuses: effectiveStatuses,
     q,
     eventType: eventTypeParam ?? undefined,
+    from: fromParam ?? undefined,
+    to: toParam ?? undefined,
   });
 
   const selectValue = highlightedTab ?? 'ACTIVE';
@@ -315,8 +461,8 @@ export default function BookingsListPage() {
       <div className="hidden md:block">
         <FilterBar active={highlightedTab} onChange={handleFilterChange} />
       </div>
-      {/* Desktop: secondary event-type filter below the status tabs */}
-      <div className="hidden md:flex items-center gap-3 mt-2 mb-2">
+      {/* Desktop: secondary filters below the status tabs */}
+      <div className="hidden md:flex items-center gap-3 mt-2 mb-2 flex-wrap">
         <span className="text-sm text-muted">Event type</span>
         <Select
           value={eventTypeParam ?? 'ALL'}
@@ -332,6 +478,40 @@ export default function BookingsListPage() {
             ))}
           </SelectContent>
         </Select>
+        <span className="text-sm text-muted">Date</span>
+        <Select
+          value={datePresetParam ?? 'ANY'}
+          onValueChange={(v) => handleDatePresetChange(v === 'ANY' ? null : v as DatePreset)}
+        >
+          <SelectTrigger className="h-8 w-40 text-sm" aria-label="Filter by date range">
+            <SelectValue placeholder="Any date" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ANY">Any date</SelectItem>
+            {DATE_PRESET_OPTIONS.map(({ value, label }) => (
+              <SelectItem key={value} value={value}>{label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {datePresetParam === 'CUSTOM' && (
+          <>
+            <Input
+              type="date"
+              value={fromParam ?? ''}
+              onChange={(e) => handleCustomFromChange(e.target.value)}
+              className="h-8 w-36 text-sm"
+              aria-label="From date"
+            />
+            <span className="text-sm text-muted">to</span>
+            <Input
+              type="date"
+              value={toParam ?? ''}
+              onChange={(e) => handleCustomToChange(e.target.value)}
+              className="h-8 w-36 text-sm"
+              aria-label="To date"
+            />
+          </>
+        )}
       </div>
       {/* Mobile: status select + filters sheet */}
       <div className="md:hidden mb-4 flex gap-2">
@@ -345,7 +525,16 @@ export default function BookingsListPage() {
             ))}
           </SelectContent>
         </Select>
-        <FiltersSheet eventType={eventTypeParam} onEventTypeChange={handleEventTypeChange} />
+        <FiltersSheet
+          eventType={eventTypeParam}
+          onEventTypeChange={handleEventTypeChange}
+          datePreset={datePresetParam}
+          from={fromParam}
+          to={toParam}
+          onDatePresetChange={handleDatePresetChange}
+          onCustomFromChange={handleCustomFromChange}
+          onCustomToChange={handleCustomToChange}
+        />
       </div>
 
       {/* Content */}

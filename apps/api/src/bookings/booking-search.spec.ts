@@ -211,8 +211,41 @@ describe('buildBookingSearchWhere', () => {
     });
 
     it('applies no eventType constraint when provided as undefined', () => {
-      const where = buildBookingSearchWhere('u1', undefined, [], undefined);
+      const where = buildBookingSearchWhere('u1', undefined, []);
       expect(where.eventType).toBeUndefined();
+    });
+  });
+
+  describe('date-range filtering', () => {
+    it('applies no date constraint when from and to are not provided', () => {
+      const where = buildBookingSearchWhere('u1', undefined, []);
+      expect(where.date).toBeUndefined();
+    });
+
+    it('applies a gte constraint when only from is provided', () => {
+      const where = buildBookingSearchWhere('u1', undefined, [], undefined, '2026-04-06');
+      expect(where.date).toEqual({ gte: new Date('2026-04-06') });
+    });
+
+    it('applies a lte constraint when only to is provided', () => {
+      const where = buildBookingSearchWhere('u1', undefined, [], undefined, undefined, '2026-04-05');
+      expect(where.date).toEqual({ lte: new Date('2026-04-05') });
+    });
+
+    it('applies both gte and lte when from and to are provided', () => {
+      const where = buildBookingSearchWhere('u1', undefined, [], undefined, '2026-04-06', '2027-04-05');
+      expect(where.date).toEqual({ gte: new Date('2026-04-06'), lte: new Date('2027-04-05') });
+    });
+
+    it('combines date filter with status, eventType, and free-text search', () => {
+      // All four filters applied simultaneously — each is an independent top-level constraint
+      const where = buildBookingSearchWhere('u1', 'smith', ['CONFIRMED'], 'WEDDING', '2026-04-06', '2027-04-05');
+      expect(where.userId).toBe('u1');
+      expect(where.status).toEqual({ in: ['CONFIRMED'] });
+      expect(where.eventType).toBe('WEDDING');
+      expect(where.date).toEqual({ gte: new Date('2026-04-06'), lte: new Date('2027-04-05') });
+      const andClauses = where.AND as Prisma.BookingWhereInput[] | undefined;
+      expect(andClauses).toHaveLength(1);
     });
   });
 });

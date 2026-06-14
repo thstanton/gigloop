@@ -184,38 +184,50 @@ describe('BookingsService', () => {
     it('delegates with an empty array when no status is given', async () => {
       repo.findAll.mockResolvedValue([booking]);
       const result = await service.findAll('u1');
-      expect(repo.findAll).toHaveBeenCalledWith('u1', [], undefined, undefined);
+      expect(repo.findAll).toHaveBeenCalledWith('u1', [], undefined, undefined, undefined, undefined);
       expect(result).toEqual([booking]);
     });
 
     it('passes a single valid status as a one-element array', async () => {
       repo.findAll.mockResolvedValue([]);
       await service.findAll('u1', 'CONFIRMED');
-      expect(repo.findAll).toHaveBeenCalledWith('u1', ['CONFIRMED'], undefined, undefined);
+      expect(repo.findAll).toHaveBeenCalledWith('u1', ['CONFIRMED'], undefined, undefined, undefined, undefined);
     });
 
     it('passes multiple valid statuses as an array', async () => {
       repo.findAll.mockResolvedValue([]);
       await service.findAll('u1', ['CONFIRMED', 'READY']);
-      expect(repo.findAll).toHaveBeenCalledWith('u1', ['CONFIRMED', 'READY'], undefined, undefined);
+      expect(repo.findAll).toHaveBeenCalledWith('u1', ['CONFIRMED', 'READY'], undefined, undefined, undefined, undefined);
     });
 
     it('passes the search query to the repository', async () => {
       repo.findAll.mockResolvedValue([]);
       await service.findAll('u1', undefined, 'smith');
-      expect(repo.findAll).toHaveBeenCalledWith('u1', [], 'smith', undefined);
+      expect(repo.findAll).toHaveBeenCalledWith('u1', [], 'smith', undefined, undefined, undefined);
     });
 
     it('passes the event type to the repository', async () => {
       repo.findAll.mockResolvedValue([]);
       await service.findAll('u1', undefined, undefined, 'WEDDING');
-      expect(repo.findAll).toHaveBeenCalledWith('u1', [], undefined, 'WEDDING');
+      expect(repo.findAll).toHaveBeenCalledWith('u1', [], undefined, 'WEDDING', undefined, undefined);
     });
 
     it('passes event type alongside status and search query', async () => {
       repo.findAll.mockResolvedValue([]);
       await service.findAll('u1', 'CONFIRMED', 'smith', 'CORPORATE');
-      expect(repo.findAll).toHaveBeenCalledWith('u1', ['CONFIRMED'], 'smith', 'CORPORATE');
+      expect(repo.findAll).toHaveBeenCalledWith('u1', ['CONFIRMED'], 'smith', 'CORPORATE', undefined, undefined);
+    });
+
+    it('passes from and to date bounds to the repository', async () => {
+      repo.findAll.mockResolvedValue([]);
+      await service.findAll('u1', undefined, undefined, undefined, '2026-04-06', '2027-04-05');
+      expect(repo.findAll).toHaveBeenCalledWith('u1', [], undefined, undefined, '2026-04-06', '2027-04-05');
+    });
+
+    it('passes date bounds alongside status, search query, and event type', async () => {
+      repo.findAll.mockResolvedValue([]);
+      await service.findAll('u1', 'CONFIRMED', 'smith', 'WEDDING', '2026-04-06', '2027-04-05');
+      expect(repo.findAll).toHaveBeenCalledWith('u1', ['CONFIRMED'], 'smith', 'WEDDING', '2026-04-06', '2027-04-05');
     });
 
     it('throws BadRequestException for an unrecognised status', () => {

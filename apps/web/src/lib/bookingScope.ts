@@ -21,6 +21,10 @@ export interface ListScopeParams {
   q?: string;
   /** The active event-type filter (?eventType=). Lifts to all statuses from resting state. */
   eventType?: string;
+  /** Lower bound for booking date (ISO date string). Lifts to all statuses from resting state. */
+  from?: string;
+  /** Upper bound for booking date (ISO date string). Lifts to all statuses from resting state. */
+  to?: string;
 }
 
 export interface ListScope {
@@ -41,14 +45,14 @@ export interface ListScope {
  * Explicit tab always wins over lifting (per ADR-0041 §3).
  */
 export function resolveListScope(params: ListScopeParams): ListScope {
-  const { tab, q, eventType } = params;
+  const { tab, q, eventType, from, to } = params;
 
   if (tab !== undefined) {
     return { effectiveStatuses: [tab], highlightedTab: tab };
   }
 
   const searchActive = q && q.trim().length >= 2;
-  const filterActive = !!eventType;
+  const filterActive = !!eventType || !!from || !!to;
 
   if (searchActive || filterActive) {
     return { effectiveStatuses: [], highlightedTab: null };

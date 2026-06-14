@@ -45,9 +45,9 @@ const listIncludes = {
 export class BookingsRepository {
   constructor(private prisma: PrismaService) {}
 
-  findAll(userId: string, statuses: BookingStatus[] = [], q?: string, eventType?: string) {
+  findAll(userId: string, statuses: BookingStatus[] = [], q?: string, eventType?: string, from?: string, to?: string) {
     return this.prisma.booking.findMany({
-      where: buildBookingSearchWhere(userId, q, statuses, eventType),
+      where: buildBookingSearchWhere(userId, q, statuses, eventType, from, to),
       include: listIncludes,
       orderBy: { date: 'asc' },
     });

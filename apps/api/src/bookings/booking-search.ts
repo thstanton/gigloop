@@ -33,13 +33,20 @@ export function buildBookingSearchWhere(
   q: string | undefined,
   statuses: BookingStatus[],
   eventType?: string,
+  from?: string,
+  to?: string,
 ): Prisma.BookingWhereInput {
   const tokens = q ? tokenize(q) : [];
+  const dateFilter =
+    from || to
+      ? { date: { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) } }
+      : {};
 
   return {
     userId,
     ...(statuses.length > 0 ? { status: { in: statuses } } : {}),
     ...(eventType ? { eventType } : {}),
+    ...dateFilter,
     ...(tokens.length > 0 ? { AND: tokens.map(tokenWhere) } : {}),
   };
 }

@@ -41,14 +41,18 @@ export class BookingsController {
   @ApiQuery({ name: 'status', required: false, enum: BookingStatus, isArray: true, description: 'Filter by one or more statuses (repeat param for multiple)' })
   @ApiQuery({ name: 'q', required: false, description: 'Free-text search across customer name, email, title, venue, agent, series, event type, and notes' })
   @ApiQuery({ name: 'eventType', required: false, description: 'Filter by event type (equality match — e.g. WEDDING, CORPORATE)' })
+  @ApiQuery({ name: 'from', required: false, description: 'Filter bookings on or after this date (ISO 8601 date, e.g. 2026-04-06)' })
+  @ApiQuery({ name: 'to', required: false, description: 'Filter bookings on or before this date (ISO 8601 date, e.g. 2027-04-05)' })
   @Get()
   findAll(
     @Req() req: AuthedRequest,
     @Query('status') status?: string | string[],
     @Query('q') q?: string,
     @Query('eventType') eventType?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
   ) {
-    return this.service.findAll(req.userId, status, q, eventType);
+    return this.service.findAll(req.userId, status, q, eventType, from, to);
   }
 
   @ApiOperation({ summary: 'Get dashboard action items for upcoming bookings' })

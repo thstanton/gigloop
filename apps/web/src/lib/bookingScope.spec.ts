@@ -127,4 +127,46 @@ describe('resolveListScope', () => {
       expect(highlightedTab).toBe('ACTIVE');
     });
   });
+
+  describe('lift-to-all-statuses branch (date-range filter active, no explicit tab)', () => {
+    it('lifts to all statuses when from is set — date-range applies across full history', () => {
+      // "upcoming gigs" must not be restricted to the active pipeline
+      const { effectiveStatuses } = resolveListScope({ from: '2026-04-06' });
+      expect(effectiveStatuses).toEqual([]);
+    });
+
+    it('clears the highlighted tab when from lifts the scope', () => {
+      const { highlightedTab } = resolveListScope({ from: '2026-04-06' });
+      expect(highlightedTab).toBeNull();
+    });
+
+    it('lifts to all statuses when to is set', () => {
+      const { effectiveStatuses } = resolveListScope({ to: '2026-04-05' });
+      expect(effectiveStatuses).toEqual([]);
+    });
+
+    it('lifts when both from and to are set', () => {
+      const scope = resolveListScope({ from: '2026-04-06', to: '2027-04-05' });
+      expect(scope.effectiveStatuses).toEqual([]);
+      expect(scope.highlightedTab).toBeNull();
+    });
+
+    it('does not lift when explicit tab is selected alongside a date range — tab wins', () => {
+      // Status tab always constrains to that status regardless of other filters (ADR-0041 §3)
+      const scope = resolveListScope({ tab: 'CONFIRMED', from: '2026-04-06' });
+      expect(scope.effectiveStatuses).toEqual(['CONFIRMED']);
+      expect(scope.highlightedTab).toBe('CONFIRMED');
+    });
+
+    it('returns resting state when from and to are both undefined', () => {
+      const { highlightedTab } = resolveListScope({ from: undefined, to: undefined });
+      expect(highlightedTab).toBe('ACTIVE');
+    });
+
+    it('lifts when date range is combined with eventType', () => {
+      const scope = resolveListScope({ from: '2026-04-06', eventType: 'WEDDING' });
+      expect(scope.effectiveStatuses).toEqual([]);
+      expect(scope.highlightedTab).toBeNull();
+    });
+  });
 });
