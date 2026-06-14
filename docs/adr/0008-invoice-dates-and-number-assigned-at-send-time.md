@@ -1,7 +1,13 @@
 # ADR-0008: Invoice dates and number assigned at send time
 
 ## Status
-Accepted
+**Superseded by [ADR-0042](0042-invoice-issued-state-decouple-issue-from-send.md)** (2026-06-14).
+
+The reasoning below — that dates and number must not be assigned to a mere draft — still holds. What changed is the *commit point*: they are now assigned when the invoice is **Issued** (finalised), not when it is **Sent** (delivered). ADR-0042 introduces the `Issued` state between `Draft` and `Sent` and moves `issueDate` / `dueDate` / `invoiceNumber` assignment to issue time. Everything below should be read as "at issue time," not "at send time."
+
+---
+
+_Original (now superseded):_
 
 ## Context
 Invoices are created as drafts before being formally issued. The question was when to assign `issueDate`, `dueDate`, and `invoiceNumber` — at creation time or at the moment the invoice is sent.
