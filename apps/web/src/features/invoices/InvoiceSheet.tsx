@@ -82,6 +82,7 @@ export default function InvoiceSheet({
   prefill,
 }: Props) {
   const isEdit = !!invoice;
+  const submitLabel = isEdit ? 'Save changes' : 'Create invoice';
   const queryClient = useQueryClient();
 
   const {
@@ -289,7 +290,7 @@ export default function InvoiceSheet({
           )}
 
           <Button type="submit" disabled={isSubmitting} className="w-full">
-            {isSubmitting ? 'Saving…' : isEdit ? 'Save changes' : 'Create invoice'}
+            {isSubmitting ? 'Saving…' : submitLabel}
           </Button>
         </form>
       </SheetContent>

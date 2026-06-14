@@ -203,6 +203,8 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
               booking={booking}
               documents={documents}
               isCreating={contractActions.isCreatingContract}
+              isVoidingContract={contractActions.isVoidingContract}
+              isDeletingContract={contractActions.isDeletingContract}
               onCreateContract={() => contractActions.createContract(() => {
                 setSearchParams({ sheet: 'contract' });
               })}

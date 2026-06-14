@@ -43,7 +43,10 @@ export function useContractActions(bookingId: string) {
       createContractMutation.mutate(undefined, { onSuccess: onCreated }),
     isCreatingContract: createContractMutation.isPending,
     sendContract: (contractId: string) => sendContractMutation.mutate(contractId),
+    isSendingContract: sendContractMutation.isPending,
     voidContract: (args: { contractId: string; confirmSignedVoid: boolean }) => voidContractMutation.mutate(args),
+    isVoidingContract: voidContractMutation.isPending,
     deleteContract: (contractId: string) => deleteContractMutation.mutate(contractId),
+    isDeletingContract: deleteContractMutation.isPending,
   };
 }

@@ -51,6 +51,8 @@ const meta = {
   decorators: [(Story) => React.createElement(MemoryRouter, {}, React.createElement(Story))],
   args: {
     isCreating: false,
+    isVoidingContract: false,
+    isDeletingContract: false,
     onCreateContract: noop,
     onEdit: noop,
     onPreview: noop,

@@ -58,6 +58,7 @@ export function useBookingActions(bookingId: string) {
     autoCreateInvoice: (args: { isDeposit: boolean; amount: number }) =>
       autoCreateInvoiceMutation.mutate(args),
     deleteInvoice: (invoiceId: string) => deleteInvoiceMutation.mutate(invoiceId),
+    isDeletingInvoice: deleteInvoiceMutation.isPending,
     isPending:
       contractMutation.isPending ||
       depositMutation.isPending ||

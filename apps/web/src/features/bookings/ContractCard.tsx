@@ -37,9 +37,11 @@ function getContractActions(
     onSend: () => void;
     onVoid: (confirmSignedVoid: boolean) => void;
     onDelete: () => void;
+    isVoiding: boolean;
+    isDeleting: boolean;
   }
 ): RowAction[] {
-  const { onEdit, onPreview, onSend, onVoid, onDelete } = handlers;
+  const { onEdit, onPreview, onSend, onVoid, onDelete, isVoiding, isDeleting } = handlers;
 
   if (status === 'DRAFT') {
     return [
@@ -50,6 +52,7 @@ function getContractActions(
         onClick: onDelete,
         variant: 'destructive',
         confirmation: { title: 'Delete contract?', description: 'This draft will be permanently removed.' },
+        isPending: isDeleting,
       },
     ];
   }
@@ -62,6 +65,7 @@ function getContractActions(
         onClick: () => onVoid(false),
         variant: 'destructive',
         confirmation: { title: 'Void contract?', description: 'The contract will be voided. You can create a new one if needed.' },
+        isPending: isVoiding,
       },
     ];
   }
@@ -85,6 +89,7 @@ function getContractActions(
         title: 'Void signed contract?',
         description: 'This contract has been signed by the client. Voiding it will require them to sign a new contract.',
       },
+      isPending: isVoiding,
     });
     return actions;
   }
@@ -96,6 +101,8 @@ export interface ContractCardProps {
   booking: BookingDetail;
   documents: Document[];
   isCreating: boolean;
+  isVoidingContract: boolean;
+  isDeletingContract: boolean;
   onCreateContract: () => void;
   onEdit: () => void;
   onPreview: () => void;
@@ -108,6 +115,8 @@ export default function ContractCard({
   booking,
   documents,
   isCreating,
+  isVoidingContract,
+  isDeletingContract,
   onCreateContract,
   onEdit,
   onPreview,
@@ -129,7 +138,7 @@ export default function ContractCard({
   ) : null;
 
   const actions = status && status !== 'VOID'
-    ? getContractActions(status, contractDoc, { onEdit, onPreview, onSend, onVoid, onDelete })
+    ? getContractActions(status, contractDoc, { onEdit, onPreview, onSend, onVoid, onDelete, isVoiding: isVoidingContract, isDeleting: isDeletingContract })
     : null;
 
   return (

@@ -33,6 +33,8 @@ const meta = {
   decorators: [(Story) => React.createElement(MemoryRouter, {}, React.createElement(Story))],
   args: {
     pdfUrl: null,
+    isDeletePending: false,
+    isVoidPending: false,
     onEdit: noop,
     onDelete: noop,
     onSend: noop,

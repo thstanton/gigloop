@@ -69,6 +69,7 @@ export function DocumentList({ bookingId, documents, invoices }: Props) {
             variant: 'destructive',
             confirmation: { title: 'Delete document?', description: 'This uploaded document will be permanently removed.' },
             onClick: () => deleteMutation.mutate(doc.id),
+            isPending: deleteMutation.isPending,
           });
         }
 

@@ -78,6 +78,8 @@ export function SeriesInvoiceSection({
       <InvoiceRow
         invoice={invoice as unknown as Invoice}
         pdfUrl={null}
+        isDeletePending={false}
+        isVoidPending={false}
         onEdit={() => onEdit(invoice)}
         onDelete={() => onDelete(invoice)}
         onSend={() => onSend(invoice)}
@@ -222,6 +224,8 @@ export default function InvoiceSection({ bookingId }: Readonly<InvoiceSectionPro
             key={inv.id}
             invoice={inv}
             pdfUrl={documents.find((d) => d.type === 'INVOICE' && d.invoiceId === inv.id)?.url ?? null}
+            isDeletePending={actions.isDeletingInvoice}
+            isVoidPending={invoiceActions.isVoidingInvoice}
             onEdit={openEditInvoice}
             onDelete={(inv) => actions.deleteInvoice(inv.id)}
             onSend={openSendInvoice}
