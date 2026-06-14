@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -27,12 +28,34 @@ function FilterBar({
   active: Filter;
   onChange: (v: Filter) => void;
 }) {
+  const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
+
+  function handleKeyDown(e: React.KeyboardEvent, index: number) {
+    let next: number | null = null;
+    if (e.key === 'ArrowRight') next = (index + 1) % FILTERS.length;
+    if (e.key === 'ArrowLeft') next = (index - 1 + FILTERS.length) % FILTERS.length;
+    if (next !== null) {
+      e.preventDefault();
+      tabRefs.current[next]?.focus();
+      onChange(FILTERS[next].value);
+    }
+  }
+
   return (
-    <div className="flex gap-0 border-b border-border overflow-x-auto overflow-y-hidden scrollbar-none">
-      {FILTERS.map(({ label, value }) => (
+    <div
+      role="tablist"
+      aria-label="Filter bookings by status"
+      className="flex gap-0 border-b border-border overflow-x-auto overflow-y-hidden scrollbar-none"
+    >
+      {FILTERS.map(({ label, value }, index) => (
         <button
           key={value}
+          role="tab"
+          aria-selected={active === value}
+          ref={(el) => { tabRefs.current[index] = el; }}
+          tabIndex={active === value ? 0 : -1}
           onClick={() => onChange(value)}
+          onKeyDown={(e) => handleKeyDown(e, index)}
           className={cn(
             'px-3 py-2.5 text-sm whitespace-nowrap transition-colors duration-150 -mb-px border-b-2',
             active === value

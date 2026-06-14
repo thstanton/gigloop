@@ -59,6 +59,7 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
   const [selectedSeriesId, setSelectedSeriesId] = useState<string | null>(null);
 
   const sheet = searchParams.get('sheet');
+
   const sheetInvoiceId = searchParams.get('invoiceId');
   const sheetContactId = searchParams.get('contactId');
   const sheetTemplateType = searchParams.get('templateType') ?? undefined;
@@ -78,6 +79,7 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
     confirmStatusTransition,
     isConfirmingTransition,
   } = useBookingChecklist(bookingId, booking, isLoaded);
+
   const { data: invoices = [] } = useBookingInvoices(bookingId);
   const contractActions = useContractActions(bookingId);
   const fields = useBookingFields(bookingId);
@@ -149,7 +151,7 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
       <BookingEditDrawer booking={booking} />
       <ContactEditSheet
         contact={editingContact}
-        onClose={() => setSearchParams({})}
+        onClose={() => { setSearchParams({}); }}
         onUnlink={editingContact?.id === booking.venue?.id ? () => { fields.updateVenue(null); setSearchParams({}); } : undefined}
       />
       <InvoiceSheet
