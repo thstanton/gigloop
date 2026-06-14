@@ -78,7 +78,7 @@ export default function BookingDetailPage() {
       <div className="px-4 md:px-6 py-6 max-w-7xl mx-auto">
         <div className="h-4 w-20 bg-border rounded" />
         <OverviewStripSkeleton />
-        <div className="md:hidden"><MobileTabsSkeleton /></div>
+        <div className="md:hidden mt-6"><MobileTabsSkeleton /></div>
         <div className="hidden md:block"><DesktopGridSkeleton /></div>
       </div>
     );
