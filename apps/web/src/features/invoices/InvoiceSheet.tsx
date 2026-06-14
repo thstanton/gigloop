@@ -289,7 +289,7 @@ export default function InvoiceSheet({
           )}
 
           <Button type="submit" disabled={isSubmitting} className="w-full">
-            {isEdit ? 'Save changes' : 'Create invoice'}
+            {isSubmitting ? 'Saving…' : isEdit ? 'Save changes' : 'Create invoice'}
           </Button>
         </form>
       </SheetContent>

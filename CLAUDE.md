@@ -281,6 +281,30 @@ GigMan is used on phones. Design every screen for 375px first, then enhance for 
 - Empty states get an icon, a heading, one paragraph, and one CTA. Nothing else.
 - Forms use react-hook-form with a Zod schema. Validation messages render below the field in text-status-cancelled text-sm.
 
+## Loading & Feedback States
+
+Every mutation must surface loading state and failure to the user. Three tiers:
+
+### Tier 1 — Inline save (form config, field edits)
+- Button: `disabled={mutation.isPending}`, label changes to `"Saving…"`
+- Success: brief inline `"Saved"` text (cleared on sheet re-open)
+- Failure: inline error message below the button
+
+### Tier 2 — State-changing async (send, void, delete, create, status transitions)
+- Button: `disabled={mutation.isPending}`, label changes to describe the action (`"Sending…"`, `"Voiding…"`, `"Creating…"`, `"Deleting…"`)
+- Success: UI reflects the new state (card updates, item disappears, navigation occurs) — no separate "Saved" inline
+- Failure: toast via `toast({ title: '…', variant: 'destructive' })`
+
+### Tier 3 — Low-stakes toggle (checklist complete/pending, small switches)
+- Optimistic update: apply state change immediately via `onMutate`
+- On error: roll back to previous state + show error toast
+- No loading text on the trigger needed
+
+### All tiers — mandatory
+- **Never use raw `apiGet`/`apiPost`/etc. outside a `useMutation` for state-changing calls.** All mutations go through `useMutation` so loading state is trackable.
+- **`onError` is required on every mutation.** Silent failures are never acceptable.
+- Failure must always surface to the user — inline error or toast.
+
 ## Agent skills
 
 ### Issue tracker
