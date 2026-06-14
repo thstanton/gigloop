@@ -9,8 +9,11 @@
 # Env:
 #   RALPH_K=3              per-issue cold-restart cap before escalation (default 3)
 #   RALPH_MAX=20           global iteration cap per run (default 20)
+#   RALPH_STALL=2          consecutive NO-SELECTION iterations before a clean stall
+#                          (afk mode; default 2 — stops spinning when the agent keeps
+#                          declining work bash still lists)
 #   RALPH_UNSAFE=1         run inside Docker Sandbox + --dangerously-skip-permissions
-#   RALPH_WEBHOOK_URL=url  POST target for ESCALATE/COMPLETE/MAX-HIT events (optional)
+#   RALPH_WEBHOOK_URL=url  POST target for ESCALATE/COMPLETE/STALL/MAX-HIT events (optional)
 #
 # Sandbox one-time setup (RALPH_UNSAFE=1, ADR-0040 §7):
 #   1. sbx secret set-custom -g --host api.anthropic.com \
@@ -23,7 +26,10 @@
 #   GitHub mobile is the zero-code dashboard — watch for ready-for-human label
 #   flips, per-slice commits on the branch, and the completion PR notification.
 #   For richer signals: `tail -f ralph.log` (one structured line per iteration);
-#   set RALPH_WEBHOOK_URL to push-notify on ESCALATE/COMPLETE/MAX-HIT.
+#   set RALPH_WEBHOOK_URL to push-notify on ESCALATE/COMPLETE/STALL/MAX-HIT.
+#   Terminal events: COMPLETE (all work delivered), COMPLETE-LOCAL (delivered but the
+#   sandbox couldn't push — branch is committed, push + open the PR by hand), STALL
+#   (agent declined listed work RALPH_STALL times — needs a human), MAX-HIT, ESCALATE.
 #   Note: agent clean-aborts (PROMPT.md step 7) relabel the issue inside the
 #   cold claude process — ralph.sh's escalate() never sees them, so no webhook
 #   fires on that path. Watch for ready-for-human label changes on the repo.
@@ -36,6 +42,7 @@ PROGRESS="$ROOT/progress.md"
 LOG="$ROOT/ralph.log"
 K="${RALPH_K:-3}"
 MAX="${RALPH_MAX:-20}"
+STALL="${RALPH_STALL:-2}"
 
 # ---------------------------------------------------------------------------
 # Arg parsing
@@ -130,8 +137,17 @@ is_issue_closed() {
 # exist without having passed the commit hook: the only honest done-predicate the
 # loop can cross-check in bash. (ADR-0040 §5: verify before honouring the promise.)
 has_closing_commit() {
-  local n=$1 range
-  if git rev-parse --verify -q main >/dev/null 2>&1; then range="main..HEAD"; else range="HEAD"; fi
+  local n=$1 base range
+  # Prefer origin/main as the comparison base. A missing local `main` (this repo has
+  # none — only origin/main) or a stale/moved local `main` would corrupt `main..HEAD`,
+  # hiding closing commits so delivered slices stay wrongly "eligible" and the loop
+  # can never terminate. origin/main is the stable remote-tracking ref and is present
+  # even in the passthrough-mounted sandbox. Fall back to local main, then to whole
+  # HEAD history (always safe — over-matching our own branch lineage at worst).
+  if git rev-parse --verify -q origin/main >/dev/null 2>&1; then base="origin/main"
+  elif git rev-parse --verify -q main >/dev/null 2>&1; then base="main"
+  else base=""; fi
+  range="HEAD"; [[ -n "$base" ]] && range="${base}..HEAD"
   git log "$range" --pretty=%B 2>/dev/null | grep -qE "(Closes|Fixes|Resolves) #${n}([^0-9]|$)"
 }
 
@@ -140,11 +156,24 @@ has_closing_commit() {
 # satisfied (closed OR already committed on this branch). bash *filters*; the agent
 # *picks* — that split is the whole point (ADR-0040 §4).
 list_eligible() {
-  local prd=$PRD_N
-  while IFS= read -r row; do
-    local num body parent_line ok=true ref
-    num=$(echo "$row" | jq -r '.number')
-    body=$(echo "$row" | jq -r '.body')
+  local prd=$PRD_N num body parent_line ok ref refs
+
+  # Drive off issue *numbers* only, then fetch each body with a targeted
+  # `gh issue view --jq` call. The old form streamed `gh ... --jq '.[]'` and
+  # re-parsed each line with `echo "$row" | jq` — which throws
+  # "Invalid string: control characters U+0000–U+001F must be escaped" whenever a
+  # body contains a literal control char, silently dropping the issue and making
+  # this function (and remaining_count) non-deterministic. `gh --jq` interprets the
+  # field server-side and prints it raw, so no body content can break the parse.
+  #
+  # Iterate over a word-split number list (issue numbers never contain spaces), NOT
+  # a `while read < <(gh ...)` loop: the per-issue `gh issue view` / `is_issue_closed`
+  # calls below read stdin and would drain a process-substitution feed, killing the
+  # loop after one pass.
+  for num in $(gh issue list --label ready-for-agent --state open --json number --limit 50 --jq '.[].number' 2>/dev/null); do
+    ok=true
+
+    body=$(gh issue view "$num" --json body --jq '.body' 2>/dev/null) || continue
 
     # Must declare ## Parent pointing to the PRD
     parent_line=$(echo "$body" | awk '/^## Parent/{f=1; next} f{print; exit}')
@@ -156,14 +185,20 @@ list_eligible() {
     # Burned through its cold-restart attempts?
     [[ "$(read_attempts "$num")" -ge "$K" ]] && continue
 
-    # Every ## Blocked by ref must be closed OR already committed on this branch
-    while IFS= read -r ref; do
+    # Every ## Blocked by ref must be closed OR already committed on this branch.
+    # Match any `#N` anywhere in the block (not only lines starting `- #`), and key
+    # off the `#` so issue refs are picked up even when prose follows
+    # ("- Slice 3 (event-type filter) #421") without numbers in the description text
+    # being mistaken for blockers. NB: blockers written with no `#N` ref at all are
+    # invisible here by design — an issue-authoring requirement, not a parser gap.
+    refs=$(echo "$body" | awk '/^## Blocked by/{f=1; next} /^## /{f=0} f' | grep -oE '#[0-9]+' | tr -d '#')
+    for ref in $refs; do
       is_issue_closed "$ref" || has_closing_commit "$ref" || { ok=false; break; }
-    done < <(echo "$body" | awk '/^## Blocked by/{f=1; next} /^## /{f=0} f && /- #/{print}' | grep -oE '[0-9]+')
+    done
 
     $ok || continue
     echo "$num"
-  done < <(gh issue list --label ready-for-agent --state open --json number,body --limit 50 --jq '.[]')
+  done
 }
 
 escalate() {
@@ -175,14 +210,34 @@ escalate() {
   notify "ralph: ESCALATE #$issue — $reason (mode=$MODE)"
 }
 
-open_pr_if_needed() {
+# Terminal success path: the loop has decided the work is COMPLETE. Try to push the
+# branch and open the PR — but the commits are already durable locally, so a failure
+# here (typically a sandbox with no GitHub auth secret) must NOT crash the run.
+# Completion has to read as success (exit 0), never a non-zero abort at the moment of
+# done-ness. Always exits.
+finish_run() {
   local branch
   branch=$(git rev-parse --abbrev-ref HEAD)
-  if ! gh pr list --head "$branch" --state open --json number --jq '.[0].number' 2>/dev/null | grep -qE '[0-9]'; then
-    echo "ralph: opening PR on $branch → main" >&2
-    git push -u origin "$branch"
-    gh pr create --base main --fill
+
+  if gh pr list --head "$branch" --state open --json number --jq '.[0].number' 2>/dev/null | grep -qE '[0-9]'; then
+    echo "ralph: PR already open on $branch — done" >&2
+    exit 0
   fi
+
+  echo "ralph: opening PR on $branch → main" >&2
+  # `set -e` is suspended inside an `if` condition, so a failing push/create just
+  # makes the branch false rather than aborting the script.
+  if git push -u origin "$branch" && gh pr create --base main --fill; then
+    echo "ralph: PR opened on $branch — done" >&2
+    heartbeat "event=PR-OPENED branch=$branch"
+    exit 0
+  fi
+
+  echo "ralph: could not push / open PR (no GitHub auth?) — work is committed locally; push + open the PR manually" >&2
+  log_progress "COMPLETE-LOCAL branch=$branch — push + open PR manually (or set sandbox GitHub auth)"
+  heartbeat "event=COMPLETE-LOCAL branch=$branch"
+  notify "ralph: COMPLETE-LOCAL $branch — all work committed; push + open PR manually"
+  exit 0
 }
 
 # ---------------------------------------------------------------------------
@@ -286,8 +341,10 @@ run_iteration() {
   if [[ -z "$selected" ]]; then
     echo "ralph: no issue selected this iteration" >&2
     log_progress "NO-SELECTION mode=$MODE"
-    heartbeat "mode=$MODE issue=none decision=CONTINUE"
-    echo "CONTINUE"
+    heartbeat "mode=$MODE issue=none decision=NO-SELECTION"
+    # Distinct from CONTINUE so the caller can count consecutive declines and stall
+    # rather than spin billed cold invocations to MAX (see run_afk circuit-breaker).
+    echo "NO-SELECTION"
     return 0
   fi
 
@@ -337,13 +394,21 @@ run_issue() {
 
     if has_closing_commit "$ISSUE_N"; then
       echo "ralph: #$ISSUE_N already delivered on this branch" >&2
-      open_pr_if_needed
-      exit 0
+      finish_run
     fi
 
     # Already escalated on a prior run? Stop (the relabel persists across restarts).
     if [[ "$(read_attempts "$ISSUE_N")" -ge $K ]]; then
       echo "ralph: #$ISSUE_N at attempt cap — handed to a human" >&2
+      exit 0
+    fi
+
+    # Agent may have relabeled to ready-for-human mid-run — respect it immediately
+    # rather than burning through the remaining K attempts.
+    if gh issue view "$ISSUE_N" --json labels --jq '.labels[].name' 2>/dev/null \
+        | grep -q "ready-for-human"; then
+      echo "ralph: #$ISSUE_N relabeled to ready-for-human — stopping" >&2
+      heartbeat "mode=issue issue=$ISSUE_N event=ESCALATED-BY-AGENT"
       exit 0
     fi
 
@@ -354,15 +419,14 @@ run_issue() {
       echo "ralph: #$ISSUE_N COMPLETE" >&2
       heartbeat "mode=issue issue=$ISSUE_N event=COMPLETE iters=$iters"
       notify "ralph: COMPLETE #$ISSUE_N (mode=issue, $iters iterations)"
-      open_pr_if_needed
-      exit 0
+      finish_run
     fi
   done
 }
 
 run_afk() {
-  echo "ralph: --afk --prd #$PRD_N (K=$K MAX=$MAX)" >&2
-  local iters=0
+  echo "ralph: --afk --prd #$PRD_N (K=$K MAX=$MAX STALL=$STALL)" >&2
+  local iters=0 no_select_streak=0
 
   while true; do
     iters=$((iters + 1))
@@ -377,8 +441,7 @@ run_afk() {
       echo "ralph: no eligible ready-for-agent slices remain in PRD #$PRD_N" >&2
       heartbeat "mode=afk prd=$PRD_N event=COMPLETE iters=$iters"
       notify "ralph: COMPLETE PRD #$PRD_N — no eligible slices remain ($iters iterations)"
-      open_pr_if_needed
-      exit 0
+      finish_run
     fi
 
     local decision
@@ -388,8 +451,25 @@ run_afk() {
       echo "ralph: PRD #$PRD_N COMPLETE — no eligible work remains" >&2
       heartbeat "mode=afk prd=$PRD_N event=COMPLETE iters=$iters"
       notify "ralph: COMPLETE PRD #$PRD_N — promise received ($iters iterations)"
-      open_pr_if_needed
-      exit 0
+      finish_run
+    fi
+
+    # Circuit-breaker. We only reach here with list_eligible non-empty, so a
+    # NO-SELECTION means bash thinks there is work but the agent declined it. One
+    # miss can be a transient model hiccup; STALL in a row means the candidate set
+    # is stale or the agent is stuck — stop cleanly and let a human look instead of
+    # spinning billed cold invocations all the way to MAX (the bug this fixes).
+    if [[ "$decision" == "NO-SELECTION" ]]; then
+      no_select_streak=$((no_select_streak + 1))
+      if [[ $no_select_streak -ge $STALL ]]; then
+        echo "ralph: $no_select_streak consecutive NO-SELECTIONs with work still listed — stalling" >&2
+        log_progress "STALL mode=afk prd=$PRD_N consecutive_no_selection=$no_select_streak"
+        heartbeat "mode=afk prd=$PRD_N event=STALL no_selection=$no_select_streak"
+        notify "ralph: STALL PRD #$PRD_N — agent declined ${no_select_streak}× while work listed (mode=afk)"
+        exit 0
+      fi
+    else
+      no_select_streak=0
     fi
   done
 }
