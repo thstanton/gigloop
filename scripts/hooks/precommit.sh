@@ -3,8 +3,12 @@
 # Fast and blocking. Docs-only commits touch neither workspace and pass instantly.
 set -u
 
+ROOT=$(git rev-parse --show-toplevel)
 staged=$(git diff --cached --name-only)
 status=0
+
+# Shortcut-detector: unconditional — lowered-bar patterns can land in any file.
+git diff --cached | node "$ROOT/scripts/shortcut-detector.mjs" || status=1
 
 if printf '%s\n' "$staged" | grep -q '^apps/api/'; then
   (cd apps/api && bun run lint) || status=1
