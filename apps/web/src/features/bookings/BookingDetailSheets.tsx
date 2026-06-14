@@ -4,12 +4,12 @@ import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import {
   Select,
   SelectContent,
@@ -119,16 +119,16 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
   return (
     <>
       {readyDialogStatus && (
-        <Dialog open onOpenChange={dismissReadyDialog}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle className="font-display text-xl">{celebratoryTitle}</DialogTitle>
-            </DialogHeader>
-            <DialogDescription>
+        <Sheet open onOpenChange={dismissReadyDialog}>
+          <SheetContent side="bottom">
+            <SheetHeader>
+              <SheetTitle className="font-display text-xl">{celebratoryTitle}</SheetTitle>
+            </SheetHeader>
+            <SheetDescription className="mt-2">
               You've completed all the tasks for this booking. Ready to move it to{' '}
               <span className="font-medium text-foreground">{STATUS_LABELS[readyDialogStatus]}</span>?
-            </DialogDescription>
-            <div className="flex gap-2 justify-end mt-2">
+            </SheetDescription>
+            <div className="flex gap-2 justify-end mt-4">
               <Button variant="outline" onClick={dismissReadyDialog} disabled={isConfirmingTransition}>
                 Not yet
               </Button>
@@ -136,8 +136,8 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
                 {isConfirmingTransition ? 'Saving…' : `Mark as ${STATUS_LABELS[readyDialogStatus]}`}
               </Button>
             </div>
-          </DialogContent>
-        </Dialog>
+          </SheetContent>
+        </Sheet>
       )}
 
       <ContractSheet
@@ -186,11 +186,11 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
         />
       )}
 
-      <Dialog open={sheet === 'series'} onOpenChange={(open) => { if (!open) { setSearchParams({}); setSelectedSeriesId(null); } }}>
-        <DialogContent aria-describedby={undefined}>
-          <DialogHeader>
-            <DialogTitle>Add to series</DialogTitle>
-          </DialogHeader>
+      <Sheet open={sheet === 'series'} onOpenChange={(open) => { if (!open) { setSearchParams({}); setSelectedSeriesId(null); } }}>
+        <SheetContent side="bottom" aria-describedby={undefined}>
+          <SheetHeader>
+            <SheetTitle>Add to series</SheetTitle>
+          </SheetHeader>
           <div className="space-y-4 pt-2">
             <Select value={selectedSeriesId ?? ''} onValueChange={setSelectedSeriesId}>
               <SelectTrigger>
@@ -228,15 +228,15 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
               <Button variant="outline" onClick={() => { setSearchParams({}); setSelectedSeriesId(null); }}>Cancel</Button>
             </div>
           </div>
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
 
-      <Dialog open={sheet === 'customerMismatch'} onOpenChange={(open) => { if (!open) setSearchParams({ sheet: 'series' }); }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Customer mismatch</DialogTitle>
-          </DialogHeader>
-          <DialogDescription className="pt-2">{sheetWarning}</DialogDescription>
+      <Sheet open={sheet === 'customerMismatch'} onOpenChange={(open) => { if (!open) setSearchParams({ sheet: 'series' }); }}>
+        <SheetContent side="bottom">
+          <SheetHeader>
+            <SheetTitle>Customer mismatch</SheetTitle>
+          </SheetHeader>
+          <SheetDescription className="pt-2">{sheetWarning}</SheetDescription>
           <div className="flex gap-3 pt-4">
             <Button
               onClick={() => {
@@ -255,8 +255,8 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
             </Button>
             <Button variant="outline" onClick={() => setSearchParams({ sheet: 'series' })}>Cancel</Button>
           </div>
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
     </>
   );
 }

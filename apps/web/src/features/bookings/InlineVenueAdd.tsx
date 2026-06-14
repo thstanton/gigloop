@@ -3,11 +3,11 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import ContactPicker from '@/features/bookings/ContactPicker';
 import { apiPatch } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
@@ -39,11 +39,11 @@ export function InlineVenueAdd({ bookingId }: { bookingId: string }) {
           + Add
         </button>
       </div>
-      <Dialog open={sheetOpen} onOpenChange={setSheetOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add venue</DialogTitle>
-          </DialogHeader>
+      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+        <SheetContent side="bottom">
+          <SheetHeader>
+            <SheetTitle>Add venue</SheetTitle>
+          </SheetHeader>
           <ContactPicker
             value={null}
             onChange={(id) => { if (id) mutation.mutate(id); }}
@@ -56,8 +56,8 @@ export function InlineVenueAdd({ bookingId }: { bookingId: string }) {
               Cancel
             </Button>
           </div>
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
     </>
   );
 }

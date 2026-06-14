@@ -8,12 +8,12 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
 import { STATUS_ORDER } from '@/lib/constants';
 import type { BookingStatus, ChecklistItem } from '@/types/api';
@@ -49,27 +49,27 @@ function OutstandingChecklistDialog({ pendingStatus, outstandingItems, onConfirm
   const plural = count === 1 ? '' : 's';
 
   return (
-    <Dialog open onOpenChange={onCancel}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Outstanding checklist items</DialogTitle>
-        </DialogHeader>
-        <DialogDescription>
+    <Sheet open onOpenChange={onCancel}>
+      <SheetContent side="bottom">
+        <SheetHeader>
+          <SheetTitle>Outstanding checklist items</SheetTitle>
+        </SheetHeader>
+        <SheetDescription>
           {count} item{plural} still outstanding for{' '}
           <span className="font-medium text-foreground">{label}</span>:
-        </DialogDescription>
-        <ul className="text-sm space-y-1 list-disc list-inside text-foreground">
+        </SheetDescription>
+        <ul className="text-sm space-y-1 list-disc list-inside text-foreground mt-2">
           {outstandingItems.map((item) => (
             <li key={item.id}>{item.label}</li>
           ))}
         </ul>
-        <p className="text-sm text-muted">Mark as {label} anyway?</p>
-        <div className="flex gap-2 justify-end mt-2">
+        <p className="text-sm text-muted mt-3">Mark as {label} anyway?</p>
+        <div className="flex gap-2 justify-end mt-4">
           <Button variant="outline" onClick={onCancel}>Cancel</Button>
           <Button onClick={onConfirm}>Mark as {label}</Button>
         </div>
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   );
 }
 
