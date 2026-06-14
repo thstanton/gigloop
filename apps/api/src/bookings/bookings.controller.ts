@@ -37,10 +37,10 @@ type AuthedRequest = Request & { userId: string };
 export class BookingsController {
   constructor(private service: BookingsService) {}
 
-  @ApiOperation({ summary: 'List bookings (excludes CANCELLED by default)' })
-  @ApiQuery({ name: 'status', required: false, enum: BookingStatus, description: 'Filter by status' })
+  @ApiOperation({ summary: 'List bookings (returns all statuses when no status param supplied)' })
+  @ApiQuery({ name: 'status', required: false, enum: BookingStatus, isArray: true, description: 'Filter by one or more statuses (repeat param for multiple)' })
   @Get()
-  findAll(@Req() req: AuthedRequest, @Query('status') status?: string) {
+  findAll(@Req() req: AuthedRequest, @Query('status') status?: string | string[]) {
     return this.service.findAll(req.userId, status);
   }
 

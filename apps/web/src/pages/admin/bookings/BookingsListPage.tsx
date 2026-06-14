@@ -4,29 +4,28 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import BookingsTable from '@/features/bookings/BookingsTable';
 import { useBookings } from '@/lib/hooks/useBookings';
+import { resolveListScope, type ListTab } from '@/lib/bookingScope';
 import type { BookingStatus } from '@/types/api';
 import { cn } from '@/lib/utils';
 
 // ─── Filter tabs ─────────────────────────────────────────────────────────────
 
-type Filter = BookingStatus | 'ALL';
-
-const FILTERS: { label: string; value: Filter }[] = [
-  { label: 'All',         value: 'ALL'         },
-  { label: 'Enquiry',     value: 'ENQUIRY'     },
-  { label: 'Provisional', value: 'PROVISIONAL' },
-  { label: 'Confirmed',   value: 'CONFIRMED'   },
-  { label: 'Ready',     value: 'READY'     },
-  { label: 'Complete',  value: 'COMPLETE'  },
-  { label: 'Cancelled', value: 'CANCELLED' },
+const FILTERS: { label: string; value: ListTab }[] = [
+  { label: 'Active',       value: 'ACTIVE'      },
+  { label: 'Enquiry',      value: 'ENQUIRY'     },
+  { label: 'Provisional',  value: 'PROVISIONAL' },
+  { label: 'Confirmed',    value: 'CONFIRMED'   },
+  { label: 'Ready',        value: 'READY'       },
+  { label: 'Complete',     value: 'COMPLETE'    },
+  { label: 'Cancelled',    value: 'CANCELLED'   },
 ];
 
 function FilterBar({
   active,
   onChange,
 }: {
-  active: Filter;
-  onChange: (v: Filter) => void;
+  active: ListTab | null;
+  onChange: (v: ListTab) => void;
 }) {
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
@@ -123,12 +122,18 @@ export default function BookingsListPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const activeFilter = (searchParams.get('status') as Filter | null) ?? 'ALL';
-  const { data = [], isLoading, isError } = useBookings(activeFilter);
+  const statusParam = searchParams.get('status') as BookingStatus | null;
+  const { effectiveStatuses, highlightedTab } = resolveListScope({ tab: statusParam ?? undefined });
 
-  function handleFilterChange(value: Filter) {
-    setSearchParams(value === 'ALL' ? {} : { status: value });
+  const { data = [], isLoading, isError } = useBookings({ statuses: effectiveStatuses });
+
+  function handleFilterChange(value: ListTab) {
+    // 'ACTIVE' clears the status param — it is the resting/default state
+    setSearchParams(value === 'ACTIVE' ? {} : { status: value });
   }
+
+  const selectValue = highlightedTab ?? 'ACTIVE';
+  const defaultSortDesc = highlightedTab === 'COMPLETE';
 
   return (
     <div className="px-6 py-8 max-w-6xl mx-auto">
@@ -142,10 +147,10 @@ export default function BookingsListPage() {
 
       {/* Filter — tabs on desktop, select on mobile */}
       <div className="hidden md:block">
-        <FilterBar active={activeFilter} onChange={handleFilterChange} />
+        <FilterBar active={highlightedTab} onChange={handleFilterChange} />
       </div>
       <div className="md:hidden mb-4">
-        <Select value={activeFilter} onValueChange={(v) => handleFilterChange(v as Filter)}>
+        <Select value={selectValue} onValueChange={(v) => handleFilterChange(v as ListTab)}>
           <SelectTrigger>
             <SelectValue />
           </SelectTrigger>
@@ -175,8 +180,10 @@ export default function BookingsListPage() {
 
         {!isLoading && !isError && (
           <BookingsTable
+            key={String(highlightedTab)}
             data={data}
             onNew={() => navigate('/admin/bookings/new')}
+            defaultSortDesc={defaultSortDesc}
           />
         )}
       </div>

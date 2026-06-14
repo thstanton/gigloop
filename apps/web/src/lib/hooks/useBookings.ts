@@ -3,16 +3,19 @@ import { useAuth } from '@clerk/react';
 import { apiGet } from '@/lib/api';
 import type { BookingListItem, BookingStatus } from '@/types/api';
 
-type Filter = BookingStatus | 'ALL';
+interface BookingsQueryParams {
+  /** Statuses to request. Empty array = no filter (all statuses returned by the API). */
+  statuses: BookingStatus[];
+}
 
-export function useBookings(filter: Filter) {
+export function useBookings({ statuses }: BookingsQueryParams) {
   const { isLoaded } = useAuth();
 
   return useQuery({
-    queryKey: ['bookings', filter],
+    queryKey: ['bookings', [...statuses].sort((a, b) => a.localeCompare(b))],
     queryFn: () => {
-      const path = filter === 'ALL' ? '/bookings' : `/bookings?status=${filter}`;
-      return apiGet<BookingListItem[]>(path);
+      const search = statuses.map((s) => `status=${s}`).join('&');
+      return apiGet<BookingListItem[]>(search ? `/bookings?${search}` : '/bookings');
     },
     enabled: isLoaded,
   });

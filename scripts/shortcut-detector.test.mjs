@@ -48,6 +48,24 @@ test('deleted expect — violation', () => {
   assert.match(v[0].reason, /assertion deleted/);
 });
 
+test('replaced expect (delete old + add new, net >= 0) — no violation', () => {
+  // Replacing an assertion with a better one is not a quality regression.
+  const v = detectViolations(diff(
+    ['  expect(where.status).toBeUndefined();'],
+    ['  expect(where.status).toEqual({ not: BookingStatus.CANCELLED });'],
+  ));
+  assert.deepEqual(v, []);
+});
+
+test('net loss of expects across a file — violation', () => {
+  // Two removed, one added: net -1 is a real regression.
+  const v = detectViolations(diff(
+    ['  expect(a).toBe(1);'],
+    ['  expect(a).toBe(1);', '  expect(b).toBe(2);'],
+  ));
+  assert.equal(v.length, 2);
+});
+
 test('.only — violation', () => {
   const v = detectViolations(diff(['test.only("foo", () => {});']));
   assert.equal(v.length, 1);

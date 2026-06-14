@@ -44,13 +44,11 @@ const listIncludes = {
 export class BookingsRepository {
   constructor(private prisma: PrismaService) {}
 
-  findAll(userId: string, status?: BookingStatus) {
+  findAll(userId: string, statuses: BookingStatus[] = []) {
     return this.prisma.booking.findMany({
       where: {
         userId,
-        status: status !== undefined
-          ? status
-          : { not: BookingStatus.CANCELLED },
+        ...(statuses.length > 0 ? { status: { in: statuses } } : {}),
       },
       include: listIncludes,
       orderBy: { date: 'asc' },

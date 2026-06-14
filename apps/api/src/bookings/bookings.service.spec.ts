@@ -181,21 +181,32 @@ describe('BookingsService', () => {
   });
 
   describe('findAll', () => {
-    it('delegates to repository', async () => {
+    it('delegates with an empty array when no status is given', async () => {
       repo.findAll.mockResolvedValue([booking]);
       const result = await service.findAll('u1');
-      expect(repo.findAll).toHaveBeenCalledWith('u1', undefined);
+      expect(repo.findAll).toHaveBeenCalledWith('u1', []);
       expect(result).toEqual([booking]);
     });
 
-    it('passes a valid status filter through to the repository', async () => {
+    it('passes a single valid status as a one-element array', async () => {
       repo.findAll.mockResolvedValue([]);
       await service.findAll('u1', 'CONFIRMED');
-      expect(repo.findAll).toHaveBeenCalledWith('u1', 'CONFIRMED');
+      expect(repo.findAll).toHaveBeenCalledWith('u1', ['CONFIRMED']);
+    });
+
+    it('passes multiple valid statuses as an array', async () => {
+      repo.findAll.mockResolvedValue([]);
+      await service.findAll('u1', ['CONFIRMED', 'READY']);
+      expect(repo.findAll).toHaveBeenCalledWith('u1', ['CONFIRMED', 'READY']);
     });
 
     it('throws BadRequestException for an unrecognised status', () => {
       expect(() => service.findAll('u1', 'NONSENSE')).toThrow(BadRequestException);
+      expect(repo.findAll).not.toHaveBeenCalled();
+    });
+
+    it('throws BadRequestException when any status in an array is invalid', () => {
+      expect(() => service.findAll('u1', ['CONFIRMED', 'NONSENSE'])).toThrow(BadRequestException);
       expect(repo.findAll).not.toHaveBeenCalled();
     });
 
