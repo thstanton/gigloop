@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { useAuth } from '@clerk/react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useFocusReturn } from '@/lib/hooks/useFocusReturn';
 import { useBooking } from '@/lib/hooks/useBooking';
 import { useBookingChecklist } from '@/lib/hooks/useBookingChecklist';
 import { useBookingFields } from '@/lib/hooks/useBookingFields';
@@ -59,6 +60,17 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
   const [selectedSeriesId, setSelectedSeriesId] = useState<string | null>(null);
 
   const sheet = searchParams.get('sheet');
+
+  const { capture, restore } = useFocusReturn();
+  const previousSheet = useRef<string | null>(null);
+
+  useLayoutEffect(() => {
+    if (sheet && sheet !== 'bookingEdit' && !previousSheet.current) {
+      capture();
+    }
+    previousSheet.current = sheet;
+  }, [sheet, capture]);
+
   const sheetInvoiceId = searchParams.get('invoiceId');
   const sheetContactId = searchParams.get('contactId');
   const sheetTemplateType = searchParams.get('templateType') ?? undefined;
@@ -78,6 +90,15 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
     confirmStatusTransition,
     isConfirmingTransition,
   } = useBookingChecklist(bookingId, booking, isLoaded);
+
+  const previousReadyDialog = useRef(false);
+  useLayoutEffect(() => {
+    if (readyDialogStatus && !previousReadyDialog.current) {
+      capture();
+    }
+    previousReadyDialog.current = !!readyDialogStatus;
+  }, [readyDialogStatus, capture]);
+
   const { data: invoices = [] } = useBookingInvoices(bookingId);
   const contractActions = useContractActions(bookingId);
   const fields = useBookingFields(bookingId);
@@ -119,7 +140,7 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
   return (
     <>
       {readyDialogStatus && (
-        <Sheet open onOpenChange={dismissReadyDialog}>
+        <Sheet open onOpenChange={() => { dismissReadyDialog(); restore(); }}>
           <SheetContent side="bottom">
             <SheetHeader>
               <SheetTitle className="font-display text-xl">{celebratoryTitle}</SheetTitle>
@@ -129,7 +150,7 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
               <span className="font-medium text-foreground">{STATUS_LABELS[readyDialogStatus]}</span>?
             </SheetDescription>
             <div className="flex gap-2 justify-end mt-4">
-              <Button variant="outline" onClick={dismissReadyDialog} disabled={isConfirmingTransition}>
+              <Button variant="outline" onClick={() => { dismissReadyDialog(); restore(); }} disabled={isConfirmingTransition}>
                 Not yet
               </Button>
               <Button onClick={() => confirmStatusTransition(readyDialogStatus)} disabled={isConfirmingTransition}>
@@ -144,13 +165,13 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
         bookingId={bookingId}
         readOnly={sheetContractReadOnly}
         open={sheet === 'contract'}
-        onClose={() => { setSearchParams({}); }}
+        onClose={() => { setSearchParams({}); restore(); }}
       />
       <BookingEditDrawer booking={booking} />
       <ContactEditSheet
         contact={editingContact}
-        onClose={() => setSearchParams({})}
-        onUnlink={editingContact?.id === booking.venue?.id ? () => { fields.updateVenue(null); setSearchParams({}); } : undefined}
+        onClose={() => { setSearchParams({}); restore(); }}
+        onUnlink={editingContact?.id === booking.venue?.id ? () => { fields.updateVenue(null); setSearchParams({}); restore(); } : undefined}
       />
       <InvoiceSheet
         bookingId={bookingId}
@@ -158,7 +179,7 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
         hasDepositInvoice={invoices.some((inv) => inv.isDeposit)}
         prefill={invoiceSheetPrefill}
         open={sheet === 'invoice'}
-        onOpenChange={(open) => { if (!open) setSearchParams({}); }}
+        onOpenChange={(open) => { if (!open) { setSearchParams({}); restore(); } }}
       />
       <ComposeEmailSheet
         bookingId={bookingId}
@@ -166,7 +187,7 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
         invoices={invoices}
         defaultPaymentTermsDays={userProfile?.defaultPaymentTermsDays}
         open={sheet === 'compose'}
-        onOpenChange={(open) => { if (!open) setSearchParams({}); }}
+        onOpenChange={(open) => { if (!open) { setSearchParams({}); restore(); } }}
         initialTemplateType={sheet === 'compose' ? sheetTemplateType : undefined}
         onAfterSend={(templateType) => {
           const isContractEmail = templateType === 'contract_cover' || templateType === 'contract_and_deposit_cover';
@@ -182,11 +203,11 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
           invoice={markSentInvoice}
           userProfile={userProfile}
           open={true}
-          onOpenChange={(open) => { if (!open) setSearchParams({}); }}
+          onOpenChange={(open) => { if (!open) { setSearchParams({}); restore(); } }}
         />
       )}
 
-      <Sheet open={sheet === 'series'} onOpenChange={(open) => { if (!open) { setSearchParams({}); setSelectedSeriesId(null); } }}>
+      <Sheet open={sheet === 'series'} onOpenChange={(open) => { if (!open) { setSearchParams({}); setSelectedSeriesId(null); restore(); } }}>
         <SheetContent side="bottom" aria-describedby={undefined}>
           <SheetHeader>
             <SheetTitle>Add to series</SheetTitle>
@@ -217,6 +238,7 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
                         }
                         setSearchParams({});
                         setSelectedSeriesId(null);
+                        restore();
                       },
                     });
                   }
@@ -225,7 +247,7 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
               >
                 {fields.isSeriesPending ? 'Saving…' : 'Add to series'}
               </Button>
-              <Button variant="outline" onClick={() => { setSearchParams({}); setSelectedSeriesId(null); }}>Cancel</Button>
+              <Button variant="outline" onClick={() => { setSearchParams({}); setSelectedSeriesId(null); restore(); }}>Cancel</Button>
             </div>
           </div>
         </SheetContent>
@@ -245,6 +267,7 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
                     onSuccess: () => {
                       setSearchParams({});
                       setSelectedSeriesId(null);
+                      restore();
                     },
                   });
                 }

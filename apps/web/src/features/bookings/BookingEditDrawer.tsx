@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -19,6 +19,7 @@ import { apiDelete, apiPatch } from '@/lib/api';
 import PerformanceEditor from './PerformanceEditor';
 import MusicFormEditor from './MusicFormEditor';
 import OnTheDayEditor from './OnTheDayEditor';
+import { useFocusReturn } from '@/lib/hooks/useFocusReturn';
 import type { BookingDetail, EventType, BookingStatus } from '@/types/api';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -58,8 +59,18 @@ export default function BookingEditDrawer({ booking }: Props) {
   const musicFormRef = useRef<HTMLDivElement>(null);
   const onTheDayRef = useRef<HTMLDivElement>(null);
 
+  const { capture, restore } = useFocusReturn();
+  const previousIsOpen = useRef(false);
+  useLayoutEffect(() => {
+    if (isOpen && !previousIsOpen.current) {
+      capture();
+    }
+    previousIsOpen.current = isOpen;
+  }, [isOpen, capture]);
+
   function close() {
     setSearchParams({});
+    restore();
   }
 
   const {
