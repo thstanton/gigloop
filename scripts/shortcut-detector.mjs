@@ -25,8 +25,26 @@ export function detectViolations(diff) {
   let currentFile = '(unknown)';
   let skipFile = false;
 
+  // Per-file assertion tracking to distinguish deletions from replacements.
+  // A removed expect() is only a violation if the file has a net loss of assertions.
+  let assertionsAdded = 0;
+  let assertionsRemoved = 0;
+  /** @type {Violation[]} */
+  let pendingAssertionViolations = [];
+
+  function flushAssertionViolations() {
+    if (assertionsRemoved > assertionsAdded) {
+      // Net decrease in assertions — flag the removals as real violations.
+      violations.push(...pendingAssertionViolations);
+    }
+    assertionsAdded = 0;
+    assertionsRemoved = 0;
+    pendingAssertionViolations = [];
+  }
+
   for (const line of diff.split('\n')) {
     if (line.startsWith('+++ b/')) {
+      flushAssertionViolations();
       currentFile = line.slice(6);
       skipFile = EXEMPT.test(currentFile);
       continue;
@@ -59,16 +77,23 @@ export function detectViolations(diff) {
       if (/\.(skip|only)\s*\(/.test(code) || /\bxit\s*\(/.test(code) || /\bxdescribe\s*\(/.test(code)) {
         violations.push({ file: currentFile, text: line, reason: 'test skip/only introduced' });
       }
+      if (/\bexpect\s*\(/.test(code)) {
+        assertionsAdded++;
+      }
     }
 
     if (REMOVED.test(line)) {
       const code = line.slice(1);
       if (/\bexpect\s*\(/.test(code)) {
-        // Known false-positive: moved assertions (delete + add) also trigger this.
-        violations.push({ file: currentFile, text: line, reason: 'assertion deleted' });
+        // Track per-file — only flag if the file has a net loss of assertions.
+        // Replacements (delete old + add new) are not violations.
+        assertionsRemoved++;
+        pendingAssertionViolations.push({ file: currentFile, text: line, reason: 'assertion deleted' });
       }
     }
   }
+
+  flushAssertionViolations();
 
   return violations;
 }

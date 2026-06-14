@@ -362,7 +362,10 @@ function nextUpcomingGig(bookings: BookingListItem[]): BookingListItem | null {
 }
 
 export default function DashboardPage() {
-  const { data: bookings = [], isLoading } = useBookings('ALL');
+  // All non-cancelled statuses — same scope as the former 'ALL' filter
+  const { data: bookings = [], isLoading } = useBookings({
+    statuses: ['ENQUIRY', 'PROVISIONAL', 'CONFIRMED', 'READY', 'COMPLETE'],
+  });
   const { user } = useUser();
 
   const firstName = user?.firstName ?? '';

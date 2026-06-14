@@ -6,6 +6,7 @@ import { UpdateBookingDto } from './dto/update-booking.dto';
 import { CreateSetDto } from './dto/create-set.dto';
 import { UpdateSetDto } from './dto/update-set.dto';
 import { CONTRACT_INCLUDE } from './booking.includes';
+import { buildBookingSearchWhere } from './booking-search';
 
 type FormatWithSlots = {
   id: string;
@@ -44,14 +45,9 @@ const listIncludes = {
 export class BookingsRepository {
   constructor(private prisma: PrismaService) {}
 
-  findAll(userId: string, status?: BookingStatus) {
+  findAll(userId: string, statuses: BookingStatus[] = [], q?: string, eventType?: string, from?: string, to?: string) {
     return this.prisma.booking.findMany({
-      where: {
-        userId,
-        status: status !== undefined
-          ? status
-          : { not: BookingStatus.CANCELLED },
-      },
+      where: buildBookingSearchWhere(userId, q, statuses, eventType, from, to),
       include: listIncludes,
       orderBy: { date: 'asc' },
     });

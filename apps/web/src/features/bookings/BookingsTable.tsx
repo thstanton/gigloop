@@ -8,7 +8,7 @@ import {
   useReactTable,
   type SortingState,
 } from '@tanstack/react-table';
-import { ChevronUp, ChevronDown, ChevronsUpDown, Calendar } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronsUpDown, Calendar, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import BookingStatusPill from '@/components/common/BookingStatusPill';
 import type { BookingListItem } from '@/types/api';
@@ -86,7 +86,7 @@ function SortIcon({ direction }: { direction: 'asc' | 'desc' | false }) {
   return <ChevronsUpDown size={13} className="text-muted opacity-0 group-hover/header:opacity-100 transition-opacity" />;
 }
 
-// ─── Empty state ─────────────────────────────────────────────────────────────
+// ─── Empty states ─────────────────────────────────────────────────────────────
 
 function BookingsEmptyState({ onNew }: { onNew?: () => void }) {
   return (
@@ -99,13 +99,31 @@ function BookingsEmptyState({ onNew }: { onNew?: () => void }) {
   );
 }
 
+function SearchEmptyState({ query, onClear }: { query: string; onClear?: () => void }) {
+  return (
+    <EmptyState
+      icon={<Search size={40} strokeWidth={1.5} />}
+      heading={`No bookings match "${query}"`}
+      description="Try a different search term or clear the search to return to the active pipeline."
+      action={onClear && <Button size="sm" variant="outline" onClick={onClear}>Clear search</Button>}
+    />
+  );
+}
+
 // ─── Mobile card list ─────────────────────────────────────────────────────────
 
-function BookingCardList({ data }: { data: BookingListItem[] }) {
+function BookingCardList({ data, sortDesc }: { data: BookingListItem[]; sortDesc: boolean }) {
   const navigate = useNavigate();
+  const sorted = useMemo(
+    () =>
+      sortDesc
+        ? [...data].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+        : data,
+    [data, sortDesc],
+  );
   return (
     <div className="divide-y divide-border">
-      {data.map((booking) => {
+      {sorted.map((booking) => {
         const { date, day } = formatDateAndDay(booking.date);
         const fee = formatFeeWhole(booking.fee);
         return (
@@ -147,12 +165,17 @@ function BookingCardList({ data }: { data: BookingListItem[] }) {
 interface BookingsTableProps {
   data: BookingListItem[];
   onNew?: () => void;
+  /** When true, defaults to date-descending (most-recent-first). Re-mount via key to apply. */
+  defaultSortDesc?: boolean;
+  /** Active search query — when set and data is empty, shows the no-results state instead of the first-run state. */
+  searchQuery?: string;
+  onClearSearch?: () => void;
 }
 
-export default function BookingsTable({ data, onNew }: BookingsTableProps) {
+export default function BookingsTable({ data, onNew, defaultSortDesc = false, searchQuery, onClearSearch }: BookingsTableProps) {
   const navigate = useNavigate();
   const [sorting, setSorting] = useState<SortingState>([
-    { id: 'date', desc: false },
+    { id: 'date', desc: defaultSortDesc },
   ]);
 
   const tableData = useMemo(() => data, [data]);
@@ -167,6 +190,9 @@ export default function BookingsTable({ data, onNew }: BookingsTableProps) {
   });
 
   if (data.length === 0) {
+    if (searchQuery) {
+      return <SearchEmptyState query={searchQuery} onClear={onClearSearch} />;
+    }
     return <BookingsEmptyState onNew={onNew} />;
   }
 
@@ -174,7 +200,7 @@ export default function BookingsTable({ data, onNew }: BookingsTableProps) {
     <>
       {/* Mobile: card list */}
       <div className="md:hidden">
-        <BookingCardList data={data} />
+        <BookingCardList data={data} sortDesc={sorting[0]?.desc ?? false} />
       </div>
 
       {/* Desktop: sortable table */}

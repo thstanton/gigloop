@@ -8,7 +8,14 @@ import BookingsListPage from './BookingsListPage';
 const meta = {
   component: BookingsListPage,
   tags: ['ai-generated'],
-  decorators: [(Story) => React.createElement(MemoryRouter, {}, React.createElement(Story))],
+  decorators: [
+    (Story, { parameters }) =>
+      React.createElement(
+        MemoryRouter,
+        { initialEntries: parameters.initialEntries ?? ['/'] },
+        React.createElement(Story),
+      ),
+  ],
 } satisfies Meta<typeof BookingsListPage>;
 
 export default meta;
@@ -42,3 +49,14 @@ export const LoadError: Story = {
     await expect(await canvas.findByText(/failed to load/i)).toBeVisible();
   },
 };
+
+export const WithEventTypeFilter: Story = {
+  parameters: {
+    initialEntries: ['/?eventType=WEDDING'],
+  },
+  play: async ({ canvas }) => {
+    // Smoke: page renders when an eventType filter is in the URL
+    await expect(await canvas.findByRole('heading', { name: /bookings/i })).toBeVisible();
+  },
+};
+

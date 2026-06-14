@@ -347,6 +347,15 @@ run_issue() {
       exit 0
     fi
 
+    # Agent may have relabeled to ready-for-human mid-run — respect it immediately
+    # rather than burning through the remaining K attempts.
+    if gh issue view "$ISSUE_N" --json labels --jq '.labels[].name' 2>/dev/null \
+        | grep -q "ready-for-human"; then
+      echo "ralph: #$ISSUE_N relabeled to ready-for-human — stopping" >&2
+      heartbeat "mode=issue issue=$ISSUE_N event=ESCALATED-BY-AGENT"
+      exit 0
+    fi
+
     local decision
     decision=$(run_iteration "$ISSUE_N")
 

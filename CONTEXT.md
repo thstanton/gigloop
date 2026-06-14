@@ -62,6 +62,9 @@ Status transitions are not enforced by the API — a Booking can move freely bet
 - **sets**: ordered list of [[Set]] entities
 - **songList** (optional): song requirements for the booking — deferred to [[song-library]] feature
 
+### Active pipeline
+The default scope of the bookings list: [[Booking]]s whose status is one of `ENQUIRY`, `PROVISIONAL`, `CONFIRMED`, or `READY` — the live, in-flight work. Complete and Cancelled bookings are *not* in the active pipeline; they remain fully searchable but are excluded from the resting list view so it stays useful day-to-day. The leftmost bookings-list tab is labelled **"Active"** and selects this scope; there is deliberately no "all bookings" tab. Searching or applying a filter from the default lifts the scope to *all* statuses (so any booking is findable) and clears the "Active" highlight; explicitly choosing a status tab re-constrains. See ADR-0041.
+
 ### Contract
 A contract document associated with a [[Booking]]. A Booking can have many Contracts over time (full history preserved), but at most one may be in a non-VOID state — the active contract. See ADR-0017.
 

@@ -50,25 +50,41 @@ describe('BookingsRepository', () => {
   });
 
   describe('findAll', () => {
-    it('excludes CANCELLED bookings when no status is given', async () => {
+    it('applies no status filter when called with no statuses', async () => {
       prisma.booking.findMany.mockResolvedValue([]);
       await repo.findAll('u1');
       const where = prisma.booking.findMany.mock.calls[0][0].where;
-      expect(where.status).toEqual({ not: BookingStatus.CANCELLED });
+      // No status key at all — returns every status including CANCELLED
+      expect(where.status).toBeUndefined();
     });
 
-    it('filters by the given status when one is provided', async () => {
+    it('applies no status filter when called with an empty array', async () => {
       prisma.booking.findMany.mockResolvedValue([]);
-      await repo.findAll('u1', BookingStatus.CONFIRMED);
+      await repo.findAll('u1', []);
       const where = prisma.booking.findMany.mock.calls[0][0].where;
-      expect(where.status).toBe(BookingStatus.CONFIRMED);
+      expect(where.status).toBeUndefined();
     });
 
-    it('allows CANCELLED to be explicitly requested', async () => {
+    it('filters to a single status when one is provided', async () => {
       prisma.booking.findMany.mockResolvedValue([]);
-      await repo.findAll('u1', BookingStatus.CANCELLED);
+      await repo.findAll('u1', [BookingStatus.CONFIRMED]);
       const where = prisma.booking.findMany.mock.calls[0][0].where;
-      expect(where.status).toBe(BookingStatus.CANCELLED);
+      expect(where.status).toEqual({ in: [BookingStatus.CONFIRMED] });
+    });
+
+    it('filters to multiple statuses when an array is provided', async () => {
+      prisma.booking.findMany.mockResolvedValue([]);
+      const pipeline = [BookingStatus.ENQUIRY, BookingStatus.PROVISIONAL, BookingStatus.CONFIRMED, BookingStatus.READY];
+      await repo.findAll('u1', pipeline);
+      const where = prisma.booking.findMany.mock.calls[0][0].where;
+      expect(where.status).toEqual({ in: pipeline });
+    });
+
+    it('accepts CANCELLED when explicitly requested', async () => {
+      prisma.booking.findMany.mockResolvedValue([]);
+      await repo.findAll('u1', [BookingStatus.CANCELLED]);
+      const where = prisma.booking.findMany.mock.calls[0][0].where;
+      expect(where.status).toEqual({ in: [BookingStatus.CANCELLED] });
     });
 
     it('scopes query to userId and orders by date asc', async () => {
@@ -77,6 +93,29 @@ describe('BookingsRepository', () => {
       const call = prisma.booking.findMany.mock.calls[0][0];
       expect(call.where.userId).toBe('u1');
       expect(call.orderBy).toEqual({ date: 'asc' });
+    });
+
+    it('passes search query through as AND clauses in the where clause', async () => {
+      prisma.booking.findMany.mockResolvedValue([]);
+      await repo.findAll('u1', [], 'smith');
+      const where = prisma.booking.findMany.mock.calls[0][0].where;
+      expect(where.AND).toBeDefined();
+      expect(where.userId).toBe('u1');
+    });
+
+    it('applies eventType equality filter when provided', async () => {
+      prisma.booking.findMany.mockResolvedValue([]);
+      await repo.findAll('u1', [], undefined, 'WEDDING');
+      const where = prisma.booking.findMany.mock.calls[0][0].where;
+      expect(where.eventType).toBe('WEDDING');
+      expect(where.userId).toBe('u1');
+    });
+
+    it('applies no eventType filter when not provided', async () => {
+      prisma.booking.findMany.mockResolvedValue([]);
+      await repo.findAll('u1', []);
+      const where = prisma.booking.findMany.mock.calls[0][0].where;
+      expect(where.eventType).toBeUndefined();
     });
   });
 
