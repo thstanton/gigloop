@@ -88,6 +88,18 @@ test('shortcut-detector own files exempt (bootstrap)', () => {
   );
 });
 
+test('markdown/docs exempt — prose naming a pattern is not a suppression', () => {
+  // Docs (PROMPT.md, CLAUDE.md, ADRs) must be able to name the forbidden patterns.
+  assert.deepEqual(
+    detectViolations(diff(['- an `eslint-disable`, an `as any`, a skipped test'], [], 'PROMPT.md')),
+    [],
+  );
+  assert.deepEqual(
+    detectViolations(diff(['Never add an `as any` without a comment.'], [], 'docs/adr/0040-agent-loop.md')),
+    [],
+  );
+});
+
 test('diff header lines not flagged', () => {
   const raw = [
     'diff --git a/foo.ts b/foo.ts',

@@ -9,8 +9,12 @@
 const ADDED = /^\+(?!\+\+)/;
 const REMOVED = /^-(?!--)/;
 
-// Files exempt from detection (the detector's own source and tests — bootstrap exemption).
-const EXEMPT = /scripts\/shortcut-detector/;
+// Files exempt from detection:
+//  - the detector's own source and tests (bootstrap exemption)
+//  - markdown/docs: prose that *names* a forbidden pattern (CLAUDE.md, ADRs, PROMPT.md)
+//    can't actually suppress lint/types/tests — it isn't executed. The detector guards
+//    source code, not documentation that documents the rules.
+const EXEMPT = /scripts\/shortcut-detector|\.mdx?$/;
 
 /**
  * @param {string} diff - output of `git diff --cached`
