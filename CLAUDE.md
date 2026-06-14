@@ -66,7 +66,7 @@ CI (→ main):    lint + test + build           (both apps)                — r
 
 There is **no pre-flight check and no pre-commit checklist.** Lint runs automatically at commit; test + build run automatically at push; CI re-runs everything. You never need to invoke these manually — if a hook fails, fix the cause and let the hook re-run.
 
-> ⚠️ **Reality note (ADR-0040):** the commit/push hooks above are **not yet installed** — there is no `husky`/`lint-staged`/`core.hooksPath`, so lint/test/build currently run **only in CI**. This is why PRs can fail lint despite the "commit → lint" rule. Implementing these hooks (plus a shortcut-detector in the commit hook) is the first prerequisite slice of the agent-loop work. Until that lands, CI is the only deterministic gate.
+> ℹ️ **Reality note (ADR-0040):** hooks live under `.githooks/` (committed). One-time opt-in required: `git config core.hooksPath .githooks`. Without it, hooks don't run and CI is the only gate. The **shortcut-detector** (blocks `--no-verify` bypasses) is pending in #412 — lint/test/build fire but the shortcut check does not yet.
 
 ### Advisory layer (CodeScene + /simplify — judgement, never a hard gate)
 
