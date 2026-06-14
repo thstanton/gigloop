@@ -1,12 +1,15 @@
 import { useRef, useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { SlidersHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import BookingsTable from '@/features/bookings/BookingsTable';
 import { useBookings } from '@/lib/hooks/useBookings';
 import { resolveListScope, type ListTab } from '@/lib/bookingScope';
-import type { BookingStatus } from '@/types/api';
+import { EVENT_TYPE_LABELS } from '@/lib/constants';
+import type { BookingStatus, EventType } from '@/types/api';
 import { cn } from '@/lib/utils';
 
 // ─── Filter tabs ─────────────────────────────────────────────────────────────
@@ -70,6 +73,86 @@ function FilterBar({
   );
 }
 
+// ─── Filters sheet (mobile) ───────────────────────────────────────────────────
+
+const EVENT_TYPE_OPTIONS = Object.entries(EVENT_TYPE_LABELS) as [EventType, string][];
+
+function FiltersSheet({
+  eventType,
+  onEventTypeChange,
+}: {
+  eventType: EventType | null;
+  onEventTypeChange: (v: EventType | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const activeCount = eventType ? 1 : 0;
+
+  return (
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger asChild>
+        <Button
+          variant="outline"
+          className="relative shrink-0"
+          aria-label={`Filters${activeCount > 0 ? `, ${activeCount} active` : ''}`}
+        >
+          <SlidersHorizontal className="h-4 w-4 mr-2" aria-hidden />
+          Filters
+          {activeCount > 0 && (
+            <span
+              aria-hidden
+              className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-primary text-[10px] font-medium text-primary-foreground flex items-center justify-center leading-none"
+            >
+              {activeCount}
+            </span>
+          )}
+        </Button>
+      </SheetTrigger>
+      <SheetContent side="right">
+        <SheetHeader>
+          <SheetTitle>Filters</SheetTitle>
+        </SheetHeader>
+        <div className="mt-6 space-y-6">
+          <div>
+            <p className="text-sm font-medium mb-3">Event type</p>
+            <div className="space-y-1">
+              <button
+                onClick={() => { onEventTypeChange(null); setOpen(false); }}
+                className={cn(
+                  'w-full text-left px-3 py-2 rounded-md text-base',
+                  !eventType ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted',
+                )}
+              >
+                All types
+              </button>
+              {EVENT_TYPE_OPTIONS.map(([value, label]) => (
+                <button
+                  key={value}
+                  onClick={() => { onEventTypeChange(value); setOpen(false); }}
+                  className={cn(
+                    'w-full text-left px-3 py-2 rounded-md text-base',
+                    eventType === value ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted',
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          {activeCount > 0 && (
+            <Button
+              variant="ghost"
+              className="w-full"
+              onClick={() => { onEventTypeChange(null); setOpen(false); }}
+            >
+              Clear filters
+            </Button>
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 // ─── Loading skeleton ─────────────────────────────────────────────────────────
 
 function TableSkeleton() {
@@ -125,6 +208,7 @@ export default function BookingsListPage() {
 
   const statusParam = searchParams.get('status') as BookingStatus | null;
   const qParam = searchParams.get('q') ?? '';
+  const eventTypeParam = searchParams.get('eventType') as EventType | null;
 
   // Local state drives the input immediately; URL is updated with a 300ms debounce.
   const [inputValue, setInputValue] = useState(qParam);
@@ -164,12 +248,6 @@ export default function BookingsListPage() {
     });
   }
 
-  // q drives the API call only when >= 2 chars; resolveListScope handles the threshold internally.
-  const q = qParam.trim().length >= 2 ? qParam : undefined;
-  const { effectiveStatuses, highlightedTab } = resolveListScope({ tab: statusParam ?? undefined, q: qParam });
-
-  const { data = [], isLoading, isError } = useBookings({ statuses: effectiveStatuses, q });
-
   function handleFilterChange(value: ListTab) {
     // 'ACTIVE' clears the status param — it is the resting/default state
     setSearchParams((prev) => {
@@ -182,6 +260,32 @@ export default function BookingsListPage() {
       return next;
     });
   }
+
+  function handleEventTypeChange(value: EventType | null) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (value) {
+        next.set('eventType', value);
+      } else {
+        next.delete('eventType');
+      }
+      return next;
+    });
+  }
+
+  // q drives the API call only when >= 2 chars; resolveListScope handles the threshold internally.
+  const q = qParam.trim().length >= 2 ? qParam : undefined;
+  const { effectiveStatuses, highlightedTab } = resolveListScope({
+    tab: statusParam ?? undefined,
+    q: qParam,
+    eventType: eventTypeParam ?? undefined,
+  });
+
+  const { data = [], isLoading, isError } = useBookings({
+    statuses: effectiveStatuses,
+    q,
+    eventType: eventTypeParam ?? undefined,
+  });
 
   const selectValue = highlightedTab ?? 'ACTIVE';
   const defaultSortDesc = highlightedTab === 'COMPLETE';
@@ -207,13 +311,32 @@ export default function BookingsListPage() {
         />
       </div>
 
-      {/* Filter — tabs on desktop, select on mobile */}
+      {/* Filter — tabs on desktop, select + filters sheet on mobile */}
       <div className="hidden md:block">
         <FilterBar active={highlightedTab} onChange={handleFilterChange} />
       </div>
-      <div className="md:hidden mb-4">
+      {/* Desktop: secondary event-type filter below the status tabs */}
+      <div className="hidden md:flex items-center gap-3 mt-2 mb-2">
+        <span className="text-sm text-muted">Event type</span>
+        <Select
+          value={eventTypeParam ?? 'ALL'}
+          onValueChange={(v) => handleEventTypeChange(v === 'ALL' ? null : v as EventType)}
+        >
+          <SelectTrigger className="h-8 w-40 text-sm" aria-label="Filter by event type">
+            <SelectValue placeholder="All types" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">All types</SelectItem>
+            {EVENT_TYPE_OPTIONS.map(([value, label]) => (
+              <SelectItem key={value} value={value}>{label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      {/* Mobile: status select + filters sheet */}
+      <div className="md:hidden mb-4 flex gap-2">
         <Select value={selectValue} onValueChange={(v) => handleFilterChange(v as ListTab)}>
-          <SelectTrigger>
+          <SelectTrigger className="flex-1">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -222,6 +345,7 @@ export default function BookingsListPage() {
             ))}
           </SelectContent>
         </Select>
+        <FiltersSheet eventType={eventTypeParam} onEventTypeChange={handleEventTypeChange} />
       </div>
 
       {/* Content */}

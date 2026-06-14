@@ -43,3 +43,13 @@ export const LoadError: Story = {
   },
 };
 
+export const WithEventTypeFilter: Story = {
+  decorators: [
+    (Story) => React.createElement(MemoryRouter, { initialEntries: ['/?eventType=WEDDING'] }, React.createElement(Story)),
+  ],
+  play: async ({ canvas }) => {
+    // Smoke: page renders when an eventType filter is in the URL
+    await expect(await canvas.findByRole('heading', { name: /bookings/i })).toBeVisible();
+  },
+};
+

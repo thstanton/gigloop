@@ -102,6 +102,21 @@ describe('BookingsRepository', () => {
       expect(where.AND).toBeDefined();
       expect(where.userId).toBe('u1');
     });
+
+    it('applies eventType equality filter when provided', async () => {
+      prisma.booking.findMany.mockResolvedValue([]);
+      await repo.findAll('u1', [], undefined, 'WEDDING');
+      const where = prisma.booking.findMany.mock.calls[0][0].where;
+      expect(where.eventType).toBe('WEDDING');
+      expect(where.userId).toBe('u1');
+    });
+
+    it('applies no eventType filter when not provided', async () => {
+      prisma.booking.findMany.mockResolvedValue([]);
+      await repo.findAll('u1', []);
+      const where = prisma.booking.findMany.mock.calls[0][0].where;
+      expect(where.eventType).toBeUndefined();
+    });
   });
 
   describe('findOne', () => {

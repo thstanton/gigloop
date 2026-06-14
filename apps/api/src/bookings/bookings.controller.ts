@@ -40,9 +40,15 @@ export class BookingsController {
   @ApiOperation({ summary: 'List bookings (returns all statuses when no status param supplied)' })
   @ApiQuery({ name: 'status', required: false, enum: BookingStatus, isArray: true, description: 'Filter by one or more statuses (repeat param for multiple)' })
   @ApiQuery({ name: 'q', required: false, description: 'Free-text search across customer name, email, title, venue, agent, series, event type, and notes' })
+  @ApiQuery({ name: 'eventType', required: false, description: 'Filter by event type (equality match — e.g. WEDDING, CORPORATE)' })
   @Get()
-  findAll(@Req() req: AuthedRequest, @Query('status') status?: string | string[], @Query('q') q?: string) {
-    return this.service.findAll(req.userId, status, q);
+  findAll(
+    @Req() req: AuthedRequest,
+    @Query('status') status?: string | string[],
+    @Query('q') q?: string,
+    @Query('eventType') eventType?: string,
+  ) {
+    return this.service.findAll(req.userId, status, q, eventType);
   }
 
   @ApiOperation({ summary: 'Get dashboard action items for upcoming bookings' })

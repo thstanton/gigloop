@@ -188,4 +188,31 @@ describe('buildBookingSearchWhere', () => {
       expect(andClauses).toHaveLength(1);
     });
   });
+
+  describe('eventType filtering', () => {
+    it('applies no eventType constraint when not provided', () => {
+      const where = buildBookingSearchWhere('u1', undefined, []);
+      expect(where.eventType).toBeUndefined();
+    });
+
+    it('applies an equality match when eventType is provided', () => {
+      const where = buildBookingSearchWhere('u1', undefined, [], 'WEDDING');
+      expect(where.eventType).toBe('WEDDING');
+    });
+
+    it('applies top-level eventType equality alongside free-text search AND clauses', () => {
+      // eventType equality is a top-level guard; the free-text OR branches still run
+      const where = buildBookingSearchWhere('u1', 'smith', ['CONFIRMED'], 'CORPORATE');
+      expect(where.userId).toBe('u1');
+      expect(where.status).toEqual({ in: ['CONFIRMED'] });
+      expect(where.eventType).toBe('CORPORATE');
+      const andClauses = where.AND as Prisma.BookingWhereInput[] | undefined;
+      expect(andClauses).toHaveLength(1);
+    });
+
+    it('applies no eventType constraint when provided as undefined', () => {
+      const where = buildBookingSearchWhere('u1', undefined, [], undefined);
+      expect(where.eventType).toBeUndefined();
+    });
+  });
 });

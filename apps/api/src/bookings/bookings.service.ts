@@ -69,7 +69,7 @@ export class BookingsService {
     private musicFormRepo: MusicFormConfigRepository,
   ) {}
 
-  findAll(userId: string, status?: string | string[], q?: string) {
+  findAll(userId: string, status?: string | string[], q?: string, eventType?: string) {
     let statuses: string[];
     if (!status) {
       statuses = [];
@@ -81,7 +81,7 @@ export class BookingsService {
     for (const s of statuses) {
       if (!VALID_STATUSES.has(s)) throw new BadRequestException(`Invalid status: ${s}`);
     }
-    return this.repo.findAll(userId, statuses as BookingStatus[], q);
+    return this.repo.findAll(userId, statuses as BookingStatus[], q, eventType);
   }
 
   async findOne(userId: string, id: string) {

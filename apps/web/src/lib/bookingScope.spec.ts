@@ -96,4 +96,35 @@ describe('resolveListScope', () => {
       expect(highlightedTab).toBe('ACTIVE');
     });
   });
+
+  describe('lift-to-all-statuses branch (eventType filter active, no explicit tab)', () => {
+    it('lifts to all statuses when an eventType filter is applied from resting state', () => {
+      // "show all my weddings" must include completed weddings — no status constraint
+      const { effectiveStatuses } = resolveListScope({ eventType: 'WEDDING' });
+      expect(effectiveStatuses).toEqual([]);
+    });
+
+    it('clears the highlighted tab when eventType lifts the scope', () => {
+      const { highlightedTab } = resolveListScope({ eventType: 'WEDDING' });
+      expect(highlightedTab).toBeNull();
+    });
+
+    it('lifts when both search and eventType are active', () => {
+      const scope = resolveListScope({ q: 'smith', eventType: 'CORPORATE' });
+      expect(scope.effectiveStatuses).toEqual([]);
+      expect(scope.highlightedTab).toBeNull();
+    });
+
+    it('does not lift when explicit tab is selected alongside eventType — tab wins', () => {
+      // Selecting a status tab always constrains to that status (ADR-0041 §3)
+      const scope = resolveListScope({ tab: 'CONFIRMED', eventType: 'WEDDING' });
+      expect(scope.effectiveStatuses).toEqual(['CONFIRMED']);
+      expect(scope.highlightedTab).toBe('CONFIRMED');
+    });
+
+    it('returns resting state when eventType is undefined', () => {
+      const { highlightedTab } = resolveListScope({ eventType: undefined });
+      expect(highlightedTab).toBe('ACTIVE');
+    });
+  });
 });

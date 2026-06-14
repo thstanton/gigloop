@@ -17,17 +17,16 @@ export interface ListScopeParams {
    * Undefined means no tab is selected (resting state → Active pipeline).
    */
   tab?: BookingStatus;
-  /**
-   * The active search query (?q=). Not yet exposed in the UI (slice 2),
-   * but the lift-to-all-statuses branch is built and tested here.
-   */
+  /** The active search query (?q=). Two or more characters lifts to all statuses. */
   q?: string;
+  /** The active event-type filter (?eventType=). Lifts to all statuses from resting state. */
+  eventType?: string;
 }
 
 export interface ListScope {
   /** Statuses to send to the API. Empty array = no filter (all statuses returned). */
   effectiveStatuses: BookingStatus[];
-  /** Which tab to highlight. Null = lifted/neutral state (search active, no explicit tab). */
+  /** Which tab to highlight. Null = lifted/neutral state (search or filter active, no explicit tab). */
   highlightedTab: ListTab | null;
 }
 
@@ -36,19 +35,22 @@ export interface ListScope {
  * URL params. Three branches:
  *
  * 1. Explicit tab selected → constrain to that status, highlight it.
- * 2. Search active, no explicit tab → lift to all statuses (no constraint), no highlight.
- * 3. Resting (no tab, no search) → active pipeline, highlight 'ACTIVE'.
+ * 2. Search or filter active, no explicit tab → lift to all statuses, no highlight.
+ * 3. Resting (no tab, no search, no filter) → active pipeline, highlight 'ACTIVE'.
  *
- * Explicit tab always wins over search lifting (per ADR-0041 §3).
+ * Explicit tab always wins over lifting (per ADR-0041 §3).
  */
 export function resolveListScope(params: ListScopeParams): ListScope {
-  const { tab, q } = params;
+  const { tab, q, eventType } = params;
 
   if (tab !== undefined) {
     return { effectiveStatuses: [tab], highlightedTab: tab };
   }
 
-  if (q && q.trim().length >= 2) {
+  const searchActive = q && q.trim().length >= 2;
+  const filterActive = !!eventType;
+
+  if (searchActive || filterActive) {
     return { effectiveStatuses: [], highlightedTab: null };
   }
 
