@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { DatePicker } from '@/components/ui/date-picker';
 import BookingsTable from '@/features/bookings/BookingsTable';
 import { useBookings } from '@/lib/hooks/useBookings';
 import { resolveListScope, type ListTab } from '@/lib/bookingScope';
@@ -91,11 +92,12 @@ function FilterBar({
   );
 }
 
-// ─── Filters sheet (mobile) ───────────────────────────────────────────────────
+// ─── Filters sheet ───────────────────────────────────────────────────────────
 
 const EVENT_TYPE_OPTIONS = Object.entries(EVENT_TYPE_LABELS) as [EventType, string][];
 
 function FiltersSheet({
+  side,
   eventType,
   onEventTypeChange,
   datePreset,
@@ -105,6 +107,7 @@ function FiltersSheet({
   onCustomFromChange,
   onCustomToChange,
 }: {
+  side: 'bottom' | 'right';
   eventType: EventType | null;
   onEventTypeChange: (v: EventType | null) => void;
   datePreset: DatePreset | null;
@@ -145,7 +148,7 @@ function FiltersSheet({
           )}
         </Button>
       </SheetTrigger>
-      <SheetContent side="right">
+      <SheetContent side={side} className={side === 'bottom' ? 'max-h-[80vh] overflow-y-auto' : undefined}>
         <SheetHeader>
           <SheetTitle>Filters</SheetTitle>
         </SheetHeader>
@@ -212,20 +215,18 @@ function FiltersSheet({
               <div className="mt-3 space-y-3">
                 <div>
                   <p className="text-sm text-muted mb-1">From</p>
-                  <Input
-                    type="date"
+                  <DatePicker
                     value={from ?? ''}
-                    onChange={(e) => onCustomFromChange(e.target.value)}
-                    aria-label="From date"
+                    onChange={onCustomFromChange}
+                    placeholder="From date"
                   />
                 </div>
                 <div>
                   <p className="text-sm text-muted mb-1">To</p>
-                  <Input
-                    type="date"
+                  <DatePicker
                     value={to ?? ''}
-                    onChange={(e) => onCustomToChange(e.target.value)}
-                    aria-label="To date"
+                    onChange={onCustomToChange}
+                    placeholder="To date"
                   />
                 </div>
               </div>
@@ -457,63 +458,24 @@ export default function BookingsListPage() {
         />
       </div>
 
-      {/* Filter — tabs on desktop, select + filters sheet on mobile */}
-      <div className="hidden md:block">
-        <FilterBar active={highlightedTab} onChange={handleFilterChange} />
+      {/* Desktop: status tabs + Filters button */}
+      <div className="hidden md:flex items-center gap-2 mb-2">
+        <div className="flex-1 min-w-0">
+          <FilterBar active={highlightedTab} onChange={handleFilterChange} />
+        </div>
+        <FiltersSheet
+          side="right"
+          eventType={eventTypeParam}
+          onEventTypeChange={handleEventTypeChange}
+          datePreset={datePresetParam}
+          from={fromParam}
+          to={toParam}
+          onDatePresetChange={handleDatePresetChange}
+          onCustomFromChange={handleCustomFromChange}
+          onCustomToChange={handleCustomToChange}
+        />
       </div>
-      {/* Desktop: secondary filters below the status tabs */}
-      <div className="hidden md:flex items-center gap-3 mt-2 mb-2 flex-wrap">
-        <span className="text-sm text-muted">Event type</span>
-        <Select
-          value={eventTypeParam ?? 'ALL'}
-          onValueChange={(v) => handleEventTypeChange(v === 'ALL' ? null : v as EventType)}
-        >
-          <SelectTrigger className="h-8 w-40 text-sm" aria-label="Filter by event type">
-            <SelectValue placeholder="All types" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ALL">All types</SelectItem>
-            {EVENT_TYPE_OPTIONS.map(([value, label]) => (
-              <SelectItem key={value} value={value}>{label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <span className="text-sm text-muted">Date</span>
-        <Select
-          value={datePresetParam ?? 'ANY'}
-          onValueChange={(v) => handleDatePresetChange(v === 'ANY' ? null : v as DatePreset)}
-        >
-          <SelectTrigger className="h-8 w-40 text-sm" aria-label="Filter by date range">
-            <SelectValue placeholder="Any date" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ANY">Any date</SelectItem>
-            {DATE_PRESET_OPTIONS.map(({ value, label }) => (
-              <SelectItem key={value} value={value}>{label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {datePresetParam === 'CUSTOM' && (
-          <>
-            <Input
-              type="date"
-              value={fromParam ?? ''}
-              onChange={(e) => handleCustomFromChange(e.target.value)}
-              className="h-8 w-36 text-sm"
-              aria-label="From date"
-            />
-            <span className="text-sm text-muted">to</span>
-            <Input
-              type="date"
-              value={toParam ?? ''}
-              onChange={(e) => handleCustomToChange(e.target.value)}
-              className="h-8 w-36 text-sm"
-              aria-label="To date"
-            />
-          </>
-        )}
-      </div>
-      {/* Mobile: status select + filters sheet */}
+      {/* Mobile: status select + Filters button */}
       <div className="md:hidden mb-4 flex gap-2">
         <Select value={selectValue} onValueChange={(v) => handleFilterChange(v as ListTab)}>
           <SelectTrigger className="flex-1">
@@ -526,6 +488,7 @@ export default function BookingsListPage() {
           </SelectContent>
         </Select>
         <FiltersSheet
+          side="bottom"
           eventType={eventTypeParam}
           onEventTypeChange={handleEventTypeChange}
           datePreset={datePresetParam}
