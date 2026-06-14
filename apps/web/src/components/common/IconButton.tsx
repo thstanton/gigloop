@@ -13,7 +13,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
         ref={ref}
         type="button"
         aria-label={label}
-        className={cn('text-muted hover:text-foreground transition-colors disabled:opacity-50', className)}
+        className={cn('min-h-[44px] min-w-[44px] inline-flex items-center justify-center text-muted hover:text-foreground transition-colors disabled:opacity-50', className)}
         {...props}
       >
         {children}

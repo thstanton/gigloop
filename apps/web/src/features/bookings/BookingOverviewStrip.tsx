@@ -79,7 +79,7 @@ export default function BookingOverviewStrip({ bookingId }: BookingOverviewStrip
             <button
               type="button"
               onClick={() => fields.updateSeries({ seriesId: null })}
-              className="hover:text-foreground transition-colors"
+              className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center -m-2 hover:text-foreground transition-colors"
               aria-label="Remove from series"
             >
               <X size={12} />
