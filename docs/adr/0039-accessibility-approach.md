@@ -18,9 +18,11 @@ The audit found the component primitives (Radix UI) already handle focus trappin
 A visually-hidden skip link (`<a href="#main-content">Skip to main content</a>`) was added to `AppShell.tsx` above the navigation. It becomes visible on focus. The `<main>` element gained `id="main-content"`.
 
 ### Focus return after sheet/dialog close
-ADR-0036 introduced URL search params as the open/close mechanism for most booking-detail sheets. This breaks Radix's automatic focus-return (which works only when a trigger button is in the same render tree).
+ADR-0036 introduced URL search params as the open/close mechanism for most booking-detail sheets. This breaks Radix's automatic focus-return, because Radix's modal Dialog calls `event.preventDefault()` in its internal `onCloseAutoFocus` handler when `context.triggerRef` is null (i.e. no `<SheetTrigger>` rendered), cancelling `FocusScope`'s own `previouslyFocusedElement` restore.
 
-A `useFocusReturn()` hook captures `document.activeElement` before `setSearchParams(...)` opens a sheet, and restores focus on `onOpenChange(false)`. All 8 URL-param-driven sheets in `BookingDetailSheets.tsx` and `BookingEditDrawer.tsx` use this hook. The 9 button-triggered sheets (PackagesPage, ContactEditSheet, etc.) rely on Radix's automatic handling.
+Fix: `SheetContent` in `components/ui/sheet.tsx` composes `onOpenAutoFocus` and `onCloseAutoFocus` directly on `SheetPrimitive.Content`. `onOpenAutoFocus` fires before Radix calls `focusFirst()`, so `document.activeElement` is still the trigger button at capture time. `onCloseAutoFocus` restores it and calls `e.preventDefault()` to suppress Radix's null-trigger → body fallback.
+
+This is implemented once in the shared `SheetContent` primitive, covering all sheets in the app — the 8 URL-param-driven sheets and the ~9 trigger-based ones — with no per-call-site wiring. No `useFocusReturn` hook or capture/restore calls are needed at call sites.
 
 ### Navigation aria-current
 React Router's `NavLink` sets `aria-current="page"` automatically when active. Verified present; no change needed.
@@ -37,6 +39,6 @@ Decorative Lucide icons in the navigation (`AppShell.tsx`) and the select chevro
 ## Consequences
 
 - All high and medium WCAG 2.1 AA gaps in the admin app are resolved.
-- `useFocusReturn` is a small reusable hook; it should be applied to any future URL-param-driven sheet.
+- Focus return for future URL-param-driven sheets is automatic — `SheetContent` handles it. No hook or extra wiring is needed at call sites.
 - `FormField` now requires no `id` prop — callers should not pass one (it would conflict with the internal `useId()` value).
 - The portal accessibility pass is deferred to P2.
