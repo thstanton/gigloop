@@ -89,11 +89,25 @@ is_issue_closed() {
   gh issue view "$1" --json state --jq '.state' 2>/dev/null | grep -qi "^CLOSED$"
 }
 
-# Print the issue number of the first unblocked ready-for-agent open child of PRD $PRD_N.
-select_issue() {
+# A slice is "done" the moment a gate-passed commit closing it lands on the branch
+# — not when the issue closes (that happens at PR merge, which the human does after
+# the run). The commit is durable, independent of the agent's prose, and could not
+# exist without having passed the commit hook: the only honest done-predicate the
+# loop can cross-check in bash. (ADR-0040 §5: verify before honouring the promise.)
+has_closing_commit() {
+  local n=$1 range
+  if git rev-parse --verify -q main >/dev/null 2>&1; then range="main..HEAD"; else range="HEAD"; fi
+  git log "$range" --pretty=%B 2>/dev/null | grep -qE "(Closes|Fixes|Resolves) #${n}([^0-9]|$)"
+}
+
+# Print every eligible slice (one issue number per line): open, ready-for-agent,
+# a child of PRD $PRD_N, not yet committed, under the attempt cap, all blockers
+# satisfied (closed OR already committed on this branch). bash *filters*; the agent
+# *picks* — that split is the whole point (ADR-0040 §4).
+list_eligible() {
   local prd=$PRD_N
   while IFS= read -r row; do
-    local num body parent_line blocked ok=true ref
+    local num body parent_line ok=true ref
     num=$(echo "$row" | jq -r '.number')
     body=$(echo "$row" | jq -r '.body')
 
@@ -101,21 +115,26 @@ select_issue() {
     parent_line=$(echo "$body" | awk '/^## Parent/{f=1; next} f{print; exit}')
     echo "$parent_line" | grep -qE "(^|[^0-9])${prd}([^0-9]|$)" || continue
 
-    # All ## Blocked by refs must be closed
+    # Already delivered on this branch?
+    has_closing_commit "$num" && continue
+
+    # Burned through its cold-restart attempts?
+    [[ "$(read_attempts "$num")" -ge "$K" ]] && continue
+
+    # Every ## Blocked by ref must be closed OR already committed on this branch
     while IFS= read -r ref; do
-      is_issue_closed "$ref" || { ok=false; break; }
+      is_issue_closed "$ref" || has_closing_commit "$ref" || { ok=false; break; }
     done < <(echo "$body" | awk '/^## Blocked by/{f=1; next} /^## /{f=0} f && /- #/{print}' | grep -oE '[0-9]+')
 
     $ok || continue
     echo "$num"
-    return 0
   done < <(gh issue list --label ready-for-agent --state open --json number,body --limit 50 --jq '.[]')
 }
 
 escalate() {
   local issue=$1 reason=$2
   echo "ralph: escalating #$issue — $reason" >&2
-  gh issue edit "$issue" --remove-label "ready-for-agent" --add-label "ready-for-human" 2>/dev/null || true
+  gh issue edit "$issue" --remove-label "ready-for-agent" --add-label "ready-for-human" >/dev/null 2>&1 || true
   log_progress "ESCALATE #$issue: $reason"
 }
 
@@ -124,6 +143,7 @@ open_pr_if_needed() {
   branch=$(git rev-parse --abbrev-ref HEAD)
   if ! gh pr list --head "$branch" --state open --json number --jq '.[0].number' 2>/dev/null | grep -qE '[0-9]'; then
     echo "ralph: opening PR on $branch → main" >&2
+    git push -u origin "$branch"
     gh pr create --base main --fill
   fi
 }
@@ -139,62 +159,108 @@ run_gate() {
 # remainingWorkCount for loop-decision
 # ---------------------------------------------------------------------------
 remaining_count() {
-  local issue=$1
-  if [[ "$MODE" == "once" || "$MODE" == "issue" ]]; then
-    is_issue_closed "$issue" && echo 0 || echo 1
+  if [[ "$MODE" == "afk" ]]; then
+    # how many eligible slices are still undelivered
+    list_eligible | wc -l | tr -d ' '
   else
-    # afk: how many unblocked ready-for-agent children remain
-    select_issue | wc -l | tr -d ' '
+    # pinned: done iff a commit closing it exists on the branch
+    has_closing_commit "$1" && echo 0 || echo 1
   fi
+}
+
+# ---------------------------------------------------------------------------
+# Work-block builders (the mode-specific tail of the injected prompt)
+# ---------------------------------------------------------------------------
+build_work_block_pinned() {
+  gh issue view "$1" --json number,title,body \
+    --jq '"## Active issue (pinned — work this one)\n\nIssue #\(.number): \(.title)\n\(.body)"'
+}
+
+build_work_block_candidates() {
+  echo "## PRD #$PRD_N — candidate slices"
+  echo
+  echo "Filtered to eligible, unblocked, AFK-appropriate work. Choose ONE by judgement"
+  echo "and emit <selected>N</selected>."
+  echo
+  local n
+  while IFS= read -r n; do
+    [[ -z "$n" ]] && continue
+    gh issue view "$n" --json number,title,labels,body \
+      --jq '"### #\(.number): \(.title)\nlabels: \([.labels[].name] | join(", "))\n\n\(.body)\n"'
+  done < <(list_eligible)
 }
 
 # ---------------------------------------------------------------------------
 # Cold claude invocation
 # ---------------------------------------------------------------------------
 run_cold() {
-  local issue=$1
-  local issue_data progress_ctx prompt
-
-  issue_data=$(gh issue view "$issue" --json number,title,body \
-    --jq '"Issue #\(.number): \(.title)\n\(.body)"')
+  local work_block=$1
+  local progress_ctx prompt
 
   progress_ctx=""
   [[ -f "$PROGRESS" ]] && progress_ctx=$(cat "$PROGRESS")
 
-  prompt=$(printf '%s\n\n---\n## progress.md\n%s\n\n---\n## Active issue\n%s\n' \
+  prompt=$(printf '%s\n\n---\n## progress.md\n%s\n\n---\n%s\n' \
     "$(cat "$PROMPT_FILE")" \
     "$progress_ctx" \
-    "$issue_data")
+    "$work_block")
 
   local claude_flags=("-p" "$prompt")
   [[ "${RALPH_UNSAFE:-}" == "1" ]] && claude_flags+=("--dangerously-skip-permissions")
 
-  # tee to stderr so the human can watch; capture stdout for promise detection
+  # tee to stderr so the human can watch; capture stdout for promise/selection markers
   claude "${claude_flags[@]}" 2>&1 | tee /dev/stderr || true
 }
 
 # ---------------------------------------------------------------------------
 # Single iteration (shared plumbing)
+#   pinned modes pass the issue number; afk learns it from <selected>N</selected>.
 # ---------------------------------------------------------------------------
 run_iteration() {
-  local issue=$1
-  local attempts gate_exit=0 promise_present=false output remaining decision
+  local pinned="${1:-}"
+  local work_block selected attempts gate_exit=0 promise_present=false output remaining decision
 
-  echo "ralph: cold iteration — issue #$issue" >&2
-  attempts=$(increment_attempts "$issue")
-  echo "ralph: attempt $attempts/$K" >&2
-  log_progress "START #$issue attempt=$attempts"
+  if [[ "$MODE" == "afk" ]]; then
+    work_block=$(build_work_block_candidates)
+  else
+    work_block=$(build_work_block_pinned "$pinned")
+  fi
 
-  output=$(run_cold "$issue")
+  echo "ralph: cold iteration (mode=$MODE)" >&2
+  log_progress "START mode=$MODE"
+
+  output=$(run_cold "$work_block")
+
+  if [[ "$MODE" == "afk" ]]; then
+    selected=$(echo "$output" | grep -oE '<selected>[0-9]+</selected>' | tail -1 | grep -oE '[0-9]+' || true)
+  else
+    selected="$pinned"
+  fi
+
+  if [[ -z "$selected" ]]; then
+    echo "ralph: no issue selected this iteration" >&2
+    log_progress "NO-SELECTION mode=$MODE"
+    echo "CONTINUE"
+    return 0
+  fi
+
+  attempts=$(increment_attempts "$selected")
+  echo "ralph: issue #$selected — attempt $attempts/$K" >&2
 
   echo "$output" | grep -q '<promise>COMPLETE</promise>' && promise_present=true
 
-  run_gate || gate_exit=$?
-  remaining=$(remaining_count "$issue")
+  # gate output → stderr (human watches there); stdout stays the clean decision channel
+  run_gate >&2 || gate_exit=$?
+  remaining=$(remaining_count "$selected")
 
   decision=$(node "$ROOT/scripts/loop-decision.mjs" "$gate_exit" "$promise_present" "$remaining")
-  echo "ralph: gate=$gate_exit promise=$promise_present remaining=$remaining → $decision" >&2
-  log_progress "END #$issue gate=$gate_exit promise=$promise_present remaining=$remaining decision=$decision"
+  echo "ralph: #$selected gate=$gate_exit promise=$promise_present remaining=$remaining → $decision" >&2
+  log_progress "END #$selected gate=$gate_exit promise=$promise_present remaining=$remaining decision=$decision"
+
+  # Escalate this issue if K cold attempts produced no closing commit.
+  if ! has_closing_commit "$selected" && [[ "$attempts" -ge "$K" ]]; then
+    escalate "$selected" "exceeded $K attempts without a closing commit"
+  fi
 
   echo "$decision"
 }
@@ -216,10 +282,15 @@ run_issue() {
     iters=$((iters + 1))
     [[ $iters -gt $MAX ]] && { echo "ralph: global MAX ($MAX) reached — stopping" >&2; exit 1; }
 
-    local attempts
-    attempts=$(read_attempts "$ISSUE_N")
-    if [[ $attempts -ge $K ]]; then
-      escalate "$ISSUE_N" "exceeded $K attempts without completion"
+    if has_closing_commit "$ISSUE_N"; then
+      echo "ralph: #$ISSUE_N already delivered on this branch" >&2
+      open_pr_if_needed
+      exit 0
+    fi
+
+    # Already escalated on a prior run? Stop (the relabel persists across restarts).
+    if [[ "$(read_attempts "$ISSUE_N")" -ge $K ]]; then
+      echo "ralph: #$ISSUE_N at attempt cap — handed to a human" >&2
       exit 0
     fi
 
@@ -242,27 +313,19 @@ run_afk() {
     iters=$((iters + 1))
     [[ $iters -gt $MAX ]] && { echo "ralph: global MAX ($MAX) reached — stopping" >&2; exit 1; }
 
-    local issue
-    issue=$(select_issue || true)
-
-    if [[ -z "$issue" ]]; then
-      echo "ralph: no unblocked ready-for-agent issues remain in PRD #$PRD_N" >&2
+    if [[ -z "$(list_eligible)" ]]; then
+      echo "ralph: no eligible ready-for-agent slices remain in PRD #$PRD_N" >&2
       open_pr_if_needed
       exit 0
     fi
 
-    local attempts
-    attempts=$(read_attempts "$issue")
-    if [[ $attempts -ge $K ]]; then
-      escalate "$issue" "exceeded $K attempts without completion"
-      continue
-    fi
-
     local decision
-    decision=$(run_iteration "$issue")
+    decision=$(run_iteration)
 
     if [[ "$decision" == "COMPLETE" ]]; then
-      echo "ralph: #$issue COMPLETE — selecting next" >&2
+      echo "ralph: PRD #$PRD_N COMPLETE — no eligible work remains" >&2
+      open_pr_if_needed
+      exit 0
     fi
   done
 }
