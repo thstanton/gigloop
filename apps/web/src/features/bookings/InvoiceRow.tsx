@@ -19,6 +19,8 @@ function getInvoiceActions(
   onMarkSent: (i: Invoice) => void,
   onMarkPaid: (i: Invoice) => void,
   onVoid: (i: Invoice) => void,
+  isDeletePending: boolean,
+  isVoidPending: boolean,
 ): RowAction[] | null {
   if (invoice.status === 'DRAFT') {
     return [
@@ -30,6 +32,7 @@ function getInvoiceActions(
         variant: 'destructive',
         confirmation: { title: 'Delete invoice?', description: 'This invoice will be permanently removed.' },
         onClick: () => onDelete(invoice),
+        isPending: isDeletePending,
       },
     ];
   }
@@ -46,6 +49,7 @@ function getInvoiceActions(
       variant: 'destructive',
       confirmation: { title: 'Void invoice?', description: 'The invoice will be marked void. You can create a new one if needed.' },
       onClick: () => onVoid(invoice),
+      isPending: isVoidPending,
     });
     return acts;
   }
@@ -60,6 +64,7 @@ function getInvoiceActions(
       variant: 'destructive',
       confirmation: { title: 'Void invoice?', description: 'The invoice will be marked void.' },
       onClick: () => onVoid(invoice),
+      isPending: isVoidPending,
     });
     return acts;
   }
@@ -70,6 +75,8 @@ function getInvoiceActions(
 export interface InvoiceRowProps {
   invoice: Invoice;
   pdfUrl: string | null;
+  isDeletePending: boolean;
+  isVoidPending: boolean;
   onEdit: (invoice: Invoice) => void;
   onDelete: (invoice: Invoice) => void;
   onSend: (invoice: Invoice) => void;
@@ -78,12 +85,12 @@ export interface InvoiceRowProps {
   onVoid: (invoice: Invoice) => void;
 }
 
-export default function InvoiceRow({ invoice, pdfUrl, onEdit, onDelete, onSend, onMarkSent, onMarkPaid, onVoid }: InvoiceRowProps) {
+export default function InvoiceRow({ invoice, pdfUrl, isDeletePending, isVoidPending, onEdit, onDelete, onSend, onMarkSent, onMarkPaid, onVoid }: InvoiceRowProps) {
   const overdue = invoice.status === 'SENT' && !!invoice.dueDate && new Date(invoice.dueDate) < new Date();
   const isVoid = invoice.status === 'VOID';
   const isPaid = invoice.status === 'PAID';
 
-  const actions = getInvoiceActions(invoice, pdfUrl, onEdit, onDelete, onSend, onMarkSent, onMarkPaid, onVoid);
+  const actions = getInvoiceActions(invoice, pdfUrl, onEdit, onDelete, onSend, onMarkSent, onMarkPaid, onVoid, isDeletePending, isVoidPending);
   const invoiceLabel = invoice.isDeposit ? 'Deposit' : 'Balance';
   const invoiceSublabel = `${formatCurrency(invoiceLineTotal(invoice))} · ${invoice.issueDate ? formatDate(invoice.issueDate) : '—'}`;
 

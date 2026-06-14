@@ -164,7 +164,7 @@ export default function BookingEditDrawer({ booking }: Props) {
           </div>
 
           <div ref={packagesRef} className="mt-8 pt-6 border-t border-border">
-            <PerformanceEditor booking={booking} />
+            <PerformanceEditor booking={booking} isOpen={isOpen} />
           </div>
 
           <div ref={musicFormRef} className="mt-8 pt-6 border-t border-border">

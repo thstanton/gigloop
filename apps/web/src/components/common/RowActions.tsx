@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ChevronRight, MoreHorizontal } from 'lucide-react';
 import {
   Sheet,
@@ -29,6 +29,7 @@ export interface RowAction {
   onClick: () => void;
   variant?: 'destructive';
   confirmation?: { title: string; description: string };
+  isPending?: boolean;
 }
 
 interface Props {
@@ -39,16 +40,34 @@ interface Props {
 
 export function RowActions({ actions, label, sublabel }: Props) {
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [confirmingAction, setConfirmingAction] = useState<RowAction | null>(null);
+  const [confirmingLabel, setConfirmingLabel] = useState<string | null>(null);
+  const [confirmFired, setConfirmFired] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const primaryAction = actions[0];
   const defaultActions = actions.filter((a) => a.variant !== 'destructive');
   const destructiveActions = actions.filter((a) => a.variant === 'destructive');
 
+  // Derive current action from label so isPending stays fresh across renders
+  const confirmingAction = confirmingLabel
+    ? (actions.find((a) => a.label === confirmingLabel) ?? null)
+    : null;
+  const isConfirmPending = confirmingAction?.isPending ?? false;
+
+  // Close when a pending action completes (or errors)
+  useEffect(() => {
+    if (confirmFired && !isConfirmPending) {
+      setConfirmingLabel(null);
+      setConfirmFired(false);
+      setSheetOpen(false);
+      setDialogOpen(false);
+    }
+  }, [confirmFired, isConfirmPending]);
+
   function handleSheetAction(action: RowAction) {
     if (action.confirmation) {
-      setConfirmingAction(action);
+      setConfirmingLabel(action.label);
+      setConfirmFired(false);
     } else {
       setSheetOpen(false);
       action.onClick();
@@ -56,19 +75,29 @@ export function RowActions({ actions, label, sublabel }: Props) {
   }
 
   function handleConfirmInSheet() {
-    confirmingAction?.onClick();
-    setConfirmingAction(null);
-    setSheetOpen(false);
+    if (!confirmingAction) return;
+    confirmingAction.onClick();
+    if (confirmingAction.isPending !== undefined) {
+      setConfirmFired(true);
+    } else {
+      setConfirmingLabel(null);
+      setSheetOpen(false);
+    }
   }
 
   function handleSheetOpenChange(open: boolean) {
-    if (!open) setConfirmingAction(null);
+    if (!open && isConfirmPending) return;
+    if (!open) {
+      setConfirmingLabel(null);
+      setConfirmFired(false);
+    }
     setSheetOpen(open);
   }
 
   function handleDropdownAction(action: RowAction) {
     if (action.confirmation) {
-      setConfirmingAction(action);
+      setConfirmingLabel(action.label);
+      setConfirmFired(false);
       setDialogOpen(true);
     } else {
       action.onClick();
@@ -76,13 +105,22 @@ export function RowActions({ actions, label, sublabel }: Props) {
   }
 
   function handleDialogConfirm() {
-    confirmingAction?.onClick();
-    setConfirmingAction(null);
-    setDialogOpen(false);
+    if (!confirmingAction) return;
+    confirmingAction.onClick();
+    if (confirmingAction.isPending !== undefined) {
+      setConfirmFired(true);
+    } else {
+      setConfirmingLabel(null);
+      setDialogOpen(false);
+    }
   }
 
   function handleDialogOpenChange(open: boolean) {
-    if (!open) setConfirmingAction(null);
+    if (!open && isConfirmPending) return;
+    if (!open) {
+      setConfirmingLabel(null);
+      setConfirmFired(false);
+    }
     setDialogOpen(open);
   }
 
@@ -114,11 +152,18 @@ export function RowActions({ actions, label, sublabel }: Props) {
                 {confirmingAction.confirmation!.description}
               </p>
               <div className="flex gap-2">
-                <Button variant="outline" onClick={() => setConfirmingAction(null)}>
+                <Button
+                  variant="outline"
+                  disabled={isConfirmPending}
+                  onClick={() => {
+                    setConfirmingLabel(null);
+                    setConfirmFired(false);
+                  }}
+                >
                   Cancel
                 </Button>
-                <Button variant="destructive" onClick={handleConfirmInSheet}>
-                  Confirm
+                <Button variant="destructive" disabled={isConfirmPending} onClick={handleConfirmInSheet}>
+                  {isConfirmPending ? '…' : 'Confirm'}
                 </Button>
               </div>
             </div>
@@ -211,15 +256,17 @@ export function RowActions({ actions, label, sublabel }: Props) {
           <DialogFooter>
             <Button
               variant="outline"
+              disabled={isConfirmPending}
               onClick={() => {
                 setDialogOpen(false);
-                setConfirmingAction(null);
+                setConfirmingLabel(null);
+                setConfirmFired(false);
               }}
             >
               Cancel
             </Button>
-            <Button variant="destructive" onClick={handleDialogConfirm}>
-              Confirm
+            <Button variant="destructive" disabled={isConfirmPending} onClick={handleDialogConfirm}>
+              {isConfirmPending ? '…' : 'Confirm'}
             </Button>
           </DialogFooter>
         </DialogContent>

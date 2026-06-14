@@ -40,6 +40,7 @@ export default function ContactEditSheet({ contact, onClose, onUnlink }: Props) 
   function handleOpenChange(o: boolean) {
     if (!o) {
       setConfirmUnlink(false);
+      saveMutation.reset();
       onClose();
     }
   }

@@ -18,12 +18,14 @@ export function useBookingActions(bookingId: string) {
         signedAt: new Date().toISOString(),
       }),
     onSuccess: () => invalidateBooking(),
+    onError: () => toast({ title: 'Failed to mark contract as signed', variant: 'destructive' }),
   });
 
   const depositMutation = useMutation({
     mutationFn: () =>
       apiPatch(`/bookings/${bookingId}`, { depositReceivedAt: new Date().toISOString() }),
     onSuccess: () => invalidateBooking(),
+    onError: () => toast({ title: 'Failed to mark deposit as received', variant: 'destructive' }),
   });
 
   const autoCreateInvoiceMutation = useMutation({
@@ -47,6 +49,7 @@ export function useBookingActions(bookingId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bookingInvoices', bookingId] });
     },
+    onError: () => toast({ title: 'Failed to delete invoice', variant: 'destructive' }),
   });
 
   return {
@@ -55,6 +58,7 @@ export function useBookingActions(bookingId: string) {
     autoCreateInvoice: (args: { isDeposit: boolean; amount: number }) =>
       autoCreateInvoiceMutation.mutate(args),
     deleteInvoice: (invoiceId: string) => deleteInvoiceMutation.mutate(invoiceId),
+    isDeletingInvoice: deleteInvoiceMutation.isPending,
     isPending:
       contractMutation.isPending ||
       depositMutation.isPending ||

@@ -1,6 +1,7 @@
 import { Trash2, FileText, Download, FolderOpen } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiDelete } from '@/lib/api';
+import { toast } from '@/lib/hooks/use-toast';
 import { RowActions } from '@/components/common/RowActions';
 import type { RowAction } from '@/components/common/RowActions';
 import type { Document, Invoice } from '@/types/api';
@@ -35,6 +36,7 @@ export function DocumentList({ bookingId, documents, invoices }: Props) {
   const deleteMutation = useMutation({
     mutationFn: (id: string) => apiDelete(`/bookings/${bookingId}/documents/${id}`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['bookingDocuments', bookingId] }),
+    onError: () => toast({ title: 'Failed to delete document', variant: 'destructive' }),
   });
 
   if (documents.length === 0) {
@@ -67,6 +69,7 @@ export function DocumentList({ bookingId, documents, invoices }: Props) {
             variant: 'destructive',
             confirmation: { title: 'Delete document?', description: 'This uploaded document will be permanently removed.' },
             onClick: () => deleteMutation.mutate(doc.id),
+            isPending: deleteMutation.isPending,
           });
         }
 

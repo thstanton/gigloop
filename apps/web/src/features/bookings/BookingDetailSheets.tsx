@@ -76,6 +76,7 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
     celebratoryTitle,
     dismissReadyDialog,
     confirmStatusTransition,
+    isConfirmingTransition,
   } = useBookingChecklist(bookingId, booking, isLoaded);
   const { data: invoices = [] } = useBookingInvoices(bookingId);
   const contractActions = useContractActions(bookingId);
@@ -128,11 +129,11 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
               <span className="font-medium text-foreground">{STATUS_LABELS[readyDialogStatus]}</span>?
             </DialogDescription>
             <div className="flex gap-2 justify-end mt-2">
-              <Button variant="outline" onClick={dismissReadyDialog}>
+              <Button variant="outline" onClick={dismissReadyDialog} disabled={isConfirmingTransition}>
                 Not yet
               </Button>
-              <Button onClick={() => confirmStatusTransition(readyDialogStatus)}>
-                Mark as {STATUS_LABELS[readyDialogStatus]}
+              <Button onClick={() => confirmStatusTransition(readyDialogStatus)} disabled={isConfirmingTransition}>
+                {isConfirmingTransition ? 'Saving…' : `Mark as ${STATUS_LABELS[readyDialogStatus]}`}
               </Button>
             </div>
           </DialogContent>

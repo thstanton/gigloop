@@ -25,6 +25,7 @@ export default function ContactEditDrawer({ contact }: Props) {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
 
   function close() {
+    saveMutation.reset();
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       next.delete('edit');

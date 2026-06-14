@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiGet, apiPatch, apiPost } from '@/lib/api';
-import { STATUS_ORDER } from '@/lib/constants';
 import { toast } from '@/lib/hooks/use-toast';
+import { STATUS_ORDER } from '@/lib/constants';
 import type { BookingDetail, BookingStatus, ChecklistItem } from '@/types/api';
 
 const CELEBRATORY_TITLES = [
@@ -97,13 +97,19 @@ export function useBookingChecklist(
     setReadyDialogStatus(null);
   }
 
-  function confirmStatusTransition(status: BookingStatus) {
-    setReadyDialogStatus(null);
-    apiPatch(`/bookings/${bookingId}`, { status }).then(() => {
+  const statusTransitionMutation = useMutation({
+    mutationFn: (status: BookingStatus) => apiPatch(`/bookings/${bookingId}`, { status }),
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['booking', bookingId] });
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
       queryClient.invalidateQueries({ queryKey: ['bookingChecklist', bookingId] });
-    });
+      setReadyDialogStatus(null);
+    },
+    onError: () => toast({ title: 'Failed to update booking status', variant: 'destructive' }),
+  });
+
+  function confirmStatusTransition(status: BookingStatus) {
+    statusTransitionMutation.mutate(status);
   }
 
   return {
@@ -113,6 +119,7 @@ export function useBookingChecklist(
     celebratoryTitle: celebratoryTitle.current,
     dismissReadyDialog,
     confirmStatusTransition,
+    isConfirmingTransition: statusTransitionMutation.isPending,
     toggleItem: (itemId: string, state: 'COMPLETE' | 'PENDING') => toggleItemMutation.mutate({ itemId, state }),
     addItem: (data: { label: string; requiredForStatus: string | null; dueDate: string | null }) => addItemMutation.mutate(data),
     isAddingItem: addItemMutation.isPending,

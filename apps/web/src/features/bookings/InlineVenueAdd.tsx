@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dialog';
 import ContactPicker from '@/features/bookings/ContactPicker';
 import { apiPatch } from '@/lib/api';
+import { toast } from '@/lib/hooks/use-toast';
 
 export function InlineVenueAdd({ bookingId }: { bookingId: string }) {
   const queryClient = useQueryClient();
@@ -22,6 +23,7 @@ export function InlineVenueAdd({ bookingId }: { bookingId: string }) {
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
       setSheetOpen(false);
     },
+    onError: () => toast({ title: 'Failed to add venue', variant: 'destructive' }),
   });
 
   return (
@@ -50,7 +52,7 @@ export function InlineVenueAdd({ bookingId }: { bookingId: string }) {
             preferredRole="VENUE"
           />
           <div className="mt-4 flex justify-end">
-            <Button variant="outline" onClick={() => setSheetOpen(false)}>
+            <Button variant="outline" onClick={() => setSheetOpen(false)} disabled={mutation.isPending}>
               Cancel
             </Button>
           </div>
