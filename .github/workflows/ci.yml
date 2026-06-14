@@ -85,6 +85,12 @@ jobs:
         if: needs.detect-changes.outputs.api == 'true'
       - run: cd apps/web && bun run test
         if: needs.detect-changes.outputs.web == 'true'
+      - name: Shortcut-detector unit tests (ADR-0030)
+        if: needs.detect-changes.outputs.web == 'true'
+        run: node --test scripts/shortcut-detector.test.mjs
+      - name: Loop-decision unit tests (ADR-0040)
+        if: needs.detect-changes.outputs.web == 'true'
+        run: node --test scripts/loop-decision.test.mjs
 
   build:
     name: Build

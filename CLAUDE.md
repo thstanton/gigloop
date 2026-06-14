@@ -66,6 +66,8 @@ CI (→ main):    lint + test + build           (both apps)                — r
 
 There is **no pre-flight check and no pre-commit checklist.** Lint runs automatically at commit; test + build run automatically at push; CI re-runs everything. You never need to invoke these manually — if a hook fails, fix the cause and let the hook re-run.
 
+> ℹ️ **Reality note (ADR-0040):** hooks live under `.githooks/` (committed). One-time opt-in required: `git config core.hooksPath .githooks`. Without it, hooks don't run and CI is the only gate. The **shortcut-detector** (blocks `--no-verify` bypasses) is pending in #412 — lint/test/build fire but the shortcut check does not yet.
+
 ### Advisory layer (CodeScene + /simplify — judgement, never a hard gate)
 
 CodeScene is a **navigator, not a gatekeeper.** See ADR-0026 (amended).
@@ -230,6 +232,8 @@ The feature branch persists across sessions; my context does not. "Too big" mean
 - I have done ≤1 sub-issue so far this session.
 
 **Stopping cleanly is the success condition — not a partial failure.** Never push through a degrading context to "finish the tracking issue." The tracking issue is a durable map advanced one increment at a time, not a goal to complete in one sitting.
+
+**AFK loop mode (ADR-0040):** this stop-and-hand-off rule governs *interactive* sessions. When work runs under the cold agent loop (`afk-ralph.sh`), the **cold-process restart between iterations IS the handoff** — a fresh, empty-context process resumes from `progress.md` + git + `gh`. The no-degrading-context principle is unchanged; AFK mode satisfies it by restarting the process instead of stopping for a human. A slice the loop cannot complete cleanly is flagged `ready-for-human` rather than pushed through.
 
 **At a stop:** leave the branch at a clean commit → tick the completed sub-issues on the tracking issue → post a short handoff comment on the tracking issue (what's done, the next unblocked sub-issue, any decisions not yet in docs; `/handoff` can draft it) → summarise to the human. Next session resumes from the tracking issue + branch log.
 
