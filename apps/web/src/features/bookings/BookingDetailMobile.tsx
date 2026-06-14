@@ -129,6 +129,7 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
             <ItineraryCard
               logistics={booking.logistics}
               sets={booking.sets}
+              packages={booking.packages}
               hideWhenEmpty
             />
             <DetailsCard

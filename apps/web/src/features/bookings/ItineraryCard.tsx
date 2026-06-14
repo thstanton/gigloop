@@ -6,7 +6,7 @@ import { EmptyState } from '@/components/common/EmptyState';
 import { formatDuration } from './PerformanceSection';
 import FormatIcon from './FormatIcon';
 import { LOGISTICS_FIELD_ICONS } from '@/lib/constants';
-import type { BookingLogisticsEntry, PerformanceSet } from '@/types/api';
+import type { BookingLogisticsEntry, BookingPackageSummary, PerformanceSet } from '@/types/api';
 
 type TimelineRow =
   | { kind: 'time'; rowKey: string; label: string; time: string; notes?: string; group: string }
@@ -15,6 +15,7 @@ type TimelineRow =
 interface ItineraryCardProps {
   logistics: Record<string, BookingLogisticsEntry> | null;
   sets: PerformanceSet[];
+  packages: BookingPackageSummary[];
   hideWhenEmpty?: boolean;
 }
 
@@ -44,7 +45,13 @@ function setLabel(set: PerformanceSet): string {
   return set.label ? `${set.label} (${dur})` : dur;
 }
 
-export default function ItineraryCard({ logistics, sets, hideWhenEmpty = false }: ItineraryCardProps) {
+function getSetIcon(set: PerformanceSet, packages: BookingPackageSummary[]): string {
+  if (!set.packageId) return 'music';
+  const pkg = packages.find((p) => p.packageId === set.packageId);
+  return pkg?.package.icon ?? 'music';
+}
+
+export default function ItineraryCard({ logistics, sets, packages, hideWhenEmpty = false }: ItineraryCardProps) {
   const [, setSearchParams] = useSearchParams();
   const rows = buildRows(logistics, sets);
 
@@ -83,6 +90,11 @@ export default function ItineraryCard({ logistics, sets, hideWhenEmpty = false }
                 {row.kind === 'time' && (
                   <span className="flex-shrink-0 text-muted">
                     <FormatIcon icon={LOGISTICS_FIELD_ICONS[row.rowKey] ?? 'clock'} size={14} />
+                  </span>
+                )}
+                {row.kind === 'set' && (
+                  <span className="flex-shrink-0 text-muted">
+                    <FormatIcon icon={getSetIcon(row.set, packages)} size={14} />
                   </span>
                 )}
                 {row.kind === 'time' && row.notes ? (
