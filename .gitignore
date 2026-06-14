@@ -10,4 +10,5 @@ storybook-static
 !.claude/skills/.gitkeep
 skills-lock.json
 progress.md
+ralph.log
 .playwright-cli/

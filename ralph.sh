@@ -7,15 +7,17 @@
 #   ./ralph.sh --afk --prd N    self-select + grind unblocked AFK children of PRD #N
 #
 # Env:
-#   RALPH_K=3       per-issue cold-restart cap before escalation (default 3)
-#   RALPH_MAX=20    global iteration cap per run (default 20)
-#   RALPH_UNSAFE=1  add --dangerously-skip-permissions (Docker sandbox only)
+#   RALPH_K=3              per-issue cold-restart cap before escalation (default 3)
+#   RALPH_MAX=20           global iteration cap per run (default 20)
+#   RALPH_UNSAFE=1         add --dangerously-skip-permissions (Docker sandbox only)
+#   RALPH_WEBHOOK_URL=url  POST target for ESCALATE/COMPLETE/MAX-HIT events (optional)
 
 set -euo pipefail
 
 ROOT=$(git rev-parse --show-toplevel)
 PROMPT_FILE="$ROOT/PROMPT.md"
 PROGRESS="$ROOT/progress.md"
+LOG="$ROOT/ralph.log"
 K="${RALPH_K:-3}"
 MAX="${RALPH_MAX:-20}"
 
@@ -82,6 +84,23 @@ log_progress() {
   echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) $*" >> "$PROGRESS"
 }
 
+# Append a structured line to ralph.log (tailable AFK heartbeat).
+# MUST NOT write to stdout — stdout is the decision channel.
+heartbeat() {
+  echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) $*" >> "$LOG"
+}
+
+# Fire a webhook POST when the loop hits an event worth waking a human for.
+# Configured via RALPH_WEBHOOK_URL; no-op when unset (graceful degradation).
+# MUST NOT write to stdout.
+notify() {
+  local msg=$1
+  [[ -z "${RALPH_WEBHOOK_URL:-}" ]] && return 0
+  curl -s -X POST "${RALPH_WEBHOOK_URL}" \
+    -H "Content-Type: text/plain" \
+    --data-raw "$msg" >/dev/null 2>&1 || true
+}
+
 # ---------------------------------------------------------------------------
 # GitHub helpers
 # ---------------------------------------------------------------------------
@@ -136,6 +155,8 @@ escalate() {
   echo "ralph: escalating #$issue — $reason" >&2
   gh issue edit "$issue" --remove-label "ready-for-agent" --add-label "ready-for-human" >/dev/null 2>&1 || true
   log_progress "ESCALATE #$issue: $reason"
+  heartbeat "event=ESCALATE issue=$issue reason=$reason"
+  notify "ralph: ESCALATE #$issue — $reason (mode=$MODE)"
 }
 
 open_pr_if_needed() {
@@ -240,6 +261,7 @@ run_iteration() {
   if [[ -z "$selected" ]]; then
     echo "ralph: no issue selected this iteration" >&2
     log_progress "NO-SELECTION mode=$MODE"
+    heartbeat "mode=$MODE issue=none decision=CONTINUE"
     echo "CONTINUE"
     return 0
   fi
@@ -256,6 +278,7 @@ run_iteration() {
   decision=$(node "$ROOT/scripts/loop-decision.mjs" "$gate_exit" "$promise_present" "$remaining")
   echo "ralph: #$selected gate=$gate_exit promise=$promise_present remaining=$remaining → $decision" >&2
   log_progress "END #$selected gate=$gate_exit promise=$promise_present remaining=$remaining decision=$decision"
+  heartbeat "mode=$MODE issue=$selected attempt=$attempts/$K gate=$gate_exit promise=$promise_present decision=$decision"
 
   # Escalate this issue if K cold attempts produced no closing commit.
   if ! has_closing_commit "$selected" && [[ "$attempts" -ge "$K" ]]; then
@@ -280,7 +303,12 @@ run_issue() {
 
   while true; do
     iters=$((iters + 1))
-    [[ $iters -gt $MAX ]] && { echo "ralph: global MAX ($MAX) reached — stopping" >&2; exit 1; }
+    if [[ $iters -gt $MAX ]]; then
+      echo "ralph: global MAX ($MAX) reached — stopping" >&2
+      heartbeat "mode=issue issue=$ISSUE_N event=MAX-HIT iters=$iters"
+      notify "ralph: MAX-HIT after $iters iterations on #$ISSUE_N (mode=issue)"
+      exit 1
+    fi
 
     if has_closing_commit "$ISSUE_N"; then
       echo "ralph: #$ISSUE_N already delivered on this branch" >&2
@@ -299,6 +327,8 @@ run_issue() {
 
     if [[ "$decision" == "COMPLETE" ]]; then
       echo "ralph: #$ISSUE_N COMPLETE" >&2
+      heartbeat "mode=issue issue=$ISSUE_N event=COMPLETE iters=$iters"
+      notify "ralph: COMPLETE #$ISSUE_N (mode=issue, $iters iterations)"
       open_pr_if_needed
       exit 0
     fi
@@ -311,10 +341,17 @@ run_afk() {
 
   while true; do
     iters=$((iters + 1))
-    [[ $iters -gt $MAX ]] && { echo "ralph: global MAX ($MAX) reached — stopping" >&2; exit 1; }
+    if [[ $iters -gt $MAX ]]; then
+      echo "ralph: global MAX ($MAX) reached — stopping" >&2
+      heartbeat "mode=afk prd=$PRD_N event=MAX-HIT iters=$iters"
+      notify "ralph: MAX-HIT after $iters iterations on PRD #$PRD_N (mode=afk)"
+      exit 1
+    fi
 
     if [[ -z "$(list_eligible)" ]]; then
       echo "ralph: no eligible ready-for-agent slices remain in PRD #$PRD_N" >&2
+      heartbeat "mode=afk prd=$PRD_N event=COMPLETE iters=$iters"
+      notify "ralph: COMPLETE PRD #$PRD_N — no eligible slices remain ($iters iterations)"
       open_pr_if_needed
       exit 0
     fi
@@ -324,6 +361,8 @@ run_afk() {
 
     if [[ "$decision" == "COMPLETE" ]]; then
       echo "ralph: PRD #$PRD_N COMPLETE — no eligible work remains" >&2
+      heartbeat "mode=afk prd=$PRD_N event=COMPLETE iters=$iters"
+      notify "ralph: COMPLETE PRD #$PRD_N — promise received ($iters iterations)"
       open_pr_if_needed
       exit 0
     fi

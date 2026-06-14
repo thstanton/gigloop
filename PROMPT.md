@@ -86,6 +86,29 @@ baton to the next cold restart.
    If this slice is done but siblings remain, commit, record, and stop — the next cold
    restart selects the next slice.
 
+## Observing an AFK run
+
+You don't need extra tooling to monitor an unattended run. GitHub is already a
+zero-code dashboard:
+
+- **Label flips** — when a slice is escalated to `ready-for-human` or when the
+  loop relabels it (PROMPT.md step 7 clean-abort), GitHub notifications fire if
+  you're watching the repo.
+- **Per-slice commits** — each closing commit appears in the branch's commit
+  list; the commit message body names the issue.
+- **Completion PR** — `open_pr_if_needed` opens the PR automatically; a mobile
+  notification arrives the moment it's created.
+
+For richer signals: `tail -f ralph.log` streams a structured heartbeat line per
+iteration (issue, decision, gate result, attempt count). Set `RALPH_WEBHOOK_URL`
+to fire a push notification to ntfy/Pushover/Slack on ESCALATE, COMPLETE, or
+MAX-hit.
+
+*Note: agent-initiated clean-aborts (step 7) relabel the issue inside the cold
+`claude -p` process — `ralph.sh`'s `escalate()` does not see them, so no webhook
+fires on that path. Watch for `ready-for-human` label changes on the repo
+instead.*
+
 ## Sub-agents
 
 Use sub-agents freely to parallelise **read-only** exploration — searching the
