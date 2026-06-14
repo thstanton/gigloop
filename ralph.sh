@@ -241,10 +241,10 @@ run_cold() {
 
   if [[ "${RALPH_UNSAFE:-}" == "1" ]]; then
     # Run inside a Docker Sandbox microVM (ADR-0040 §7).
-    # Default RW passthrough mount — do NOT add --clone (strands commits in the VM).
-    # CLAUDE_CODE_OAUTH_TOKEN must be set in the host shell via `claude setup-token`.
-    sbx run -e "CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}" \
-      -- claude "${claude_flags[@]}" 2>&1 | tee /dev/stderr || true
+    # $ROOT is mounted RW passthrough — do NOT use --clone (strands commits in the VM).
+    # One-time auth setup: sbx secret set-custom -g --host api.anthropic.com \
+    #   --env CLAUDE_CODE_OAUTH_TOKEN --value "$CLAUDE_CODE_OAUTH_TOKEN"
+    sbx run claude "$ROOT" -- "${claude_flags[@]}" 2>&1 | tee /dev/stderr || true
   else
     # tee to stderr so the human can watch; capture stdout for promise/selection markers
     claude "${claude_flags[@]}" 2>&1 | tee /dev/stderr || true
