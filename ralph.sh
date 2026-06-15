@@ -66,6 +66,13 @@ RUN_JSONL=""
 RUN_METRICS=""
 RUN_CLAUDE_ERR=""
 
+# Terminal routing (ADR-0045 §5, #453). cold_pass classifies the agent's final message
+# via scripts/terminal-signal.mjs and leaves the verdict here for the mode runner. Set
+# as globals (NOT a `$(cold_pass)` capture) so the value survives without a subshell —
+# cold_pass also writes per-iteration artefact paths into globals run_cold reads back.
+RALPH_SIGNAL=""        # COMPLETE | HANDOFF | CONTINUE
+RALPH_HANDOFF_N=""     # slices needing a human, parsed from a HANDOFF promise (may be empty)
+
 # ---------------------------------------------------------------------------
 # Arg parsing
 # ---------------------------------------------------------------------------
@@ -380,11 +387,24 @@ cold_pass() {
   echo "Ralph is calling an agent (mode=$MODE)! Watch him go: tail -f $RUN_JSONL | watch cat $CURRENT" >&2
   log_progress "START mode=$MODE"
 
-  # Discard run_cold's stdout — the agent's final text. With the `<selected>`/`<promise>`
-  # markers gone (AC3), bash no longer parses it; #458 reads the worked issue from the
-  # `Closes #N` commit and #453 reads the terminal signal. The live feed (stderr) and
-  # the artefacts (commits + labels + metrics) are the record.
-  run_cold "$work_block" >/dev/null
+  # Capture run_cold's stdout — the agent's final message — and route on it (ADR-0045 §5,
+  # #453). The agent JUDGES doneness and emits a wrapped <promise> token; terminal-signal.mjs
+  # classifies it to COMPLETE | HANDOFF | CONTINUE. bash never recounts work. run_cold's
+  # live feed + metrics are stderr/files, so $() captures the final text cleanly; the
+  # RUN_* artefact paths are read back from disk afterwards.
+  local agent_out
+  agent_out=$(run_cold "$work_block")
+
+  # `|| true` is load-bearing: under `set -euo pipefail` a nonzero node (missing binary,
+  # import/throw) would otherwise abort the whole run HERE, before the fallback below —
+  # killing an unattended grind on a transient glitch. With it, a hiccup yields an empty
+  # signal ⇒ CONTINUE ⇒ resume, never falsely "done".
+  RALPH_SIGNAL=$(printf '%s' "$agent_out" | node "$ROOT/scripts/terminal-signal.mjs" 2>/dev/null || true)
+  [[ -z "$RALPH_SIGNAL" ]] && RALPH_SIGNAL="CONTINUE"
+  # N for the HANDOFF notification: the first integer inside the HANDOFF promise. The
+  # PROMPT template literally shows `N`, so the agent may not substitute a count — empty
+  # is fine, the mode runner falls back to "some".
+  RALPH_HANDOFF_N=$(printf '%s' "$agent_out" | grep -oE 'HANDOFF[^<]*' | grep -oE '[0-9]+' | head -1 || true)
 
   mstr="dur=$(read_metric DURATION_S "$RUN_METRICS")s turns=$(read_metric NUM_TURNS "$RUN_METRICS")"
   mstr="$mstr in=$(read_metric TOKENS_IN "$RUN_METRICS") out=$(read_metric TOKENS_OUT "$RUN_METRICS")"
@@ -392,31 +412,59 @@ cold_pass() {
   mstr="$mstr cost=\$$(read_metric COST_USD "$RUN_METRICS") result=$(read_metric RESULT_SUBTYPE "$RUN_METRICS")"
 
   log_progress "END mode=$MODE result=$(read_metric RESULT_SUBTYPE "$RUN_METRICS") turns=$(read_metric NUM_TURNS "$RUN_METRICS")"
-  heartbeat "mode=$MODE prd=$PRD_N $mstr"
+  heartbeat "mode=$MODE prd=$PRD_N $mstr signal=$RALPH_SIGNAL"
 }
 
 # ---------------------------------------------------------------------------
 # Mode runners
 # ---------------------------------------------------------------------------
-# `once`: one watched cold pass over the PRD; the human is the loop. This is the
-# supported HITL entry point for this slice and the acceptance test for #452.
+# `once`: one watched cold pass over the PRD; the human is the loop. No finish_run — the
+# terminal signal is reported for information only (ADR-0045 §5: the COMPLETE/HANDOFF
+# distinction is moot in `once`, load-bearing in `afk`).
 run_once() {
   echo "Ralph is excited to do one watched pass over PRD #$PRD_N! (once)" >&2
   cold_pass
-  echo "Ralph is done with his pass — you're the loop now (once mode)." >&2
+  echo "Ralph is done with his pass (signal=$RALPH_SIGNAL) — you're the loop now (once mode)." >&2
 }
 
-# `afk`: the unwatched grind loop. ADR-0045 spine A → C: the two-signal terminal that
-# tells afk when to STOP (NO MORE TASKS → open PR / HANDOFF → notify + stop) is #453.
-# Until that lands, afk cannot safely loop unwatched, so it does ONE pass and stops —
-# use `--once --prd N` for now. #453 restores the loop with proper terminal routing.
+# `afk`: the unwatched grind loop. Cold-pass until a terminal signal or MAX (ADR-0045 §5,
+# #453). The agent judges doneness each iteration and bash routes on its wrapped <promise>:
+#   COMPLETE → every slice delivered → finish_run opens the PR (terminal, exits).
+#   HANDOFF  → open HITL/blocked slices remain → notify "N need a human", STOP, NO PR.
+#   CONTINUE → more ready-for-agent work (or a truncated iteration) → another cold pass.
+# NOTE (#456): the iteration-start `git reset --hard && git clean -fd` is a sibling slice
+# on this branch — until it lands, a `--max-turns`-cut iteration could carry a dirty tree
+# into the next pass. Both ship on feature/449-ralph-autonomy before the PR merges.
 run_afk() {
-  echo "Ralph wants to grind PRD #$PRD_N solo — but his STOP signal lands in #453!" >&2
-  echo "Ralph is doing ONE pass then stopping. Use --once --prd $PRD_N to watch him." >&2
-  cold_pass
-  heartbeat "mode=afk prd=$PRD_N event=TRANSITIONAL-ONE-PASS note=terminal-routing-pending-#453"
-  notify "Ralph (afk) did one pass on PRD #$PRD_N — the full afk loop lands in #453"
-  echo "Ralph did his one pass. The full afk loop is coming in #453!" >&2
+  echo "Ralph is off to grind PRD #$PRD_N solo (afk, up to MAX=$MAX passes)!" >&2
+  local i
+  for ((i = 1; i <= MAX; i++)); do
+    echo "Ralph is on afk pass $i/$MAX..." >&2
+    cold_pass
+    case "$RALPH_SIGNAL" in
+      COMPLETE)
+        echo "Ralph thinks every slice is delivered — opening the PR! (pass $i)" >&2
+        heartbeat "mode=afk prd=$PRD_N event=COMPLETE pass=$i"
+        notify "Ralph finished PRD #$PRD_N — every slice delivered! Opening the PR. (afk)"
+        finish_run   # pushes + opens the PR, then exits
+        ;;
+      HANDOFF)
+        local n="${RALPH_HANDOFF_N:-some}"
+        echo "Ralph is handing off — $n slices need a human. No PR (HITL/blocked work remains)." >&2
+        heartbeat "mode=afk prd=$PRD_N event=HANDOFF need_human=$n pass=$i"
+        log_progress "HANDOFF mode=afk prd=$PRD_N need_human=$n — no PR; HITL/blocked work remains"
+        notify "Ralph stopped on PRD #$PRD_N — $n slices need a human. No PR opened (afk)."
+        exit 0
+        ;;
+      *)
+        : # CONTINUE — more ready-for-agent work; run another cold pass.
+        ;;
+    esac
+  done
+
+  echo "Ralph hit his MAX=$MAX iteration cap on PRD #$PRD_N without a terminal signal." >&2
+  heartbeat "mode=afk prd=$PRD_N event=MAX-HIT max=$MAX"
+  notify "Ralph hit the MAX=$MAX iteration cap on PRD #$PRD_N without a terminal signal — needs a look."
 }
 
 # ---------------------------------------------------------------------------
