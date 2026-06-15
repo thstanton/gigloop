@@ -91,6 +91,9 @@ jobs:
       - name: Loop-decision unit tests (ADR-0040)
         if: needs.detect-changes.outputs.web == 'true'
         run: node --test scripts/loop-decision.test.mjs
+      - name: Ralph-stream formatter unit tests (ADR-0040)
+        if: needs.detect-changes.outputs.web == 'true'
+        run: node --test scripts/ralph-stream.test.mjs
 
   build:
     name: Build
