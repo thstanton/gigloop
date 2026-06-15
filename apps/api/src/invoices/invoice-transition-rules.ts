@@ -11,13 +11,8 @@ export interface InvoiceForRules {
 /** True when the invoice is a draft and can be issued (DRAFT → ISSUED). */
 export const isIssuable = (i: InvoiceForRules): boolean => i.status === 'DRAFT';
 
-/**
- * True when the invoice can be sent or marked-sent.
- * ISSUED is the primary sendable state (issued booking invoices).
- * DRAFT remains sendable for series invoices that have not yet gained the ISSUED state.
- */
-export const isSendable = (i: InvoiceForRules): boolean =>
-  i.status === 'ISSUED' || i.status === 'DRAFT';
+/** True when the invoice can be sent or marked-sent (status is ISSUED). */
+export const isSendable = (i: InvoiceForRules): boolean => i.status === 'ISSUED';
 
 /**
  * True when the invoice can be voided.

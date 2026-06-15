@@ -18,8 +18,8 @@ describe('isIssuable', () => {
 });
 
 describe('isSendable', () => {
-  it('is true for ISSUED (primary send path)', () => expect(isSendable(issued)).toBe(true));
-  it('is true for DRAFT (series compat — series invoices not yet on ISSUED path)', () => expect(isSendable(draft)).toBe(true));
+  it('is true for ISSUED', () => expect(isSendable(issued)).toBe(true));
+  it('is false for DRAFT', () => expect(isSendable(draft)).toBe(false));
   it('is false for SENT', () => expect(isSendable(sent)).toBe(false));
   it('is false for PAID', () => expect(isSendable(paid)).toBe(false));
   it('is false for VOID', () => expect(isSendable(voided)).toBe(false));

@@ -397,7 +397,7 @@ describe('InvoicesService', () => {
 
     it('delegates to lifecycle.send with userId, invoice, and dto', async () => {
       await service.send('u1', 'b1', 'i1', dto);
-      expect(mockLifecycle.send).toHaveBeenCalledWith('u1', issuedInvoice, dto, expect.any(Function));
+      expect(mockLifecycle.send).toHaveBeenCalledWith('u1', issuedInvoice, dto);
     });
   });
 
@@ -417,12 +417,12 @@ describe('InvoicesService', () => {
 
     it('delegates to lifecycle.markSent', async () => {
       await service.markSent('u1', 'b1', 'i1', dto);
-      expect(mockLifecycle.markSent).toHaveBeenCalledWith(issuedInvoice, dto, expect.any(Function));
+      expect(mockLifecycle.markSent).toHaveBeenCalledWith(issuedInvoice, dto);
     });
 
-    it('passes undefined atomicMarkSent callback when no issueDate provided (ISSUED path — no date assignment needed)', async () => {
+    it('delegates to lifecycle.markSent with empty dto', async () => {
       await service.markSent('u1', 'b1', 'i1', {});
-      expect(mockLifecycle.markSent).toHaveBeenCalledWith(issuedInvoice, {}, undefined);
+      expect(mockLifecycle.markSent).toHaveBeenCalledWith(issuedInvoice, {});
     });
   });
 

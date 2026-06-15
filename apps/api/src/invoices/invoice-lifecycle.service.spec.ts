@@ -11,6 +11,7 @@ const paidInvoice = { id: 'i1', status: 'PAID' as const, invoiceNumber: 'INV-202
 const voidedInvoice = { id: 'i1', status: 'VOID' as const, invoiceNumber: 'INV-2026-001', bookingId: 'b1' };
 
 const seriesDraftInvoice = { id: 'i2', status: 'DRAFT' as const, invoiceNumber: null, bookingId: null };
+const seriesIssuedInvoice = { id: 'i2', status: 'ISSUED' as const, invoiceNumber: 'INV-2026-002', bookingId: null };
 
 const pdfBuffer = Buffer.from('%PDF-test');
 const numberedInvoice = {
@@ -78,7 +79,7 @@ describe('InvoiceLifecycleService', () => {
         .toHaveBeenCalledWith('u1', 'i1', numberedInvoice, 'b1');
     });
 
-    it('passes undefined bookingId to generateAndStoreInvoicePdf for series invoices (series parity is a later slice)', async () => {
+    it('passes undefined bookingId to generateAndStoreInvoicePdf for series invoices', async () => {
       const seriesNumbered = { ...numberedInvoice, id: 'i2', bookingId: null };
       const seriesAssign = jest.fn().mockResolvedValue(seriesNumbered);
       await service.issueInvoice('u1', seriesDraftInvoice, params, seriesAssign);
@@ -96,79 +97,28 @@ describe('InvoiceLifecycleService', () => {
   // ─── send ──────────────────────────────────────────────────────────────────
 
   describe('send', () => {
-    const assignNumberOnly = jest.fn().mockResolvedValue(numberedInvoice);
-
     beforeEach(() => {
-      assignNumberOnly.mockClear();
       mockDocuments.getStoredInvoicePdfBuffer.mockResolvedValue({ buffer: pdfBuffer, documentId: 'doc-stored' });
     });
 
-    it('throws BadRequestException when invoice is not sendable (SENT)', async () => {
-      await expect(service.send('u1', sentInvoice, sendDto, assignNumberOnly))
+    it('throws BadRequestException when invoice is not ISSUED', async () => {
+      await expect(service.send('u1', draftInvoice, sendDto))
         .rejects.toThrow(BadRequestException);
-      expect(assignNumberOnly).not.toHaveBeenCalled();
     });
 
-    // ─── ISSUED path ───────────────────────────────────────────────────────
+    it('throws BadRequestException when invoice is SENT', async () => {
+      await expect(service.send('u1', sentInvoice, sendDto))
+        .rejects.toThrow(BadRequestException);
+    });
 
-    it('retrieves stored PDF for ISSUED invoices without calling assignNumberOnly', async () => {
-      await service.send('u1', issuedInvoice, sendDto, assignNumberOnly);
-      expect(assignNumberOnly).not.toHaveBeenCalled();
+    it('retrieves stored PDF and does not regenerate it', async () => {
+      await service.send('u1', issuedInvoice, sendDto);
       expect(mockDocuments.getStoredInvoicePdfBuffer).toHaveBeenCalledWith('u1', 'i1');
       expect(mockDocuments.generateAndStoreInvoicePdf).not.toHaveBeenCalled();
     });
 
-    it('sends email with the stored PDF for ISSUED invoices', async () => {
-      await service.send('u1', issuedInvoice, sendDto, assignNumberOnly);
-      expect(mockComms.sendEmail).toHaveBeenCalledWith(expect.objectContaining({
-        attachments: [{ filename: 'INV-2026-001.pdf', content: pdfBuffer }],
-      }));
-    });
-
-    it('passes documentId from stored PDF to sendEmail for ISSUED invoices (audit trail)', async () => {
-      await service.send('u1', issuedInvoice, sendDto, assignNumberOnly);
-      expect(mockComms.sendEmail).toHaveBeenCalledWith(expect.objectContaining({
-        documentId: 'doc-stored',
-      }));
-    });
-
-    it('throws BadRequestException when ISSUED invoice has no stored PDF', async () => {
-      mockDocuments.getStoredInvoicePdfBuffer.mockResolvedValue(null);
-      await expect(service.send('u1', issuedInvoice, sendDto, assignNumberOnly))
-        .rejects.toThrow(BadRequestException);
-      expect(mockComms.sendEmail).not.toHaveBeenCalled();
-    });
-
-    // ─── DRAFT path (series compat) ────────────────────────────────────────
-
-    it('calls assignNumberOnly with parsed dates for DRAFT invoices', async () => {
-      await service.send('u1', draftInvoice, sendDto, assignNumberOnly);
-      expect(assignNumberOnly).toHaveBeenCalledWith(
-        'i1', new Date('2026-06-01'), new Date('2026-06-15'),
-      );
-    });
-
-    it('calls assignNumberOnly with null dueDate when not provided', async () => {
-      await service.send('u1', draftInvoice, { ...sendDto, dueDate: undefined }, assignNumberOnly);
-      expect(assignNumberOnly).toHaveBeenCalledWith('i1', expect.any(Date), null);
-    });
-
-    it('calls generateAndStoreInvoicePdf with the numbered invoice and bookingId for DRAFT', async () => {
-      await service.send('u1', draftInvoice, sendDto, assignNumberOnly);
-      expect(mockDocuments.generateAndStoreInvoicePdf)
-        .toHaveBeenCalledWith('u1', 'i1', numberedInvoice, 'b1');
-    });
-
-    it('calls generateAndStoreInvoicePdf with undefined bookingId for series DRAFT invoices', async () => {
-      const seriesNumbered = { ...numberedInvoice, id: 'i2', bookingId: null };
-      const seriesAssign = jest.fn().mockResolvedValue(seriesNumbered);
-      await service.send('u1', seriesDraftInvoice, sendDto, seriesAssign);
-      expect(mockDocuments.generateAndStoreInvoicePdf)
-        .toHaveBeenCalledWith('u1', 'i2', seriesNumbered, undefined);
-    });
-
-    it('sends email with generated PDF attachment named after the invoice number for DRAFT', async () => {
-      await service.send('u1', draftInvoice, sendDto, assignNumberOnly);
+    it('sends email with the stored PDF', async () => {
+      await service.send('u1', issuedInvoice, sendDto);
       expect(mockComms.sendEmail).toHaveBeenCalledWith(expect.objectContaining({
         attachments: [{ filename: 'INV-2026-001.pdf', content: pdfBuffer }],
         to: sendDto.to,
@@ -177,35 +127,33 @@ describe('InvoiceLifecycleService', () => {
       }));
     });
 
-    it('passes documentId from generated PDF to sendEmail for DRAFT invoices (audit trail)', async () => {
-      await service.send('u1', draftInvoice, sendDto, assignNumberOnly);
+    it('passes documentId from stored PDF for the send audit trail', async () => {
+      await service.send('u1', issuedInvoice, sendDto);
       expect(mockComms.sendEmail).toHaveBeenCalledWith(expect.objectContaining({
-        documentId: 'doc-generated',
+        documentId: 'doc-stored',
       }));
     });
 
     it('omits bookingId in sendEmail for series invoices', async () => {
-      const seriesNumbered = { ...numberedInvoice, id: 'i2', bookingId: null };
-      const seriesAssign = jest.fn().mockResolvedValue(seriesNumbered);
-      await service.send('u1', seriesDraftInvoice, sendDto, seriesAssign);
+      await service.send('u1', seriesIssuedInvoice, sendDto);
       const callArgs = mockComms.sendEmail.mock.calls[0][0];
       expect(callArgs.bookingId).toBeUndefined();
     });
 
-    it('calls markSentById after email succeeds', async () => {
-      await service.send('u1', draftInvoice, sendDto, assignNumberOnly);
-      expect(mockRepo.markSentById).toHaveBeenCalledWith('i1');
+    it('throws BadRequestException when ISSUED invoice has no stored PDF', async () => {
+      mockDocuments.getStoredInvoicePdfBuffer.mockResolvedValue(null);
+      await expect(service.send('u1', issuedInvoice, sendDto)).rejects.toThrow(BadRequestException);
+      expect(mockComms.sendEmail).not.toHaveBeenCalled();
     });
 
-    it('does not call markSentById when PDF generation fails', async () => {
-      mockDocuments.generateAndStoreInvoicePdf.mockRejectedValue(new Error('pdf error'));
-      await expect(service.send('u1', draftInvoice, sendDto, assignNumberOnly)).rejects.toThrow('pdf error');
-      expect(mockRepo.markSentById).not.toHaveBeenCalled();
+    it('calls markSentById after email succeeds', async () => {
+      await service.send('u1', issuedInvoice, sendDto);
+      expect(mockRepo.markSentById).toHaveBeenCalledWith('i1');
     });
 
     it('does not call markSentById when email fails', async () => {
       mockComms.sendEmail.mockRejectedValue(new Error('email error'));
-      await expect(service.send('u1', draftInvoice, sendDto, assignNumberOnly)).rejects.toThrow('email error');
+      await expect(service.send('u1', issuedInvoice, sendDto)).rejects.toThrow('email error');
       expect(mockRepo.markSentById).not.toHaveBeenCalled();
     });
   });
@@ -213,47 +161,29 @@ describe('InvoiceLifecycleService', () => {
   // ─── markSent ──────────────────────────────────────────────────────────────
 
   describe('markSent', () => {
-    const atomicMarkSent = jest.fn().mockResolvedValue(sentInvoice);
     const dto = { issueDate: '2026-06-01', dueDate: '2026-06-15' };
 
-    beforeEach(() => atomicMarkSent.mockClear());
-
-    it('throws BadRequestException when invoice is not sendable (SENT)', async () => {
-      await expect(service.markSent(sentInvoice, dto, atomicMarkSent))
-        .rejects.toThrow(BadRequestException);
-      expect(atomicMarkSent).not.toHaveBeenCalled();
+    it('throws BadRequestException when invoice is not ISSUED (DRAFT)', async () => {
+      await expect(service.markSent(draftInvoice, dto)).rejects.toThrow(BadRequestException);
     });
 
-    // ─── ISSUED path ───────────────────────────────────────────────────────
+    it('throws BadRequestException when invoice is already SENT', async () => {
+      await expect(service.markSent(sentInvoice, dto)).rejects.toThrow(BadRequestException);
+    });
 
-    it('calls markSentById directly for ISSUED invoices without calling atomicMarkSent', async () => {
-      await service.markSent(issuedInvoice, dto, atomicMarkSent);
+    it('calls markSentById for ISSUED invoices', async () => {
+      await service.markSent(issuedInvoice, dto);
       expect(mockRepo.markSentById).toHaveBeenCalledWith('i1');
-      expect(atomicMarkSent).not.toHaveBeenCalled();
     });
 
-    it('returns the updated invoice for ISSUED invoices', async () => {
-      const result = await service.markSent(issuedInvoice, dto, atomicMarkSent);
+    it('returns the updated invoice', async () => {
+      const result = await service.markSent(issuedInvoice, dto);
       expect(result).toEqual({ ...sentInvoice, status: 'SENT' });
     });
 
-    // ─── DRAFT path (series compat) ────────────────────────────────────────
-
-    it('calls atomicMarkSent with parsed dates for DRAFT invoices', async () => {
-      await service.markSent(draftInvoice, dto, atomicMarkSent);
-      expect(atomicMarkSent).toHaveBeenCalledWith(
-        'i1', new Date('2026-06-01'), new Date('2026-06-15'),
-      );
-    });
-
-    it('calls atomicMarkSent with null dueDate when not provided', async () => {
-      await service.markSent(draftInvoice, { issueDate: '2026-06-01' }, atomicMarkSent);
-      expect(atomicMarkSent).toHaveBeenCalledWith('i1', expect.any(Date), null);
-    });
-
-    it('returns the result of atomicMarkSent for DRAFT invoices', async () => {
-      const result = await service.markSent(draftInvoice, dto, atomicMarkSent);
-      expect(result).toBe(sentInvoice);
+    it('works for series invoices (bookingId null)', async () => {
+      await service.markSent(seriesIssuedInvoice, dto);
+      expect(mockRepo.markSentById).toHaveBeenCalledWith('i2');
     });
   });
 

@@ -295,6 +295,60 @@ export class InvoicesRepository {
     });
   }
 
+  /**
+   * Assign an invoice number and transition a series invoice to ISSUED.
+   * Parallel to assignAndMarkIssued but keyed on seriesId (series invoices have no isDeposit).
+   */
+  async assignSeriesAndMarkIssued(
+    userId: string,
+    params: { id: string; seriesId: string; issueDate: Date; dueDate: Date | null },
+  ) {
+    const { id, seriesId, issueDate, dueDate } = params;
+
+    const existing = await this.prisma.invoice.findUnique({ where: { id }, select: { invoiceNumber: true } });
+    if (existing?.invoiceNumber) {
+      return this.prisma.invoice.update({
+        where: { id },
+        data: { issueDate, dueDate, status: 'ISSUED' },
+        include: invoiceIncludes,
+      });
+    }
+
+    const currentYear = new Date().getFullYear();
+    return this.prisma.$transaction(async (tx) => {
+      const voided = await tx.invoice.findFirst({
+        where: { seriesId, userId, status: 'VOID', invoiceNumber: { not: null } },
+        select: { invoiceNumber: true },
+        orderBy: { updatedAt: 'desc' },
+      });
+
+      const profile = await tx.userProfile.findUnique({ where: { userId } });
+      if (!profile) throw new NotFoundException('User profile not found');
+
+      const prefs = (profile.preferences as Record<string, unknown>) ?? {};
+      const { invoiceNumber, nextSeq, nextYear } = allocate(
+        prefs,
+        currentYear,
+        profile.invoiceNumberSequence,
+        profile.invoiceSequenceYear,
+        voided?.invoiceNumber,
+      );
+
+      if (nextSeq !== profile.invoiceNumberSequence) {
+        await tx.userProfile.update({
+          where: { userId },
+          data: { invoiceNumberSequence: nextSeq, invoiceSequenceYear: nextYear },
+        });
+      }
+
+      return tx.invoice.update({
+        where: { id },
+        data: { invoiceNumber, issueDate, dueDate, status: 'ISSUED' },
+        include: invoiceIncludes,
+      });
+    });
+  }
+
   async assignSeriesInvoiceNumberOnly(
     userId: string,
     params: { id: string; seriesId: string; issueDate: Date; dueDate: Date | null },

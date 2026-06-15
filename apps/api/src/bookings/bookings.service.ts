@@ -5,6 +5,7 @@ import { ContractRepository } from './contract.repository';
 import { MusicFormConfigRepository } from './music-form-config.repository';
 import { ChecklistRepository } from '../checklist/checklist.repository';
 import { SeriesRepository } from '../series/series.repository';
+import { SeriesService, MemberBookingForSync } from '../series/series.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
 import { UpdateContractDto } from './dto/update-contract.dto';
@@ -62,6 +63,7 @@ export class BookingsService {
   constructor(
     private repo: BookingsRepository,
     private seriesRepo: SeriesRepository,
+    private seriesService: SeriesService,
     private mail: MailService,
     private evaluator: ChecklistEvaluatorService,
     private checklistRepo: ChecklistRepository,
@@ -114,6 +116,11 @@ export class BookingsService {
 
   async create(userId: string, dto: CreateBookingDto) {
     const resolvedSeriesId = await this.resolveSeriesId(userId, dto);
+
+    if (resolvedSeriesId) {
+      await this.seriesService.assertMembershipMutable(userId, resolvedSeriesId);
+    }
+
     const dtoWithSeries = { ...dto, seriesId: resolvedSeriesId };
     let booking;
     if (!dto.formatIds?.length) {
@@ -133,6 +140,17 @@ export class BookingsService {
     if (dto.checklistItems.length > 0) {
       await this.checklistRepo.seedChecklistItems(userId, booking.id, dto.checklistItems, booking.date, booking.createdAt);
     }
+
+    if (resolvedSeriesId) {
+      const syncPayload: MemberBookingForSync = {
+        id: booking.id,
+        date: booking.date,
+        fee: booking.fee as MemberBookingForSync['fee'],
+        sets: (booking.sets ?? []) as Array<{ label: string | null; duration: number }>,
+      };
+      await this.seriesService.syncMemberJoin(userId, resolvedSeriesId, syncPayload);
+    }
+
     return booking;
   }
 
@@ -388,29 +406,60 @@ export class BookingsService {
     };
   }
 
-  async updateSeries(userId: string, bookingId: string, seriesId: string | null, confirm?: boolean) {
-    const booking = await this.findOne(userId, bookingId);
+  private async checkSeriesJoin(
+    userId: string,
+    bookingId: string,
+    seriesId: string,
+    booking: { customerId: string; customer: { name: string } },
+    confirm?: boolean,
+  ): Promise<{ requiresConfirmation: true; warning: string } | null> {
+    const series = await this.seriesRepo.findOneLight(userId, seriesId);
+    if (!series) throw new NotFoundException('Series not found');
 
-    if (seriesId !== null) {
-      const series = await this.seriesRepo.findOneLight(userId, seriesId);
-      if (!series) throw new NotFoundException('Series not found');
-
-      const nonVoidCount = await this.repo.countNonVoidInvoices(bookingId);
-      if (nonVoidCount > 0) {
-        throw new ConflictException(
-          'This booking has non-VOID invoices. Void or delete them before adding the booking to a series.',
-        );
-      }
-
-      if (booking.customerId !== series.customerId && !confirm) {
-        return {
-          requiresConfirmation: true,
-          warning: `This booking's customer (${booking.customer.name}) differs from the series billing customer (${series.customer.name}). The series invoice will be addressed to ${series.customer.name}. Resend with confirm: true to proceed.`,
-        };
-      }
+    const nonVoidCount = await this.repo.countNonVoidInvoices(bookingId);
+    if (nonVoidCount > 0) {
+      throw new ConflictException(
+        'This booking has non-VOID invoices. Void or delete them before adding the booking to a series.',
+      );
     }
 
-    return this.repo.updateSeries(bookingId, seriesId);
+    await this.seriesService.assertMembershipMutable(userId, seriesId);
+
+    if (booking.customerId !== series.customerId && !confirm) {
+      return {
+        requiresConfirmation: true,
+        warning: `This booking's customer (${booking.customer.name}) differs from the series billing customer (${series.customer.name}). The series invoice will be addressed to ${series.customer.name}. Resend with confirm: true to proceed.`,
+      };
+    }
+    return null;
+  }
+
+  async updateSeries(userId: string, bookingId: string, seriesId: string | null, confirm?: boolean) {
+    const booking = await this.findOne(userId, bookingId);
+    const previousSeriesId = (booking as { seriesId?: string | null }).seriesId ?? null;
+
+    if (seriesId !== null) {
+      const earlyReturn = await this.checkSeriesJoin(userId, bookingId, seriesId, booking, confirm);
+      if (earlyReturn) return earlyReturn;
+    } else if (previousSeriesId) {
+      await this.seriesService.assertMembershipMutable(userId, previousSeriesId);
+    }
+
+    const result = await this.repo.updateSeries(bookingId, seriesId);
+
+    if (seriesId !== null) {
+      const syncPayload: MemberBookingForSync = {
+        id: booking.id,
+        date: booking.date as unknown as Date,
+        fee: booking.fee as MemberBookingForSync['fee'],
+        sets: (booking.sets ?? []) as Array<{ label: string | null; duration: number }>,
+      };
+      await this.seriesService.syncMemberJoin(userId, seriesId, syncPayload);
+    } else if (previousSeriesId) {
+      await this.seriesService.syncMemberLeave(userId, previousSeriesId, bookingId);
+    }
+
+    return result;
   }
 
   async getActions(userId: string) {

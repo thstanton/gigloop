@@ -358,6 +358,7 @@ export interface InvoiceLineItem {
   description: string;
   amount: string; // Decimal serialises as string
   order: number;
+  sourceBookingId: string | null;
 }
 
 export interface Invoice {

@@ -73,22 +73,20 @@ function makeSharedSetup() {
   return { putObjectMock, mockStorage, documents };
 }
 
-// ─── send integration ──────────────────────────────────────────────────────────
+// ─── send integration — DRAFT guard ───────────────────────────────────────────
+// DRAFT invoices must be issued first; sending a DRAFT is now rejected.
 
-describe('InvoicesService.send (integration)', () => {
+describe('InvoicesService.send (integration) — DRAFT guard', () => {
   let service: InvoicesService;
-  let sendEmailMock: jest.Mock;
 
   beforeEach(() => {
     const shared = makeSharedSetup();
 
-    sendEmailMock = jest.fn().mockResolvedValue(undefined);
-    const mockComms = { sendEmail: sendEmailMock } as unknown as import('../communications/communications.service').CommunicationsService;
+    const mockComms = { sendEmail: jest.fn() } as unknown as import('../communications/communications.service').CommunicationsService;
 
     const mockInvoicesRepo = {
-      findOne: jest.fn().mockResolvedValue({ ...draftInvoice, invoiceNumber: null }),
-      assignInvoiceNumberOnly: jest.fn().mockResolvedValue(numberedInvoice),
-      markSentById: jest.fn().mockResolvedValue({ ...numberedInvoice, status: 'SENT' }),
+      findOne: jest.fn().mockResolvedValue(draftInvoice),
+      markSentById: jest.fn(),
       markPaidBase: jest.fn(),
       voidInvoice: jest.fn(),
       getUserPaymentTerms: jest.fn().mockResolvedValue(14),
@@ -112,23 +110,15 @@ describe('InvoicesService.send (integration)', () => {
     );
   });
 
-  it('generates a valid PDF and passes a non-empty Buffer to sendEmail', async () => {
-    await service.send(userId, bookingId, invoiceId, {
-      issueDate: '2026-06-01',
-      dueDate: '2026-06-15',
-      to: 'client@example.com',
-      contactId: 'c1',
-      subject: 'Invoice INV-2026-001',
-      body: '<p>Please find attached</p>',
-    });
-
-    expect(sendEmailMock).toHaveBeenCalledTimes(1);
-    const [{ attachments }] = sendEmailMock.mock.calls[0];
-    expect(attachments).toHaveLength(1);
-    expect(attachments[0].filename).toBe('INV-2026-001.pdf');
-    expect(Buffer.isBuffer(attachments[0].content)).toBe(true);
-    expect(attachments[0].content.length).toBeGreaterThan(0);
-    expect(attachments[0].content.slice(0, 4).toString()).toBe('%PDF');
+  it('rejects with BadRequestException — DRAFT must be issued before sending', async () => {
+    await expect(
+      service.send(userId, bookingId, invoiceId, {
+        to: 'client@example.com',
+        contactId: 'c1',
+        subject: 'Invoice',
+        body: '<p>Hi</p>',
+      }),
+    ).rejects.toThrow('Only issued invoices can be sent');
   });
 });
 

@@ -185,6 +185,7 @@ model Booking {
   musicFormResponse MusicFormResponse?
   contracts         Contract[]
   checklistItems    BookingChecklistItem[]
+  invoiceLineItems  InvoiceLineItem[]
 
   @@index([userId])
   @@index([customerId])
@@ -381,8 +382,12 @@ model InvoiceLineItem {
   invoiceId String
   invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 
+  sourceBookingId String?
+  sourceBooking   Booking? @relation(fields: [sourceBookingId], references: [id], onDelete: SetNull)
+
   @@index([userId])
   @@index([invoiceId])
+  @@index([sourceBookingId])
 }
 
 model Template {

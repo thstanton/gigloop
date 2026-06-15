@@ -125,7 +125,7 @@ export class SeriesRepository {
     userId: string,
     seriesId: string,
     billToContactId: string,
-    lineItems: Array<{ description: string; amount: number; order: number }>,
+    lineItems: Array<{ description: string; amount: number; order: number; sourceBookingId?: string }>,
   ) {
     return this.prisma.invoice.create({
       data: {
@@ -143,6 +143,34 @@ export class SeriesRepository {
     return this.prisma.invoice.count({
       where: { seriesId, userId, status: { not: 'VOID' } },
     });
+  }
+
+  findNonDraftNonVoidSeriesInvoice(userId: string, seriesId: string) {
+    return this.prisma.invoice.findFirst({
+      where: { seriesId, userId, status: { notIn: ['DRAFT', 'VOID'] } },
+      select: { id: true, status: true },
+    });
+  }
+
+  findDraftSeriesInvoiceWithLines(userId: string, seriesId: string) {
+    return this.prisma.invoice.findFirst({
+      where: { seriesId, userId, status: 'DRAFT' },
+      include: { lineItems: { orderBy: { order: 'asc' } } },
+    });
+  }
+
+  appendSeriesInvoiceLine(
+    userId: string,
+    invoiceId: string,
+    line: { description: string; amount: number; order: number; sourceBookingId: string },
+  ) {
+    return this.prisma.invoiceLineItem.create({
+      data: { userId, invoiceId, ...line },
+    });
+  }
+
+  removeSeriesInvoiceLine(lineId: string) {
+    return this.prisma.invoiceLineItem.delete({ where: { id: lineId } });
   }
 
   markSeriesInvoicePaid(invoiceId: string) {

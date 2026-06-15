@@ -21,6 +21,7 @@ export interface SeriesInvoiceSectionProps {
   isLoading: boolean;
   onCreateInvoice: () => void;
   onEdit: (invoice: SeriesInvoice) => void;
+  onIssue: (invoice: SeriesInvoice) => void;
   onDelete: (invoice: SeriesInvoice) => void;
   onSend: (invoice: SeriesInvoice) => void;
   onMarkSent: (invoice: SeriesInvoice) => void;
@@ -34,6 +35,7 @@ export function SeriesInvoiceSection({
   isLoading,
   onCreateInvoice,
   onEdit,
+  onIssue,
   onDelete,
   onSend,
   onMarkSent,
@@ -82,7 +84,7 @@ export function SeriesInvoiceSection({
         isVoidPending={false}
         onEdit={() => onEdit(invoice)}
         onPreview={() => {}}
-        onIssue={() => {}}
+        onIssue={() => onIssue(invoice)}
         onDelete={() => onDelete(invoice)}
         onSend={() => onSend(invoice)}
         onMarkSent={() => onMarkSent(invoice)}

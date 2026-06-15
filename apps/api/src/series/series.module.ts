@@ -8,6 +8,6 @@ import { InvoicesModule } from '../invoices/invoices.module';
   imports: [InvoicesModule],
   controllers: [SeriesController],
   providers: [SeriesService, SeriesRepository],
-  exports: [SeriesRepository],
+  exports: [SeriesRepository, SeriesService],
 })
 export class SeriesModule {}

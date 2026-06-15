@@ -103,13 +103,7 @@ export class InvoicesService {
 
   async send(userId: string, bookingId: string, id: string, dto: SendInvoiceDto) {
     const invoice = await this.findOne(userId, bookingId, id);
-    await this.lifecycle.send(
-      userId,
-      invoice,
-      dto,
-      (invId, issueDate, dueDate) =>
-        this.repo.assignInvoiceNumberOnly(userId, { id: invId, bookingId, isDeposit: invoice.isDeposit, issueDate, dueDate }),
-    );
+    await this.lifecycle.send(userId, invoice, dto);
   }
 
   previewInvoiceNumber(userId: string, bookingId: string, isDeposit: boolean) {
@@ -123,14 +117,7 @@ export class InvoicesService {
 
   async markSent(userId: string, bookingId: string, id: string, dto: MarkSentDto) {
     const invoice = await this.findOne(userId, bookingId, id);
-    return this.lifecycle.markSent(
-      invoice,
-      dto,
-      dto.issueDate
-        ? (invId, issueDate, dueDate) =>
-            this.repo.assignAndMarkSent(userId, { id: invId, bookingId, isDeposit: invoice.isDeposit, issueDate, dueDate })
-        : undefined,
-    );
+    return this.lifecycle.markSent(invoice, dto);
   }
 
   async markPaid(userId: string, bookingId: string, id: string) {
