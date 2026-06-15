@@ -128,6 +128,12 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const safe = (fn) => { try { fn(); } catch { /* best-effort: never break the stream */ } };
   const elapsed = () => Math.round((Date.now() - start) / 1000);
 
+  // sbx puts the shared TTY in raw mode (ONLCR off) while the agent runs, so a bare "\n"
+  // staircases the feed — each line starts where the previous ended, not at column 0.
+  // Emit CRLF on a TTY (harmless in cooked mode); keep plain "\n" when stderr is a
+  // file/pipe so redirected logs don't collect literal ^M.
+  const FEED_EOL = process.stderr.isTTY ? '\r\n' : '\n';
+
   const writeCurrent = () => {
     if (!currentPath) return;
     const u = state.lastUsage || {};
@@ -149,7 +155,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     let o;
     try { o = JSON.parse(line); } catch { return; } // skip non-JSON / partial lines
     safe(() => step(state, o));                      // fold first: result-feed reads state.metrics
-    safe(() => { for (const f of feedFor(o, state)) process.stderr.write(`  ⟫ ${f}\n`); });
+    safe(() => { for (const f of feedFor(o, state)) process.stderr.write(`  ⟫ ${f}${FEED_EOL}`); });
     writeCurrent();
   });
   rl.on('close', () => {

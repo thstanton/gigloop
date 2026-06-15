@@ -342,11 +342,20 @@ run_cold() {
   # claude's status ([0]) is the real signal — a formatter hiccup ([1]) must not mask
   # it. The verifier of record is still the gate (run_gate), not this exit code.
   # Send claude's OWN stderr to a per-iteration file, not the terminal: the formatter's
-  # live feed (also stderr) is then the sole TTY writer. claude additionally suppresses
-  # its progress spinner when its stderr is not a TTY, so the feed stays clean rather
-  # than interleaving with the spinner's partial-line output. The file is forensics if
-  # claude crashes.
-  local pipe
+  # live feed (also stderr) is then the sole TTY writer. The file is forensics if claude
+  # crashes.
+  #
+  # sbx (and potentially any agent CLI) puts the shared controlling terminal into raw
+  # mode (ONLCR off — newline no longer implies carriage return) for the duration of the
+  # run and does NOT restore it on exit. The symptom is a "staircase": every line we
+  # print afterwards starts where the previous one ended, not at column 0 — the feed
+  # during the run AND Ralph's echoes after it. Snapshot the terminal settings before the
+  # pipeline and restore them after so the corruption can't leak past this function. A
+  # no-op when stdin is not a TTY (AFK/cold-loop runs pipe their input — nothing to
+  # staircase there). The feed itself also emits CRLF on a TTY (ralph-stream.mjs) so its
+  # lines render correctly while the run is still in raw mode.
+  local pipe tty_saved=""
+  [[ -t 0 ]] && tty_saved=$(stty -g 2>/dev/null || true)
   set +e
   if [[ "${RALPH_UNSAFE:-}" == "1" ]]; then
     # Docker Sandbox microVM (ADR-0040 §7). $ROOT is mounted RW passthrough — do NOT
@@ -358,6 +367,8 @@ run_cold() {
   fi
   pipe=("${PIPESTATUS[@]}")
   set -e
+  # Restore the terminal sbx/claude may have left in raw mode (see above).
+  [[ -n "$tty_saved" ]] && { stty "$tty_saved" 2>/dev/null || true; }
 
   {
     echo "CLAUDE_EXIT=${pipe[0]:-?}"
