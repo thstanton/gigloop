@@ -373,6 +373,13 @@ run_cold() {
 # What survives this function is observability only: ralph.log, ralph.current, the raw
 # stream dump, and the metrics file.
 cold_pass() {
+  # Working-tree hygiene (#456, ADR-0045): reset at the start of every iteration so a
+  # truncated/aborted prior pass cannot leave dirty state that poisons this one. HEAD is
+  # never moved — only uncommitted file changes and untracked files are discarded.
+  # Gitignored files (logs/, ralph.current, .env) are left untouched (no -x flag).
+  git reset --hard
+  git clean -ffd   # double -f overrides clean.requireForce=true in git config
+
   local work_block run_ts mstr
   work_block=$(gather_candidates)
 
@@ -432,9 +439,7 @@ run_once() {
 #   COMPLETE → every slice delivered → finish_run opens the PR (terminal, exits).
 #   HANDOFF  → open HITL/blocked slices remain → notify "N need a human", STOP, NO PR.
 #   CONTINUE → more ready-for-agent work (or a truncated iteration) → another cold pass.
-# NOTE (#456): the iteration-start `git reset --hard && git clean -fd` is a sibling slice
-# on this branch — until it lands, a `--max-turns`-cut iteration could carry a dirty tree
-# into the next pass. Both ship on feature/449-ralph-autonomy before the PR merges.
+# The working tree is reset at the start of every cold_pass (#456).
 run_afk() {
   echo "Ralph is off to grind PRD #$PRD_N solo (afk, up to MAX=$MAX passes)!" >&2
   local i
