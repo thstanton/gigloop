@@ -230,11 +230,11 @@ list_eligible() {
 
 escalate() {
   local issue=$1 reason=$2
-  echo "ralph: escalating #$issue — $reason" >&2
+  echo "Ralph is handing #$issue to a grown-up — $reason" >&2
   gh issue edit "$issue" --remove-label "ready-for-agent" --add-label "ready-for-human" >/dev/null 2>&1 || true
   log_progress "ESCALATE #$issue: $reason"
   heartbeat "event=ESCALATE issue=$issue reason=$reason"
-  notify "ralph: ESCALATE #$issue — $reason (mode=$MODE)"
+  notify "Ralph is handing #$issue to a grown-up — $reason (mode=$MODE)"
 }
 
 # Terminal success path: the loop has decided the work is COMPLETE. Try to push the
@@ -247,23 +247,23 @@ finish_run() {
   branch=$(git rev-parse --abbrev-ref HEAD)
 
   if gh pr list --head "$branch" --state open --json number --jq '.[0].number' 2>/dev/null | grep -qE '[0-9]'; then
-    echo "ralph: PR already open on $branch — done" >&2
+    echo "Ralph is happy — a PR is already open on $branch!" >&2
     exit 0
   fi
 
-  echo "ralph: opening PR on $branch → main" >&2
+  echo "Ralph is opening a PR on $branch → main!" >&2
   # `set -e` is suspended inside an `if` condition, so a failing push/create just
   # makes the branch false rather than aborting the script.
   if git push -u origin "$branch" && gh pr create --base main --fill; then
-    echo "ralph: PR opened on $branch — done" >&2
+    echo "Ralph is done — PR opened on $branch! Ralph is happy!" >&2
     heartbeat "event=PR-OPENED branch=$branch"
     exit 0
   fi
 
-  echo "ralph: could not push / open PR (no GitHub auth?) — work is committed locally; push + open the PR manually" >&2
+  echo "Ralph is stuck — couldn't push/open the PR (no GitHub auth?). The work is committed locally; push + open it yourself. Ralph tried his best!" >&2
   log_progress "COMPLETE-LOCAL branch=$branch — push + open PR manually (or set sandbox GitHub auth)"
   heartbeat "event=COMPLETE-LOCAL branch=$branch"
-  notify "ralph: COMPLETE-LOCAL $branch — all work committed; push + open PR manually"
+  notify "Ralph is done but stuck on $branch — all work committed; push + open the PR yourself!"
   exit 0
 }
 
@@ -368,7 +368,7 @@ run_cold() {
   # emits a result). The live feed just went quiet, so point the human at the stderr we
   # captured — one line, after the pipeline, so it never interleaves with the feed.
   if [[ "$(read_metric RESULT_SEEN "$RUN_METRICS")" == "false" ]]; then
-    echo "ralph: claude produced no result (exit ${pipe[0]:-?}) — see $RUN_CLAUDE_ERR" >&2
+    echo "Ralph is confused — the agent gave nothing back (exit ${pipe[0]:-?}). Ralph wrote it down in $RUN_CLAUDE_ERR." >&2
   fi
 
   # Always succeed: run_cold's stdout (captured by run_iteration) is the decision
@@ -400,7 +400,7 @@ run_iteration() {
   RUN_METRICS="$RUNLOG_DIR/ralph-${run_ts}-$$.metrics"
   RUN_CLAUDE_ERR="$RUNLOG_DIR/ralph-${run_ts}-$$.claude-stderr"
 
-  echo "ralph: cold iteration (mode=$MODE) — live: tail -f $RUN_JSONL | watch cat $CURRENT" >&2
+  echo "Ralph is calling an agent (mode=$MODE)! Watch him go: tail -f $RUN_JSONL | watch cat $CURRENT" >&2
   log_progress "START mode=$MODE"
 
   output=$(run_cold "$work_block")
@@ -419,7 +419,7 @@ run_iteration() {
   fi
 
   if [[ -z "$selected" ]]; then
-    echo "ralph: no issue selected this iteration" >&2
+    echo "Ralph is not sure what to do — he didn't pick an issue this time." >&2
     log_progress "NO-SELECTION mode=$MODE result=$(read_metric RESULT_SUBTYPE "$RUN_METRICS")"
     heartbeat "mode=$MODE issue=none decision=NO-SELECTION $mstr"
     # Distinct from CONTINUE so the caller can count consecutive declines and stall
@@ -429,7 +429,7 @@ run_iteration() {
   fi
 
   attempts=$(increment_attempts "$selected")
-  echo "ralph: issue #$selected — attempt $attempts/$K" >&2
+  echo "Ralph is working on #$selected — try $attempts of $K!" >&2
 
   echo "$output" | grep -q '<promise>COMPLETE</promise>' && promise_present=true
 
@@ -438,7 +438,7 @@ run_iteration() {
   remaining=$(remaining_count "$selected")
 
   decision=$(node "$ROOT/scripts/loop-decision.mjs" "$gate_exit" "$promise_present" "$remaining")
-  echo "ralph: #$selected gate=$gate_exit promise=$promise_present remaining=$remaining → $decision" >&2
+  echo "Ralph is checking his work on #$selected — gate=$gate_exit promise=$promise_present remaining=$remaining → $decision" >&2
   # The next cold agent reads progress.md, not ralph.log — so the outcome subtype must
   # land here too. result=error_max_turns/error_* means "truncated/crashed, resume the
   # unfinished slice", which is NOT the same as a genuine gate failure (ADR-0040).
@@ -457,32 +457,32 @@ run_iteration() {
 # Mode runners
 # ---------------------------------------------------------------------------
 run_once() {
-  echo "ralph: --once #$ISSUE_N" >&2
+  echo "Ralph is excited to get started on #$ISSUE_N! (once)" >&2
   run_iteration "$ISSUE_N" > /dev/null
-  echo "ralph: done (you are the loop in --once mode)" >&2
+  echo "Ralph is done! You're the loop now (once mode)." >&2
 }
 
 run_issue() {
-  echo "ralph: --issue #$ISSUE_N (K=$K MAX=$MAX)" >&2
+  echo "Ralph is excited to get started on #$ISSUE_N! (issue, K=$K MAX=$MAX)" >&2
   local iters=0
 
   while true; do
     iters=$((iters + 1))
     if [[ $iters -gt $MAX ]]; then
-      echo "ralph: global MAX ($MAX) reached — stopping" >&2
+      echo "Ralph is tired — he hit the MAX ($MAX). Ralph is stopping now." >&2
       heartbeat "mode=issue issue=$ISSUE_N event=MAX-HIT iters=$iters"
-      notify "ralph: MAX-HIT after $iters iterations on #$ISSUE_N (mode=issue)"
+      notify "Ralph is tired — hit MAX after $iters tries on #$ISSUE_N (issue)"
       exit 1
     fi
 
     if has_closing_commit "$ISSUE_N"; then
-      echo "ralph: #$ISSUE_N already delivered on this branch" >&2
+      echo "Ralph is happy — #$ISSUE_N is already done on this branch!" >&2
       finish_run
     fi
 
     # Already escalated on a prior run? Stop (the relabel persists across restarts).
     if [[ "$(read_attempts "$ISSUE_N")" -ge $K ]]; then
-      echo "ralph: #$ISSUE_N at attempt cap — handed to a human" >&2
+      echo "Ralph is out of tries on #$ISSUE_N — a grown-up gets it now." >&2
       exit 0
     fi
 
@@ -490,7 +490,7 @@ run_issue() {
     # rather than burning through the remaining K attempts.
     if gh issue view "$ISSUE_N" --json labels --jq '.labels[].name' 2>/dev/null \
         | grep -q "ready-for-human"; then
-      echo "ralph: #$ISSUE_N relabeled to ready-for-human — stopping" >&2
+      echo "Ralph is stopping — #$ISSUE_N is for a grown-up now (ready-for-human)." >&2
       heartbeat "mode=issue issue=$ISSUE_N event=ESCALATED-BY-AGENT"
       exit 0
     fi
@@ -499,31 +499,31 @@ run_issue() {
     decision=$(run_iteration "$ISSUE_N")
 
     if [[ "$decision" == "COMPLETE" ]]; then
-      echo "ralph: #$ISSUE_N COMPLETE" >&2
+      echo "Ralph is happy — #$ISSUE_N is COMPLETE!" >&2
       heartbeat "mode=issue issue=$ISSUE_N event=COMPLETE iters=$iters"
-      notify "ralph: COMPLETE #$ISSUE_N (mode=issue, $iters iterations)"
+      notify "Ralph is happy — #$ISSUE_N is COMPLETE! ($iters tries, issue)"
       finish_run
     fi
   done
 }
 
 run_afk() {
-  echo "ralph: --afk --prd #$PRD_N (K=$K MAX=$MAX STALL=$STALL)" >&2
+  echo "Ralph is excited to do PRD #$PRD_N all by himself! (afk, K=$K MAX=$MAX STALL=$STALL)" >&2
   local iters=0 no_select_streak=0
 
   while true; do
     iters=$((iters + 1))
     if [[ $iters -gt $MAX ]]; then
-      echo "ralph: global MAX ($MAX) reached — stopping" >&2
+      echo "Ralph is tired — he hit the MAX ($MAX). Ralph is stopping now." >&2
       heartbeat "mode=afk prd=$PRD_N event=MAX-HIT iters=$iters"
-      notify "ralph: MAX-HIT after $iters iterations on PRD #$PRD_N (mode=afk)"
+      notify "Ralph is tired — hit MAX after $iters tries on PRD #$PRD_N (afk)"
       exit 1
     fi
 
     if [[ -z "$(list_eligible)" ]]; then
-      echo "ralph: no eligible ready-for-agent slices remain in PRD #$PRD_N" >&2
+      echo "Ralph is all done — no more work left in PRD #$PRD_N!" >&2
       heartbeat "mode=afk prd=$PRD_N event=COMPLETE iters=$iters"
-      notify "ralph: COMPLETE PRD #$PRD_N — no eligible slices remain ($iters iterations)"
+      notify "Ralph is happy — PRD #$PRD_N is COMPLETE! No work left ($iters tries)"
       finish_run
     fi
 
@@ -531,9 +531,9 @@ run_afk() {
     decision=$(run_iteration)
 
     if [[ "$decision" == "COMPLETE" ]]; then
-      echo "ralph: PRD #$PRD_N COMPLETE — no eligible work remains" >&2
+      echo "Ralph is happy — PRD #$PRD_N is COMPLETE, no work left!" >&2
       heartbeat "mode=afk prd=$PRD_N event=COMPLETE iters=$iters"
-      notify "ralph: COMPLETE PRD #$PRD_N — promise received ($iters iterations)"
+      notify "Ralph is happy — PRD #$PRD_N is COMPLETE! The agent promised ($iters tries)"
       finish_run
     fi
 
@@ -545,10 +545,10 @@ run_afk() {
     if [[ "$decision" == "NO-SELECTION" ]]; then
       no_select_streak=$((no_select_streak + 1))
       if [[ $no_select_streak -ge $STALL ]]; then
-        echo "ralph: $no_select_streak consecutive NO-SELECTIONs with work still listed — stalling" >&2
+        echo "Ralph is confused — he picked nothing $no_select_streak times but there's still work. Ralph is taking a nap (stalling)." >&2
         log_progress "STALL mode=afk prd=$PRD_N consecutive_no_selection=$no_select_streak"
         heartbeat "mode=afk prd=$PRD_N event=STALL no_selection=$no_select_streak"
-        notify "ralph: STALL PRD #$PRD_N — agent declined ${no_select_streak}× while work listed (mode=afk)"
+        notify "Ralph is napping — PRD #$PRD_N stalled, the agent said no ${no_select_streak}× while work waited (afk)"
         exit 0
       fi
     else
