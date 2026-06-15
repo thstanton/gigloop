@@ -59,6 +59,7 @@ STALL="${RALPH_STALL:-2}"
 # formatter writes persist beyond it.
 RUN_JSONL=""
 RUN_METRICS=""
+RUN_CLAUDE_ERR=""
 
 # ---------------------------------------------------------------------------
 # Arg parsing
@@ -96,26 +97,29 @@ done
 # ---------------------------------------------------------------------------
 read_attempts() {
   local issue=$1
-  if [[ -f "$PROGRESS" ]]; then
-    local val
-    val=$(grep -E "^attempts_${issue}:" "$PROGRESS" 2>/dev/null | awk -F: '{print $2}' | tr -d ' ' || true)
-    [[ -n "$val" ]] && { echo "$val"; return; }
-  fi
-  echo 0
+  # progress.md is shared with the agent, so this counter can be duplicated or garbled
+  # (the agent has appended `attempts_<n>:` lines mimicking our format). Collapse every
+  # matching line to the MAX numeric value (default 0) — always a SINGLE clean integer,
+  # so the `$(( ))` in increment_attempts and the `-ge K` cap checks can never receive a
+  # multi-line value. Max is the conservative choice for the cap (never under-counts
+  # attempts → never loops past K); non-numeric values count as 0.
+  [[ -f "$PROGRESS" ]] || { echo 0; return; }
+  grep -E "^attempts_${issue}:" "$PROGRESS" 2>/dev/null \
+    | awk -F: '{ gsub(/[^0-9]/, "", $2); v = $2 + 0; if (v > m) m = v } END { print m + 0 }'
 }
 
 increment_attempts() {
   local issue=$1
   local current next
-  current=$(read_attempts "$issue")
+  current=$(read_attempts "$issue")    # guaranteed a single int → arithmetic is safe
   next=$((current + 1))
   touch "$PROGRESS"
-  if grep -q "^attempts_${issue}:" "$PROGRESS" 2>/dev/null; then
-    sed -i.bak "s/^attempts_${issue}:.*/attempts_${issue}: $next/" "$PROGRESS"
-    rm -f "${PROGRESS}.bak"
-  else
-    echo "attempts_${issue}: $next" >> "$PROGRESS"
-  fi
+  # Self-heal: delete EVERY attempts_<issue> line (collapsing any agent-introduced
+  # duplicates) then append exactly one canonical line. Keeps the counter single-valued
+  # no matter what the agent wrote into the shared scratchpad.
+  sed -i.bak "/^attempts_${issue}:/d" "$PROGRESS"
+  rm -f "${PROGRESS}.bak"
+  echo "attempts_${issue}: $next" >> "$PROGRESS"
   echo "$next"
 }
 
@@ -337,15 +341,20 @@ run_cold() {
   # abort the run at the moment of capture; grab PIPESTATUS immediately afterwards.
   # claude's status ([0]) is the real signal — a formatter hiccup ([1]) must not mask
   # it. The verifier of record is still the gate (run_gate), not this exit code.
+  # Send claude's OWN stderr to a per-iteration file, not the terminal: the formatter's
+  # live feed (also stderr) is then the sole TTY writer. claude additionally suppresses
+  # its progress spinner when its stderr is not a TTY, so the feed stays clean rather
+  # than interleaving with the spinner's partial-line output. The file is forensics if
+  # claude crashes.
   local pipe
   set +e
   if [[ "${RALPH_UNSAFE:-}" == "1" ]]; then
     # Docker Sandbox microVM (ADR-0040 §7). $ROOT is mounted RW passthrough — do NOT
     # use --clone (strands commits in the VM). One-time auth: sbx secret set-custom -g
     #   --host api.anthropic.com --env CLAUDE_CODE_OAUTH_TOKEN --value "$CLAUDE_CODE_OAUTH_TOKEN"
-    sbx run claude "$ROOT" -- "${claude_flags[@]}" | "${fmt[@]}"
+    sbx run claude "$ROOT" -- "${claude_flags[@]}" 2>"$RUN_CLAUDE_ERR" | "${fmt[@]}"
   else
-    claude "${claude_flags[@]}" | "${fmt[@]}"
+    claude "${claude_flags[@]}" 2>"$RUN_CLAUDE_ERR" | "${fmt[@]}"
   fi
   pipe=("${PIPESTATUS[@]}")
   set -e
@@ -354,6 +363,18 @@ run_cold() {
     echo "CLAUDE_EXIT=${pipe[0]:-?}"
     echo "FORMATTER_EXIT=${pipe[1]:-?}"
   } >> "$RUN_METRICS" 2>/dev/null || true
+
+  # No result event = a real crash (NOT the normal error_max_turns exit-1, which still
+  # emits a result). The live feed just went quiet, so point the human at the stderr we
+  # captured — one line, after the pipeline, so it never interleaves with the feed.
+  if [[ "$(read_metric RESULT_SEEN "$RUN_METRICS")" == "false" ]]; then
+    echo "ralph: claude produced no result (exit ${pipe[0]:-?}) — see $RUN_CLAUDE_ERR" >&2
+  fi
+
+  # Always succeed: run_cold's stdout (captured by run_iteration) is the decision
+  # channel; its exit status is not consulted, and a non-zero here would abort the
+  # caller under `set -e`. The gate (run_gate) is the verifier of record.
+  return 0
 }
 
 # ---------------------------------------------------------------------------
@@ -377,6 +398,7 @@ run_iteration() {
   mkdir -p "$RUNLOG_DIR"
   RUN_JSONL="$RUNLOG_DIR/ralph-${run_ts}-$$.jsonl"
   RUN_METRICS="$RUNLOG_DIR/ralph-${run_ts}-$$.metrics"
+  RUN_CLAUDE_ERR="$RUNLOG_DIR/ralph-${run_ts}-$$.claude-stderr"
 
   echo "ralph: cold iteration (mode=$MODE) — live: tail -f $RUN_JSONL | watch cat $CURRENT" >&2
   log_progress "START mode=$MODE"

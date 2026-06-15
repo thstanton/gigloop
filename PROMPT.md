@@ -94,8 +94,11 @@ baton to the next cold restart.
    after the tests are written, after each commit — never save it all for the final
    turn. If a per-iteration cap (`RALPH_MAX_TURNS` / `RALPH_MAX_USD`) or a crash cuts
    this life short, an up-to-date `progress.md` is the *only* thing that lets the next
-   cold restart resume instead of starting blind. `progress.md` is gitignored — never commit it; it is
-   distilled into a `/handoff` comment at feature end.
+   cold restart resume instead of starting blind. Record **narrative and decisions
+   only** — the `attempts_<n>:` keys are the **loop's** bookkeeping; never write, copy,
+   or edit an `attempts_` line (duplicating one corrupts the loop's counter).
+   `progress.md` is gitignored — never commit it; it is distilled into a `/handoff`
+   comment at feature end.
 
 9. **Promise honestly.** Emit `<promise>COMPLETE</promise>` only when you believe no
    unblocked AFK work remains for this PRD. It is necessary but **not sufficient** —
