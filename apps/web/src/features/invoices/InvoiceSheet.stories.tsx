@@ -1,12 +1,12 @@
 import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, waitFor } from 'storybook/test';
+import { expect, waitFor, within } from 'storybook/test';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw';
 import InvoiceSheet from './InvoiceSheet';
 
-function Providers({ children }: { children: React.ReactNode }) {
+function Providers({ children }: { children?: React.ReactNode }) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return (
     <MemoryRouter>
@@ -47,7 +47,9 @@ export const NewInvoiceFreshNumber: Story = {
       ],
     },
   },
-  play: async ({ canvas }) => {
+  play: async ({ canvasElement }) => {
+    // Sheet content portals to document.body, so query the body, not the canvas root.
+    const canvas = within(canvasElement.ownerDocument.body);
     await waitFor(async () => {
       await expect(canvas.findByText(/INV-2026-007/)).resolves.toBeVisible();
     });
@@ -64,7 +66,8 @@ export const NewInvoiceVoidReuse: Story = {
       ],
     },
   },
-  play: async ({ canvas }) => {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement.ownerDocument.body);
     await waitFor(async () => {
       await expect(canvas.findByText(/INV-2026-003/)).resolves.toBeVisible();
     });
@@ -91,7 +94,8 @@ export const EditMode: Story = {
       lineItems: [{ id: 'li1', description: 'Performance fee', amount: '1500.00', order: 0, createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' }],
     },
   },
-  play: async ({ canvas }) => {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement.ownerDocument.body);
     await expect(canvas.findByText('Edit Invoice')).resolves.toBeVisible();
     await expect(canvas.findByText('Save changes')).resolves.toBeVisible();
   },

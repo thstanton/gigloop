@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, waitFor } from 'storybook/test';
+import { expect, waitFor, within } from 'storybook/test';
 import { http, HttpResponse } from 'msw';
 import ComposeEmailSheet from './ComposeEmailSheet';
 import type { BookingDetail, Invoice } from '@/types/api';
@@ -100,7 +100,9 @@ export const AttachmentPresent: Story = {
       ],
     },
   },
-  play: async ({ canvas }) => {
+  play: async ({ canvasElement }) => {
+    // Sheet content portals to document.body, so query the body, not the canvas root.
+    const canvas = within(canvasElement.ownerDocument.body);
     await waitFor(async () => {
       await expect(canvas.findByText('Invoice INV-2030-001.pdf')).resolves.toBeVisible();
     });
@@ -121,7 +123,8 @@ export const AttachmentWarning: Story = {
       ],
     },
   },
-  play: async ({ canvas }) => {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement.ownerDocument.body);
     await waitFor(async () => {
       await expect(canvas.findByText('No deposit invoice to attach')).resolves.toBeVisible();
     });
@@ -142,7 +145,8 @@ export const NoAttachment: Story = {
       ],
     },
   },
-  play: async ({ canvas }) => {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement.ownerDocument.body);
     // Wait for render to complete (subject line populated)
     await waitFor(async () => {
       await expect(canvas.findByDisplayValue('Booking confirmed — Stanton Strings')).resolves.toBeVisible();
