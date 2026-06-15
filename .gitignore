@@ -11,4 +11,6 @@ storybook-static
 skills-lock.json
 progress.md
 ralph.log
+logs/
+ralph.current
 .playwright-cli/

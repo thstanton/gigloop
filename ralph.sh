@@ -40,9 +40,25 @@ ROOT=$(git rev-parse --show-toplevel)
 PROMPT_FILE="$ROOT/PROMPT.md"
 PROGRESS="$ROOT/progress.md"
 LOG="$ROOT/ralph.log"
+RUNLOG_DIR="$ROOT/logs"           # per-iteration raw stream dumps + metrics (gitignored)
+CURRENT="$ROOT/ralph.current"     # live status snapshot, rewritten per stream event (gitignored)
 K="${RALPH_K:-3}"
 MAX="${RALPH_MAX:-20}"
 STALL="${RALPH_STALL:-2}"
+# RALPH_MAX_TURNS / RALPH_MAX_USD (both optional, both unset = no cap, behaviour
+# unchanged): per-iteration ceilings passed to `claude --max-turns` / `--max-budget-usd`.
+# Either one ENFORCES the cold-restart handoff (ADR-0040): a capped iteration ends
+# (result subtype `error_max_turns` for the turn cap), progress.md carries state, the
+# next cold restart resumes. `--max-turns` is functional in this CLI (v2.1.177) though
+# it is absent from `claude --help`. Set the cap ABOVE a healthy slice's measured
+# turns= / cost= (now in every heartbeat) — too low and every iteration is cut
+# mid-slice, fails the gate, and burns a K attempt. A rot-ceiling, not a speed dial.
+
+# Per-iteration stream artefact paths — set fresh in run_iteration, read back for the
+# heartbeat. run_cold runs in a `$(...)` subshell that inherits these; the FILES the
+# formatter writes persist beyond it.
+RUN_JSONL=""
+RUN_METRICS=""
 
 # ---------------------------------------------------------------------------
 # Arg parsing
@@ -111,6 +127,13 @@ log_progress() {
 # MUST NOT write to stdout — stdout is the decision channel.
 heartbeat() {
   echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) $*" >> "$LOG"
+}
+
+# Read one KEY=VALUE from the per-iteration metrics file the formatter wrote.
+# read_metric KEY FILE — empty string if the key (or file) is absent.
+read_metric() {
+  [[ -f "$2" ]] || return 0
+  grep -E "^$1=" "$2" 2>/dev/null | head -1 | cut -d= -f2-
 }
 
 # Fire a webhook POST when the loop hits an event worth waking a human for.
@@ -298,19 +321,39 @@ run_cold() {
     "$work_block")
 
   # --model sonnet: Agent SDK credit is capped; sonnet stretches it (ADR-0040 §7).
-  local claude_flags=("--model" "sonnet" "-p" "$prompt")
+  # --output-format stream-json --verbose: emit a parseable event stream that
+  # ralph-stream.mjs turns into a live feed (stderr), a raw per-iteration dump
+  # ($RUN_JSONL), token/cost/turn metrics ($RUN_METRICS), and the ralph.current
+  # status file — and prints ONLY the agent's final text on stdout, so the
+  # <selected>/<promise> markers below are matched exactly as before.
+  local claude_flags=("--model" "sonnet" "--output-format" "stream-json" "--verbose" "-p" "$prompt")
+  [[ -n "${RALPH_MAX_TURNS:-}" ]] && claude_flags+=("--max-turns" "$RALPH_MAX_TURNS")
+  [[ -n "${RALPH_MAX_USD:-}" ]] && claude_flags+=("--max-budget-usd" "$RALPH_MAX_USD")
   [[ "${RALPH_UNSAFE:-}" == "1" ]] && claude_flags+=("--dangerously-skip-permissions")
 
+  local fmt=("node" "$ROOT/scripts/ralph-stream.mjs" "$RUN_JSONL" "$RUN_METRICS" "$CURRENT")
+
+  # set +e around the pipeline so a non-zero claude/formatter (pipefail is on) cannot
+  # abort the run at the moment of capture; grab PIPESTATUS immediately afterwards.
+  # claude's status ([0]) is the real signal — a formatter hiccup ([1]) must not mask
+  # it. The verifier of record is still the gate (run_gate), not this exit code.
+  local pipe
+  set +e
   if [[ "${RALPH_UNSAFE:-}" == "1" ]]; then
-    # Run inside a Docker Sandbox microVM (ADR-0040 §7).
-    # $ROOT is mounted RW passthrough — do NOT use --clone (strands commits in the VM).
-    # One-time auth setup: sbx secret set-custom -g --host api.anthropic.com \
-    #   --env CLAUDE_CODE_OAUTH_TOKEN --value "$CLAUDE_CODE_OAUTH_TOKEN"
-    sbx run claude "$ROOT" -- "${claude_flags[@]}" 2>&1 | tee /dev/stderr || true
+    # Docker Sandbox microVM (ADR-0040 §7). $ROOT is mounted RW passthrough — do NOT
+    # use --clone (strands commits in the VM). One-time auth: sbx secret set-custom -g
+    #   --host api.anthropic.com --env CLAUDE_CODE_OAUTH_TOKEN --value "$CLAUDE_CODE_OAUTH_TOKEN"
+    sbx run claude "$ROOT" -- "${claude_flags[@]}" | "${fmt[@]}"
   else
-    # tee to stderr so the human can watch; capture stdout for promise/selection markers
-    claude "${claude_flags[@]}" 2>&1 | tee /dev/stderr || true
+    claude "${claude_flags[@]}" | "${fmt[@]}"
   fi
+  pipe=("${PIPESTATUS[@]}")
+  set -e
+
+  {
+    echo "CLAUDE_EXIT=${pipe[0]:-?}"
+    echo "FORMATTER_EXIT=${pipe[1]:-?}"
+  } >> "$RUN_METRICS" 2>/dev/null || true
 }
 
 # ---------------------------------------------------------------------------
@@ -320,6 +363,7 @@ run_cold() {
 run_iteration() {
   local pinned="${1:-}"
   local work_block selected attempts gate_exit=0 promise_present=false output remaining decision
+  local run_ts mstr
 
   if [[ "$MODE" == "afk" ]]; then
     work_block=$(build_work_block_candidates)
@@ -327,10 +371,24 @@ run_iteration() {
     work_block=$(build_work_block_pinned "$pinned")
   fi
 
-  echo "ralph: cold iteration (mode=$MODE)" >&2
+  # Fresh per-iteration artefact paths (inherited by run_cold's subshell; the files the
+  # formatter writes persist back here for the heartbeat).
+  run_ts=$(date -u +%Y%m%dT%H%M%SZ)
+  mkdir -p "$RUNLOG_DIR"
+  RUN_JSONL="$RUNLOG_DIR/ralph-${run_ts}-$$.jsonl"
+  RUN_METRICS="$RUNLOG_DIR/ralph-${run_ts}-$$.metrics"
+
+  echo "ralph: cold iteration (mode=$MODE) — live: tail -f $RUN_JSONL | watch cat $CURRENT" >&2
   log_progress "START mode=$MODE"
 
   output=$(run_cold "$work_block")
+
+  # Per-iteration metrics (turns/tokens/cost/duration) for the heartbeat — appended to
+  # both the NO-SELECTION and END lines so every iteration's cost is visible in ralph.log.
+  mstr="dur=$(read_metric DURATION_S "$RUN_METRICS")s turns=$(read_metric NUM_TURNS "$RUN_METRICS")"
+  mstr="$mstr in=$(read_metric TOKENS_IN "$RUN_METRICS") out=$(read_metric TOKENS_OUT "$RUN_METRICS")"
+  mstr="$mstr cacheR=$(read_metric CACHE_READ "$RUN_METRICS") cacheW=$(read_metric CACHE_WRITE "$RUN_METRICS")"
+  mstr="$mstr cost=\$$(read_metric COST_USD "$RUN_METRICS") result=$(read_metric RESULT_SUBTYPE "$RUN_METRICS")"
 
   if [[ "$MODE" == "afk" ]]; then
     selected=$(echo "$output" | grep -oE '<selected>[0-9]+</selected>' | tail -1 | grep -oE '[0-9]+' || true)
@@ -340,8 +398,8 @@ run_iteration() {
 
   if [[ -z "$selected" ]]; then
     echo "ralph: no issue selected this iteration" >&2
-    log_progress "NO-SELECTION mode=$MODE"
-    heartbeat "mode=$MODE issue=none decision=NO-SELECTION"
+    log_progress "NO-SELECTION mode=$MODE result=$(read_metric RESULT_SUBTYPE "$RUN_METRICS")"
+    heartbeat "mode=$MODE issue=none decision=NO-SELECTION $mstr"
     # Distinct from CONTINUE so the caller can count consecutive declines and stall
     # rather than spin billed cold invocations to MAX (see run_afk circuit-breaker).
     echo "NO-SELECTION"
@@ -359,8 +417,11 @@ run_iteration() {
 
   decision=$(node "$ROOT/scripts/loop-decision.mjs" "$gate_exit" "$promise_present" "$remaining")
   echo "ralph: #$selected gate=$gate_exit promise=$promise_present remaining=$remaining → $decision" >&2
-  log_progress "END #$selected gate=$gate_exit promise=$promise_present remaining=$remaining decision=$decision"
-  heartbeat "mode=$MODE issue=$selected attempt=$attempts/$K gate=$gate_exit promise=$promise_present decision=$decision"
+  # The next cold agent reads progress.md, not ralph.log — so the outcome subtype must
+  # land here too. result=error_max_turns/error_* means "truncated/crashed, resume the
+  # unfinished slice", which is NOT the same as a genuine gate failure (ADR-0040).
+  log_progress "END #$selected gate=$gate_exit promise=$promise_present remaining=$remaining decision=$decision result=$(read_metric RESULT_SUBTYPE "$RUN_METRICS") turns=$(read_metric NUM_TURNS "$RUN_METRICS")"
+  heartbeat "mode=$MODE issue=$selected attempt=$attempts/$K gate=$gate_exit promise=$promise_present decision=$decision $mstr"
 
   # Escalate this issue if K cold attempts produced no closing commit.
   if ! has_closing_commit "$selected" && [[ "$attempts" -ge "$K" ]]; then

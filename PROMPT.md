@@ -17,6 +17,10 @@ baton to the next cold restart.
 
 1. **Resume.** Read `progress.md`. If it shows a slice committed but the gate left
    **red**, fixing that is your top priority — settle it before selecting anything new.
+   Read the prior END line's `result=`: `result=error_max_turns` (or `error_*`) means
+   the previous iteration was **truncated mid-work, not failed** — pick up that same
+   slice where it left off rather than re-deriving from scratch; a red gate there is
+   almost certainly just unfinished work, not a wrong approach.
 
 2. **Select.** If an issue is pinned, work it. If you're handed a PRD with candidate
    slices, the list is already filtered to eligible, unblocked, AFK-appropriate work —
@@ -39,7 +43,11 @@ baton to the next cold restart.
    **Search before you build** — never assume something isn't already implemented;
    reuse what exists (CLAUDE.md's inventory discipline). Ship the **full**
    implementation, never a placeholder or stub. Build only this slice; do not wander
-   into sibling work.
+   into sibling work. **Validate cheaply while iterating** — run the *targeted* test
+   (`bun --filter @gigman/api run test -- --testPathPattern=<file>`) and `tsc
+   --noEmit`, not the whole-monorepo `npm run build` on every loop. Repeated full
+   builds are the main per-iteration time sink; save the full `test + build` for the
+   gate at step 6.
 
 5. **Spin off, don't expand.** Work you uncover never goes into the current commit —
    capture it as its own `gh issue create` (enough context to action; a `## Parent`
@@ -59,11 +67,17 @@ baton to the next cold restart.
    `needs-triage`. *Is it corrective or structural, serving the plan already approved?*
    → `ready-for-agent`. When genuinely unsure, choose `needs-triage`.
 
-6. **Commit the slice.** One commit, Conventional Commits, body includes `Closes #N`.
-   The commit hook (lint + shortcut-detector) and push gate (test + build) are the
-   verifier — **let them run; never `--no-verify`.** A green gate is the only
-   definition of done, and the loop confirms it independently in bash: a commit that
-   doesn't pass earns nothing.
+6. **Commit the slice, then run the real gate yourself — before you declare done.**
+   One commit, Conventional Commits, body includes `Closes #N`. The commit hook runs
+   lint + shortcut-detector; **let it run, never `--no-verify`.** But the commit hook
+   is *not* the full verifier: the **test + build** gate runs only at push, which
+   happens *after* this cold process has already exited. So a slice that compiles
+   under lint but fails type/build looks done to you and lands as a wasted red gate
+   on the next restart. Close that gap **in this life**: before finishing, run the
+   push gate yourself — `bash scripts/hooks/prepush.sh` (or the changed workspace's
+   `npm run test && npm run build`) — and fix anything red now. A green gate is the
+   only definition of done; the loop re-confirms it in bash, and a commit that fails
+   it earns nothing.
 
 7. **No silent shortcuts.** If the only path to green lowers the bar — an
    `eslint-disable`, an `as any` to dodge a type error, a weakened or skipped test, a
@@ -74,10 +88,14 @@ baton to the next cold restart.
    record *why* in `progress.md`, and stop. **Surfacing the blocker is the success
    condition, not a failure.**
 
-8. **Record.** Append to `progress.md`: which slice, what changed, any decision not
-   yet in the docs, the gate result, and what the next cold iteration needs.
-   `progress.md` is gitignored — never commit it; it is distilled into a `/handoff`
-   comment at feature end.
+8. **Record — and checkpoint as you go, not just at the end.** Append to
+   `progress.md`: which slice, what changed, any decision not yet in the docs, the
+   gate result, and what the next cold iteration needs. **Write it incrementally** —
+   after the tests are written, after each commit — never save it all for the final
+   turn. If a per-iteration cap (`RALPH_MAX_TURNS` / `RALPH_MAX_USD`) or a crash cuts
+   this life short, an up-to-date `progress.md` is the *only* thing that lets the next
+   cold restart resume instead of starting blind. `progress.md` is gitignored — never commit it; it is
+   distilled into a `/handoff` comment at feature end.
 
 9. **Promise honestly.** Emit `<promise>COMPLETE</promise>` only when you believe no
    unblocked AFK work remains for this PRD. It is necessary but **not sufficient** —
