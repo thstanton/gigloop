@@ -25,6 +25,7 @@ type MockRepo = {
   addLineItem: jest.Mock;
   updateLineItem: jest.Mock;
   deleteLineItem: jest.Mock;
+  previewBookingInvoiceNumber: jest.Mock;
 };
 
 function makeRepo(): MockRepo {
@@ -49,6 +50,7 @@ function makeRepo(): MockRepo {
     addLineItem: jest.fn(),
     updateLineItem: jest.fn(),
     deleteLineItem: jest.fn(),
+    previewBookingInvoiceNumber: jest.fn(),
   };
 }
 

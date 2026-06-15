@@ -414,4 +414,44 @@ export class InvoicesRepository {
       select: { dueDate: true },
     });
   }
+
+  async previewBookingInvoiceNumber(
+    userId: string,
+    bookingId: string,
+    isDeposit: boolean,
+  ): Promise<{ invoiceNumber: string; willReuse: boolean }> {
+    const currentYear = new Date().getFullYear();
+    const [voided, profile] = await Promise.all([
+      this.prisma.invoice.findFirst({
+        where: { bookingId, userId, isDeposit, status: 'VOID', invoiceNumber: { not: null } },
+        select: { invoiceNumber: true },
+      }),
+      this.prisma.userProfile.findUnique({ where: { userId } }),
+    ]);
+    const prefs = (profile?.preferences as Record<string, unknown>) ?? {};
+    const seq = profile?.invoiceNumberSequence ?? 0;
+    const seqYear = profile?.invoiceSequenceYear ?? currentYear;
+    const { invoiceNumber } = allocate(prefs, currentYear, seq, seqYear, voided?.invoiceNumber);
+    return { invoiceNumber, willReuse: !!voided?.invoiceNumber };
+  }
+
+  async previewSeriesInvoiceNumber(
+    userId: string,
+    seriesId: string,
+  ): Promise<{ invoiceNumber: string; willReuse: boolean }> {
+    const currentYear = new Date().getFullYear();
+    const [voided, profile] = await Promise.all([
+      this.prisma.invoice.findFirst({
+        where: { seriesId, userId, status: 'VOID', invoiceNumber: { not: null } },
+        select: { invoiceNumber: true },
+        orderBy: { updatedAt: 'desc' },
+      }),
+      this.prisma.userProfile.findUnique({ where: { userId } }),
+    ]);
+    const prefs = (profile?.preferences as Record<string, unknown>) ?? {};
+    const seq = profile?.invoiceNumberSequence ?? 0;
+    const seqYear = profile?.invoiceSequenceYear ?? currentYear;
+    const { invoiceNumber } = allocate(prefs, currentYear, seq, seqYear, voided?.invoiceNumber);
+    return { invoiceNumber, willReuse: !!voided?.invoiceNumber };
+  }
 }

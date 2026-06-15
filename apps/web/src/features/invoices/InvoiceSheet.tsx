@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@clerk/react';
 import { Plus, Trash2 } from 'lucide-react';
 import {
   Sheet,
@@ -14,9 +15,9 @@ import {
 } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { apiPost, apiPatch, apiDelete } from '@/lib/api';
+import { apiGet, apiPost, apiPatch, apiDelete } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
-import type { Invoice, InvoiceLineItem } from '@/types/api';
+import type { Invoice, InvoiceLineItem, InvoiceNumberPreview } from '@/types/api';
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
@@ -57,6 +58,12 @@ function buildDefaults(invoice?: Invoice, prefill?: Props['prefill']): FormValue
   };
 }
 
+function buildConfirmText(preview: InvoiceNumberPreview | undefined): string {
+  if (!preview) return "Once issued, this invoice is locked. To make changes, you'll need to void it and create a new one.";
+  if (preview.willReuse) return `This invoice will be issued as ${preview.invoiceNumber} (re-used from a voided invoice). Once issued, it is locked — void it to make changes.`;
+  return `This invoice will be issued as ${preview.invoiceNumber}. Once issued, it is locked — void it to make changes.`;
+}
+
 function hasChanged(item: FormValues['lineItems'][number], original: InvoiceLineItem): boolean {
   return (
     item.description !== original.description ||
@@ -87,6 +94,7 @@ export default function InvoiceSheet({
   onAfterIssue,
 }: Props) {
   const isEdit = !!invoice;
+  const { isLoaded } = useAuth();
   const queryClient = useQueryClient();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingFormValues, setPendingFormValues] = useState<FormValues | null>(null);
@@ -113,11 +121,19 @@ export default function InvoiceSheet({
     }
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const isDeposit = watch('isDeposit');
   const lineItems = watch('lineItems');
   const total = lineItems.reduce((sum, item) => {
     const n = parseFloat(item.amount);
     return sum + (isNaN(n) ? 0 : n);
   }, 0);
+
+  const { data: numberPreview } = useQuery<InvoiceNumberPreview>({
+    queryKey: ['invoiceNumberPreview', bookingId, isDeposit],
+    queryFn: () => apiGet<InvoiceNumberPreview>(`/bookings/${bookingId}/invoices/preview-number?isDeposit=${isDeposit}`),
+    enabled: isLoaded && !isEdit,
+    staleTime: 30_000,
+  });
 
   // Save as DRAFT
   const saveDraftMutation = useMutation({
@@ -338,6 +354,15 @@ export default function InvoiceSheet({
               </div>
             )}
 
+            {/* Invoice number preview (create mode only) */}
+            {!isEdit && numberPreview && (
+              <p className="text-sm text-muted-foreground">
+                {numberPreview.willReuse
+                  ? `Invoice number ${numberPreview.invoiceNumber} (from a voided invoice) will be re-used`
+                  : `When issued, this will be invoice ${numberPreview.invoiceNumber}`}
+              </p>
+            )}
+
             {/* Actions */}
             {isEdit ? (
               <Button
@@ -373,14 +398,13 @@ export default function InvoiceSheet({
         </SheetContent>
       </Sheet>
 
-      {/* Issue confirmation: warns that issuing is irreversible */}
+      {/* Issue confirmation: warns that issuing is irreversible, states the concrete number */}
       <Sheet open={confirmOpen} onOpenChange={setConfirmOpen}>
         <SheetContent side="bottom" aria-describedby="confirm-desc">
           <SheetHeader>
             <SheetTitle>Create and lock this invoice?</SheetTitle>
             <SheetDescription id="confirm-desc">
-              Once issued, this invoice is locked. To make changes, you'll need to void it and create a new one.
-              A PDF will be generated and an invoice number assigned.
+              {buildConfirmText(numberPreview)}{' '}A PDF will be generated.
             </SheetDescription>
           </SheetHeader>
           <SheetFooter className="mt-4">

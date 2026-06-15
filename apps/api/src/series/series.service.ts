@@ -117,6 +117,11 @@ export class SeriesService {
     return this.repo.findActiveSeriesInvoice(userId, seriesId);
   }
 
+  async previewInvoiceNumber(userId: string, seriesId: string) {
+    await this.requireSeries(userId, seriesId);
+    return this.invoicesRepo.previewSeriesInvoiceNumber(userId, seriesId);
+  }
+
   async voidInvoice(userId: string, seriesId: string, invoiceId: string) {
     const invoice = await this.repo.findSeriesInvoiceById(userId, seriesId, invoiceId);
     if (!invoice) throw new NotFoundException('Invoice not found');

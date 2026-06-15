@@ -112,6 +112,10 @@ export class InvoicesService {
     );
   }
 
+  previewInvoiceNumber(userId: string, bookingId: string, isDeposit: boolean) {
+    return this.repo.previewBookingInvoiceNumber(userId, bookingId, isDeposit);
+  }
+
   async generatePreviewPdf(userId: string, bookingId: string, id: string): Promise<Buffer> {
     await this.findOne(userId, bookingId, id);
     return this.documents.generatePreviewPdf(userId, id);

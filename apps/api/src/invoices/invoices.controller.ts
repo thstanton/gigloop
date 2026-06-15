@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Req,
   Res,
 } from '@nestjs/common';
@@ -17,6 +18,7 @@ import { InvoicesService } from './invoices.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { IssueInvoiceDto } from './dto/issue-invoice.dto';
+import { PreviewInvoiceNumberQuery } from './dto/preview-invoice-number.query';
 import { SendInvoiceDto } from './dto/send-invoice.dto';
 import { MarkSentDto } from './dto/mark-sent.dto';
 import { CreateLineItemDto } from './dto/create-line-item.dto';
@@ -39,6 +41,17 @@ export class InvoicesController {
     @Param('bookingId') bookingId: string,
   ) {
     return this.service.findAll(req.userId, bookingId);
+  }
+
+  @ApiOperation({ summary: 'Preview the invoice number that will be assigned on issue (dry-run, no allocation)' })
+  @ApiResponse({ status: 200, description: '{ invoiceNumber: string; willReuse: boolean }' })
+  @Get('preview-number')
+  previewNumber(
+    @Req() req: AuthedRequest,
+    @Param('bookingId') bookingId: string,
+    @Query() query: PreviewInvoiceNumberQuery,
+  ) {
+    return this.service.previewInvoiceNumber(req.userId, bookingId, query.isDeposit);
   }
 
   @ApiOperation({ summary: 'Get an invoice by ID' })

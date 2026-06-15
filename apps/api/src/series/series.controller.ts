@@ -45,6 +45,13 @@ export class SeriesController {
     return this.service.createInvoice(req.userId, id);
   }
 
+  @ApiOperation({ summary: 'Preview the invoice number that will be assigned on send (dry-run, no allocation)' })
+  @ApiResponse({ status: 200, description: '{ invoiceNumber: string; willReuse: boolean }' })
+  @Get(':id/invoices/preview-number')
+  previewInvoiceNumber(@Req() req: AuthedRequest, @Param('id') id: string) {
+    return this.service.previewInvoiceNumber(req.userId, id);
+  }
+
   @ApiOperation({ summary: 'Get the active (non-VOID) series invoice; 404 when none exists' })
   @Get(':id/invoices/current')
   async getActiveInvoice(@Req() req: AuthedRequest, @Param('id') id: string) {

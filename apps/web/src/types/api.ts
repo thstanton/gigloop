@@ -611,6 +611,11 @@ export interface CreateChecklistItemInput {
   dueDate?: string | null;
 }
 
+export interface InvoiceNumberPreview {
+  invoiceNumber: string;
+  willReuse: boolean;
+}
+
 export type PaddingWidth = 1 | 3 | 4 | 6;
 
 export interface InvoiceNumberFormat {
