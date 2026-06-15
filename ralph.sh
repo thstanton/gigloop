@@ -1,17 +1,22 @@
 #!/usr/bin/env bash
-# ralph.sh — cold-restart AFK loop (ADR-0040)
+# ralph.sh — cold-restart AFK loop (ADR-0040, ADR-0045)
 #
 # Usage:
-#   ./ralph.sh --once N         one cold pass on issue #N; you are the loop
-#   ./ralph.sh --issue N        retry until #N done or K attempts (HITL workhorse)
+#   ./ralph.sh --once --prd N   one cold pass over PRD #N; the agent self-selects a
+#                               slice, you are the loop (watched HITL pass)
 #   ./ralph.sh --afk --prd N    self-select + grind unblocked AFK children of PRD #N
 #
+# ADR-0045: bash GATHERS, the agent JUDGES. ralph.sh no longer filters eligibility —
+# it injects the candidate corpus (the PRD's open children + git log + runbook) and the
+# agent self-selects the highest-priority unblocked `ready-for-agent` slice, works it,
+# self-verifies, commits `Closes #N`, and relabels it `ready-for-review`. There is no
+# `<selected>` marker, no `--issue` pinning, and no bash blocker/attempts parsing.
+#
 # Env:
-#   RALPH_K=3              per-issue cold-restart cap before escalation (default 3)
 #   RALPH_MAX=20           global iteration cap per run (default 20)
+#   RALPH_LOG_N=15         how many recent commits (full bodies) to inject (default 15)
 #   RALPH_STALL=2          consecutive NO-SELECTION iterations before a clean stall
-#                          (afk mode; default 2 — stops spinning when the agent keeps
-#                          declining work bash still lists)
+#                          (afk mode; default 2)
 #   RALPH_UNSAFE=1         run inside Docker Sandbox + --dangerously-skip-permissions
 #   RALPH_WEBHOOK_URL=url  POST target for ESCALATE/COMPLETE/STALL/MAX-HIT events (optional)
 #
@@ -54,7 +59,7 @@ STALL="${RALPH_STALL:-2}"
 # turns= / cost= (now in every heartbeat) — too low and every iteration is cut
 # mid-slice, fails the gate, and burns a K attempt. A rot-ceiling, not a speed dial.
 
-# Per-iteration stream artefact paths — set fresh in run_iteration, read back for the
+# Per-iteration stream artefact paths — set fresh in cold_pass, read back for the
 # heartbeat. run_cold runs in a `$(...)` subshell that inherits these; the FILES the
 # formatter writes persist beyond it.
 RUN_JSONL=""
@@ -65,27 +70,25 @@ RUN_CLAUDE_ERR=""
 # Arg parsing
 # ---------------------------------------------------------------------------
 MODE=""
-ISSUE_N=""
 PRD_N=""
 
 usage() {
-  echo "Usage: ralph.sh --once N | --issue N | --afk --prd N" >&2
+  echo "Usage: ralph.sh --once --prd N | --afk --prd N" >&2
   exit 1
 }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --once)  MODE=once;  ISSUE_N="$2"; shift 2 ;;
-    --issue) MODE=issue; ISSUE_N="$2"; shift 2 ;;
-    --afk)   MODE=afk; shift ;;
+    --once)  MODE=once; shift ;;
+    --afk)   MODE=afk;  shift ;;
     --prd)   PRD_N="$2"; shift 2 ;;
     *)       usage ;;
   esac
 done
 
 [[ -z "$MODE" ]] && usage
-[[ "$MODE" == "afk" && -z "$PRD_N" ]] && { echo "ralph.sh --afk requires --prd N" >&2; exit 1; }
-[[ ("$MODE" == "once" || "$MODE" == "issue") && -z "$ISSUE_N" ]] && usage
+# Both modes self-select over a PRD's children (ADR-0045) — --prd is mandatory.
+[[ -z "$PRD_N" ]] && { echo "ralph.sh --$MODE requires --prd N" >&2; exit 1; }
 
 [[ -f "$PROMPT_FILE" ]] || {
   echo "ralph.sh: PROMPT.md not found — implement #411 first" >&2
@@ -178,55 +181,11 @@ has_closing_commit() {
   git log "$range" --pretty=%B 2>/dev/null | grep -qE "(Closes|Fixes|Resolves) #${n}([^0-9]|$)"
 }
 
-# Print every eligible slice (one issue number per line): open, ready-for-agent,
-# a child of PRD $PRD_N, not yet committed, under the attempt cap, all blockers
-# satisfied (closed OR already committed on this branch). bash *filters*; the agent
-# *picks* — that split is the whole point (ADR-0040 §4).
-list_eligible() {
-  local prd=$PRD_N num body parent_line ok ref refs
-
-  # Drive off issue *numbers* only, then fetch each body with a targeted
-  # `gh issue view --jq` call. The old form streamed `gh ... --jq '.[]'` and
-  # re-parsed each line with `echo "$row" | jq` — which throws
-  # "Invalid string: control characters U+0000–U+001F must be escaped" whenever a
-  # body contains a literal control char, silently dropping the issue and making
-  # this function (and remaining_count) non-deterministic. `gh --jq` interprets the
-  # field server-side and prints it raw, so no body content can break the parse.
-  #
-  # Iterate over a word-split number list (issue numbers never contain spaces), NOT
-  # a `while read < <(gh ...)` loop: the per-issue `gh issue view` / `is_issue_closed`
-  # calls below read stdin and would drain a process-substitution feed, killing the
-  # loop after one pass.
-  for num in $(gh issue list --label ready-for-agent --state open --json number --limit 50 --jq '.[].number' 2>/dev/null); do
-    ok=true
-
-    body=$(gh issue view "$num" --json body --jq '.body' 2>/dev/null) || continue
-
-    # Must declare ## Parent pointing to the PRD
-    parent_line=$(echo "$body" | awk '/^## Parent/{f=1; next} f{print; exit}')
-    echo "$parent_line" | grep -qE "(^|[^0-9])${prd}([^0-9]|$)" || continue
-
-    # Already delivered on this branch?
-    has_closing_commit "$num" && continue
-
-    # Burned through its cold-restart attempts?
-    [[ "$(read_attempts "$num")" -ge "$K" ]] && continue
-
-    # Every ## Blocked by ref must be closed OR already committed on this branch.
-    # Match any `#N` anywhere in the block (not only lines starting `- #`), and key
-    # off the `#` so issue refs are picked up even when prose follows
-    # ("- Slice 3 (event-type filter) #421") without numbers in the description text
-    # being mistaken for blockers. NB: blockers written with no `#N` ref at all are
-    # invisible here by design — an issue-authoring requirement, not a parser gap.
-    refs=$(echo "$body" | awk '/^## Blocked by/{f=1; next} /^## /{f=0} f' | grep -oE '#[0-9]+' | tr -d '#')
-    for ref in $refs; do
-      is_issue_closed "$ref" || has_closing_commit "$ref" || { ok=false; break; }
-    done
-
-    $ok || continue
-    echo "$num"
-  done
-}
+# ADR-0045: list_eligible is GONE. bash no longer judges eligibility — it does not
+# parse `## Parent` / `## Blocked by` / attempts / closing commits to decide what is
+# workable. It GATHERS the candidate corpus (gather_candidates below) and the agent
+# self-selects the highest-priority unblocked `ready-for-agent` slice, treating a
+# blocker as satisfied when it is closed OR labelled `ready-for-review` (PROMPT.md).
 
 escalate() {
   local issue=$1 reason=$2
@@ -278,35 +237,36 @@ run_gate() {
 # remainingWorkCount for loop-decision
 # ---------------------------------------------------------------------------
 remaining_count() {
-  if [[ "$MODE" == "afk" ]]; then
-    # how many eligible slices are still undelivered
-    list_eligible | wc -l | tr -d ' '
-  else
-    # pinned: done iff a commit closing it exists on the branch
-    has_closing_commit "$1" && echo 0 || echo 1
-  fi
+  # ADR-0045 transitional: this fed loop-decision.mjs. With list_eligible removed and
+  # the iteration path no longer parsing a selection, nothing calls this any more —
+  # left as a stub (no reference to the deleted eligibility judging) until #454 removes
+  # remaining_count + loop-decision entirely.
+  has_closing_commit "${1:-}" && echo 0 || echo 1
 }
 
 # ---------------------------------------------------------------------------
-# Work-block builders (the mode-specific tail of the injected prompt)
+# Gather (ADR-0045): the candidate corpus injected into every iteration.
 # ---------------------------------------------------------------------------
-build_work_block_pinned() {
-  gh issue view "$1" --json number,title,body \
-    --jq '"## Active issue (pinned — work this one)\n\nIssue #\(.number): \(.title)\n\(.body)"'
-}
-
-build_work_block_candidates() {
-  echo "## PRD #$PRD_N — candidate slices"
+# Dump the PRD's OPEN child issues — number, title, labels, full body — in ONE gh
+# query, with NO eligibility/blocker/attempts filtering. Children are found by their
+# `## Parent` ref to the PRD (finding the corpus by parent is gather, not judging);
+# ALL labels are shown (ready-for-agent / ready-for-human / ready-for-review) so the
+# agent has the dependency context to self-select and never works a HITL/done slice.
+# `gh --jq` interprets bodies server-side, so literal control chars in a body cannot
+# break the parse (the failure mode the old per-issue re-parse had).
+gather_candidates() {
+  echo "## PRD #$PRD_N — open issues (your candidate work)"
   echo
-  echo "Filtered to eligible, unblocked, AFK-appropriate work. Choose ONE by judgement"
-  echo "and emit <selected>N</selected>."
+  echo "Self-select per PROMPT.md: the highest-priority UNBLOCKED issue labelled"
+  echo "\`ready-for-agent\`. Never touch \`ready-for-human\` or \`ready-for-review\`."
   echo
-  local n
-  while IFS= read -r n; do
-    [[ -z "$n" ]] && continue
-    gh issue view "$n" --json number,title,labels,body \
-      --jq '"### #\(.number): \(.title)\nlabels: \([.labels[].name] | join(", "))\n\n\(.body)\n"'
-  done < <(list_eligible)
+  gh issue list --state open --limit 100 --json number,title,labels,body --jq '
+    .[]
+    | . as $i
+    | (($i.body // "") | split("## Parent")[1] // "" | split("\n") | map(select(length>0))[0] // "") as $parentline
+    | select($parentline | test("(^|[^0-9])'"$PRD_N"'([^0-9]|$)"))
+    | "### #\($i.number): \($i.title)\nlabels: \([$i.labels[].name] | join(", "))\n\n\($i.body)\n"
+  ' 2>/dev/null
 }
 
 # ---------------------------------------------------------------------------
@@ -314,22 +274,29 @@ build_work_block_candidates() {
 # ---------------------------------------------------------------------------
 run_cold() {
   local work_block=$1
-  local progress_ctx prompt
+  local git_log runbook_ctx prompt
 
-  progress_ctx=""
-  [[ -f "$PROGRESS" ]] && progress_ctx=$(cat "$PROGRESS")
+  # ADR-0045: the agent's narrative memory across cold restarts is the git log (full
+  # bodies — that is where the last iteration left its decisions + blockers), NOT a
+  # progress.md scratchpad. Inject recent commits + the runbook (if it exists yet —
+  # #457 scaffolds it; inject gracefully until then) + the candidate corpus.
+  git_log=$(git log -n "${RALPH_LOG_N:-15}" --no-color 2>/dev/null || true)
 
-  prompt=$(printf '%s\n\n---\n## progress.md\n%s\n\n---\n%s\n' \
+  runbook_ctx="(no runbook yet — docs/agents/ralph-runbook.md not present)"
+  [[ -f "$ROOT/docs/agents/ralph-runbook.md" ]] && runbook_ctx=$(cat "$ROOT/docs/agents/ralph-runbook.md")
+
+  prompt=$(printf '%s\n\n---\n## Recent commits (git log -n %s — your narrative memory)\n\n```\n%s\n```\n\n---\n## Runbook (docs/agents/ralph-runbook.md)\n\n%s\n\n---\n%s\n' \
     "$(cat "$PROMPT_FILE")" \
-    "$progress_ctx" \
+    "${RALPH_LOG_N:-15}" \
+    "$git_log" \
+    "$runbook_ctx" \
     "$work_block")
 
   # --model sonnet: Agent SDK credit is capped; sonnet stretches it (ADR-0040 §7).
   # --output-format stream-json --verbose: emit a parseable event stream that
   # ralph-stream.mjs turns into a live feed (stderr), a raw per-iteration dump
   # ($RUN_JSONL), token/cost/turn metrics ($RUN_METRICS), and the ralph.current
-  # status file — and prints ONLY the agent's final text on stdout, so the
-  # <selected>/<promise> markers below are matched exactly as before.
+  # status file — and prints ONLY the agent's final text on stdout.
   local claude_flags=("--model" "sonnet" "--output-format" "stream-json" "--verbose" "-p" "$prompt")
   [[ -n "${RALPH_MAX_TURNS:-}" ]] && claude_flags+=("--max-turns" "$RALPH_MAX_TURNS")
   [[ -n "${RALPH_MAX_USD:-}" ]] && claude_flags+=("--max-budget-usd" "$RALPH_MAX_USD")
@@ -382,26 +349,25 @@ run_cold() {
     echo "Ralph is confused — the agent gave nothing back (exit ${pipe[0]:-?}). Ralph wrote it down in $RUN_CLAUDE_ERR." >&2
   fi
 
-  # Always succeed: run_cold's stdout (captured by run_iteration) is the decision
-  # channel; its exit status is not consulted, and a non-zero here would abort the
-  # caller under `set -e`. The gate (run_gate) is the verifier of record.
+  # Always succeed: run_cold's stdout (captured by cold_pass) is the agent's final
+  # text; its exit status is not consulted, and a non-zero here would abort the caller
+  # under `set -e`. CI + human-merge is the verifier of record (ADR-0045).
   return 0
 }
 
 # ---------------------------------------------------------------------------
-# Single iteration (shared plumbing)
-#   pinned modes pass the issue number; afk learns it from <selected>N</selected>.
+# One cold pass (ADR-0045)
 # ---------------------------------------------------------------------------
-run_iteration() {
-  local pinned="${1:-}"
-  local work_block selected attempts gate_exit=0 promise_present=false output remaining decision
-  local run_ts mstr
-
-  if [[ "$MODE" == "afk" ]]; then
-    work_block=$(build_work_block_candidates)
-  else
-    work_block=$(build_work_block_pinned "$pinned")
-  fi
+# Gather the candidate corpus, set up the per-iteration artefacts, and run one cold
+# agent. The agent self-selects + tests + self-reviews + commits `Closes #N` + relabels
+# `ready-for-agent` → `ready-for-review`, all INSIDE the cold process (PROMPT.md). bash
+# no longer parses a `<selected>` marker, re-runs the gate, or tracks attempts — the
+# loop's state is the commits + issue labels (gh), and CI + human-merge is the gate.
+# What survives this function is observability only: ralph.log, ralph.current, the raw
+# stream dump, and the metrics file.
+cold_pass() {
+  local work_block run_ts mstr
+  work_block=$(gather_candidates)
 
   # Fresh per-iteration artefact paths (inherited by run_cold's subshell; the files the
   # formatter writes persist back here for the heartbeat).
@@ -414,163 +380,47 @@ run_iteration() {
   echo "Ralph is calling an agent (mode=$MODE)! Watch him go: tail -f $RUN_JSONL | watch cat $CURRENT" >&2
   log_progress "START mode=$MODE"
 
-  output=$(run_cold "$work_block")
+  # Discard run_cold's stdout — the agent's final text. With the `<selected>`/`<promise>`
+  # markers gone (AC3), bash no longer parses it; #458 reads the worked issue from the
+  # `Closes #N` commit and #453 reads the terminal signal. The live feed (stderr) and
+  # the artefacts (commits + labels + metrics) are the record.
+  run_cold "$work_block" >/dev/null
 
-  # Per-iteration metrics (turns/tokens/cost/duration) for the heartbeat — appended to
-  # both the NO-SELECTION and END lines so every iteration's cost is visible in ralph.log.
   mstr="dur=$(read_metric DURATION_S "$RUN_METRICS")s turns=$(read_metric NUM_TURNS "$RUN_METRICS")"
   mstr="$mstr in=$(read_metric TOKENS_IN "$RUN_METRICS") out=$(read_metric TOKENS_OUT "$RUN_METRICS")"
   mstr="$mstr cacheR=$(read_metric CACHE_READ "$RUN_METRICS") cacheW=$(read_metric CACHE_WRITE "$RUN_METRICS")"
   mstr="$mstr cost=\$$(read_metric COST_USD "$RUN_METRICS") result=$(read_metric RESULT_SUBTYPE "$RUN_METRICS")"
 
-  if [[ "$MODE" == "afk" ]]; then
-    selected=$(echo "$output" | grep -oE '<selected>[0-9]+</selected>' | tail -1 | grep -oE '[0-9]+' || true)
-  else
-    selected="$pinned"
-  fi
-
-  if [[ -z "$selected" ]]; then
-    echo "Ralph is not sure what to do — he didn't pick an issue this time." >&2
-    log_progress "NO-SELECTION mode=$MODE result=$(read_metric RESULT_SUBTYPE "$RUN_METRICS")"
-    heartbeat "mode=$MODE issue=none decision=NO-SELECTION $mstr"
-    # Distinct from CONTINUE so the caller can count consecutive declines and stall
-    # rather than spin billed cold invocations to MAX (see run_afk circuit-breaker).
-    echo "NO-SELECTION"
-    return 0
-  fi
-
-  attempts=$(increment_attempts "$selected")
-  echo "Ralph is working on #$selected — try $attempts of $K!" >&2
-
-  echo "$output" | grep -q '<promise>COMPLETE</promise>' && promise_present=true
-
-  # gate output → stderr (human watches there); stdout stays the clean decision channel
-  run_gate >&2 || gate_exit=$?
-  remaining=$(remaining_count "$selected")
-
-  decision=$(node "$ROOT/scripts/loop-decision.mjs" "$gate_exit" "$promise_present" "$remaining")
-  echo "Ralph is checking his work on #$selected — gate=$gate_exit promise=$promise_present remaining=$remaining → $decision" >&2
-  # The next cold agent reads progress.md, not ralph.log — so the outcome subtype must
-  # land here too. result=error_max_turns/error_* means "truncated/crashed, resume the
-  # unfinished slice", which is NOT the same as a genuine gate failure (ADR-0040).
-  log_progress "END #$selected gate=$gate_exit promise=$promise_present remaining=$remaining decision=$decision result=$(read_metric RESULT_SUBTYPE "$RUN_METRICS") turns=$(read_metric NUM_TURNS "$RUN_METRICS")"
-  heartbeat "mode=$MODE issue=$selected attempt=$attempts/$K gate=$gate_exit promise=$promise_present decision=$decision $mstr"
-
-  # Escalate this issue if K cold attempts produced no closing commit.
-  if ! has_closing_commit "$selected" && [[ "$attempts" -ge "$K" ]]; then
-    escalate "$selected" "exceeded $K attempts without a closing commit"
-  fi
-
-  echo "$decision"
+  log_progress "END mode=$MODE result=$(read_metric RESULT_SUBTYPE "$RUN_METRICS") turns=$(read_metric NUM_TURNS "$RUN_METRICS")"
+  heartbeat "mode=$MODE prd=$PRD_N $mstr"
 }
 
 # ---------------------------------------------------------------------------
 # Mode runners
 # ---------------------------------------------------------------------------
+# `once`: one watched cold pass over the PRD; the human is the loop. This is the
+# supported HITL entry point for this slice and the acceptance test for #452.
 run_once() {
-  echo "Ralph is excited to get started on #$ISSUE_N! (once)" >&2
-  run_iteration "$ISSUE_N" > /dev/null
-  echo "Ralph is done! You're the loop now (once mode)." >&2
+  echo "Ralph is excited to do one watched pass over PRD #$PRD_N! (once)" >&2
+  cold_pass
+  echo "Ralph is done with his pass — you're the loop now (once mode)." >&2
 }
 
-run_issue() {
-  echo "Ralph is excited to get started on #$ISSUE_N! (issue, K=$K MAX=$MAX)" >&2
-  local iters=0
-
-  while true; do
-    iters=$((iters + 1))
-    if [[ $iters -gt $MAX ]]; then
-      echo "Ralph is tired — he hit the MAX ($MAX). Ralph is stopping now." >&2
-      heartbeat "mode=issue issue=$ISSUE_N event=MAX-HIT iters=$iters"
-      notify "Ralph is tired — hit MAX after $iters tries on #$ISSUE_N (issue)"
-      exit 1
-    fi
-
-    if has_closing_commit "$ISSUE_N"; then
-      echo "Ralph is happy — #$ISSUE_N is already done on this branch!" >&2
-      finish_run
-    fi
-
-    # Already escalated on a prior run? Stop (the relabel persists across restarts).
-    if [[ "$(read_attempts "$ISSUE_N")" -ge $K ]]; then
-      echo "Ralph is out of tries on #$ISSUE_N — a grown-up gets it now." >&2
-      exit 0
-    fi
-
-    # Agent may have relabeled to ready-for-human mid-run — respect it immediately
-    # rather than burning through the remaining K attempts.
-    if gh issue view "$ISSUE_N" --json labels --jq '.labels[].name' 2>/dev/null \
-        | grep -q "ready-for-human"; then
-      echo "Ralph is stopping — #$ISSUE_N is for a grown-up now (ready-for-human)." >&2
-      heartbeat "mode=issue issue=$ISSUE_N event=ESCALATED-BY-AGENT"
-      exit 0
-    fi
-
-    local decision
-    decision=$(run_iteration "$ISSUE_N")
-
-    if [[ "$decision" == "COMPLETE" ]]; then
-      echo "Ralph is happy — #$ISSUE_N is COMPLETE!" >&2
-      heartbeat "mode=issue issue=$ISSUE_N event=COMPLETE iters=$iters"
-      notify "Ralph is happy — #$ISSUE_N is COMPLETE! ($iters tries, issue)"
-      finish_run
-    fi
-  done
-}
-
+# `afk`: the unwatched grind loop. ADR-0045 spine A → C: the two-signal terminal that
+# tells afk when to STOP (NO MORE TASKS → open PR / HANDOFF → notify + stop) is #453.
+# Until that lands, afk cannot safely loop unwatched, so it does ONE pass and stops —
+# use `--once --prd N` for now. #453 restores the loop with proper terminal routing.
 run_afk() {
-  echo "Ralph is excited to do PRD #$PRD_N all by himself! (afk, K=$K MAX=$MAX STALL=$STALL)" >&2
-  local iters=0 no_select_streak=0
-
-  while true; do
-    iters=$((iters + 1))
-    if [[ $iters -gt $MAX ]]; then
-      echo "Ralph is tired — he hit the MAX ($MAX). Ralph is stopping now." >&2
-      heartbeat "mode=afk prd=$PRD_N event=MAX-HIT iters=$iters"
-      notify "Ralph is tired — hit MAX after $iters tries on PRD #$PRD_N (afk)"
-      exit 1
-    fi
-
-    if [[ -z "$(list_eligible)" ]]; then
-      echo "Ralph is all done — no more work left in PRD #$PRD_N!" >&2
-      heartbeat "mode=afk prd=$PRD_N event=COMPLETE iters=$iters"
-      notify "Ralph is happy — PRD #$PRD_N is COMPLETE! No work left ($iters tries)"
-      finish_run
-    fi
-
-    local decision
-    decision=$(run_iteration)
-
-    if [[ "$decision" == "COMPLETE" ]]; then
-      echo "Ralph is happy — PRD #$PRD_N is COMPLETE, no work left!" >&2
-      heartbeat "mode=afk prd=$PRD_N event=COMPLETE iters=$iters"
-      notify "Ralph is happy — PRD #$PRD_N is COMPLETE! The agent promised ($iters tries)"
-      finish_run
-    fi
-
-    # Circuit-breaker. We only reach here with list_eligible non-empty, so a
-    # NO-SELECTION means bash thinks there is work but the agent declined it. One
-    # miss can be a transient model hiccup; STALL in a row means the candidate set
-    # is stale or the agent is stuck — stop cleanly and let a human look instead of
-    # spinning billed cold invocations all the way to MAX (the bug this fixes).
-    if [[ "$decision" == "NO-SELECTION" ]]; then
-      no_select_streak=$((no_select_streak + 1))
-      if [[ $no_select_streak -ge $STALL ]]; then
-        echo "Ralph is confused — he picked nothing $no_select_streak times but there's still work. Ralph is taking a nap (stalling)." >&2
-        log_progress "STALL mode=afk prd=$PRD_N consecutive_no_selection=$no_select_streak"
-        heartbeat "mode=afk prd=$PRD_N event=STALL no_selection=$no_select_streak"
-        notify "Ralph is napping — PRD #$PRD_N stalled, the agent said no ${no_select_streak}× while work waited (afk)"
-        exit 0
-      fi
-    else
-      no_select_streak=0
-    fi
-  done
+  echo "Ralph wants to grind PRD #$PRD_N solo — but his STOP signal lands in #453!" >&2
+  echo "Ralph is doing ONE pass then stopping. Use --once --prd $PRD_N to watch him." >&2
+  cold_pass
+  heartbeat "mode=afk prd=$PRD_N event=TRANSITIONAL-ONE-PASS note=terminal-routing-pending-#453"
+  notify "Ralph (afk) did one pass on PRD #$PRD_N — the full afk loop lands in #453"
+  echo "Ralph did his one pass. The full afk loop is coming in #453!" >&2
 }
 
 # ---------------------------------------------------------------------------
 case "$MODE" in
-  once)  run_once ;;
-  issue) run_issue ;;
-  afk)   run_afk ;;
+  once) run_once ;;
+  afk)  run_afk ;;
 esac
