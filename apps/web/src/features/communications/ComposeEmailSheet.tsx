@@ -5,7 +5,7 @@ import Underline from '@tiptap/extension-underline';
 import Link_ from '@tiptap/extension-link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@clerk/react';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Paperclip } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
@@ -24,7 +24,7 @@ import { apiGet, apiPostVoid } from '@/lib/api';
 import { DatePicker } from '@/components/ui/date-picker';
 import { toast } from '@/lib/hooks/use-toast';
 import { BUILT_IN_EMAIL_TYPES, TEMPLATE_DISPLAY } from '@/features/templates/templateMeta';
-import { getInvoiceIdForTemplate, formatMissingVariables } from './composeHelpers';
+import { getInvoiceIdForTemplate, formatMissingVariables, getAttachmentState } from './composeHelpers';
 import type { BookingDetail, BuiltInTemplateType, Invoice, Template } from '@/types/api';
 
 interface RenderResult {
@@ -121,6 +121,7 @@ function ComposeEmailSheetBody({
   const selectedType = selectedTemplate?.builtInType ?? null;
   const invoiceId = getInvoiceIdForTemplate(selectedType, invoices);
   const invoiceForSend = invoices.find((i) => i.id === invoiceId);
+  const attachmentState = getAttachmentState(selectedType, invoices);
   // Route to invoice send endpoint for any non-void invoice template (ISSUED or DRAFT).
   const isInvoiceEmail = !!invoiceId;
   // Date fields are only needed for DRAFT invoices — ISSUED already have dates from issue time.
@@ -256,6 +257,21 @@ function ComposeEmailSheetBody({
               </SelectContent>
             </Select>
           </div>
+
+          {/* Attachment indicator — only shown when a template is selected */}
+          {selectedTemplateId && attachmentState !== null && (
+            attachmentState.kind === 'present' ? (
+              <div className="flex items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm">
+                <Paperclip size={14} className="flex-shrink-0 text-muted" />
+                <span>{attachmentState.filename}</span>
+              </div>
+            ) : (
+              <div className="flex gap-2 rounded-md bg-amber-50 border border-amber-200 px-3 py-2.5 text-sm text-amber-800">
+                <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
+                <span>{attachmentState.message}</span>
+              </div>
+            )
+          )}
 
           {/* Invoice dates — only for draft invoices */}
           {showDateFields && (

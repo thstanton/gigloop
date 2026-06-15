@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getInvoiceIdForTemplate, shouldHideTemplate, formatMissingVariables } from './composeHelpers';
+import { getInvoiceIdForTemplate, shouldHideTemplate, formatMissingVariables, getAttachmentState } from './composeHelpers';
 import type { Invoice } from '@/types/api';
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
@@ -124,6 +124,92 @@ describe('shouldHideTemplate', () => {
   it('hides thank_you for today (date not yet passed)', () => {
     const today = new Date().toISOString();
     expect(shouldHideTemplate('thank_you', invoices, today)).toBe(true);
+  });
+});
+
+// ─── getAttachmentState ───────────────────────────────────────────────────────
+
+describe('getAttachmentState', () => {
+  const issuedDeposit = makeInvoice({ id: 'dep-1', isDeposit: true, status: 'ISSUED', invoiceNumber: 'INV-2030-001' });
+  const draftDeposit = makeInvoice({ id: 'dep-2', isDeposit: true, status: 'DRAFT', invoiceNumber: null });
+  const voidDeposit = makeInvoice({ id: 'dep-3', isDeposit: true, status: 'VOID', invoiceNumber: 'INV-OLD-001' });
+  const issuedBalance = makeInvoice({ id: 'bal-1', isDeposit: false, status: 'ISSUED', invoiceNumber: 'INV-2030-002' });
+  const draftBalance = makeInvoice({ id: 'bal-2', isDeposit: false, status: 'DRAFT', invoiceNumber: null });
+
+  it('returns null for non-attachment template types', () => {
+    const nonAttachmentTypes = ['quote', 'confirmation', 'contract_cover', 'contract_received',
+      'deposit_received', 'music_form_invite', 'thank_you'] as const;
+    for (const type of nonAttachmentTypes) {
+      expect(getAttachmentState(type, [issuedDeposit, issuedBalance])).toBeNull();
+    }
+  });
+
+  it('returns null for null type', () => {
+    expect(getAttachmentState(null, [issuedDeposit])).toBeNull();
+  });
+
+  it('returns present with invoice number filename for an ISSUED deposit invoice', () => {
+    expect(getAttachmentState('deposit_invoice_cover', [issuedDeposit])).toEqual({
+      kind: 'present',
+      filename: 'Invoice INV-2030-001.pdf',
+    });
+  });
+
+  it('returns present with generic label for a DRAFT deposit invoice (no number yet)', () => {
+    expect(getAttachmentState('deposit_invoice_cover', [draftDeposit])).toEqual({
+      kind: 'present',
+      filename: 'Deposit invoice PDF',
+    });
+  });
+
+  it('returns present with invoice number filename for an ISSUED balance invoice', () => {
+    expect(getAttachmentState('balance_invoice_cover', [issuedBalance])).toEqual({
+      kind: 'present',
+      filename: 'Invoice INV-2030-002.pdf',
+    });
+  });
+
+  it('returns present with generic label for a DRAFT balance invoice (no number yet)', () => {
+    expect(getAttachmentState('balance_invoice_cover', [draftBalance])).toEqual({
+      kind: 'present',
+      filename: 'Balance invoice PDF',
+    });
+  });
+
+  it('returns present for contract_and_deposit_cover using the deposit invoice', () => {
+    expect(getAttachmentState('contract_and_deposit_cover', [issuedDeposit, issuedBalance])).toEqual({
+      kind: 'present',
+      filename: 'Invoice INV-2030-001.pdf',
+    });
+  });
+
+  it('returns deposit warning when only a VOID deposit invoice exists', () => {
+    // VOID deposit satisfies shouldHideTemplate (invoice exists) but getInvoiceIdForTemplate filters it out
+    expect(getAttachmentState('deposit_invoice_cover', [voidDeposit])).toEqual({
+      kind: 'warning',
+      message: 'No deposit invoice to attach',
+    });
+  });
+
+  it('returns deposit warning when no deposit invoice exists at all', () => {
+    expect(getAttachmentState('deposit_invoice_cover', [])).toEqual({
+      kind: 'warning',
+      message: 'No deposit invoice to attach',
+    });
+  });
+
+  it('returns balance warning for balance_invoice_cover when no balance invoice exists', () => {
+    expect(getAttachmentState('balance_invoice_cover', [issuedDeposit])).toEqual({
+      kind: 'warning',
+      message: 'No balance invoice to attach',
+    });
+  });
+
+  it('returns deposit warning for contract_and_deposit_cover when no deposit invoice exists', () => {
+    expect(getAttachmentState('contract_and_deposit_cover', [issuedBalance])).toEqual({
+      kind: 'warning',
+      message: 'No deposit invoice to attach',
+    });
   });
 });
 

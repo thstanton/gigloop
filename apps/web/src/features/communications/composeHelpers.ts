@@ -1,6 +1,17 @@
 import type { BuiltInTemplateType, Invoice } from '@/types/api';
 import { VAR_LABELS } from '@/features/templates/templateMeta';
 
+const ATTACHMENT_TEMPLATE_TYPES: BuiltInTemplateType[] = [
+  'deposit_invoice_cover',
+  'balance_invoice_cover',
+  'contract_and_deposit_cover',
+];
+
+export type AttachmentState =
+  | { kind: 'present'; filename: string }
+  | { kind: 'warning'; message: string }
+  | null;
+
 export function getInvoiceIdForTemplate(
   type: BuiltInTemplateType | null,
   invoices: Invoice[],
@@ -31,6 +42,35 @@ export function shouldHideTemplate(
     return date >= today;
   }
   return false;
+}
+
+function resolveAttachmentFilename(invoice: Invoice | undefined): string {
+  if (invoice?.invoiceNumber) return `Invoice ${invoice.invoiceNumber}.pdf`;
+  if (invoice?.isDeposit) return 'Deposit invoice PDF';
+  return 'Balance invoice PDF';
+}
+
+export function getAttachmentState(
+  type: BuiltInTemplateType | null,
+  invoices: Invoice[],
+): AttachmentState {
+  if (!type || !ATTACHMENT_TEMPLATE_TYPES.includes(type)) return null;
+
+  const invoiceId = getInvoiceIdForTemplate(type, invoices);
+  if (!invoiceId) {
+    return {
+      kind: 'warning',
+      message:
+        type === 'balance_invoice_cover'
+          ? 'No balance invoice to attach'
+          : 'No deposit invoice to attach',
+    };
+  }
+
+  const invoice = invoices.find((i) => i.id === invoiceId);
+  const filename = resolveAttachmentFilename(invoice);
+
+  return { kind: 'present', filename };
 }
 
 export function formatMissingVariables(keys: string[]): string {
