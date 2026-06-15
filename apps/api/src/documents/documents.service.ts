@@ -176,7 +176,7 @@ export class DocumentsService {
     invoiceId: string,
     preloaded?: PreloadedInvoice,
     bookingId?: string,
-  ): Promise<{ buffer: Buffer }> {
+  ): Promise<{ buffer: Buffer; documentId: string }> {
     const data = await this.buildInvoicePdfData(userId, invoiceId, preloaded);
     const buffer = await this.generatePdfBuffer(data);
     // Series invoices have no bookingId — store under a flat per-invoice path.
@@ -187,8 +187,8 @@ export class DocumentsService {
     // Replace any existing document record (idempotent on retry)
     const existing = await this.repo.findByInvoice(userId, invoiceId);
     if (existing) await this.repo.delete(existing.id);
-    await this.repo.create(userId, bookingId, 'INVOICE', key, invoiceId);
-    return { buffer };
+    const doc = await this.repo.create(userId, bookingId, 'INVOICE', key, invoiceId);
+    return { buffer, documentId: doc.id };
   }
 
   async generatePreviewPdf(userId: string, invoiceId: string): Promise<Buffer> {
@@ -196,11 +196,12 @@ export class DocumentsService {
     return this.generatePdfBuffer(data);
   }
 
-  /** Retrieve the PDF buffer for an already-stored INVOICE Document (used when sending an issued invoice). */
-  async getStoredInvoicePdfBuffer(userId: string, invoiceId: string): Promise<Buffer | null> {
+  /** Retrieve the stored INVOICE Document with its PDF buffer (used when sending an issued invoice). */
+  async getStoredInvoicePdfBuffer(userId: string, invoiceId: string): Promise<{ buffer: Buffer; documentId: string } | null> {
     const doc = await this.repo.findByInvoice(userId, invoiceId);
     if (!doc) return null;
-    return this.storage.getObject(doc.storageKey);
+    const buffer = await this.storage.getObject(doc.storageKey);
+    return { buffer, documentId: doc.id };
   }
 
   // ─── Signed contract PDF ───────────────────────────────────────────────────

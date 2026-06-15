@@ -8,7 +8,6 @@ export class DocumentsRepository {
 
   create(userId: string, bookingId: string | undefined, type: DocumentType, storageKey: string, invoiceId?: string, contractId?: string, name?: string) {
     return this.prisma.document.create({
-      // @ts-expect-error Prisma generated types require bookingId until the schema migration runs
       data: { userId, bookingId: bookingId ?? null, type, storageKey, invoiceId, contractId, name },
     });
   }

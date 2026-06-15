@@ -12,7 +12,7 @@ const sentEmail: Communication = {
   direction: 'OUTBOUND', channel: 'EMAIL', status: 'SENT',
   subject: 'Confirmation of your booking', body: '<p>Dear Jane, your booking is confirmed.</p>',
   sentAt: '2030-04-02T10:00:00Z', bookingId: 'b1', contactId: 'c1', contact,
-  templateId: null, template: null,
+  templateId: null, template: null, document: null,
 };
 
 const pendingEmail: Communication = {
@@ -20,7 +20,7 @@ const pendingEmail: Communication = {
   direction: 'OUTBOUND', channel: 'EMAIL', status: 'PENDING',
   subject: 'Your invoice is attached', body: '<p>Please find your invoice attached.</p>',
   sentAt: null, bookingId: 'b1', contactId: 'c1', contact,
-  templateId: null, template: null,
+  templateId: null, template: null, document: null,
 };
 
 const failedEmail: Communication = {
@@ -28,7 +28,17 @@ const failedEmail: Communication = {
   direction: 'OUTBOUND', channel: 'EMAIL', status: 'FAILED',
   subject: 'Thank you for a wonderful evening', body: '<p>It was a pleasure to perform for you.</p>',
   sentAt: null, bookingId: 'b1', contactId: 'c1', contact,
-  templateId: null, template: null,
+  templateId: null, template: null, document: null,
+};
+
+const invoiceSentEmail: Communication = {
+  id: 'cm4', createdAt: '2030-04-05T11:00:00Z', updatedAt: '2030-04-05T11:00:00Z',
+  direction: 'OUTBOUND', channel: 'EMAIL', status: 'SENT',
+  subject: 'Your balance invoice — Stanton Strings',
+  body: '<p>Dear Jane, please find your invoice attached.</p>',
+  sentAt: '2030-04-05T11:00:00Z', bookingId: 'b1', contactId: 'c1', contact,
+  templateId: 'tmpl1', template: { id: 'tmpl1', name: 'Balance invoice cover', content: {}, builtInType: 'balance_invoice_cover', createdAt: '2030-01-01T00:00:00Z', updatedAt: '2030-01-01T00:00:00Z' },
+  document: { id: 'doc1', invoiceId: 'inv1' },
 };
 
 const meta = {
@@ -67,5 +77,22 @@ export const WithFailedEmail: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Thank you for a wonderful evening')).toBeVisible();
     await expect(canvas.getByText(/Send failed/)).toBeVisible();
+  },
+};
+
+export const WithInvoiceAttachment: Story = {
+  args: { communications: [invoiceSentEmail] },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Your balance invoice — Stanton Strings')).toBeVisible();
+    await expect(canvas.getByRole('link', { name: /Download attached invoice PDF/i })).toBeVisible();
+  },
+};
+
+export const MixedEmails: Story = {
+  args: { communications: [invoiceSentEmail, sentEmail, pendingEmail, failedEmail] },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Your balance invoice — Stanton Strings')).toBeVisible();
+    await expect(canvas.getByRole('link', { name: /Download attached invoice PDF/i })).toBeVisible();
+    await expect(canvas.getByText('Confirmation of your booking')).toBeVisible();
   },
 };

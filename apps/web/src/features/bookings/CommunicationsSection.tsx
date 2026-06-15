@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { AlertTriangle, FileText, Mail } from 'lucide-react';
+import { AlertTriangle, FileText, Mail, Paperclip } from 'lucide-react';
 import { GhostButton } from '@/components/common/GhostButton';
 import {
   Sheet,
@@ -54,6 +54,24 @@ function getStatusPrefix(isFailed: boolean, isPending: boolean): string {
   return '';
 }
 
+function AttachmentLink({ comm }: Readonly<{ comm: Communication }>) {
+  if (!comm.document?.invoiceId) return null;
+  const pdfUrl = `/api/bookings/${comm.bookingId}/invoices/${comm.document.invoiceId}/preview.pdf`;
+  return (
+    <a
+      href={pdfUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-1 text-xs text-primary hover:underline flex-shrink-0"
+      onClick={(e) => e.stopPropagation()}
+      aria-label="Download attached invoice PDF"
+    >
+      <Paperclip size={11} />
+      Invoice PDF
+    </a>
+  );
+}
+
 function CommunicationRow({ comm }: Readonly<{ comm: Communication }>) {
   const [open, setOpen] = useState(false);
   const isFailed = comm.status === 'FAILED';
@@ -70,6 +88,7 @@ function CommunicationRow({ comm }: Readonly<{ comm: Communication }>) {
             {comm.subject}
           </p>
           <p className="text-xs text-muted mt-0.5">{statusPrefix}{meta}</p>
+          <AttachmentLink comm={comm} />
         </div>
       </div>
       <span className="text-xs text-muted flex-shrink-0">

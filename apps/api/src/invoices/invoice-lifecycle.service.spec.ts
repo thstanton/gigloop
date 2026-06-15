@@ -42,8 +42,8 @@ describe('InvoiceLifecycleService', () => {
       voidInvoice: jest.fn().mockResolvedValue({ ...voidedInvoice }),
     };
     mockDocuments = {
-      generateAndStoreInvoicePdf: jest.fn().mockResolvedValue({ buffer: pdfBuffer }),
-      getStoredInvoicePdfBuffer: jest.fn().mockResolvedValue(pdfBuffer),
+      generateAndStoreInvoicePdf: jest.fn().mockResolvedValue({ buffer: pdfBuffer, documentId: 'doc-generated' }),
+      getStoredInvoicePdfBuffer: jest.fn().mockResolvedValue({ buffer: pdfBuffer, documentId: 'doc-stored' }),
     };
     mockComms = { sendEmail: jest.fn().mockResolvedValue(undefined) };
     service = new InvoiceLifecycleService(
@@ -100,7 +100,7 @@ describe('InvoiceLifecycleService', () => {
 
     beforeEach(() => {
       assignNumberOnly.mockClear();
-      mockDocuments.getStoredInvoicePdfBuffer.mockResolvedValue(pdfBuffer);
+      mockDocuments.getStoredInvoicePdfBuffer.mockResolvedValue({ buffer: pdfBuffer, documentId: 'doc-stored' });
     });
 
     it('throws BadRequestException when invoice is not sendable (SENT)', async () => {
@@ -122,6 +122,13 @@ describe('InvoiceLifecycleService', () => {
       await service.send('u1', issuedInvoice, sendDto, assignNumberOnly);
       expect(mockComms.sendEmail).toHaveBeenCalledWith(expect.objectContaining({
         attachments: [{ filename: 'INV-2026-001.pdf', content: pdfBuffer }],
+      }));
+    });
+
+    it('passes documentId from stored PDF to sendEmail for ISSUED invoices (audit trail)', async () => {
+      await service.send('u1', issuedInvoice, sendDto, assignNumberOnly);
+      expect(mockComms.sendEmail).toHaveBeenCalledWith(expect.objectContaining({
+        documentId: 'doc-stored',
       }));
     });
 
@@ -167,6 +174,13 @@ describe('InvoiceLifecycleService', () => {
         to: sendDto.to,
         subject: sendDto.subject,
         bookingId: 'b1',
+      }));
+    });
+
+    it('passes documentId from generated PDF to sendEmail for DRAFT invoices (audit trail)', async () => {
+      await service.send('u1', draftInvoice, sendDto, assignNumberOnly);
+      expect(mockComms.sendEmail).toHaveBeenCalledWith(expect.objectContaining({
+        documentId: 'doc-generated',
       }));
     });
 

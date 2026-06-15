@@ -13,6 +13,8 @@ export interface SendEmailOptions {
   body: string;
   templateId?: string;
   attachments?: Array<{ filename: string; content: Buffer }>;
+  /** ID of the Document attached to this email (set when sending an invoice PDF). */
+  documentId?: string;
 }
 
 @Injectable()
@@ -46,12 +48,12 @@ export class CommunicationsService {
   }
 
   async sendEmail(options: SendEmailOptions): Promise<void> {
-    const { userId, bookingId, contactId, to, subject, body, templateId, attachments } = options;
+    const { userId, bookingId, contactId, to, subject, body, templateId, attachments, documentId } = options;
     if (!bookingId) {
       await this.mail.send({ to, subject, body, attachments });
       return;
     }
-    const communication = await this.repo.createPending(userId, bookingId, contactId, subject, body, templateId);
+    const communication = await this.repo.createPending(userId, bookingId, contactId, subject, body, templateId, documentId);
     try {
       await this.mail.send({ to, subject, body, attachments });
       await this.repo.markSent(communication.id);

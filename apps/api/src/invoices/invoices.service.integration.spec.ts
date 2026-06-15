@@ -150,7 +150,7 @@ describe('InvoicesService.send (integration) — ISSUED invoice', () => {
     // Stub getStoredInvoicePdfBuffer directly — the ISSUED send path calls this instead
     // of generating a new PDF, so we return a buffer without touching R2.
     const storedPdfBuffer = Buffer.from('%PDF-stored');
-    jest.spyOn(shared.documents, 'getStoredInvoicePdfBuffer').mockResolvedValue(storedPdfBuffer);
+    jest.spyOn(shared.documents, 'getStoredInvoicePdfBuffer').mockResolvedValue({ buffer: storedPdfBuffer, documentId: 'doc-stored' });
 
     const mockInvoicesRepo = {
       findOne: jest.fn().mockResolvedValue(issuedInvoice),
@@ -194,6 +194,23 @@ describe('InvoicesService.send (integration) — ISSUED invoice', () => {
     expect(Buffer.isBuffer(attachments[0].content)).toBe(true);
     // Stored PDF is served — no new PDF was generated
     expect(putObjectMock).not.toHaveBeenCalled();
+  });
+
+  it('passes the stored Document id to sendEmail for audit trail (tenant-scoped: documentId belongs to same userId)', async () => {
+    // The communication record is created with documentId so the comms log can link to the PDF.
+    // Document.userId = invoice sender's userId — cross-tenant access is structurally impossible
+    // because Communication.userId + Document.userId are both scoped to the same user at creation.
+    await service.send(userId, bookingId, invoiceId, {
+      to: 'client@example.com',
+      contactId: 'c1',
+      subject: 'Invoice INV-2026-001',
+      body: '<p>Please find attached</p>',
+    });
+
+    expect(sendEmailMock).toHaveBeenCalledTimes(1);
+    const [options] = sendEmailMock.mock.calls[0];
+    expect(options.documentId).toBe('doc-stored');
+    expect(options.userId).toBe(userId);
   });
 });
 

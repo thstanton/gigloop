@@ -537,6 +537,8 @@ export interface Communication {
   contact: Contact;
   templateId: string | null;
   template: Template | null;
+  /** Set when an invoice PDF was attached; null for plain emails. */
+  document: { id: string; invoiceId: string | null } | null;
 }
 
 export interface CreateCommunicationInput {

@@ -422,6 +422,10 @@ model Communication {
   templateId String?
   template   Template? @relation(fields: [templateId], references: [id], onDelete: SetNull)
 
+  // null for non-invoice communications; set when an invoice PDF is attached
+  documentId String?
+  document   Document? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+
   @@index([userId])
   @@index([bookingId])
 }
@@ -449,6 +453,8 @@ model Document {
 
   // null for system-generated documents; required for UPLOAD type
   name String?
+
+  communications Communication[]
 
   @@index([userId])
   @@index([bookingId])

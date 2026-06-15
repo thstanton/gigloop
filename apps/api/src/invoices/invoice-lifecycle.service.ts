@@ -61,7 +61,7 @@ export class InvoiceLifecycleService {
     if (!isSendable(invoice)) {
       throw new BadRequestException('Only issued (or draft) invoices can be sent');
     }
-    const { buffer: pdfBuffer, invoiceNumber } = await this.resolvePdfForSend(userId, invoice, dto, assignNumberOnly);
+    const { buffer: pdfBuffer, invoiceNumber, documentId } = await this.resolvePdfForSend(userId, invoice, dto, assignNumberOnly);
     await this.comms.sendEmail({
       userId,
       bookingId: invoice.bookingId ?? undefined,
@@ -71,6 +71,7 @@ export class InvoiceLifecycleService {
       body: dto.body,
       templateId: dto.templateId,
       attachments: [{ filename: `${invoiceNumber ?? 'invoice'}.pdf`, content: pdfBuffer }],
+      documentId: documentId ?? undefined,
     });
     await this.invoicesRepo.markSentById(invoice.id);
   }
@@ -82,24 +83,24 @@ export class InvoiceLifecycleService {
     invoice: InvoiceForRules & { id: string; bookingId: string | null },
     dto: SendInvoiceDto,
     assignNumberOnly?: (id: string, issueDate: Date, dueDate: Date | null) => Promise<AssignedInvoice>,
-  ): Promise<{ buffer: Buffer; invoiceNumber: string | null }> {
+  ): Promise<{ buffer: Buffer; invoiceNumber: string | null; documentId: string | null }> {
     if (invoice.status === 'ISSUED') {
-      const buffer = await this.documents.getStoredInvoicePdfBuffer(userId, invoice.id);
-      if (!buffer) throw new BadRequestException('Issued invoice has no stored PDF — cannot send');
-      return { buffer, invoiceNumber: invoice.invoiceNumber };
+      const result = await this.documents.getStoredInvoicePdfBuffer(userId, invoice.id);
+      if (!result) throw new BadRequestException('Issued invoice has no stored PDF — cannot send');
+      return { buffer: result.buffer, invoiceNumber: invoice.invoiceNumber, documentId: result.documentId };
     }
     if (!assignNumberOnly) throw new BadRequestException('assignNumberOnly required for draft invoices');
     if (!dto.issueDate) throw new BadRequestException('issueDate is required for draft invoices');
     const issueDate = new Date(dto.issueDate);
     const dueDate = dto.dueDate ? new Date(dto.dueDate) : null;
     const numbered = await assignNumberOnly(invoice.id, issueDate, dueDate);
-    const { buffer } = await this.documents.generateAndStoreInvoicePdf(
+    const { buffer, documentId } = await this.documents.generateAndStoreInvoicePdf(
       userId,
       numbered.id,
       numbered,
       invoice.bookingId ?? undefined,
     );
-    return { buffer, invoiceNumber: numbered.invoiceNumber };
+    return { buffer, invoiceNumber: numbered.invoiceNumber, documentId };
   }
 
   /**
