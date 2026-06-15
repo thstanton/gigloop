@@ -103,6 +103,65 @@ export class InvoicesRepository {
     });
   }
 
+  getUserPaymentTerms(userId: string): Promise<number> {
+    return this.prisma.userProfile
+      .findUnique({ where: { userId }, select: { defaultPaymentTermsDays: true } })
+      .then((p) => p?.defaultPaymentTermsDays ?? 14);
+  }
+
+  /**
+   * Assign an invoice number and transition the invoice to ISSUED.
+   * Idempotent: if the invoice already has a number, only updates dates and status.
+   */
+  async assignAndMarkIssued(
+    userId: string,
+    params: { id: string; bookingId: string; isDeposit: boolean; issueDate: Date; dueDate: Date | null },
+  ) {
+    const { id, bookingId, isDeposit, issueDate, dueDate } = params;
+
+    const existing = await this.prisma.invoice.findUnique({ where: { id }, select: { invoiceNumber: true } });
+    if (existing?.invoiceNumber) {
+      return this.prisma.invoice.update({
+        where: { id },
+        data: { issueDate, dueDate, status: 'ISSUED' },
+        include: invoiceIncludes,
+      });
+    }
+
+    const currentYear = new Date().getFullYear();
+    return this.prisma.$transaction(async (tx) => {
+      const voided = await tx.invoice.findFirst({
+        where: { bookingId, userId, isDeposit, status: 'VOID', invoiceNumber: { not: null } },
+        select: { invoiceNumber: true },
+      });
+
+      const profile = await tx.userProfile.findUnique({ where: { userId } });
+      if (!profile) throw new NotFoundException('User profile not found');
+
+      const prefs = (profile.preferences as Record<string, unknown>) ?? {};
+      const { invoiceNumber, nextSeq, nextYear } = allocate(
+        prefs,
+        currentYear,
+        profile.invoiceNumberSequence,
+        profile.invoiceSequenceYear,
+        voided?.invoiceNumber,
+      );
+
+      if (nextSeq !== profile.invoiceNumberSequence) {
+        await tx.userProfile.update({
+          where: { userId },
+          data: { invoiceNumberSequence: nextSeq, invoiceSequenceYear: nextYear },
+        });
+      }
+
+      return tx.invoice.update({
+        where: { id },
+        data: { invoiceNumber, issueDate, dueDate, status: 'ISSUED' },
+        include: invoiceIncludes,
+      });
+    });
+  }
+
   async assignAndMarkSent(
     userId: string,
     params: { id: string; bookingId: string; isDeposit: boolean; issueDate: Date; dueDate: Date | null },
@@ -236,44 +295,6 @@ export class InvoicesRepository {
     });
   }
 
-  async markPaid(userId: string, bookingId: string, invoiceId: string) {
-    return this.prisma.$transaction(async (tx) => {
-      const invoice = await tx.invoice.findFirst({
-        where: { id: invoiceId, userId, bookingId },
-        select: { isDeposit: true },
-      });
-
-      if (!invoice) return null;
-
-      const updated = await tx.invoice.update({
-        where: { id: invoiceId },
-        data: { status: 'PAID', paidAt: new Date() },
-        include: invoiceIncludes,
-      });
-
-      if (invoice.isDeposit) {
-        await tx.booking.update({ where: { id: bookingId }, data: { depositReceivedAt: new Date() } });
-      }
-
-      return updated;
-    });
-  }
-
-  markPaidBase(invoiceId: string) {
-    return this.prisma.invoice.update({
-      where: { id: invoiceId },
-      data: { status: 'PAID', paidAt: new Date() },
-      include: invoiceIncludes,
-    });
-  }
-
-  setBookingDepositReceivedAt(bookingId: string) {
-    return this.prisma.booking.update({
-      where: { id: bookingId },
-      data: { depositReceivedAt: new Date() },
-    });
-  }
-
   async assignSeriesInvoiceNumberOnly(
     userId: string,
     params: { id: string; seriesId: string; issueDate: Date; dueDate: Date | null },
@@ -323,6 +344,44 @@ export class InvoicesRepository {
         data: { invoiceNumber, issueDate, dueDate },
         include: invoiceIncludes,
       });
+    });
+  }
+
+  async markPaid(userId: string, bookingId: string, invoiceId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const invoice = await tx.invoice.findFirst({
+        where: { id: invoiceId, userId, bookingId },
+        select: { isDeposit: true },
+      });
+
+      if (!invoice) return null;
+
+      const updated = await tx.invoice.update({
+        where: { id: invoiceId },
+        data: { status: 'PAID', paidAt: new Date() },
+        include: invoiceIncludes,
+      });
+
+      if (invoice.isDeposit) {
+        await tx.booking.update({ where: { id: bookingId }, data: { depositReceivedAt: new Date() } });
+      }
+
+      return updated;
+    });
+  }
+
+  markPaidBase(invoiceId: string) {
+    return this.prisma.invoice.update({
+      where: { id: invoiceId },
+      data: { status: 'PAID', paidAt: new Date() },
+      include: invoiceIncludes,
+    });
+  }
+
+  setBookingDepositReceivedAt(bookingId: string) {
+    return this.prisma.booking.update({
+      where: { id: bookingId },
+      data: { depositReceivedAt: new Date() },
     });
   }
 

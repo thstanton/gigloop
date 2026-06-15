@@ -11,16 +11,17 @@ const lineItem = { id: 'li1', createdAt: '2030-04-01T00:00:00Z', updatedAt: '203
 
 const depositDraft: Invoice = {
   id: 'inv1', createdAt: '2030-04-01T10:00:00Z', updatedAt: '2030-04-01T10:00:00Z',
-  status: 'DRAFT', isDeposit: true, invoiceNumber: 'INV-001',
-  issueDate: '2030-04-01', dueDate: '2030-05-01', paidAt: null,
+  status: 'DRAFT', isDeposit: true, invoiceNumber: null,
+  issueDate: null, dueDate: null, paidAt: null,
   bookingId: 'b1', billToContactId: 'c1', billToContact: customer,
   lineItems: [{ ...lineItem, amount: '600.00' }],
 };
 
-const depositSent: Invoice = { ...depositDraft, id: 'inv2', status: 'SENT', invoiceNumber: 'INV-002', dueDate: '2030-07-01' };
-const balanceDraft: Invoice = { ...depositDraft, id: 'inv3', status: 'DRAFT', isDeposit: false, invoiceNumber: 'INV-003', lineItems: [{ ...lineItem, amount: '1400.00' }] };
-const depositPaid: Invoice = { ...depositDraft, id: 'inv4', status: 'PAID', paidAt: '2030-05-02T10:00:00Z' };
-const balancePaid: Invoice = { ...balanceDraft, id: 'inv5', status: 'PAID', paidAt: '2030-07-10T10:00:00Z' };
+const depositIssued: Invoice = { ...depositDraft, id: 'inv6', status: 'ISSUED', invoiceNumber: 'INV-001', issueDate: '2030-04-01', dueDate: '2030-05-01' };
+const depositSent: Invoice = { ...depositDraft, id: 'inv2', status: 'SENT', invoiceNumber: 'INV-002', issueDate: '2030-04-01', dueDate: '2030-07-01' };
+const balanceDraft: Invoice = { ...depositDraft, id: 'inv3', status: 'DRAFT', isDeposit: false, invoiceNumber: null, lineItems: [{ ...lineItem, amount: '1400.00' }] };
+const depositPaid: Invoice = { ...depositDraft, id: 'inv4', status: 'PAID', invoiceNumber: 'INV-001', issueDate: '2030-04-01', dueDate: '2030-05-01', paidAt: '2030-05-02T10:00:00Z' };
+const balancePaid: Invoice = { ...balanceDraft, id: 'inv5', status: 'PAID', invoiceNumber: 'INV-002', issueDate: '2030-04-01', paidAt: '2030-07-10T10:00:00Z' };
 
 const bookingFixture = {
   id: 'b1', fee: '2000.00', sets: [], packages: [],
@@ -76,5 +77,15 @@ export const BothPaid: Story = {
   },
   play: async ({ canvas }) => {
     await expect(canvas.findAllByText('Paid')).resolves.toSatisfy((els: HTMLElement[]) => els.length >= 2);
+  },
+};
+
+export const DepositIssued: Story = {
+  parameters: {
+    msw: { handlers: [...baseHandlers, http.get('/api/bookings/b1/invoices', () => HttpResponse.json([depositIssued]))] },
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.findByText('Deposit')).resolves.toBeVisible();
+    await expect(canvas.findByText('Issued')).resolves.toBeVisible();
   },
 };

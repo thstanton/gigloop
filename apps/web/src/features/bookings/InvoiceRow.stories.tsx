@@ -36,6 +36,8 @@ const meta = {
     isDeletePending: false,
     isVoidPending: false,
     onEdit: noop,
+    onPreview: noop,
+    onIssue: noop,
     onDelete: noop,
     onSend: noop,
     onMarkSent: noop,
@@ -48,13 +50,12 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const DepositDraft: Story = {
-  args: { invoice: { ...baseInvoice, status: 'DRAFT', isDeposit: true } },
+  args: { invoice: { ...baseInvoice, status: 'DRAFT', isDeposit: true, invoiceNumber: null, issueDate: null, dueDate: null } },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Deposit')).toBeVisible();
+    await expect(canvas.getByText('Draft')).toBeVisible();
     // Mobile trigger
     await expect(canvas.getByRole('button', { name: 'Actions' })).toBeVisible();
-    // Desktop primary shortcut
-    await expect(canvas.getByRole('button', { name: 'Send' })).toBeVisible();
   },
 };
 
@@ -62,6 +63,28 @@ export const BalanceDraft: Story = {
   args: { invoice: { ...baseInvoice, status: 'DRAFT', isDeposit: false } },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Balance')).toBeVisible();
+    await expect(canvas.getByText('Draft')).toBeVisible();
+  },
+};
+
+export const DepositIssued: Story = {
+  args: { invoice: { ...baseInvoice, status: 'ISSUED', isDeposit: true } },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Deposit')).toBeVisible();
+    await expect(canvas.getByText('Issued')).toBeVisible();
+    // Send is the primary action for ISSUED
+    await expect(canvas.getByRole('button', { name: 'Send' })).toBeVisible();
+  },
+};
+
+export const IssuedWithPdf: Story = {
+  args: {
+    invoice: { ...baseInvoice, status: 'ISSUED' },
+    pdfUrl: 'https://example.com/invoice.pdf',
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Issued')).toBeVisible();
+    await expect(canvas.getByRole('button', { name: 'Send' })).toBeVisible();
   },
 };
 
@@ -91,6 +114,16 @@ export const SentOverdue: Story = {
   },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Overdue')).toBeVisible();
+  },
+};
+
+export const IssuedPastDueNotOverdue: Story = {
+  args: {
+    // ISSUED past its due date should NOT show as overdue — overdue only applies to SENT
+    invoice: { ...baseInvoice, status: 'ISSUED', dueDate: '2029-01-01' },
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Issued')).toBeVisible();
   },
 };
 

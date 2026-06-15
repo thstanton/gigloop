@@ -3,10 +3,10 @@ import type { Invoice } from '@prisma/client';
 import { InvoicesRepository } from './invoices.repository';
 import { DocumentsService, PreloadedInvoice } from '../documents/documents.service';
 import { CommunicationsService } from '../communications/communications.service';
-import { isSendable, isVoidable, isPayable, InvoiceForRules } from './invoice-transition-rules';
+import { isIssuable, isSendable, isVoidable, isPayable, InvoiceForRules } from './invoice-transition-rules';
 import type { SendInvoiceDto } from './dto/send-invoice.dto';
 
-// The numbered invoice returned by assignNumberOnly: the preloaded shape plus its id.
+// The numbered invoice returned by assignAndMarkIssued / assignNumberOnly: the preloaded shape plus its id.
 export type AssignedInvoice = PreloadedInvoice & { id: string };
 
 @Injectable()
@@ -18,38 +18,73 @@ export class InvoiceLifecycleService {
   ) {}
 
   /**
-   * Send an invoice: generate PDF, store as a Document, email to the client, mark SENT.
+   * Issue a draft invoice: assign invoice number, set dates, lock line items,
+   * and generate + store the PDF as an INVOICE Document.
    *
-   * The `assignNumberOnly` callback is owner-specific — booking and series invoices differ in
-   * which voided invoice they look for when inheriting a number. It must leave the invoice in
-   * DRAFT after assigning the number so the operation is safely retryable if a later step fails.
+   * The `assignAndMarkIssued` callback is owner-specific — booking and series invoices
+   * differ in how they look up a voided number for reuse.
+   */
+  async issueInvoice(
+    userId: string,
+    invoice: InvoiceForRules & { id: string; bookingId: string | null },
+    params: { issueDate: Date; dueDate: Date | null },
+    assignAndMarkIssued: (id: string, issueDate: Date, dueDate: Date | null) => Promise<AssignedInvoice>,
+  ): Promise<void> {
+    if (!isIssuable(invoice)) {
+      throw new BadRequestException('Only draft invoices can be issued');
+    }
+    const issued = await assignAndMarkIssued(invoice.id, params.issueDate, params.dueDate);
+    await this.documents.generateAndStoreInvoicePdf(
+      userId,
+      issued.id,
+      issued,
+      invoice.bookingId ?? undefined,
+    );
+  }
+
+  /**
+   * Send an invoice: attach the stored PDF and email it to the client, then mark SENT.
+   *
+   * For ISSUED invoices (the normal booking invoice flow), the PDF is retrieved from storage —
+   * it is never regenerated, ensuring what was previewed = what is stored = what the client receives.
+   *
+   * For DRAFT invoices (series compat — series invoices have not yet gained the ISSUED state),
+   * the legacy flow applies: assign number, generate + store PDF, send, mark SENT.
+   * The `assignNumberOnly` callback is required for this path.
    */
   async send(
     userId: string,
     invoice: InvoiceForRules & { id: string; bookingId: string | null },
     dto: SendInvoiceDto,
-    assignNumberOnly: (id: string, issueDate: Date, dueDate: Date | null) => Promise<AssignedInvoice>,
+    assignNumberOnly?: (id: string, issueDate: Date, dueDate: Date | null) => Promise<AssignedInvoice>,
   ): Promise<void> {
     if (!isSendable(invoice)) {
-      throw new BadRequestException('Only draft invoices can be sent');
+      throw new BadRequestException('Only issued (or draft) invoices can be sent');
     }
 
-    const issueDate = new Date(dto.issueDate);
-    const dueDate = dto.dueDate ? new Date(dto.dueDate) : null;
+    let pdfBuffer: Buffer;
+    let invoiceNumber: string | null = invoice.invoiceNumber;
 
-    // Step 1: assign invoice number (stays DRAFT — idempotent if PDF/email steps fail)
-    const numbered = await assignNumberOnly(invoice.id, issueDate, dueDate);
+    if (invoice.status === 'ISSUED') {
+      const stored = await this.documents.getStoredInvoicePdfBuffer(userId, invoice.id);
+      if (!stored) throw new BadRequestException('Issued invoice has no stored PDF — cannot send');
+      pdfBuffer = stored;
+    } else {
+      // DRAFT path (series compat): assign number + generate PDF
+      if (!assignNumberOnly) throw new BadRequestException('assignNumberOnly required for draft invoices');
+      const issueDate = new Date(dto.issueDate);
+      const dueDate = dto.dueDate ? new Date(dto.dueDate) : null;
+      const numbered = await assignNumberOnly(invoice.id, issueDate, dueDate);
+      invoiceNumber = numbered.invoiceNumber;
+      const { buffer } = await this.documents.generateAndStoreInvoicePdf(
+        userId,
+        numbered.id,
+        numbered,
+        invoice.bookingId ?? undefined,
+      );
+      pdfBuffer = buffer;
+    }
 
-    // Step 2: generate PDF and store as an INVOICE Document (same for booking and series)
-    const { buffer: pdfBuffer } = await this.documents.generateAndStoreInvoicePdf(
-      userId,
-      numbered.id,
-      numbered,
-      invoice.bookingId ?? undefined,
-    );
-
-    // Step 3: send email
-    const filename = `${numbered.invoiceNumber ?? 'invoice'}.pdf`;
     await this.comms.sendEmail({
       userId,
       bookingId: invoice.bookingId ?? undefined,
@@ -58,26 +93,33 @@ export class InvoiceLifecycleService {
       subject: dto.subject,
       body: dto.body,
       templateId: dto.templateId,
-      attachments: [{ filename, content: pdfBuffer }],
+      attachments: [{ filename: `${invoiceNumber ?? 'invoice'}.pdf`, content: pdfBuffer }],
     });
 
-    // Step 4: mark SENT only after all steps succeed
     await this.invoicesRepo.markSentById(invoice.id);
   }
 
   /**
    * Mark an invoice as sent without emailing.
-   * The `atomicMarkSent` callback handles the owner-specific voided-number lookup and
-   * atomically assigns the number + transitions to SENT in a single transaction.
+   *
+   * For ISSUED invoices: simply transitions to SENT (number and dates are already set).
+   * For DRAFT invoices (series compat): the `atomicMarkSent` callback assigns the number
+   * and transitions to SENT atomically. The callback and dates are required in this case.
    */
-  async markSent<T extends Invoice>(
+  async markSent(
     invoice: InvoiceForRules & { id: string },
-    dto: { issueDate: string; dueDate?: string },
-    atomicMarkSent: (id: string, issueDate: Date, dueDate: Date | null) => Promise<T>,
-  ): Promise<T> {
+    dto: { issueDate?: string; dueDate?: string },
+    atomicMarkSent?: (id: string, issueDate: Date, dueDate: Date | null) => Promise<Invoice>,
+  ): Promise<Invoice> {
     if (!isSendable(invoice)) {
-      throw new BadRequestException('Only draft invoices can be marked as sent');
+      throw new BadRequestException('Only issued (or draft) invoices can be marked as sent');
     }
+    if (invoice.status === 'ISSUED') {
+      return this.invoicesRepo.markSentById(invoice.id);
+    }
+    // DRAFT path (series compat): require the callback and dates
+    if (!atomicMarkSent) throw new BadRequestException('atomicMarkSent required for draft invoices');
+    if (!dto.issueDate) throw new BadRequestException('issueDate is required for draft invoices');
     const issueDate = new Date(dto.issueDate);
     const dueDate = dto.dueDate ? new Date(dto.dueDate) : null;
     return atomicMarkSent(invoice.id, issueDate, dueDate);

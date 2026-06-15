@@ -2,7 +2,8 @@ import { BadRequestException, ConflictException, NotFoundException } from '@nest
 import { SeriesService } from './series.service';
 import { SeriesRepository } from './series.repository';
 import { InvoicesRepository } from '../invoices/invoices.repository';
-import { InvoiceLifecycleService } from '../invoices/invoice-lifecycle.service';
+import type { DocumentsService } from '../documents/documents.service';
+import type { CommunicationsService } from '../communications/communications.service';
 
 type MockRepo = {
   findAll: jest.Mock;
@@ -15,19 +16,13 @@ type MockRepo = {
   findVoidedSeriesInvoiceWithNumber: jest.Mock;
   findActiveSeriesInvoice: jest.Mock;
   createSeriesInvoice: jest.Mock;
+  markSeriesInvoicePaid: jest.Mock;
 };
 
 type MockInvoicesRepo = {
   delete: jest.Mock;
   assignNewSequenceNumber: jest.Mock;
   assignWithInheritedNumber: jest.Mock;
-  assignSeriesInvoiceNumberOnly: jest.Mock;
-};
-
-type MockLifecycle = {
-  send: jest.Mock;
-  markSent: jest.Mock;
-  markPaid: jest.Mock;
   voidInvoice: jest.Mock;
 };
 
@@ -43,6 +38,7 @@ function makeRepo(): MockRepo {
     findVoidedSeriesInvoiceWithNumber: jest.fn(),
     findActiveSeriesInvoice: jest.fn(),
     createSeriesInvoice: jest.fn(),
+    markSeriesInvoicePaid: jest.fn(),
   };
 }
 
@@ -51,18 +47,17 @@ function makeInvoicesRepo(): MockInvoicesRepo {
     delete: jest.fn(),
     assignNewSequenceNumber: jest.fn(),
     assignWithInheritedNumber: jest.fn(),
-    assignSeriesInvoiceNumberOnly: jest.fn(),
+    voidInvoice: jest.fn(),
   };
 }
 
-function makeLifecycle(): MockLifecycle {
-  return {
-    send: jest.fn().mockResolvedValue(undefined),
-    markSent: jest.fn().mockResolvedValue({ status: 'SENT', invoiceNumber: 'INV-2026-001' }),
-    markPaid: jest.fn().mockResolvedValue({ status: 'PAID' }),
-    voidInvoice: jest.fn().mockResolvedValue({ status: 'VOID' }),
-  };
-}
+const mockDocuments = {
+  generatePreviewPdf: jest.fn().mockResolvedValue(Buffer.from('%PDF-test')),
+} as unknown as DocumentsService;
+
+const mockComms = {
+  sendEmail: jest.fn().mockResolvedValue(undefined),
+} as unknown as CommunicationsService;
 
 const seriesWithMeta = {
   id: 's1', createdAt: new Date(), updatedAt: new Date(),
@@ -81,16 +76,17 @@ describe('SeriesService', () => {
   let service: SeriesService;
   let repo: MockRepo;
   let invoicesRepo: MockInvoicesRepo;
-  let lifecycle: MockLifecycle;
 
   beforeEach(() => {
     repo = makeRepo();
     invoicesRepo = makeInvoicesRepo();
-    lifecycle = makeLifecycle();
+    (mockDocuments as unknown as { generatePreviewPdf: jest.Mock }).generatePreviewPdf.mockResolvedValue(Buffer.from('%PDF-test'));
+    (mockComms as unknown as { sendEmail: jest.Mock }).sendEmail.mockResolvedValue(undefined);
     service = new SeriesService(
       repo as unknown as SeriesRepository,
       invoicesRepo as unknown as InvoicesRepository,
-      lifecycle as unknown as InvoiceLifecycleService,
+      mockDocuments,
+      mockComms,
     );
   });
 
@@ -166,16 +162,17 @@ describe('SeriesService', () => {
     const sentInvoice = { id: 'inv1', status: 'SENT', invoiceNumber: 'INV-2026-001' };
     const draftInvoice = { id: 'inv1', status: 'DRAFT', invoiceNumber: null };
 
-    it('delegates to lifecycle.voidInvoice for a sent invoice', async () => {
+    it('calls invoicesRepo.voidInvoice for a sent invoice', async () => {
       repo.findSeriesInvoiceById.mockResolvedValue(sentInvoice);
+      invoicesRepo.voidInvoice.mockResolvedValue({ ...sentInvoice, status: 'VOID' });
       await service.voidInvoice('u1', 's1', 'inv1');
-      expect(lifecycle.voidInvoice).toHaveBeenCalledWith(sentInvoice);
+      expect(invoicesRepo.voidInvoice).toHaveBeenCalledWith('inv1');
     });
 
-    it('throws BadRequestException when voiding a DRAFT invoice (via lifecycle)', async () => {
+    it('throws BadRequestException when voiding a DRAFT invoice', async () => {
       repo.findSeriesInvoiceById.mockResolvedValue(draftInvoice);
-      lifecycle.voidInvoice.mockRejectedValue(new BadRequestException('Draft invoices cannot be voided'));
       await expect(service.voidInvoice('u1', 's1', 'inv1')).rejects.toThrow(BadRequestException);
+      expect(invoicesRepo.voidInvoice).not.toHaveBeenCalled();
     });
 
     it('throws NotFoundException when invoice not found', async () => {
@@ -208,35 +205,31 @@ describe('SeriesService', () => {
   });
 
   describe('sendInvoice', () => {
-    const draftInvoice = { id: 'inv1', status: 'DRAFT', invoiceNumber: null, bookingId: null, seriesId: 's1' };
+    const draftInvoice = { id: 'inv1', status: 'DRAFT', invoiceNumber: null };
+    const numberedInvoice = { id: 'inv1', status: 'DRAFT', invoiceNumber: 'INV-2026-001' };
     const dto = {
       issueDate: '2026-06-01', dueDate: '2026-06-15',
       to: 'client@example.com', contactId: 'c1',
       subject: 'Invoice', body: '<p>Hi</p>',
     };
 
-    it('delegates to lifecycle.send', async () => {
+    beforeEach(() => {
       repo.findSeriesInvoiceById.mockResolvedValue(draftInvoice);
-      await service.sendInvoice('u1', 's1', 'inv1', dto);
-      expect(lifecycle.send).toHaveBeenCalledWith('u1', draftInvoice, dto, expect.any(Function));
+      repo.findVoidedSeriesInvoiceWithNumber.mockResolvedValue(null);
+      invoicesRepo.assignNewSequenceNumber.mockResolvedValue(numberedInvoice);
     });
 
-    it('passes an assignNumberOnly callback that calls assignSeriesInvoiceNumberOnly', async () => {
-      repo.findSeriesInvoiceById.mockResolvedValue(draftInvoice);
-      let capturedCallback: ((id: string, issueDate: Date, dueDate: Date | null) => Promise<unknown>) | undefined;
-      lifecycle.send.mockImplementation(async (_userId, _invoice, _dto, cb) => {
-        capturedCallback = cb;
-      });
-
+    it('calls generatePreviewPdf and sendEmail', async () => {
       await service.sendInvoice('u1', 's1', 'inv1', dto);
+      expect((mockDocuments as unknown as { generatePreviewPdf: jest.Mock }).generatePreviewPdf)
+        .toHaveBeenCalledWith('u1', 'inv1');
+      expect((mockComms as unknown as { sendEmail: jest.Mock }).sendEmail)
+        .toHaveBeenCalledWith(expect.objectContaining({ to: dto.to, subject: dto.subject }));
+    });
 
-      const issueDate = new Date('2026-06-01');
-      const dueDate = new Date('2026-06-15');
-      await capturedCallback!('inv1', issueDate, dueDate);
-
-      expect(invoicesRepo.assignSeriesInvoiceNumberOnly).toHaveBeenCalledWith('u1', {
-        id: 'inv1', seriesId: 's1', issueDate, dueDate,
-      });
+    it('throws BadRequestException when invoice is not DRAFT', async () => {
+      repo.findSeriesInvoiceById.mockResolvedValue({ ...draftInvoice, status: 'SENT' });
+      await expect(service.sendInvoice('u1', 's1', 'inv1', dto)).rejects.toThrow(BadRequestException);
     });
 
     it('throws NotFoundException when invoice not found', async () => {
@@ -249,10 +242,26 @@ describe('SeriesService', () => {
     const draftInvoice = { id: 'inv1', status: 'DRAFT', invoiceNumber: null };
     const dto = { issueDate: '2026-06-01', dueDate: '2026-06-15' };
 
-    it('delegates to lifecycle.markSent', async () => {
+    beforeEach(() => {
       repo.findSeriesInvoiceById.mockResolvedValue(draftInvoice);
+      repo.findVoidedSeriesInvoiceWithNumber.mockResolvedValue(null);
+      invoicesRepo.assignNewSequenceNumber.mockResolvedValue({ id: 'inv1', invoiceNumber: 'INV-2026-001' });
+    });
+
+    it('assigns a number and marks as sent', async () => {
       await service.markSentInvoice('u1', 's1', 'inv1', dto);
-      expect(lifecycle.markSent).toHaveBeenCalledWith(draftInvoice, dto, expect.any(Function));
+      expect(invoicesRepo.assignNewSequenceNumber).toHaveBeenCalledWith(
+        'u1', 'inv1', new Date(dto.issueDate), new Date(dto.dueDate),
+      );
+    });
+
+    it('throws BadRequestException when invoice is not DRAFT', async () => {
+      repo.findSeriesInvoiceById.mockResolvedValue({ ...draftInvoice, status: 'SENT' });
+      await expect(service.markSentInvoice('u1', 's1', 'inv1', dto)).rejects.toThrow(BadRequestException);
+    });
+
+    it('throws BadRequestException when issueDate is not provided', async () => {
+      await expect(service.markSentInvoice('u1', 's1', 'inv1', {})).rejects.toThrow(BadRequestException);
     });
 
     it('throws NotFoundException when invoice not found', async () => {
@@ -264,10 +273,16 @@ describe('SeriesService', () => {
   describe('markPaidInvoice', () => {
     const sentInvoice = { id: 'inv1', status: 'SENT', invoiceNumber: 'INV-2026-001' };
 
-    it('delegates to lifecycle.markPaid', async () => {
+    it('calls repo.markSeriesInvoicePaid', async () => {
       repo.findSeriesInvoiceById.mockResolvedValue(sentInvoice);
+      repo.markSeriesInvoicePaid.mockResolvedValue({ ...sentInvoice, status: 'PAID' });
       await service.markPaidInvoice('u1', 's1', 'inv1');
-      expect(lifecycle.markPaid).toHaveBeenCalledWith(sentInvoice);
+      expect(repo.markSeriesInvoicePaid).toHaveBeenCalledWith('inv1');
+    });
+
+    it('throws BadRequestException when invoice is not SENT', async () => {
+      repo.findSeriesInvoiceById.mockResolvedValue({ id: 'inv1', status: 'DRAFT', invoiceNumber: null });
+      await expect(service.markPaidInvoice('u1', 's1', 'inv1')).rejects.toThrow(BadRequestException);
     });
 
     it('throws NotFoundException when invoice not found', async () => {

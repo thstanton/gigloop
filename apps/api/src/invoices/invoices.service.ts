@@ -4,9 +4,10 @@ import { DocumentsService } from '../documents/documents.service';
 import { ChecklistEvaluatorService } from '../checklist/checklist-evaluator.service';
 import { ChecklistRepository } from '../checklist/checklist.repository';
 import { InvoiceLifecycleService } from './invoice-lifecycle.service';
-import { isEditable } from './invoice-transition-rules';
+import { isEditable, isDeletable } from './invoice-transition-rules';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
+import { IssueInvoiceDto } from './dto/issue-invoice.dto';
 import { SendInvoiceDto } from './dto/send-invoice.dto';
 import { MarkSentDto } from './dto/mark-sent.dto';
 import { CreateLineItemDto } from './dto/create-line-item.dto';
@@ -54,13 +55,50 @@ export class InvoicesService {
   }
 
   async update(userId: string, bookingId: string, id: string, dto: UpdateInvoiceDto) {
-    await this.findOne(userId, bookingId, id);
+    const invoice = await this.findOne(userId, bookingId, id);
+    if (!isEditable(invoice)) throw new BadRequestException('Only draft invoices can be updated');
     return this.repo.update(id, dto);
   }
 
   async delete(userId: string, bookingId: string, id: string) {
-    await this.findOne(userId, bookingId, id);
+    const invoice = await this.findOne(userId, bookingId, id);
+    if (!isDeletable(invoice)) throw new BadRequestException('Only draft invoices can be deleted — void an issued invoice instead');
     return this.repo.delete(id);
+  }
+
+  async issue(userId: string, bookingId: string, id: string, dto: IssueInvoiceDto) {
+    const invoice = await this.findOne(userId, bookingId, id);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const issueDate = dto.issueDate ? new Date(dto.issueDate) : today;
+
+    let dueDate: Date | null = null;
+    if (dto.dueDate) {
+      dueDate = new Date(dto.dueDate);
+    } else {
+      const terms = await this.repo.getUserPaymentTerms(userId);
+      if (terms > 0) {
+        dueDate = new Date(issueDate);
+        dueDate.setDate(dueDate.getDate() + terms);
+      }
+    }
+
+    await this.lifecycle.issueInvoice(
+      userId,
+      invoice,
+      { issueDate, dueDate },
+      (invId, issueDateParam, dueDateParam) =>
+        this.repo.assignAndMarkIssued(userId, {
+          id: invId,
+          bookingId,
+          isDeposit: invoice.isDeposit,
+          issueDate: issueDateParam,
+          dueDate: dueDateParam,
+        }),
+    );
+    await this.evaluator.evaluate(bookingId).catch(() => {});
+    return this.findOne(userId, bookingId, id);
   }
 
   async send(userId: string, bookingId: string, id: string, dto: SendInvoiceDto) {
@@ -84,8 +122,10 @@ export class InvoicesService {
     return this.lifecycle.markSent(
       invoice,
       dto,
-      (invId, issueDate, dueDate) =>
-        this.repo.assignAndMarkSent(userId, { id: invId, bookingId, isDeposit: invoice.isDeposit, issueDate, dueDate }),
+      dto.issueDate
+        ? (invId, issueDate, dueDate) =>
+            this.repo.assignAndMarkSent(userId, { id: invId, bookingId, isDeposit: invoice.isDeposit, issueDate, dueDate })
+        : undefined,
     );
   }
 

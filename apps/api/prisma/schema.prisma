@@ -23,6 +23,7 @@ enum BookingStatus {
 
 enum InvoiceStatus {
   DRAFT
+  ISSUED
   SENT
   PAID
   VOID

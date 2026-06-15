@@ -16,6 +16,7 @@ import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagg
 import { InvoicesService } from './invoices.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
+import { IssueInvoiceDto } from './dto/issue-invoice.dto';
 import { SendInvoiceDto } from './dto/send-invoice.dto';
 import { MarkSentDto } from './dto/mark-sent.dto';
 import { CreateLineItemDto } from './dto/create-line-item.dto';
@@ -71,9 +72,22 @@ export class InvoicesController {
     return this.service.update(req.userId, bookingId, id, dto);
   }
 
+  @ApiOperation({ summary: 'Issue a draft invoice: assign number, lock line items, store PDF' })
+  @ApiResponse({ status: 200, description: 'Invoice issued (ISSUED status)' })
+  @ApiResponse({ status: 400, description: 'Invoice is not a draft' })
+  @Post(':id/issue')
+  issue(
+    @Req() req: AuthedRequest,
+    @Param('bookingId') bookingId: string,
+    @Param('id') id: string,
+    @Body() dto: IssueInvoiceDto,
+  ) {
+    return this.service.issue(req.userId, bookingId, id, dto);
+  }
+
   @ApiOperation({ summary: 'Send an invoice email and mark it Sent' })
   @ApiResponse({ status: 204, description: 'Invoice sent and marked Sent' })
-  @ApiResponse({ status: 400, description: 'Invoice is not a draft' })
+  @ApiResponse({ status: 400, description: 'Invoice is not issued (or draft for series)' })
   @Post(':id/send')
   @HttpCode(204)
   send(

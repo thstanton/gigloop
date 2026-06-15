@@ -196,6 +196,13 @@ export class DocumentsService {
     return this.generatePdfBuffer(data);
   }
 
+  /** Retrieve the PDF buffer for an already-stored INVOICE Document (used when sending an issued invoice). */
+  async getStoredInvoicePdfBuffer(userId: string, invoiceId: string): Promise<Buffer | null> {
+    const doc = await this.repo.findByInvoice(userId, invoiceId);
+    if (!doc) return null;
+    return this.storage.getObject(doc.storageKey);
+  }
+
   // ─── Signed contract PDF ───────────────────────────────────────────────────
 
   async generateAndStoreSignedContractPdf(

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -7,6 +7,8 @@ import { Plus, Trash2 } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
+  SheetFooter,
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
@@ -82,8 +84,9 @@ export default function InvoiceSheet({
   prefill,
 }: Props) {
   const isEdit = !!invoice;
-  const submitLabel = isEdit ? 'Save changes' : 'Create invoice';
   const queryClient = useQueryClient();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingFormValues, setPendingFormValues] = useState<FormValues | null>(null);
 
   const {
     register,
@@ -100,7 +103,11 @@ export default function InvoiceSheet({
   const { fields, append, remove } = useFieldArray({ control, name: 'lineItems' });
 
   useEffect(() => {
-    if (open) reset(buildDefaults(invoice, prefill));
+    if (open) {
+      reset(buildDefaults(invoice, prefill));
+      setConfirmOpen(false);
+      setPendingFormValues(null);
+    }
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const lineItems = watch('lineItems');
@@ -109,7 +116,8 @@ export default function InvoiceSheet({
     return sum + (isNaN(n) ? 0 : n);
   }, 0);
 
-  const createMutation = useMutation({
+  // Save as DRAFT
+  const saveDraftMutation = useMutation({
     mutationFn: (values: FormValues) =>
       apiPost<Invoice>(`/bookings/${bookingId}/invoices`, {
         isDeposit: values.isDeposit,
@@ -123,15 +131,48 @@ export default function InvoiceSheet({
       queryClient.invalidateQueries({ queryKey: ['bookingInvoices', bookingId] });
       queryClient.invalidateQueries({ queryKey: ['bookingChecklist', bookingId] });
       onOpenChange(false);
+      toast({ title: 'Draft saved' });
+    },
+    onError: (error: unknown, variables: FormValues) => {
+      const is409 = error instanceof Response && error.status === 409;
+      const invoiceType = variables.isDeposit ? 'deposit' : 'balance';
+      toast({
+        title: is409
+          ? `A ${invoiceType} invoice already exists — void it before creating a new one`
+          : 'Failed to save draft',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Create DRAFT then immediately issue (DRAFT → ISSUED)
+  const createAndIssueMutation = useMutation({
+    mutationFn: async (values: FormValues) => {
+      const draft = await apiPost<Invoice>(`/bookings/${bookingId}/invoices`, {
+        isDeposit: values.isDeposit,
+        lineItems: values.lineItems.map((item, i) => ({
+          description: item.description,
+          amount: parseFloat(item.amount),
+          order: i,
+        })),
+      });
+      return apiPost<Invoice>(`/bookings/${bookingId}/invoices/${draft.id}/issue`, {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bookingInvoices', bookingId] });
+      queryClient.invalidateQueries({ queryKey: ['bookingChecklist', bookingId] });
+      onOpenChange(false);
       toast({ title: 'Invoice created' });
     },
     onError: (error: unknown, variables: FormValues) => {
       const is409 = error instanceof Response && error.status === 409;
       const invoiceType = variables.isDeposit ? 'deposit' : 'balance';
-      const title = is409
-        ? `A ${invoiceType} invoice already exists — void it before creating a new one`
-        : 'Failed to create invoice';
-      toast({ title, variant: 'destructive' });
+      toast({
+        title: is409
+          ? `A ${invoiceType} invoice already exists — void it before creating a new one`
+          : 'Failed to create invoice',
+        variant: 'destructive',
+      });
     },
   });
 
@@ -180,120 +221,182 @@ export default function InvoiceSheet({
     },
   });
 
-  function onSubmit(values: FormValues) {
-    if (isEdit) {
-      editMutation.mutate(values);
-    } else {
-      createMutation.mutate(values);
-    }
+  function onCreateInvoice(values: FormValues) {
+    setPendingFormValues(values);
+    setConfirmOpen(true);
+  }
+
+  function onConfirmIssue() {
+    if (!pendingFormValues) return;
+    setConfirmOpen(false);
+    createAndIssueMutation.mutate(pendingFormValues);
   }
 
   const showDepositToggle = !isEdit && !hasDepositInvoice;
+  const isBusy = saveDraftMutation.isPending || createAndIssueMutation.isPending || isSubmitting;
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto">
-        <SheetHeader className="mb-6">
-          <SheetTitle>{isEdit ? 'Edit Invoice' : 'New Invoice'}</SheetTitle>
-        </SheetHeader>
+    <>
+      <Sheet open={open} onOpenChange={onOpenChange}>
+        <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto">
+          <SheetHeader className="mb-6">
+            <SheetTitle>{isEdit ? 'Edit Invoice' : 'New Invoice'}</SheetTitle>
+          </SheetHeader>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-          {/* Deposit toggle — create mode only, hidden if booking already has one */}
-          {showDepositToggle && (
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                {...register('isDeposit')}
-                className="h-4 w-4 rounded border-border accent-primary"
-              />
-              <span className="text-sm font-medium text-foreground">Deposit invoice</span>
-            </label>
-          )}
+          <form className="space-y-6">
+            {/* Deposit toggle — create mode only, hidden if booking already has one */}
+            {showDepositToggle && (
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  {...register('isDeposit')}
+                  className="h-4 w-4 rounded border-border accent-primary"
+                />
+                <span className="text-sm font-medium text-foreground">Deposit invoice</span>
+              </label>
+            )}
 
-          {/* Edit mode: show deposit badge (not editable) */}
-          {isEdit && invoice?.isDeposit && (
-            <p className="text-sm text-muted">
-              This is the deposit invoice.
-            </p>
-          )}
+            {/* Edit mode: show deposit badge (not editable) */}
+            {isEdit && invoice?.isDeposit && (
+              <p className="text-sm text-muted">
+                This is the deposit invoice.
+              </p>
+            )}
 
-          {/* Line items */}
-          <div className="space-y-3">
-            <p className="text-sm font-medium text-foreground">Line items</p>
+            {/* Line items */}
+            <div className="space-y-3">
+              <p className="text-sm font-medium text-foreground">Line items</p>
 
-            {fields.map((field, index) => (
-              <div key={field.id} className="flex gap-2 items-start">
-                <div className="flex-1 space-y-1">
-                  <Input
-                    placeholder="Description"
-                    {...register(`lineItems.${index}.description`)}
-                  />
-                  {errors.lineItems?.[index]?.description && (
-                    <p className="text-sm text-status-cancelled">
-                      {errors.lineItems[index].description?.message}
-                    </p>
-                  )}
+              {fields.map((field, index) => (
+                <div key={field.id} className="flex gap-2 items-start">
+                  <div className="flex-1 space-y-1">
+                    <Input
+                      placeholder="Description"
+                      {...register(`lineItems.${index}.description`)}
+                    />
+                    {errors.lineItems?.[index]?.description && (
+                      <p className="text-sm text-status-cancelled">
+                        {errors.lineItems[index].description?.message}
+                      </p>
+                    )}
+                  </div>
+                  <div className="w-28 space-y-1">
+                    <Input
+                      placeholder="0.00"
+                      inputMode="decimal"
+                      {...register(`lineItems.${index}.amount`)}
+                    />
+                    {errors.lineItems?.[index]?.amount && (
+                      <p className="text-sm text-status-cancelled">
+                        {errors.lineItems[index].amount?.message}
+                      </p>
+                    )}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => remove(index)}
+                    disabled={fields.length === 1}
+                    className="mt-0.5 flex-shrink-0"
+                    aria-label="Remove line item"
+                  >
+                    <Trash2 size={14} />
+                  </Button>
                 </div>
-                <div className="w-28 space-y-1">
-                  <Input
-                    placeholder="0.00"
-                    inputMode="decimal"
-                    {...register(`lineItems.${index}.amount`)}
-                  />
-                  {errors.lineItems?.[index]?.amount && (
-                    <p className="text-sm text-status-cancelled">
-                      {errors.lineItems[index].amount?.message}
-                    </p>
-                  )}
-                </div>
+              ))}
+
+              {errors.lineItems?.root && (
+                <p className="text-sm text-status-cancelled">{errors.lineItems.root.message}</p>
+              )}
+
+              {errors.lineItems?.message && (
+                <p className="text-sm text-status-cancelled">{errors.lineItems.message}</p>
+              )}
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => append({ serverId: undefined, description: '', amount: '' })}
+              >
+                <Plus size={14} className="mr-1.5" />
+                Add line item
+              </Button>
+            </div>
+
+            {/* Total */}
+            {total > 0 && (
+              <div className="flex justify-between items-center border-t border-border pt-3">
+                <span className="text-sm font-medium text-foreground">Total</span>
+                <span className="text-sm font-semibold text-foreground">
+                  {total.toLocaleString('en-GB', { style: 'currency', currency: 'GBP' })}
+                </span>
+              </div>
+            )}
+
+            {/* Actions */}
+            {isEdit ? (
+              <Button
+                type="button"
+                disabled={isBusy}
+                className="w-full"
+                onClick={handleSubmit((v) => editMutation.mutate(v))}
+              >
+                {editMutation.isPending ? 'Saving…' : 'Save changes'}
+              </Button>
+            ) : (
+              <div className="flex flex-col gap-2">
                 <Button
                   type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => remove(index)}
-                  disabled={fields.length === 1}
-                  className="mt-0.5 flex-shrink-0"
-                  aria-label="Remove line item"
+                  disabled={isBusy}
+                  className="w-full"
+                  onClick={handleSubmit(onCreateInvoice)}
                 >
-                  <Trash2 size={14} />
+                  {createAndIssueMutation.isPending ? 'Creating…' : 'Create invoice'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={isBusy}
+                  className="w-full"
+                  onClick={handleSubmit((v) => saveDraftMutation.mutate(v))}
+                >
+                  {saveDraftMutation.isPending ? 'Saving…' : 'Save draft'}
                 </Button>
               </div>
-            ))}
-
-            {errors.lineItems?.root && (
-              <p className="text-sm text-status-cancelled">{errors.lineItems.root.message}</p>
             )}
+          </form>
+        </SheetContent>
+      </Sheet>
 
-            {errors.lineItems?.message && (
-              <p className="text-sm text-status-cancelled">{errors.lineItems.message}</p>
-            )}
-
+      {/* Issue confirmation: warns that issuing is irreversible */}
+      <Sheet open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <SheetContent side="bottom" aria-describedby="confirm-desc">
+          <SheetHeader>
+            <SheetTitle>Create and lock this invoice?</SheetTitle>
+            <SheetDescription id="confirm-desc">
+              Once issued, this invoice is locked. To make changes, you'll need to void it and create a new one.
+              A PDF will be generated and an invoice number assigned.
+            </SheetDescription>
+          </SheetHeader>
+          <SheetFooter className="mt-4">
             <Button
-              type="button"
               variant="outline"
-              size="sm"
-              onClick={() => append({ serverId: undefined, description: '', amount: '' })}
+              onClick={() => setConfirmOpen(false)}
+              disabled={createAndIssueMutation.isPending}
             >
-              <Plus size={14} className="mr-1.5" />
-              Add line item
+              Cancel
             </Button>
-          </div>
-
-          {/* Total */}
-          {total > 0 && (
-            <div className="flex justify-between items-center border-t border-border pt-3">
-              <span className="text-sm font-medium text-foreground">Total</span>
-              <span className="text-sm font-semibold text-foreground">
-                {total.toLocaleString('en-GB', { style: 'currency', currency: 'GBP' })}
-              </span>
-            </div>
-          )}
-
-          <Button type="submit" disabled={isSubmitting} className="w-full">
-            {isSubmitting ? 'Saving…' : submitLabel}
-          </Button>
-        </form>
-      </SheetContent>
-    </Sheet>
+            <Button
+              onClick={onConfirmIssue}
+              disabled={createAndIssueMutation.isPending}
+            >
+              {createAndIssueMutation.isPending ? 'Creating…' : 'Create invoice'}
+            </Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
+    </>
   );
 }
