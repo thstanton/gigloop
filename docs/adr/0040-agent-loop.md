@@ -3,6 +3,8 @@
 **Status:** Accepted
 **Date:** 2026-06-14
 
+> ⚠️ **Partly superseded by [ADR-0045](0045-ralph-autonomy-over-machinery.md) (2026-06-15).** §4 (bash-filtered selection), §5 (bash-side gate cross-check / `loop-decision`), §9 (three trust rungs), and the 2026-06-15 amendment's in-iteration gate-gap mechanism are reversed there: the loop moves judgement into the agent, makes CI the sole ungameable gate, kills `progress.md` and per-issue `K`, collapses to two entry points, and makes `gh` labels the loop's state machine. Read ADR-0045 first; treat the sections it names below as historical.
+
 ## Context
 
 ADR-0030 established an agent-native workflow: deterministic checks automated, judgement front-loaded into a planning gate, advisory tools that inform rather than trap, and **session-scoped increments where the agent stops by default at every commit boundary and hands off to a human** — because the agent's context degrades across a long session and ploughing on through it produces bad work.
