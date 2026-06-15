@@ -132,6 +132,124 @@ describe('InvoicesService.send (integration)', () => {
   });
 });
 
+// ─── send integration — ISSUED path ───────────────────────────────────────────
+// ISSUED invoices must serve the already-stored PDF rather than re-generating.
+
+describe('InvoicesService.send (integration) — ISSUED invoice', () => {
+  let service: InvoicesService;
+  let sendEmailMock: jest.Mock;
+  let putObjectMock: jest.Mock;
+
+  beforeEach(() => {
+    const shared = makeSharedSetup();
+    putObjectMock = shared.putObjectMock;
+
+    sendEmailMock = jest.fn().mockResolvedValue(undefined);
+    const mockComms = { sendEmail: sendEmailMock } as unknown as import('../communications/communications.service').CommunicationsService;
+
+    // Stub getStoredInvoicePdfBuffer directly — the ISSUED send path calls this instead
+    // of generating a new PDF, so we return a buffer without touching R2.
+    const storedPdfBuffer = Buffer.from('%PDF-stored');
+    jest.spyOn(shared.documents, 'getStoredInvoicePdfBuffer').mockResolvedValue(storedPdfBuffer);
+
+    const mockInvoicesRepo = {
+      findOne: jest.fn().mockResolvedValue(issuedInvoice),
+      markSentById: jest.fn().mockResolvedValue({ ...issuedInvoice, status: 'SENT' }),
+      markPaidBase: jest.fn(),
+      voidInvoice: jest.fn(),
+      getUserPaymentTerms: jest.fn().mockResolvedValue(14),
+    };
+
+    const lifecycle = new InvoiceLifecycleService(
+      mockInvoicesRepo as unknown as InvoicesRepository,
+      shared.documents,
+      mockComms,
+    );
+
+    const mockEvaluator = { evaluate: jest.fn().mockResolvedValue(undefined) } as unknown as import('../checklist/checklist-evaluator.service').ChecklistEvaluatorService;
+    const mockChecklistRepo = { resetItemByKey: jest.fn() } as unknown as import('../checklist/checklist.repository').ChecklistRepository;
+
+    service = new InvoicesService(
+      mockInvoicesRepo as unknown as InvoicesRepository,
+      lifecycle,
+      shared.documents,
+      mockEvaluator,
+      mockChecklistRepo,
+    );
+  });
+
+  it('sends the stored PDF without regenerating (putObject not called)', async () => {
+    await service.send(userId, bookingId, invoiceId, {
+      // issueDate omitted — ISSUED invoices already have dates set at issue time
+      to: 'client@example.com',
+      contactId: 'c1',
+      subject: 'Invoice INV-2026-001',
+      body: '<p>Please find attached</p>',
+    });
+
+    expect(sendEmailMock).toHaveBeenCalledTimes(1);
+    const [{ attachments }] = sendEmailMock.mock.calls[0];
+    expect(attachments).toHaveLength(1);
+    expect(attachments[0].filename).toBe('INV-2026-001.pdf');
+    expect(Buffer.isBuffer(attachments[0].content)).toBe(true);
+    // Stored PDF is served — no new PDF was generated
+    expect(putObjectMock).not.toHaveBeenCalled();
+  });
+});
+
+// ─── markSent integration — ISSUED path ───────────────────────────────────────
+// For ISSUED invoices, mark-sent simply transitions to SENT — no PDF generation needed
+// because the PDF was already stored at issue time.
+
+describe('InvoicesService.markSent (integration) — ISSUED invoice', () => {
+  let service: InvoicesService;
+  let putObjectMock: jest.Mock;
+  let markSentByIdMock: jest.Mock;
+
+  beforeEach(() => {
+    const shared = makeSharedSetup();
+    putObjectMock = shared.putObjectMock;
+
+    const mockComms = { sendEmail: jest.fn() } as unknown as import('../communications/communications.service').CommunicationsService;
+
+    markSentByIdMock = jest.fn().mockResolvedValue({ ...issuedInvoice, status: 'SENT' });
+    const mockInvoicesRepo = {
+      findOne: jest.fn().mockResolvedValue(issuedInvoice),
+      markSentById: markSentByIdMock,
+      markPaidBase: jest.fn(),
+      voidInvoice: jest.fn(),
+      getUserPaymentTerms: jest.fn().mockResolvedValue(14),
+    };
+
+    const lifecycle = new InvoiceLifecycleService(
+      mockInvoicesRepo as unknown as InvoicesRepository,
+      shared.documents,
+      mockComms,
+    );
+
+    const mockEvaluator = { evaluate: jest.fn().mockResolvedValue(undefined) } as unknown as import('../checklist/checklist-evaluator.service').ChecklistEvaluatorService;
+    const mockChecklistRepo = { resetItemByKey: jest.fn() } as unknown as import('../checklist/checklist.repository').ChecklistRepository;
+
+    service = new InvoicesService(
+      mockInvoicesRepo as unknown as InvoicesRepository,
+      lifecycle,
+      shared.documents,
+      mockEvaluator,
+      mockChecklistRepo,
+    );
+  });
+
+  it('transitions ISSUED to SENT without generating a new PDF', async () => {
+    // Dates omitted — ISSUED invoice already has dates set at issue time
+    const result = await service.markSent(userId, bookingId, invoiceId, {});
+
+    expect(result.status).toBe('SENT');
+    // PDF was stored at issue time — mark-sent must not generate or store another
+    expect(putObjectMock).not.toHaveBeenCalled();
+    expect(markSentByIdMock).toHaveBeenCalledWith(invoiceId);
+  });
+});
+
 // ─── issue integration ─────────────────────────────────────────────────────────
 
 describe('InvoicesService.issue (integration)', () => {

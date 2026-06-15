@@ -136,8 +136,12 @@ export class SeriesService {
     const invoice = await this.repo.findSeriesInvoiceById(userId, seriesId, invoiceId);
     if (!invoice) throw new NotFoundException('Invoice not found');
     if (invoice.status !== 'DRAFT') throw new BadRequestException('Only draft invoices can be sent');
+    if (!dto.issueDate) throw new BadRequestException('issueDate is required');
 
-    const sentInvoice = await this.assignSeriesInvoiceNumber(userId, seriesId, invoiceId, dto);
+    const sentInvoice = await this.assignSeriesInvoiceNumber(userId, seriesId, invoiceId, {
+      issueDate: dto.issueDate,
+      dueDate: dto.dueDate,
+    });
 
     const pdfBuffer = await this.documents.generatePreviewPdf(userId, invoiceId);
     await this.comms.sendEmail({

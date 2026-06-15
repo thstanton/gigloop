@@ -73,6 +73,8 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   prefill?: { isDeposit: boolean; amount?: number; description?: string };
+  /** Called after create+issue completes — use to open the compose sheet for the new invoice. */
+  onAfterIssue?: (invoice: Invoice) => void;
 }
 
 export default function InvoiceSheet({
@@ -82,6 +84,7 @@ export default function InvoiceSheet({
   open,
   onOpenChange,
   prefill,
+  onAfterIssue,
 }: Props) {
   const isEdit = !!invoice;
   const queryClient = useQueryClient();
@@ -145,7 +148,7 @@ export default function InvoiceSheet({
     },
   });
 
-  // Create DRAFT then immediately issue (DRAFT → ISSUED)
+  // Create DRAFT then immediately issue (DRAFT → ISSUED), then open compose sheet
   const createAndIssueMutation = useMutation({
     mutationFn: async (values: FormValues) => {
       const draft = await apiPost<Invoice>(`/bookings/${bookingId}/invoices`, {
@@ -158,11 +161,11 @@ export default function InvoiceSheet({
       });
       return apiPost<Invoice>(`/bookings/${bookingId}/invoices/${draft.id}/issue`, {});
     },
-    onSuccess: () => {
+    onSuccess: (issuedInvoice) => {
       queryClient.invalidateQueries({ queryKey: ['bookingInvoices', bookingId] });
       queryClient.invalidateQueries({ queryKey: ['bookingChecklist', bookingId] });
       onOpenChange(false);
-      toast({ title: 'Invoice created' });
+      onAfterIssue?.(issuedInvoice);
     },
     onError: (error: unknown, variables: FormValues) => {
       const is409 = error instanceof Response && error.status === 409;

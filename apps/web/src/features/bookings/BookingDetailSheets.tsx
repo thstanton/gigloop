@@ -161,6 +161,10 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
         prefill={invoiceSheetPrefill}
         open={sheet === 'invoice'}
         onOpenChange={(open) => { if (!open) setSearchParams({}); }}
+        onAfterIssue={(inv) => {
+          const templateType = inv.isDeposit ? 'deposit_invoice_cover' : 'balance_invoice_cover';
+          setSearchParams({ sheet: 'compose', templateType });
+        }}
       />
       <ComposeEmailSheet
         bookingId={bookingId}

@@ -121,7 +121,10 @@ function ComposeEmailSheetBody({
   const selectedType = selectedTemplate?.builtInType ?? null;
   const invoiceId = getInvoiceIdForTemplate(selectedType, invoices);
   const invoiceForSend = invoices.find((i) => i.id === invoiceId);
-  const showDateFields = !!invoiceId && invoiceForSend?.status === 'DRAFT';
+  // Route to invoice send endpoint for any non-void invoice template (ISSUED or DRAFT).
+  const isInvoiceEmail = !!invoiceId;
+  // Date fields are only needed for DRAFT invoices — ISSUED already have dates from issue time.
+  const showDateFields = isInvoiceEmail && invoiceForSend?.status === 'DRAFT';
 
   // Seed date defaults when switching to an invoice template
   useEffect(() => {
@@ -167,10 +170,10 @@ function ComposeEmailSheetBody({
     mutationFn: () => {
       const body = editor?.getHTML() ?? '';
 
-      if (showDateFields && invoiceId) {
+      if (isInvoiceEmail && invoiceId) {
         return apiPostVoid(`/bookings/${bookingId}/invoices/${invoiceId}/send`, {
-          issueDate: formIssueDate,
-          dueDate: formDueDate || undefined,
+          // issueDate/dueDate only for DRAFT; ISSUED invoices have dates from issue time
+          ...(showDateFields && { issueDate: formIssueDate, dueDate: formDueDate || undefined }),
           to: booking.customer.email,
           contactId: booking.customerId,
           subject,
@@ -190,7 +193,7 @@ function ComposeEmailSheetBody({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bookingCommunications', bookingId] });
       queryClient.invalidateQueries({ queryKey: ['bookingChecklist', bookingId] });
-      if (showDateFields && invoiceId) {
+      if (isInvoiceEmail && invoiceId) {
         queryClient.invalidateQueries({ queryKey: ['bookingInvoices', bookingId] });
         queryClient.invalidateQueries({ queryKey: ['bookingDocuments', bookingId] });
       }
