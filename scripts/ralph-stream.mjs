@@ -11,8 +11,8 @@
 //   • writes per-iteration metrics (turns / tokens / cost / duration) to <metricsPath>
 //     as shell-greppable KEY=VALUE lines, for ralph.sh's heartbeat;
 //   • rewrites <currentPath> (ralph.current) after every event as a live snapshot;
-//   • prints ONLY the agent's final text on STDOUT, so ralph.sh's <selected>/<promise>
-//     greps downstream are unchanged (this is the loop's decision channel).
+//   • prints ONLY the agent's final text on STDOUT, so ralph.sh's <promise>
+//     grep downstream is unchanged (this is the loop's decision channel).
 //
 // Robustness: a malformed line or event never throws — the stream keeps flowing. A
 // crashed claude (no result event) still yields a metrics file with RESULT_SEEN=false.
@@ -161,8 +161,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   rl.on('close', () => {
     if (metricsPath) safe(() => fs.writeFileSync(metricsPath, metricsLines(state, { durationFallback: elapsed() }).join('\n') + '\n'));
     writeCurrent();
-    // The ONLY thing on stdout: the agent's final text, so the <selected>/<promise>
-    // greps in ralph.sh behave exactly as they did with plain `claude -p`.
+    // The ONLY thing on stdout: the agent's final text, so the <promise>
+    // grep in ralph.sh behaves exactly as it did with plain `claude -p`.
     if (state.finalText) process.stdout.write(state.finalText);
   });
 }
