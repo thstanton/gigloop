@@ -43,21 +43,18 @@ set -euo pipefail
 
 ROOT=$(git rev-parse --show-toplevel)
 PROMPT_FILE="$ROOT/PROMPT.md"
-PROGRESS="$ROOT/progress.md"
 LOG="$ROOT/ralph.log"
 RUNLOG_DIR="$ROOT/logs"           # per-iteration raw stream dumps + metrics (gitignored)
 CURRENT="$ROOT/ralph.current"     # live status snapshot, rewritten per stream event (gitignored)
-K="${RALPH_K:-3}"
 MAX="${RALPH_MAX:-20}"
 STALL="${RALPH_STALL:-2}"
 # RALPH_MAX_TURNS / RALPH_MAX_USD (both optional, both unset = no cap, behaviour
 # unchanged): per-iteration ceilings passed to `claude --max-turns` / `--max-budget-usd`.
 # Either one ENFORCES the cold-restart handoff (ADR-0040): a capped iteration ends
-# (result subtype `error_max_turns` for the turn cap), progress.md carries state, the
-# next cold restart resumes. `--max-turns` is functional in this CLI (v2.1.177) though
-# it is absent from `claude --help`. Set the cap ABOVE a healthy slice's measured
-# turns= / cost= (now in every heartbeat) — too low and every iteration is cut
-# mid-slice, fails the gate, and burns a K attempt. A rot-ceiling, not a speed dial.
+# (result subtype `error_max_turns` for the turn cap), the next cold restart resumes.
+# `--max-turns` is functional in this CLI (v2.1.177) though absent from `claude --help`.
+# Set the cap ABOVE a healthy slice's measured turns= / cost= (in every heartbeat) —
+# too low and every iteration is cut mid-slice. A rot-ceiling, not a speed dial.
 
 # Per-iteration stream artefact paths — set fresh in cold_pass, read back for the
 # heartbeat. run_cold runs in a `$(...)` subshell that inherits these; the FILES the
@@ -100,41 +97,6 @@ done
 [[ -f "$PROMPT_FILE" ]] || {
   echo "ralph.sh: PROMPT.md not found — implement #411 first" >&2
   exit 1
-}
-
-# ---------------------------------------------------------------------------
-# progress.md helpers
-# ---------------------------------------------------------------------------
-read_attempts() {
-  local issue=$1
-  # progress.md is shared with the agent, so this counter can be duplicated or garbled
-  # (the agent has appended `attempts_<n>:` lines mimicking our format). Collapse every
-  # matching line to the MAX numeric value (default 0) — always a SINGLE clean integer,
-  # so the `$(( ))` in increment_attempts and the `-ge K` cap checks can never receive a
-  # multi-line value. Max is the conservative choice for the cap (never under-counts
-  # attempts → never loops past K); non-numeric values count as 0.
-  [[ -f "$PROGRESS" ]] || { echo 0; return; }
-  grep -E "^attempts_${issue}:" "$PROGRESS" 2>/dev/null \
-    | awk -F: '{ gsub(/[^0-9]/, "", $2); v = $2 + 0; if (v > m) m = v } END { print m + 0 }'
-}
-
-increment_attempts() {
-  local issue=$1
-  local current next
-  current=$(read_attempts "$issue")    # guaranteed a single int → arithmetic is safe
-  next=$((current + 1))
-  touch "$PROGRESS"
-  # Self-heal: delete EVERY attempts_<issue> line (collapsing any agent-introduced
-  # duplicates) then append exactly one canonical line. Keeps the counter single-valued
-  # no matter what the agent wrote into the shared scratchpad.
-  sed -i.bak "/^attempts_${issue}:/d" "$PROGRESS"
-  rm -f "${PROGRESS}.bak"
-  echo "attempts_${issue}: $next" >> "$PROGRESS"
-  echo "$next"
-}
-
-log_progress() {
-  echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) $*" >> "$PROGRESS"
 }
 
 # Append a structured line to ralph.log (tailable AFK heartbeat).
@@ -213,7 +175,6 @@ escalate() {
   local issue=$1 reason=$2
   echo "Ralph is handing #$issue to a grown-up — $reason" >&2
   gh issue edit "$issue" --remove-label "ready-for-agent" --add-label "ready-for-human" >/dev/null 2>&1 || true
-  log_progress "ESCALATE #$issue: $reason"
   heartbeat "event=ESCALATE issue=$issue reason=$reason"
   notify "Ralph is handing #$issue to a grown-up — $reason (mode=$MODE)"
 }
@@ -242,7 +203,6 @@ finish_run() {
   fi
 
   echo "Ralph is stuck — couldn't push/open the PR (no GitHub auth?). The work is committed locally; push + open it yourself. Ralph tried his best!" >&2
-  log_progress "COMPLETE-LOCAL branch=$branch — push + open PR manually (or set sandbox GitHub auth)"
   heartbeat "event=COMPLETE-LOCAL branch=$branch"
   notify "Ralph is done but stuck on $branch — all work committed; push + open the PR yourself!"
   exit 0
@@ -281,9 +241,8 @@ run_cold() {
   local git_log runbook_ctx prompt
 
   # ADR-0045: the agent's narrative memory across cold restarts is the git log (full
-  # bodies — that is where the last iteration left its decisions + blockers), NOT a
-  # progress.md scratchpad. Inject recent commits + the runbook (if it exists yet —
-  # #457 scaffolds it; inject gracefully until then) + the candidate corpus.
+  # bodies — that is where the last iteration left its decisions + blockers). Inject
+  # recent commits + the runbook + the candidate corpus.
   git_log=$(git log -n "${RALPH_LOG_N:-15}" --no-color 2>/dev/null || true)
 
   runbook_ctx="(no runbook yet — docs/agents/ralph-runbook.md not present)"
@@ -389,7 +348,6 @@ cold_pass() {
   RUN_CLAUDE_ERR="$RUNLOG_DIR/ralph-${run_ts}-$$.claude-stderr"
 
   echo "Ralph is calling an agent (mode=$MODE)! Watch him go: tail -f $RUN_JSONL | watch cat $CURRENT" >&2
-  log_progress "START mode=$MODE"
 
   # Capture run_cold's stdout — the agent's final message — and route on it (ADR-0045 §5,
   # #453). The agent JUDGES doneness and emits a wrapped <promise> token; terminal-signal.mjs
@@ -418,7 +376,6 @@ cold_pass() {
   local worked_issue
   worked_issue=$(read_worked_issue)
 
-  log_progress "END mode=$MODE result=$(read_metric RESULT_SUBTYPE "$RUN_METRICS") turns=$(read_metric NUM_TURNS "$RUN_METRICS")"
   heartbeat "mode=$MODE prd=$PRD_N issue=${worked_issue:-unknown} $mstr signal=$RALPH_SIGNAL"
 }
 
@@ -457,7 +414,6 @@ run_afk() {
         local n="${RALPH_HANDOFF_N:-some}"
         echo "Ralph is handing off — $n slices need a human. No PR (HITL/blocked work remains)." >&2
         heartbeat "mode=afk prd=$PRD_N event=HANDOFF need_human=$n pass=$i"
-        log_progress "HANDOFF mode=afk prd=$PRD_N need_human=$n — no PR; HITL/blocked work remains"
         notify "Ralph stopped on PRD #$PRD_N — $n slices need a human. No PR opened (afk)."
         exit 0
         ;;
