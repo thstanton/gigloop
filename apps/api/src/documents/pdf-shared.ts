@@ -56,8 +56,8 @@ export function buildPdfFooter(): (currentPage: number, pageCount: number) => Co
 export function buildDocumentTitle(title: string): Content {
   return {
     text: title,
-    font: 'Caveat',
-    fontSize: 36,
+    font: 'PlayfairDisplay',
+    fontSize: 28,
     color: '#1a1a1a',
     margin: [0, 12, 0, 20],
   };

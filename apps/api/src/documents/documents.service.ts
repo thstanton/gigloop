@@ -30,8 +30,11 @@ pdfmake.addFonts({
     italics: join(fontDir, 'Roboto-Italic.ttf'),
     bolditalics: join(fontDir, 'Roboto-MediumItalic.ttf'),
   },
-  Caveat: {
-    normal: join(customFontsDir, 'Caveat-Regular.ttf'),
+  PlayfairDisplay: {
+    normal: join(customFontsDir, 'PlayfairDisplay-Medium.ttf'),
+    bold: join(customFontsDir, 'PlayfairDisplay-SemiBold.ttf'),
+    italics: join(customFontsDir, 'PlayfairDisplay-Medium.ttf'),
+    bolditalics: join(customFontsDir, 'PlayfairDisplay-SemiBold.ttf'),
   },
   Commissioner: {
     normal: join(customFontsDir, 'Commissioner-Regular.ttf'),
@@ -48,7 +51,8 @@ pdfmake.setUrlAccessPolicy(() => true);
 const requiredFonts = [
   join(customFontsDir, 'Commissioner-Regular.ttf'),
   join(customFontsDir, 'Commissioner-Medium.ttf'),
-  join(customFontsDir, 'Caveat-Regular.ttf'),
+  join(customFontsDir, 'PlayfairDisplay-Medium.ttf'),
+  join(customFontsDir, 'PlayfairDisplay-SemiBold.ttf'),
 ];
 for (const font of requiredFonts) {
   if (!existsSync(font)) {
