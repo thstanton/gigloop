@@ -6,6 +6,7 @@ import { CreateCommunicationDto } from './dto/create-communication.dto';
 const include = {
   contact: true,
   template: true,
+  document: { select: { id: true, invoiceId: true } },
 } as const;
 
 @Injectable()
@@ -64,6 +65,7 @@ export class CommunicationsRepository {
     subject: string,
     body: string,
     templateId?: string,
+    documentId?: string,
   ) {
     return this.prisma.communication.create({
       data: {
@@ -74,6 +76,7 @@ export class CommunicationsRepository {
         body,
         status: CommunicationStatus.PENDING,
         ...(templateId ? { templateId } : {}),
+        ...(documentId ? { documentId } : {}),
       },
     });
   }

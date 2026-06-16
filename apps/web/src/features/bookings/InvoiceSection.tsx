@@ -21,6 +21,7 @@ export interface SeriesInvoiceSectionProps {
   isLoading: boolean;
   onCreateInvoice: () => void;
   onEdit: (invoice: SeriesInvoice) => void;
+  onIssue: (invoice: SeriesInvoice) => void;
   onDelete: (invoice: SeriesInvoice) => void;
   onSend: (invoice: SeriesInvoice) => void;
   onMarkSent: (invoice: SeriesInvoice) => void;
@@ -34,6 +35,7 @@ export function SeriesInvoiceSection({
   isLoading,
   onCreateInvoice,
   onEdit,
+  onIssue,
   onDelete,
   onSend,
   onMarkSent,
@@ -81,6 +83,8 @@ export function SeriesInvoiceSection({
         isDeletePending={false}
         isVoidPending={false}
         onEdit={() => onEdit(invoice)}
+        onPreview={() => {}}
+        onIssue={() => onIssue(invoice)}
         onDelete={() => onDelete(invoice)}
         onSend={() => onSend(invoice)}
         onMarkSent={() => onMarkSent(invoice)}
@@ -124,6 +128,10 @@ export default function InvoiceSection({ bookingId }: Readonly<InvoiceSectionPro
 
   const actions = useBookingActions(bookingId);
   const invoiceActions = useInvoiceActions(bookingId);
+
+  function openPreviewPdf(invoice: Invoice) {
+    window.open(`/api/bookings/${bookingId}/invoices/${invoice.id}/preview.pdf`, '_blank', 'noopener,noreferrer');
+  }
 
   function buildSetsDescription(): string {
     if (!booking?.sets?.length) return '';
@@ -227,9 +235,17 @@ export default function InvoiceSection({ bookingId }: Readonly<InvoiceSectionPro
             isDeletePending={actions.isDeletingInvoice}
             isVoidPending={invoiceActions.isVoidingInvoice}
             onEdit={openEditInvoice}
+            onPreview={openPreviewPdf}
+            onIssue={(inv) => invoiceActions.issue(inv.id)}
             onDelete={(inv) => actions.deleteInvoice(inv.id)}
             onSend={openSendInvoice}
-            onMarkSent={(inv) => setSearchParams({ sheet: 'markSent', invoiceId: inv.id })}
+            onMarkSent={(inv) => {
+              if (inv.status === 'ISSUED') {
+                invoiceActions.markSent(inv.id);
+              } else {
+                setSearchParams({ sheet: 'markSent', invoiceId: inv.id });
+              }
+            }}
             onMarkPaid={(inv) => invoiceActions.markPaid(inv.id)}
             onVoid={(inv) => invoiceActions.voidInvoice(inv.id)}
           />

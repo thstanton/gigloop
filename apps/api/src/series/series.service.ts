@@ -1,10 +1,12 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { SeriesRepository } from './series.repository';
 import { InvoicesRepository } from '../invoices/invoices.repository';
-import { DocumentsService } from '../documents/documents.service';
-import { CommunicationsService } from '../communications/communications.service';
+import { InvoiceLifecycleService } from '../invoices/invoice-lifecycle.service';
+import { reconcile } from '../invoices/series-line-reconciler';
+import { isDeletable } from '../invoices/invoice-transition-rules';
 import { SendInvoiceDto } from '../invoices/dto/send-invoice.dto';
 import { MarkSentDto } from '../invoices/dto/mark-sent.dto';
+import { IssueInvoiceDto } from '../invoices/dto/issue-invoice.dto';
 
 function buildLineItemDescription(date: Date, sets: Array<{ label: string | null; duration: number }>): string {
   const dateStr = date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -12,13 +14,26 @@ function buildLineItemDescription(date: Date, sets: Array<{ label: string | null
   return setsStr ? `${dateStr} — ${setsStr}` : dateStr;
 }
 
+export interface MemberBookingForSync {
+  id: string;
+  date: Date;
+  fee: { toNumber(): number } | number | string | null;
+  sets: Array<{ label: string | null; duration: number }>;
+}
+
+function memberFeeAmount(fee: MemberBookingForSync['fee']): number {
+  if (fee === null) return 0;
+  if (typeof fee === 'number') return fee;
+  if (typeof fee === 'string') return Number(fee);
+  return fee.toNumber();
+}
+
 @Injectable()
 export class SeriesService {
   constructor(
     private repo: SeriesRepository,
     private invoicesRepo: InvoicesRepository,
-    private documents: DocumentsService,
-    private comms: CommunicationsService,
+    private lifecycle: InvoiceLifecycleService,
   ) {}
 
   findAll(userId: string) {
@@ -82,18 +97,6 @@ export class SeriesService {
     return series;
   }
 
-  private async assignSeriesInvoiceNumber(
-    userId: string, seriesId: string, invoiceId: string,
-    dto: { issueDate: string; dueDate?: string },
-  ) {
-    const issueDate = new Date(dto.issueDate);
-    const dueDate = dto.dueDate ? new Date(dto.dueDate) : null;
-    const voided = await this.repo.findVoidedSeriesInvoiceWithNumber(userId, seriesId);
-    return voided?.invoiceNumber
-      ? this.invoicesRepo.assignWithInheritedNumber(invoiceId, voided.invoiceNumber, issueDate, dueDate)
-      : this.invoicesRepo.assignNewSequenceNumber(userId, invoiceId, issueDate, dueDate);
-  }
-
   async createInvoice(userId: string, seriesId: string) {
     const series = await this.requireSeries(userId, seriesId);
 
@@ -107,6 +110,7 @@ export class SeriesService {
       description: buildLineItemDescription(b.date, b.sets),
       amount: b.fee ? Number(b.fee) : 0,
       order: i,
+      sourceBookingId: b.id,
     }));
 
     return this.repo.createSeriesInvoice(userId, seriesId, series.customerId, lineItems);
@@ -117,52 +121,128 @@ export class SeriesService {
     return this.repo.findActiveSeriesInvoice(userId, seriesId);
   }
 
+  async previewInvoiceNumber(userId: string, seriesId: string) {
+    await this.requireSeries(userId, seriesId);
+    return this.invoicesRepo.previewSeriesInvoiceNumber(userId, seriesId);
+  }
+
+  async issueInvoice(userId: string, seriesId: string, invoiceId: string, dto: IssueInvoiceDto) {
+    const invoice = await this.repo.findSeriesInvoiceById(userId, seriesId, invoiceId);
+    if (!invoice) throw new NotFoundException('Invoice not found');
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const issueDate = dto.issueDate ? new Date(dto.issueDate) : today;
+
+    let dueDate: Date | null = null;
+    if (dto.dueDate) {
+      dueDate = new Date(dto.dueDate);
+    } else {
+      const terms = await this.invoicesRepo.getUserPaymentTerms(userId);
+      if (terms > 0) {
+        dueDate = new Date(issueDate);
+        dueDate.setDate(dueDate.getDate() + terms);
+      }
+    }
+
+    await this.lifecycle.issueInvoice(
+      userId,
+      { ...invoice, bookingId: null },
+      { issueDate, dueDate },
+      (invId, issueDateParam, dueDateParam) =>
+        this.invoicesRepo.assignSeriesAndMarkIssued(userId, {
+          id: invId,
+          seriesId,
+          issueDate: issueDateParam,
+          dueDate: dueDateParam,
+        }),
+    );
+    return this.repo.findSeriesInvoiceById(userId, seriesId, invoiceId);
+  }
+
   async voidInvoice(userId: string, seriesId: string, invoiceId: string) {
     const invoice = await this.repo.findSeriesInvoiceById(userId, seriesId, invoiceId);
     if (!invoice) throw new NotFoundException('Invoice not found');
-    if (invoice.status === 'DRAFT') throw new BadRequestException('Draft invoices cannot be voided — delete them instead');
-    if (invoice.status === 'VOID') throw new BadRequestException('Invoice is already VOID');
-    return this.invoicesRepo.voidInvoice(invoiceId);
+    return this.lifecycle.voidInvoice(invoice);
   }
 
   async deleteInvoice(userId: string, seriesId: string, invoiceId: string) {
     const invoice = await this.repo.findSeriesInvoiceById(userId, seriesId, invoiceId);
     if (!invoice) throw new NotFoundException('Invoice not found');
-    if (invoice.status !== 'DRAFT') throw new BadRequestException('Only DRAFT invoices can be deleted');
+    if (!isDeletable(invoice)) throw new BadRequestException('Only DRAFT invoices can be deleted');
     return this.invoicesRepo.delete(invoiceId);
   }
 
   async sendInvoice(userId: string, seriesId: string, invoiceId: string, dto: SendInvoiceDto) {
     const invoice = await this.repo.findSeriesInvoiceById(userId, seriesId, invoiceId);
     if (!invoice) throw new NotFoundException('Invoice not found');
-    if (invoice.status !== 'DRAFT') throw new BadRequestException('Only draft invoices can be sent');
-
-    const sentInvoice = await this.assignSeriesInvoiceNumber(userId, seriesId, invoiceId, dto);
-
-    const pdfBuffer = await this.documents.generatePreviewPdf(userId, invoiceId);
-    await this.comms.sendEmail({
-      userId,
-      contactId: dto.contactId,
-      to: dto.to,
-      subject: dto.subject,
-      body: dto.body,
-      templateId: dto.templateId,
-      attachments: [{ filename: `${sentInvoice.invoiceNumber ?? 'invoice'}.pdf`, content: pdfBuffer }],
-    });
+    return this.lifecycle.send(userId, { ...invoice, bookingId: null }, dto);
   }
 
   async markSentInvoice(userId: string, seriesId: string, invoiceId: string, dto: MarkSentDto) {
     const invoice = await this.repo.findSeriesInvoiceById(userId, seriesId, invoiceId);
     if (!invoice) throw new NotFoundException('Invoice not found');
-    if (invoice.status !== 'DRAFT') throw new BadRequestException('Only draft invoices can be marked as sent');
-
-    return this.assignSeriesInvoiceNumber(userId, seriesId, invoiceId, dto);
+    return this.lifecycle.markSent(invoice, dto);
   }
 
   async markPaidInvoice(userId: string, seriesId: string, invoiceId: string) {
     const invoice = await this.repo.findSeriesInvoiceById(userId, seriesId, invoiceId);
     if (!invoice) throw new NotFoundException('Invoice not found');
-    if (invoice.status !== 'SENT') throw new BadRequestException('Only sent invoices can be marked as paid');
-    return this.repo.markSeriesInvoicePaid(invoiceId);
+    return this.lifecycle.markPaid(invoice);
+  }
+
+  // ─── Series membership guard + sync ───────────────────────────────────────
+
+  /**
+   * Throws 409 if the series has an active (ISSUED, SENT, or PAID) invoice.
+   * Call before any membership add or remove to prevent mutating a frozen billing batch.
+   */
+  async assertMembershipMutable(userId: string, seriesId: string): Promise<void> {
+    const locked = await this.repo.findNonDraftNonVoidSeriesInvoice(userId, seriesId);
+    if (locked) {
+      throw new ConflictException(
+        'This series has an issued invoice — void the invoice before changing the lineup.',
+      );
+    }
+  }
+
+  /**
+   * After a booking joins a series, append a traced line to the series DRAFT invoice (if any).
+   * No-op when no DRAFT invoice exists.
+   */
+  async syncMemberJoin(userId: string, seriesId: string, booking: MemberBookingForSync): Promise<void> {
+    const draftInvoice = await this.repo.findDraftSeriesInvoiceWithLines(userId, seriesId);
+    if (!draftInvoice) return;
+
+    const { add } = reconcile(draftInvoice.lineItems, [
+      {
+        id: booking.id,
+        description: buildLineItemDescription(booking.date, booking.sets),
+        amount: memberFeeAmount(booking.fee),
+      },
+    ]);
+    if (add.length === 0) return;
+
+    const maxOrder = draftInvoice.lineItems.reduce((m, l) => Math.max(m, l.order), -1);
+    await this.repo.appendSeriesInvoiceLine(userId, draftInvoice.id, {
+      description: add[0].description,
+      amount: add[0].amount,
+      order: maxOrder + 1,
+      sourceBookingId: booking.id,
+    });
+  }
+
+  /**
+   * After a booking leaves a series, remove its traced line from the series DRAFT invoice (if any).
+   * No-op when no DRAFT invoice exists or the booking had no traced line.
+   */
+  async syncMemberLeave(userId: string, seriesId: string, bookingId: string): Promise<void> {
+    const draftInvoice = await this.repo.findDraftSeriesInvoiceWithLines(userId, seriesId);
+    if (!draftInvoice) return;
+
+    const tracedLines = draftInvoice.lineItems.filter((l) => l.sourceBookingId === bookingId);
+    for (const line of tracedLines) {
+      await this.repo.removeSeriesInvoiceLine(line.id);
+    }
   }
 }

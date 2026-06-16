@@ -91,7 +91,9 @@ export class ChecklistRepository {
             orderBy: { createdAt: 'asc' },
           },
           invoices: {
-            where: { status: { not: 'VOID' } },
+            // Only ISSUED, SENT, and PAID invoices satisfy the invoiceExists checklist rule.
+            // DRAFT (scratchpad) and VOID are excluded.
+            where: { status: { notIn: ['VOID', 'DRAFT'] } },
             select: { isDeposit: true },
           },
           contracts: {

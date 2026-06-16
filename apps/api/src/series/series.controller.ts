@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagg
 import { SeriesService } from './series.service';
 import { SendInvoiceDto } from '../invoices/dto/send-invoice.dto';
 import { MarkSentDto } from '../invoices/dto/mark-sent.dto';
+import { IssueInvoiceDto } from '../invoices/dto/issue-invoice.dto';
 import type { Request } from 'express';
 
 type AuthedRequest = Request & { userId: string };
@@ -45,12 +46,34 @@ export class SeriesController {
     return this.service.createInvoice(req.userId, id);
   }
 
+  @ApiOperation({ summary: 'Preview the invoice number that will be assigned on send (dry-run, no allocation)' })
+  @ApiResponse({ status: 200, description: '{ invoiceNumber: string; willReuse: boolean }' })
+  @Get(':id/invoices/preview-number')
+  previewInvoiceNumber(@Req() req: AuthedRequest, @Param('id') id: string) {
+    return this.service.previewInvoiceNumber(req.userId, id);
+  }
+
   @ApiOperation({ summary: 'Get the active (non-VOID) series invoice; 404 when none exists' })
   @Get(':id/invoices/current')
   async getActiveInvoice(@Req() req: AuthedRequest, @Param('id') id: string) {
     const invoice = await this.service.getActiveInvoice(req.userId, id);
     if (!invoice) throw new NotFoundException('No active series invoice');
     return invoice;
+  }
+
+  @ApiOperation({ summary: 'Issue a series draft invoice (assign number, lock line items, store PDF)' })
+  @ApiResponse({ status: 200, description: 'Invoice issued successfully' })
+  @ApiResponse({ status: 400, description: 'Invoice is not in DRAFT status' })
+  @ApiResponse({ status: 404, description: 'Series or invoice not found' })
+  @Post(':id/invoices/:invoiceId/issue')
+  @HttpCode(200)
+  issueInvoice(
+    @Req() req: AuthedRequest,
+    @Param('id') id: string,
+    @Param('invoiceId') invoiceId: string,
+    @Body() dto: IssueInvoiceDto,
+  ) {
+    return this.service.issueInvoice(req.userId, id, invoiceId, dto);
   }
 
   @ApiOperation({ summary: 'Send a series invoice by email' })

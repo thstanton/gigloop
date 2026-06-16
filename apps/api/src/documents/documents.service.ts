@@ -30,8 +30,11 @@ pdfmake.addFonts({
     italics: join(fontDir, 'Roboto-Italic.ttf'),
     bolditalics: join(fontDir, 'Roboto-MediumItalic.ttf'),
   },
-  Caveat: {
-    normal: join(customFontsDir, 'Caveat-Regular.ttf'),
+  PlayfairDisplay: {
+    normal: join(customFontsDir, 'PlayfairDisplay-Medium.ttf'),
+    bold: join(customFontsDir, 'PlayfairDisplay-SemiBold.ttf'),
+    italics: join(customFontsDir, 'PlayfairDisplay-Medium.ttf'),
+    bolditalics: join(customFontsDir, 'PlayfairDisplay-SemiBold.ttf'),
   },
   Commissioner: {
     normal: join(customFontsDir, 'Commissioner-Regular.ttf'),
@@ -48,7 +51,8 @@ pdfmake.setUrlAccessPolicy(() => true);
 const requiredFonts = [
   join(customFontsDir, 'Commissioner-Regular.ttf'),
   join(customFontsDir, 'Commissioner-Medium.ttf'),
-  join(customFontsDir, 'Caveat-Regular.ttf'),
+  join(customFontsDir, 'PlayfairDisplay-Medium.ttf'),
+  join(customFontsDir, 'PlayfairDisplay-SemiBold.ttf'),
 ];
 for (const font of requiredFonts) {
   if (!existsSync(font)) {
@@ -68,7 +72,7 @@ export type DocumentWithUrl = Document & { url: string; contract?: { status: str
 
 // Minimal shape needed to build PDF data from an already-fetched invoice.
 // Accepts Prisma Decimal for amount (hence the any — Number() handles it).
-type PreloadedInvoice = {
+export type PreloadedInvoice = {
   invoiceNumber: string | null;
   issueDate: Date | null;
   dueDate: Date | null;
@@ -173,24 +177,35 @@ export class DocumentsService {
 
   async generateAndStoreInvoicePdf(
     userId: string,
-    bookingId: string,
     invoiceId: string,
     preloaded?: PreloadedInvoice,
-  ): Promise<{ buffer: Buffer }> {
+    bookingId?: string,
+  ): Promise<{ buffer: Buffer; documentId: string }> {
     const data = await this.buildInvoicePdfData(userId, invoiceId, preloaded);
     const buffer = await this.generatePdfBuffer(data);
-    const key = `invoices/${userId}/${bookingId}/${invoiceId}.pdf`;
+    // Series invoices have no bookingId — store under a flat per-invoice path.
+    const key = bookingId
+      ? `invoices/${userId}/${bookingId}/${invoiceId}.pdf`
+      : `invoices/${userId}/series/${invoiceId}.pdf`;
     await this.storage.putObject(key, buffer, 'application/pdf');
     // Replace any existing document record (idempotent on retry)
     const existing = await this.repo.findByInvoice(userId, invoiceId);
     if (existing) await this.repo.delete(existing.id);
-    await this.repo.create(userId, bookingId, 'INVOICE', key, invoiceId);
-    return { buffer };
+    const doc = await this.repo.create(userId, bookingId, 'INVOICE', key, invoiceId);
+    return { buffer, documentId: doc.id };
   }
 
   async generatePreviewPdf(userId: string, invoiceId: string): Promise<Buffer> {
     const data = await this.buildInvoicePdfData(userId, invoiceId);
     return this.generatePdfBuffer(data);
+  }
+
+  /** Retrieve the stored INVOICE Document with its PDF buffer (used when sending an issued invoice). */
+  async getStoredInvoicePdfBuffer(userId: string, invoiceId: string): Promise<{ buffer: Buffer; documentId: string } | null> {
+    const doc = await this.repo.findByInvoice(userId, invoiceId);
+    if (!doc) return null;
+    const buffer = await this.storage.getObject(doc.storageKey);
+    return { buffer, documentId: doc.id };
   }
 
   // ─── Signed contract PDF ───────────────────────────────────────────────────

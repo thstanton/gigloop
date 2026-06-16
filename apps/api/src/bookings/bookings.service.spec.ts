@@ -6,6 +6,7 @@ import { ContractRepository } from './contract.repository';
 import { MusicFormConfigRepository } from './music-form-config.repository';
 import { ChecklistRepository } from '../checklist/checklist.repository';
 import { SeriesRepository } from '../series/series.repository';
+import { SeriesService } from '../series/series.service';
 import { MailService } from '../mail/mail.service';
 import { ChecklistEvaluatorService } from '../checklist/checklist-evaluator.service';
 import type { EmailContext } from '../mail/mail.service';
@@ -101,6 +102,14 @@ function makeSeriesRepo(): MockSeriesRepo {
   return { findOne: jest.fn(), findOneLight: jest.fn(), findExists: jest.fn(), create: jest.fn() };
 }
 
+function makeSeriesService() {
+  return {
+    assertMembershipMutable: jest.fn().mockResolvedValue(undefined),
+    syncMemberJoin: jest.fn().mockResolvedValue(undefined),
+    syncMemberLeave: jest.fn().mockResolvedValue(undefined),
+  };
+}
+
 function makeChecklistRepo(): MockChecklistRepo {
   return {
     findActionItems: jest.fn().mockResolvedValue([]),
@@ -155,6 +164,7 @@ describe('BookingsService', () => {
   let service: BookingsService;
   let repo: MockRepo;
   let seriesRepo: MockSeriesRepo;
+  let seriesService: ReturnType<typeof makeSeriesService>;
   let mail: MockMail;
   let evaluator: MockEvaluator;
   let checklistRepo: MockChecklistRepo;
@@ -164,6 +174,7 @@ describe('BookingsService', () => {
   beforeEach(() => {
     repo = makeRepo();
     seriesRepo = makeSeriesRepo();
+    seriesService = makeSeriesService();
     mail = makeMail();
     evaluator = makeEvaluator();
     checklistRepo = makeChecklistRepo();
@@ -172,6 +183,7 @@ describe('BookingsService', () => {
     service = new BookingsService(
       repo as unknown as BookingsRepository,
       seriesRepo as unknown as SeriesRepository,
+      seriesService as unknown as SeriesService,
       mail as unknown as MailService,
       evaluator as unknown as ChecklistEvaluatorService,
       checklistRepo as unknown as ChecklistRepository,

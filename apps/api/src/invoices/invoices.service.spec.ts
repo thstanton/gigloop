@@ -1,14 +1,8 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { InvoicesService } from './invoices.service';
 import { InvoicesRepository } from './invoices.repository';
-import { CommunicationsService } from '../communications/communications.service';
-
-jest.mock('../documents/documents.service', () => ({
-  DocumentsService: jest.fn().mockImplementation(() => ({
-    generateAndStoreInvoicePdf: jest.fn(),
-    generatePreviewPdf: jest.fn(),
-  })),
-}));
+import type { DocumentsService } from '../documents/documents.service';
+import type { InvoiceLifecycleService } from './invoice-lifecycle.service';
 
 type MockRepo = {
   findBookingCustomerId: jest.Mock;
@@ -19,15 +13,19 @@ type MockRepo = {
   update: jest.Mock;
   delete: jest.Mock;
   assignAndMarkSent: jest.Mock;
+  assignAndMarkIssued: jest.Mock;
   assignInvoiceNumberOnly: jest.Mock;
   markSentById: jest.Mock;
-  markPaid: jest.Mock;
+  markPaidBase: jest.Mock;
+  setBookingDepositReceivedAt: jest.Mock;
   voidInvoice: jest.Mock;
   countActiveByType: jest.Mock;
+  getUserPaymentTerms: jest.Mock;
   findLineItem: jest.Mock;
   addLineItem: jest.Mock;
   updateLineItem: jest.Mock;
   deleteLineItem: jest.Mock;
+  previewBookingInvoiceNumber: jest.Mock;
 };
 
 function makeRepo(): MockRepo {
@@ -40,38 +38,54 @@ function makeRepo(): MockRepo {
     update: jest.fn(),
     delete: jest.fn(),
     assignAndMarkSent: jest.fn(),
+    assignAndMarkIssued: jest.fn(),
     assignInvoiceNumberOnly: jest.fn(),
     markSentById: jest.fn(),
-    markPaid: jest.fn(),
+    markPaidBase: jest.fn(),
+    setBookingDepositReceivedAt: jest.fn(),
     voidInvoice: jest.fn(),
     countActiveByType: jest.fn(),
+    getUserPaymentTerms: jest.fn().mockResolvedValue(14),
     findLineItem: jest.fn(),
     addLineItem: jest.fn(),
     updateLineItem: jest.fn(),
     deleteLineItem: jest.fn(),
+    previewBookingInvoiceNumber: jest.fn(),
   };
 }
 
-const mockComms = { sendEmail: jest.fn() } as unknown as CommunicationsService;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const mockDocuments = { generateAndStoreInvoicePdf: jest.fn(), generatePreviewPdf: jest.fn() } as any;
+const mockDocuments = { generatePreviewPdf: jest.fn() } as unknown as DocumentsService;
 
-const invoice = { id: 'i1', bookingId: 'b1', userId: 'u1', status: 'DRAFT', isDeposit: false };
+const draftInvoice = { id: 'i1', bookingId: 'b1', userId: 'u1', status: 'DRAFT', isDeposit: false, invoiceNumber: null };
+const issuedInvoice = { id: 'i1', bookingId: 'b1', userId: 'u1', status: 'ISSUED', isDeposit: false, invoiceNumber: 'INV-2026-001' };
 const lineItem = { id: 'li1', invoiceId: 'i1', userId: 'u1' };
 
 describe('InvoicesService', () => {
   let service: InvoicesService;
   let repo: MockRepo;
-
+  let mockLifecycle: {
+    send: jest.Mock;
+    markSent: jest.Mock;
+    markPaid: jest.Mock;
+    voidInvoice: jest.Mock;
+    issueInvoice: jest.Mock;
+  };
   let mockChecklistRepo: { resetItemByKey: jest.Mock };
 
   beforeEach(() => {
     repo = makeRepo();
+    mockLifecycle = {
+      send: jest.fn().mockResolvedValue(undefined),
+      markSent: jest.fn().mockResolvedValue({ ...draftInvoice, status: 'SENT', invoiceNumber: 'INV-2026-001' }),
+      markPaid: jest.fn().mockResolvedValue({ ...draftInvoice, status: 'PAID' }),
+      voidInvoice: jest.fn().mockResolvedValue({ ...draftInvoice, status: 'VOID', invoiceNumber: 'INV-2026-001' }),
+      issueInvoice: jest.fn().mockResolvedValue(undefined),
+    };
     const mockEvaluator = { evaluate: jest.fn().mockResolvedValue(undefined) } as unknown as import('../checklist/checklist-evaluator.service').ChecklistEvaluatorService;
     mockChecklistRepo = { resetItemByKey: jest.fn().mockResolvedValue({ count: 0 }) };
     service = new InvoicesService(
       repo as unknown as InvoicesRepository,
-      mockComms,
+      mockLifecycle as unknown as InvoiceLifecycleService,
       mockDocuments,
       mockEvaluator,
       mockChecklistRepo as unknown as import('../checklist/checklist.repository').ChecklistRepository,
@@ -80,18 +94,18 @@ describe('InvoicesService', () => {
 
   describe('findAll', () => {
     it('delegates to repository', async () => {
-      repo.findAll.mockResolvedValue([invoice]);
+      repo.findAll.mockResolvedValue([draftInvoice]);
       const result = await service.findAll('u1', 'b1');
       expect(repo.findAll).toHaveBeenCalledWith('u1', 'b1');
-      expect(result).toEqual([invoice]);
+      expect(result).toEqual([draftInvoice]);
     });
   });
 
   describe('findOne', () => {
     it('returns invoice when found', async () => {
-      repo.findOne.mockResolvedValue(invoice);
+      repo.findOne.mockResolvedValue(draftInvoice);
       const result = await service.findOne('u1', 'b1', 'i1');
-      expect(result).toBe(invoice);
+      expect(result).toBe(draftInvoice);
     });
 
     it('throws NotFoundException when invoice is not found', async () => {
@@ -104,7 +118,7 @@ describe('InvoicesService', () => {
     beforeEach(() => {
       repo.findBookingInfo.mockResolvedValue({ customerId: 'c1', seriesId: null });
       repo.countActiveByType.mockResolvedValue(0);
-      repo.create.mockResolvedValue(invoice);
+      repo.create.mockResolvedValue(draftInvoice);
     });
 
     it('defaults billToContactId to the booking customerId when not provided', async () => {
@@ -150,13 +164,19 @@ describe('InvoicesService', () => {
   });
 
   describe('update', () => {
-    it('updates when invoice exists', async () => {
-      repo.findOne.mockResolvedValue(invoice);
-      const updated = { ...invoice, status: 'SENT' };
+    it('updates when invoice is DRAFT', async () => {
+      repo.findOne.mockResolvedValue(draftInvoice);
+      const updated = { ...draftInvoice };
       repo.update.mockResolvedValue(updated);
-      const result = await service.update('u1', 'b1', 'i1', { status: 'SENT' as const });
-      expect(repo.update).toHaveBeenCalledWith('i1', { status: 'SENT' });
+      const result = await service.update('u1', 'b1', 'i1', { billToContactId: 'c2' });
+      expect(repo.update).toHaveBeenCalledWith('i1', { billToContactId: 'c2' });
       expect(result).toBe(updated);
+    });
+
+    it('throws BadRequestException when invoice is ISSUED (locked after issue)', async () => {
+      repo.findOne.mockResolvedValue(issuedInvoice);
+      await expect(service.update('u1', 'b1', 'i1', {})).rejects.toThrow(BadRequestException);
+      expect(repo.update).not.toHaveBeenCalled();
     });
 
     it('throws NotFoundException without calling update when invoice is not found', async () => {
@@ -167,11 +187,17 @@ describe('InvoicesService', () => {
   });
 
   describe('delete', () => {
-    it('deletes when invoice exists', async () => {
-      repo.findOne.mockResolvedValue(invoice);
-      repo.delete.mockResolvedValue(invoice);
+    it('deletes when invoice is DRAFT', async () => {
+      repo.findOne.mockResolvedValue(draftInvoice);
+      repo.delete.mockResolvedValue(draftInvoice);
       await service.delete('u1', 'b1', 'i1');
       expect(repo.delete).toHaveBeenCalledWith('i1');
+    });
+
+    it('throws BadRequestException when invoice is ISSUED (must void instead)', async () => {
+      repo.findOne.mockResolvedValue(issuedInvoice);
+      await expect(service.delete('u1', 'b1', 'i1')).rejects.toThrow(BadRequestException);
+      expect(repo.delete).not.toHaveBeenCalled();
     });
 
     it('throws NotFoundException without deleting when invoice is not found', async () => {
@@ -181,9 +207,83 @@ describe('InvoicesService', () => {
     });
   });
 
+  describe('issue', () => {
+    beforeEach(() => {
+      repo.findOne
+        .mockResolvedValueOnce(draftInvoice)
+        .mockResolvedValueOnce(issuedInvoice);
+      repo.assignAndMarkIssued.mockResolvedValue(issuedInvoice);
+    });
+
+    it('throws NotFoundException when invoice is not found', async () => {
+      repo.findOne.mockReset();
+      repo.findOne.mockResolvedValue(null);
+      await expect(service.issue('u1', 'b1', 'missing', {})).rejects.toThrow(NotFoundException);
+      expect(mockLifecycle.issueInvoice).not.toHaveBeenCalled();
+    });
+
+    it('delegates to lifecycle.issueInvoice', async () => {
+      await service.issue('u1', 'b1', 'i1', {});
+      expect(mockLifecycle.issueInvoice).toHaveBeenCalledWith(
+        'u1',
+        draftInvoice,
+        expect.objectContaining({ issueDate: expect.any(Date) }),
+        expect.any(Function),
+      );
+    });
+
+    it('defaults issueDate to today when not provided', async () => {
+      const before = new Date();
+      before.setHours(0, 0, 0, 0);
+      await service.issue('u1', 'b1', 'i1', {});
+      const [, , { issueDate }] = mockLifecycle.issueInvoice.mock.calls[0];
+      expect(issueDate.getTime()).toBeGreaterThanOrEqual(before.getTime());
+    });
+
+    it('computes dueDate from user payment terms when not provided', async () => {
+      repo.getUserPaymentTerms.mockResolvedValue(30);
+      await service.issue('u1', 'b1', 'i1', {});
+      const [, , { issueDate, dueDate }] = mockLifecycle.issueInvoice.mock.calls[0];
+      const expected = new Date(issueDate);
+      expected.setDate(expected.getDate() + 30);
+      expect(dueDate?.toDateString()).toBe(expected.toDateString());
+    });
+
+    it('passes explicit issueDate and dueDate when provided', async () => {
+      await service.issue('u1', 'b1', 'i1', { issueDate: '2026-06-01', dueDate: '2026-06-15' });
+      const [, , { issueDate, dueDate }] = mockLifecycle.issueInvoice.mock.calls[0];
+      expect(issueDate).toEqual(new Date('2026-06-01'));
+      expect(dueDate).toEqual(new Date('2026-06-15'));
+    });
+
+    it('passes an assignAndMarkIssued callback that calls the repository with booking context', async () => {
+      let capturedCallback: ((id: string, issueDate: Date, dueDate: Date | null) => Promise<unknown>) | undefined;
+      mockLifecycle.issueInvoice.mockImplementation(
+        async (_userId: string, _invoice: unknown, _params: unknown, cb: typeof capturedCallback) => {
+          capturedCallback = cb;
+        },
+      );
+
+      await service.issue('u1', 'b1', 'i1', {});
+
+      const issueDate = new Date('2026-06-01');
+      const dueDate = new Date('2026-06-15');
+      await capturedCallback!('i1', issueDate, dueDate);
+
+      expect(repo.assignAndMarkIssued).toHaveBeenCalledWith('u1', {
+        id: 'i1', bookingId: 'b1', isDeposit: false, issueDate, dueDate,
+      });
+    });
+
+    it('returns the re-fetched issued invoice', async () => {
+      const result = await service.issue('u1', 'b1', 'i1', {});
+      expect(result).toBe(issuedInvoice);
+    });
+  });
+
   describe('addLineItem', () => {
-    it('adds line item when invoice exists', async () => {
-      repo.findOne.mockResolvedValue(invoice);
+    it('adds line item when invoice is DRAFT', async () => {
+      repo.findOne.mockResolvedValue(draftInvoice);
       repo.addLineItem.mockResolvedValue(lineItem);
       const dto = { description: 'Performance fee', amount: 1500 };
       const result = await service.addLineItem('u1', 'b1', 'i1', dto);
@@ -200,7 +300,7 @@ describe('InvoicesService', () => {
     });
 
     it('throws BadRequestException when invoice is not DRAFT', async () => {
-      repo.findOne.mockResolvedValue({ ...invoice, status: 'SENT' });
+      repo.findOne.mockResolvedValue(issuedInvoice);
       await expect(
         service.addLineItem('u1', 'b1', 'i1', { description: 'Fee', amount: 100 }),
       ).rejects.toThrow(BadRequestException);
@@ -210,7 +310,7 @@ describe('InvoicesService', () => {
 
   describe('updateLineItem', () => {
     it('updates line item when invoice and item both exist', async () => {
-      repo.findOne.mockResolvedValue(invoice);
+      repo.findOne.mockResolvedValue(draftInvoice);
       repo.findLineItem.mockResolvedValue(lineItem);
       const updated = { ...lineItem, amount: 200 };
       repo.updateLineItem.mockResolvedValue(updated);
@@ -226,14 +326,14 @@ describe('InvoicesService', () => {
     });
 
     it('throws NotFoundException when line item is not found', async () => {
-      repo.findOne.mockResolvedValue(invoice);
+      repo.findOne.mockResolvedValue(draftInvoice);
       repo.findLineItem.mockResolvedValue(null);
       await expect(service.updateLineItem('u1', 'b1', 'i1', 'missing', {})).rejects.toThrow(NotFoundException);
       expect(repo.updateLineItem).not.toHaveBeenCalled();
     });
 
     it('scopes line item lookup to the correct invoice and user', async () => {
-      repo.findOne.mockResolvedValue(invoice);
+      repo.findOne.mockResolvedValue(draftInvoice);
       repo.findLineItem.mockResolvedValue(lineItem);
       repo.updateLineItem.mockResolvedValue(lineItem);
       await service.updateLineItem('u1', 'b1', 'i1', 'li1', {});
@@ -241,7 +341,7 @@ describe('InvoicesService', () => {
     });
 
     it('throws BadRequestException when invoice is not DRAFT', async () => {
-      repo.findOne.mockResolvedValue({ ...invoice, status: 'SENT' });
+      repo.findOne.mockResolvedValue(issuedInvoice);
       repo.findLineItem.mockResolvedValue(lineItem);
       await expect(service.updateLineItem('u1', 'b1', 'i1', 'li1', { amount: 200 })).rejects.toThrow(BadRequestException);
       expect(repo.updateLineItem).not.toHaveBeenCalled();
@@ -250,7 +350,7 @@ describe('InvoicesService', () => {
 
   describe('deleteLineItem', () => {
     it('deletes line item when invoice and item both exist', async () => {
-      repo.findOne.mockResolvedValue(invoice);
+      repo.findOne.mockResolvedValue(draftInvoice);
       repo.findLineItem.mockResolvedValue(lineItem);
       repo.deleteLineItem.mockResolvedValue(lineItem);
       await service.deleteLineItem('u1', 'b1', 'i1', 'li1');
@@ -264,14 +364,14 @@ describe('InvoicesService', () => {
     });
 
     it('throws NotFoundException when line item is not found', async () => {
-      repo.findOne.mockResolvedValue(invoice);
+      repo.findOne.mockResolvedValue(draftInvoice);
       repo.findLineItem.mockResolvedValue(null);
       await expect(service.deleteLineItem('u1', 'b1', 'i1', 'missing')).rejects.toThrow(NotFoundException);
       expect(repo.deleteLineItem).not.toHaveBeenCalled();
     });
 
     it('throws BadRequestException when invoice is not DRAFT', async () => {
-      repo.findOne.mockResolvedValue({ ...invoice, status: 'SENT' });
+      repo.findOne.mockResolvedValue(issuedInvoice);
       repo.findLineItem.mockResolvedValue(lineItem);
       await expect(service.deleteLineItem('u1', 'b1', 'i1', 'li1')).rejects.toThrow(BadRequestException);
       expect(repo.deleteLineItem).not.toHaveBeenCalled();
@@ -279,179 +379,150 @@ describe('InvoicesService', () => {
   });
 
   describe('send', () => {
-    const numberedInvoice = { ...invoice, invoiceNumber: 'INV-2026-001', issueDate: new Date('2026-05-26'), dueDate: new Date('2026-06-09') };
-    const sentInvoice = { ...numberedInvoice, status: 'SENT' };
-    const pdfBuffer = Buffer.from('pdf');
     const dto = {
-      issueDate: '2026-05-26',
-      dueDate: '2026-06-09',
-      to: 'client@example.com',
-      contactId: 'c1',
-      subject: 'Invoice INV-2026-001',
-      body: '<p>Please find attached</p>',
+      issueDate: '2026-05-26', dueDate: '2026-06-09',
+      to: 'client@example.com', contactId: 'c1',
+      subject: 'Invoice INV-2026-001', body: '<p>Please find attached</p>',
     };
 
     beforeEach(() => {
-      repo.findOne.mockResolvedValue(invoice);
-      repo.assignInvoiceNumberOnly.mockResolvedValue(numberedInvoice);
-      repo.markSentById.mockResolvedValue(sentInvoice);
-      mockDocuments.generateAndStoreInvoicePdf.mockResolvedValue({ buffer: pdfBuffer });
-      (mockComms.sendEmail as jest.Mock).mockResolvedValue(undefined);
+      repo.findOne.mockResolvedValue(issuedInvoice);
     });
 
     it('throws NotFoundException when invoice is not found', async () => {
       repo.findOne.mockResolvedValue(null);
       await expect(service.send('u1', 'b1', 'missing', dto)).rejects.toThrow(NotFoundException);
-      expect(repo.assignInvoiceNumberOnly).not.toHaveBeenCalled();
+      expect(mockLifecycle.send).not.toHaveBeenCalled();
     });
 
-    it('throws BadRequestException when invoice is not DRAFT', async () => {
-      repo.findOne.mockResolvedValue({ ...invoice, status: 'SENT' });
-      await expect(service.send('u1', 'b1', 'i1', dto)).rejects.toThrow(BadRequestException);
-      expect(repo.assignInvoiceNumberOnly).not.toHaveBeenCalled();
-    });
-
-    it('calls assignInvoiceNumberOnly with bookingId, isDeposit, parsed issueDate and dueDate', async () => {
+    it('delegates to lifecycle.send with userId, invoice, and dto', async () => {
       await service.send('u1', 'b1', 'i1', dto);
-      expect(repo.assignInvoiceNumberOnly).toHaveBeenCalledWith('u1', {
-        id: 'i1', bookingId: 'b1', isDeposit: false, issueDate: new Date('2026-05-26'), dueDate: new Date('2026-06-09'),
-      });
-    });
-
-    it('calls assignInvoiceNumberOnly with null dueDate when not provided', async () => {
-      await service.send('u1', 'b1', 'i1', { ...dto, dueDate: undefined });
-      expect(repo.assignInvoiceNumberOnly).toHaveBeenCalledWith('u1', expect.objectContaining({ dueDate: null }));
-    });
-
-    it('passes isDeposit: true to assignInvoiceNumberOnly for deposit invoices', async () => {
-      repo.findOne.mockResolvedValue({ ...invoice, isDeposit: true });
-      await service.send('u1', 'b1', 'i1', dto);
-      expect(repo.assignInvoiceNumberOnly).toHaveBeenCalledWith('u1', expect.objectContaining({ isDeposit: true }));
-    });
-
-    it('calls generateAndStoreInvoicePdf with the numbered invoice to avoid a redundant DB fetch', async () => {
-      await service.send('u1', 'b1', 'i1', dto);
-      expect(mockDocuments.generateAndStoreInvoicePdf).toHaveBeenCalledWith('u1', 'b1', numberedInvoice.id, numberedInvoice);
-    });
-
-    it('sends email with PDF attachment named after the invoice number', async () => {
-      await service.send('u1', 'b1', 'i1', dto);
-      expect(mockComms.sendEmail).toHaveBeenCalledWith(expect.objectContaining({
-        attachments: [{ filename: 'INV-2026-001.pdf', content: pdfBuffer }],
-        to: dto.to,
-        subject: dto.subject,
-        body: dto.body,
-      }));
-    });
-
-    it('calls markSentById after email succeeds', async () => {
-      await service.send('u1', 'b1', 'i1', dto);
-      expect(repo.markSentById).toHaveBeenCalledWith('i1');
-    });
-
-    it('does not call markSentById when PDF generation fails — invoice stays DRAFT', async () => {
-      mockDocuments.generateAndStoreInvoicePdf.mockRejectedValue(new Error('font not found'));
-      await expect(service.send('u1', 'b1', 'i1', dto)).rejects.toThrow('font not found');
-      expect(repo.markSentById).not.toHaveBeenCalled();
+      expect(mockLifecycle.send).toHaveBeenCalledWith('u1', issuedInvoice, dto);
     });
   });
 
   describe('markSent', () => {
-    const sentInvoice = { ...invoice, status: 'SENT', invoiceNumber: 'INV-2026-001' };
     const dto = { issueDate: '2026-05-26', dueDate: '2026-06-09' };
 
     beforeEach(() => {
-      repo.findOne.mockResolvedValue(invoice);
-      repo.assignAndMarkSent.mockResolvedValue(sentInvoice);
+      repo.findOne.mockResolvedValue(issuedInvoice);
+      repo.assignAndMarkSent.mockResolvedValue({ ...draftInvoice, status: 'SENT', invoiceNumber: 'INV-2026-001' });
     });
 
     it('throws NotFoundException when invoice is not found', async () => {
       repo.findOne.mockResolvedValue(null);
       await expect(service.markSent('u1', 'b1', 'missing', dto)).rejects.toThrow(NotFoundException);
+      expect(mockLifecycle.markSent).not.toHaveBeenCalled();
     });
 
-    it('throws BadRequestException when invoice is not DRAFT', async () => {
-      repo.findOne.mockResolvedValue({ ...invoice, status: 'SENT' });
-      await expect(service.markSent('u1', 'b1', 'i1', dto)).rejects.toThrow(BadRequestException);
-      expect(repo.assignAndMarkSent).not.toHaveBeenCalled();
-    });
-
-    it('calls assignAndMarkSent with bookingId, isDeposit, parsed issueDate and dueDate', async () => {
+    it('delegates to lifecycle.markSent', async () => {
       await service.markSent('u1', 'b1', 'i1', dto);
-      expect(repo.assignAndMarkSent).toHaveBeenCalledWith('u1', {
-        id: 'i1', bookingId: 'b1', isDeposit: false, issueDate: new Date('2026-05-26'), dueDate: new Date('2026-06-09'),
-      });
+      expect(mockLifecycle.markSent).toHaveBeenCalledWith(issuedInvoice, dto);
     });
 
-    it('calls assignAndMarkSent with null dueDate when not provided', async () => {
-      await service.markSent('u1', 'b1', 'i1', { issueDate: '2026-05-26' });
-      expect(repo.assignAndMarkSent).toHaveBeenCalledWith('u1', expect.objectContaining({ dueDate: null }));
-    });
-
-    it('returns the updated invoice', async () => {
-      const result = await service.markSent('u1', 'b1', 'i1', dto);
-      expect(result).toBe(sentInvoice);
+    it('delegates to lifecycle.markSent with empty dto', async () => {
+      await service.markSent('u1', 'b1', 'i1', {});
+      expect(mockLifecycle.markSent).toHaveBeenCalledWith(issuedInvoice, {});
     });
   });
 
   describe('markPaid', () => {
-    const sentInvoice = { id: 'i1', bookingId: 'b1', userId: 'u1', status: 'SENT', isDeposit: false };
+    const sentInvoice = { id: 'i1', bookingId: 'b1', userId: 'u1', status: 'SENT', isDeposit: false, invoiceNumber: 'INV-2026-001' };
+    const depositSentInvoice = { ...sentInvoice, isDeposit: true };
     const paidInvoice = { ...sentInvoice, status: 'PAID' };
 
     beforeEach(() => {
       repo.findOne.mockResolvedValue(sentInvoice);
-      repo.markPaid.mockResolvedValue(paidInvoice);
+      repo.setBookingDepositReceivedAt.mockResolvedValue({});
+      mockLifecycle.markPaid.mockResolvedValue(paidInvoice);
     });
 
-    it('throws BadRequestException when invoice is not SENT', async () => {
-      repo.findOne.mockResolvedValue({ ...sentInvoice, status: 'DRAFT' });
-      await expect(service.markPaid('u1', 'b1', 'i1')).rejects.toThrow(BadRequestException);
-      expect(repo.markPaid).not.toHaveBeenCalled();
+    it('throws NotFoundException when invoice not found', async () => {
+      repo.findOne.mockResolvedValue(null);
+      await expect(service.markPaid('u1', 'b1', 'missing')).rejects.toThrow(NotFoundException);
     });
 
-    it('delegates to repository markPaid', async () => {
+    it('delegates to lifecycle.markPaid', async () => {
       await service.markPaid('u1', 'b1', 'i1');
-      expect(repo.markPaid).toHaveBeenCalledWith('u1', 'b1', 'i1');
+      expect(mockLifecycle.markPaid).toHaveBeenCalledWith(sentInvoice, expect.any(Function));
     });
 
     it('returns the paid invoice', async () => {
       const result = await service.markPaid('u1', 'b1', 'i1');
       expect(result).toBe(paidInvoice);
     });
+
+    it('updates booking depositReceivedAt for deposit invoices via onCommit callback', async () => {
+      repo.findOne.mockResolvedValue(depositSentInvoice);
+      let capturedOnCommit: (() => Promise<void>) | undefined;
+      mockLifecycle.markPaid.mockImplementation(async (_invoice: unknown, onCommit: typeof capturedOnCommit) => {
+        capturedOnCommit = onCommit;
+        return paidInvoice;
+      });
+
+      await service.markPaid('u1', 'b1', 'i1');
+      await capturedOnCommit!();
+
+      expect(repo.setBookingDepositReceivedAt).toHaveBeenCalledWith('b1');
+    });
+
+    it('does not update depositReceivedAt for balance invoices', async () => {
+      let capturedOnCommit: (() => Promise<void>) | undefined;
+      mockLifecycle.markPaid.mockImplementation(async (_invoice: unknown, onCommit: typeof capturedOnCommit) => {
+        capturedOnCommit = onCommit;
+        return paidInvoice;
+      });
+
+      await service.markPaid('u1', 'b1', 'i1');
+      await capturedOnCommit!();
+
+      expect(repo.setBookingDepositReceivedAt).not.toHaveBeenCalled();
+    });
   });
 
   describe('voidInvoice', () => {
-    const sentInvoice = { id: 'i1', bookingId: 'b1', userId: 'u1', status: 'SENT', isDeposit: true };
+    const sentInvoice = { id: 'i1', bookingId: 'b1', userId: 'u1', status: 'SENT', isDeposit: true, invoiceNumber: 'INV-2026-001' };
     const voidedInvoice = { ...sentInvoice, status: 'VOID' };
 
     beforeEach(() => {
       repo.findOne.mockResolvedValue(sentInvoice);
-      repo.voidInvoice.mockResolvedValue(voidedInvoice);
+      mockLifecycle.voidInvoice.mockResolvedValue(voidedInvoice);
       repo.countActiveByType.mockResolvedValue(0);
     });
 
-    it('voids a SENT invoice', async () => {
-      const result = await service.voidInvoice('u1', 'b1', 'i1');
-      expect(repo.voidInvoice).toHaveBeenCalledWith('i1');
-      expect(result).toBe(voidedInvoice);
+    it('throws BadRequestException for a DRAFT invoice', async () => {
+      repo.findOne.mockResolvedValue({ ...sentInvoice, status: 'DRAFT', invoiceNumber: null });
+      mockLifecycle.voidInvoice.mockRejectedValue(new BadRequestException('Draft invoices cannot be voided — delete them instead'));
+      await expect(service.voidInvoice('u1', 'b1', 'i1')).rejects.toThrow(BadRequestException);
+      expect(repo.countActiveByType).not.toHaveBeenCalled();
+    });
+
+    it('throws BadRequestException for an already-VOID invoice', async () => {
+      repo.findOne.mockResolvedValue({ ...sentInvoice, status: 'VOID' });
+      mockLifecycle.voidInvoice.mockRejectedValue(new BadRequestException('Invoice is already VOID'));
+      await expect(service.voidInvoice('u1', 'b1', 'i1')).rejects.toThrow(BadRequestException);
+    });
+
+    it('delegates to lifecycle.voidInvoice', async () => {
+      await service.voidInvoice('u1', 'b1', 'i1');
+      expect(mockLifecycle.voidInvoice).toHaveBeenCalledWith(sentInvoice);
+    });
+
+    it('voids an ISSUED invoice', async () => {
+      repo.findOne.mockResolvedValue({ ...sentInvoice, status: 'ISSUED' });
+      await service.voidInvoice('u1', 'b1', 'i1');
+      expect(mockLifecycle.voidInvoice).toHaveBeenCalledWith(expect.objectContaining({ status: 'ISSUED' }));
     });
 
     it('voids a PAID invoice', async () => {
       repo.findOne.mockResolvedValue({ ...sentInvoice, status: 'PAID' });
       await service.voidInvoice('u1', 'b1', 'i1');
-      expect(repo.voidInvoice).toHaveBeenCalledWith('i1');
+      expect(mockLifecycle.voidInvoice).toHaveBeenCalledWith(expect.objectContaining({ status: 'PAID' }));
     });
 
-    it('throws BadRequestException for a DRAFT invoice', async () => {
-      repo.findOne.mockResolvedValue({ ...sentInvoice, status: 'DRAFT' });
-      await expect(service.voidInvoice('u1', 'b1', 'i1')).rejects.toThrow(BadRequestException);
-      expect(repo.voidInvoice).not.toHaveBeenCalled();
-    });
-
-    it('throws BadRequestException for an already-VOID invoice', async () => {
-      repo.findOne.mockResolvedValue({ ...sentInvoice, status: 'VOID' });
-      await expect(service.voidInvoice('u1', 'b1', 'i1')).rejects.toThrow(BadRequestException);
-      expect(repo.voidInvoice).not.toHaveBeenCalled();
+    it('returns the voided invoice', async () => {
+      const result = await service.voidInvoice('u1', 'b1', 'i1');
+      expect(result).toBe(voidedInvoice);
     });
 
     it('resets the create_deposit_invoice checklist item when no active deposit invoices remain', async () => {

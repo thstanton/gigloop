@@ -23,6 +23,7 @@ enum BookingStatus {
 
 enum InvoiceStatus {
   DRAFT
+  ISSUED
   SENT
   PAID
   VOID
@@ -184,6 +185,7 @@ model Booking {
   musicFormResponse MusicFormResponse?
   contracts         Contract[]
   checklistItems    BookingChecklistItem[]
+  invoiceLineItems  InvoiceLineItem[]
 
   @@index([userId])
   @@index([customerId])
@@ -380,8 +382,12 @@ model InvoiceLineItem {
   invoiceId String
   invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 
+  sourceBookingId String?
+  sourceBooking   Booking? @relation(fields: [sourceBookingId], references: [id], onDelete: SetNull)
+
   @@index([userId])
   @@index([invoiceId])
+  @@index([sourceBookingId])
 }
 
 model Template {
@@ -421,6 +427,10 @@ model Communication {
   templateId String?
   template   Template? @relation(fields: [templateId], references: [id], onDelete: SetNull)
 
+  // null for non-invoice communications; set when an invoice PDF is attached
+  documentId String?
+  document   Document? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+
   @@index([userId])
   @@index([bookingId])
 }
@@ -434,8 +444,9 @@ model Document {
   type       DocumentType
   storageKey String
 
-  bookingId String
-  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  // null for series invoice documents which have no direct booking association
+  bookingId String?
+  booking   Booking? @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 
   // null for non-INVOICE documents; set for INVOICE documents
   invoiceId String?
@@ -448,8 +459,11 @@ model Document {
   // null for system-generated documents; required for UPLOAD type
   name String?
 
+  communications Communication[]
+
   @@index([userId])
   @@index([bookingId])
+  @@index([invoiceId])
   @@index([contractId])
 }
 

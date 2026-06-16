@@ -1,4 +1,4 @@
-import { CheckCircle2, Download, Pencil, Send } from 'lucide-react';
+import { CheckCircle2, Download, Eye, Send } from 'lucide-react';
 import InvoiceStatusPill from '@/components/common/InvoiceStatusPill';
 import { RowActions } from '@/components/common/RowActions';
 import type { RowAction } from '@/components/common/RowActions';
@@ -14,6 +14,8 @@ function getInvoiceActions(
   invoice: Invoice,
   pdfUrl: string | null,
   onEdit: (i: Invoice) => void,
+  onPreview: (i: Invoice) => void,
+  onIssue: (i: Invoice) => void,
   onDelete: (i: Invoice) => void,
   onSend: (i: Invoice) => void,
   onMarkSent: (i: Invoice) => void,
@@ -24,17 +26,35 @@ function getInvoiceActions(
 ): RowAction[] | null {
   if (invoice.status === 'DRAFT') {
     return [
-      { label: 'Send', icon: <Send size={14} />, onClick: () => onSend(invoice) },
-      { label: 'Edit', icon: <Pencil size={14} />, onClick: () => onEdit(invoice) },
-      { label: 'Mark as sent', onClick: () => onMarkSent(invoice) },
+      { label: 'Create invoice', onClick: () => onIssue(invoice) },
+      { label: 'Edit', onClick: () => onEdit(invoice) },
+      { label: 'Preview draft', icon: <Eye size={14} />, onClick: () => onPreview(invoice) },
       {
         label: 'Delete',
         variant: 'destructive',
-        confirmation: { title: 'Delete invoice?', description: 'This invoice will be permanently removed.' },
+        confirmation: { title: 'Delete draft invoice?', description: 'This draft will be permanently removed.' },
         onClick: () => onDelete(invoice),
         isPending: isDeletePending,
       },
     ];
+  }
+
+  if (invoice.status === 'ISSUED') {
+    const acts: RowAction[] = [
+      { label: 'Send', icon: <Send size={14} />, onClick: () => onSend(invoice) },
+      { label: 'Mark as sent', onClick: () => onMarkSent(invoice) },
+    ];
+    if (pdfUrl) {
+      acts.push({ label: 'Download', icon: <Download size={14} />, onClick: () => window.open(pdfUrl, '_blank', 'noopener,noreferrer') });
+    }
+    acts.push({
+      label: 'Void',
+      variant: 'destructive',
+      confirmation: { title: 'Void invoice?', description: 'The invoice will be marked void. You can create a new one if needed.' },
+      onClick: () => onVoid(invoice),
+      isPending: isVoidPending,
+    });
+    return acts;
   }
 
   if (invoice.status === 'SENT') {
@@ -78,6 +98,8 @@ export interface InvoiceRowProps {
   isDeletePending: boolean;
   isVoidPending: boolean;
   onEdit: (invoice: Invoice) => void;
+  onPreview: (invoice: Invoice) => void;
+  onIssue: (invoice: Invoice) => void;
   onDelete: (invoice: Invoice) => void;
   onSend: (invoice: Invoice) => void;
   onMarkSent: (invoice: Invoice) => void;
@@ -85,12 +107,13 @@ export interface InvoiceRowProps {
   onVoid: (invoice: Invoice) => void;
 }
 
-export default function InvoiceRow({ invoice, pdfUrl, isDeletePending, isVoidPending, onEdit, onDelete, onSend, onMarkSent, onMarkPaid, onVoid }: InvoiceRowProps) {
+export default function InvoiceRow({ invoice, pdfUrl, isDeletePending, isVoidPending, onEdit, onPreview, onIssue, onDelete, onSend, onMarkSent, onMarkPaid, onVoid }: InvoiceRowProps) {
+  // Overdue only applies to SENT invoices — an ISSUED invoice past its due date is not overdue
   const overdue = invoice.status === 'SENT' && !!invoice.dueDate && new Date(invoice.dueDate) < new Date();
   const isVoid = invoice.status === 'VOID';
   const isPaid = invoice.status === 'PAID';
 
-  const actions = getInvoiceActions(invoice, pdfUrl, onEdit, onDelete, onSend, onMarkSent, onMarkPaid, onVoid, isDeletePending, isVoidPending);
+  const actions = getInvoiceActions(invoice, pdfUrl, onEdit, onPreview, onIssue, onDelete, onSend, onMarkSent, onMarkPaid, onVoid, isDeletePending, isVoidPending);
   const invoiceLabel = invoice.isDeposit ? 'Deposit' : 'Balance';
   const invoiceSublabel = `${formatCurrency(invoiceLineTotal(invoice))} · ${invoice.issueDate ? formatDate(invoice.issueDate) : '—'}`;
 

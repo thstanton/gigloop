@@ -1,11 +1,13 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InvoicesRepository } from './invoices.repository';
-import { CommunicationsService } from '../communications/communications.service';
 import { DocumentsService } from '../documents/documents.service';
 import { ChecklistEvaluatorService } from '../checklist/checklist-evaluator.service';
 import { ChecklistRepository } from '../checklist/checklist.repository';
+import { InvoiceLifecycleService } from './invoice-lifecycle.service';
+import { isEditable, isDeletable } from './invoice-transition-rules';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
+import { IssueInvoiceDto } from './dto/issue-invoice.dto';
 import { SendInvoiceDto } from './dto/send-invoice.dto';
 import { MarkSentDto } from './dto/mark-sent.dto';
 import { CreateLineItemDto } from './dto/create-line-item.dto';
@@ -15,7 +17,7 @@ import { UpdateLineItemDto } from './dto/update-line-item.dto';
 export class InvoicesService {
   constructor(
     private repo: InvoicesRepository,
-    private comms: CommunicationsService,
+    private lifecycle: InvoiceLifecycleService,
     private documents: DocumentsService,
     private evaluator: ChecklistEvaluatorService,
     private checklistRepo: ChecklistRepository,
@@ -53,44 +55,59 @@ export class InvoicesService {
   }
 
   async update(userId: string, bookingId: string, id: string, dto: UpdateInvoiceDto) {
-    await this.findOne(userId, bookingId, id);
+    const invoice = await this.findOne(userId, bookingId, id);
+    if (!isEditable(invoice)) throw new BadRequestException('Only draft invoices can be updated');
     return this.repo.update(id, dto);
   }
 
   async delete(userId: string, bookingId: string, id: string) {
-    await this.findOne(userId, bookingId, id);
+    const invoice = await this.findOne(userId, bookingId, id);
+    if (!isDeletable(invoice)) throw new BadRequestException('Only draft invoices can be deleted — void an issued invoice instead');
     return this.repo.delete(id);
+  }
+
+  async issue(userId: string, bookingId: string, id: string, dto: IssueInvoiceDto) {
+    const invoice = await this.findOne(userId, bookingId, id);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const issueDate = dto.issueDate ? new Date(dto.issueDate) : today;
+
+    let dueDate: Date | null = null;
+    if (dto.dueDate) {
+      dueDate = new Date(dto.dueDate);
+    } else {
+      const terms = await this.repo.getUserPaymentTerms(userId);
+      if (terms > 0) {
+        dueDate = new Date(issueDate);
+        dueDate.setDate(dueDate.getDate() + terms);
+      }
+    }
+
+    await this.lifecycle.issueInvoice(
+      userId,
+      invoice,
+      { issueDate, dueDate },
+      (invId, issueDateParam, dueDateParam) =>
+        this.repo.assignAndMarkIssued(userId, {
+          id: invId,
+          bookingId,
+          isDeposit: invoice.isDeposit,
+          issueDate: issueDateParam,
+          dueDate: dueDateParam,
+        }),
+    );
+    await this.evaluator.evaluate(bookingId).catch(() => {});
+    return this.findOne(userId, bookingId, id);
   }
 
   async send(userId: string, bookingId: string, id: string, dto: SendInvoiceDto) {
     const invoice = await this.findOne(userId, bookingId, id);
-    if (invoice.status !== 'DRAFT') {
-      throw new BadRequestException('Only draft invoices can be sent');
-    }
+    await this.lifecycle.send(userId, invoice, dto);
+  }
 
-    const issueDate = new Date(dto.issueDate);
-    const dueDate = dto.dueDate ? new Date(dto.dueDate) : null;
-
-    // Assign invoice number first (stays DRAFT — idempotent on retry if PDF later fails)
-    const numbered = await this.repo.assignInvoiceNumberOnly(userId, { id, bookingId, isDeposit: invoice.isDeposit, issueDate, dueDate });
-
-    const { buffer: pdfBuffer } = await this.documents.generateAndStoreInvoicePdf(userId, bookingId, numbered.id, numbered);
-
-    const filename = `${numbered.invoiceNumber ?? 'invoice'}.pdf`;
-
-    await this.comms.sendEmail({
-      userId,
-      bookingId,
-      contactId: dto.contactId,
-      to: dto.to,
-      subject: dto.subject,
-      body: dto.body,
-      templateId: dto.templateId,
-      attachments: [{ filename, content: pdfBuffer }],
-    });
-
-    // Mark SENT only after PDF + email both succeed
-    await this.repo.markSentById(id);
+  previewInvoiceNumber(userId: string, bookingId: string, isDeposit: boolean) {
+    return this.repo.previewBookingInvoiceNumber(userId, bookingId, isDeposit);
   }
 
   async generatePreviewPdf(userId: string, bookingId: string, id: string): Promise<Buffer> {
@@ -100,35 +117,22 @@ export class InvoicesService {
 
   async markSent(userId: string, bookingId: string, id: string, dto: MarkSentDto) {
     const invoice = await this.findOne(userId, bookingId, id);
-    if (invoice.status !== 'DRAFT') {
-      throw new BadRequestException('Only draft invoices can be marked as sent');
-    }
-
-    const issueDate = new Date(dto.issueDate);
-    const dueDate = dto.dueDate ? new Date(dto.dueDate) : null;
-
-    return this.repo.assignAndMarkSent(userId, { id, bookingId, isDeposit: invoice.isDeposit, issueDate, dueDate });
+    return this.lifecycle.markSent(invoice, dto);
   }
 
   async markPaid(userId: string, bookingId: string, id: string) {
     const invoice = await this.findOne(userId, bookingId, id);
-    if (invoice.status !== 'SENT') {
-      throw new BadRequestException('Only sent invoices can be marked as paid');
-    }
-    const result = await this.repo.markPaid(userId, bookingId, id);
-    await this.evaluator.evaluate(bookingId).catch(() => {});
-    return result;
+    return this.lifecycle.markPaid(invoice, async () => {
+      if (invoice.isDeposit) {
+        await this.repo.setBookingDepositReceivedAt(bookingId);
+      }
+      await this.evaluator.evaluate(bookingId).catch(() => {});
+    });
   }
 
   async voidInvoice(userId: string, bookingId: string, id: string) {
     const invoice = await this.findOne(userId, bookingId, id);
-    if (invoice.status === 'DRAFT') {
-      throw new BadRequestException('Draft invoices cannot be voided — delete them instead');
-    }
-    if (invoice.status === 'VOID') {
-      throw new BadRequestException('Invoice is already VOID');
-    }
-    const result = await this.repo.voidInvoice(id);
+    const result = await this.lifecycle.voidInvoice(invoice);
     const remaining = await this.repo.countActiveByType(bookingId, invoice.isDeposit);
     if (remaining === 0) {
       const checklistKey = invoice.isDeposit ? 'create_deposit_invoice' : 'create_balance_invoice';
@@ -138,43 +142,25 @@ export class InvoicesService {
     return result;
   }
 
-  async addLineItem(
-    userId: string,
-    bookingId: string,
-    id: string,
-    dto: CreateLineItemDto,
-  ) {
+  async addLineItem(userId: string, bookingId: string, id: string, dto: CreateLineItemDto) {
     const invoice = await this.findOne(userId, bookingId, id);
-    if (invoice.status !== 'DRAFT') throw new BadRequestException('Line items can only be modified on DRAFT invoices');
+    if (!isEditable(invoice)) throw new BadRequestException('Line items can only be modified on DRAFT invoices');
     return this.repo.addLineItem(userId, id, dto);
   }
 
-  async updateLineItem(
-    userId: string,
-    bookingId: string,
-    id: string,
-    itemId: string,
-    dto: UpdateLineItemDto,
-  ) {
+  async updateLineItem(userId: string, bookingId: string, id: string, itemId: string, dto: UpdateLineItemDto) {
     const invoice = await this.findOne(userId, bookingId, id);
-    if (invoice.status !== 'DRAFT') throw new BadRequestException('Line items can only be modified on DRAFT invoices');
+    if (!isEditable(invoice)) throw new BadRequestException('Line items can only be modified on DRAFT invoices');
     const item = await this.repo.findLineItem(userId, id, itemId);
     if (!item) throw new NotFoundException('Line item not found');
     return this.repo.updateLineItem(item.id, dto);
   }
 
-  async deleteLineItem(
-    userId: string,
-    bookingId: string,
-    id: string,
-    itemId: string,
-  ) {
+  async deleteLineItem(userId: string, bookingId: string, id: string, itemId: string) {
     const invoice = await this.findOne(userId, bookingId, id);
-    if (invoice.status !== 'DRAFT') throw new BadRequestException('Line items can only be modified on DRAFT invoices');
+    if (!isEditable(invoice)) throw new BadRequestException('Line items can only be modified on DRAFT invoices');
     const item = await this.repo.findLineItem(userId, id, itemId);
     if (!item) throw new NotFoundException('Line item not found');
     return this.repo.deleteLineItem(item.id);
   }
-
 }
-

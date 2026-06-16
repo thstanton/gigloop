@@ -7,7 +7,7 @@ import type { Invoice } from '@/types/api';
 
 const customer = { id: 'c1', name: 'Jane Smith', email: 'jane@example.com', phone: null, addressLine1: null, addressLine2: null, city: null, county: null, postcode: null, country: null, latitude: null, longitude: null, placeId: null, travelTimeMinutes: null, travelDistanceMetres: null, travelTimeCalculatedAt: null, travelMode: null, notes: null, greetingName: 'Jane', primaryRole: 'CUSTOMER', parkingInfo: null, accessInfo: null, equipmentAvailable: null, website: null, commissionArrangement: null, createdAt: '2030-01-01T00:00:00Z', updatedAt: '2030-01-01T00:00:00Z' };
 
-const lineItem = { id: 'li1', createdAt: '2030-04-01T00:00:00Z', updatedAt: '2030-04-01T00:00:00Z', description: 'Performance fee', amount: '1500.00', order: 0 };
+const lineItem = { id: 'li1', createdAt: '2030-04-01T00:00:00Z', updatedAt: '2030-04-01T00:00:00Z', description: 'Performance fee', amount: '1500.00', order: 0, sourceBookingId: null };
 
 const baseInvoice: Invoice = {
   id: 'inv1',
@@ -36,6 +36,8 @@ const meta = {
     isDeletePending: false,
     isVoidPending: false,
     onEdit: noop,
+    onPreview: noop,
+    onIssue: noop,
     onDelete: noop,
     onSend: noop,
     onMarkSent: noop,
@@ -48,13 +50,12 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const DepositDraft: Story = {
-  args: { invoice: { ...baseInvoice, status: 'DRAFT', isDeposit: true } },
+  args: { invoice: { ...baseInvoice, status: 'DRAFT', isDeposit: true, invoiceNumber: null, issueDate: null, dueDate: null } },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Deposit')).toBeVisible();
+    await expect(canvas.getByText('Draft')).toBeVisible();
     // Mobile trigger
     await expect(canvas.getByRole('button', { name: 'Actions' })).toBeVisible();
-    // Desktop primary shortcut
-    await expect(canvas.getByRole('button', { name: 'Send' })).toBeVisible();
   },
 };
 
@@ -62,6 +63,28 @@ export const BalanceDraft: Story = {
   args: { invoice: { ...baseInvoice, status: 'DRAFT', isDeposit: false } },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Balance')).toBeVisible();
+    await expect(canvas.getByText('Draft')).toBeVisible();
+  },
+};
+
+export const DepositIssued: Story = {
+  args: { invoice: { ...baseInvoice, status: 'ISSUED', isDeposit: true } },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Deposit')).toBeVisible();
+    await expect(canvas.getByText('Issued')).toBeVisible();
+    // Send is the primary action for ISSUED
+    await expect(canvas.getByRole('button', { name: 'Send' })).toBeVisible();
+  },
+};
+
+export const IssuedWithPdf: Story = {
+  args: {
+    invoice: { ...baseInvoice, status: 'ISSUED' },
+    pdfUrl: 'https://example.com/invoice.pdf',
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Issued')).toBeVisible();
+    await expect(canvas.getByRole('button', { name: 'Send' })).toBeVisible();
   },
 };
 
@@ -91,6 +114,16 @@ export const SentOverdue: Story = {
   },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Overdue')).toBeVisible();
+  },
+};
+
+export const IssuedPastDueNotOverdue: Story = {
+  args: {
+    // ISSUED past its due date should NOT show as overdue — overdue only applies to SENT
+    invoice: { ...baseInvoice, status: 'ISSUED', dueDate: '2029-01-01' },
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Issued')).toBeVisible();
   },
 };
 

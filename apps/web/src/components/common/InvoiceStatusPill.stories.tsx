@@ -11,6 +11,7 @@ export default meta;
 type Story = StoryObj<typeof InvoiceStatusPill>;
 
 export const Draft: Story = { args: { status: 'DRAFT' } };
+export const Issued: Story = { args: { status: 'ISSUED' } };
 export const Sent: Story = { args: { status: 'SENT' } };
 export const Paid: Story = { args: { status: 'PAID' } };
 export const Overdue: Story = { args: { status: 'SENT', isOverdue: true } };

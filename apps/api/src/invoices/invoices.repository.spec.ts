@@ -1,4 +1,5 @@
 import { InvoicesRepository, buildInvoiceNumber } from './invoices.repository';
+import { allocate } from './invoice-number-allocator';
 import { PrismaService } from '../prisma/prisma.service';
 
 type MockPrisma = {
@@ -270,6 +271,99 @@ describe('InvoicesRepository', () => {
       await repo.assignAndMarkSent('u1', { id: 'i1', bookingId: 'b1', isDeposit: false, issueDate, dueDate: null });
       expect(prisma.userProfile.update).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ invoiceNumberSequence: 1 }) }),
+      );
+    });
+  });
+
+  describe('previewBookingInvoiceNumber', () => {
+    const currentYear = new Date().getFullYear();
+    const freshProfile = { invoiceNumberSequence: 5, invoiceSequenceYear: currentYear, preferences: {} };
+
+    it('returns the next sequence number for a fresh allocation (no voided invoice)', async () => {
+      prisma.invoice.findFirst.mockResolvedValue(null);
+      prisma.userProfile.findUnique.mockResolvedValue(freshProfile);
+      const result = await repo.previewBookingInvoiceNumber('u1', 'b1', false);
+      const expected = allocate({}, currentYear, 5, currentYear);
+      expect(result.invoiceNumber).toBe(expected.invoiceNumber);
+      expect(result.willReuse).toBe(false);
+    });
+
+    it('returns sequence 1 and willReuse=false after an annual reset', async () => {
+      prisma.invoice.findFirst.mockResolvedValue(null);
+      prisma.userProfile.findUnique.mockResolvedValue({ ...freshProfile, invoiceSequenceYear: currentYear - 1, invoiceNumberSequence: 99 });
+      const result = await repo.previewBookingInvoiceNumber('u1', 'b1', false);
+      // Year rollover: sequence resets to 1 when format includes year
+      expect(result.invoiceNumber).toContain('-001');
+      expect(result.willReuse).toBe(false);
+    });
+
+    it('returns the voided invoice number and willReuse=true when a void slot exists', async () => {
+      prisma.invoice.findFirst.mockResolvedValue({ invoiceNumber: 'INV-2026-003' });
+      prisma.userProfile.findUnique.mockResolvedValue(freshProfile);
+      const result = await repo.previewBookingInvoiceNumber('u1', 'b1', true);
+      expect(result.invoiceNumber).toBe('INV-2026-003');
+      expect(result.willReuse).toBe(true);
+    });
+
+    it('returns the same invoice number that allocate() would assign (preview equals allocation)', async () => {
+      const prefs = { invoiceNumberFormat: { prefix: 'GM', includeYear: true, paddingWidth: 6 } };
+      const seq = 41;
+      prisma.invoice.findFirst.mockResolvedValue(null);
+      prisma.userProfile.findUnique.mockResolvedValue({ invoiceNumberSequence: seq, invoiceSequenceYear: currentYear, preferences: prefs });
+      const result = await repo.previewBookingInvoiceNumber('u1', 'b1', false);
+      const expected = allocate(prefs, currentYear, seq, currentYear);
+      expect(result.invoiceNumber).toBe(expected.invoiceNumber);
+    });
+
+    it('falls back to seq 0 and current year when no user profile exists', async () => {
+      prisma.invoice.findFirst.mockResolvedValue(null);
+      prisma.userProfile.findUnique.mockResolvedValue(null);
+      const result = await repo.previewBookingInvoiceNumber('u1', 'b1', false);
+      const expected = allocate({}, currentYear, 0, currentYear);
+      expect(result.invoiceNumber).toBe(expected.invoiceNumber);
+    });
+
+    it('queries voided invoices scoped to bookingId, userId, and isDeposit', async () => {
+      prisma.invoice.findFirst.mockResolvedValue(null);
+      prisma.userProfile.findUnique.mockResolvedValue(freshProfile);
+      await repo.previewBookingInvoiceNumber('u1', 'b1', true);
+      expect(prisma.invoice.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ bookingId: 'b1', userId: 'u1', isDeposit: true, status: 'VOID' }),
+        }),
+      );
+    });
+  });
+
+  describe('previewSeriesInvoiceNumber', () => {
+    const currentYear = new Date().getFullYear();
+    const freshProfile = { invoiceNumberSequence: 10, invoiceSequenceYear: currentYear, preferences: {} };
+
+    it('returns the next sequence number when no voided series invoice exists', async () => {
+      prisma.invoice.findFirst.mockResolvedValue(null);
+      prisma.userProfile.findUnique.mockResolvedValue(freshProfile);
+      const result = await repo.previewSeriesInvoiceNumber('u1', 'ser1');
+      const expected = allocate({}, currentYear, 10, currentYear);
+      expect(result.invoiceNumber).toBe(expected.invoiceNumber);
+      expect(result.willReuse).toBe(false);
+    });
+
+    it('returns the voided series invoice number and willReuse=true', async () => {
+      prisma.invoice.findFirst.mockResolvedValue({ invoiceNumber: 'INV-2026-007' });
+      prisma.userProfile.findUnique.mockResolvedValue(freshProfile);
+      const result = await repo.previewSeriesInvoiceNumber('u1', 'ser1');
+      expect(result.invoiceNumber).toBe('INV-2026-007');
+      expect(result.willReuse).toBe(true);
+    });
+
+    it('queries voided invoices scoped to seriesId and userId', async () => {
+      prisma.invoice.findFirst.mockResolvedValue(null);
+      prisma.userProfile.findUnique.mockResolvedValue(freshProfile);
+      await repo.previewSeriesInvoiceNumber('u1', 'ser1');
+      expect(prisma.invoice.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ seriesId: 'ser1', userId: 'u1', status: 'VOID' }),
+        }),
       );
     });
   });

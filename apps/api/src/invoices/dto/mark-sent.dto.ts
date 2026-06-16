@@ -1,10 +1,11 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsDateString, IsOptional } from 'class-validator';
 
 export class MarkSentDto {
-  @ApiProperty({ example: '2026-06-01' })
+  @ApiPropertyOptional({ description: 'Issue date — only required for DRAFT invoices; ignored for ISSUED invoices (date was set at issue time)', example: '2026-06-01' })
+  @IsOptional()
   @IsDateString()
-  issueDate!: string;
+  issueDate?: string;
 
   @ApiPropertyOptional({ example: '2026-06-15' })
   @IsOptional()

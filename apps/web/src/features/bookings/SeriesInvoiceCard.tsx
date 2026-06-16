@@ -25,6 +25,12 @@ export default function SeriesInvoiceCard({ seriesId, seriesLabel, onEdit, onSen
     onError: () => toast({ title: 'Failed to create series invoice', variant: 'destructive' }),
   });
 
+  const issueSeriesInvoiceMutation = useMutation({
+    mutationFn: (invoiceId: string) => apiPost<SeriesInvoice>(`/series/${seriesId}/invoices/${invoiceId}/issue`, {}),
+    onSuccess: invalidateSeriesInvoice,
+    onError: () => toast({ title: 'Failed to issue series invoice', variant: 'destructive' }),
+  });
+
   const voidSeriesInvoiceMutation = useMutation({
     mutationFn: (invoiceId: string) => apiPostVoid(`/series/${seriesId}/invoices/${invoiceId}/void`, {}),
     onSuccess: invalidateSeriesInvoice,
@@ -43,6 +49,20 @@ export default function SeriesInvoiceCard({ seriesId, seriesLabel, onEdit, onSen
     onError: () => toast({ title: 'Failed to mark series invoice as paid', variant: 'destructive' }),
   });
 
+  const markSeriesInvoiceSentMutation = useMutation({
+    mutationFn: (invoiceId: string) => apiPost(`/series/${seriesId}/invoices/${invoiceId}/mark-sent`, {}),
+    onSuccess: invalidateSeriesInvoice,
+    onError: () => toast({ title: 'Failed to mark series invoice as sent', variant: 'destructive' }),
+  });
+
+  function handleMarkSent(inv: SeriesInvoice) {
+    if (inv.status === 'ISSUED') {
+      markSeriesInvoiceSentMutation.mutate(inv.id);
+    } else {
+      onMarkSent(inv);
+    }
+  }
+
   return (
     <SeriesInvoiceSection
       seriesLabel={seriesLabel}
@@ -50,9 +70,10 @@ export default function SeriesInvoiceCard({ seriesId, seriesLabel, onEdit, onSen
       isLoading={isPending}
       onCreateInvoice={() => createSeriesInvoiceMutation.mutate()}
       onEdit={onEdit}
+      onIssue={(inv) => issueSeriesInvoiceMutation.mutate(inv.id)}
       onDelete={(inv) => deleteSeriesInvoiceMutation.mutate(inv.id)}
       onSend={onSend}
-      onMarkSent={onMarkSent}
+      onMarkSent={handleMarkSent}
       onMarkPaid={(inv) => markSeriesInvoicePaidMutation.mutate(inv.id)}
       onVoid={(inv) => voidSeriesInvoiceMutation.mutate(inv.id)}
     />

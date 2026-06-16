@@ -33,7 +33,7 @@ export type SongGenre =
   | 'BOLLYWOOD'
   | 'CHRISTMAS';
 
-export type InvoiceStatus = 'DRAFT' | 'SENT' | 'PAID' | 'VOID';
+export type InvoiceStatus = 'DRAFT' | 'ISSUED' | 'SENT' | 'PAID' | 'VOID';
 
 // ─────────────────────────────────────────
 // Contacts
@@ -358,6 +358,7 @@ export interface InvoiceLineItem {
   description: string;
   amount: string; // Decimal serialises as string
   order: number;
+  sourceBookingId: string | null;
 }
 
 export interface Invoice {
@@ -537,6 +538,8 @@ export interface Communication {
   contact: Contact;
   templateId: string | null;
   template: Template | null;
+  /** Set when an invoice PDF was attached; null for plain emails. */
+  document: { id: string; invoiceId: string | null } | null;
 }
 
 export interface CreateCommunicationInput {
@@ -607,6 +610,11 @@ export interface CreateChecklistItemInput {
   label: string;
   requiredForStatus?: 'PROVISIONAL' | 'CONFIRMED' | 'READY' | 'COMPLETE' | null;
   dueDate?: string | null;
+}
+
+export interface InvoiceNumberPreview {
+  invoiceNumber: string;
+  willReuse: boolean;
 }
 
 export type PaddingWidth = 1 | 3 | 4 | 6;

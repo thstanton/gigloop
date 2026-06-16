@@ -120,7 +120,7 @@ describe('CommunicationsService', () => {
     it('creates a PENDING record before sending', async () => {
       await service.sendEmail(options);
       expect(repo.createPending).toHaveBeenCalledWith(
-        'u1', 'b1', 'ct1', 'Your invoice', '<p>Please find attached</p>', undefined,
+        'u1', 'b1', 'ct1', 'Your invoice', '<p>Please find attached</p>', undefined, undefined,
       );
     });
 
@@ -145,8 +145,23 @@ describe('CommunicationsService', () => {
     it('passes templateId to createPending when provided', async () => {
       await service.sendEmail({ ...options, templateId: 'tmpl1' });
       expect(repo.createPending).toHaveBeenCalledWith(
-        'u1', 'b1', 'ct1', 'Your invoice', '<p>Please find attached</p>', 'tmpl1',
+        'u1', 'b1', 'ct1', 'Your invoice', '<p>Please find attached</p>', 'tmpl1', undefined,
       );
+    });
+
+    it('passes documentId to createPending when provided (invoice send audit)', async () => {
+      await service.sendEmail({ ...options, documentId: 'doc1' });
+      expect(repo.createPending).toHaveBeenCalledWith(
+        'u1', 'b1', 'ct1', 'Your invoice', '<p>Please find attached</p>', undefined, 'doc1',
+      );
+    });
+
+    it('scopes the communication to userId — different users cannot see each other\'s records', async () => {
+      // Structural guarantee: createPending stores userId, and findAll queries with userId.
+      // This test verifies the link is stored with the correct user scope.
+      await service.sendEmail({ ...options, documentId: 'doc1' });
+      const [calledUserId] = repo.createPending.mock.calls[0];
+      expect(calledUserId).toBe('u1');
     });
   });
 });

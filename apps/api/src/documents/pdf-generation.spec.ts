@@ -20,8 +20,11 @@ beforeAll(() => {
       italics: join(fontDir, 'Roboto-Italic.ttf'),
       bolditalics: join(fontDir, 'Roboto-MediumItalic.ttf'),
     },
-    Caveat: {
-      normal: join(customFontsDir, 'Caveat-Regular.ttf'),
+    PlayfairDisplay: {
+      normal: join(customFontsDir, 'PlayfairDisplay-Medium.ttf'),
+      bold: join(customFontsDir, 'PlayfairDisplay-SemiBold.ttf'),
+      italics: join(customFontsDir, 'PlayfairDisplay-Medium.ttf'),
+      bolditalics: join(customFontsDir, 'PlayfairDisplay-SemiBold.ttf'),
     },
     Commissioner: {
       normal: join(customFontsDir, 'Commissioner-Regular.ttf'),
@@ -69,7 +72,7 @@ const songListData: SongListPdfData = {
 };
 
 describe('PDF generation', () => {
-  it('generates invoice PDF using Commissioner + Caveat fonts', async () => {
+  it('generates invoice PDF using Commissioner + PlayfairDisplay fonts', async () => {
     const docDef = buildInvoiceDefinition(invoiceData);
     const buffer: Buffer = await pdfmake.createPdf(docDef).getBuffer();
     expect(Buffer.isBuffer(buffer)).toBe(true);
@@ -77,7 +80,7 @@ describe('PDF generation', () => {
     expect(buffer.subarray(0, 4).toString()).toBe('%PDF');
   });
 
-  it('generates song list PDF using Commissioner + Caveat fonts', async () => {
+  it('generates song list PDF using Commissioner + PlayfairDisplay fonts', async () => {
     const docDef = buildSongListDefinition(songListData);
     const buffer: Buffer = await pdfmake.createPdf(docDef).getBuffer();
     expect(Buffer.isBuffer(buffer)).toBe(true);
