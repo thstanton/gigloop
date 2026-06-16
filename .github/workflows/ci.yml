@@ -94,6 +94,9 @@ jobs:
       - name: Ralph-stream formatter unit tests (ADR-0040)
         if: needs.detect-changes.outputs.web == 'true'
         run: node --test scripts/ralph-stream.test.mjs
+      - name: Read-worked-issue unit tests (#458)
+        if: needs.detect-changes.outputs.web == 'true'
+        run: node --test scripts/read-worked-issue.test.mjs
 
   build:
     name: Build

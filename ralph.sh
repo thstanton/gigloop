@@ -194,6 +194,21 @@ has_closing_commit() {
 # self-selects the highest-priority unblocked `ready-for-agent` slice, treating a
 # blocker as satisfied when it is closed OR labelled `ready-for-review` (PROMPT.md).
 
+# Read the issue number closed by the most recent Closes/Fixes/Resolves commit on
+# this branch since origin/main (or main, or all of HEAD). Replaces the old
+# <selected>N</selected> observability marker (removed in ADR-0045 slice A, #452).
+# Returns an empty string — never crashes — when no closing commit exists yet (a
+# truncated or handoff iteration). Used only to populate the ralph.log heartbeat.
+read_worked_issue() {
+  local base range
+  if git rev-parse --verify -q origin/main >/dev/null 2>&1; then base="origin/main"
+  elif git rev-parse --verify -q main >/dev/null 2>&1; then base="main"
+  else base=""; fi
+  range="HEAD"; [[ -n "$base" ]] && range="${base}..HEAD"
+  git log "$range" --pretty=%B 2>/dev/null \
+    | node "$ROOT/scripts/read-worked-issue.mjs" 2>/dev/null || true
+}
+
 escalate() {
   local issue=$1 reason=$2
   echo "Ralph is handing #$issue to a grown-up — $reason" >&2
@@ -400,8 +415,11 @@ cold_pass() {
   mstr="$mstr cacheR=$(read_metric CACHE_READ "$RUN_METRICS") cacheW=$(read_metric CACHE_WRITE "$RUN_METRICS")"
   mstr="$mstr cost=\$$(read_metric COST_USD "$RUN_METRICS") result=$(read_metric RESULT_SUBTYPE "$RUN_METRICS")"
 
+  local worked_issue
+  worked_issue=$(read_worked_issue)
+
   log_progress "END mode=$MODE result=$(read_metric RESULT_SUBTYPE "$RUN_METRICS") turns=$(read_metric NUM_TURNS "$RUN_METRICS")"
-  heartbeat "mode=$MODE prd=$PRD_N $mstr signal=$RALPH_SIGNAL"
+  heartbeat "mode=$MODE prd=$PRD_N issue=${worked_issue:-unknown} $mstr signal=$RALPH_SIGNAL"
 }
 
 # ---------------------------------------------------------------------------
