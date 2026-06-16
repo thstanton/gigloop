@@ -31,6 +31,7 @@ export function useInvoiceActions(bookingId: string) {
       apiPost(`/bookings/${bookingId}/invoices/${invoiceId}/issue`, {}),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bookingInvoices', bookingId] });
+      queryClient.invalidateQueries({ queryKey: ['bookingDocuments', bookingId] });
       queryClient.invalidateQueries({ queryKey: ['bookingChecklist', bookingId] });
       toast({ title: 'Invoice created' });
     },
@@ -58,5 +59,6 @@ export function useInvoiceActions(bookingId: string) {
     isMarkingSent: markSentMutation.isPending,
     issue: (invoiceId: string) => issueMutation.mutate(invoiceId),
     isIssuing: issueMutation.isPending,
+    issuingInvoiceId: issueMutation.isPending ? (issueMutation.variables ?? null) : null,
   };
 }

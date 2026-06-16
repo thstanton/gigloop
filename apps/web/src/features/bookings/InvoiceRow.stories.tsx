@@ -35,6 +35,7 @@ const meta = {
     pdfUrl: null,
     isDeletePending: false,
     isVoidPending: false,
+    isIssuePending: false,
     onEdit: noop,
     onPreview: noop,
     onIssue: noop,
@@ -64,6 +65,16 @@ export const BalanceDraft: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Balance')).toBeVisible();
     await expect(canvas.getByText('Draft')).toBeVisible();
+  },
+};
+
+export const DraftIssuing: Story = {
+  args: {
+    invoice: { ...baseInvoice, status: 'DRAFT', isDeposit: true },
+    isIssuePending: true,
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Creating…')).toBeVisible();
   },
 };
 

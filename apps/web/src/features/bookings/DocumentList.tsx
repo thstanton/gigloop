@@ -9,7 +9,8 @@ import type { Document, Invoice } from '@/types/api';
 function getDocumentLabel(doc: Document, invoice: Invoice | undefined): string {
   if (doc.type === 'UPLOAD') return doc.name ?? 'Uploaded document';
   if (doc.type !== 'CONTRACT') {
-    return invoice?.isDeposit ? 'Deposit invoice' : 'Balance invoice';
+    const base = invoice?.isDeposit ? 'Deposit invoice' : 'Balance invoice';
+    return invoice?.status === 'VOID' ? `${base} [VOID]` : base;
   }
   return doc.contractStatus === 'VOID' ? 'Contract [VOID]' : 'Contract';
 }

@@ -8,6 +8,7 @@ export function useContractActions(bookingId: string) {
 
   function invalidateBooking() {
     queryClient.invalidateQueries({ queryKey: ['booking', bookingId] });
+    queryClient.invalidateQueries({ queryKey: ['bookingDocuments', bookingId] });
     queryClient.invalidateQueries({ queryKey: ['bookingChecklist', bookingId] });
   }
 

@@ -23,10 +23,11 @@ function getInvoiceActions(
   onVoid: (i: Invoice) => void,
   isDeletePending: boolean,
   isVoidPending: boolean,
+  isIssuePending: boolean,
 ): RowAction[] | null {
   if (invoice.status === 'DRAFT') {
     return [
-      { label: 'Create invoice', onClick: () => onIssue(invoice) },
+      { label: 'Create invoice', onClick: () => onIssue(invoice), isPending: isIssuePending },
       { label: 'Edit', onClick: () => onEdit(invoice) },
       { label: 'Preview draft', icon: <Eye size={14} />, onClick: () => onPreview(invoice) },
       {
@@ -97,6 +98,7 @@ export interface InvoiceRowProps {
   pdfUrl: string | null;
   isDeletePending: boolean;
   isVoidPending: boolean;
+  isIssuePending: boolean;
   onEdit: (invoice: Invoice) => void;
   onPreview: (invoice: Invoice) => void;
   onIssue: (invoice: Invoice) => void;
@@ -107,13 +109,13 @@ export interface InvoiceRowProps {
   onVoid: (invoice: Invoice) => void;
 }
 
-export default function InvoiceRow({ invoice, pdfUrl, isDeletePending, isVoidPending, onEdit, onPreview, onIssue, onDelete, onSend, onMarkSent, onMarkPaid, onVoid }: InvoiceRowProps) {
+export default function InvoiceRow({ invoice, pdfUrl, isDeletePending, isVoidPending, isIssuePending, onEdit, onPreview, onIssue, onDelete, onSend, onMarkSent, onMarkPaid, onVoid }: InvoiceRowProps) {
   // Overdue only applies to SENT invoices — an ISSUED invoice past its due date is not overdue
   const overdue = invoice.status === 'SENT' && !!invoice.dueDate && new Date(invoice.dueDate) < new Date();
   const isVoid = invoice.status === 'VOID';
   const isPaid = invoice.status === 'PAID';
 
-  const actions = getInvoiceActions(invoice, pdfUrl, onEdit, onPreview, onIssue, onDelete, onSend, onMarkSent, onMarkPaid, onVoid, isDeletePending, isVoidPending);
+  const actions = getInvoiceActions(invoice, pdfUrl, onEdit, onPreview, onIssue, onDelete, onSend, onMarkSent, onMarkPaid, onVoid, isDeletePending, isVoidPending, isIssuePending);
   const invoiceLabel = invoice.isDeposit ? 'Deposit' : 'Balance';
   const invoiceSublabel = `${formatCurrency(invoiceLineTotal(invoice))} · ${invoice.issueDate ? formatDate(invoice.issueDate) : '—'}`;
 
@@ -129,7 +131,11 @@ export default function InvoiceRow({ invoice, pdfUrl, isDeletePending, isVoidPen
           {isPaid && invoice.paidAt && ` · paid ${formatDate(invoice.paidAt)}`}
         </p>
         <div className="mt-1">
-          <InvoiceStatusPill status={invoice.status} isOverdue={overdue} />
+          {isIssuePending ? (
+            <span className="text-xs text-muted">Creating…</span>
+          ) : (
+            <InvoiceStatusPill status={invoice.status} isOverdue={overdue} />
+          )}
         </div>
       </div>
       <div className="flex items-center gap-2 flex-shrink-0">
