@@ -11,6 +11,11 @@ How a feature is broken into issues *before any code is written*. This is the ca
 
 If unsure whether something is trivial, treat it as a feature and plan it.
 
+When planning a non-trivial feature, consult `docs/north-star.md` (the Wave 2 / P2 direction) for
+**plumb-it-forward** opportunities — a cheap nullable field, a generic shape, or a preserved timestamp
+now that makes a future pillar materially easier later, without bending the current feature out of
+shape. The North Star is directional, not a constraint.
+
 ## What the gate produces
 
 A **tracking issue** (umbrella; durable dependency map) whose body lists sub-issues as a task list with `Blocked by` links, plus the sub-issues themselves. Every sub-issue must be:

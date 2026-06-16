@@ -184,6 +184,10 @@ Private, authenticated-only half of the musician's profile (one per userId). Nev
 - Full bidirectional comms log (inbound email)
 - Post-gig checklist
 
+For the consolidated, agreed direction these post-MVP items roll up into — the four Wave 2 (P2)
+pillars and the forward-compatibility opportunities they imply — see `docs/north-star.md`. It is
+directional, not binding; the hard rules above still govern.
+
 ## Out of Scope for MVP
 - OAuth / social login
 - Stripe payment integration
