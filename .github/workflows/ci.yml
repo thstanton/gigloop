@@ -88,12 +88,15 @@ jobs:
       - name: Shortcut-detector unit tests (ADR-0030)
         if: needs.detect-changes.outputs.web == 'true'
         run: node --test scripts/shortcut-detector.test.mjs
-      - name: Loop-decision unit tests (ADR-0040)
+      - name: Terminal-signal unit tests (ADR-0045)
         if: needs.detect-changes.outputs.web == 'true'
-        run: node --test scripts/loop-decision.test.mjs
+        run: node --test scripts/terminal-signal.test.mjs
       - name: Ralph-stream formatter unit tests (ADR-0040)
         if: needs.detect-changes.outputs.web == 'true'
         run: node --test scripts/ralph-stream.test.mjs
+      - name: Read-worked-issue unit tests (#458)
+        if: needs.detect-changes.outputs.web == 'true'
+        run: node --test scripts/read-worked-issue.test.mjs
 
   build:
     name: Build
