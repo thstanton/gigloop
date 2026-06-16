@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-GigMan — a CRM for musicians. Greenfield monorepo; SPEC.md is the source of truth for architecture and requirements.
+GigMan — a CRM for musicians. Greenfield monorepo; SPEC.md is the source of truth for architecture and requirements. For where the product is heading next, see `docs/north-star.md` — the directional (non-binding) statement of the Wave 2 (P2) feature direction.
 
 ## Stack
 
