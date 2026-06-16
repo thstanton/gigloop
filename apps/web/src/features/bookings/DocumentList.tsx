@@ -49,12 +49,19 @@ export function DocumentList({ bookingId, documents, invoices }: Props) {
     );
   }
 
+  // Compute each document's display label once, then sort voided documents
+  // (labelled with a trailing "[VOID]" by getDocumentLabel) to the bottom.
+  // Array.prototype.sort is stable, so creation order is preserved within each
+  // group. Sorting on the rendered label keeps the badge and order consistent.
+  const items = documents.map((doc) => {
+    const invoice = invoices.find((i) => i.id === doc.invoiceId);
+    return { doc, invoice, label: getDocumentLabel(doc, invoice) };
+  });
+  items.sort((a, b) => Number(a.label.endsWith('[VOID]')) - Number(b.label.endsWith('[VOID]')));
+
   return (
     <div className="divide-y divide-border">
-      {documents.map((doc) => {
-        const invoice = invoices.find((i) => i.id === doc.invoiceId);
-        const label = getDocumentLabel(doc, invoice);
-
+      {items.map(({ doc, invoice, label }) => {
         const actions: RowAction[] = [
           {
             label: 'Download',
