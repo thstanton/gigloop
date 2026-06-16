@@ -234,24 +234,6 @@ finish_run() {
 }
 
 # ---------------------------------------------------------------------------
-# Gate (prepush: test + build on changed workspaces)
-# ---------------------------------------------------------------------------
-run_gate() {
-  bash "$ROOT/scripts/hooks/prepush.sh"
-}
-
-# ---------------------------------------------------------------------------
-# remainingWorkCount for loop-decision
-# ---------------------------------------------------------------------------
-remaining_count() {
-  # ADR-0045 transitional: this fed loop-decision.mjs. With list_eligible removed and
-  # the iteration path no longer parsing a selection, nothing calls this any more —
-  # left as a stub (no reference to the deleted eligibility judging) until #454 removes
-  # remaining_count + loop-decision entirely.
-  has_closing_commit "${1:-}" && echo 0 || echo 1
-}
-
-# ---------------------------------------------------------------------------
 # Gather (ADR-0045): the candidate corpus injected into every iteration.
 # ---------------------------------------------------------------------------
 # Dump the PRD's OPEN child issues — number, title, labels, full body — in ONE gh
@@ -314,7 +296,7 @@ run_cold() {
   # set +e around the pipeline so a non-zero claude/formatter (pipefail is on) cannot
   # abort the run at the moment of capture; grab PIPESTATUS immediately afterwards.
   # claude's status ([0]) is the real signal — a formatter hiccup ([1]) must not mask
-  # it. The verifier of record is still the gate (run_gate), not this exit code.
+  # it. CI + human-merge is the verifier of record (ADR-0045); this exit code is not consulted.
   # Send claude's OWN stderr to a per-iteration file, not the terminal: the formatter's
   # live feed (also stderr) is then the sole TTY writer. The file is forensics if claude
   # crashes.
