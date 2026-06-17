@@ -94,6 +94,94 @@ a new entity, or invited users), it **must not break `userId` scoping**, and it 
 ADR(s) when it lands. It also revisits the currently-deferred "cross-booking awareness / band member
 coordination" design principle called out in `CONTEXT.md`.
 
+**Explored direction (sketch, 2026-06-17 — directional, not a committed design).** A first pass at
+*how* this could work. None of it is decided; it exists so future feature designs share a mental
+model.
+
+- **Band member identity: Contact + join table.** Band members are Contacts (the existing model). A
+  new `BookingBandMember` join table links them to specific bookings: `bookingId`, `contactId`,
+  `userId` (inheriting the organiser's `userId` — so the multi-tenancy hard rule holds), plus an
+  `instrument`/`role` label, a `bandPortalToken` (unique UUID), and `sessionFee` (the agreed gig fee
+  for this booking). No "named band" concept in P2 — band membership is per-booking, and the roster
+  is fluid: deps vary gig-to-gig, with some regulars. The Contact gains a `defaultSessionFee` field:
+  the dep's usual rate, private to the organiser, never surfaced to the band member, and used as a
+  default when the booking-specific fee is set and as an input to the Quote Calculator (see below).
+  This follows the same pattern as `Contact.commissionArrangement` for booking agents — a role-
+  specific field on an otherwise role-agnostic model.
+
+- **Confirmation model: two paths, organiser has final say.** A dep can confirm via their portal
+  (self-service), or the organiser can confirm on their behalf with an optional note (e.g. "Confirmed
+  on WhatsApp"). Both paths update `BookingBandMember.status` (`INVITED → CONFIRMED`). The model
+  deliberately does not depend on portal adoption — the organiser always has an override. They can
+  also mark a member `DECLINED` or replace them at any time. This mirrors the two-path pattern
+  already used for `depositReceivedAt` (automatic via invoice, or manual override).
+
+- **Portal pattern: x members = x tokens, x states.** Unlike the client portal (one token per
+  booking), each `BookingBandMember` row has its own `bandPortalToken`. The band member portal lives
+  at `/band/:token` — a sibling of `/booking/:token`, bypassing Clerk auth via `@Public()` in the
+  same way. The portal is **branded** (uses `PublicProfile` data; `bandPortalConfig` namespace on
+  `PublicProfile` was reserved in ADR-0015 for any band-specific overrides). What the portal shows:
+  booking date/time/venue, logistics entries where `shareWithBand: true` (already stored per entry —
+  ADR-0034), the PerformanceSets running order, and the member's own instrument/role. A single "I
+  confirm I'm available" action updates their status in GigMan. The portal is **read-only beyond
+  confirmation** in v1.
+
+- **Checklist integration: the BAND_MEMBER actor activates.** `BookingChecklistItem.completedBy:
+  'BAND_MEMBER'` is already dormant in the codebase (ADR-0016). When the portal ships, items
+  assigned to `BAND_MEMBER` appear on the dep's portal and can be ticked off there. On the
+  organiser's side, the checklist shows which items are pending band member action. The confirmation
+  itself is the natural seed for the first `BAND_MEMBER` checklist item: "Confirm availability."
+  This is ADR-0031's envisioned multi-stakeholder checklist model becoming concrete.
+
+- **Musician's view.** A "Band" section on the booking detail page (parallel to "On the day" /
+  logistics). Lists all band members: name, instrument/role, status (Invited / Confirmed /
+  Declined), and controls to add, resend invite, confirm on behalf, or remove. The organiser sees
+  each member's `sessionFee` inline; the dep does not (yet — see below).
+
+- **Fee model: two tiers.** `Contact.defaultSessionFee` is the dep's usual rate — private to the
+  organiser, never surfaced to the dep, and the starting-point input when setting a booking-specific
+  fee. `BookingBandMember.sessionFee` is the agreed fee for this gig — the value that flows into any
+  agreement or document the dep receives. Whether the gig fee appears as a visible value on the band
+  member portal or within a downloadable agreement document is **deferred**; the data model carries
+  it either way.
+
+- **Quote Calculator (cross-pillar P2 feature).** A related P2 feature sitting at the junction of
+  this pillar and Pillar 2. Inputs: Package base values, per-member `Contact.defaultSessionFee`
+  values, mileage, and manual adjustments. Output: a calculated base quote the organiser reviews
+  and customises before sending to the client. The fee fields described above are the band-member
+  inputs to this calculator; they should be present in the schema from day one so the calculator can
+  be built without retrofitting.
+
+- **Calendar: .ics attachment as the universal bridge.** The band member invite email (via Resend;
+  a `band_invite` built-in template) includes a `.ics` calendar attachment: event date/time, venue
+  address, and a link to their portal. This lands in the dep's existing calendar workflow with zero
+  friction — no account, no app. A separate iCal feed for the *organiser* (so their own GigMan
+  bookings appear in Google Calendar / Apple Calendar / Outlook) is a related but distinct feature.
+
+- **Customer insight: musicians operate in WhatsApp.** Deps are resistant to adopting new tools and
+  often dep for several bands, each potentially using different platforms. WhatsApp is a primary
+  communication channel for many musicians. The portal and `.ics` invite are designed to deliver
+  value *through* existing workflows rather than replace them. The invite email should be clear and
+  easy to forward. A WhatsApp Business API integration — outbound template messages delivering the
+  portal link — is a plausible future channel but is deferred until the portal is proven. Full
+  two-way WhatsApp confirmation is high complexity and not in near-term scope.
+
+- **Network effect principle: the booking as a multi-stakeholder event.** Every band member is a
+  potential future GigMan user — many deps lead their own bands; the band member portal is a product
+  demo and should be polished accordingly. Looking further ahead: if a dep signs up to GigMan, their
+  email address is the natural link to Contact records where they are already listed as a band member
+  on other users' bookings. The shared layer defined here — logistics with `shareWithBand: true`, the
+  running order, `BookingBandMember.sessionFee` — is the foundation for future **authenticated
+  cross-user visibility**: a dep's GigMan account surfacing gigs they're part of alongside gigs they
+  organise. The full implications (GDPR, consent model, cross-tenant read access architecture) are
+  not designed here and will need their own ADR(s). **The design principle for now:** model band
+  member data with a clear shared / organiser-only distinction from the start, so this future can be
+  built without retrofitting.
+
+- **What v1 defers.** Authenticated cross-user visibility. Fee visibility mechanism on the portal
+  (visible value vs. downloadable agreement). WhatsApp integration. Song-level set lists (flagged as
+  a P3 feature — v1 shares the PerformanceSets running order only).
+
 ### 4. AI assistant (natural-language query)
 
 **What.** Free-text questions over the musician's own data — *"which weddings haven't paid their
