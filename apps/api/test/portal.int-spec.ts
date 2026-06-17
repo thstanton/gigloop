@@ -119,3 +119,92 @@ describe('Portal music form (integration)', () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe('Portal document visibility (integration)', () => {
+  let app: INestApplication;
+  let bookingId: string;
+  const DOCS_TOKEN = `test-portal-docs-token-${Date.now()}`;
+
+  beforeAll(async () => {
+    app = await createTestApp();
+
+    const contact = await prisma.contact.create({
+      data: { userId: TEST_USER_ID, name: 'Docs Portal Customer' },
+    });
+
+    await prisma.publicProfile.upsert({
+      where: { userId: TEST_USER_ID },
+      create: { userId: TEST_USER_ID, businessName: 'Test Band' },
+      update: {},
+    });
+
+    const booking = await prisma.booking.create({
+      data: {
+        userId: TEST_USER_ID,
+        customerId: contact.id,
+        eventType: 'WEDDING',
+        date: new Date(FUTURE_DATE),
+        portalToken: DOCS_TOKEN,
+      },
+    });
+    bookingId = booking.id;
+
+    // An invoice + its issue-time INVOICE document for each status we care about.
+    const statuses = ['ISSUED', 'SENT', 'PAID', 'VOID'] as const;
+    for (const status of statuses) {
+      const invoice = await prisma.invoice.create({
+        data: {
+          userId: TEST_USER_ID,
+          bookingId,
+          billToContactId: contact.id,
+          status,
+          invoiceNumber: `INV-2027-${status}`,
+        },
+      });
+      await prisma.document.create({
+        data: {
+          userId: TEST_USER_ID,
+          bookingId,
+          invoiceId: invoice.id,
+          type: 'INVOICE',
+          storageKey: `invoices/${invoice.id}.pdf`,
+        },
+      });
+    }
+
+    // A non-invoice document is always visible.
+    await prisma.document.create({
+      data: {
+        userId: TEST_USER_ID,
+        bookingId,
+        type: 'SONG_LIST',
+        storageKey: `song-lists/${bookingId}.pdf`,
+      },
+    });
+  });
+
+  afterAll(async () => {
+    await prisma.document.deleteMany({ where: { bookingId } });
+    await prisma.invoice.deleteMany({ where: { bookingId } });
+    await prisma.booking.deleteMany({ where: { userId: TEST_USER_ID } });
+    await prisma.contact.deleteMany({ where: { userId: TEST_USER_ID } });
+    await prisma.publicProfile.deleteMany({ where: { userId: TEST_USER_ID } });
+    await app.close();
+  });
+
+  it('exposes only SENT/PAID invoice documents plus non-invoice documents', async () => {
+    const res = await request(app.getHttpServer()).get(`/api/booking/${DOCS_TOKEN}`);
+
+    expect(res.status).toBe(200);
+    const labels = (res.body.documents as Array<{ label: string; type: string }>).map((d) => d.label);
+
+    // SENT and PAID invoices are delivered/settled — visible.
+    expect(labels).toContain('Invoice INV-2027-SENT');
+    expect(labels).toContain('Invoice INV-2027-PAID');
+    // ISSUED-but-unsent and VOID invoices must never reach the client.
+    expect(labels).not.toContain('Invoice INV-2027-ISSUED');
+    expect(labels).not.toContain('Invoice INV-2027-VOID');
+    // Non-invoice documents are unaffected.
+    expect(labels).toContain('Song list');
+  });
+});
