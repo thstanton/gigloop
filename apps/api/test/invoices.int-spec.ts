@@ -410,6 +410,39 @@ describe('Invoice flow (integration)', () => {
     });
   });
 
+  // ── PDF preview ───────────────────────────────────────────────────────────
+
+  describe('Preview PDF', () => {
+    it('returns application/pdf for a DRAFT invoice', async () => {
+      const bookingId = await createBooking();
+      const invoiceId = await createInvoice(bookingId, true);
+
+      const res = await request(app.getHttpServer())
+        .get(`/api/bookings/${bookingId}/invoices/${invoiceId}/preview.pdf`);
+
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toMatch(/application\/pdf/);
+
+      await prisma.booking.delete({ where: { id: bookingId } });
+    });
+
+    it('returns application/pdf for an ISSUED invoice', async () => {
+      const bookingId = await createBooking();
+      const invoiceId = await createInvoice(bookingId, true);
+      await request(app.getHttpServer())
+        .post(`/api/bookings/${bookingId}/invoices/${invoiceId}/issue`)
+        .send({ issueDate: '2027-01-01', dueDate: '2027-01-15' });
+
+      const res = await request(app.getHttpServer())
+        .get(`/api/bookings/${bookingId}/invoices/${invoiceId}/preview.pdf`);
+
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toMatch(/application\/pdf/);
+
+      await prisma.booking.delete({ where: { id: bookingId } });
+    });
+  });
+
   // ── unhappy paths ──────────────────────────────────────────────────────────
 
   describe('Unhappy paths', () => {
