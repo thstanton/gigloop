@@ -78,6 +78,16 @@ export const DraftIssuing: Story = {
   },
 };
 
+export const IssuedVoiding: Story = {
+  args: {
+    invoice: { ...baseInvoice, status: 'ISSUED', isDeposit: true },
+    isVoidPending: true,
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Voiding…')).toBeVisible();
+  },
+};
+
 export const DepositIssued: Story = {
   args: { invoice: { ...baseInvoice, status: 'ISSUED', isDeposit: true } },
   play: async ({ canvas }) => {

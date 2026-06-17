@@ -112,6 +112,7 @@ export class DocumentsService {
     userId: string,
     invoiceId: string,
     preloaded?: PreloadedInvoice,
+    previewNumber?: string,
   ): Promise<InvoicePdfData> {
     const invoice = preloaded ?? await this.prisma.invoice.findFirst({
       where: { id: invoiceId, userId },
@@ -121,8 +122,9 @@ export class DocumentsService {
       },
     });
     if (!invoice) throw new NotFoundException('Invoice not found');
-    // Use a placeholder for preview generation on uninvoiced drafts
-    const invoiceNumber = invoice.invoiceNumber ?? 'DRAFT';
+    // Uninvoiced drafts have no number yet — show the provisional number it would receive
+    // on issue (matches the InvoiceSheet preview), falling back to a placeholder.
+    const invoiceNumber = invoice.invoiceNumber ?? previewNumber ?? 'DRAFT';
 
     const [publicProfile, userProfile] = await Promise.all([
       this.prisma.publicProfile.findUnique({ where: { userId } }),
@@ -196,8 +198,8 @@ export class DocumentsService {
     return { buffer, documentId: doc.id };
   }
 
-  async generatePreviewPdf(userId: string, invoiceId: string): Promise<Buffer> {
-    const data = await this.buildInvoicePdfData(userId, invoiceId);
+  async generatePreviewPdf(userId: string, invoiceId: string, previewNumber?: string): Promise<Buffer> {
+    const data = await this.buildInvoicePdfData(userId, invoiceId, undefined, previewNumber);
     return this.generatePdfBuffer(data);
   }
 

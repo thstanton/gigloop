@@ -119,6 +119,10 @@ export default function InvoiceRow({ invoice, pdfUrl, isDeletePending, isVoidPen
   const invoiceLabel = invoice.isDeposit ? 'Deposit' : 'Balance';
   const invoiceSublabel = `${formatCurrency(invoiceLineTotal(invoice))} · ${invoice.issueDate ? formatDate(invoice.issueDate) : '—'}`;
 
+  let pendingLabel: string | null = null;
+  if (isIssuePending) pendingLabel = 'Creating…';
+  else if (isVoidPending) pendingLabel = 'Voiding…';
+
   return (
     <div className="flex items-start justify-between gap-3 py-2.5 border-b border-border last:border-0">
       <div className="min-w-0">
@@ -131,8 +135,8 @@ export default function InvoiceRow({ invoice, pdfUrl, isDeletePending, isVoidPen
           {isPaid && invoice.paidAt && ` · paid ${formatDate(invoice.paidAt)}`}
         </p>
         <div className="mt-1">
-          {isIssuePending ? (
-            <span className="text-xs text-muted">Creating…</span>
+          {pendingLabel ? (
+            <span className="text-xs text-muted">{pendingLabel}</span>
           ) : (
             <InvoiceStatusPill status={invoice.status} isOverdue={overdue} />
           )}

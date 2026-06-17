@@ -10,7 +10,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import InvoiceRow from './InvoiceRow';
-import { apiGet } from '@/lib/api';
+import { apiGet, apiGetBlob } from '@/lib/api';
+import { toast } from '@/lib/hooks/use-toast';
 import { useBookingActions } from '@/lib/hooks/useBookingActions';
 import { useInvoiceActions } from '@/lib/hooks/useInvoiceActions';
 import type { Invoice, Document, SeriesInvoice, BookingDetail, UserProfile } from '@/types/api';
@@ -131,7 +132,21 @@ export default function InvoiceSection({ bookingId }: Readonly<InvoiceSectionPro
   const invoiceActions = useInvoiceActions(bookingId);
 
   function openPreviewPdf(invoice: Invoice) {
-    window.open(`/api/bookings/${bookingId}/invoices/${invoice.id}/preview.pdf`, '_blank', 'noopener,noreferrer');
+    // The preview endpoint requires the Clerk bearer token, so a raw window.open() to it
+    // 401s. Open the tab synchronously (preserves the user gesture), fetch the PDF with
+    // auth, then point the tab at the blob.
+    const win = window.open('', '_blank');
+    apiGetBlob(`/bookings/${bookingId}/invoices/${invoice.id}/preview.pdf`)
+      .then((blob) => {
+        const url = URL.createObjectURL(blob);
+        if (win) win.location.href = url;
+        else window.open(url, '_blank');
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      })
+      .catch(() => {
+        win?.close();
+        toast({ title: 'Failed to open preview', variant: 'destructive' });
+      });
   }
 
   function buildSetsDescription(): string {
@@ -234,7 +249,7 @@ export default function InvoiceSection({ bookingId }: Readonly<InvoiceSectionPro
             invoice={inv}
             pdfUrl={documents.find((d) => d.type === 'INVOICE' && d.invoiceId === inv.id)?.url ?? null}
             isDeletePending={actions.isDeletingInvoice}
-            isVoidPending={invoiceActions.isVoidingInvoice}
+            isVoidPending={invoiceActions.voidingInvoiceId === inv.id}
             isIssuePending={invoiceActions.issuingInvoiceId === inv.id}
             onEdit={openEditInvoice}
             onPreview={openPreviewPdf}

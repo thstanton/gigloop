@@ -28,6 +28,12 @@ export async function apiGet<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+export async function apiGetBlob(path: string): Promise<Blob> {
+  const res = await authedFetch(path);
+  if (!res.ok) throw new Response(res.statusText, { status: res.status });
+  return res.blob();
+}
+
 export async function apiGetNullable<T>(path: string): Promise<T | null> {
   const res = await authedFetch(path);
   if (res.status === 404) return null;

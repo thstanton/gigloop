@@ -247,7 +247,7 @@ describe('InvoicesRepository', () => {
     });
 
     it('reuses VOID invoice number and skips counter increment when slot found', async () => {
-      prisma.invoice.findFirst.mockResolvedValue({ invoiceNumber: 'INV-2026-003' });
+      prisma.invoice.findFirst.mockResolvedValue({ invoiceNumber: 'INV-2026-003', issueDate: new Date('2026-02-01'), createdAt: new Date('2026-02-01') });
       await repo.assignAndMarkSent('u1', { id: 'i1', bookingId: 'b1', isDeposit: false, issueDate, dueDate: null });
       expect(prisma.userProfile.update).not.toHaveBeenCalled();
       expect(prisma.invoice.update).toHaveBeenCalledWith(
@@ -298,7 +298,7 @@ describe('InvoicesRepository', () => {
     });
 
     it('returns the voided invoice number and willReuse=true when a void slot exists', async () => {
-      prisma.invoice.findFirst.mockResolvedValue({ invoiceNumber: 'INV-2026-003' });
+      prisma.invoice.findFirst.mockResolvedValue({ invoiceNumber: 'INV-2026-003', issueDate: new Date('2026-02-01'), createdAt: new Date('2026-02-01') });
       prisma.userProfile.findUnique.mockResolvedValue(freshProfile);
       const result = await repo.previewBookingInvoiceNumber('u1', 'b1', true);
       expect(result.invoiceNumber).toBe('INV-2026-003');
@@ -349,7 +349,7 @@ describe('InvoicesRepository', () => {
     });
 
     it('returns the voided series invoice number and willReuse=true', async () => {
-      prisma.invoice.findFirst.mockResolvedValue({ invoiceNumber: 'INV-2026-007' });
+      prisma.invoice.findFirst.mockResolvedValue({ invoiceNumber: 'INV-2026-007', issueDate: new Date('2026-02-01'), createdAt: new Date('2026-02-01') });
       prisma.userProfile.findUnique.mockResolvedValue(freshProfile);
       const result = await repo.previewSeriesInvoiceNumber('u1', 'ser1');
       expect(result.invoiceNumber).toBe('INV-2026-007');
