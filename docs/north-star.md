@@ -44,18 +44,119 @@ into understanding the business (insight), across the band (collaboration), and 
 `ENQUIRY`-stage bookings from incoming mail — plus a fuller bidirectional communication log and batch
 sending.
 
-**Why it matters.** It removes manual data entry at the top of the funnel, which is where the
-musician's effort is least rewarded. It also makes the `ENQUIRY` stage genuinely useful rather than a
-stage most bookings skip.
+**Why it matters.** This pillar is fundamentally a **migration-barrier** play, not just a
+typing-saver. Customer research surfaced that musicians are disincentivised from creating
+`ENQUIRY`-stage records until a booking is "serious," because the admin overhead isn't worth it for a
+lead that may go nowhere — even though those dead enquiries are exactly the signal the insight pillar
+(Pillar 2) wants. The deeper insight (see sketch) is that the real barrier is the **context-switch**
+out of the inbox into GigMan, not the per-record typing: a musician deciding to leave their mail app
+and re-enter a lead by hand is the act that doesn't happen. So the goal is **passive capture** —
+value that accrues *without the user choosing to act* — which makes the `ENQUIRY` stage genuinely
+useful rather than a stage most bookings skip.
 
-**Already plumbed for it.** `Communication` is modelled generically for inbound today — `direction`
-(`OUTBOUND | INBOUND`) and `status` (`PENDING | SENT | FAILED`), explicitly designed "to accommodate
+**Already plumbed for it (partially — see correction below).** `Communication` is modelled
+generically for inbound today — `direction` (`OUTBOUND | INBOUND`) and `status`
+(`PENDING | SENT | FAILED`), and the model carries a `channel` field — designed "to accommodate
 inbound messages without schema changes" (ADR-0007). The `ENQUIRY` lifecycle stage and the optional
-`quote` template are both documented as gaining their full value once ingestion exists.
+`quote` template are both documented as gaining their full value once ingestion exists. **But that
+claim only covers the easy half** (direction/status/channel): the *routing reality* is unplumbed — see
+the schema note in the sketch.
 
 **Keep in mind.** An inbound webhook (e.g. Resend inbound) and a way to thread/link inbound mail to a
 contact by email address. Keep the async `PENDING` send path intact — it was added in anticipation of
-batch sending. Enquiry classification is a natural fit for AI assistance (links to Pillar 4).
+batch sending. Enquiry classification, to-do extraction, and answer-from-booking-info are natural
+fits for AI assistance (links to Pillar 4 — and note that inbound email is precisely the untrusted
+third-party content flagged as Pillar 4's residual injection surface).
+
+**Explored direction (sketch, 2026-06-17 — directional, not a committed design).** A first pass at
+*how* this could work. None of it is decided; it exists so future feature designs share a mental
+model. The genuinely unresolved choices are flagged as such.
+
+- **Governing principle: support the workflow, don't dictate it.** A constant since the first UAT
+  session — we cannot enforce a workflow on users. GigMan must be flexible enough to *support* a
+  musician's existing workflow, *encourage* workflows we can support more easily, but *dictate* none.
+  This rhymes with the band-member pillar's "deliver value *through* existing workflows rather than
+  replace them" (the WhatsApp insight) — a consistent GigMan philosophy across pillars.
+
+- **Adoption ladder: a spectrum of capture mechanisms at increasing integration depth.** This is how
+  "context-switch is the barrier" and "don't dictate" combine into architecture — the user chooses how
+  far down the ladder they go, each rung more passive than the last, none required:
+  1. **Manual quick-add** — always available, zero trust, zero setup. The floor.
+  2. **Forwarding to a GigMan inbound address** (e.g. via a forwarding rule, or pointing a website
+     contact form / directory profile at it; captured via a Resend inbound webhook) — a one-time
+     setup, *passive thereafter*. Buys most of the value at low build/trust cost.
+  3. **Full mailbox integration (Gmail/Outlook OAuth)** — deepest, highest trust, *fully passive, no
+     redirection*. The aspirational rung, and the biggest scope/trust jump in the pillar.
+  The doc commits to the **ladder shape**, not the rung selection. **The fwd-vs-mailbox mechanism is
+  the central unresolved decision** and is deferred to the feature's own ADR. Current lean: forwarding
+  as the first real implementation (mailbox integration has nasty edge cases and a large privacy
+  surface); manual quick-add as the always-present floor.
+
+- **Honesty posture: label the surface for what it contains.** The Communications section on the
+  booking page is scoped to email and **labelled "Email"** because that is honestly all it shows. The
+  `Communication` *model* stays generic and channel-aware (it already carries `channel`), so other
+  channels could land later as their own labelled sections or a merged view — no schema narrowing. The
+  completeness contract follows the chosen rung: with **forwarding**, the *user* owns completeness and
+  knows it; with **mailbox integration**, GigMan *assumes* responsibility for completeness. Either way,
+  GigMan is never sold as "we replace your email client" — always "we make it easier to see your
+  booking info in one place." A half-integrated log that the user *trusts* but that is quietly
+  incomplete is a real risk to design around (it can drive the wrong nudge or a stale AI to-do).
+
+- **Routing: propose, don't assume.** Linking inbound mail to the right booking/contact is the central
+  ingestion problem, and it is mechanism-independent (forwarding and mailbox both have it). Ambiguity
+  is unavoidable — an agent with three live bookings, a wedding couple with two email addresses, a
+  repeat client with past and future bookings. The resolution is **confidence-based**: a high-confidence
+  match (known sender, single live booking) auto-files to the thread; a low/ambiguous match lands in a
+  **triage queue** with GigMan's best guess pre-selected, and the user confirms or reassigns in one
+  tap. GigMan never silently mis-files. This is where **AI (Pillar 4) plugs in** — the model *proposes*
+  the match and extracts candidate to-dos; the human confirms. The unknown-sender case is the
+  migration-barrier win: "create a new `ENQUIRY` booking from this email?"
+
+- **Schema plumb-forward (corrects the "already plumbed" claim).** ADR-0007 plumbed direction/status
+  but **not the routing reality**, and any feature touching `Communication` before ingestion ships
+  should keep this in mind. Today `Communication.bookingId` and `contactId` are **both required
+  (non-null)** and there is **no `fromAddress`** field and no triage/unassigned `status` — so an
+  inbound email from an *unknown sender* (the new-enquiry happy path) has nowhere to live until a
+  Contact and Booking already exist, and an unroutable email has no home at all. The real plumb-forward
+  is: make `bookingId` nullable, add `fromAddress`, add a received/unassigned state. Separately,
+  `Contact.email` is a **single optional field**, so the wedding-couple-second-address case can't
+  match — supporting multiple emails per contact is a small, cheap candidate.
+
+- **Outbound: free-form send is an easy win; threaded reply is not.** These are two things wearing one
+  name. **Free-form send** ("no template" — compose in the existing Tiptap editor, send via Resend,
+  log with `templateId = null`) is almost entirely a UI affordance: `Communication.templateId` is
+  *already* nullable and `body` already stores rendered HTML. Variable substitution
+  (`{{portalLink}}`, `{{bookingDate}}`, …) should remain available in the no-template path — a "blank
+  template that still supports variables." This is nearly P1-adjacent and could be pulled forward.
+  **Threaded reply** (the message stitches into the conversation the *client* sees) is *not* free: it
+  needs `In-Reply-To`/`References` headers built from the inbound email's captured `Message-ID` (which
+  only exists once ingestion lands) plus a resolved sending identity. Keep them labelled distinctly so
+  a reader doesn't think the whole two-way inbox is cheap — only the compose half is.
+
+- **Reply-To / reply routing (a current gap, and a fork in the road).** Today every send goes out as
+  `from: noreply@gigman.com` with **no `reply_to` header**, so a client's reply hits a black hole and
+  is **lost**. The musician's real address already exists in the system (`PublicProfile.email`, used
+  only as the `{{musicianEmail}}` *body variable*). Two consequences:
+  - **Cheap win (near a bug-fix):** set `reply_to` = the musician's own email. Replies then land in
+    their **real inbox** — their existing workflow, zero ingestion infrastructure, and it honours
+    "don't dictate." Worth doing regardless of when the pillar lands.
+  - **Future rung — tokenised reply address (percolating, not decided).** Setting `reply_to` to a
+    *tokenised* GigMan address (e.g. `reply+<bookingToken>@inbox.gigman.app`) would route replies
+    *unambiguously straight into GigMan* — the token encodes the booking, so it **designs the routing-
+    ambiguity problem away at the address layer** for the reply path (the agent-with-three-bookings and
+    couple-with-two-addresses cases vanish for replies). It is the existing portal-token pattern
+    (`/booking/:token`) reused as a reply address. The cost: replies bypass the musician's own inbox
+    unless GigMan forwards them on — nudging GigMan toward *owning* comms. This is the fwd-vs-mailbox
+    tension surfaced at its most concrete point, and is flagged here to let it mature, not to decide it.
+
+- **Proactive surfacing ties comms back to the core differentiator.** Captured inbound is most
+  valuable when it becomes "the right action at the right time" — a checklist / attention nudge ("a
+  new client email needs your reply") rather than a passive log the musician must interrogate. This
+  links the daily-digest deferred-SPEC item and the existing checklist model.
+
+- **What v1 likely defers.** Mailbox (OAuth) integration. Threaded two-way reply (headers + sending
+  identity). Tokenised reply routing. The fwd-vs-mailbox mechanism decision itself. Channels beyond
+  email (the model stays channel-aware so they need no migration).
 
 ### 2. Insight & analytics
 
