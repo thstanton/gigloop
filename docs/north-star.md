@@ -114,6 +114,52 @@ bearing concern** — any generated query must be constrained to the authenticat
 through the existing validated filter/search layer, **never** raw cross-tenant SQL. (c) Keep DTOs
 well-described as the model's contract. (d) Overlaps with Pillar 2.
 
+**Explored direction (sketch, 2026-06-16 — directional, not a committed design).** A first pass at
+*how* this could work. None of it is decided; it exists so future feature designs share a mental
+model. The real design choices below are flagged as questions for the feature's own future ADR.
+
+- **Query translation: tool / function calling.** The LLM is given a small set of tools that map onto
+  the existing validated repository methods (`searchBookings` maps 1:1 to the ADR-0041 search;
+  `searchSongs`, `searchContacts`, etc. follow). The app executes them server-side with `userId`
+  injected from the Clerk JWT — the model never sees or sets `userId`, and tools return real rows, so
+  there is nothing to hallucinate. Aggregate questions ("earnings in May", "busiest month") become
+  their own tools backed by scoped Prisma aggregates — the **same backend the Insight pillar uses**.
+  Alternatives considered and set aside: a generic filter-DSL / blend (more bespoke grammar to own),
+  text-to-SQL (largest security surface, cuts against the `userId` hard rule), and RAG/semantic
+  retrieval (a possible *later* complement for fuzzy/notes questions, not the foundation).
+- **Scope: read-only Q&A.** Find / filter / summarise; no mutations in the first version, so no
+  confirmation-flow design is needed yet. Write-actions, if ever added, would need confirmation gates.
+- **Response shape: narrative + records, both returned.** A two-pass loop — user query → LLM
+  interprets and calls tools → backend fetches real records → results returned to the LLM → LLM writes
+  a direct narrative answer grounded in that data → API returns `{ answer, records }`. The UI renders
+  the narrative alongside the canonical record card(s); the card stays the source of truth, so a
+  manipulated or imperfect narrative is backstopped by the visible data.
+- **UX: a global command palette** (⌘K on desktop; a top-bar icon on mobile — *not* a bottom-tab-bar
+  slot; the bookings-list search stays as it is). It is **tri-modal**: (1) standard cross-entity quick
+  search (existing endpoints, instant, no LLM), (2) quick actions (e.g. "Create booking" — a small
+  command registry, mostly navigations), and (3) **Ask** — free-text that invokes the LLM assistant.
+  The **LLM is invoked only on the explicit "Ask" action, never per keystroke**, so search and actions
+  are the cheap default and the LLM is a deliberate escalation. Answers are **one-shot** (ask → answer
+  → ask again, not a chat thread); result cards are tappable and navigate to the record. This is a new
+  cmdk-style shared component (buildable on the existing `Dialog`/`Sheet` + `Input`, or adopt `cmdk`)
+  — to flag for approval at planning time.
+- **Where it runs / model:** API-side (like PDF generation), via a new `@anthropic-ai/sdk` dependency,
+  on a **small/fast model tier** (tool selection + grounded summarising suits it) — Haiku-vs-Sonnet
+  left to evaluation, not pinned here. Resolve relative dates ("this week") to ISO ranges in code
+  rather than asking the model to do date arithmetic.
+- **Guardrails — injection is largely contained by the architecture.** Because the assistant is
+  read-only, tenant-locked (`userId` server-side), has no write/send tools, and holds no secrets in
+  context, a hijacked model can at most distort the *narrative* — it cannot exfiltrate cross-tenant
+  data or take actions, and the canonical records rendered alongside are the backstop. Treat tool
+  results as **data, not instructions**. The residual injection surface is *indirect* (untrusted
+  third-party content — contact names, notes, and especially the inbound emails of Pillar 1). For
+  cost/abuse: a **hard per-response output cap** plus a **tightly-scoped system prompt** so off-topic
+  prompts map to no tool and get a cheap canned refusal. Per-user quotas and subscription-tier gating
+  (ADR-0015) are deferred backstops to revisit once the assistant has proven its value.
+- **Possible later optimisation (not designed in):** pre-loading a bounded "hot set" of upcoming gigs
+  so the most common questions can be answered in a single pass. The sketch keeps to the clean
+  two-pass tool-loop.
+
 ## What this does *not* change
 
 - The **hard rules** still hold without exception: Clerk-only auth, UUID primary keys, `userId`
