@@ -19,6 +19,11 @@ Phasing terminology is unchanged: we keep using **P1 / P2 / P3** (P1 = the shipp
 small, cheap bit of "plumb-it-forward" now (a nullable field, a generic shape, a preserved timestamp)
 would make a Wave 2 pillar materially easier later — without bending the current feature out of shape.
 
+**How to extend it:** use the `shape-north-star` skill. Shaping is breadth-first direction-setting —
+adding or deepening a pillar, parking architectural choices as open questions — and is the deliberate
+complement to `grill-with-docs` (which converts those parked questions into binding ADRs). Keep
+everything here directional; the moment a decision is ready to be made, take it to a grill session.
+
 ## Where we are (P1)
 
 The MVP is a complete gig-lifecycle CRM: bookings (`Enquiry → Complete`), contacts, packages & sets,
