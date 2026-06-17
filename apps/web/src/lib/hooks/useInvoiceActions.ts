@@ -53,6 +53,7 @@ export function useInvoiceActions(bookingId: string) {
   return {
     voidInvoice: (invoiceId: string) => voidInvoiceMutation.mutate(invoiceId),
     isVoidingInvoice: voidInvoiceMutation.isPending,
+    voidingInvoiceId: voidInvoiceMutation.isPending ? (voidInvoiceMutation.variables ?? null) : null,
     markPaid: (invoiceId: string) => markPaidMutation.mutate(invoiceId),
     isMarkingPaid: markPaidMutation.isPending,
     markSent: (invoiceId: string) => markSentMutation.mutate(invoiceId),

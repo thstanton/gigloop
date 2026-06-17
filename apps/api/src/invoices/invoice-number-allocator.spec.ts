@@ -96,27 +96,43 @@ describe('allocate', () => {
   });
 
   describe('void-slot inheritance', () => {
-    it('returns voided number unchanged when voidedNumber provided', () => {
-      const result = allocate(defaultPrefs, currentYear, 5, currentYear, 'INV-2026-003');
+    it('keeps the same number when the style is unchanged', () => {
+      const result = allocate(defaultPrefs, currentYear, 5, currentYear, { invoiceNumber: 'INV-2026-003', year: 2026 });
       expect(result.invoiceNumber).toBe('INV-2026-003');
     });
 
+    it('re-renders the reused sequence with the current template', () => {
+      const prefs = { invoiceNumberFormat: { prefix: '', includeYear: false, paddingWidth: 6 } };
+      const result = allocate(prefs, currentYear, 5, currentYear, { invoiceNumber: 'INV-2026-006', year: 2026 });
+      expect(result.invoiceNumber).toBe('000006');
+    });
+
+    it('uses the voided year for the re-rendered number', () => {
+      const result = allocate(defaultPrefs, 2027, 5, 2027, { invoiceNumber: 'INV-2026-006', year: 2026 });
+      expect(result.invoiceNumber).toBe('INV-2026-006');
+    });
+
+    it('falls back to the verbatim number when the sequence is unparseable', () => {
+      const result = allocate(defaultPrefs, currentYear, 5, currentYear, { invoiceNumber: 'LEGACY-X', year: 2026 });
+      expect(result.invoiceNumber).toBe('LEGACY-X');
+    });
+
     it('does not advance nextSeq when void inherited', () => {
-      const result = allocate(defaultPrefs, currentYear, 5, currentYear, 'INV-2026-003');
+      const result = allocate(defaultPrefs, currentYear, 5, currentYear, { invoiceNumber: 'INV-2026-003', year: 2026 });
       expect(result.nextSeq).toBe(5);
     });
 
     it('preserves seqYear when void inherited', () => {
-      const result = allocate(defaultPrefs, 2026, 5, 2025, 'INV-2025-099');
+      const result = allocate(defaultPrefs, 2026, 5, 2025, { invoiceNumber: 'INV-2025-099', year: 2025 });
       expect(result.nextYear).toBe(2025);
     });
 
-    it('treats null voidedNumber as no void', () => {
+    it('treats null voided as no void', () => {
       const result = allocate(defaultPrefs, currentYear, 5, currentYear, null);
       expect(result.nextSeq).toBe(6);
     });
 
-    it('treats undefined voidedNumber as no void', () => {
+    it('treats undefined voided as no void', () => {
       const result = allocate(defaultPrefs, currentYear, 5, currentYear);
       expect(result.nextSeq).toBe(6);
     });

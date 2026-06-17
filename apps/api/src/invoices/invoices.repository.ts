@@ -5,9 +5,21 @@ import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { CreateLineItemDto } from './dto/create-line-item.dto';
 import { UpdateLineItemDto } from './dto/update-line-item.dto';
-import { allocate } from './invoice-number-allocator';
+import { allocate, type VoidedInvoiceRef } from './invoice-number-allocator';
 
 export { buildInvoiceNumber, PaddingWidth, InvoiceNumberFormat } from './invoice-number-allocator';
+
+/**
+ * Map a voided invoice record to the reuse reference passed to allocate(). The year comes
+ * from when the slot was originally issued (issueDate, falling back to createdAt) so the
+ * re-rendered number keeps its original year segment.
+ */
+function toVoidedRef(
+  voided: { invoiceNumber: string | null; issueDate: Date | null; createdAt: Date } | null,
+): VoidedInvoiceRef | null {
+  if (!voided?.invoiceNumber) return null;
+  return { invoiceNumber: voided.invoiceNumber, year: (voided.issueDate ?? voided.createdAt).getFullYear() };
+}
 
 export const invoiceIncludes = {
   lineItems: { orderBy: { order: 'asc' } },
@@ -124,7 +136,7 @@ export class InvoicesRepository {
 
     const voided = await tx.invoice.findFirst({
       where: { ...ownerWhere, userId, status: 'VOID', invoiceNumber: { not: null } },
-      select: { invoiceNumber: true },
+      select: { invoiceNumber: true, issueDate: true, createdAt: true },
       ...(orderBy ? { orderBy } : {}),
     });
 
@@ -137,7 +149,7 @@ export class InvoicesRepository {
       currentYear,
       profile.invoiceNumberSequence,
       profile.invoiceSequenceYear,
-      voided?.invoiceNumber,
+      toVoidedRef(voided),
     );
 
     if (nextSeq !== profile.invoiceNumberSequence) {
@@ -159,7 +171,7 @@ export class InvoicesRepository {
     const [voided, profile] = await Promise.all([
       this.prisma.invoice.findFirst({
         where: { ...ownerWhere, userId, status: 'VOID', invoiceNumber: { not: null } },
-        select: { invoiceNumber: true },
+        select: { invoiceNumber: true, issueDate: true, createdAt: true },
         ...(orderBy ? { orderBy } : {}),
       }),
       this.prisma.userProfile.findUnique({ where: { userId } }),
@@ -167,7 +179,7 @@ export class InvoicesRepository {
     const prefs = (profile?.preferences as Record<string, unknown>) ?? {};
     const seq = profile?.invoiceNumberSequence ?? 0;
     const seqYear = profile?.invoiceSequenceYear ?? currentYear;
-    const { invoiceNumber } = allocate(prefs, currentYear, seq, seqYear, voided?.invoiceNumber);
+    const { invoiceNumber } = allocate(prefs, currentYear, seq, seqYear, toVoidedRef(voided));
     return { invoiceNumber, willReuse: !!voided?.invoiceNumber };
   }
 

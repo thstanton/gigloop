@@ -26,6 +26,7 @@ type MockRepo = {
   updateLineItem: jest.Mock;
   deleteLineItem: jest.Mock;
   previewBookingInvoiceNumber: jest.Mock;
+  previewSeriesInvoiceNumber: jest.Mock;
 };
 
 function makeRepo(): MockRepo {
@@ -51,6 +52,7 @@ function makeRepo(): MockRepo {
     updateLineItem: jest.fn(),
     deleteLineItem: jest.fn(),
     previewBookingInvoiceNumber: jest.fn(),
+    previewSeriesInvoiceNumber: jest.fn(),
   };
 }
 
@@ -111,6 +113,35 @@ describe('InvoicesService', () => {
     it('throws NotFoundException when invoice is not found', async () => {
       repo.findOne.mockResolvedValue(null);
       await expect(service.findOne('u1', 'b1', 'missing')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('generatePreviewPdf', () => {
+    beforeEach(() => {
+      (mockDocuments.generatePreviewPdf as jest.Mock).mockResolvedValue(Buffer.from('pdf'));
+    });
+
+    it('renders a draft preview with the provisional booking number', async () => {
+      repo.findOne.mockResolvedValue(draftInvoice);
+      repo.previewBookingInvoiceNumber.mockResolvedValue({ invoiceNumber: 'INV-2026-007', willReuse: false });
+      await service.generatePreviewPdf('u1', 'b1', 'i1');
+      expect(repo.previewBookingInvoiceNumber).toHaveBeenCalledWith('u1', 'b1', false);
+      expect(mockDocuments.generatePreviewPdf).toHaveBeenCalledWith('u1', 'i1', 'INV-2026-007');
+    });
+
+    it('uses the series preview number for a draft series invoice', async () => {
+      repo.findOne.mockResolvedValue({ ...draftInvoice, seriesId: 'ser1' });
+      repo.previewSeriesInvoiceNumber.mockResolvedValue({ invoiceNumber: 'INV-2026-009', willReuse: false });
+      await service.generatePreviewPdf('u1', 'b1', 'i1');
+      expect(repo.previewSeriesInvoiceNumber).toHaveBeenCalledWith('u1', 'ser1');
+      expect(mockDocuments.generatePreviewPdf).toHaveBeenCalledWith('u1', 'i1', 'INV-2026-009');
+    });
+
+    it('passes no provisional number when the invoice already has one', async () => {
+      repo.findOne.mockResolvedValue(issuedInvoice);
+      await service.generatePreviewPdf('u1', 'b1', 'i1');
+      expect(repo.previewBookingInvoiceNumber).not.toHaveBeenCalled();
+      expect(mockDocuments.generatePreviewPdf).toHaveBeenCalledWith('u1', 'i1', undefined);
     });
   });
 

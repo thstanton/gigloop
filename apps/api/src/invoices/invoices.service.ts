@@ -111,8 +111,17 @@ export class InvoicesService {
   }
 
   async generatePreviewPdf(userId: string, bookingId: string, id: string): Promise<Buffer> {
-    await this.findOne(userId, bookingId, id);
-    return this.documents.generatePreviewPdf(userId, id);
+    const invoice = await this.findOne(userId, bookingId, id);
+    // Drafts have no assigned number yet — render the preview with the provisional number
+    // the invoice would receive on issue, so the PDF doesn't fail for its only use case.
+    let previewNumber: string | undefined;
+    if (!invoice.invoiceNumber) {
+      const { invoiceNumber } = invoice.seriesId
+        ? await this.repo.previewSeriesInvoiceNumber(userId, invoice.seriesId)
+        : await this.repo.previewBookingInvoiceNumber(userId, bookingId, invoice.isDeposit);
+      previewNumber = invoiceNumber;
+    }
+    return this.documents.generatePreviewPdf(userId, id, previewNumber);
   }
 
   async markSent(userId: string, bookingId: string, id: string, dto: MarkSentDto) {
