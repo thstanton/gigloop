@@ -121,7 +121,8 @@ export class DocumentsService {
       },
     });
     if (!invoice) throw new NotFoundException('Invoice not found');
-    if (!invoice.invoiceNumber) throw new NotFoundException('Invoice has not been assigned a number yet');
+    // Use a placeholder for preview generation on uninvoiced drafts
+    const invoiceNumber = invoice.invoiceNumber ?? 'DRAFT';
 
     const [publicProfile, userProfile] = await Promise.all([
       this.prisma.publicProfile.findUnique({ where: { userId } }),
@@ -147,7 +148,7 @@ export class DocumentsService {
       logoUrl: publicProfile.logoUrl ?? null,
       brandColour,
 
-      invoiceNumber: invoice.invoiceNumber,
+      invoiceNumber,
       issueDate: invoice.issueDate ? invoice.issueDate.toISOString().split('T')[0] : '',
       dueDate: invoice.dueDate ? invoice.dueDate.toISOString().split('T')[0] : null,
       isDeposit: invoice.isDeposit,
