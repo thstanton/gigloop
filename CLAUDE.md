@@ -319,6 +319,10 @@ Issues are tracked in GitHub Issues. See `docs/agents/issue-tracker.md`.
 
 Non-trivial features are planned into issues before any code. `/to-issues` and `/grill-with-docs` are generic global skills; the GigMan-specific requirements their output must meet live in `docs/agents/issue-authoring.md`. **When authoring issues for this repo, conform to that spec and get the human's approval before coding.**
 
+### Strategic shaping (North Star)
+
+`docs/north-star.md` holds the agreed **directional** roadmap for the next wave (consulted at the planning gate for "plumb-it-forward" decisions). To add or deepen a pillar, use the `/shape-north-star` skill — breadth-first direction-setting that parks architectural choices as open questions. It is the complement to `/grill-with-docs`, which converts those parked questions into binding ADRs. Shaping opens the question; grilling closes it.
+
 ### Triage labels
 
 Default label vocabulary (needs-triage, needs-info, ready-for-agent, ready-for-human, wontfix). See `docs/agents/triage-labels.md`.

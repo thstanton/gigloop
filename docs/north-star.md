@@ -19,6 +19,11 @@ Phasing terminology is unchanged: we keep using **P1 / P2 / P3** (P1 = the shipp
 small, cheap bit of "plumb-it-forward" now (a nullable field, a generic shape, a preserved timestamp)
 would make a Wave 2 pillar materially easier later — without bending the current feature out of shape.
 
+**How to extend it:** use the `shape-north-star` skill. Shaping is breadth-first direction-setting —
+adding or deepening a pillar, parking architectural choices as open questions — and is the deliberate
+complement to `grill-with-docs` (which converts those parked questions into binding ADRs). Keep
+everything here directional; the moment a decision is ready to be made, take it to a grill session.
+
 ## Where we are (P1)
 
 The MVP is a complete gig-lifecycle CRM: bookings (`Enquiry → Complete`), contacts, packages & sets,
@@ -30,11 +35,20 @@ the musician's business/brand profile.
 
 GigMan's core differentiator is already stated in `CONTEXT.md`: *"a smart management system that
 surfaces the right action at the right time, rather than a passive record-keeper the musician has to
-manually interrogate."*
+manually interrogate."* P1 got the data *in* and managed individual bookings well. **Wave 2's
+throughline is putting that data to work** — turning a record store into an active asset.
 
-**Wave 2 extends that intelligence in four directions:** outward to the inbox (automation), upward
-into understanding the business (insight), across the band (collaboration), and into natural language
-(AI query). Each pillar makes GigMan more of a proactive partner and less of a passive ledger.
+Each of the four pillars serves that one story from a different angle:
+
+- **Automation & comms inbox** — get the data *in* more easily, capturing enquiries straight from
+  the inbox rather than by hand.
+- **Insight & analytics** — draw *deeper insight* from the data, beyond the operational view of a
+  single booking.
+- **Collaboration & band members** — *surface* the data to a wider set of stakeholders: the players
+  on the gig.
+- **AI assistant** — *find* the data faster, by asking for it in plain language.
+
+Each makes GigMan more of a proactive partner and less of a passive ledger.
 
 ## The four pillars
 
