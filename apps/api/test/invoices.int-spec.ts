@@ -115,7 +115,7 @@ describe('Invoice flow (integration)', () => {
   // ── happy paths ────────────────────────────────────────────────────────────
 
   describe('Create deposit invoice → create_deposit_invoice checklist COMPLETE', () => {
-    it('auto-completes create_deposit_invoice on creation', async () => {
+    it('auto-completes create_deposit_invoice on issue', async () => {
       const bookingId = await createBooking();
       // Force deps so create_deposit_invoice is reachable (not BLOCKED)
       await prisma.bookingChecklistItem.updateMany({
@@ -123,7 +123,10 @@ describe('Invoice flow (integration)', () => {
         data: { state: 'COMPLETE', completedAt: new Date() },
       });
 
-      await createInvoice(bookingId, true);
+      const invoiceId = await createInvoice(bookingId, true);
+      await request(app.getHttpServer())
+        .post(`/api/bookings/${bookingId}/invoices/${invoiceId}/issue`)
+        .send({ issueDate: '2027-01-01', dueDate: '2027-01-15' });
 
       const item = await getChecklistItem(bookingId, 'create_deposit_invoice');
       expect(item?.state).toBe('COMPLETE');
@@ -133,10 +136,13 @@ describe('Invoice flow (integration)', () => {
   });
 
   describe('Create balance invoice → create_balance_invoice checklist COMPLETE', () => {
-    it('auto-completes create_balance_invoice on creation', async () => {
+    it('auto-completes create_balance_invoice on issue', async () => {
       const bookingId = await createBooking();
 
-      await createInvoice(bookingId, false);
+      const invoiceId = await createInvoice(bookingId, false);
+      await request(app.getHttpServer())
+        .post(`/api/bookings/${bookingId}/invoices/${invoiceId}/issue`)
+        .send({ issueDate: '2027-01-01', dueDate: '2027-01-15' });
 
       const item = await getChecklistItem(bookingId, 'create_balance_invoice');
       expect(item?.state).toBe('COMPLETE');
@@ -206,10 +212,10 @@ describe('Invoice flow (integration)', () => {
       });
 
       const invoiceId = await createInvoice(bookingId, true);
+      await markSent(bookingId, invoiceId);
+
       const itemBeforeVoid = await getChecklistItem(bookingId, 'create_deposit_invoice');
       expect(itemBeforeVoid?.state).toBe('COMPLETE');
-
-      await markSent(bookingId, invoiceId);
 
       const voidRes = await request(app.getHttpServer())
         .post(`/api/bookings/${bookingId}/invoices/${invoiceId}/void`)
@@ -238,7 +244,10 @@ describe('Invoice flow (integration)', () => {
         .post(`/api/bookings/${bookingId}/invoices/${firstId}/void`)
         .send({});
 
-      await createInvoice(bookingId, true);
+      const secondId = await createInvoice(bookingId, true);
+      await request(app.getHttpServer())
+        .post(`/api/bookings/${bookingId}/invoices/${secondId}/issue`)
+        .send({ issueDate: '2027-01-01', dueDate: '2027-01-15' });
 
       const item = await getChecklistItem(bookingId, 'create_deposit_invoice');
       expect(item?.state).toBe('COMPLETE');
