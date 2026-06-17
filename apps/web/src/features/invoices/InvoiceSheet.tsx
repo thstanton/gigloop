@@ -179,6 +179,7 @@ export default function InvoiceSheet({
     },
     onSuccess: (issuedInvoice) => {
       queryClient.invalidateQueries({ queryKey: ['bookingInvoices', bookingId] });
+      queryClient.invalidateQueries({ queryKey: ['bookingDocuments', bookingId] });
       queryClient.invalidateQueries({ queryKey: ['bookingChecklist', bookingId] });
       onOpenChange(false);
       onAfterIssue?.(issuedInvoice);
