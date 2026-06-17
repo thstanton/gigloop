@@ -18,6 +18,7 @@ export const mockStorageService = {
   putObject: jest.fn().mockResolvedValue(undefined),
   deleteObject: jest.fn().mockResolvedValue(undefined),
   getPublicUrl: jest.fn().mockReturnValue('https://mock-storage.test/file'),
+  getObject: jest.fn().mockResolvedValue(Buffer.from('%PDF-mock')),
 };
 
 const mockEmailContext = {

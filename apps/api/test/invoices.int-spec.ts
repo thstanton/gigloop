@@ -82,11 +82,13 @@ describe('Invoice flow (integration)', () => {
   }
 
   async function sendInvoice(bookingId: string, invoiceId: string): Promise<void> {
+    const issueRes = await request(app.getHttpServer())
+      .post(`/api/bookings/${bookingId}/invoices/${invoiceId}/issue`)
+      .send({ issueDate: '2027-01-01', dueDate: '2027-01-15' });
+    expect(issueRes.status).toBe(201);
     const res = await request(app.getHttpServer())
       .post(`/api/bookings/${bookingId}/invoices/${invoiceId}/send`)
       .send({
-        issueDate: '2027-01-01',
-        dueDate: '2027-01-15',
         to: 'client@example.com',
         contactId: customerId,
         subject: 'Your invoice',
@@ -96,9 +98,13 @@ describe('Invoice flow (integration)', () => {
   }
 
   async function markSent(bookingId: string, invoiceId: string): Promise<void> {
+    const issueRes = await request(app.getHttpServer())
+      .post(`/api/bookings/${bookingId}/invoices/${invoiceId}/issue`)
+      .send({ issueDate: '2027-01-01', dueDate: '2027-01-15' });
+    expect(issueRes.status).toBe(201);
     const res = await request(app.getHttpServer())
       .post(`/api/bookings/${bookingId}/invoices/${invoiceId}/mark-sent`)
-      .send({ issueDate: '2027-01-01', dueDate: '2027-01-15' });
+      .send({});
     expect(res.status).toBe(201);
   }
 
