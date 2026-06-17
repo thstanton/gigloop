@@ -32,7 +32,7 @@ export class PortalRepository {
         },
         documents: {
           include: {
-            invoice: { select: { id: true, invoiceNumber: true, isDeposit: true } },
+            invoice: { select: { id: true, invoiceNumber: true, isDeposit: true, status: true } },
           },
           orderBy: { createdAt: 'asc' },
         },

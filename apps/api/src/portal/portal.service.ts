@@ -77,6 +77,26 @@ function labelDocument(doc: {
   return doc.invoice?.isDeposit ? `Deposit invoice${num}` : `Invoice${num}`;
 }
 
+// An invoice PDF is stored as a Document at issue time, but the client should only see it once
+// it has actually been delivered (SENT) or settled (PAID) — never an ISSUED-but-unsent invoice
+// they were never shown, nor a VOID one that has been superseded.
+const PORTAL_VISIBLE_INVOICE_STATUSES = new Set(['SENT', 'PAID']);
+
+/**
+ * Decide whether a stored Document should appear on the client portal (ADR-0031: portal
+ * visibility is driven by source truth). CONTRACT documents are limited to the active contract
+ * so superseded re-sends drop off; INVOICE documents are gated on their invoice's delivery
+ * status; everything else (e.g. SONG_LIST) is always shown.
+ */
+export function isPortalVisibleDocument(
+  doc: { type: string; contractId?: string | null; invoice?: { status: string } | null },
+  activeContractId: string | null,
+): boolean {
+  if (doc.type === 'CONTRACT') return doc.contractId === activeContractId;
+  if (doc.type === 'INVOICE') return !!doc.invoice && PORTAL_VISIBLE_INVOICE_STATUSES.has(doc.invoice.status);
+  return true;
+}
+
 function groupBy<T>(items: T[], key: (item: T) => string): Map<string, T[]> {
   const map = new Map<string, T[]>();
   for (const item of items) {
@@ -169,9 +189,7 @@ export class PortalService {
         : null;
 
     const activeContractId = activeContract?.id ?? null;
-    const portalDocs = booking.documents.filter(
-      (doc) => doc.type !== 'CONTRACT' || doc.contractId === activeContractId,
-    );
+    const portalDocs = booking.documents.filter((doc) => isPortalVisibleDocument(doc, activeContractId));
     const signedContractDoc = portalDocs.find((d) => d.type === 'CONTRACT') ?? null;
     const documents = portalDocs.map((doc) => ({
       id: doc.id,

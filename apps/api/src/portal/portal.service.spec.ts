@@ -2,7 +2,7 @@
  * Integration tests for PortalService PDF flows — real pdfmake, mocked DB/storage/email.
  * Verifies font loading and PDF generation for signContract and submitMusicForm.
  */
-import { PortalService } from './portal.service';
+import { PortalService, isPortalVisibleDocument } from './portal.service';
 import { DocumentsService } from '../documents/documents.service';
 import { StorageService } from '../storage/storage.service';
 import { DocumentsRepository } from '../documents/documents.repository';
@@ -48,6 +48,35 @@ function makeDocumentsService(putObjectMock: jest.Mock) {
 
   return new DocumentsService(mockPrisma, mockDocsRepo, mockStorage);
 }
+
+describe('isPortalVisibleDocument', () => {
+  const activeContractId = 'c-active';
+
+  it('shows the active contract document, hides superseded ones', () => {
+    expect(isPortalVisibleDocument({ type: 'CONTRACT', contractId: activeContractId }, activeContractId)).toBe(true);
+    expect(isPortalVisibleDocument({ type: 'CONTRACT', contractId: 'c-old' }, activeContractId)).toBe(false);
+  });
+
+  it('shows invoice documents only when the invoice is SENT or PAID', () => {
+    for (const status of ['SENT', 'PAID']) {
+      expect(isPortalVisibleDocument({ type: 'INVOICE', invoice: { status } }, activeContractId)).toBe(true);
+    }
+  });
+
+  it('hides invoice documents for unsent (DRAFT/ISSUED) and VOID invoices', () => {
+    for (const status of ['DRAFT', 'ISSUED', 'VOID']) {
+      expect(isPortalVisibleDocument({ type: 'INVOICE', invoice: { status } }, activeContractId)).toBe(false);
+    }
+  });
+
+  it('hides an invoice document whose invoice link has been cleared', () => {
+    expect(isPortalVisibleDocument({ type: 'INVOICE', invoice: null }, activeContractId)).toBe(false);
+  });
+
+  it('always shows non-contract, non-invoice documents (e.g. song lists)', () => {
+    expect(isPortalVisibleDocument({ type: 'SONG_LIST' }, activeContractId)).toBe(true);
+  });
+});
 
 describe('PortalService.signContract (integration)', () => {
   let service: PortalService;
