@@ -160,11 +160,19 @@ model.
   it either way.
 
 - **Quote Calculator (cross-pillar P2 feature).** A related P2 feature sitting at the junction of
-  this pillar and Pillar 2. Inputs: Package base values, per-member `Contact.defaultSessionFee`
+  this pillar and Pillar 2. Inputs: **Package Template guide fees**, per-member `Contact.defaultSessionFee`
   values, mileage, and manual adjustments. Output: a calculated base quote the organiser reviews
   and customises before sending to the client. The fee fields described above are the band-member
   inputs to this calculator; they should be present in the schema from day one so the calculator can
   be built without retrofitting.
+- **Package Template guide fee (directional, 2026-06-17).** Following the Package / Package Template
+  split (a `Package Template` is the reusable library builder; an applied `Package` is a booking-owned
+  grouping of sets — see CONTEXT and its ADR), a **guide fee on the `Package Template`** is envisaged
+  as an input that *helps the musician arrive at an overall booking quote* — **not** a per-`Package`
+  line item billed separately. Quoting stays at the booking level; the template fee is a starting-point
+  estimate, the same way `Contact.defaultSessionFee` guides the band-member fee. The exact mechanism
+  (how multiple template fees combine, how mileage and adjustments fold in) is for the Quote
+  Calculator's own future design — flagged here, not decided.
 
 - **Calendar: .ics attachment as the universal bridge.** The band member invite email (via Resend;
   a `band_invite` built-in template) includes a `.ics` calendar attachment: event date/time, venue
