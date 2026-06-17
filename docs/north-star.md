@@ -35,11 +35,20 @@ the musician's business/brand profile.
 
 GigMan's core differentiator is already stated in `CONTEXT.md`: *"a smart management system that
 surfaces the right action at the right time, rather than a passive record-keeper the musician has to
-manually interrogate."*
+manually interrogate."* P1 got the data *in* and managed individual bookings well. **Wave 2's
+throughline is putting that data to work** — turning a record store into an active asset.
 
-**Wave 2 extends that intelligence in four directions:** outward to the inbox (automation), upward
-into understanding the business (insight), across the band (collaboration), and into natural language
-(AI query). Each pillar makes GigMan more of a proactive partner and less of a passive ledger.
+Each of the four pillars serves that one story from a different angle:
+
+- **Automation & comms inbox** — get the data *in* more easily, capturing enquiries straight from
+  the inbox rather than by hand.
+- **Insight & analytics** — draw *deeper insight* from the data, beyond the operational view of a
+  single booking.
+- **Collaboration & band members** — *surface* the data to a wider set of stakeholders: the players
+  on the gig.
+- **AI assistant** — *find* the data faster, by asking for it in plain language.
+
+Each makes GigMan more of a proactive partner and less of a passive ledger.
 
 ## The four pillars
 
