@@ -10,9 +10,9 @@ import { allocate, type VoidedInvoiceRef } from './invoice-number-allocator';
 export { buildInvoiceNumber, PaddingWidth, InvoiceNumberFormat } from './invoice-number-allocator';
 
 /**
- * Map a voided invoice record to the reuse reference passed to allocate(). The year comes
- * from when the slot was originally issued (issueDate, falling back to createdAt) so the
- * re-rendered number keeps its original year segment.
+ * Map a voided invoice record to the reuse reference passed to allocate(). allocate() prefers
+ * the year embedded in the original invoiceNumber; this issueDate-derived year (falling back to
+ * createdAt) is only the fallback for numbers that were issued without a year segment.
  */
 function toVoidedRef(
   voided: { invoiceNumber: string | null; issueDate: Date | null; createdAt: Date } | null,

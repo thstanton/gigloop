@@ -112,6 +112,19 @@ describe('allocate', () => {
       expect(result.invoiceNumber).toBe('INV-2026-006');
     });
 
+    it("prefers the original number's embedded year over the fallback year", () => {
+      // Fallback year (e.g. from a later issueDate) disagrees with the number's own segment;
+      // the embedded year wins so the reused number is byte-identical to the original.
+      const result = allocate(defaultPrefs, 2027, 5, 2027, { invoiceNumber: 'INV-2026-001', year: 2027 });
+      expect(result.invoiceNumber).toBe('INV-2026-001');
+    });
+
+    it('falls back to the voided year when the original number had no year segment', () => {
+      const prefs = { invoiceNumberFormat: { includeYear: true, paddingWidth: 3 } };
+      const result = allocate(prefs, 2027, 5, 2027, { invoiceNumber: 'INV-006', year: 2026 });
+      expect(result.invoiceNumber).toBe('INV-2026-006');
+    });
+
     it('falls back to the verbatim number when the sequence is unparseable', () => {
       const result = allocate(defaultPrefs, currentYear, 5, currentYear, { invoiceNumber: 'LEGACY-X', year: 2026 });
       expect(result.invoiceNumber).toBe('LEGACY-X');

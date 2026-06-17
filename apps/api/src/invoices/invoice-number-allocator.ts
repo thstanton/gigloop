@@ -31,6 +31,18 @@ function parseSequence(invoiceNumber: string): number | null {
   return Number(token);
 }
 
+/**
+ * Extract the year embedded in a previously-built invoice number. When includeYear was on,
+ * buildInvoiceNumber places the 4-digit year directly before the sequence, so the
+ * second-to-last token is the year. Returns null if the number had no year segment.
+ */
+function parseYear(invoiceNumber: string): number | null {
+  const tokens = invoiceNumber.split('-');
+  if (tokens.length < 2) return null;
+  const candidate = tokens[tokens.length - 2];
+  return /^\d{4}$/.test(candidate) ? Number(candidate) : null;
+}
+
 export function resolveFormat(preferences: Record<string, unknown>): InvoiceNumberFormat {
   const raw = preferences.invoiceNumberFormat as Partial<InvoiceNumberFormat> | undefined;
   if (!raw) return FORMAT_DEFAULTS;
@@ -63,11 +75,14 @@ export function allocate(
 ): AllocationResult {
   if (voided) {
     // Reuse the voided slot's sequence but re-render it with the *current* template, so a
-    // number issued under an old numbering style adopts the user's current style. The
-    // counter is not advanced. Fall back to the verbatim number if the sequence can't be parsed.
+    // number issued under an old numbering style adopts the user's current style. The year
+    // comes from the original number's own year segment (what it was actually issued as);
+    // voided.year is only a fallback for numbers that never had a year segment. The counter
+    // is not advanced. Fall back to the verbatim number if the sequence can't be parsed.
     const seq = parseSequence(voided.invoiceNumber);
+    const year = parseYear(voided.invoiceNumber) ?? voided.year;
     const invoiceNumber =
-      seq == null ? voided.invoiceNumber : buildInvoiceNumber(seq, voided.year, resolveFormat(prefs));
+      seq == null ? voided.invoiceNumber : buildInvoiceNumber(seq, year, resolveFormat(prefs));
     return { invoiceNumber, nextSeq: currentSeq, nextYear: seqYear };
   }
 
