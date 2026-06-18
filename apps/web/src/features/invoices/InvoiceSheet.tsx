@@ -71,6 +71,39 @@ function hasChanged(item: FormValues['lineItems'][number], original: InvoiceLine
   );
 }
 
+function buildCreatePayload(values: FormValues) {
+  return {
+    isDeposit: values.isDeposit,
+    lineItems: values.lineItems.map((item, i) => ({
+      description: item.description,
+      amount: parseFloat(item.amount),
+      order: i,
+    })),
+  };
+}
+
+// Shared wrapper for the invoice create/issue mutations: callers supply mutationFn + onSuccess; the 409-aware error toast is identical and lives here.
+function useInvoiceAction<TResult>(opts: {
+  mutationFn: (values: FormValues) => Promise<TResult>;
+  fallbackErrorTitle: string;
+  onSuccess: (result: TResult) => void;
+}) {
+  return useMutation({
+    mutationFn: opts.mutationFn,
+    onSuccess: opts.onSuccess,
+    onError: (error: unknown, variables: FormValues) => {
+      const is409 = error instanceof Response && error.status === 409;
+      const invoiceType = variables.isDeposit ? 'deposit' : 'balance';
+      toast({
+        title: is409
+          ? `A ${invoiceType} invoice already exists — void it before creating a new one`
+          : opts.fallbackErrorTitle,
+        variant: 'destructive',
+      });
+    },
+  });
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 interface Props {
@@ -135,64 +168,30 @@ export default function InvoiceSheet({
     staleTime: 30_000,
   });
 
-  // Save as DRAFT
-  const saveDraftMutation = useMutation({
-    mutationFn: (values: FormValues) =>
-      apiPost<Invoice>(`/bookings/${bookingId}/invoices`, {
-        isDeposit: values.isDeposit,
-        lineItems: values.lineItems.map((item, i) => ({
-          description: item.description,
-          amount: parseFloat(item.amount),
-          order: i,
-        })),
-      }),
+  const saveDraftMutation = useInvoiceAction({
+    mutationFn: (values) => apiPost<Invoice>(`/bookings/${bookingId}/invoices`, buildCreatePayload(values)),
+    fallbackErrorTitle: 'Failed to save draft',
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bookingInvoices', bookingId] });
       queryClient.invalidateQueries({ queryKey: ['bookingChecklist', bookingId] });
       onOpenChange(false);
       toast({ title: 'Draft saved' });
     },
-    onError: (error: unknown, variables: FormValues) => {
-      const is409 = error instanceof Response && error.status === 409;
-      const invoiceType = variables.isDeposit ? 'deposit' : 'balance';
-      toast({
-        title: is409
-          ? `A ${invoiceType} invoice already exists — void it before creating a new one`
-          : 'Failed to save draft',
-        variant: 'destructive',
-      });
-    },
   });
 
   // Create DRAFT then immediately issue (DRAFT → ISSUED), then open compose sheet
-  const createAndIssueMutation = useMutation({
-    mutationFn: async (values: FormValues) => {
-      const draft = await apiPost<Invoice>(`/bookings/${bookingId}/invoices`, {
-        isDeposit: values.isDeposit,
-        lineItems: values.lineItems.map((item, i) => ({
-          description: item.description,
-          amount: parseFloat(item.amount),
-          order: i,
-        })),
-      });
+  const createAndIssueMutation = useInvoiceAction({
+    mutationFn: async (values) => {
+      const draft = await apiPost<Invoice>(`/bookings/${bookingId}/invoices`, buildCreatePayload(values));
       return apiPost<Invoice>(`/bookings/${bookingId}/invoices/${draft.id}/issue`, {});
     },
+    fallbackErrorTitle: 'Failed to create invoice',
     onSuccess: (issuedInvoice) => {
       queryClient.invalidateQueries({ queryKey: ['bookingInvoices', bookingId] });
       queryClient.invalidateQueries({ queryKey: ['bookingDocuments', bookingId] });
       queryClient.invalidateQueries({ queryKey: ['bookingChecklist', bookingId] });
       onOpenChange(false);
       onAfterIssue?.(issuedInvoice);
-    },
-    onError: (error: unknown, variables: FormValues) => {
-      const is409 = error instanceof Response && error.status === 409;
-      const invoiceType = variables.isDeposit ? 'deposit' : 'balance';
-      toast({
-        title: is409
-          ? `A ${invoiceType} invoice already exists — void it before creating a new one`
-          : 'Failed to create invoice',
-        variant: 'destructive',
-      });
     },
   });
 
