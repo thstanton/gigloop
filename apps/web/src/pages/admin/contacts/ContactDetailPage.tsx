@@ -10,15 +10,10 @@ import { useContact } from '@/lib/hooks/useContact';
 import { apiGet } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
 import { formatDate } from '@/lib/formatters';
-import { EVENT_TYPE_LABELS } from '@/lib/constants';
+import { EVENT_TYPE_LABELS, PRIMARY_ROLE_LABELS, type ContactPrimaryRole } from '@/lib/constants';
 import ContactEditDrawer from '@/features/contacts/ContactEditDrawer';
 import type { BookingRef, BookingStatus, ContactDetail as ContactDetailType, TravelTimeResponse } from '@/types/api';
 
-const PRIMARY_ROLE_LABELS: Record<string, string> = {
-  CUSTOMER: 'Customer',
-  VENUE: 'Venue',
-  BOOKING_AGENT: 'Booking agent',
-};
 
 function buildNewBookingState(contact: ContactDetailType): { customerId?: string; venueId?: string; bookingAgentId?: string } {
   switch (contact.primaryRole) {
@@ -161,7 +156,7 @@ export default function ContactDetailPage() {
               <h1 className="font-display text-2xl font-semibold text-foreground">{contact.name}</h1>
               {contact.primaryRole && (
                 <Badge variant="secondary" className="mt-2">
-                  {PRIMARY_ROLE_LABELS[contact.primaryRole] ?? contact.primaryRole}
+                  {PRIMARY_ROLE_LABELS[contact.primaryRole as ContactPrimaryRole] ?? contact.primaryRole}
                 </Badge>
               )}
             </div>
