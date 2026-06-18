@@ -53,6 +53,7 @@ function makeBooking(overrides: Partial<{
   id: string;
   date: Date;
   title: string | null;
+  status: string;
   customer: { name: string };
   venue: { name: string } | null;
   checklistItems: ReturnType<typeof makeItem>[];
@@ -61,6 +62,7 @@ function makeBooking(overrides: Partial<{
     id: 'booking-1',
     date: new Date('2025-01-20T19:00:00.000Z'),
     title: 'Wedding',
+    status: 'CONFIRMED',
     customer: { name: 'Alice Smith' },
     venue: null,
     checklistItems: [],
@@ -148,6 +150,29 @@ describe('ChecklistRepository — findActionItems', () => {
       const result = await repo.findActionItems('u1', TODAY, REMINDER_LEAD_DAYS);
 
       expect(result).toHaveLength(0);
+    });
+  });
+
+  describe('stage gate', () => {
+    it('does not surface an item required for a stage the booking has already passed', async () => {
+      // deposit (requiredForStatus CONFIRMED), due within window, on a COMPLETE booking
+      const item = makeItem({ dueDate: new Date('2025-01-10T00:00:00.000Z'), requiredForStatus: 'CONFIRMED' });
+      const booking = makeBooking({ status: 'COMPLETE', checklistItems: [item] });
+      prisma.booking.findMany.mockResolvedValue([booking]);
+
+      const result = await repo.findActionItems('u1', TODAY, REMINDER_LEAD_DAYS);
+
+      expect(result).toHaveLength(0);
+    });
+
+    it('surfaces the same item while the booking is still at that stage', async () => {
+      const item = makeItem({ dueDate: new Date('2025-01-10T00:00:00.000Z'), requiredForStatus: 'CONFIRMED' });
+      const booking = makeBooking({ status: 'CONFIRMED', checklistItems: [item] });
+      prisma.booking.findMany.mockResolvedValue([booking]);
+
+      const result = await repo.findActionItems('u1', TODAY, REMINDER_LEAD_DAYS);
+
+      expect(result).toHaveLength(1);
     });
   });
 

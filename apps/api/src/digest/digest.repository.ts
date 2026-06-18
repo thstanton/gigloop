@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { addDays, surfaceActionItems } from '../checklist/checklist-surfacing';
 
 type DigestChecklistItem = {
   id: string;
@@ -116,30 +117,10 @@ export class DigestRepository {
     const upcomingItems = upcomingBookings
       .map(({ checklistItems, ...booking }) => ({
         booking: booking as DigestBooking,
-        items: this.applySurfacingRules(checklistItems as DigestChecklistItem[], cutoff),
+        items: surfaceActionItems(checklistItems as DigestChecklistItem[], booking.status, cutoff),
       }))
       .filter(({ items }) => items.length > 0);
 
     return { gigsThisWeek: gigsThisWeek as DigestBooking[], upcomingItems };
   }
-
-  private applySurfacingRules(items: DigestChecklistItem[], cutoff: Date): DigestChecklistItem[] {
-    return items.filter((item) => {
-      if (item.dueDate !== null) {
-        return item.dueDate <= cutoff;
-      }
-      if (item.requiredForStatus !== null) {
-        // Surface only if this is the last remaining item blocking this status transition
-        const peers = items.filter((i) => i.requiredForStatus === item.requiredForStatus);
-        return peers.length === 1;
-      }
-      return false;
-    });
-  }
-}
-
-function addDays(date: Date, days: number): Date {
-  const result = new Date(date);
-  result.setDate(result.getDate() + days);
-  return result;
 }
