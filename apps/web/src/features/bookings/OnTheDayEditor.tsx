@@ -10,6 +10,7 @@ import { FormField } from '@/components/common/FormField';
 import { SubLabel } from '@/components/common/SubLabel';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { apiGet, apiPatch } from '@/lib/api';
+import { toast } from '@/lib/hooks/use-toast';
 import { DRESS_CODE_OPTIONS, LOGISTICS_FIELD_ICONS, PACKAGE_ICON_OPTIONS } from '@/lib/constants';
 import FormatIcon from './FormatIcon';
 import { cn } from '@/lib/utils';
@@ -486,6 +487,7 @@ function DressCodeField({ value, onChange }: { value: string; onChange: (v: stri
       setOpen(false);
       setSearch('');
     },
+    onError: () => toast({ title: 'Failed to add dress code. Please try again.', variant: 'destructive' }),
   });
 
   const deleteMutation = useMutation({
@@ -497,6 +499,7 @@ function DressCodeField({ value, onChange }: { value: string; onChange: (v: stri
       queryClient.invalidateQueries({ queryKey: ['me'] });
       onChange('');
     },
+    onError: () => toast({ title: 'Failed to remove dress code. Please try again.', variant: 'destructive' }),
   });
 
   return (

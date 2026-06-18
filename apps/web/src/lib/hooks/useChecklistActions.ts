@@ -96,7 +96,7 @@ export function useChecklistActions(bookingId: string) {
   return {
     handleChecklistAction,
     handleMarkDone,
-    isActionPending: actions.isPending || invoiceActions.isMarkingPaid,
+    isActionPending: actions.isPending || invoiceActions.isMarkingPaid || contractActions.isCreatingContract,
     pendingContract,
     clearPendingContract: () => setPendingContract(null),
   };

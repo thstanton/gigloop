@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useTemplate } from '@/lib/hooks/useTemplate';
 import { apiGet, apiPatch, apiPost } from '@/lib/api';
+import { toast } from '@/lib/hooks/use-toast';
 import { VariableNode } from '@/features/templates/VariableNode';
 import {
   TEMPLATE_DISPLAY,
@@ -253,6 +254,7 @@ function TemplateEditor({ template }: { template: Template }) {
       queryClient.invalidateQueries({ queryKey: ['templates'] });
       setResetConfirm(false);
     },
+    onError: () => toast({ title: 'Failed to reset template. Please try again.', variant: 'destructive' }),
   });
 
   const handleSave = useCallback(() => {

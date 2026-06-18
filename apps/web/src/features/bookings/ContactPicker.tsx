@@ -21,6 +21,7 @@ interface ContactPickerProps {
   placeholder?: string;
   label?: string;
   preferredRole?: string;
+  disabled?: boolean;
 }
 
 export default function ContactPicker({
@@ -29,6 +30,7 @@ export default function ContactPicker({
   placeholder = 'Select contact...',
   label = 'contact',
   preferredRole,
+  disabled = false,
 }: ContactPickerProps) {
   const [open, setOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
@@ -126,9 +128,11 @@ export default function ContactPicker({
             aria-expanded={open}
             aria-haspopup="listbox"
             aria-label={selected ? `${placeholder}: ${selected.name}` : placeholder}
+            disabled={disabled}
             className={cn(
               'w-full flex items-center justify-between rounded-md border border-border bg-background px-3 h-10 text-sm transition-colors',
               'hover:border-foreground/30 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary',
+              'disabled:opacity-50 disabled:cursor-not-allowed',
             )}
           >
             <span className={cn('truncate', selected ? 'text-foreground' : 'text-muted')}>

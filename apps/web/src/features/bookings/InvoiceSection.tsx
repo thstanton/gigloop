@@ -28,6 +28,12 @@ export interface SeriesInvoiceSectionProps {
   onMarkSent: (invoice: SeriesInvoice) => void;
   onMarkPaid: (invoice: SeriesInvoice) => void;
   onVoid: (invoice: SeriesInvoice) => void;
+  isCreatePending?: boolean;
+  isIssuePending?: boolean;
+  isDeletePending?: boolean;
+  isVoidPending?: boolean;
+  isMarkSentPending?: boolean;
+  isMarkPaidPending?: boolean;
 }
 
 export function SeriesInvoiceSection({
@@ -42,6 +48,12 @@ export function SeriesInvoiceSection({
   onMarkSent,
   onMarkPaid,
   onVoid,
+  isCreatePending = false,
+  isIssuePending = false,
+  isDeletePending = false,
+  isVoidPending = false,
+  isMarkSentPending = false,
+  isMarkPaidPending = false,
 }: Readonly<SeriesInvoiceSectionProps>) {
   const notice = (
     <p className="text-sm text-muted px-0 pb-2">
@@ -50,8 +62,8 @@ export function SeriesInvoiceSection({
   );
 
   const createAction = !invoice ? (
-    <GhostButton variant="primary" size="xs" icon={<Plus size={12} />} onClick={onCreateInvoice}>
-      Create invoice
+    <GhostButton variant="primary" size="xs" icon={<Plus size={12} />} onClick={onCreateInvoice} disabled={isCreatePending}>
+      {isCreatePending ? 'Creating…' : 'Create invoice'}
     </GhostButton>
   ) : null;
 
@@ -81,9 +93,11 @@ export function SeriesInvoiceSection({
       <InvoiceRow
         invoice={invoice as unknown as Invoice}
         pdfUrl={null}
-        isDeletePending={false}
-        isVoidPending={false}
-        isIssuePending={false}
+        isDeletePending={isDeletePending}
+        isVoidPending={isVoidPending}
+        isIssuePending={isIssuePending}
+        isMarkSentPending={isMarkSentPending}
+        isMarkPaidPending={isMarkPaidPending}
         onEdit={() => onEdit(invoice)}
         onPreview={() => {}}
         onIssue={() => onIssue(invoice)}
@@ -251,6 +265,8 @@ export default function InvoiceSection({ bookingId }: Readonly<InvoiceSectionPro
             isDeletePending={actions.isDeletingInvoice}
             isVoidPending={invoiceActions.voidingInvoiceId === inv.id}
             isIssuePending={invoiceActions.issuingInvoiceId === inv.id}
+            isMarkSentPending={invoiceActions.markingSentId === inv.id}
+            isMarkPaidPending={invoiceActions.markingPaidId === inv.id}
             onEdit={openEditInvoice}
             onPreview={openPreviewPdf}
             onIssue={(inv) => invoiceActions.issue(inv.id)}

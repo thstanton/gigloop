@@ -24,6 +24,8 @@ function getInvoiceActions(
   isDeletePending: boolean,
   isVoidPending: boolean,
   isIssuePending: boolean,
+  isMarkSentPending: boolean,
+  isMarkPaidPending: boolean,
 ): RowAction[] | null {
   if (invoice.status === 'DRAFT') {
     return [
@@ -43,7 +45,7 @@ function getInvoiceActions(
   if (invoice.status === 'ISSUED') {
     const acts: RowAction[] = [
       { label: 'Send', icon: <Send size={14} />, onClick: () => onSend(invoice) },
-      { label: 'Mark as sent', onClick: () => onMarkSent(invoice) },
+      { label: 'Mark as sent', onClick: () => onMarkSent(invoice), isPending: isMarkSentPending },
     ];
     if (pdfUrl) {
       acts.push({ label: 'Download', icon: <Download size={14} />, onClick: () => window.open(pdfUrl, '_blank', 'noopener,noreferrer') });
@@ -60,7 +62,7 @@ function getInvoiceActions(
 
   if (invoice.status === 'SENT') {
     const acts: RowAction[] = [
-      { label: 'Mark as paid', icon: <CheckCircle2 size={14} />, onClick: () => onMarkPaid(invoice) },
+      { label: 'Mark as paid', icon: <CheckCircle2 size={14} />, onClick: () => onMarkPaid(invoice), isPending: isMarkPaidPending },
     ];
     if (pdfUrl) {
       acts.push({ label: 'Download', icon: <Download size={14} />, onClick: () => window.open(pdfUrl, '_blank', 'noopener,noreferrer') });
@@ -99,6 +101,8 @@ export interface InvoiceRowProps {
   isDeletePending: boolean;
   isVoidPending: boolean;
   isIssuePending: boolean;
+  isMarkSentPending: boolean;
+  isMarkPaidPending: boolean;
   onEdit: (invoice: Invoice) => void;
   onPreview: (invoice: Invoice) => void;
   onIssue: (invoice: Invoice) => void;
@@ -109,19 +113,21 @@ export interface InvoiceRowProps {
   onVoid: (invoice: Invoice) => void;
 }
 
-export default function InvoiceRow({ invoice, pdfUrl, isDeletePending, isVoidPending, isIssuePending, onEdit, onPreview, onIssue, onDelete, onSend, onMarkSent, onMarkPaid, onVoid }: InvoiceRowProps) {
+export default function InvoiceRow({ invoice, pdfUrl, isDeletePending, isVoidPending, isIssuePending, isMarkSentPending, isMarkPaidPending, onEdit, onPreview, onIssue, onDelete, onSend, onMarkSent, onMarkPaid, onVoid }: InvoiceRowProps) {
   // Overdue only applies to SENT invoices — an ISSUED invoice past its due date is not overdue
   const overdue = invoice.status === 'SENT' && !!invoice.dueDate && new Date(invoice.dueDate) < new Date();
   const isVoid = invoice.status === 'VOID';
   const isPaid = invoice.status === 'PAID';
 
-  const actions = getInvoiceActions(invoice, pdfUrl, onEdit, onPreview, onIssue, onDelete, onSend, onMarkSent, onMarkPaid, onVoid, isDeletePending, isVoidPending, isIssuePending);
+  const actions = getInvoiceActions(invoice, pdfUrl, onEdit, onPreview, onIssue, onDelete, onSend, onMarkSent, onMarkPaid, onVoid, isDeletePending, isVoidPending, isIssuePending, isMarkSentPending, isMarkPaidPending);
   const invoiceLabel = invoice.isDeposit ? 'Deposit' : 'Balance';
   const invoiceSublabel = `${formatCurrency(invoiceLineTotal(invoice))} · ${invoice.issueDate ? formatDate(invoice.issueDate) : '—'}`;
 
   let pendingLabel: string | null = null;
   if (isIssuePending) pendingLabel = 'Creating…';
   else if (isVoidPending) pendingLabel = 'Voiding…';
+  else if (isMarkSentPending) pendingLabel = 'Marking sent…';
+  else if (isMarkPaidPending) pendingLabel = 'Marking paid…';
 
   return (
     <div className="flex items-start justify-between gap-3 py-2.5 border-b border-border last:border-0">

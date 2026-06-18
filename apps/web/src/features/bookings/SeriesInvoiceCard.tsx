@@ -76,6 +76,12 @@ export default function SeriesInvoiceCard({ seriesId, seriesLabel, onEdit, onSen
       onMarkSent={handleMarkSent}
       onMarkPaid={(inv) => markSeriesInvoicePaidMutation.mutate(inv.id)}
       onVoid={(inv) => voidSeriesInvoiceMutation.mutate(inv.id)}
+      isCreatePending={createSeriesInvoiceMutation.isPending}
+      isIssuePending={issueSeriesInvoiceMutation.isPending}
+      isDeletePending={deleteSeriesInvoiceMutation.isPending}
+      isVoidPending={voidSeriesInvoiceMutation.isPending}
+      isMarkSentPending={markSeriesInvoiceSentMutation.isPending}
+      isMarkPaidPending={markSeriesInvoicePaidMutation.isPending}
     />
   );
 }

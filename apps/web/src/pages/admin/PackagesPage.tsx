@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Switch } from '@/components/ui/switch';
 import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
+import { toast } from '@/lib/hooks/use-toast';
 import { PACKAGE_CATEGORY_LABELS, PACKAGE_CATEGORY_ORDER, PACKAGE_ICON_MAP, PACKAGE_ICON_OPTIONS } from '@/lib/constants';
 import type { CreatePackageInput, Package, SlotInput, UpdatePackageInput } from '@/types/api';
 import { cn } from '@/lib/utils';
@@ -445,7 +446,19 @@ function PackageCard({
   const toggle = useMutation({
     mutationFn: (enabled: boolean) =>
       apiPatch<Package>(`/packages/${pkg.id}`, { enabled } as UpdatePackageInput),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['packages'] }),
+    onMutate: async (enabled) => {
+      await qc.cancelQueries({ queryKey: ['packages'] });
+      const previous = qc.getQueryData<Package[]>(['packages']);
+      qc.setQueryData<Package[]>(['packages'], (old) =>
+        old?.map((p) => (p.id === pkg.id ? { ...p, enabled } : p)),
+      );
+      return { previous };
+    },
+    onError: (_err, _enabled, context) => {
+      if (context?.previous) qc.setQueryData(['packages'], context.previous);
+      toast({ title: 'Failed to update package', variant: 'destructive' });
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ['packages'] }),
   });
 
   return (

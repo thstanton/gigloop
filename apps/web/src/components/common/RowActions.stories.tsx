@@ -34,6 +34,39 @@ type Story = StoryObj<typeof meta>;
 
 export const Smoke: Story = {};
 
+// Regression guard: a non-confirmation action that is pending must be disabled and
+// must not fire its onClick (the gap that previously let issue/mark-sent double-submit).
+export const PendingActionGuarded: Story = {
+  args: {
+    actions: [
+      {
+        label: 'Create invoice',
+        onClick: fn(),
+        isPending: true,
+      },
+      {
+        label: 'Edit',
+        icon: React.createElement(Edit2, { size: 14 }),
+        onClick: fn(),
+      },
+    ],
+  },
+  play: async ({ canvas, args }) => {
+    const trigger = await canvas.findByRole('button', { name: 'Actions' });
+    await userEvent.click(trigger);
+
+    const body = within(document.body);
+    // While pending, the action renders a loading glyph and is disabled
+    const pendingBtn = await body.findByRole('button', { name: '…' });
+    await expect(pendingBtn).toBeDisabled();
+
+    // Clicking the disabled action must not fire onClick
+    await userEvent.click(pendingBtn);
+    const onClickSpy = args.actions[0].onClick as unknown as ReturnType<typeof fn>;
+    expect(onClickSpy).not.toHaveBeenCalled();
+  },
+};
+
 export const MobileSheetFlow: Story = {
   args: {
     actions: [

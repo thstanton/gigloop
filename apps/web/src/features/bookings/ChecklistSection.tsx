@@ -119,10 +119,10 @@ function ChecklistItemShortcuts({ shortcutType, shortcutTemplateType, isFailed, 
     return <button onClick={() => onOpenCompose(shortcutTemplateType)} className="text-xs text-primary hover:underline">{label ?? 'Send'}</button>;
   }
   if (shortcutType === 'create_contract' || shortcutType === 'create_deposit_invoice' || shortcutType === 'create_balance_invoice') {
-    return <button onClick={() => onChecklistAction(shortcutType as ChecklistAction)} className="text-xs text-primary hover:underline">{label ?? 'Create'}</button>;
+    return <button onClick={() => onChecklistAction(shortcutType as ChecklistAction)} disabled={isActionPending} className="text-xs text-primary hover:underline disabled:opacity-50 disabled:cursor-not-allowed">{isActionPending ? 'Creating…' : (label ?? 'Create')}</button>;
   }
   if (shortcutType === 'mark_contract_signed' || shortcutType === 'mark_deposit_received') {
-    return <button onClick={() => onMarkDone(shortcutType as MarkDoneKey)} disabled={isActionPending} className="text-xs text-primary hover:underline disabled:opacity-50">{label ?? 'Mark done'}</button>;
+    return <button onClick={() => onMarkDone(shortcutType as MarkDoneKey)} disabled={isActionPending} className="text-xs text-primary hover:underline disabled:opacity-50 disabled:cursor-not-allowed">{isActionPending ? 'Marking…' : (label ?? 'Mark done')}</button>;
   }
   return <button onClick={() => onToggle(itemId, 'COMPLETE')} className="text-xs text-primary hover:underline">Mark done</button>;
 }

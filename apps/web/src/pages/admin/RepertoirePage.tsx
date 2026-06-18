@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/select';
 import { useSongs } from '@/lib/hooks/useSongs';
 import { apiPost, apiPatch, apiDelete } from '@/lib/api';
+import { toast } from '@/lib/hooks/use-toast';
 import { GENRE_LABELS, ALL_GENRES } from '@/lib/constants';
 import type { Song } from '@/types/api';
 import { cn } from '@/lib/utils';
@@ -222,6 +223,7 @@ function EditSongForm({ song, onClose }: { song: Song; onClose: () => void }) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['songs'] });
     },
+    onError: () => toast({ title: 'Failed to delete song. Please try again.', variant: 'destructive' }),
   });
 
   return (
@@ -295,6 +297,7 @@ function SongRow({
     },
     onError: (_, __, context) => {
       if (context?.previous) queryClient.setQueryData(['songs'], context.previous);
+      toast({ title: 'Failed to update song. Please try again.', variant: 'destructive' });
     },
     onSettled: () => queryClient.invalidateQueries({ queryKey: ['songs'] }),
   });

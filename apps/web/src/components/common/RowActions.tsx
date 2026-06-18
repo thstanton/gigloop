@@ -60,6 +60,7 @@ export function RowActions({ actions, label, sublabel }: Props) {
   }, [confirmFired, isConfirmPending]);
 
   function handleSheetAction(action: RowAction) {
+    if (action.isPending) return;
     if (action.confirmation) {
       setConfirmingLabel(action.label);
       setConfirmFired(false);
@@ -90,6 +91,7 @@ export function RowActions({ actions, label, sublabel }: Props) {
   }
 
   function handleDropdownAction(action: RowAction) {
+    if (action.isPending) return;
     if (action.confirmation) {
       setConfirmingLabel(action.label);
       setConfirmFired(false);
@@ -168,11 +170,12 @@ export function RowActions({ actions, label, sublabel }: Props) {
                 <button
                   key={action.label}
                   type="button"
-                  className="flex w-full items-center gap-3 rounded-md px-3 py-3 text-left hover:bg-accent"
+                  disabled={action.isPending}
+                  className="flex w-full items-center gap-3 rounded-md px-3 py-3 text-left hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
                   onClick={() => handleSheetAction(action)}
                 >
                   {action.icon}
-                  <span>{action.label}</span>
+                  <span>{action.isPending ? '…' : action.label}</span>
                 </button>
               ))}
               {destructiveActions.length > 0 && (
@@ -182,11 +185,12 @@ export function RowActions({ actions, label, sublabel }: Props) {
                     <button
                       key={action.label}
                       type="button"
-                      className="flex w-full items-center gap-3 rounded-md px-3 py-3 text-left text-destructive hover:bg-accent"
+                      disabled={action.isPending}
+                      className="flex w-full items-center gap-3 rounded-md px-3 py-3 text-left text-destructive hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
                       onClick={() => handleSheetAction(action)}
                     >
                       {action.icon}
-                      <span>{action.label}</span>
+                      <span>{action.isPending ? '…' : action.label}</span>
                     </button>
                   ))}
                 </>
@@ -202,7 +206,8 @@ export function RowActions({ actions, label, sublabel }: Props) {
           <button
             type="button"
             aria-label={primaryAction.label}
-            className="text-muted transition-colors hover:text-foreground"
+            disabled={primaryAction.isPending}
+            className="text-muted transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
             onClick={() => handleDropdownAction(primaryAction)}
           >
             {primaryAction.icon}
@@ -217,9 +222,13 @@ export function RowActions({ actions, label, sublabel }: Props) {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             {defaultActions.map((action) => (
-              <DropdownMenuItem key={action.label} onClick={() => handleDropdownAction(action)}>
+              <DropdownMenuItem
+                key={action.label}
+                disabled={action.isPending}
+                onClick={() => handleDropdownAction(action)}
+              >
                 {action.icon}
-                {action.label}
+                {action.isPending ? '…' : action.label}
               </DropdownMenuItem>
             ))}
             {destructiveActions.length > 0 && (
@@ -228,11 +237,12 @@ export function RowActions({ actions, label, sublabel }: Props) {
                 {destructiveActions.map((action) => (
                   <DropdownMenuItem
                     key={action.label}
+                    disabled={action.isPending}
                     className="text-destructive focus:text-destructive"
                     onClick={() => handleDropdownAction(action)}
                   >
                     {action.icon}
-                    {action.label}
+                    {action.isPending ? '…' : action.label}
                   </DropdownMenuItem>
                 ))}
               </>

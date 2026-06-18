@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { apiPatch, apiPost } from '@/lib/api';
 import { CHECKLIST_STAGE_ORDER, BOOKING_STATUS_LABELS } from '@/lib/constants';
 import { useMe } from '@/lib/hooks/useMe';
+import { toast } from '@/lib/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { PageHeader } from '@/components/common/PageHeader';
@@ -47,6 +48,9 @@ export default function OnboardingChecklistPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['me'] });
       navigate('/admin', { replace: true });
+    },
+    onError: () => {
+      toast({ title: 'Failed to finish setup. Please try again.', variant: 'destructive' });
     },
   });
 

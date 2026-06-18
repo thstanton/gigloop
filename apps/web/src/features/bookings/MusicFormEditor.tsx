@@ -5,6 +5,7 @@ import { Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SubLabel } from '@/components/common/SubLabel';
 import { apiGet, apiPut, apiDelete } from '@/lib/api';
+import { toast } from '@/lib/hooks/use-toast';
 import { ALL_GENRES, GENRE_LABELS } from '@/lib/constants';
 import type { BookingDetail, KeyMoment, MusicFormConfig } from '@/types/api';
 
@@ -80,6 +81,7 @@ export default function MusicFormEditor({
       queryClient.invalidateQueries({ queryKey: ['booking-music-form-config', booking.id] });
       queryClient.invalidateQueries({ queryKey: ['booking', booking.id] });
     },
+    onError: () => toast({ title: 'Failed to save. Please try again.', variant: 'destructive' }),
   });
 
   const remove = useMutation({
@@ -89,6 +91,7 @@ export default function MusicFormEditor({
       queryClient.invalidateQueries({ queryKey: ['booking-music-form-config', booking.id] });
       queryClient.invalidateQueries({ queryKey: ['booking', booking.id] });
     },
+    onError: () => toast({ title: 'Failed to remove music form. Please try again.', variant: 'destructive' }),
   });
 
   const { reset: saveReset } = save;

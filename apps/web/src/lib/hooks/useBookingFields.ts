@@ -23,16 +23,19 @@ export function useBookingFields(bookingId: string) {
   const updateNotesMutation = useMutation({
     mutationFn: (notes: string) => apiPatch(`/bookings/${bookingId}`, { notes: notes || null }),
     onSuccess: () => invalidateBookingList(),
+    onError: () => toast({ title: 'Failed to save notes. Please try again.', variant: 'destructive' }),
   });
 
   const updateFeeMutation = useMutation({
     mutationFn: (fee: number) => apiPatch(`/bookings/${bookingId}`, { fee }),
     onSuccess: () => invalidateBookingList(),
+    onError: () => toast({ title: 'Failed to save fee. Please try again.', variant: 'destructive' }),
   });
 
   const updateVenueMutation = useMutation({
     mutationFn: (venueId: string | null) => apiPatch(`/bookings/${bookingId}`, { venueId }),
     onSuccess: () => invalidateBookingList(),
+    onError: () => toast({ title: 'Failed to update venue. Please try again.', variant: 'destructive' }),
   });
 
   const updateSeriesMutation = useMutation({

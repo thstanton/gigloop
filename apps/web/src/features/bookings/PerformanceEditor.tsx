@@ -24,10 +24,12 @@ function SetEditRow({
   set,
   bookingId,
   onDelete,
+  isDeleting = false,
 }: {
   set: PerformanceSet;
   bookingId: string;
   onDelete: (setId: string) => void;
+  isDeleting?: boolean;
 }) {
   const queryClient = useQueryClient();
   const [label, setLabel] = useState(set.label ?? '');
@@ -111,8 +113,8 @@ function SetEditRow({
         <button
           type="button"
           onClick={() => onDelete(set.id)}
-          disabled={isPending}
-          className="text-muted hover:text-status-cancelled transition-colors disabled:opacity-50"
+          disabled={isPending || isDeleting}
+          className="text-muted hover:text-status-cancelled transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           aria-label="Remove set"
         >
           <Trash2 size={13} aria-hidden="true" />
@@ -284,6 +286,7 @@ export default function PerformanceEditor({ booking, isOpen }: { booking: Bookin
                 set={set}
                 bookingId={booking.id}
                 onDelete={(id) => deleteSet.mutate(id)}
+                isDeleting={deleteSet.isPending && deleteSet.variables === set.id}
               />
             ))}
 
@@ -310,6 +313,7 @@ export default function PerformanceEditor({ booking, isOpen }: { booking: Bookin
               set={set}
               bookingId={booking.id}
               onDelete={(id) => deleteSet.mutate(id)}
+              isDeleting={deleteSet.isPending && deleteSet.variables === set.id}
             />
           ))}
         </div>
