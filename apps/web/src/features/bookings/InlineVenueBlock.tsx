@@ -1,7 +1,12 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { MapPin, ChevronDown, ChevronUp } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
+import { FormField } from '@/components/common/FormField';
+import { SubLabel } from '@/components/common/SubLabel';
 import ContactPicker from './ContactPicker';
 import { VenuePlaceSearch, type VenuePlaceValue } from '@/components/common/VenuePlaceSearch';
 import { apiPost } from '@/lib/api';
@@ -30,6 +35,10 @@ export function InlineVenueBlock({ value, onChange, error }: InlineVenueBlockPro
   const queryClient = useQueryClient();
   const [mode, setMode] = useState<'existing' | 'new'>('existing');
   const [venueValue, setVenueValue] = useState<VenuePlaceValue>(EMPTY_VENUE);
+  const [showMore, setShowMore] = useState(false);
+  const [parking, setParking] = useState('');
+  const [access, setAccess] = useState('');
+  const [equipment, setEquipment] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
 
   const createMutation = useMutation({
@@ -46,12 +55,19 @@ export function InlineVenueBlock({ value, onChange, error }: InlineVenueBlockPro
         latitude: venueValue.latitude ?? undefined,
         longitude: venueValue.longitude ?? undefined,
         placeId: venueValue.placeId || undefined,
+        parkingInfo: parking.trim() || undefined,
+        accessInfo: access.trim() || undefined,
+        equipmentAvailable: equipment.trim() || undefined,
       }),
     onSuccess: (created) => {
       queryClient.invalidateQueries({ queryKey: ['contacts'] });
       onChange(created.id);
       setMode('existing');
       setVenueValue(EMPTY_VENUE);
+      setShowMore(false);
+      setParking('');
+      setAccess('');
+      setEquipment('');
       setLocalError(null);
     },
     onError: () => {
@@ -68,13 +84,20 @@ export function InlineVenueBlock({ value, onChange, error }: InlineVenueBlockPro
     createMutation.mutate();
   }
 
+  const setAddressField =
+    (field: keyof VenuePlaceValue) => (e: React.ChangeEvent<HTMLInputElement>) =>
+      setVenueValue((v) => ({ ...v, [field]: e.target.value, placeId: null, latitude: null, longitude: null }));
+
   return (
     <div className="border border-border rounded-md p-4 space-y-3">
       <Tabs value={mode} onValueChange={(v) => setMode(v as 'existing' | 'new')}>
         <div className="flex items-center justify-between gap-3">
-          <p className="text-sm font-semibold">
-            Venue <span className="font-normal text-muted-foreground">(optional)</span>
-          </p>
+          <div className="flex items-center gap-1.5">
+            <MapPin size={16} className="text-muted-foreground" aria-hidden="true" />
+            <p className="text-sm font-semibold">
+              Venue <span className="font-normal text-muted-foreground">(optional)</span>
+            </p>
+          </div>
           <TabsList className="h-auto p-0.5 bg-secondary border border-border">
             <TabsTrigger
               value="existing"
@@ -103,10 +126,86 @@ export function InlineVenueBlock({ value, onChange, error }: InlineVenueBlockPro
         </TabsContent>
 
         <TabsContent value="new" className="mt-3 space-y-3">
-          {/* Wrapper intercepts Enter to prevent outer form submission when VenuePlaceSearch has no suggestions */}
+          {/* Wrapper intercepts Enter: VenuePlaceSearch handles it when suggestions are open;
+              wrapper prevents outer form submission when there are no suggestions */}
           <div onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}>
-            <VenuePlaceSearch value={venueValue} onChange={setVenueValue} />
+            <VenuePlaceSearch value={venueValue} onChange={setVenueValue} searchOnly />
           </div>
+
+          <button
+            type="button"
+            onClick={() => setShowMore((o) => !o)}
+            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {showMore ? (
+              <><ChevronUp className="h-4 w-4" aria-hidden="true" />Hide venue details</>
+            ) : (
+              <><ChevronDown className="h-4 w-4" aria-hidden="true" />Add more venue details</>
+            )}
+          </button>
+
+          {showMore && (
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <SubLabel>Venue name</SubLabel>
+                <Input
+                  value={venueValue.name}
+                  onChange={setAddressField('name')}
+                  placeholder="e.g. The O2 Arena"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <SubLabel>Address line 1</SubLabel>
+                <Input
+                  value={venueValue.addressLine1}
+                  onChange={setAddressField('addressLine1')}
+                  placeholder="123 High Street"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <SubLabel>Address line 2</SubLabel>
+                <Input
+                  value={venueValue.addressLine2}
+                  onChange={setAddressField('addressLine2')}
+                  placeholder="(optional)"
+                />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="space-y-1.5">
+                  <SubLabel>City</SubLabel>
+                  <Input value={venueValue.city} onChange={setAddressField('city')} />
+                </div>
+                <div className="space-y-1.5">
+                  <SubLabel>Postcode</SubLabel>
+                  <Input value={venueValue.postcode} onChange={setAddressField('postcode')} />
+                </div>
+              </div>
+              <FormField label="Parking">
+                <Textarea
+                  value={parking}
+                  onChange={(e) => setParking(e.target.value)}
+                  rows={2}
+                  placeholder="e.g. Free car park at rear"
+                />
+              </FormField>
+              <FormField label="Access">
+                <Textarea
+                  value={access}
+                  onChange={(e) => setAccess(e.target.value)}
+                  rows={2}
+                  placeholder="e.g. Stage door on left side"
+                />
+              </FormField>
+              <FormField label="Equipment available">
+                <Textarea
+                  value={equipment}
+                  onChange={(e) => setEquipment(e.target.value)}
+                  rows={2}
+                  placeholder="e.g. PA system, microphone stands"
+                />
+              </FormField>
+            </div>
+          )}
 
           <div className="flex items-center gap-3">
             <Button type="button" onClick={handleCreate} disabled={createMutation.isPending}>

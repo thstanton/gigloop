@@ -20,6 +20,9 @@ export interface VenuePlaceValue {
 export interface VenuePlaceSearchProps {
   value: VenuePlaceValue;
   onChange: (v: VenuePlaceValue) => void;
+  /** Show only the search input; hides inline address fields and "Enter manually" link.
+   *  When Places fails to load, renders a plain name input instead of ManualEntry. */
+  searchOnly?: boolean;
 }
 
 // ─── Manual-entry fallback ────────────────────────────────────────────────────
@@ -84,7 +87,7 @@ function ManualEntry({
 
 const ESTABLISHMENT_TYPES = new Set(['establishment', 'point_of_interest']);
 
-export function VenuePlaceSearch({ value, onChange }: VenuePlaceSearchProps) {
+export function VenuePlaceSearch({ value, onChange, searchOnly = false }: VenuePlaceSearchProps) {
   const onChangeRef = useRef(onChange);
   useEffect(() => { onChangeRef.current = onChange; });
 
@@ -176,6 +179,22 @@ export function VenuePlaceSearch({ value, onChange }: VenuePlaceSearchProps) {
   };
 
   if (loadFailed || manual) {
+    if (searchOnly) {
+      return (
+        <div className="relative">
+          <MapPin
+            size={16}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
+          />
+          <Input
+            value={value.name}
+            onChange={(e) => onChange({ ...value, name: e.target.value })}
+            placeholder="e.g. The O2 Arena"
+            className="pl-9"
+          />
+        </div>
+      );
+    }
     return (
       <ManualEntry
         value={value}
@@ -249,7 +268,7 @@ export function VenuePlaceSearch({ value, onChange }: VenuePlaceSearchProps) {
         )}
       </div>
 
-      {hasAddress && (
+      {!searchOnly && hasAddress && (
         <div className="space-y-2">
           <div className="space-y-1.5">
             <SubLabel>Address line 1</SubLabel>
@@ -272,7 +291,7 @@ export function VenuePlaceSearch({ value, onChange }: VenuePlaceSearchProps) {
         </div>
       )}
 
-      {!hasAddress && (
+      {!searchOnly && !hasAddress && (
         <button
           type="button"
           onClick={() => setManual(true)}

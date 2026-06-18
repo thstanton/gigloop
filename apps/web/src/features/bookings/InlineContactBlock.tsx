@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronDown, ChevronUp, User } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -83,7 +83,10 @@ export function InlineContactBlock({ value, onChange, error }: InlineContactBloc
     <div className="border border-border rounded-md p-4 space-y-3">
       <Tabs value={mode} onValueChange={(v) => setMode(v as 'existing' | 'new')}>
         <div className="flex items-center justify-between gap-3">
-          <p className="text-sm font-semibold">Customer</p>
+          <div className="flex items-center gap-1.5">
+            <User size={16} className="text-muted-foreground" aria-hidden="true" />
+            <span className="text-sm font-semibold">Customer</span>
+          </div>
           <TabsList className="h-auto p-0.5 bg-secondary border border-border">
             <TabsTrigger
               value="existing"

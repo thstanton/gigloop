@@ -8,7 +8,7 @@ const newAgentContact = {
   id: 'new-a1',
   userId: 'user_storybook_test',
   name: 'Bob Agency',
-  greetingName: null,
+  greetingName: 'Bob',
   email: 'bob@agency.com',
   phone: null, website: null,
   addressLine1: null, addressLine2: null, city: null, county: null,
@@ -65,7 +65,7 @@ export const AgentBlockDefault: Story = {
 };
 
 export const AgentBlockNewPath: Story = {
-  name: 'Booking agent block — + New tab shows Name + Email fields',
+  name: 'Booking agent block — + New tab shows Name, Greeting name, Email fields',
   args: { value: null, onChange: () => {} },
   render: (args) => {
     function Wrapper() {
@@ -80,6 +80,47 @@ export const AgentBlockNewPath: Story = {
     await expect(canvas.getByPlaceholderText('Full name')).toBeVisible();
     await expect(canvas.getByPlaceholderText('email@example.com')).toBeVisible();
     await expect(canvas.getByRole('button', { name: /create booking agent/i })).toBeVisible();
+  },
+};
+
+export const AgentBlockGreetingNameAutoSuggest: Story = {
+  name: 'Booking agent block — greeting name auto-suggests from first word of name',
+  args: { value: null, onChange: () => {} },
+  render: (args) => {
+    function Wrapper() {
+      const [value, setValue] = useState<string | null>(null);
+      return <InlineAgentBlock {...args} value={value} onChange={setValue} />;
+    }
+    return <Wrapper />;
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('tab', { name: /\+ new/i }));
+    const nameInput = canvas.getByPlaceholderText('Full name');
+    await userEvent.type(nameInput, 'Bob Agency');
+    // Greeting name should auto-suggest "Bob" (first word)
+    await expect(canvas.getByPlaceholderText('e.g. Bob')).toHaveValue('Bob');
+  },
+};
+
+export const AgentBlockDisclosure: Story = {
+  name: 'Booking agent block — disclosure reveals phone, address, website, commission',
+  args: { value: null, onChange: () => {} },
+  render: (args) => {
+    function Wrapper() {
+      const [value, setValue] = useState<string | null>(null);
+      return <InlineAgentBlock {...args} value={value} onChange={setValue} />;
+    }
+    return <Wrapper />;
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('tab', { name: /\+ new/i }));
+    await expect(canvas.queryByLabelText(/phone/i)).toBeNull();
+    await userEvent.click(canvas.getByRole('button', { name: /add more agent details/i }));
+    await expect(canvas.getByLabelText(/phone/i)).toBeVisible();
+    await expect(canvas.getByLabelText(/website/i)).toBeVisible();
+    await expect(canvas.getByLabelText(/commission arrangement/i)).toBeVisible();
   },
 };
 

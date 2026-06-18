@@ -67,7 +67,7 @@ export const VenueBlockDefault: Story = {
 };
 
 export const VenueBlockNewPath: Story = {
-  name: 'Venue block — + New tab shows VenuePlaceSearch',
+  name: 'Venue block — + New tab shows venue name input and create button',
   args: { value: null, onChange: () => {} },
   render: (args) => {
     function Wrapper() {
@@ -79,15 +79,36 @@ export const VenueBlockNewPath: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('tab', { name: /\+ new/i }));
-    // VenuePlaceSearch search input is visible (may later fall back to manual entry)
-    await expect(canvas.getByPlaceholderText('Search for a venue…')).toBeVisible();
+    // In test env Google Maps is unavailable — VenuePlaceSearch searchOnly renders a plain name input
+    await expect(canvas.getByPlaceholderText('e.g. The O2 Arena')).toBeVisible();
     // Create venue button is visible
     await expect(canvas.getByRole('button', { name: /create venue/i })).toBeVisible();
   },
 };
 
+export const VenueBlockDisclosure: Story = {
+  name: 'Venue block — disclosure reveals address and extra fields',
+  args: { value: null, onChange: () => {} },
+  render: (args) => {
+    function Wrapper() {
+      const [value, setValue] = useState<string | null>(null);
+      return <InlineVenueBlock {...args} value={value} onChange={setValue} />;
+    }
+    return <Wrapper />;
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('tab', { name: /\+ new/i }));
+    await expect(canvas.queryByLabelText(/parking/i)).toBeNull();
+    await userEvent.click(canvas.getByRole('button', { name: /add more venue details/i }));
+    await expect(canvas.getByLabelText(/parking/i)).toBeVisible();
+    await expect(canvas.getByLabelText(/access/i)).toBeVisible();
+    await expect(canvas.getByLabelText(/equipment available/i)).toBeVisible();
+  },
+};
+
 export const InlineCreateStaysOnStep: Story = {
-  name: 'Venue block — Enter in venue search does not submit outer form',
+  name: 'Venue block — Enter in venue name input does not submit outer form',
   args: { value: null, onChange: () => {} },
   render: (args) => {
     function Wrapper() {
@@ -107,9 +128,9 @@ export const InlineCreateStaysOnStep: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('tab', { name: /\+ new/i }));
-    // Type in the venue search input (no suggestions in Storybook — Enter falls to wrapper guard)
-    const searchInput = canvas.getByPlaceholderText('Search for a venue…');
-    await userEvent.type(searchInput, 'Grand Hotel');
+    // In test env, VenuePlaceSearch searchOnly renders the plain name input
+    const nameInput = canvas.getByPlaceholderText('e.g. The O2 Arena');
+    await userEvent.type(nameInput, 'Grand Hotel');
     await userEvent.keyboard('{Enter}');
     // Outer form must NOT have been submitted
     await expect(canvas.getByTestId('outer-submitted')).toHaveTextContent('no');
