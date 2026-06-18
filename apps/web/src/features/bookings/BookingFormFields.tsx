@@ -1,3 +1,4 @@
+import type { Ref } from 'react';
 import { Controller } from 'react-hook-form';
 import type { Control, UseFormRegister, FieldErrors } from 'react-hook-form';
 import { z } from 'zod';
@@ -210,6 +211,8 @@ interface Props {
   formats?: Package[];
   series?: BookingSeries[];
   hideNotes?: boolean;
+  /** Wraps the Venue block so the edit drawer can scroll/focus it (section=venue). */
+  venueSectionRef?: Ref<HTMLDivElement>;
 }
 
 export function BookingFormFields({
@@ -220,6 +223,7 @@ export function BookingFormFields({
   formats,
   series,
   hideNotes,
+  venueSectionRef,
 }: Props) {
   return (
     <div className="space-y-6">
@@ -315,16 +319,18 @@ export function BookingFormFields({
           )}
         />
 
-        <Controller
-          name="venueId"
-          control={control}
-          render={({ field }) => (
-            <InlineVenueBlock
-              value={field.value}
-              onChange={field.onChange}
-            />
-          )}
-        />
+        <div ref={venueSectionRef}>
+          <Controller
+            name="venueId"
+            control={control}
+            render={({ field }) => (
+              <InlineVenueBlock
+                value={field.value}
+                onChange={field.onChange}
+              />
+            )}
+          />
+        </div>
 
         <Controller
           name="bookingAgentId"

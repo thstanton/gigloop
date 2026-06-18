@@ -58,6 +58,7 @@ export default function BookingEditDrawer({ booking }: Props) {
   const packagesRef = useRef<HTMLDivElement>(null);
   const musicFormRef = useRef<HTMLDivElement>(null);
   const onTheDayRef = useRef<HTMLDivElement>(null);
+  const venueRef = useRef<HTMLDivElement>(null);
 
   function close() {
     setSearchParams({});
@@ -124,6 +125,7 @@ export default function BookingEditDrawer({ booking }: Props) {
           if (section === 'packages') ref = packagesRef;
           else if (section === 'musicForm') ref = musicFormRef;
           else if (section === 'onTheDay') ref = onTheDayRef;
+          else if (section === 'venue') ref = venueRef;
           if (!ref?.current) return;
           requestAnimationFrame(() => {
             ref.current!.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -143,6 +145,7 @@ export default function BookingEditDrawer({ booking }: Props) {
               register={register}
               errors={errors}
               hideNotes
+              venueSectionRef={venueRef}
             />
 
             {mutation.isError && (
