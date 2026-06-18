@@ -9,6 +9,7 @@ import BookingStatusDropdown from '@/features/bookings/BookingStatusDropdown';
 import InlineFeeAdd from '@/features/bookings/InlineFeeAdd';
 import { apiGet } from '@/lib/api';
 import { formatDate, formatCurrency, formatFee } from '@/lib/formatters';
+import { DateBadge } from '@/components/common/DateBadge';
 import { EVENT_TYPE_LABELS } from '@/lib/constants';
 import type { UserProfile } from '@/types/api';
 
@@ -40,7 +41,10 @@ export default function BookingOverviewStrip({ bookingId }: BookingOverviewStrip
 
   return (
     <section className="mt-6">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-start gap-3">
+        <DateBadge date={booking.date} size="lg" className="mt-0.5" />
+        <div className="flex-1 min-w-0">
+        <div className="flex items-start justify-between gap-4">
         <h1 className="font-display text-2xl font-semibold text-foreground">{title}</h1>
         <div className="flex items-center gap-2 flex-shrink-0">
           <a
@@ -61,7 +65,7 @@ export default function BookingOverviewStrip({ bookingId }: BookingOverviewStrip
           </Button>
         </div>
       </div>
-      <div className="flex items-center justify-between md:flex-wrap md:justify-start md:gap-x-3 md:gap-y-1 mt-2">
+        <div className="flex items-center justify-between md:flex-wrap md:justify-start md:gap-x-3 md:gap-y-1 mt-1">
         <BookingStatusDropdown
           currentStatus={booking.status}
           checklist={[]}
@@ -94,6 +98,8 @@ export default function BookingOverviewStrip({ bookingId }: BookingOverviewStrip
             + Add to series
           </button>
         )}
+        </div>
+        </div>
       </div>
     </section>
   );

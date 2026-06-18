@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Card } from '@/components/common/Card';
 import { GhostButton } from '@/components/common/GhostButton';
 import { formatDate } from '@/lib/formatters';
+import { DateBadge } from '@/components/common/DateBadge';
 import type { BookingListItem } from '@/types/api';
 
 export interface SeriesEventsCardProps {
@@ -43,9 +44,10 @@ export function SeriesEventsCard({ bookings, isLoading, onAddToSeries }: SeriesE
           <li key={b.id}>
             <button
               onClick={() => navigate(`/admin/bookings/${b.id}`)}
-              className="w-full flex items-start justify-between gap-4 py-3 text-left hover:bg-muted/30 transition-colors -mx-4 px-4"
+              className="w-full flex items-start gap-3 py-3 text-left hover:bg-muted/30 transition-colors -mx-4 px-4"
             >
-              <div className="flex flex-col gap-0.5 min-w-0">
+              <DateBadge date={b.date} size="sm" className="mt-0.5" />
+              <div className="flex flex-col gap-0.5 min-w-0 flex-1">
                 <span className="text-sm text-foreground truncate">
                   {b.title ?? b.customer.name}
                 </span>
