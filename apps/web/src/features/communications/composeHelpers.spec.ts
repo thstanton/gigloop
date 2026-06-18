@@ -1,6 +1,18 @@
 import { describe, it, expect } from 'vitest';
-import { getInvoiceIdForTemplate, shouldHideTemplate, formatMissingVariables, getAttachmentState } from './composeHelpers';
-import type { Invoice } from '@/types/api';
+import {
+  getInvoiceIdForTemplate,
+  shouldHideTemplate,
+  formatMissingVariables,
+  getAttachmentState,
+  isComposableEmailTemplate,
+  findPreselectTemplateId,
+  computeInvoiceDateDefaults,
+  buildRenderUrl,
+  buildSendRequest,
+  canRenderEmail,
+  canSendEmail,
+} from './composeHelpers';
+import type { Invoice, Template } from '@/types/api';
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -248,5 +260,232 @@ describe('formatMissingVariables', () => {
     const result = formatMissingVariables(keys);
     expect(result).toContain('Customer name');
     expect(result).toContain('Invoice total');
+  });
+});
+
+// ─── isComposableEmailTemplate ──────────────────────────────────────────────
+
+function makeTemplate(overrides: Partial<Template> = {}): Template {
+  return {
+    id: 'tpl-1',
+    name: 'A template',
+    builtInType: 'confirmation',
+    content: { type: 'doc', content: [] },
+    createdAt: '2025-01-01',
+    updatedAt: '2025-01-01',
+    ...overrides,
+  } as unknown as Template;
+}
+
+describe('isComposableEmailTemplate', () => {
+  it('includes built-in email templates', () => {
+    expect(isComposableEmailTemplate(makeTemplate({ builtInType: 'confirmation' }), false)).toBe(true);
+  });
+
+  it('excludes templates with no built-in type', () => {
+    expect(isComposableEmailTemplate(makeTemplate({ builtInType: null }), false)).toBe(false);
+  });
+
+  it('excludes document-only built-in types', () => {
+    expect(isComposableEmailTemplate(makeTemplate({ builtInType: 'contract' }), false)).toBe(false);
+  });
+
+  it('hides music_form_invite unless the booking has a music form configured', () => {
+    const t = makeTemplate({ builtInType: 'music_form_invite' });
+    expect(isComposableEmailTemplate(t, false)).toBe(false);
+    expect(isComposableEmailTemplate(t, true)).toBe(true);
+  });
+});
+
+// ─── findPreselectTemplateId ────────────────────────────────────────────────
+
+describe('findPreselectTemplateId', () => {
+  const templates = [
+    makeTemplate({ id: 't-conf', builtInType: 'confirmation' }),
+    makeTemplate({ id: 't-quote', builtInType: 'quote' }),
+  ];
+
+  it('returns the id of the template matching the requested type', () => {
+    expect(findPreselectTemplateId(templates, 'quote')).toBe('t-quote');
+  });
+
+  it('returns null when no template matches', () => {
+    expect(findPreselectTemplateId(templates, 'thank_you')).toBeNull();
+  });
+
+  it('returns null when no type is requested', () => {
+    expect(findPreselectTemplateId(templates, undefined)).toBeNull();
+  });
+});
+
+// ─── computeInvoiceDateDefaults ─────────────────────────────────────────────
+
+describe('computeInvoiceDateDefaults', () => {
+  it('defaults the issue date to today', () => {
+    const today = new Date().toISOString().slice(0, 10);
+    expect(computeInvoiceDateDefaults(30).issueDate).toBe(today);
+  });
+
+  it('sets the due date to issue date + payment terms', () => {
+    const { issueDate, dueDate } = computeInvoiceDateDefaults(30);
+    const expected = new Date(issueDate);
+    expected.setDate(expected.getDate() + 30);
+    expect(dueDate).toBe(expected.toISOString().slice(0, 10));
+  });
+
+  it('leaves the due date blank when no terms are configured', () => {
+    expect(computeInvoiceDateDefaults(undefined).dueDate).toBe('');
+    expect(computeInvoiceDateDefaults(0).dueDate).toBe('');
+  });
+});
+
+// ─── buildRenderUrl ─────────────────────────────────────────────────────────
+
+describe('buildRenderUrl', () => {
+  const base = {
+    bookingId: 'b1',
+    templateId: 'tpl-1',
+    invoiceId: undefined,
+    issueDate: '',
+    dueDate: '',
+    showDateFields: false,
+  };
+
+  it('returns an empty string when no template is selected', () => {
+    expect(buildRenderUrl({ ...base, templateId: '' })).toBe('');
+  });
+
+  it('builds the base render url for a plain template', () => {
+    expect(buildRenderUrl(base)).toBe('/bookings/b1/communications/render?templateId=tpl-1');
+  });
+
+  it('appends the invoice id when present', () => {
+    expect(buildRenderUrl({ ...base, invoiceId: 'inv-1' })).toBe(
+      '/bookings/b1/communications/render?templateId=tpl-1&invoiceId=inv-1',
+    );
+  });
+
+  it('appends issue/due dates only when date fields are shown', () => {
+    expect(buildRenderUrl({ ...base, issueDate: '2030-01-01', dueDate: '2030-02-01' })).toBe(
+      '/bookings/b1/communications/render?templateId=tpl-1',
+    );
+    expect(
+      buildRenderUrl({ ...base, issueDate: '2030-01-01', dueDate: '2030-02-01', showDateFields: true }),
+    ).toBe('/bookings/b1/communications/render?templateId=tpl-1&issueDate=2030-01-01&dueDate=2030-02-01');
+  });
+});
+
+// ─── buildSendRequest ───────────────────────────────────────────────────────
+
+describe('buildSendRequest', () => {
+  const base = {
+    bookingId: 'b1',
+    invoiceId: undefined as string | undefined,
+    isInvoiceEmail: false,
+    showDateFields: false,
+    formIssueDate: '',
+    formDueDate: '',
+    to: 'sophie@example.com',
+    contactId: 'c1',
+    subject: 'Hi',
+    body: '<p>Hello</p>',
+    templateId: 'tpl-1',
+  };
+
+  it('routes non-invoice emails to the communications endpoint', () => {
+    const { url, payload } = buildSendRequest(base);
+    expect(url).toBe('/bookings/b1/communications/send');
+    expect(payload).toEqual({
+      to: 'sophie@example.com',
+      contactId: 'c1',
+      subject: 'Hi',
+      body: '<p>Hello</p>',
+      templateId: 'tpl-1',
+    });
+  });
+
+  it('routes invoice emails to the invoice-send endpoint', () => {
+    const { url } = buildSendRequest({ ...base, isInvoiceEmail: true, invoiceId: 'inv-1' });
+    expect(url).toBe('/bookings/b1/invoices/inv-1/send');
+  });
+
+  it('includes issue/due dates for draft invoices only', () => {
+    const { payload } = buildSendRequest({
+      ...base,
+      isInvoiceEmail: true,
+      invoiceId: 'inv-1',
+      showDateFields: true,
+      formIssueDate: '2030-01-01',
+      formDueDate: '2030-02-01',
+    });
+    expect(payload).toMatchObject({ issueDate: '2030-01-01', dueDate: '2030-02-01' });
+  });
+
+  it('omits dates for issued invoices', () => {
+    const { payload } = buildSendRequest({ ...base, isInvoiceEmail: true, invoiceId: 'inv-1' });
+    expect(payload).not.toHaveProperty('issueDate');
+  });
+
+  it('omits the templateId when none is selected', () => {
+    const { payload } = buildSendRequest({ ...base, templateId: '' });
+    expect(payload).not.toHaveProperty('templateId');
+  });
+});
+
+// ─── canRenderEmail / canSendEmail ──────────────────────────────────────────
+
+describe('canRenderEmail', () => {
+  const ready = {
+    isLoaded: true,
+    open: true,
+    hasTemplate: true,
+    renderUrl: '/render',
+    showDateFields: false,
+    formIssueDate: '',
+  };
+
+  it('is true when loaded, open, has a template and url', () => {
+    expect(canRenderEmail(ready)).toBe(true);
+  });
+
+  it('is false until auth has loaded, the sheet is open, and a template+url exist', () => {
+    expect(canRenderEmail({ ...ready, isLoaded: false })).toBe(false);
+    expect(canRenderEmail({ ...ready, open: false })).toBe(false);
+    expect(canRenderEmail({ ...ready, hasTemplate: false })).toBe(false);
+    expect(canRenderEmail({ ...ready, renderUrl: '' })).toBe(false);
+  });
+
+  it('requires an issue date when date fields are shown', () => {
+    expect(canRenderEmail({ ...ready, showDateFields: true, formIssueDate: '' })).toBe(false);
+    expect(canRenderEmail({ ...ready, showDateFields: true, formIssueDate: '2030-01-01' })).toBe(true);
+  });
+});
+
+describe('canSendEmail', () => {
+  const ready = {
+    hasEmail: true,
+    hasTemplate: true,
+    hasSubject: true,
+    rendering: false,
+    sending: false,
+    showDateFields: false,
+    formIssueDate: '',
+  };
+
+  it('is true when all preconditions are met', () => {
+    expect(canSendEmail(ready)).toBe(true);
+  });
+
+  it('is false without an email, template or subject, or while busy', () => {
+    expect(canSendEmail({ ...ready, hasEmail: false })).toBe(false);
+    expect(canSendEmail({ ...ready, hasTemplate: false })).toBe(false);
+    expect(canSendEmail({ ...ready, hasSubject: false })).toBe(false);
+    expect(canSendEmail({ ...ready, rendering: true })).toBe(false);
+    expect(canSendEmail({ ...ready, sending: true })).toBe(false);
+  });
+
+  it('requires an issue date when date fields are shown', () => {
+    expect(canSendEmail({ ...ready, showDateFields: true, formIssueDate: '' })).toBe(false);
+    expect(canSendEmail({ ...ready, showDateFields: true, formIssueDate: '2030-01-01' })).toBe(true);
   });
 });
