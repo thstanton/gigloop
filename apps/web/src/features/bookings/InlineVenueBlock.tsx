@@ -88,6 +88,15 @@ export function InlineVenueBlock({ value, onChange, error }: InlineVenueBlockPro
     (field: keyof VenuePlaceValue) => (e: React.ChangeEvent<HTMLInputElement>) =>
       setVenueValue((v) => ({ ...v, [field]: e.target.value, placeId: null, latitude: null, longitude: null }));
 
+  function handleVenueChange(next: VenuePlaceValue) {
+    setVenueValue(next);
+    // A plain-address selection (a private house, a field) fills the address but no
+    // business name, leaving the search box blank. Auto-open details so the captured
+    // address is visible and the musician can name the venue.
+    const hasAddress = !!(next.addressLine1 || next.city || next.postcode);
+    if (hasAddress && !next.name.trim()) setShowMore(true);
+  }
+
   return (
     <div className="border border-border rounded-md p-4 space-y-3">
       <Tabs value={mode} onValueChange={(v) => setMode(v as 'existing' | 'new')}>
@@ -129,7 +138,7 @@ export function InlineVenueBlock({ value, onChange, error }: InlineVenueBlockPro
           {/* Wrapper intercepts Enter: VenuePlaceSearch handles it when suggestions are open;
               wrapper prevents outer form submission when there are no suggestions */}
           <div onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}>
-            <VenuePlaceSearch value={venueValue} onChange={setVenueValue} searchOnly />
+            <VenuePlaceSearch value={venueValue} onChange={handleVenueChange} searchOnly />
           </div>
 
           <button

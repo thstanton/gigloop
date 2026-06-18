@@ -117,6 +117,9 @@ describe('VenuePlaceSearch', () => {
       addressComponents: makeAddressComponents(),
       location: { lat: () => 51.5, lng: () => 0.003 },
       id: 'o2-id',
+      // Authoritative types live on the resolved Place (populated by fetchFields),
+      // not the prediction — see selectSuggestion.
+      types: ['establishment', 'point_of_interest'],
       fetchFields: vi.fn().mockResolvedValue(undefined),
     };
     setupGoogleMock([
@@ -124,7 +127,6 @@ describe('VenuePlaceSearch', () => {
         placePrediction: {
           text: { toString: () => 'The O2 Arena, London' },
           toPlace: () => place,
-          types: ['establishment', 'point_of_interest'],
         },
       },
     ]);
@@ -153,6 +155,7 @@ describe('VenuePlaceSearch', () => {
       addressComponents: makeAddressComponents(),
       location: { lat: () => 51.5, lng: () => -0.1 },
       id: 'addr-id',
+      types: ['street_address', 'geocode'],
       fetchFields: vi.fn().mockResolvedValue(undefined),
     };
     setupGoogleMock([
@@ -160,7 +163,6 @@ describe('VenuePlaceSearch', () => {
         placePrediction: {
           text: { toString: () => '10 Main Street, London' },
           toPlace: () => place,
-          types: ['street_address', 'geocode'],
         },
       },
     ]);

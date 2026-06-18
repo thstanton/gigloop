@@ -157,8 +157,11 @@ export function VenuePlaceSearch({ value, onChange, searchOnly = false }: VenueP
 
       const parsed = parseAddressComponents(place.addressComponents ?? []);
 
-      const predictionTypes: string[] = suggestion.placePrediction.types ?? [];
-      const isEstablishment = predictionTypes.some((t) => ESTABLISHMENT_TYPES.has(t));
+      // Read types from the resolved Place (fetched above), not the prediction —
+      // prediction-level types don't reliably carry establishment/point_of_interest
+      // at runtime, which left venue names blank after selection.
+      const placeTypes: string[] = place.types ?? [];
+      const isEstablishment = placeTypes.some((t) => ESTABLISHMENT_TYPES.has(t));
       const venueName = isEstablishment ? (place.displayName ?? '') : '';
 
       onChangeRef.current({
