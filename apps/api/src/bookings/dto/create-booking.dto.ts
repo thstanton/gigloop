@@ -106,11 +106,11 @@ export class CreateBookingDto {
   @IsUUID()
   bookingAgentId?: string;
 
-  @ApiPropertyOptional({ type: [String], description: 'Performance format IDs to apply (in order)' })
+  @ApiPropertyOptional({ type: [String], description: 'Package template IDs to apply (in order)' })
   @IsOptional()
   @IsArray()
   @IsUUID('all', { each: true })
-  formatIds?: string[];
+  packageTemplateIds?: string[];
 
   @ApiProperty({ type: [ChecklistItemInput], description: 'Checklist items to seed for this booking' })
   @IsArray()

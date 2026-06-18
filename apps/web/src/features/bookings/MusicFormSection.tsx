@@ -162,7 +162,7 @@ export default function MusicFormSection({
   }
 
   const sectionIconMap = new Map<string, string>(
-    (booking.packages ?? []).map((bpf) => [bpf.package.label, bpf.package.icon]),
+    (booking.packages ?? []).map((bpf) => [bpf.label, bpf.icon]),
   );
 
   const sectionMap = new Map<string, { label: string; section: string }[]>();

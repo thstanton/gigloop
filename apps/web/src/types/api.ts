@@ -163,7 +163,6 @@ export interface SeriesDefaults {
   customerId?: string;
   venueId?: string | null;
   bookingAgentId?: string | null;
-  packageIds?: string[];
   checklistItems?: ChecklistDefaultItem[];
   musicFormConfig?: { enabledGenres: string[]; keyMoments: KeyMoment[] } | null;
 }
@@ -191,14 +190,8 @@ export interface PerformanceSet {
 export interface BookingPackageSummary {
   id: string;
   order: number;
-  packageId: string;
-  package: {
-    id: string;
-    label: string;
-    icon: string;
-    keyMoments: string[];
-    defaultGenreSelection: string[];
-  };
+  label: string;
+  icon: string;
 }
 
 export interface KeyMoment {
@@ -319,7 +312,7 @@ export interface CreateBookingInput {
   notes?: string;
   venueId?: string;
   bookingAgentId?: string;
-  formatIds?: string[];
+  packageTemplateIds?: string[];
   checklistItems: ChecklistDefaultItem[];
   seriesId?: string;
   newSeries?: { label: string };
@@ -447,17 +440,17 @@ export interface UpdateSongInput {
 }
 
 // ─────────────────────────────────────────
-// Packages
+// Package Templates (library)
 // ─────────────────────────────────────────
 
-export interface PackageSlot {
+export interface PackageTemplateSlot {
   id: string;
   label: string | null;
   duration: number;
   order: number;
 }
 
-export interface Package {
+export interface PackageTemplate {
   id: string;
   createdAt: string;
   updatedAt: string;
@@ -469,7 +462,7 @@ export interface Package {
   notes: string | null;
   isSystemDefault: boolean;
   enabled: boolean;
-  slots: PackageSlot[];
+  slots: PackageTemplateSlot[];
 }
 
 export interface SlotInput {

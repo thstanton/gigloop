@@ -15,8 +15,7 @@ const baseBooking: BookingDetail = {
   venueId: null, venue: null, bookingAgentId: null, bookingAgent: null,
   sets: [], packages: [
     {
-      id: 'bp1', order: 0, packageId: 'pkg1',
-      package: { id: 'pkg1', label: 'Wedding Package', icon: 'heart', keyMoments: ['First dance', 'Bridal walk-in'], defaultGenreSelection: ['JAZZ', 'CLASSICAL'] },
+      id: 'pkg1', order: 0, label: 'Wedding Package', icon: 'heart',
     },
   ],
   activeContract: null, depositReceivedAt: null, portalToken: 'tok_abc',

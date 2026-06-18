@@ -34,40 +34,20 @@ export default function MusicFormEditor({
   useEffect(() => {
     if (initialized) return;
 
+    // #502 restores template-derived key-moment/genre suggestion. ADR-0046 severs the
+    // booking-owned Package → PackageTemplate provenance, so the snapshot no longer
+    // carries keyMoments/defaultGenreSelection to seed from — first-time setup starts empty.
     if (!booking.hasMusicFormConfig) {
-      const seedKeyMoments = (booking.packages ?? []).flatMap((bpf) =>
-        bpf.package.keyMoments.map((km) => ({ label: km, section: bpf.package.label })),
-      );
-      const seedGenres = [
-        ...new Set((booking.packages ?? []).flatMap((bpf) => bpf.package.defaultGenreSelection)),
-      ];
-      setLocalKeyMoments(seedKeyMoments);
-      setLocalGenres(seedGenres);
+      setLocalKeyMoments([]);
+      setLocalGenres([]);
       setInitialized(true);
       return;
     }
 
     if (!config) return;
 
-    const existing = config.keyMoments ?? [];
-    const existingKeys = new Set(existing.map((km) => `${km.section}::${km.label}`));
-    const fromFormats: KeyMoment[] = (booking.packages ?? []).flatMap((bpf) =>
-      bpf.package.keyMoments.map((km) => ({
-        label: km,
-        section: bpf.package.label,
-      })),
-    );
-    const merged = [
-      ...existing,
-      ...fromFormats.filter((km) => !existingKeys.has(`${km.section}::${km.label}`)),
-    ];
-    const seedGenres = [
-      ...new Set(
-        (booking.packages ?? []).flatMap((bpf) => bpf.package.defaultGenreSelection),
-      ),
-    ];
-    setLocalKeyMoments(merged);
-    setLocalGenres(config.enabledGenres?.length ? config.enabledGenres : seedGenres);
+    setLocalKeyMoments(config.keyMoments ?? []);
+    setLocalGenres(config.enabledGenres ?? []);
     setInitialized(true);
   }, [config, initialized, booking.packages, booking.hasMusicFormConfig]);
 

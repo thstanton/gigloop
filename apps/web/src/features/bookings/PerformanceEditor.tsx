@@ -9,7 +9,7 @@ import { PACKAGE_ICON_MAP } from '@/lib/constants';
 import type {
   BookingDetail,
   BookingPackageSummary,
-  Package,
+  PackageTemplate,
   PerformanceSet,
 } from '@/types/api';
 
@@ -143,33 +143,32 @@ function SetEditRow({
 export default function PerformanceEditor({ booking, isOpen }: { booking: BookingDetail; isOpen: boolean }) {
   const queryClient = useQueryClient();
   const [addOpen, setAddOpen] = useState(false);
-  const [confirmRemoveFormatId, setConfirmRemoveFormatId] = useState<string | null>(null);
+  const [confirmRemovePackageId, setConfirmRemovePackageId] = useState<string | null>(null);
 
-  const { data: allFormats = [], isLoading: formatsLoading } = useQuery({
+  const { data: allTemplates = [], isLoading: templatesLoading } = useQuery({
     queryKey: ['packages'],
-    queryFn: () => apiGet<Package[]>('/packages'),
+    queryFn: () => apiGet<PackageTemplate[]>('/packages'),
     enabled: addOpen,
   });
 
   const [otherOpen, setOtherOpen] = useState(false);
 
-  const appliedFormatIds = new Set(
-    (booking.packages ?? []).map((bpf) => bpf.packageId),
-  );
-  const enabledUnapplied = allFormats.filter((f) => f.enabled && !appliedFormatIds.has(f.id));
-  const matchingFormats = enabledUnapplied.filter((f) => f.category === booking.eventType);
-  const otherFormats = enabledUnapplied.filter((f) => f.category !== booking.eventType);
-  const availableFormats = enabledUnapplied;
+  // Provenance is severed (ADR-0046): booking-owned Packages carry no FK back to the
+  // template, so we can't filter already-applied templates. All enabled templates are shown.
+  const enabledTemplates = allTemplates.filter((t) => t.enabled);
+  const matchingTemplates = enabledTemplates.filter((t) => t.category === booking.eventType);
+  const otherTemplates = enabledTemplates.filter((t) => t.category !== booking.eventType);
+  const availableTemplates = enabledTemplates;
 
   useEffect(() => {
     if (isOpen) {
-      setConfirmRemoveFormatId(null);
+      setConfirmRemovePackageId(null);
     }
   }, [isOpen]);
 
-  const applyFormat = useMutation({
-    mutationFn: (formatId: string) =>
-      apiPost(`/bookings/${booking.id}/formats`, { formatId }),
+  const applyTemplate = useMutation({
+    mutationFn: (packageTemplateId: string) =>
+      apiPost(`/bookings/${booking.id}/packages`, { packageTemplateId }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['booking', booking.id] });
       setAddOpen(false);
@@ -179,9 +178,9 @@ export default function PerformanceEditor({ booking, isOpen }: { booking: Bookin
     },
   });
 
-  const removeFormat = useMutation({
-    mutationFn: (bookingFormatId: string) =>
-      apiDelete(`/bookings/${booking.id}/formats/${bookingFormatId}`),
+  const removePackage = useMutation({
+    mutationFn: (packageId: string) =>
+      apiDelete(`/bookings/${booking.id}/packages/${packageId}`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['booking', booking.id] }),
     onError: () => {
       toast({ title: 'Failed to remove package. Please try again.', variant: 'destructive' });
@@ -209,28 +208,28 @@ export default function PerformanceEditor({ booking, isOpen }: { booking: Bookin
     },
   });
 
-  function handleRemoveFormat(bpf: BookingPackageSummary) {
-    const sets = (booking.sets ?? []).filter((s) => s.packageId === bpf.packageId);
+  function handleRemovePackage(bpf: BookingPackageSummary) {
+    const sets = (booking.sets ?? []).filter((s) => s.packageId === bpf.id);
     const hasStartTimes = sets.some((s) => s.startTime);
     if (hasStartTimes) {
-      setConfirmRemoveFormatId(bpf.id);
+      setConfirmRemovePackageId(bpf.id);
       return;
     }
-    removeFormat.mutate(bpf.id);
+    removePackage.mutate(bpf.id);
   }
 
   function handleAddSet(bpf: BookingPackageSummary) {
     const nextOrder = Math.max(0, ...(booking.sets ?? []).map((s) => s.order)) + 1;
-    addSet.mutate({ packageId: bpf.packageId, order: nextOrder });
+    addSet.mutate({ packageId: bpf.id, order: nextOrder });
   }
 
-  const setsByFormatId = new Map<string | null, PerformanceSet[]>();
+  const setsByPackageId = new Map<string | null, PerformanceSet[]>();
   for (const set of booking.sets ?? []) {
     const key = set.packageId ?? null;
-    if (!setsByFormatId.has(key)) setsByFormatId.set(key, []);
-    setsByFormatId.get(key)!.push(set);
+    if (!setsByPackageId.has(key)) setsByPackageId.set(key, []);
+    setsByPackageId.get(key)!.push(set);
   }
-  const unassigned = setsByFormatId.get(null) ?? [];
+  const unassigned = setsByPackageId.get(null) ?? [];
 
   return (
     <div>
@@ -241,27 +240,27 @@ export default function PerformanceEditor({ booking, isOpen }: { booking: Bookin
       )}
 
       {(booking.packages ?? []).map((bpf) => {
-        const sets = setsByFormatId.get(bpf.packageId) ?? [];
+        const sets = setsByPackageId.get(bpf.id) ?? [];
         return (
           <div key={bpf.id} className="mb-5">
             <div className="flex items-center justify-between mb-1">
               <span className="text-sm font-medium text-foreground flex items-center gap-1.5">
-                <FormatIcon icon={bpf.package.icon} />
-                {bpf.package.label}
+                <FormatIcon icon={bpf.icon} />
+                {bpf.label}
               </span>
-              {confirmRemoveFormatId === bpf.id ? (
+              {confirmRemovePackageId === bpf.id ? (
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => { removeFormat.mutate(bpf.id); setConfirmRemoveFormatId(null); }}
-                    disabled={removeFormat.isPending}
+                    onClick={() => { removePackage.mutate(bpf.id); setConfirmRemovePackageId(null); }}
+                    disabled={removePackage.isPending}
                     className="text-xs text-status-cancelled hover:text-status-cancelled/80 transition-colors disabled:opacity-50"
                   >
-                    {removeFormat.isPending ? 'Removing…' : 'Confirm remove'}
+                    {removePackage.isPending ? 'Removing…' : 'Confirm remove'}
                   </button>
                   <button
                     type="button"
-                    onClick={() => setConfirmRemoveFormatId(null)}
+                    onClick={() => setConfirmRemovePackageId(null)}
                     className="text-xs text-muted hover:text-foreground transition-colors"
                   >
                     Cancel
@@ -270,10 +269,10 @@ export default function PerformanceEditor({ booking, isOpen }: { booking: Bookin
               ) : (
                 <button
                   type="button"
-                  onClick={() => handleRemoveFormat(bpf)}
-                  disabled={removeFormat.isPending}
+                  onClick={() => handleRemovePackage(bpf)}
+                  disabled={removePackage.isPending}
                   className="text-muted hover:text-status-cancelled transition-colors disabled:opacity-50"
-                  aria-label={`Remove ${bpf.package.label}`}
+                  aria-label={`Remove ${bpf.label}`}
                 >
                   <Trash2 size={13} aria-hidden="true" />
                 </button>
@@ -338,48 +337,48 @@ export default function PerformanceEditor({ booking, isOpen }: { booking: Bookin
         </GhostButton>
       ) : (
         <div className="space-y-2">
-          <SubLabel>Select a format</SubLabel>
-          {formatsLoading && <p className="text-sm text-muted">Loading…</p>}
-          {!formatsLoading && availableFormats.length === 0 && (
-            <p className="text-sm text-muted">All formats already applied.</p>
+          <SubLabel>Select a package</SubLabel>
+          {templatesLoading && <p className="text-sm text-muted">Loading…</p>}
+          {!templatesLoading && availableTemplates.length === 0 && (
+            <p className="text-sm text-muted">No package templates available.</p>
           )}
-          {!formatsLoading && availableFormats.length > 0 && (
+          {!templatesLoading && availableTemplates.length > 0 && (
             <div className="space-y-3">
               <div className="flex flex-wrap gap-2">
-                {(matchingFormats.length > 0 ? matchingFormats : otherFormats).map((fmt) => (
+                {(matchingTemplates.length > 0 ? matchingTemplates : otherTemplates).map((tmpl) => (
                   <button
-                    key={fmt.id}
+                    key={tmpl.id}
                     type="button"
-                    disabled={applyFormat.isPending}
-                    onClick={() => applyFormat.mutate(fmt.id)}
+                    disabled={applyTemplate.isPending}
+                    onClick={() => applyTemplate.mutate(tmpl.id)}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border text-sm hover:border-primary transition-colors disabled:opacity-50"
                   >
-                    <FormatIcon icon={fmt.icon} />
-                    {fmt.label}
+                    <FormatIcon icon={tmpl.icon} />
+                    {tmpl.label}
                   </button>
                 ))}
               </div>
-              {matchingFormats.length > 0 && otherFormats.length > 0 && (
+              {matchingTemplates.length > 0 && otherTemplates.length > 0 && (
                 <div>
                   <button
                     type="button"
                     onClick={() => setOtherOpen((o) => !o)}
                     className="text-sm text-muted hover:text-foreground transition-colors"
                   >
-                    {otherOpen ? '▾' : '▸'} Other packages ({otherFormats.length})
+                    {otherOpen ? '▾' : '▸'} Other packages ({otherTemplates.length})
                   </button>
                   {otherOpen && (
                     <div className="flex flex-wrap gap-2 mt-2">
-                      {otherFormats.map((fmt) => (
+                      {otherTemplates.map((tmpl) => (
                         <button
-                          key={fmt.id}
+                          key={tmpl.id}
                           type="button"
-                          disabled={applyFormat.isPending}
-                          onClick={() => applyFormat.mutate(fmt.id)}
+                          disabled={applyTemplate.isPending}
+                          onClick={() => applyTemplate.mutate(tmpl.id)}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border text-sm hover:border-primary transition-colors disabled:opacity-50"
                         >
-                          <FormatIcon icon={fmt.icon} />
-                          {fmt.label}
+                          <FormatIcon icon={tmpl.icon} />
+                          {tmpl.label}
                         </button>
                       ))}
                     </div>

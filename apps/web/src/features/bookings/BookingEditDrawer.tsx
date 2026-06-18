@@ -38,7 +38,7 @@ function buildDefaultValues(booking: BookingDetail): BookingFormValues {
     customerId: booking.customerId,
     venueId: booking.venueId,
     bookingAgentId: booking.bookingAgentId,
-    formatIds: [],
+    packageTemplateIds: [],
     seriesMode: 'none',
     seriesId: null,
     newSeriesLabel: '',

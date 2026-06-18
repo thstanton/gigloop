@@ -6,6 +6,7 @@ type MockPrisma = {
   booking: {
     findMany: jest.Mock;
     findFirst: jest.Mock;
+    findFirstOrThrow: jest.Mock;
     create: jest.Mock;
     update: jest.Mock;
   };
@@ -16,7 +17,13 @@ type MockPrisma = {
     delete: jest.Mock;
   };
   package: {
+    create: jest.Mock;
+  };
+  packageTemplate: {
     findMany: jest.Mock;
+  };
+  musicFormConfig: {
+    create: jest.Mock;
   };
 };
 
@@ -25,6 +32,7 @@ function makePrisma(): MockPrisma {
     booking: {
       findMany: jest.fn(),
       findFirst: jest.fn(),
+      findFirstOrThrow: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
     },
@@ -35,7 +43,13 @@ function makePrisma(): MockPrisma {
       delete: jest.fn(),
     },
     package: {
+      create: jest.fn(),
+    },
+    packageTemplate: {
       findMany: jest.fn(),
+    },
+    musicFormConfig: {
+      create: jest.fn(),
     },
   };
 }
@@ -175,61 +189,95 @@ describe('BookingsRepository', () => {
     });
   });
 
-  describe('findFormats', () => {
+  describe('findPackageTemplates', () => {
     it('queries by userId and ids', async () => {
-      prisma.package.findMany.mockResolvedValue([]);
-      await repo.findFormats('u1', ['f1', 'f2']);
-      expect(prisma.package.findMany).toHaveBeenCalledWith(
+      prisma.packageTemplate.findMany.mockResolvedValue([]);
+      await repo.findPackageTemplates('u1', ['f1', 'f2']);
+      expect(prisma.packageTemplate.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ where: { id: { in: ['f1', 'f2'] }, userId: 'u1' } }),
       );
     });
   });
 
-  describe('createWithFormats', () => {
-    it('creates sets from format slots with packageId', async () => {
+  describe('createWithPackageTemplates', () => {
+    const baseDto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', checklistItems: [] };
+
+    function primeCreateChain() {
       prisma.booking.create.mockResolvedValue({ id: 'b1' });
-      const fmt = {
+      prisma.package.create.mockResolvedValue({ id: 'pkg1' });
+      prisma.performanceSet.create.mockResolvedValue({ id: 's1' });
+      prisma.musicFormConfig.create.mockResolvedValue({ id: 'mfc1' });
+      prisma.booking.findFirstOrThrow.mockResolvedValue({ id: 'b1' });
+    }
+
+    it('creates a booking-owned package snapshotting the template label/icon', async () => {
+      primeCreateChain();
+      const tmpl = {
         id: 'f1',
         label: 'Ceremony',
+        icon: 'heart',
         keyMoments: [],
         defaultGenreSelection: ['CONTEMPORARY'],
         slots: [{ label: 'Ceremony', duration: 30, order: 1 }],
       };
-      await repo.createWithFormats('u1', { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', checklistItems: [] }, [fmt], false);
-      const data = prisma.booking.create.mock.calls[0][0].data;
-      expect(data.sets.create[0]).toMatchObject({ duration: 30, packageId: 'f1' });
+      await repo.createWithPackageTemplates('u1', baseDto, [tmpl], false);
+      expect(prisma.package.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ userId: 'u1', bookingId: 'b1', order: 1, label: 'Ceremony', icon: 'heart' }),
+        }),
+      );
     });
 
-    it('creates musicFormConfig when formats have keyMoments and songRequestFormEnabled', async () => {
-      prisma.booking.create.mockResolvedValue({ id: 'b1' });
-      const fmt = {
+    it('creates sets referencing the booking-owned package id (not the template id)', async () => {
+      primeCreateChain();
+      const tmpl = {
+        id: 'f1',
+        label: 'Ceremony',
+        icon: 'heart',
+        keyMoments: [],
+        defaultGenreSelection: ['CONTEMPORARY'],
+        slots: [{ label: 'Ceremony', duration: 30, order: 1 }],
+      };
+      await repo.createWithPackageTemplates('u1', baseDto, [tmpl], false);
+      expect(prisma.performanceSet.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ duration: 30, packageId: 'pkg1' }) }),
+      );
+    });
+
+    it('creates musicFormConfig with keyMoments from templates when songRequestFormEnabled', async () => {
+      primeCreateChain();
+      const tmpl = {
         id: 'f1',
         label: 'Wedding Ceremony',
+        icon: 'heart',
         keyMoments: ['Processional'],
         defaultGenreSelection: ['CLASSICAL'],
         slots: [],
       };
-      await repo.createWithFormats('u1', { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', checklistItems: [] }, [fmt], true);
-      const data = prisma.booking.create.mock.calls[0][0].data;
-      expect(data.musicFormConfig.create.keyMoments).toEqual([
-        { label: 'Processional', section: 'Wedding Ceremony' },
-      ]);
+      await repo.createWithPackageTemplates('u1', baseDto, [tmpl], true);
+      expect(prisma.musicFormConfig.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            keyMoments: [{ label: 'Processional', section: 'Wedding Ceremony' }],
+          }),
+        }),
+      );
     });
 
-    it('creates musicFormConfig with empty keyMoments when formats have none but songRequestFormEnabled', async () => {
-      prisma.booking.create.mockResolvedValue({ id: 'b1' });
-      const fmt = { id: 'f1', label: 'Background', keyMoments: [], defaultGenreSelection: ['CONTEMPORARY'], slots: [] };
-      await repo.createWithFormats('u1', { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', checklistItems: [] }, [fmt], true);
-      const data = prisma.booking.create.mock.calls[0][0].data;
-      expect(data.musicFormConfig.create.keyMoments).toEqual([]);
+    it('creates musicFormConfig with empty keyMoments when templates have none but songRequestFormEnabled', async () => {
+      primeCreateChain();
+      const tmpl = { id: 'f1', label: 'Background', icon: 'music', keyMoments: [], defaultGenreSelection: ['CONTEMPORARY'], slots: [] };
+      await repo.createWithPackageTemplates('u1', baseDto, [tmpl], true);
+      expect(prisma.musicFormConfig.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ keyMoments: [] }) }),
+      );
     });
 
     it('omits musicFormConfig when songRequestFormEnabled is false', async () => {
-      prisma.booking.create.mockResolvedValue({ id: 'b1' });
-      const fmt = { id: 'f1', label: 'Background', keyMoments: [], defaultGenreSelection: [], slots: [] };
-      await repo.createWithFormats('u1', { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', checklistItems: [] }, [fmt], false);
-      const data = prisma.booking.create.mock.calls[0][0].data;
-      expect(data.musicFormConfig).toBeUndefined();
+      primeCreateChain();
+      const tmpl = { id: 'f1', label: 'Background', icon: 'music', keyMoments: [], defaultGenreSelection: [], slots: [] };
+      await repo.createWithPackageTemplates('u1', baseDto, [tmpl], false);
+      expect(prisma.musicFormConfig.create).not.toHaveBeenCalled();
     });
   });
 

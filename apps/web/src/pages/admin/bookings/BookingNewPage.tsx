@@ -19,7 +19,7 @@ import type {
   BookingStatus,
   ChecklistDefaultItem,
   EventType,
-  Package,
+  PackageTemplate,
   SeriesDefaults,
   UserProfile,
 } from '@/types/api';
@@ -41,7 +41,7 @@ function buildBookingPayload(values: BookingFormValues, checklistItems: Checklis
     notes: values.notes || undefined,
     venueId: values.venueId ?? undefined,
     bookingAgentId: values.bookingAgentId ?? undefined,
-    formatIds: values.formatIds.length ? values.formatIds : undefined,
+    packageTemplateIds: values.packageTemplateIds.length ? values.packageTemplateIds : undefined,
     checklistItems,
     ...buildSeriesPayload(values),
   };
@@ -66,7 +66,7 @@ export default function BookingNewPage() {
 
   const { data: formats } = useQuery({
     queryKey: ['packages'],
-    queryFn: () => apiGet<Package[]>('/packages'),
+    queryFn: () => apiGet<PackageTemplate[]>('/packages'),
     enabled: isLoaded && (userProfile?.songRequestFormEnabled ?? false),
   });
 
@@ -88,7 +88,7 @@ export default function BookingNewPage() {
       customerId: locationState?.customerId ?? '',
       venueId: locationState?.venueId ?? null,
       bookingAgentId: locationState?.bookingAgentId ?? null,
-      formatIds: [],
+      packageTemplateIds: [],
       seriesMode: 'none',
       seriesId: null,
       newSeriesLabel: '',
@@ -125,7 +125,6 @@ export default function BookingNewPage() {
     if (seriesDefaults.customerId) setValue('customerId', seriesDefaults.customerId);
     if (seriesDefaults.venueId !== undefined) setValue('venueId', seriesDefaults.venueId ?? null);
     if (seriesDefaults.bookingAgentId !== undefined) setValue('bookingAgentId', seriesDefaults.bookingAgentId ?? null);
-    if (seriesDefaults.packageIds) setValue('formatIds', seriesDefaults.packageIds);
   }, [seriesDefaults, seriesMode, setValue]);
 
   const mutation = useMutation({

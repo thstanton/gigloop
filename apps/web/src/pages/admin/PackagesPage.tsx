@@ -8,7 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
 import { PACKAGE_CATEGORY_LABELS, PACKAGE_CATEGORY_ORDER, PACKAGE_ICON_MAP, PACKAGE_ICON_OPTIONS } from '@/lib/constants';
-import type { CreatePackageInput, Package, SlotInput, UpdatePackageInput } from '@/types/api';
+import type { CreatePackageInput, PackageTemplate, SlotInput, UpdatePackageInput } from '@/types/api';
 import { cn } from '@/lib/utils';
 import { Card } from '@/components/common/Card';
 import { EmptyState } from '@/components/common/EmptyState';
@@ -222,9 +222,9 @@ function IconPicker({
 
 // ─── Package drawer ───────────────────────────────────────────────────────────
 
-type DrawerMode = { type: 'create' } | { type: 'edit'; pkg: Package };
+type DrawerMode = { type: 'create' } | { type: 'edit'; pkg: PackageTemplate };
 
-function toSlotDrafts(slots: Package['slots']): SlotDraft[] {
+function toSlotDrafts(slots: PackageTemplate['slots']): SlotDraft[] {
   return slots.map((s) => ({ ...s, label: s.label ?? undefined, key: s.id }));
 }
 
@@ -255,7 +255,7 @@ function PackageDrawer({
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  function reset(pkg?: Package) {
+  function reset(pkg?: PackageTemplate) {
     setLabel(pkg?.label ?? '');
     setIcon(pkg?.icon ?? 'music');
     setCategory(pkg?.category ?? '');
@@ -291,9 +291,9 @@ function PackageDrawer({
         })),
       };
       if (isEdit) {
-        return apiPatch<Package>(`/packages/${existing!.id}`, payload as UpdatePackageInput);
+        return apiPatch<PackageTemplate>(`/packages/${existing!.id}`, payload as UpdatePackageInput);
       }
-      return apiPost<Package>('/packages', payload as CreatePackageInput);
+      return apiPost<PackageTemplate>('/packages', payload as CreatePackageInput);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['packages'] });
@@ -438,18 +438,18 @@ function PackageCard({
   pkg,
   onEdit,
 }: {
-  pkg: Package;
-  onEdit: (pkg: Package) => void;
+  pkg: PackageTemplate;
+  onEdit: (pkg: PackageTemplate) => void;
 }) {
   const qc = useQueryClient();
 
   const toggle = useMutation({
     mutationFn: (enabled: boolean) =>
-      apiPatch<Package>(`/packages/${pkg.id}`, { enabled } as UpdatePackageInput),
+      apiPatch<PackageTemplate>(`/packages/${pkg.id}`, { enabled } as UpdatePackageInput),
     onMutate: async (enabled) => {
       await qc.cancelQueries({ queryKey: ['packages'] });
-      const previous = qc.getQueryData<Package[]>(['packages']);
-      qc.setQueryData<Package[]>(['packages'], (old) =>
+      const previous = qc.getQueryData<PackageTemplate[]>(['packages']);
+      qc.setQueryData<PackageTemplate[]>(['packages'], (old) =>
         old?.map((p) => (p.id === pkg.id ? { ...p, enabled } : p)),
       );
       return { previous };
@@ -508,8 +508,8 @@ function CategoryGroup({
   onEdit,
 }: {
   title: string;
-  packages: Package[];
-  onEdit: (pkg: Package) => void;
+  packages: PackageTemplate[];
+  onEdit: (pkg: PackageTemplate) => void;
 }) {
   if (packages.length === 0) return null;
   return (
@@ -532,11 +532,11 @@ export default function PackagesPage() {
 
   const { data: packages = [], isLoading } = useQuery({
     queryKey: ['packages'],
-    queryFn: () => apiGet<Package[]>('/packages'),
+    queryFn: () => apiGet<PackageTemplate[]>('/packages'),
     enabled: isLoaded,
   });
 
-  const grouped = PACKAGE_CATEGORY_ORDER.reduce<Record<string, Package[]>>((acc, cat) => {
+  const grouped = PACKAGE_CATEGORY_ORDER.reduce<Record<string, PackageTemplate[]>>((acc, cat) => {
     acc[cat] = packages.filter((p) => p.category === cat);
     return acc;
   }, {});

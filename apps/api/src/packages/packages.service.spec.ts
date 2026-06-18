@@ -1,4 +1,4 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { NotFoundException } from '@nestjs/common';
 import { PackagesService } from './packages.service';
 import { PackagesRepository } from './packages.repository';
 import { CreatePackageDto } from './dto/create-package.dto';
@@ -11,7 +11,6 @@ type MockRepo = {
   create: jest.Mock;
   update: jest.Mock;
   delete: jest.Mock;
-  countBookingsByPackageId: jest.Mock;
 };
 
 function makeRepo(): MockRepo {
@@ -23,7 +22,6 @@ function makeRepo(): MockRepo {
     create: jest.fn(),
     update: jest.fn(),
     delete: jest.fn(),
-    countBookingsByPackageId: jest.fn(),
   };
 }
 
@@ -108,16 +106,8 @@ describe('PackagesService', () => {
       await expect(service.delete('u1', 'missing')).rejects.toThrow(NotFoundException);
     });
 
-    it('throws 409 if package has bookings', async () => {
+    it('deletes the template (provenance severed — no booking-count check)', async () => {
       repo.findOne.mockResolvedValue(pkg);
-      repo.countBookingsByPackageId.mockResolvedValue(2);
-
-      await expect(service.delete('u1', 'p1')).rejects.toThrow(ConflictException);
-    });
-
-    it('deletes when no bookings reference the package', async () => {
-      repo.findOne.mockResolvedValue(pkg);
-      repo.countBookingsByPackageId.mockResolvedValue(0);
       repo.delete.mockResolvedValue(pkg);
 
       await service.delete('u1', 'p1');

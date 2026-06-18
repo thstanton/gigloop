@@ -14,15 +14,9 @@ export class PortalRepository {
         venue: true,
         sets: {
           orderBy: { order: 'asc' },
-          include: {
-            package: { select: { id: true, label: true, icon: true } },
-          },
         },
         packages: {
           orderBy: { order: 'asc' },
-          include: {
-            package: { select: { id: true, label: true, icon: true } },
-          },
         },
         invoices: {
           where: { status: 'SENT', isDeposit: true },

@@ -118,19 +118,19 @@ export class BookingsService {
     return undefined;
   }
 
-  private async resolveOrderedFormats(
+  private async resolveOrderedPackageTemplates(
     userId: string,
     dto: CreateBookingDto,
-  ): Promise<{ orderedFormats: Awaited<ReturnType<BookingsRepository['findFormats']>>; songRequestFormEnabled: boolean }> {
-    if (!dto.formatIds?.length) return { orderedFormats: [], songRequestFormEnabled: false };
-    const [formats, profile] = await Promise.all([
-      this.repo.findFormats(userId, dto.formatIds),
+  ): Promise<{ orderedTemplates: Awaited<ReturnType<BookingsRepository['findPackageTemplates']>>; songRequestFormEnabled: boolean }> {
+    if (!dto.packageTemplateIds?.length) return { orderedTemplates: [], songRequestFormEnabled: false };
+    const [templates, profile] = await Promise.all([
+      this.repo.findPackageTemplates(userId, dto.packageTemplateIds),
       this.repo.findUserProfile(userId),
     ]);
-    const orderedFormats = dto.formatIds
-      .map((id) => formats.find((f) => f.id === id))
-      .filter((f): f is NonNullable<typeof f> => f != null);
-    return { orderedFormats, songRequestFormEnabled: profile?.songRequestFormEnabled ?? false };
+    const orderedTemplates = dto.packageTemplateIds
+      .map((id) => templates.find((t) => t.id === id))
+      .filter((t): t is NonNullable<typeof t> => t != null);
+    return { orderedTemplates, songRequestFormEnabled: profile?.songRequestFormEnabled ?? false };
   }
 
   // The atomic unit (ADR-0047): booking row + checklist seed + series-invoice-line append
@@ -143,14 +143,14 @@ export class BookingsService {
       dto: CreateBookingDto;
       dtoWithSeries: CreateBookingDto;
       resolvedSeriesId: string | undefined;
-      orderedFormats: Awaited<ReturnType<BookingsRepository['findFormats']>>;
+      orderedTemplates: Awaited<ReturnType<BookingsRepository['findPackageTemplates']>>;
       songRequestFormEnabled: boolean;
     },
   ) {
-    const { dto, dtoWithSeries, resolvedSeriesId, orderedFormats, songRequestFormEnabled } = args;
+    const { dto, dtoWithSeries, resolvedSeriesId, orderedTemplates, songRequestFormEnabled } = args;
 
-    const created = dto.formatIds?.length
-      ? await this.repo.createWithFormats(userId, dtoWithSeries, orderedFormats, songRequestFormEnabled, tx)
+    const created = dto.packageTemplateIds?.length
+      ? await this.repo.createWithPackageTemplates(userId, dtoWithSeries, orderedTemplates, songRequestFormEnabled, tx)
       : await this.repo.create(userId, dtoWithSeries, tx);
 
     if (dto.checklistItems.length > 0) {
@@ -177,10 +177,10 @@ export class BookingsService {
       await this.seriesService.assertMembershipMutable(userId, resolvedSeriesId);
     }
     const dtoWithSeries = { ...dto, seriesId: resolvedSeriesId };
-    const { orderedFormats, songRequestFormEnabled } = await this.resolveOrderedFormats(userId, dto);
+    const { orderedTemplates, songRequestFormEnabled } = await this.resolveOrderedPackageTemplates(userId, dto);
 
     // Warm the Neon compute (scale-to-zero) *before* opening the transaction so a cold-start
-    // wake is absorbed here, not inside the interactive-transaction timeout. The no-format/
+    // wake is absorbed here, not inside the interactive-transaction timeout. The no-template/
     // no-series path has no prior DB read, so this is its only warm-up. maxWait/timeout sit
     // above Prisma's 2s/5s defaults as defence in depth (ADR-0047: cold-start handling).
     await this.prisma.$queryRaw`SELECT 1`;
@@ -191,7 +191,7 @@ export class BookingsService {
           dto,
           dtoWithSeries,
           resolvedSeriesId,
-          orderedFormats,
+          orderedTemplates,
           songRequestFormEnabled,
         }),
       { maxWait: 5000, timeout: 15000 },
@@ -251,19 +251,19 @@ export class BookingsService {
     return this.musicFormRepo.deleteMusicFormConfig(bookingId);
   }
 
-  async applyFormat(userId: string, bookingId: string, formatId: string) {
+  async applyPackageTemplate(userId: string, bookingId: string, packageTemplateId: string) {
     await this.findOne(userId, bookingId);
-    const formats = await this.repo.findFormats(userId, [formatId]);
-    if (!formats.length) throw new NotFoundException('Format not found');
-    const booking = await this.repo.applyFormat(userId, bookingId, formats[0]);
+    const templates = await this.repo.findPackageTemplates(userId, [packageTemplateId]);
+    if (!templates.length) throw new NotFoundException('Package template not found');
+    const booking = await this.repo.applyPackageTemplate(userId, bookingId, templates[0]);
     return this.mapBooking(booking!);
   }
 
-  async removeFormat(userId: string, bookingId: string, bookingFormatId: string) {
+  async removePackage(userId: string, bookingId: string, packageId: string) {
     await this.findOne(userId, bookingId);
-    const bookingFormat = await this.repo.findBookingFormat(userId, bookingId, bookingFormatId);
-    if (!bookingFormat) throw new NotFoundException('Applied format not found');
-    const booking = await this.repo.removeFormat(bookingId, bookingFormatId, bookingFormat.packageId);
+    const pkg = await this.repo.findBookingPackage(userId, bookingId, packageId);
+    if (!pkg) throw new NotFoundException('Applied package not found');
+    const booking = await this.repo.removePackage(bookingId, packageId);
     return this.mapBooking(booking!);
   }
 

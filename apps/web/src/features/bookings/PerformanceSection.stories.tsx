@@ -20,13 +20,11 @@ const baseBooking: BookingDetail = {
 };
 
 const weddingPackage = {
-  id: 'bp1', order: 0, packageId: 'pkg1',
-  package: { id: 'pkg1', label: 'Wedding Package', icon: 'heart', keyMoments: [], defaultGenreSelection: [] },
+  id: 'pkg1', order: 0, label: 'Wedding Package', icon: 'heart',
 };
 
 const corporatePackage = {
-  id: 'bp2', order: 1, packageId: 'pkg2',
-  package: { id: 'pkg2', label: 'Corporate Dinner', icon: 'briefcase', keyMoments: [], defaultGenreSelection: [] },
+  id: 'pkg2', order: 1, label: 'Corporate Dinner', icon: 'briefcase',
 };
 
 const meta = {

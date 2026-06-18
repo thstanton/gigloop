@@ -2,12 +2,11 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiPut } from '@/lib/api';
 import type { BookingDetail, MusicFormConfig } from '@/types/api';
 
-function buildSeedPayload(booking: BookingDetail) {
-  const keyMoments = (booking.packages ?? []).flatMap((bpf) =>
-    bpf.package.keyMoments.map((km) => ({ label: km, section: bpf.package.label })),
-  );
-  const enabledGenres = [...new Set((booking.packages ?? []).flatMap((bpf) => bpf.package.defaultGenreSelection))];
-  return { keyMoments, enabledGenres };
+function buildSeedPayload(_booking: BookingDetail) {
+  // #502 restores template-derived key-moment/genre suggestion. ADR-0046 severs the
+  // booking-owned Package → PackageTemplate provenance, so the snapshot no longer
+  // carries keyMoments/defaultGenreSelection to seed from.
+  return { keyMoments: [], enabledGenres: [] };
 }
 
 export function useConfigureMusicForm(

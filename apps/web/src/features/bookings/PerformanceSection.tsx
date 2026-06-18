@@ -18,13 +18,13 @@ export interface PerformanceSectionProps {
 
 export default function PerformanceSection({ booking, hideWhenEmpty = false }: PerformanceSectionProps) {
   const [, setSearchParams] = useSearchParams();
-  const setsByFormatId = new Map<string | null, PerformanceSet[]>();
+  const setsByPackageId = new Map<string | null, PerformanceSet[]>();
   for (const set of booking.sets ?? []) {
     const key = set.packageId ?? null;
-    if (!setsByFormatId.has(key)) setsByFormatId.set(key, []);
-    setsByFormatId.get(key)!.push(set);
+    if (!setsByPackageId.has(key)) setsByPackageId.set(key, []);
+    setsByPackageId.get(key)!.push(set);
   }
-  const unassigned = setsByFormatId.get(null) ?? [];
+  const unassigned = setsByPackageId.get(null) ?? [];
 
   if ((booking.packages ?? []).length === 0 && unassigned.length === 0) {
     if (hideWhenEmpty) return null;
@@ -58,12 +58,12 @@ export default function PerformanceSection({ booking, hideWhenEmpty = false }: P
     >
 
       {(booking.packages ?? []).map((bpf) => {
-        const sets = setsByFormatId.get(bpf.packageId) ?? [];
+        const sets = setsByPackageId.get(bpf.id) ?? [];
         return (
           <div key={bpf.id} className="mb-4 last:mb-0">
             <div className="flex items-center gap-1.5 text-sm font-medium text-foreground mb-1">
-              <FormatIcon icon={bpf.package.icon} />
-              {bpf.package.label}
+              <FormatIcon icon={bpf.icon} />
+              {bpf.label}
             </div>
             {sets.map((set) => (
               <div key={set.id} className="flex items-center gap-3 py-1.5 border-b border-border last:border-0">

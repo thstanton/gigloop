@@ -8,9 +8,10 @@ import { UpdateSetDto } from './dto/update-set.dto';
 import { CONTRACT_INCLUDE } from './booking.includes';
 import { buildBookingSearchWhere } from './booking-search';
 
-type FormatWithSlots = {
+type PackageTemplateWithSlots = {
   id: string;
   label: string;
+  icon: string;
   keyMoments: string[];
   defaultGenreSelection: string[];
   slots: Array<{ label: string | null; duration: number; order: number }>;
@@ -23,9 +24,6 @@ const bookingIncludes = {
   series: { select: { id: true, label: true } },
   sets: { orderBy: { order: 'asc' as const } },
   packages: {
-    include: {
-      package: { select: { id: true, label: true, icon: true, keyMoments: true, defaultGenreSelection: true } },
-    },
     orderBy: { order: 'asc' as const },
   },
   musicFormConfig: { select: { id: true } },
@@ -61,7 +59,7 @@ export class BookingsRepository {
   }
 
   create(userId: string, dto: CreateBookingDto, tx?: Prisma.TransactionClient) {
-    const { formatIds: _, fee, date, checklistItems: __, newSeries: ___, ...fields } = dto;
+    const { packageTemplateIds: _, fee, date, checklistItems: __, newSeries: ___, ...fields } = dto;
     return (tx ?? this.prisma).booking.create({
       data: {
         userId,
@@ -73,62 +71,72 @@ export class BookingsRepository {
     });
   }
 
-  findFormats(userId: string, ids: string[]) {
-    return this.prisma.package.findMany({
+  findPackageTemplates(userId: string, ids: string[]) {
+    return this.prisma.packageTemplate.findMany({
       where: { id: { in: ids }, userId },
       include: { slots: { orderBy: { order: 'asc' } } },
     });
   }
 
-  createWithFormats(
+  async createWithPackageTemplates(
     userId: string,
     dto: CreateBookingDto,
-    orderedFormats: FormatWithSlots[],
+    orderedTemplates: PackageTemplateWithSlots[],
     songRequestFormEnabled: boolean,
     tx?: Prisma.TransactionClient,
   ) {
-    const { formatIds: _, fee, date, checklistItems: __, newSeries: ___, ...fields } = dto;
+    const { packageTemplateIds: _, fee, date, checklistItems: __, newSeries: ___, ...fields } = dto;
+    const db = tx ?? this.prisma;
 
-    let slotOrder = 1;
-    const setRecords = orderedFormats.flatMap((fmt) =>
-      fmt.slots.map((slot) => ({
-        userId,
-        order: slotOrder++,
-        duration: slot.duration,
-        label: slot.label ?? undefined,
-        packageId: fmt.id,
-      })),
-    );
-
-    const formatRecords = orderedFormats.map((fmt, idx) => ({
-      userId,
-      order: idx + 1,
-      packageId: fmt.id,
-    }));
-
-    const allKeyMoments = orderedFormats.flatMap((fmt) =>
-      fmt.keyMoments.map((km) => ({ label: km, section: fmt.label })),
-    );
-    const allGenres = [...new Set(orderedFormats.flatMap((fmt) => fmt.defaultGenreSelection))];
-
-    return (tx ?? this.prisma).booking.create({
+    // Create the booking row first (no sets, no packages yet)
+    const booking = await db.booking.create({
       data: {
         userId,
         ...fields,
         date: new Date(date),
         ...(fee !== undefined ? { fee } : {}),
-        sets: setRecords.length ? { create: setRecords } : undefined,
-        packages: { create: formatRecords },
-        ...(songRequestFormEnabled
-          ? {
-              musicFormConfig: {
-                create: { userId, enabledGenres: allGenres, keyMoments: allKeyMoments },
-              },
-            }
-          : {}),
       },
-      include: bookingIncludes,
     });
+
+    // Create booking-owned Package rows (snapshot label + icon from template)
+    const bookingPackages: Array<{ id: string }> = [];
+    for (let i = 0; i < orderedTemplates.length; i++) {
+      const tmpl = orderedTemplates[i];
+      const pkg = await db.package.create({
+        data: { userId, bookingId: booking.id, order: i + 1, label: tmpl.label, icon: tmpl.icon },
+      });
+      bookingPackages.push(pkg);
+    }
+
+    // Create sets referencing the booking-owned Package IDs
+    let slotOrder = 1;
+    for (let tIdx = 0; tIdx < orderedTemplates.length; tIdx++) {
+      for (const slot of orderedTemplates[tIdx].slots) {
+        await db.performanceSet.create({
+          data: {
+            userId,
+            bookingId: booking.id,
+            order: slotOrder++,
+            duration: slot.duration,
+            label: slot.label ?? undefined,
+            packageId: bookingPackages[tIdx].id,
+          },
+        });
+      }
+    }
+
+    // Create music form config when enabled
+    if (songRequestFormEnabled) {
+      const allKeyMoments = orderedTemplates.flatMap((tmpl) =>
+        tmpl.keyMoments.map((km) => ({ label: km, section: tmpl.label })),
+      );
+      const allGenres = [...new Set(orderedTemplates.flatMap((tmpl) => tmpl.defaultGenreSelection))];
+      await db.musicFormConfig.create({
+        data: { userId, bookingId: booking.id, enabledGenres: allGenres, keyMoments: allKeyMoments },
+      });
+    }
+
+    return db.booking.findFirstOrThrow({ where: { id: booking.id }, include: bookingIncludes });
   }
 
   update(id: string, dto: UpdateBookingDto) {
@@ -207,49 +215,51 @@ export class BookingsRepository {
     return this.prisma.userProfile.findUnique({ where: { userId } });
   }
 
-  findBookingFormat(userId: string, bookingId: string, bookingFormatId: string) {
-    return this.prisma.bookingPackage.findFirst({
-      where: { id: bookingFormatId, bookingId, userId },
+  findBookingPackage(userId: string, bookingId: string, packageId: string) {
+    return this.prisma.package.findFirst({
+      where: { id: packageId, bookingId, userId },
     });
   }
 
-  async applyFormat(userId: string, bookingId: string, format: FormatWithSlots) {
-    const [existingFormats, existingSets] = await Promise.all([
-      this.prisma.bookingPackage.findMany({ where: { bookingId }, select: { order: true } }),
+  async applyPackageTemplate(userId: string, bookingId: string, template: PackageTemplateWithSlots) {
+    const [existingPackages, existingSets] = await Promise.all([
+      this.prisma.package.findMany({ where: { bookingId }, select: { order: true } }),
       this.prisma.performanceSet.findMany({ where: { bookingId }, select: { order: true } }),
     ]);
-    const nextFormatOrder = existingFormats.length
-      ? Math.max(...existingFormats.map((f) => f.order)) + 1
+    const nextPackageOrder = existingPackages.length
+      ? Math.max(...existingPackages.map((p) => p.order)) + 1
       : 1;
     const nextSetOrder = existingSets.length
       ? Math.max(...existingSets.map((s) => s.order)) + 1
       : 1;
 
-    await this.prisma.$transaction([
-      this.prisma.bookingPackage.create({
-        data: { userId, bookingId, order: nextFormatOrder, packageId: format.id },
-      }),
-      ...format.slots.map((slot, idx) =>
-        this.prisma.performanceSet.create({
+    // Create booking-owned Package + sets atomically
+    await this.prisma.$transaction(async (tx) => {
+      const bookingPackage = await tx.package.create({
+        data: { userId, bookingId, order: nextPackageOrder, label: template.label, icon: template.icon },
+      });
+      for (let i = 0; i < template.slots.length; i++) {
+        const slot = template.slots[i];
+        await tx.performanceSet.create({
           data: {
             userId,
             bookingId,
-            order: nextSetOrder + idx,
+            order: nextSetOrder + i,
             duration: slot.duration,
             label: slot.label ?? undefined,
-            packageId: format.id,
+            packageId: bookingPackage.id,
           },
-        }),
-      ),
-    ]);
+        });
+      }
+    });
 
     return this.prisma.booking.findFirst({ where: { id: bookingId }, include: bookingIncludes });
   }
 
-  async removeFormat(bookingId: string, bookingFormatId: string, packageId: string) {
+  async removePackage(bookingId: string, packageId: string) {
     await this.prisma.$transaction([
       this.prisma.performanceSet.deleteMany({ where: { bookingId, packageId } }),
-      this.prisma.bookingPackage.delete({ where: { id: bookingFormatId } }),
+      this.prisma.package.delete({ where: { id: packageId } }),
     ]);
     return this.prisma.booking.findFirst({ where: { id: bookingId }, include: bookingIncludes });
   }
@@ -327,5 +337,4 @@ export class BookingsRepository {
       include: bookingIncludes,
     });
   }
-
 }

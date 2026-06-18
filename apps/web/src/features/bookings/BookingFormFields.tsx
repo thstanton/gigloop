@@ -20,7 +20,7 @@ import { InlineContactBlock } from './InlineContactBlock';
 import { InlineVenueBlock } from './InlineVenueBlock';
 import { InlineAgentBlock } from './InlineAgentBlock';
 import { EVENT_TYPE_LABELS } from '@/lib/constants';
-import type { BookingSeries, EventType, Package } from '@/types/api';
+import type { BookingSeries, EventType, PackageTemplate } from '@/types/api';
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
@@ -36,7 +36,7 @@ export const bookingFormSchema = z.object({
   customerId: z.string().min(1, 'Customer is required'),
   venueId: z.string().nullable(),
   bookingAgentId: z.string().nullable(),
-  formatIds: z.array(z.string()),
+  packageTemplateIds: z.array(z.string()),
   seriesMode: z.enum(['none', 'existing', 'new']),
   seriesId: z.string().nullable().optional(),
   newSeriesLabel: z.string().optional(),
@@ -56,7 +56,7 @@ function FormatSelector({
   value,
   onChange,
 }: {
-  formats: Package[];
+  formats: PackageTemplate[];
   value: string[];
   onChange: (ids: string[]) => void;
 }) {
@@ -80,7 +80,7 @@ function FormatSelector({
 
   const selected = value
     .map((id) => formats.find((f) => f.id === id))
-    .filter((f): f is Package => f !== undefined);
+    .filter((f): f is PackageTemplate => f !== undefined);
 
   return (
     <div className="space-y-3">
@@ -207,7 +207,7 @@ interface Props {
   register: UseFormRegister<BookingFormValues>;
   errors: FieldErrors<BookingFormValues>;
   songRequestFormEnabled?: boolean;
-  formats?: Package[];
+  formats?: PackageTemplate[];
   series?: BookingSeries[];
   hideNotes?: boolean;
   /** Hide the People section — the edit drawer renders its own People blocks that
@@ -350,7 +350,7 @@ export function BookingFormFields({
         <div className="space-y-3">
           <h2 className="text-sm font-semibold text-foreground">Packages</h2>
           <Controller
-            name="formatIds"
+            name="packageTemplateIds"
             control={control}
             render={({ field }) => (
               <FormatSelector

@@ -56,7 +56,9 @@ export class SeriesRepository {
       where: { seriesId, userId },
       orderBy: { createdAt: 'asc' },
       include: {
-        packages: { select: { packageId: true }, orderBy: { order: 'asc' } },
+        // Package pre-fill from the earliest member is gone: ADR-0046 severs the
+        // booking-owned Package → PackageTemplate provenance, so we can no longer
+        // recover which templates a prior booking used. See #499 follow-up.
         checklistItems: { orderBy: { order: 'asc' } },
         musicFormConfig: true,
       },

@@ -47,8 +47,8 @@ function setLabel(set: PerformanceSet): string {
 
 function getSetIcon(set: PerformanceSet, packages: BookingPackageSummary[]): string {
   if (!set.packageId) return 'music';
-  const pkg = packages.find((p) => p.packageId === set.packageId);
-  return pkg?.package.icon ?? 'music';
+  const pkg = packages.find((p) => p.id === set.packageId);
+  return pkg?.icon ?? 'music';
 }
 
 export default function ItineraryCard({ logistics, sets, packages, hideWhenEmpty = false }: ItineraryCardProps) {

@@ -24,6 +24,7 @@ describe('Booking lifecycle (integration)', () => {
 
   afterAll(async () => {
     await prisma.booking.deleteMany({ where: { userId: TEST_USER_ID } });
+    await prisma.packageTemplate.deleteMany({ where: { userId: TEST_USER_ID } });
     await prisma.contact.deleteMany({ where: { userId: TEST_USER_ID } });
     await app.close();
   });
@@ -220,6 +221,63 @@ describe('Booking lifecycle (integration)', () => {
       expect(ids).toContain(bookingId);
 
       await prisma.booking.delete({ where: { id: bookingId } });
+    });
+  });
+
+  // ── ADR-0046: applied package is a snapshot, decoupled from its template ────
+
+  describe('Apply package template → booking snapshots label/icon (provenance severed)', () => {
+    it('editing the source PackageTemplate afterwards does not change the booking', async () => {
+      // Library template the musician will apply.
+      const template = await prisma.packageTemplate.create({
+        data: {
+          userId: TEST_USER_ID,
+          label: 'Wedding Ceremony',
+          icon: 'heart',
+          category: 'WEDDING',
+          keyMoments: [],
+          defaultGenreSelection: [],
+          slots: { create: [{ userId: TEST_USER_ID, label: 'Processional', duration: 30, order: 1 }] },
+        },
+      });
+
+      const create = await createBooking();
+      const bookingId = create.body.id as string;
+
+      // Apply the template to the booking.
+      const apply = await request(app.getHttpServer())
+        .post(`/api/bookings/${bookingId}/packages`)
+        .send({ packageTemplateId: template.id });
+      expect(apply.status).toBe(201);
+
+      // The booking-owned Package carries a snapshot of the template's label/icon,
+      // and a set was copied from the template's slot.
+      const applied = apply.body.packages as Array<{ id: string; label: string; icon: string }>;
+      expect(applied).toHaveLength(1);
+      expect(applied[0]).toMatchObject({ label: 'Wedding Ceremony', icon: 'heart' });
+      const packageId = applied[0].id;
+      const appliedSets = (apply.body.sets as Array<{ packageId: string | null }>).filter(
+        (s) => s.packageId === packageId,
+      );
+      expect(appliedSets).toHaveLength(1);
+
+      // Mutate the source template after applying.
+      await prisma.packageTemplate.update({
+        where: { id: template.id },
+        data: { label: 'RENAMED TEMPLATE', icon: 'star' },
+      });
+
+      // The booking's snapshot must be unaffected — provenance is severed (ADR-0046).
+      const after = await request(app.getHttpServer()).get(`/api/bookings/${bookingId}`);
+      const pkg = (after.body.packages as Array<{ id: string; label: string; icon: string }>).find(
+        (p) => p.id === packageId,
+      );
+      expect(pkg).toBeDefined();
+      expect(pkg!.label).toBe('Wedding Ceremony');
+      expect(pkg!.icon).toBe('heart');
+
+      await prisma.booking.delete({ where: { id: bookingId } });
+      await prisma.packageTemplate.delete({ where: { id: template.id } });
     });
   });
 

@@ -177,7 +177,7 @@ model Booking {
   logistics  Json?
 
   sets     PerformanceSet[]
-  packages BookingPackage[]
+  packages Package[]
   invoices Invoice[]
   communications    Communication[]
   documents         Document[]
@@ -263,7 +263,7 @@ model PerformanceSet {
   @@index([packageId])
 }
 
-model Package {
+model PackageTemplate {
   id        String   @id @default(uuid())
   userId    String
   createdAt DateTime @default(now())
@@ -278,14 +278,12 @@ model Package {
   isSystemDefault       Boolean  @default(false)
   enabled               Boolean  @default(true)
 
-  slots    PackageSlot[]
-  bookings BookingPackage[]
-  sets     PerformanceSet[]
+  slots PackageTemplateSlot[]
 
   @@index([userId])
 }
 
-model PackageSlot {
+model PackageTemplateSlot {
   id        String   @id @default(uuid())
   userId    String
   createdAt DateTime @default(now())
@@ -295,30 +293,30 @@ model PackageSlot {
   duration Int
   order    Int
 
-  packageId String
-  package   Package @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  packageTemplateId String
+  packageTemplate   PackageTemplate @relation(fields: [packageTemplateId], references: [id], onDelete: Cascade)
 
   @@index([userId])
-  @@index([packageId])
+  @@index([packageTemplateId])
 }
 
-model BookingPackage {
+model Package {
   id        String   @id @default(uuid())
   userId    String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  label String
+  icon  String
   order Int
 
   bookingId String
   booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 
-  packageId String
-  package   Package @relation(fields: [packageId], references: [id], onDelete: Restrict)
+  sets PerformanceSet[]
 
   @@index([userId])
   @@index([bookingId])
-  @@index([packageId])
 }
 
 model BookingSeries {
