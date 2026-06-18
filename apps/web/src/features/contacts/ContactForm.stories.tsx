@@ -229,7 +229,7 @@ export const ContextRolePrefill: Story = {
     // Venue fields are open (proves contextRole seeded the select as VENUE)
     await expect(canvas.getByLabelText('Parking')).toBeVisible();
 
-    // Contact Type shows Venue
-    await expect(canvas.getByText('Venue')).toBeVisible();
+    // Contact Type shows Venue — scope to <span> to exclude the hidden native <option>
+    await expect(canvas.getByText('Venue', { selector: 'span' })).toBeVisible();
   },
 };
