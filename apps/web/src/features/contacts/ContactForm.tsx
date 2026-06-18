@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -96,54 +96,9 @@ export function contactToFormValues(c: Contact): ContactFormValues {
   };
 }
 
-// ─── Progressive disclosure ────────────────────────────────────────────────────
+// ─── Form ─────────────────────────────────────────────────────────────────────
 
 type RoleKey = 'CUSTOMER' | 'VENUE' | 'BOOKING_AGENT';
-type RoleField =
-  | 'phone'
-  | 'notes'
-  | 'address'
-  | 'parkingInfo'
-  | 'accessInfo'
-  | 'equipmentAvailable'
-  | 'website'
-  | 'commissionArrangement';
-
-// Fields each role "claims" — overlapping fields (phone, address) render exactly
-// once via the deduplication in computeSections.
-const ROLE_FIELDS: Record<RoleKey, RoleField[]> = {
-  CUSTOMER: ['phone', 'notes'],
-  VENUE: ['address', 'parkingInfo', 'accessInfo', 'equipmentAvailable'],
-  BOOKING_AGENT: ['phone', 'address', 'website', 'commissionArrangement'],
-};
-
-const ROLE_LABEL: Record<RoleKey, string> = {
-  CUSTOMER: 'customer',
-  VENUE: 'venue',
-  BOOKING_AGENT: 'agent',
-};
-
-const DISCLOSURE_ORDER: RoleKey[] = ['CUSTOMER', 'VENUE', 'BOOKING_AGENT'];
-
-// Active section gets all its fields; disclosures get theirs minus already-rendered.
-function computeSections(activeRole: string) {
-  if (!activeRole || !(activeRole in ROLE_FIELDS)) {
-    return { activeFields: [] as RoleField[], disclosures: [] as { role: RoleKey; fields: RoleField[] }[] };
-  }
-  const rendered = new Set<RoleField>();
-  const activeFields = [...ROLE_FIELDS[activeRole as RoleKey]];
-  activeFields.forEach(f => rendered.add(f));
-  const disclosures = DISCLOSURE_ORDER
-    .filter(r => r !== activeRole)
-    .map(role => {
-      const fields = ROLE_FIELDS[role].filter(f => !rendered.has(f));
-      fields.forEach(f => rendered.add(f));
-      return { role, fields };
-    });
-  return { activeFields, disclosures };
-}
-
-// ─── Form ─────────────────────────────────────────────────────────────────────
 
 interface ContactFormProps {
   defaultValues?: ContactFormValues;
@@ -222,96 +177,22 @@ export default function ContactForm({
   };
 
   const selectedRole = watch('primaryRole');
-  const [openDisclosures, setOpenDisclosures] = useState<Set<string>>(new Set());
+  const [venueOpen, setVenueOpen] = useState(selectedRole === 'VENUE');
+  const [agentOpen, setAgentOpen] = useState(selectedRole === 'BOOKING_AGENT');
   const prevRoleRef = useRef(selectedRole);
 
+  // When Contact Type changes, auto-open the matching disclosure and close the other.
   useEffect(() => {
-    if (prevRoleRef.current !== selectedRole) {
-      setOpenDisclosures(new Set());
-      prevRoleRef.current = selectedRole;
-    }
+    if (prevRoleRef.current === selectedRole) return;
+    prevRoleRef.current = selectedRole;
+    setVenueOpen(selectedRole === 'VENUE');
+    setAgentOpen(selectedRole === 'BOOKING_AGENT');
   }, [selectedRole]);
-
-  const { activeFields, disclosures } = useMemo(
-    () => computeSections(selectedRole),
-    [selectedRole],
-  );
-
-  function toggleDisclosure(role: string) {
-    setOpenDisclosures(prev => {
-      const next = new Set(prev);
-      if (next.has(role)) next.delete(role);
-      else next.add(role);
-      return next;
-    });
-  }
-
-  function renderField(field: RoleField) {
-    switch (field) {
-      case 'phone':
-        return (
-          <FormField label="Phone" error={errors.phone?.message}>
-            <Input type="tel" {...register('phone')} />
-          </FormField>
-        );
-      case 'notes':
-        return (
-          <FormField label="Notes" error={errors.notes?.message}>
-            <Textarea {...register('notes')} rows={3} />
-          </FormField>
-        );
-      case 'address':
-        return (
-          <FormField label="Address">
-            <Controller
-              name="addressLine1"
-              control={control}
-              render={() => (
-                <AddressAutocomplete
-                  value={addressValue}
-                  onChange={handleAddressChange}
-                />
-              )}
-            />
-          </FormField>
-        );
-      case 'parkingInfo':
-        return (
-          <FormField label="Parking" error={errors.parkingInfo?.message}>
-            <Textarea {...register('parkingInfo')} rows={2} />
-          </FormField>
-        );
-      case 'accessInfo':
-        return (
-          <FormField label="Access" error={errors.accessInfo?.message}>
-            <Textarea {...register('accessInfo')} rows={2} />
-          </FormField>
-        );
-      case 'equipmentAvailable':
-        return (
-          <FormField label="Equipment available" error={errors.equipmentAvailable?.message}>
-            <Textarea {...register('equipmentAvailable')} rows={2} />
-          </FormField>
-        );
-      case 'website':
-        return (
-          <FormField label="Website" error={errors.website?.message}>
-            <Input type="url" {...register('website')} placeholder="https://" />
-          </FormField>
-        );
-      case 'commissionArrangement':
-        return (
-          <FormField label="Commission arrangement" error={errors.commissionArrangement?.message}>
-            <Textarea {...register('commissionArrangement')} rows={2} />
-          </FormField>
-        );
-    }
-  }
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
 
-      {/* Contact Type — first field, drives progressive disclosure */}
+      {/* Contact Type — first field, drives disclosure auto-open */}
       <FormField label="Contact Type" error={errors.primaryRole?.message}>
         <Controller
           name="primaryRole"
@@ -332,7 +213,7 @@ export default function ContactForm({
         />
       </FormField>
 
-      {/* Core fields — always visible */}
+      {/* Core — always visible for every contact */}
       <div className="space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <FormField label="Name" required error={errors.name?.message}>
@@ -342,73 +223,83 @@ export default function ContactForm({
             <Input {...greetingNameRegistration} placeholder="e.g. Jane" />
           </FormField>
         </div>
-        <FormField label="Email" error={errors.email?.message}>
-          <Input type="email" {...register('email')} />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <FormField label="Email" error={errors.email?.message}>
+            <Input type="email" {...register('email')} />
+          </FormField>
+          <FormField label="Phone" error={errors.phone?.message}>
+            <Input type="tel" {...register('phone')} />
+          </FormField>
+        </div>
+        <FormField label="Address">
+          <Controller
+            name="addressLine1"
+            control={control}
+            render={() => (
+              <AddressAutocomplete
+                value={addressValue}
+                onChange={handleAddressChange}
+              />
+            )}
+          />
+        </FormField>
+        <FormField label="Notes" error={errors.notes?.message}>
+          <Textarea {...register('notes')} rows={3} />
         </FormField>
       </div>
 
-      {/* Role-aware section */}
-      {selectedRole ? (
-        <div className="space-y-6">
-          {/* Active type's fields */}
-          {activeFields.length > 0 && (
-            <div className="space-y-4">
-              {activeFields.map(field => (
-                <div key={field}>{renderField(field)}</div>
-              ))}
-            </div>
+      {/* Venue-specific fields */}
+      <div className="space-y-4">
+        <button
+          type="button"
+          onClick={() => setVenueOpen(o => !o)}
+          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          {venueOpen ? (
+            <><ChevronUp className="h-4 w-4" aria-hidden="true" />Hide venue fields</>
+          ) : (
+            <><ChevronDown className="h-4 w-4" aria-hidden="true" />Show venue fields</>
           )}
+        </button>
+        {venueOpen && (
+          <div className="space-y-4">
+            <FormField label="Parking" error={errors.parkingInfo?.message}>
+              <Textarea {...register('parkingInfo')} rows={2} />
+            </FormField>
+            <FormField label="Access" error={errors.accessInfo?.message}>
+              <Textarea {...register('accessInfo')} rows={2} />
+            </FormField>
+            <FormField label="Equipment available" error={errors.equipmentAvailable?.message}>
+              <Textarea {...register('equipmentAvailable')} rows={2} />
+            </FormField>
+          </div>
+        )}
+      </div>
 
-          {/* Disclosures for other types */}
-          {disclosures
-            .filter(({ fields }) => fields.length > 0)
-            .map(({ role, fields }) => (
-              <div key={role} className="space-y-4">
-                <button
-                  type="button"
-                  onClick={() => toggleDisclosure(role)}
-                  className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  {openDisclosures.has(role) ? (
-                    <>
-                      <ChevronUp className="h-4 w-4" aria-hidden="true" />
-                      Hide {ROLE_LABEL[role]} fields
-                    </>
-                  ) : (
-                    <>
-                      <ChevronDown className="h-4 w-4" aria-hidden="true" />
-                      Show {ROLE_LABEL[role]} fields
-                    </>
-                  )}
-                </button>
-                {openDisclosures.has(role) && (
-                  <div className="space-y-4">
-                    {fields.map(field => (
-                      <div key={field}>{renderField(field)}</div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-        </div>
-      ) : (
-        /* No type selected: flat layout — all fields visible */
-        <>
+      {/* Agent-specific fields */}
+      <div className="space-y-4">
+        <button
+          type="button"
+          onClick={() => setAgentOpen(o => !o)}
+          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          {agentOpen ? (
+            <><ChevronUp className="h-4 w-4" aria-hidden="true" />Hide agent fields</>
+          ) : (
+            <><ChevronDown className="h-4 w-4" aria-hidden="true" />Show agent fields</>
+          )}
+        </button>
+        {agentOpen && (
           <div className="space-y-4">
-            {renderField('phone')}
-            {renderField('website')}
-            {renderField('address')}
-            {renderField('notes')}
+            <FormField label="Website" error={errors.website?.message}>
+              <Input type="url" {...register('website')} placeholder="https://" />
+            </FormField>
+            <FormField label="Commission arrangement" error={errors.commissionArrangement?.message}>
+              <Textarea {...register('commissionArrangement')} rows={2} />
+            </FormField>
           </div>
-          <div className="space-y-4">
-            <p className="text-sm font-medium text-foreground">Venue details</p>
-            {renderField('parkingInfo')}
-            {renderField('accessInfo')}
-            {renderField('equipmentAvailable')}
-          </div>
-          {renderField('commissionArrangement')}
-        </>
-      )}
+        )}
+      </div>
 
       <div className="flex items-center gap-3">
         <Button type="submit" disabled={isPending}>

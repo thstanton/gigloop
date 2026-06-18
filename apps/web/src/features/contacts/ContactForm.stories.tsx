@@ -17,9 +17,7 @@ const baseArgs = {
 };
 
 export const Empty: Story = {
-  args: {
-    ...baseArgs,
-  },
+  args: { ...baseArgs },
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('button', { name: /save/i })).toBeVisible();
     await expect(canvas.getAllByRole('textbox').length).toBeGreaterThan(3);
@@ -70,10 +68,10 @@ export const SaveError: Story = {
   args: { ...baseArgs, isPending: false, isError: true },
 };
 
-// ─── Role-aware progressive disclosure stories ────────────────────────────────
+// ─── Progressive disclosure stories ───────────────────────────────────────────
 
 export const RoleCustomer: Story = {
-  name: 'Role: Customer — fields expanded, disclosures present',
+  name: 'Role: Customer — core fields visible, disclosures collapsed',
   args: {
     ...baseArgs,
     defaultValues: {
@@ -102,33 +100,31 @@ export const RoleCustomer: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
-    // Customer fields are expanded by default
+    // Core fields are always visible
     await expect(canvas.getByLabelText('Phone')).toBeVisible();
     await expect(canvas.getByLabelText('Notes')).toBeVisible();
 
-    // Disclosures for other types are present
-    const venueBtn = canvas.getByRole('button', { name: /show venue fields/i });
-    await expect(venueBtn).toBeVisible();
-    const agentBtn = canvas.getByRole('button', { name: /show agent fields/i });
-    await expect(agentBtn).toBeVisible();
+    // Both disclosure buttons are present
+    await expect(canvas.getByRole('button', { name: /show venue fields/i })).toBeVisible();
+    await expect(canvas.getByRole('button', { name: /show agent fields/i })).toBeVisible();
 
-    // Parking is hidden until disclosure is opened
+    // Both disclosures start collapsed for Customer type
     await expect(canvas.queryByLabelText('Parking')).toBeNull();
+    await expect(canvas.queryByLabelText('Website')).toBeNull();
 
-    // Click venue disclosure — parking becomes visible
-    await userEvent.click(venueBtn);
+    // Open venue disclosure
+    await userEvent.click(canvas.getByRole('button', { name: /show venue fields/i }));
     await expect(canvas.getByLabelText('Parking')).toBeVisible();
     await expect(canvas.getByLabelText('Access')).toBeVisible();
 
-    // Collapse back
-    const seeLessBtn = canvas.getByRole('button', { name: /hide venue fields/i });
-    await userEvent.click(seeLessBtn);
+    // Collapse it again
+    await userEvent.click(canvas.getByRole('button', { name: /hide venue fields/i }));
     await expect(canvas.queryByLabelText('Parking')).toBeNull();
   },
 };
 
 export const RoleVenue: Story = {
-  name: 'Role: Venue — fields expanded, disclosures present',
+  name: 'Role: Venue — venue fields auto-expanded',
   args: {
     ...baseArgs,
     defaultValues: {
@@ -157,26 +153,25 @@ export const RoleVenue: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
-    // Venue extras are expanded
+    // Venue fields auto-opened
     await expect(canvas.getByLabelText('Parking')).toBeVisible();
     await expect(canvas.getByLabelText('Access')).toBeVisible();
     await expect(canvas.getByLabelText('Equipment available')).toBeVisible();
 
-    // Disclosures for other types are present
-    await expect(canvas.getByRole('button', { name: /show customer fields/i })).toBeVisible();
-    await expect(canvas.getByRole('button', { name: /show agent fields/i })).toBeVisible();
-
-    // Phone is hidden (in customer disclosure)
-    await expect(canvas.queryByLabelText('Phone')).toBeNull();
-
-    // Open customer disclosure → phone appears
-    await userEvent.click(canvas.getByRole('button', { name: /show customer fields/i }));
+    // Core fields still visible
     await expect(canvas.getByLabelText('Phone')).toBeVisible();
+    await expect(canvas.getByLabelText('Notes')).toBeVisible();
+
+    // Agent disclosure button is present but collapsed
+    await expect(canvas.getByRole('button', { name: /show agent fields/i })).toBeVisible();
+    await expect(canvas.queryByLabelText('Website')).toBeNull();
+    await userEvent.click(canvas.getByRole('button', { name: /show agent fields/i }));
+    await expect(canvas.getByLabelText('Website')).toBeVisible();
   },
 };
 
 export const RoleAgent: Story = {
-  name: 'Role: Booking agent — fields expanded, disclosures present',
+  name: 'Role: Booking agent — agent fields auto-expanded',
   args: {
     ...baseArgs,
     defaultValues: {
@@ -205,17 +200,17 @@ export const RoleAgent: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
-    // Agent fields are expanded
-    await expect(canvas.getByLabelText('Phone')).toBeVisible();
+    // Agent fields auto-opened
     await expect(canvas.getByLabelText('Website')).toBeVisible();
     await expect(canvas.getByLabelText('Commission arrangement')).toBeVisible();
 
-    // Disclosures for other types are present
-    await expect(canvas.getByRole('button', { name: /show customer fields/i })).toBeVisible();
-    await expect(canvas.getByRole('button', { name: /show venue fields/i })).toBeVisible();
+    // Core fields still visible
+    await expect(canvas.getByLabelText('Phone')).toBeVisible();
+    await expect(canvas.getByLabelText('Notes')).toBeVisible();
 
-    // Open agent disclosure → commission is already visible (no duplicate)
-    // Open venue disclosure → parking appears
+    // Venue disclosure button is present but collapsed
+    await expect(canvas.getByRole('button', { name: /show venue fields/i })).toBeVisible();
+    await expect(canvas.queryByLabelText('Parking')).toBeNull();
     await userEvent.click(canvas.getByRole('button', { name: /show venue fields/i }));
     await expect(canvas.getByLabelText('Parking')).toBeVisible();
   },
@@ -225,17 +220,16 @@ export const ContextRolePrefill: Story = {
   name: 'contextRole pre-fills Contact Type (no defaultValues)',
   args: {
     ...baseArgs,
-    contextRole: 'CUSTOMER',
+    contextRole: 'VENUE',
     autoSuggestGreetingName: true,
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
-    // Customer fields are visible (proves contextRole pre-filled the select)
-    await expect(canvas.getByLabelText('Phone')).toBeVisible();
-    await expect(canvas.getByLabelText('Notes')).toBeVisible();
+    // Venue fields are open (proves contextRole seeded the select as VENUE)
+    await expect(canvas.getByLabelText('Parking')).toBeVisible();
 
-    // Contact Type select shows Customer
-    await expect(canvas.getByText('Customer')).toBeVisible();
+    // Contact Type shows Venue
+    await expect(canvas.getByText('Venue')).toBeVisible();
   },
 };
