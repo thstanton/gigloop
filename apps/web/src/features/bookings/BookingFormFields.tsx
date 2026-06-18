@@ -1,4 +1,3 @@
-import type { Ref } from 'react';
 import { Controller } from 'react-hook-form';
 import type { Control, UseFormRegister, FieldErrors } from 'react-hook-form';
 import { z } from 'zod';
@@ -211,8 +210,9 @@ interface Props {
   formats?: Package[];
   series?: BookingSeries[];
   hideNotes?: boolean;
-  /** Wraps the Venue block so the edit drawer can scroll/focus it (section=venue). */
-  venueSectionRef?: Ref<HTMLDivElement>;
+  /** Hide the People section — the edit drawer renders its own People blocks that
+   *  save independently (per-box), separate from this form's global Save. */
+  hidePeople?: boolean;
 }
 
 export function BookingFormFields({
@@ -223,7 +223,7 @@ export function BookingFormFields({
   formats,
   series,
   hideNotes,
-  venueSectionRef,
+  hidePeople,
 }: Props) {
   return (
     <div className="space-y-6">
@@ -303,23 +303,24 @@ export function BookingFormFields({
         <Input placeholder="e.g. Smith Wedding" {...register('title')} />
       </FormField>
 
-      {/* People */}
-      <div className="space-y-4">
-        <h2 className="text-sm font-semibold text-foreground">People</h2>
+      {/* People — only in the create form; the edit drawer renders its own
+          per-box-saving People section (see BookingEditDrawer). */}
+      {!hidePeople && (
+        <div className="space-y-4">
+          <h2 className="text-sm font-semibold text-foreground">People</h2>
 
-        <Controller
-          name="customerId"
-          control={control}
-          render={({ field }) => (
-            <InlineContactBlock
-              value={field.value || null}
-              onChange={(id) => field.onChange(id ?? '')}
-              error={errors.customerId?.message}
-            />
-          )}
-        />
+          <Controller
+            name="customerId"
+            control={control}
+            render={({ field }) => (
+              <InlineContactBlock
+                value={field.value || null}
+                onChange={(id) => field.onChange(id ?? '')}
+                error={errors.customerId?.message}
+              />
+            )}
+          />
 
-        <div ref={venueSectionRef}>
           <Controller
             name="venueId"
             control={control}
@@ -330,19 +331,19 @@ export function BookingFormFields({
               />
             )}
           />
-        </div>
 
-        <Controller
-          name="bookingAgentId"
-          control={control}
-          render={({ field }) => (
-            <InlineAgentBlock
-              value={field.value}
-              onChange={field.onChange}
-            />
-          )}
-        />
-      </div>
+          <Controller
+            name="bookingAgentId"
+            control={control}
+            render={({ field }) => (
+              <InlineAgentBlock
+                value={field.value}
+                onChange={field.onChange}
+              />
+            )}
+          />
+        </div>
+      )}
 
       {/* Packages */}
       {songRequestFormEnabled && formats && formats.length > 0 && (

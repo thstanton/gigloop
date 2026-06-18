@@ -20,6 +20,9 @@ import { toast } from '@/lib/hooks/use-toast';
 import PerformanceEditor from './PerformanceEditor';
 import MusicFormEditor from './MusicFormEditor';
 import OnTheDayEditor from './OnTheDayEditor';
+import { InlineContactBlock } from './InlineContactBlock';
+import { InlineVenueBlock } from './InlineVenueBlock';
+import { InlineAgentBlock } from './InlineAgentBlock';
 import type { BookingDetail, EventType, BookingStatus } from '@/types/api';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -60,6 +63,12 @@ export default function BookingEditDrawer({ booking }: Props) {
   const onTheDayRef = useRef<HTMLDivElement>(null);
   const venueRef = useRef<HTMLDivElement>(null);
 
+  // People save independently of the global form (per-box Save). Held as local
+  // state so a transiently-empty customer can't block the global Save's validation.
+  const [customerId, setCustomerId] = useState<string | null>(booking.customerId);
+  const [venueId, setVenueId] = useState<string | null>(booking.venueId);
+  const [bookingAgentId, setBookingAgentId] = useState<string | null>(booking.bookingAgentId);
+
   function close() {
     setSearchParams({});
   }
@@ -79,9 +88,29 @@ export default function BookingEditDrawer({ booking }: Props) {
   useEffect(() => {
     if (isOpen) {
       reset(buildDefaultValues(booking));
+      setCustomerId(booking.customerId);
+      setVenueId(booking.venueId);
+      setBookingAgentId(booking.bookingAgentId);
       setDeleteConfirm(false);
     }
   }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Per-box People saves: each PATCHes one association and invalidates the booking
+  // so committedValue re-flows and the block's Save button clears.
+  function usePeopleMutation(field: 'customerId' | 'venueId' | 'bookingAgentId', label: string) {
+    return useMutation({
+      mutationFn: (id: string | null) =>
+        apiPatch<BookingDetail>(`/bookings/${booking.id}`, { [field]: id }),
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ['booking', booking.id] });
+        queryClient.invalidateQueries({ queryKey: ['bookings'] });
+      },
+      onError: () => toast({ title: `Failed to save ${label}. Please try again.`, variant: 'destructive' }),
+    });
+  }
+  const customerMutation = usePeopleMutation('customerId', 'customer');
+  const venueMutation = usePeopleMutation('venueId', 'venue');
+  const agentMutation = usePeopleMutation('bookingAgentId', 'booking agent');
 
 
   const deleteMutation = useMutation({
@@ -101,9 +130,6 @@ export default function BookingEditDrawer({ booking }: Props) {
         title: values.title || null,
         fee: values.fee ? parseFloat(values.fee) : null,
         notes: values.notes || null,
-        customerId: values.customerId,
-        venueId: values.venueId,
-        bookingAgentId: values.bookingAgentId,
       });
     },
     onSuccess: () => {
@@ -145,7 +171,7 @@ export default function BookingEditDrawer({ booking }: Props) {
               register={register}
               errors={errors}
               hideNotes
-              venueSectionRef={venueRef}
+              hidePeople
             />
 
             {mutation.isError && (
@@ -163,6 +189,35 @@ export default function BookingEditDrawer({ booking }: Props) {
               </Button>
             </div>
           </form>
+
+          {/* People — each block saves independently (per-box Save), separate from
+              the global form above. */}
+          <div className="mt-8 pt-6 border-t border-border space-y-4">
+            <h2 className="text-sm font-semibold text-foreground">People</h2>
+            <InlineContactBlock
+              value={customerId}
+              onChange={setCustomerId}
+              committedValue={booking.customerId}
+              onSave={(v) => customerMutation.mutate(v)}
+              isSaving={customerMutation.isPending}
+            />
+            <div ref={venueRef}>
+              <InlineVenueBlock
+                value={venueId}
+                onChange={setVenueId}
+                committedValue={booking.venueId}
+                onSave={(v) => venueMutation.mutate(v)}
+                isSaving={venueMutation.isPending}
+              />
+            </div>
+            <InlineAgentBlock
+              value={bookingAgentId}
+              onChange={setBookingAgentId}
+              committedValue={booking.bookingAgentId}
+              onSave={(v) => agentMutation.mutate(v)}
+              isSaving={agentMutation.isPending}
+            />
+          </div>
 
           <div ref={onTheDayRef} className="mt-8 pt-6 border-t border-border">
             <OnTheDayEditor booking={booking} isOpen={isOpen} />

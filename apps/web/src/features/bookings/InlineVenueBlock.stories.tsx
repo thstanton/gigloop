@@ -136,3 +136,18 @@ export const InlineCreateStaysOnStep: Story = {
     await expect(canvas.getByTestId('outer-submitted')).toHaveTextContent('no');
   },
 };
+
+export const EditRemovalAllowed: Story = {
+  name: 'Venue block — edit mode: detaching a venue allows Save (no warning)',
+  args: { value: null, onChange: () => {}, committedValue: 'new-v1', onSave: () => {} },
+  parameters: {
+    msw: { handlers: [http.get('/api/contacts', () => HttpResponse.json([newVenueContact]))] },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    // Venue is nullable: an empty selection (removal) is a valid, saveable change.
+    const save = canvas.getByRole('button', { name: /^save$/i });
+    await expect(save).toBeVisible();
+    await expect(save).toBeEnabled();
+  },
+};

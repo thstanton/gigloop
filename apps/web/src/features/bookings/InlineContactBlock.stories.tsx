@@ -232,3 +232,28 @@ export const SelectExistingTab: Story = {
     await expect(canvas.queryByPlaceholderText('Full name')).toBeNull();
   },
 };
+
+const otherContact = { ...newContact, id: 'other-c1', name: 'Bob Carter', greetingName: 'Bob' };
+
+export const EditDirtyShowsSave: Story = {
+  name: 'Customer block — edit mode: changed selection shows Save',
+  args: { value: 'other-c1', onChange: () => {}, committedValue: 'new-c1', onSave: () => {} },
+  parameters: {
+    msw: { handlers: [http.get('/api/contacts', () => HttpResponse.json([newContact, otherContact]))] },
+  },
+  play: async ({ canvas }) => {
+    // Selection (other-c1) differs from committed (new-c1) → per-box Save appears, enabled.
+    const save = canvas.getByRole('button', { name: /^save$/i });
+    await expect(save).toBeVisible();
+    await expect(save).toBeEnabled();
+  },
+};
+
+export const EditEmptyCustomerWarns: Story = {
+  name: 'Customer block — edit mode: empty customer disables Save with a warning',
+  args: { value: null, onChange: () => {}, committedValue: 'new-c1', onSave: () => {} },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText(/a booking must have a customer/i)).toBeVisible();
+    await expect(canvas.getByRole('button', { name: /^save$/i })).toBeDisabled();
+  },
+};

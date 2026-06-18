@@ -29,9 +29,23 @@ interface InlineVenueBlockProps {
   value: string | null;
   onChange: (id: string | null) => void;
   error?: string;
+  /** When provided, the block is in edit mode: a per-box Save appears whenever the
+   *  selection differs from committedValue (the venue saved on the booking). */
+  committedValue?: string | null;
+  onSave?: (value: string | null) => void;
+  isSaving?: boolean;
+  saveError?: string | null;
 }
 
-export function InlineVenueBlock({ value, onChange, error }: InlineVenueBlockProps) {
+export function InlineVenueBlock({
+  value,
+  onChange,
+  error,
+  committedValue,
+  onSave,
+  isSaving,
+  saveError,
+}: InlineVenueBlockProps) {
   const queryClient = useQueryClient();
   const [mode, setMode] = useState<'existing' | 'new'>('existing');
   const [venueValue, setVenueValue] = useState<VenuePlaceValue>(EMPTY_VENUE);
@@ -62,7 +76,6 @@ export function InlineVenueBlock({ value, onChange, error }: InlineVenueBlockPro
     onSuccess: (created) => {
       queryClient.invalidateQueries({ queryKey: ['contacts'] });
       onChange(created.id);
-      setMode('existing');
       setVenueValue(EMPTY_VENUE);
       setShowMore(false);
       setParking('');
@@ -97,33 +110,23 @@ export function InlineVenueBlock({ value, onChange, error }: InlineVenueBlockPro
     if (hasAddress && !next.name.trim()) setShowMore(true);
   }
 
+  const dirty = !!onSave && (value || null) !== (committedValue ?? null);
+
+  const header = (
+    <div className="flex items-center gap-1.5">
+      <MapPin size={16} className="text-muted-foreground" aria-hidden="true" />
+      <p className="text-sm font-semibold">
+        Venue <span className="font-normal text-muted-foreground">(optional)</span>
+      </p>
+    </div>
+  );
+
   return (
     <div className="border border-border rounded-md p-4 space-y-3">
-      <Tabs value={mode} onValueChange={(v) => setMode(v as 'existing' | 'new')}>
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-1.5">
-            <MapPin size={16} className="text-muted-foreground" aria-hidden="true" />
-            <p className="text-sm font-semibold">
-              Venue <span className="font-normal text-muted-foreground">(optional)</span>
-            </p>
-          </div>
-          <TabsList className="h-auto p-0.5 bg-secondary border border-border">
-            <TabsTrigger
-              value="existing"
-              className="text-foreground/60 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-none"
-            >
-              Select existing
-            </TabsTrigger>
-            <TabsTrigger
-              value="new"
-              className="text-foreground/60 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-none"
-            >
-              + New
-            </TabsTrigger>
-          </TabsList>
-        </div>
-
-        <TabsContent value="existing" className="mt-3">
+      {value ? (
+        // Attached: show the selected venue (clear with the ✕ to detach)
+        <>
+          {header}
           <ContactPicker
             value={value}
             onChange={onChange}
@@ -132,100 +135,140 @@ export function InlineVenueBlock({ value, onChange, error }: InlineVenueBlockPro
             preferredRole="VENUE"
             disableCreate
           />
-        </TabsContent>
-
-        <TabsContent value="new" className="mt-3 space-y-3">
-          {/* Wrapper intercepts Enter: VenuePlaceSearch handles it when suggestions are open;
-              wrapper prevents outer form submission when there are no suggestions */}
-          <div onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}>
-            <VenuePlaceSearch value={venueValue} onChange={handleVenueChange} searchOnly />
+        </>
+      ) : (
+        <Tabs value={mode} onValueChange={(v) => setMode(v as 'existing' | 'new')}>
+          <div className="flex items-center justify-between gap-3">
+            {header}
+            <TabsList className="h-auto p-0.5 bg-secondary border border-border">
+              <TabsTrigger
+                value="existing"
+                className="text-foreground/60 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-none"
+              >
+                Select existing
+              </TabsTrigger>
+              <TabsTrigger
+                value="new"
+                className="text-foreground/60 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-none"
+              >
+                + New
+              </TabsTrigger>
+            </TabsList>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setShowMore((o) => !o)}
-            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            {showMore ? (
-              <><ChevronUp className="h-4 w-4" aria-hidden="true" />Hide venue details</>
-            ) : (
-              <><ChevronDown className="h-4 w-4" aria-hidden="true" />Add more venue details</>
-            )}
-          </button>
+          <TabsContent value="existing" className="mt-3">
+            <ContactPicker
+              value={value}
+              onChange={onChange}
+              placeholder="Select venue..."
+              label="venue"
+              preferredRole="VENUE"
+              disableCreate
+            />
+          </TabsContent>
 
-          {showMore && (
-            <div className="space-y-3">
-              <div className="space-y-1.5">
-                <SubLabel>Venue name</SubLabel>
-                <Input
-                  value={venueValue.name}
-                  onChange={setAddressField('name')}
-                  placeholder="e.g. The O2 Arena"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <SubLabel>Address line 1</SubLabel>
-                <Input
-                  value={venueValue.addressLine1}
-                  onChange={setAddressField('addressLine1')}
-                  placeholder="123 High Street"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <SubLabel>Address line 2</SubLabel>
-                <Input
-                  value={venueValue.addressLine2}
-                  onChange={setAddressField('addressLine2')}
-                  placeholder="(optional)"
-                />
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <div className="space-y-1.5">
-                  <SubLabel>City</SubLabel>
-                  <Input value={venueValue.city} onChange={setAddressField('city')} />
-                </div>
-                <div className="space-y-1.5">
-                  <SubLabel>Postcode</SubLabel>
-                  <Input value={venueValue.postcode} onChange={setAddressField('postcode')} />
-                </div>
-              </div>
-              <FormField label="Parking">
-                <Textarea
-                  value={parking}
-                  onChange={(e) => setParking(e.target.value)}
-                  rows={2}
-                  placeholder="e.g. Free car park at rear"
-                />
-              </FormField>
-              <FormField label="Access">
-                <Textarea
-                  value={access}
-                  onChange={(e) => setAccess(e.target.value)}
-                  rows={2}
-                  placeholder="e.g. Stage door on left side"
-                />
-              </FormField>
-              <FormField label="Equipment available">
-                <Textarea
-                  value={equipment}
-                  onChange={(e) => setEquipment(e.target.value)}
-                  rows={2}
-                  placeholder="e.g. PA system, microphone stands"
-                />
-              </FormField>
+          <TabsContent value="new" className="mt-3 space-y-3">
+            {/* Wrapper intercepts Enter: VenuePlaceSearch handles it when suggestions are open;
+                wrapper prevents outer form submission when there are no suggestions */}
+            <div onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}>
+              <VenuePlaceSearch value={venueValue} onChange={handleVenueChange} searchOnly />
             </div>
-          )}
 
-          <div className="flex items-center gap-3">
-            <Button type="button" onClick={handleCreate} disabled={createMutation.isPending}>
-              {createMutation.isPending ? 'Creating…' : 'Create venue'}
-            </Button>
-            {localError && (
-              <p className="text-sm text-status-cancelled">{localError}</p>
+            <button
+              type="button"
+              onClick={() => setShowMore((o) => !o)}
+              className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {showMore ? (
+                <><ChevronUp className="h-4 w-4" aria-hidden="true" />Hide venue details</>
+              ) : (
+                <><ChevronDown className="h-4 w-4" aria-hidden="true" />Add more venue details</>
+              )}
+            </button>
+
+            {showMore && (
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <SubLabel>Venue name</SubLabel>
+                  <Input
+                    value={venueValue.name}
+                    onChange={setAddressField('name')}
+                    placeholder="e.g. The O2 Arena"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <SubLabel>Address line 1</SubLabel>
+                  <Input
+                    value={venueValue.addressLine1}
+                    onChange={setAddressField('addressLine1')}
+                    placeholder="123 High Street"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <SubLabel>Address line 2</SubLabel>
+                  <Input
+                    value={venueValue.addressLine2}
+                    onChange={setAddressField('addressLine2')}
+                    placeholder="(optional)"
+                  />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="space-y-1.5">
+                    <SubLabel>City</SubLabel>
+                    <Input value={venueValue.city} onChange={setAddressField('city')} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <SubLabel>Postcode</SubLabel>
+                    <Input value={venueValue.postcode} onChange={setAddressField('postcode')} />
+                  </div>
+                </div>
+                <FormField label="Parking">
+                  <Textarea
+                    value={parking}
+                    onChange={(e) => setParking(e.target.value)}
+                    rows={2}
+                    placeholder="e.g. Free car park at rear"
+                  />
+                </FormField>
+                <FormField label="Access">
+                  <Textarea
+                    value={access}
+                    onChange={(e) => setAccess(e.target.value)}
+                    rows={2}
+                    placeholder="e.g. Stage door on left side"
+                  />
+                </FormField>
+                <FormField label="Equipment available">
+                  <Textarea
+                    value={equipment}
+                    onChange={(e) => setEquipment(e.target.value)}
+                    rows={2}
+                    placeholder="e.g. PA system, microphone stands"
+                  />
+                </FormField>
+              </div>
             )}
-          </div>
-        </TabsContent>
-      </Tabs>
+
+            <div className="flex items-center gap-3">
+              <Button type="button" onClick={handleCreate} disabled={createMutation.isPending}>
+                {createMutation.isPending ? 'Creating…' : 'Create venue'}
+              </Button>
+              {localError && (
+                <p className="text-sm text-status-cancelled">{localError}</p>
+              )}
+            </div>
+          </TabsContent>
+        </Tabs>
+      )}
+
+      {onSave && dirty && (
+        <div className="flex items-center gap-3">
+          <Button type="button" onClick={() => onSave(value)} disabled={isSaving}>
+            {isSaving ? 'Saving…' : 'Save'}
+          </Button>
+          {saveError && <p className="text-sm text-status-cancelled">{saveError}</p>}
+        </div>
+      )}
 
       {error && <p className="text-sm text-status-cancelled">{error}</p>}
     </div>
