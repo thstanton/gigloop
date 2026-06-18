@@ -317,6 +317,7 @@ describe('SeriesService', () => {
       expect(repo.appendSeriesInvoiceLine).toHaveBeenCalledWith(
         'u1', 'inv1',
         expect.objectContaining({ sourceBookingId: 'b1', amount: 500 }),
+        undefined, // no tx threaded when called outside the atomic-create path
       );
     });
 

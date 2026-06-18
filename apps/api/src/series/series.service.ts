@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { SeriesRepository } from './series.repository';
 import { InvoicesRepository } from '../invoices/invoices.repository';
 import { InvoiceLifecycleService } from '../invoices/invoice-lifecycle.service';
@@ -210,8 +211,13 @@ export class SeriesService {
    * After a booking joins a series, append a traced line to the series DRAFT invoice (if any).
    * No-op when no DRAFT invoice exists.
    */
-  async syncMemberJoin(userId: string, seriesId: string, booking: MemberBookingForSync): Promise<void> {
-    const draftInvoice = await this.repo.findDraftSeriesInvoiceWithLines(userId, seriesId);
+  async syncMemberJoin(
+    userId: string,
+    seriesId: string,
+    booking: MemberBookingForSync,
+    tx?: Prisma.TransactionClient,
+  ): Promise<void> {
+    const draftInvoice = await this.repo.findDraftSeriesInvoiceWithLines(userId, seriesId, tx);
     if (!draftInvoice) return;
 
     const { add } = reconcile(draftInvoice.lineItems, [
@@ -224,12 +230,17 @@ export class SeriesService {
     if (add.length === 0) return;
 
     const maxOrder = draftInvoice.lineItems.reduce((m, l) => Math.max(m, l.order), -1);
-    await this.repo.appendSeriesInvoiceLine(userId, draftInvoice.id, {
-      description: add[0].description,
-      amount: add[0].amount,
-      order: maxOrder + 1,
-      sourceBookingId: booking.id,
-    });
+    await this.repo.appendSeriesInvoiceLine(
+      userId,
+      draftInvoice.id,
+      {
+        description: add[0].description,
+        amount: add[0].amount,
+        order: maxOrder + 1,
+        sourceBookingId: booking.id,
+      },
+      tx,
+    );
   }
 
   /**
