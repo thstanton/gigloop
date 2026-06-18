@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/select';
 import { FormField } from '@/components/common/FormField';
 import { AddressAutocomplete } from '@/components/common/AddressAutocomplete';
+import { VenuePlaceSearch, type VenuePlaceValue } from '@/components/common/VenuePlaceSearch';
 import type { Contact, CreateContactInput, UpdateContactInput } from '@/types/api';
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
@@ -176,6 +177,15 @@ export default function ContactForm({
     setValue('placeId', v.placeId, { shouldDirty: true });
   };
 
+  // Venue contacts use the venue-aware search so picking an establishment fills the
+  // Name field too (matching the inline booking flow). The search box echoes value.name,
+  // which is two-way bound to the always-visible Name field above.
+  const venuePlaceValue: VenuePlaceValue = { name: watch('name'), ...addressValue };
+  const handleVenuePlaceChange = (v: VenuePlaceValue) => {
+    setValue('name', v.name, { shouldDirty: true });
+    handleAddressChange(v);
+  };
+
   const selectedRole = watch('primaryRole');
   const [venueOpen, setVenueOpen] = useState(selectedRole === 'VENUE');
   const [agentOpen, setAgentOpen] = useState(selectedRole === 'BOOKING_AGENT');
@@ -231,16 +241,23 @@ export default function ContactForm({
             <Input type="tel" {...register('phone')} />
           </FormField>
         </div>
-        <FormField label="Address">
+        <FormField label={selectedRole === 'VENUE' ? 'Find venue' : 'Address'}>
           <Controller
             name="addressLine1"
             control={control}
-            render={() => (
-              <AddressAutocomplete
-                value={addressValue}
-                onChange={handleAddressChange}
-              />
-            )}
+            render={() =>
+              selectedRole === 'VENUE' ? (
+                <VenuePlaceSearch
+                  value={venuePlaceValue}
+                  onChange={handleVenuePlaceChange}
+                />
+              ) : (
+                <AddressAutocomplete
+                  value={addressValue}
+                  onChange={handleAddressChange}
+                />
+              )
+            }
           />
         </FormField>
         <FormField label="Notes" error={errors.notes?.message}>
