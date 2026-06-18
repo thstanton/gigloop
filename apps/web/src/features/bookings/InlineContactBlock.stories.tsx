@@ -66,6 +66,38 @@ export const CustomerBlockDefault: Story = {
   },
 };
 
+export const ExistingContactAttached: Story = {
+  name: 'Customer block — starts on Select existing when a contact is attached',
+  args: { value: 'new-c1', onChange: () => {} },
+  parameters: {
+    msw: {
+      handlers: [
+        http.get('/api/contacts', () => HttpResponse.json([newContact])),
+      ],
+    },
+  },
+  render: (args) => {
+    function Wrapper() {
+      const [value, setValue] = useState<string | null>('new-c1');
+      return (
+        <InlineContactBlock
+          {...args}
+          value={value}
+          onChange={(id) => { setValue(id); args.onChange(id); }}
+        />
+      );
+    }
+    return <Wrapper />;
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    // Editing a booking that already has a customer: Select existing is active,
+    // not the + New create form.
+    await expect(canvas.getByRole('combobox')).toBeVisible();
+    await expect(canvas.queryByPlaceholderText('Full name')).toBeNull();
+  },
+};
+
 export const GreetingAutoSuggest: Story = {
   name: 'Customer block — greeting auto-suggests from name',
   args: { value: null, onChange: () => {} },

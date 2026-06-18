@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, ChevronUp, User } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -19,7 +19,15 @@ interface InlineContactBlockProps {
 export function InlineContactBlock({ value, onChange, error }: InlineContactBlockProps) {
   const queryClient = useQueryClient();
 
-  const [mode, setMode] = useState<'existing' | 'new'>('new');
+  // "Select existing" when a contact is already attached (editing a booking with a
+  // customer); the create flow starts on "+ New". Re-sync if the attached contact
+  // resolves after mount (e.g. the edit drawer reopening) until the user picks a tab.
+  const [mode, setMode] = useState<'existing' | 'new'>(value ? 'existing' : 'new');
+  const modeTouched = useRef(false);
+  useEffect(() => {
+    if (modeTouched.current) return;
+    setMode(value ? 'existing' : 'new');
+  }, [value]);
   const [showMore, setShowMore] = useState(false);
   const [name, setName] = useState('');
   const [greetingName, setGreetingName] = useState('');
@@ -81,7 +89,7 @@ export function InlineContactBlock({ value, onChange, error }: InlineContactBloc
 
   return (
     <div className="border border-border rounded-md p-4 space-y-3">
-      <Tabs value={mode} onValueChange={(v) => setMode(v as 'existing' | 'new')}>
+      <Tabs value={mode} onValueChange={(v) => { modeTouched.current = true; setMode(v as 'existing' | 'new'); }}>
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-1.5">
             <User size={16} className="text-muted-foreground" aria-hidden="true" />
