@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import BookingStatusPill from '@/components/common/BookingStatusPill';
 import { useContact } from '@/lib/hooks/useContact';
 import { apiGet } from '@/lib/api';
+import { toast } from '@/lib/hooks/use-toast';
 import { formatDate } from '@/lib/formatters';
 import { EVENT_TYPE_LABELS } from '@/lib/constants';
 import ContactEditDrawer from '@/features/contacts/ContactEditDrawer';
@@ -117,6 +118,7 @@ export default function ContactDetailPage() {
   const { mutate: refreshTravelTime, isPending: isRefreshingTravelTime } = useMutation({
     mutationFn: () => apiGet<TravelTimeResponse>(`/contacts/${id}/travel-time`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['contact', id] }),
+    onError: () => toast({ title: 'Failed to refresh travel time. Please try again.', variant: 'destructive' }),
   });
 
   if (isLoading) return <DetailSkeleton />;

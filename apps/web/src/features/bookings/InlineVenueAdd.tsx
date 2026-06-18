@@ -50,6 +50,7 @@ export function InlineVenueAdd({ bookingId }: { bookingId: string }) {
             placeholder="Select venue..."
             label="venue"
             preferredRole="VENUE"
+            disabled={mutation.isPending}
           />
           <div className="mt-4 flex justify-end">
             <Button variant="outline" onClick={() => setSheetOpen(false)} disabled={mutation.isPending}>

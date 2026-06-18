@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { FormField } from '@/components/common/FormField';
 import { apiPostFormData } from '@/lib/api';
+import { toast } from '@/lib/hooks/use-toast';
 import type { Document } from '@/types/api';
 
 const MAX_SIZE = 10 * 1024 * 1024;
@@ -54,6 +55,12 @@ export function UploadDocumentSheet({ bookingId, open, onOpenChange }: Props) {
       setFileName(null);
       if (fileRef.current) fileRef.current.value = '';
       onOpenChange(false);
+    },
+    onError: (error) => {
+      // Client-side validation failures already surface inline via fileError — don't
+      // also fire a misleading "upload failed" toast for those. Toast genuine failures only.
+      if (error instanceof Error && (error.message === 'no file' || error.message === 'too large')) return;
+      toast({ title: 'Failed to upload document. Please try again.', variant: 'destructive' });
     },
   });
 

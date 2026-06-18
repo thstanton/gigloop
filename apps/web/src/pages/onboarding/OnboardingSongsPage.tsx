@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { apiGet, apiPost } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/common/PageHeader';
+import { toast } from '@/lib/hooks/use-toast';
 import type { CatalogueGroup } from '@/types/api';
 
 export default function OnboardingSongsPage() {
@@ -21,6 +22,9 @@ export default function OnboardingSongsPage() {
   const { mutate: seed, isPending } = useMutation({
     mutationFn: (ids: string[]) => apiPost('/songs/seed', { ids }),
     onSuccess: () => navigate('/onboarding/packages'),
+    onError: () => {
+      toast({ title: 'Failed to add songs. Please try again.', variant: 'destructive' });
+    },
   });
 
   function toggleGenre(group: CatalogueGroup) {

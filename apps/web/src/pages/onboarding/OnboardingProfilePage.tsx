@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/common/PageHeader';
 import { FormField } from '@/components/common/FormField';
 import { Input } from '@/components/ui/input';
+import { toast } from '@/lib/hooks/use-toast';
 import type { PublicProfile } from '@/types/api';
 
 const schema = z.object({
@@ -51,6 +52,9 @@ export default function OnboardingProfilePage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['public-profile'] });
       navigate('/onboarding/songs');
+    },
+    onError: () => {
+      toast({ title: 'Failed to save. Please try again.', variant: 'destructive' });
     },
   });
 

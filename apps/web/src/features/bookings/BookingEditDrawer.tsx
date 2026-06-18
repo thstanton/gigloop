@@ -16,6 +16,7 @@ import {
   type BookingFormValues,
 } from './BookingFormFields';
 import { apiDelete, apiPatch } from '@/lib/api';
+import { toast } from '@/lib/hooks/use-toast';
 import PerformanceEditor from './PerformanceEditor';
 import MusicFormEditor from './MusicFormEditor';
 import OnTheDayEditor from './OnTheDayEditor';
@@ -87,6 +88,7 @@ export default function BookingEditDrawer({ booking }: Props) {
     onSuccess: () => {
       navigate('/admin/bookings');
     },
+    onError: () => toast({ title: 'Failed to cancel booking. Please try again.', variant: 'destructive' }),
   });
 
   const mutation = useMutation({

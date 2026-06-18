@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import ContactForm, { toContactPayload, contactToFormValues } from './ContactForm';
 import type { ContactFormValues } from './ContactForm';
 import { apiPatch, apiDelete } from '@/lib/api';
+import { toast } from '@/lib/hooks/use-toast';
 import type { Contact, ContactDetail } from '@/types/api';
 
 interface Props {
@@ -54,6 +55,7 @@ export default function ContactEditDrawer({ contact }: Props) {
       queryClient.invalidateQueries({ queryKey: ['contacts'] });
       navigate('/admin/contacts');
     },
+    onError: () => toast({ title: 'Failed to delete contact. It may have linked bookings.', variant: 'destructive' }),
   });
 
   const totalBookings =

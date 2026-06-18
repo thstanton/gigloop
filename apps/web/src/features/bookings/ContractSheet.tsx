@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { VariableNode } from '@/features/templates/VariableNode';
 import { useBooking } from '@/lib/hooks/useBooking';
 import { apiPatch } from '@/lib/api';
+import { toast } from '@/lib/hooks/use-toast';
 import { cn } from '@/lib/utils';
 
 // ─── Toolbar ─────────────────────────────────────────────────────────────────
@@ -135,6 +136,7 @@ function ContractSheetBody({ bookingId, readOnly, onClose }: BodyProps) {
       queryClient.invalidateQueries({ queryKey: ['booking', bookingId] });
       onClose();
     },
+    onError: () => toast({ title: 'Failed to save contract. Please try again.', variant: 'destructive' }),
   });
 
   const handleSave = useCallback(() => {

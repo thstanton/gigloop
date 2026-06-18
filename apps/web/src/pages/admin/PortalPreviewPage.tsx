@@ -4,6 +4,7 @@ import { useAuth } from '@clerk/react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Check, ChevronLeft, Download, FileText, Music, Search } from 'lucide-react';
 import { apiGet, apiPatch } from '@/lib/api';
+import { toast } from '@/lib/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { PortalLayout, getDisplayFontClass } from '@/layouts/PortalLayout';
 import {
@@ -438,6 +439,7 @@ export default function PortalPreviewPage() {
       setIsDirty(false);
       setSheetOpen(false);
     },
+    onError: () => toast({ title: 'Failed to save. Please try again.', variant: 'destructive' }),
   });
 
   function handleChange(partial: Partial<Overrides>) {

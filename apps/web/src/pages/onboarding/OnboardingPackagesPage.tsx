@@ -9,6 +9,7 @@ import { Switch } from '@/components/ui/switch';
 import { PACKAGE_CATEGORY_LABELS, PACKAGE_ICON_MAP } from '@/lib/constants';
 import { PageHeader } from '@/components/common/PageHeader';
 import { PageSection } from '@/components/common/PageSection';
+import { toast } from '@/lib/hooks/use-toast';
 import type { Package } from '@/types/api';
 
 function PackageIcon({ icon }: { icon: string }) {
@@ -47,6 +48,9 @@ export default function OnboardingPackagesPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['packages'] });
       navigate('/onboarding/checklist');
+    },
+    onError: () => {
+      toast({ title: 'Failed to save. Please try again.', variant: 'destructive' });
     },
   });
 

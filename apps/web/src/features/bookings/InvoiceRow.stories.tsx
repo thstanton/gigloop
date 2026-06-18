@@ -36,6 +36,8 @@ const meta = {
     isDeletePending: false,
     isVoidPending: false,
     isIssuePending: false,
+    isMarkSentPending: false,
+    isMarkPaidPending: false,
     onEdit: noop,
     onPreview: noop,
     onIssue: noop,
@@ -85,6 +87,26 @@ export const IssuedVoiding: Story = {
   },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Voiding…')).toBeVisible();
+  },
+};
+
+export const IssuedMarkingSent: Story = {
+  args: {
+    invoice: { ...baseInvoice, status: 'ISSUED', isDeposit: true },
+    isMarkSentPending: true,
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Marking sent…')).toBeVisible();
+  },
+};
+
+export const SentMarkingPaid: Story = {
+  args: {
+    invoice: { ...baseInvoice, status: 'SENT' },
+    isMarkPaidPending: true,
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Marking paid…')).toBeVisible();
   },
 };
 
