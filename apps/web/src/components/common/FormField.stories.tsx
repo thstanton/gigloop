@@ -1,4 +1,5 @@
-import type { Meta, StoryObj } from '@storybook/react';
+import type { Meta, StoryObj } from '@storybook/react-vite';
+import { expect, within } from 'storybook/test';
 import { FormField } from './FormField';
 import { Input } from '@/components/ui/input';
 
@@ -24,6 +25,11 @@ export const Required: Story = {
     required: true,
     children: <Input placeholder="Jane Smith" />,
   },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const input = canvas.getByRole('textbox', { name: 'Name' });
+    await expect(input).toHaveAttribute('aria-required', 'true');
+  },
 };
 
 export const WithError: Story = {
@@ -32,6 +38,13 @@ export const WithError: Story = {
     required: true,
     error: 'Invalid email address',
     children: <Input placeholder="you@example.com" />,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const input = canvas.getByRole('textbox', { name: 'Email address' });
+    const errorMsg = canvas.getByText('Invalid email address');
+    await expect(errorMsg).toHaveAttribute('id');
+    await expect(input).toHaveAttribute('aria-describedby', errorMsg.id);
   },
 };
 
