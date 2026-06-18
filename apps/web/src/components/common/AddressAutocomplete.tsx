@@ -26,7 +26,7 @@ const CALLBACK = '__gmapsReady';
 
 let placesPromise: Promise<void> | null = null;
 
-function loadPlaces(): Promise<void> {
+export function loadPlaces(): Promise<void> {
   if (placesPromise) return placesPromise;
   placesPromise = new Promise<void>((resolve, reject) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -51,7 +51,7 @@ function loadPlaces(): Promise<void> {
   return placesPromise;
 }
 
-function parseAddressComponents(
+export function parseAddressComponents(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   components: any[],
 ): Pick<AddressFields, 'addressLine1' | 'addressLine2' | 'city' | 'county' | 'postcode' | 'country'> {
