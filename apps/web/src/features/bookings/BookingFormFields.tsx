@@ -16,8 +16,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import ContactPicker from './ContactPicker';
 import { InlineContactBlock } from './InlineContactBlock';
+import { InlineVenueBlock } from './InlineVenueBlock';
+import { InlineAgentBlock } from './InlineAgentBlock';
 import { EVENT_TYPE_LABELS } from '@/lib/constants';
 import type { BookingSeries, EventType, Package } from '@/types/api';
 
@@ -314,37 +315,27 @@ export function BookingFormFields({
           )}
         />
 
-        <FormField label="Venue (optional)">
-          <Controller
-            name="venueId"
-            control={control}
-            render={({ field }) => (
-              <ContactPicker
-                value={field.value}
-                onChange={field.onChange}
-                placeholder="Select venue..."
-                label="venue"
-                preferredRole="VENUE"
-              />
-            )}
-          />
-        </FormField>
+        <Controller
+          name="venueId"
+          control={control}
+          render={({ field }) => (
+            <InlineVenueBlock
+              value={field.value}
+              onChange={field.onChange}
+            />
+          )}
+        />
 
-        <FormField label="Booking agent (optional)">
-          <Controller
-            name="bookingAgentId"
-            control={control}
-            render={({ field }) => (
-              <ContactPicker
-                value={field.value}
-                onChange={field.onChange}
-                placeholder="Select booking agent..."
-                label="booking agent"
-                preferredRole="BOOKING_AGENT"
-              />
-            )}
-          />
-        </FormField>
+        <Controller
+          name="bookingAgentId"
+          control={control}
+          render={({ field }) => (
+            <InlineAgentBlock
+              value={field.value}
+              onChange={field.onChange}
+            />
+          )}
+        />
       </div>
 
       {/* Packages */}
