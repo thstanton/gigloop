@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import ContactPicker from './ContactPicker';
+import { InlineContactBlock } from './InlineContactBlock';
 import { EVENT_TYPE_LABELS } from '@/lib/constants';
 import type { BookingSeries, EventType, Package } from '@/types/api';
 
@@ -301,21 +302,17 @@ export function BookingFormFields({
       <div className="space-y-4">
         <h2 className="text-sm font-semibold text-foreground">People</h2>
 
-        <FormField label="Customer" required error={errors.customerId?.message}>
-          <Controller
-            name="customerId"
-            control={control}
-            render={({ field }) => (
-              <ContactPicker
-                value={field.value || null}
-                onChange={(id) => field.onChange(id ?? '')}
-                placeholder="Select customer..."
-                label="customer"
-                preferredRole="CUSTOMER"
-              />
-            )}
-          />
-        </FormField>
+        <Controller
+          name="customerId"
+          control={control}
+          render={({ field }) => (
+            <InlineContactBlock
+              value={field.value || null}
+              onChange={(id) => field.onChange(id ?? '')}
+              error={errors.customerId?.message}
+            />
+          )}
+        />
 
         <FormField label="Venue (optional)">
           <Controller
