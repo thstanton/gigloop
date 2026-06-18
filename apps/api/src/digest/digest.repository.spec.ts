@@ -241,6 +241,35 @@ describe('DigestRepository', () => {
     });
   });
 
+  describe('findDigestDataForUser — stage gate', () => {
+    it('does not surface an item required for a stage the booking has already passed', async () => {
+      // deposit (requiredForStatus CONFIRMED), due within window, on a COMPLETE booking
+      const item = makeItem({ dueDate: new Date('2025-01-10T00:00:00.000Z'), requiredForStatus: 'CONFIRMED' });
+      const booking = makeBooking({ status: 'COMPLETE', checklistItems: [item] });
+
+      prisma.booking.findMany
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([booking]);
+
+      const result = await repo.findDigestDataForUser('u1', WEEK_START, WEEK_END, TODAY, REMINDER_LEAD_DAYS);
+
+      expect(result.upcomingItems).toHaveLength(0);
+    });
+
+    it('surfaces the same item while the booking is still at that stage', async () => {
+      const item = makeItem({ dueDate: new Date('2025-01-10T00:00:00.000Z'), requiredForStatus: 'CONFIRMED' });
+      const booking = makeBooking({ status: 'CONFIRMED', checklistItems: [item] });
+
+      prisma.booking.findMany
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([booking]);
+
+      const result = await repo.findDigestDataForUser('u1', WEEK_START, WEEK_END, TODAY, REMINDER_LEAD_DAYS);
+
+      expect(result.upcomingItems[0].items).toHaveLength(1);
+    });
+  });
+
   describe('findDigestDataForUser — edge cases', () => {
     it('returns empty upcomingItems when all bookings have no surfaceable items', async () => {
       const item = makeItem({ dueDate: null, requiredForStatus: null });

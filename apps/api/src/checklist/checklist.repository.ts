@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { computeDueDate } from '../bookings/checklist-defaults';
+import { addDays, surfaceActionItems } from './checklist-surfacing';
 
 type ChecklistItemSeed = {
   key?: string | null;
@@ -41,6 +42,7 @@ export class ChecklistRepository {
         id: true,
         date: true,
         title: true,
+        status: true,
         customer: { select: { name: true } },
         venue: { select: { name: true } },
         checklistItems: {
@@ -64,7 +66,11 @@ export class ChecklistRepository {
 
     return bookings
       .map(({ checklistItems, ...booking }) => {
-        const surfaced = applySurfacingRules(checklistItems as ActionChecklistItem[], cutoff);
+        const surfaced = surfaceActionItems(
+          checklistItems as ActionChecklistItem[],
+          booking.status,
+          cutoff,
+        );
         return surfaced.length > 0 ? { booking, item: surfaced[0] } : null;
       })
       .filter((a): a is NonNullable<typeof a> => a !== null);
@@ -188,23 +194,4 @@ export class ChecklistRepository {
       },
     });
   }
-}
-
-function addDays(date: Date, days: number): Date {
-  const result = new Date(date);
-  result.setDate(result.getDate() + days);
-  return result;
-}
-
-function applySurfacingRules(items: ActionChecklistItem[], cutoff: Date): ActionChecklistItem[] {
-  return items.filter((item) => {
-    if (item.dueDate !== null) {
-      return item.dueDate <= cutoff;
-    }
-    if (item.requiredForStatus !== null) {
-      const peers = items.filter((i) => i.requiredForStatus === item.requiredForStatus);
-      return peers.length === 1;
-    }
-    return false;
-  });
 }
