@@ -129,6 +129,7 @@ export function InlineContactBlock({ value, onChange, error }: InlineContactBloc
                 onKeyDown={handleKeyDown}
                 placeholder="e.g. Jane"
               />
+              <p className="text-sm text-muted-foreground mt-1">Used in emails and letters to this contact</p>
             </FormField>
           </div>
 
@@ -148,9 +149,9 @@ export function InlineContactBlock({ value, onChange, error }: InlineContactBloc
             className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
             {showMore ? (
-              <><ChevronUp className="h-4 w-4" aria-hidden="true" />See less customer details</>
+              <><ChevronUp className="h-4 w-4" aria-hidden="true" />Hide customer details</>
             ) : (
-              <><ChevronDown className="h-4 w-4" aria-hidden="true" />See more customer details</>
+              <><ChevronDown className="h-4 w-4" aria-hidden="true" />Add more customer details</>
             )}
           </button>
 

@@ -170,12 +170,12 @@ export const SeeMoreDisclosure: Story = {
     await expect(canvas.queryByLabelText('Notes')).toBeNull();
 
     // Expand
-    await userEvent.click(canvas.getByRole('button', { name: /see more customer details/i }));
+    await userEvent.click(canvas.getByRole('button', { name: /add more customer details/i }));
     await expect(canvas.getByLabelText('Phone')).toBeVisible();
     await expect(canvas.getByLabelText('Notes')).toBeVisible();
 
     // Collapse
-    await userEvent.click(canvas.getByRole('button', { name: /see less customer details/i }));
+    await userEvent.click(canvas.getByRole('button', { name: /hide customer details/i }));
     await expect(canvas.queryByLabelText('Phone')).toBeNull();
   },
 };
