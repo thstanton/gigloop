@@ -58,7 +58,7 @@ Governing principle: **deterministic checks belong to automation; judgement belo
 ### Deterministic gates (automated — do not run by hand)
 
 ```
-commit (hook):  lint                          (changed workspace only)   — fast, blocking
+commit (hook):  lint + shortcut-detector      (lint: changed workspace)  — fast, blocking
 push   (hook):  test + build                  (changed workspace)        — build subsumes typecheck
 CI (→ main):    lint + test + build           (both apps)                — required gate
                 integration                                              — informational only (continue-on-error)
@@ -66,7 +66,7 @@ CI (→ main):    lint + test + build           (both apps)                — r
 
 There is **no pre-flight check and no pre-commit checklist.** Lint runs automatically at commit; test + build run automatically at push; CI re-runs everything. You never need to invoke these manually — if a hook fails, fix the cause and let the hook re-run.
 
-> ℹ️ **Reality note (ADR-0040):** hooks live under `.githooks/` (committed). One-time opt-in required: `git config core.hooksPath .githooks`. Without it, hooks don't run and CI is the only gate. The **shortcut-detector** (blocks `--no-verify` bypasses) is pending in #412 — lint/test/build fire but the shortcut check does not yet.
+> ℹ️ **Reality note (ADR-0040):** hooks live under `.githooks/` (committed). One-time opt-in required: `git config core.hooksPath .githooks`. Without it, hooks don't run and CI is the only gate. The **shortcut-detector** (`scripts/shortcut-detector.mjs`, wired into the pre-commit hook) is **active**: it scans the staged diff and blocks any commit that introduces a lowered-bar pattern — an `eslint-disable`, an `any` to dodge a type error, weakened or removed test assertions — so surface the trade-off instead. Note it runs *inside* the hook, so it cannot stop a `--no-verify` bypass (that skips hooks entirely); CI re-running lint/test/build is the backstop there.
 
 ### Advisory layer (CodeScene + /simplify — judgement, never a hard gate)
 
