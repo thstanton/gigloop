@@ -1,8 +1,8 @@
-import { useEffect, useRef } from 'react';
-import { Controller } from 'react-hook-form';
-import { useForm } from 'react-hook-form';
+import { useEffect, useRef, useState } from 'react';
+import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/select';
 import { FormField } from '@/components/common/FormField';
 import { AddressAutocomplete } from '@/components/common/AddressAutocomplete';
+import { VenuePlaceSearch, type VenuePlaceValue } from '@/components/common/VenuePlaceSearch';
 import type { Contact, CreateContactInput, UpdateContactInput } from '@/types/api';
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
@@ -98,6 +99,8 @@ export function contactToFormValues(c: Contact): ContactFormValues {
 
 // ─── Form ─────────────────────────────────────────────────────────────────────
 
+type RoleKey = 'CUSTOMER' | 'VENUE' | 'BOOKING_AGENT';
+
 interface ContactFormProps {
   defaultValues?: ContactFormValues;
   onSubmit: (values: ContactFormValues) => void;
@@ -106,6 +109,7 @@ interface ContactFormProps {
   submitLabel?: string;
   onCancel?: () => void;
   autoSuggestGreetingName?: boolean;
+  contextRole?: RoleKey;
 }
 
 export default function ContactForm({
@@ -116,6 +120,7 @@ export default function ContactForm({
   submitLabel = 'Save',
   onCancel,
   autoSuggestGreetingName = false,
+  contextRole,
 }: ContactFormProps) {
   const {
     register,
@@ -130,14 +135,12 @@ export default function ContactForm({
       name: '', greetingName: '', email: '', phone: '', website: '',
       addressLine1: '', addressLine2: '', city: '', county: '',
       postcode: '', country: 'GB', latitude: null, longitude: null, placeId: null,
-      notes: '', parkingInfo: '',
-      accessInfo: '', equipmentAvailable: '', commissionArrangement: '', primaryRole: '',
+      notes: '', parkingInfo: '', accessInfo: '', equipmentAvailable: '',
+      commissionArrangement: '', primaryRole: contextRole ?? '',
     },
   });
 
-  // Track whether the user has manually edited greetingName so we stop suggesting.
   const greetingNameEdited = useRef(false);
-
   const watchedName = watch('name');
 
   useEffect(() => {
@@ -162,20 +165,72 @@ export default function ContactForm({
     placeId: watch('placeId'),
   };
 
-  return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
+  const handleAddressChange = (v: typeof addressValue) => {
+    setValue('addressLine1', v.addressLine1, { shouldDirty: true });
+    setValue('addressLine2', v.addressLine2, { shouldDirty: true });
+    setValue('city', v.city, { shouldDirty: true });
+    setValue('county', v.county, { shouldDirty: true });
+    setValue('postcode', v.postcode, { shouldDirty: true });
+    setValue('country', v.country, { shouldDirty: true });
+    setValue('latitude', v.latitude, { shouldDirty: true });
+    setValue('longitude', v.longitude, { shouldDirty: true });
+    setValue('placeId', v.placeId, { shouldDirty: true });
+  };
 
-      {/* Core */}
+  // Venue contacts use the venue-aware search so picking an establishment fills the
+  // Name field too (matching the inline booking flow). The search box echoes value.name,
+  // which is two-way bound to the always-visible Name field above.
+  const venuePlaceValue: VenuePlaceValue = { name: watch('name'), ...addressValue };
+  const handleVenuePlaceChange = (v: VenuePlaceValue) => {
+    setValue('name', v.name, { shouldDirty: true });
+    handleAddressChange(v);
+  };
+
+  const selectedRole = watch('primaryRole');
+  const [venueOpen, setVenueOpen] = useState(selectedRole === 'VENUE');
+  const [agentOpen, setAgentOpen] = useState(selectedRole === 'BOOKING_AGENT');
+  const prevRoleRef = useRef(selectedRole);
+
+  // When Contact Type changes, auto-open the matching disclosure and close the other.
+  useEffect(() => {
+    if (prevRoleRef.current === selectedRole) return;
+    prevRoleRef.current = selectedRole;
+    setVenueOpen(selectedRole === 'VENUE');
+    setAgentOpen(selectedRole === 'BOOKING_AGENT');
+  }, [selectedRole]);
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+
+      {/* Contact Type — first field, drives disclosure auto-open */}
+      <FormField label="Contact Type" error={errors.primaryRole?.message}>
+        <Controller
+          name="primaryRole"
+          control={control}
+          render={({ field }) => (
+            <Select value={field.value || 'NONE'} onValueChange={(v) => field.onChange(v === 'NONE' ? '' : v)}>
+              <SelectTrigger>
+                <SelectValue placeholder="No contact type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="NONE">No contact type</SelectItem>
+                <SelectItem value="CUSTOMER">Customer</SelectItem>
+                <SelectItem value="VENUE">Venue</SelectItem>
+                <SelectItem value="BOOKING_AGENT">Booking agent</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+        />
+      </FormField>
+
+      {/* Core — always visible for every contact */}
       <div className="space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <FormField label="Name" required error={errors.name?.message}>
             <Input {...register('name')} autoFocus />
           </FormField>
           <FormField label="Greeting name" error={errors.greetingName?.message}>
-            <Input
-              {...greetingNameRegistration}
-              placeholder="e.g. Jane"
-            />
+            <Input {...greetingNameRegistration} placeholder="e.g. Jane" />
           </FormField>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -186,73 +241,82 @@ export default function ContactForm({
             <Input type="tel" {...register('phone')} />
           </FormField>
         </div>
-        <FormField label="Website" error={errors.website?.message}>
-          <Input type="url" {...register('website')} placeholder="https://" />
-        </FormField>
-        <FormField label="Address">
+        <FormField label={selectedRole === 'VENUE' ? 'Find venue' : 'Address'}>
           <Controller
             name="addressLine1"
             control={control}
-            render={() => (
-              <AddressAutocomplete
-                value={addressValue}
-                onChange={(v) => {
-                  setValue('addressLine1', v.addressLine1, { shouldDirty: true });
-                  setValue('addressLine2', v.addressLine2, { shouldDirty: true });
-                  setValue('city', v.city, { shouldDirty: true });
-                  setValue('county', v.county, { shouldDirty: true });
-                  setValue('postcode', v.postcode, { shouldDirty: true });
-                  setValue('country', v.country, { shouldDirty: true });
-                  setValue('latitude', v.latitude, { shouldDirty: true });
-                  setValue('longitude', v.longitude, { shouldDirty: true });
-                  setValue('placeId', v.placeId, { shouldDirty: true });
-                }}
-              />
-            )}
+            render={() =>
+              selectedRole === 'VENUE' ? (
+                <VenuePlaceSearch
+                  value={venuePlaceValue}
+                  onChange={handleVenuePlaceChange}
+                />
+              ) : (
+                <AddressAutocomplete
+                  value={addressValue}
+                  onChange={handleAddressChange}
+                />
+              )
+            }
           />
         </FormField>
         <FormField label="Notes" error={errors.notes?.message}>
           <Textarea {...register('notes')} rows={3} />
         </FormField>
-        <FormField label="Primary role (optional)" error={errors.primaryRole?.message}>
-          <Controller
-            name="primaryRole"
-            control={control}
-            render={({ field }) => (
-              <Select value={field.value || 'NONE'} onValueChange={(v) => field.onChange(v === 'NONE' ? '' : v)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="No primary role" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="NONE">No primary role</SelectItem>
-                  <SelectItem value="CUSTOMER">Customer</SelectItem>
-                  <SelectItem value="VENUE">Venue</SelectItem>
-                  <SelectItem value="BOOKING_AGENT">Booking agent</SelectItem>
-                </SelectContent>
-              </Select>
-            )}
-          />
-        </FormField>
       </div>
 
-      {/* Venue extras */}
+      {/* Venue-specific fields */}
       <div className="space-y-4">
-        <p className="text-sm font-medium text-foreground">Venue details</p>
-        <FormField label="Parking" error={errors.parkingInfo?.message}>
-          <Textarea {...register('parkingInfo')} rows={2} />
-        </FormField>
-        <FormField label="Access" error={errors.accessInfo?.message}>
-          <Textarea {...register('accessInfo')} rows={2} />
-        </FormField>
-        <FormField label="Equipment available" error={errors.equipmentAvailable?.message}>
-          <Textarea {...register('equipmentAvailable')} rows={2} />
-        </FormField>
+        <button
+          type="button"
+          onClick={() => setVenueOpen(o => !o)}
+          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          {venueOpen ? (
+            <><ChevronUp className="h-4 w-4" aria-hidden="true" />Hide venue fields</>
+          ) : (
+            <><ChevronDown className="h-4 w-4" aria-hidden="true" />Show venue fields</>
+          )}
+        </button>
+        {venueOpen && (
+          <div className="space-y-4">
+            <FormField label="Parking" error={errors.parkingInfo?.message}>
+              <Textarea {...register('parkingInfo')} rows={2} />
+            </FormField>
+            <FormField label="Access" error={errors.accessInfo?.message}>
+              <Textarea {...register('accessInfo')} rows={2} />
+            </FormField>
+            <FormField label="Equipment available" error={errors.equipmentAvailable?.message}>
+              <Textarea {...register('equipmentAvailable')} rows={2} />
+            </FormField>
+          </div>
+        )}
       </div>
 
-      {/* Commission */}
-      <FormField label="Commission arrangement" error={errors.commissionArrangement?.message}>
-        <Textarea {...register('commissionArrangement')} rows={2} />
-      </FormField>
+      {/* Agent-specific fields */}
+      <div className="space-y-4">
+        <button
+          type="button"
+          onClick={() => setAgentOpen(o => !o)}
+          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          {agentOpen ? (
+            <><ChevronUp className="h-4 w-4" aria-hidden="true" />Hide agent fields</>
+          ) : (
+            <><ChevronDown className="h-4 w-4" aria-hidden="true" />Show agent fields</>
+          )}
+        </button>
+        {agentOpen && (
+          <div className="space-y-4">
+            <FormField label="Website" error={errors.website?.message}>
+              <Input type="url" {...register('website')} placeholder="https://" />
+            </FormField>
+            <FormField label="Commission arrangement" error={errors.commissionArrangement?.message}>
+              <Textarea {...register('commissionArrangement')} rows={2} />
+            </FormField>
+          </div>
+        )}
+      </div>
 
       <div className="flex items-center gap-3">
         <Button type="submit" disabled={isPending}>

@@ -16,7 +16,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import ContactPicker from './ContactPicker';
+import { InlineContactBlock } from './InlineContactBlock';
+import { InlineVenueBlock } from './InlineVenueBlock';
+import { InlineAgentBlock } from './InlineAgentBlock';
 import { EVENT_TYPE_LABELS } from '@/lib/constants';
 import type { BookingSeries, EventType, Package } from '@/types/api';
 
@@ -208,6 +210,9 @@ interface Props {
   formats?: Package[];
   series?: BookingSeries[];
   hideNotes?: boolean;
+  /** Hide the People section — the edit drawer renders its own People blocks that
+   *  save independently (per-box), separate from this form's global Save. */
+  hidePeople?: boolean;
 }
 
 export function BookingFormFields({
@@ -218,6 +223,7 @@ export function BookingFormFields({
   formats,
   series,
   hideNotes,
+  hidePeople,
 }: Props) {
   return (
     <div className="space-y-6">
@@ -297,58 +303,47 @@ export function BookingFormFields({
         <Input placeholder="e.g. Smith Wedding" {...register('title')} />
       </FormField>
 
-      {/* People */}
-      <div className="space-y-4">
-        <h2 className="text-sm font-semibold text-foreground">People</h2>
+      {/* People — only in the create form; the edit drawer renders its own
+          per-box-saving People section (see BookingEditDrawer). */}
+      {!hidePeople && (
+        <div className="space-y-4">
+          <h2 className="text-sm font-semibold text-foreground">People</h2>
 
-        <FormField label="Customer" required error={errors.customerId?.message}>
           <Controller
             name="customerId"
             control={control}
             render={({ field }) => (
-              <ContactPicker
+              <InlineContactBlock
                 value={field.value || null}
                 onChange={(id) => field.onChange(id ?? '')}
-                placeholder="Select customer..."
-                label="customer"
-                preferredRole="CUSTOMER"
+                error={errors.customerId?.message}
               />
             )}
           />
-        </FormField>
 
-        <FormField label="Venue (optional)">
           <Controller
             name="venueId"
             control={control}
             render={({ field }) => (
-              <ContactPicker
+              <InlineVenueBlock
                 value={field.value}
                 onChange={field.onChange}
-                placeholder="Select venue..."
-                label="venue"
-                preferredRole="VENUE"
               />
             )}
           />
-        </FormField>
 
-        <FormField label="Booking agent (optional)">
           <Controller
             name="bookingAgentId"
             control={control}
             render={({ field }) => (
-              <ContactPicker
+              <InlineAgentBlock
                 value={field.value}
                 onChange={field.onChange}
-                placeholder="Select booking agent..."
-                label="booking agent"
-                preferredRole="BOOKING_AGENT"
               />
             )}
           />
-        </FormField>
-      </div>
+        </div>
+      )}
 
       {/* Packages */}
       {songRequestFormEnabled && formats && formats.length > 0 && (

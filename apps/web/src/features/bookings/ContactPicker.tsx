@@ -22,6 +22,7 @@ interface ContactPickerProps {
   label?: string;
   preferredRole?: string;
   disabled?: boolean;
+  disableCreate?: boolean;
 }
 
 export default function ContactPicker({
@@ -31,6 +32,7 @@ export default function ContactPicker({
   label = 'contact',
   preferredRole,
   disabled = false,
+  disableCreate = false,
 }: ContactPickerProps) {
   const [open, setOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
@@ -64,8 +66,8 @@ export default function ContactPicker({
     (c) => c.name.toLowerCase() === search.toLowerCase()
   );
 
-  // Options includes the create option when present
-  const totalOptions = filtered.length + (search && !hasExactMatch ? 1 : 0);
+  // Options includes the create option when present (unless disabled)
+  const totalOptions = filtered.length + (search && !hasExactMatch && !disableCreate ? 1 : 0);
 
   const createMutation = useMutation({
     mutationFn: (values: ContactFormValues) =>
@@ -209,7 +211,7 @@ export default function ContactPicker({
                 )}
               </button>
             ))}
-            {search && !hasExactMatch && (
+            {search && !hasExactMatch && !disableCreate && (
               <button
                 id={`${listboxId}-option-${filtered.length}`}
                 type="button"
@@ -229,30 +231,32 @@ export default function ContactPicker({
         </PopoverContent>
       </Popover>
 
-      <Sheet open={createOpen} onOpenChange={setCreateOpen}>
-        <SheetContent side="bottom" className="max-h-[90vh] overflow-y-auto" aria-describedby={undefined}>
-          <SheetHeader>
-            <SheetTitle>New {label}</SheetTitle>
-          </SheetHeader>
-          <ContactForm
-            defaultValues={{
-              name: pendingName,
-              greetingName: pendingName.trim().split(/\s+/)[0] ?? '',
-              email: '', phone: '', website: '',
-              addressLine1: '', addressLine2: '', city: '', county: '',
-              postcode: '', country: 'GB', latitude: null, longitude: null, placeId: null,
-              notes: '', parkingInfo: '',
-              accessInfo: '', equipmentAvailable: '', commissionArrangement: '', primaryRole: '',
-            }}
-            onSubmit={(values) => createMutation.mutate(values)}
-            isPending={createMutation.isPending}
-            isError={createMutation.isError}
-            submitLabel="Create"
-            onCancel={() => setCreateOpen(false)}
-            autoSuggestGreetingName
-          />
-        </SheetContent>
-      </Sheet>
+      {!disableCreate && (
+        <Sheet open={createOpen} onOpenChange={setCreateOpen}>
+          <SheetContent side="bottom" className="max-h-[90vh] overflow-y-auto" aria-describedby={undefined}>
+            <SheetHeader>
+              <SheetTitle>New {label}</SheetTitle>
+            </SheetHeader>
+            <ContactForm
+              defaultValues={{
+                name: pendingName,
+                greetingName: pendingName.trim().split(/\s+/)[0] ?? '',
+                email: '', phone: '', website: '',
+                addressLine1: '', addressLine2: '', city: '', county: '',
+                postcode: '', country: 'GB', latitude: null, longitude: null, placeId: null,
+                notes: '', parkingInfo: '',
+                accessInfo: '', equipmentAvailable: '', commissionArrangement: '', primaryRole: '',
+              }}
+              onSubmit={(values) => createMutation.mutate(values)}
+              isPending={createMutation.isPending}
+              isError={createMutation.isError}
+              submitLabel="Create"
+              onCancel={() => setCreateOpen(false)}
+              autoSuggestGreetingName
+            />
+          </SheetContent>
+        </Sheet>
+      )}
     </>
   );
 }

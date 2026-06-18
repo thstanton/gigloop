@@ -96,7 +96,7 @@ export function BookingDetailDesktop({ bookingId }: BookingDetailDesktopProps) {
             bookingId={bookingId}
             contactHref={`/admin/contacts/${booking.venue?.id ?? ''}`}
           />
-          {!booking.venue && <InlineVenueAdd bookingId={booking.id} />}
+          {!booking.venue && <InlineVenueAdd />}
           <MusicFormSection
             booking={booking}
             documents={documents}
