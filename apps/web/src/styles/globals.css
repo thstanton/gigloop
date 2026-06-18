@@ -46,6 +46,11 @@
     --status-ready: 262 83% 58%;
     --status-complete: 30 8% 48%;
     --status-cancelled: 0 84% 60%;
+
+    /* Date badge — the single sanctioned decorative accent (see CONTEXT
+       "date as first-class anchor"). A deliberate exception to the otherwise
+       restrained palette: a warm calendar red used only on the DateBadge strip. */
+    --date-badge: 0 57% 45%;
   }
 
   * {
@@ -69,6 +74,7 @@
   .bg-chrome-sidebar { background-color: hsl(var(--chrome-sidebar)); }
   .bg-primary\/20    { background-color: hsl(var(--primary) / 0.20); }
   .bg-dashboard { background-color: hsl(var(--dashboard-surface)); }
+  .bg-date-badge { background-color: hsl(var(--date-badge)); }
 
   .text-chrome-foreground { color: hsl(var(--chrome-foreground)); }
   .text-chrome-muted      { color: hsl(var(--chrome-muted)); }

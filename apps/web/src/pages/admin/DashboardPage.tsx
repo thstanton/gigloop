@@ -10,6 +10,7 @@ import { useBookings } from '@/lib/hooks/useBookings';
 import BookingStatusPill from '@/components/common/BookingStatusPill';
 import { PageSection } from '@/components/common/PageSection';
 import { formatDate } from '@/lib/formatters';
+import { DateBadge } from '@/components/common/DateBadge';
 import type { DashboardAction, BookingListItem } from '@/types/api';
 import { cn } from '@/lib/utils';
 
@@ -46,9 +47,10 @@ function UpcomingGigsWidget({ bookings }: { bookings: BookingListItem[] }) {
         <li key={g.id}>
           <button
             onClick={() => navigate(`/admin/bookings/${g.id}`, { state: { from: '/admin', label: 'Dashboard' } })}
-            className="w-full flex items-start justify-between gap-4 py-3 text-left hover:bg-muted/30 transition-colors -mx-4 px-4"
+            className="w-full flex items-start gap-3 py-3 text-left hover:bg-muted/30 transition-colors -mx-4 px-4"
           >
-            <div className="flex flex-col gap-0.5 min-w-0">
+            <DateBadge date={g.date} size="sm" className="mt-0.5" />
+            <div className="flex flex-col gap-0.5 min-w-0 flex-1">
               <span className="text-sm text-foreground truncate">
                 {g.title ?? g.customer.name}
               </span>
@@ -65,7 +67,6 @@ function UpcomingGigsWidget({ bookings }: { bookings: BookingListItem[] }) {
                 <BookingStatusPill status={g.status} />
               </div>
             </div>
-            <span className="text-xs text-muted flex-shrink-0 mt-0.5">{formatDate(g.date)}</span>
           </button>
         </li>
       ))}
@@ -126,9 +127,10 @@ function ActionsWidget() {
         <li key={a.bookingId}>
           <button
             onClick={() => navigate(`/admin/bookings/${a.bookingId}`, { state: { from: '/admin', label: 'Dashboard' } })}
-            className="w-full flex items-start justify-between gap-4 py-3 text-left hover:bg-muted/30 transition-colors -mx-4 px-4"
+            className="w-full flex items-start gap-3 py-3 text-left hover:bg-muted/30 transition-colors -mx-4 px-4"
           >
-            <div className="flex flex-col gap-0.5 min-w-0">
+            <DateBadge date={a.bookingDate} size="sm" className="mt-0.5" />
+            <div className="flex flex-col gap-0.5 min-w-0 flex-1">
               <span className="text-sm text-foreground truncate">
                 {a.bookingTitle ?? a.customerName}
               </span>
@@ -144,9 +146,6 @@ function ActionsWidget() {
                 {a.item.label}
               </span>
             </div>
-            <span className="text-xs text-muted flex-shrink-0 mt-0.5">
-              {formatDate(a.bookingDate)}
-            </span>
           </button>
         </li>
       ))}
@@ -297,9 +296,10 @@ function CalendarWidget({ bookings }: { bookings: BookingListItem[] }) {
             <li key={b.id}>
               <button
                 onClick={() => navigate(`/admin/bookings/${b.id}`, { state: { from: '/admin', label: 'Calendar' } })}
-                className="w-full flex items-start justify-between gap-3 py-2 text-left hover:bg-muted/30 transition-colors -mx-4 px-4"
+                className="w-full flex items-start gap-3 py-2 text-left hover:bg-muted/30 transition-colors -mx-4 px-4"
               >
-                <div className="flex flex-col gap-0.5">
+                <DateBadge date={b.date} size="sm" className="mt-0.5" />
+                <div className="flex flex-col gap-0.5 min-w-0 flex-1">
                   <span className="text-sm text-foreground">
                     {b.title ?? b.customer.name}
                   </span>

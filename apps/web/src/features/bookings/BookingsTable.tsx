@@ -14,6 +14,7 @@ import BookingStatusPill from '@/components/common/BookingStatusPill';
 import type { BookingListItem } from '@/types/api';
 import { cn } from '@/lib/utils';
 import { formatDateAndDay, formatFeeWhole } from '@/lib/formatters';
+import { DateBadge } from '@/components/common/DateBadge';
 import { EmptyState } from '@/components/common/EmptyState';
 
 // ─── Column helper ───────────────────────────────────────────────────────────
@@ -27,9 +28,12 @@ const columns = [
     cell: ({ getValue }) => {
       const { date, day } = formatDateAndDay(getValue());
       return (
-        <span className="flex flex-col gap-0.5">
-          <span className="text-sm text-foreground">{date}</span>
-          <span className="text-xs text-muted">{day}</span>
+        <span className="flex items-center gap-2.5">
+          <DateBadge date={getValue()} size="md" />
+          <span className="flex flex-col gap-0.5">
+            <span className="text-sm text-foreground">{date}</span>
+            <span className="text-xs text-muted">{day}</span>
+          </span>
         </span>
       );
     },
@@ -130,29 +134,32 @@ function BookingCardList({ data, sortDesc }: { data: BookingListItem[]; sortDesc
           <div
             key={booking.id}
             onClick={() => navigate(`/admin/bookings/${booking.id}`)}
-            className="py-3 flex flex-col gap-1 cursor-pointer active:bg-surface transition-colors duration-100"
+            className="py-3 flex items-start gap-3 cursor-pointer active:bg-surface transition-colors duration-100"
           >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <span className="text-sm font-medium text-foreground truncate block">
-                  {booking.customer.name}
-                </span>
-                {booking.title && (
-                  <span className="text-xs text-muted truncate block">{booking.title}</span>
-                )}
-                {booking.series && (
-                  <span className="text-xs text-muted truncate block">{booking.series.label}</span>
-                )}
-                <div className="mt-1">
-                  <BookingStatusPill status={booking.status} />
+            <DateBadge date={booking.date} size="md" className="mt-0.5" />
+            <div className="min-w-0 flex-1 flex flex-col gap-1">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <span className="text-sm font-medium text-foreground truncate block">
+                    {booking.customer.name}
+                  </span>
+                  {booking.title && (
+                    <span className="text-xs text-muted truncate block">{booking.title}</span>
+                  )}
+                  {booking.series && (
+                    <span className="text-xs text-muted truncate block">{booking.series.label}</span>
+                  )}
+                  <div className="mt-1">
+                    <BookingStatusPill status={booking.status} />
+                  </div>
                 </div>
+                {fee && <span className="text-sm text-foreground tabular-nums flex-shrink-0">{fee}</span>}
               </div>
-              {fee && <span className="text-sm text-foreground tabular-nums flex-shrink-0">{fee}</span>}
+              <span className="text-sm text-muted">{date} · {day}</span>
+              {booking.venue && (
+                <span className="text-xs text-muted truncate">{booking.venue.name}</span>
+              )}
             </div>
-            <span className="text-sm text-muted">{date} · {day}</span>
-            {booking.venue && (
-              <span className="text-xs text-muted truncate">{booking.venue.name}</span>
-            )}
           </div>
         );
       })}
@@ -234,10 +241,10 @@ export default function BookingsTable({ data, onNew, defaultSortDesc = false, se
               <tr
                 key={row.id}
                 onClick={() => navigate(`/admin/bookings/${row.original.id}`)}
-                className="h-14 border-b border-border cursor-pointer hover:bg-surface transition-colors duration-100 group"
+                className="border-b border-border cursor-pointer hover:bg-surface transition-colors duration-100 group"
               >
                 {row.getVisibleCells().map((cell) => (
-                  <td key={cell.id} className="px-4">
+                  <td key={cell.id} className="px-4 py-3">
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </td>
                 ))}

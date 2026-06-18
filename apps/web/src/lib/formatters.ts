@@ -6,6 +6,16 @@ const _date = new Intl.DateTimeFormat('en-GB', {
 
 const _day = new Intl.DateTimeFormat('en-GB', { weekday: 'long' });
 
+const _badgeDay = new Intl.DateTimeFormat('en-GB', { day: 'numeric' });
+const _badgeMonth = new Intl.DateTimeFormat('en-GB', { month: 'short' });
+const _badgeWeekday = new Intl.DateTimeFormat('en-GB', { weekday: 'short' });
+const _badgeFull = new Intl.DateTimeFormat('en-GB', {
+  weekday: 'long',
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+});
+
 const _currency = new Intl.NumberFormat('en-GB', {
   style: 'currency',
   currency: 'GBP',
@@ -25,6 +35,17 @@ export function formatDate(iso: string): string {
 export function formatDateAndDay(iso: string): { date: string; day: string } {
   const d = new Date(iso);
   return { date: _date.format(d), day: _day.format(d) };
+}
+
+/** Parts for the tear-off DateBadge. `month`/`weekday` are short forms; `full` is the a11y label. */
+export function formatDateBadge(iso: string): { day: string; month: string; weekday: string; full: string } {
+  const d = new Date(iso);
+  return {
+    day: _badgeDay.format(d),
+    month: _badgeMonth.format(d),
+    weekday: _badgeWeekday.format(d),
+    full: _badgeFull.format(d),
+  };
 }
 
 export function formatCurrency(amount: number): string {

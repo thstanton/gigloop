@@ -67,6 +67,7 @@ const config: Config = {
         },
         input: 'hsl(var(--input))',
         ring: 'hsl(var(--ring))',
+        'date-badge': 'hsl(var(--date-badge))',
         status: {
           enquiry: 'hsl(var(--status-enquiry) / <alpha-value>)',
           provisional: 'hsl(var(--status-provisional) / <alpha-value>)',
