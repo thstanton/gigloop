@@ -1,27 +1,45 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Search, Users } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useContacts } from '@/lib/hooks/useContacts';
 import type { Contact } from '@/types/api';
 import { EmptyState } from '@/components/common/EmptyState';
-
-const PRIMARY_ROLE_LABELS: Record<string, string> = {
-  CUSTOMER: 'Customer',
-  VENUE: 'Venue',
-  BOOKING_AGENT: 'Booking agent',
-};
+import { PRIMARY_ROLE_LABELS, PRIMARY_ROLE_ORDER, type ContactPrimaryRole } from '@/lib/constants';
 
 // ─── Empty state ──────────────────────────────────────────────────────────────
 
-function ContactsEmptyState({ filtered }: { filtered: boolean }) {
+function ContactsEmptyState({
+  searchActive,
+  roleFilter,
+}: {
+  searchActive: boolean;
+  roleFilter: ContactPrimaryRole | null;
+}) {
   const navigate = useNavigate();
+  const filtered = searchActive || roleFilter !== null;
+
+  let heading: string;
+  let description: string;
+  if (searchActive) {
+    heading = 'No contacts match your search';
+    description = 'Try a different name or email.';
+  } else if (roleFilter) {
+    const roleLabel = PRIMARY_ROLE_LABELS[roleFilter].toLowerCase();
+    heading = `No ${roleLabel} contacts yet`;
+    description = `Add your first ${roleLabel} to get started.`;
+  } else {
+    heading = 'No contacts yet';
+    description = 'Add your first contact to get started.';
+  }
+
   return (
     <EmptyState
       icon={<Users size={40} strokeWidth={1.5} />}
-      heading={filtered ? 'No contacts match your search' : 'No contacts yet'}
-      description={filtered ? 'Try a different name or email.' : 'Add your first contact to get started.'}
+      heading={heading}
+      description={description}
       action={!filtered && <Button size="sm" onClick={() => navigate('/admin/contacts/new')}>New contact</Button>}
     />
   );
@@ -78,7 +96,7 @@ function ContactsTable({ contacts }: { contacts: Contact[] }) {
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium text-foreground">{c.name}</span>
                   {c.primaryRole && (
-                    <span className="text-xs text-muted">{PRIMARY_ROLE_LABELS[c.primaryRole]}</span>
+                    <span className="text-xs text-muted">{PRIMARY_ROLE_LABELS[c.primaryRole as ContactPrimaryRole]}</span>
                   )}
                 </div>
               </td>
@@ -131,7 +149,7 @@ function ContactCardList({ contacts }: { contacts: Contact[] }) {
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium text-foreground">{c.name}</span>
             {c.primaryRole && (
-              <span className="text-xs text-muted">{PRIMARY_ROLE_LABELS[c.primaryRole]}</span>
+              <span className="text-xs text-muted">{PRIMARY_ROLE_LABELS[c.primaryRole as ContactPrimaryRole]}</span>
             )}
           </div>
           {(c.email || c.phone) && (
@@ -159,19 +177,37 @@ function ContactCardList({ contacts }: { contacts: Contact[] }) {
 
 export default function ContactsListPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
   const { data = [], isLoading, isError } = useContacts();
 
-  const filtered = search.trim()
-    ? data.filter((c) => {
-        const q = search.toLowerCase();
-        return (
-          c.name.toLowerCase().includes(q) ||
-          c.email?.toLowerCase().includes(q) ||
-          c.phone?.includes(q)
-        );
-      })
-    : data;
+  const roleFilter = (searchParams.get('role') as ContactPrimaryRole | null) ?? null;
+  const searchActive = search.trim().length > 0;
+
+  const filtered = data.filter((c) => {
+    if (searchActive) {
+      const q = search.toLowerCase();
+      return (
+        c.name.toLowerCase().includes(q) ||
+        c.email?.toLowerCase().includes(q) ||
+        c.phone?.includes(q)
+      );
+    }
+    if (roleFilter) return c.primaryRole === roleFilter;
+    return true;
+  });
+
+  function handleRoleFilter(role: ContactPrimaryRole | null) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (role) {
+        next.set('role', role);
+      } else {
+        next.delete('role');
+      }
+      return next;
+    });
+  }
 
   return (
     <div className="px-6 py-8 max-w-6xl mx-auto">
@@ -194,6 +230,28 @@ export default function ContactsListPage() {
         />
       </div>
 
+      {/* Role filter row */}
+      <div className="flex gap-1 mb-4 border-b border-border">
+        {([null, ...PRIMARY_ROLE_ORDER] as Array<ContactPrimaryRole | null>).map((role) => {
+          const label = role ? PRIMARY_ROLE_LABELS[role] : 'All';
+          const isActive = !searchActive && role === roleFilter;
+          return (
+            <button
+              key={role ?? 'all'}
+              onClick={() => handleRoleFilter(role)}
+              className={cn(
+                'px-3 py-2 text-sm -mb-px border-b-2 transition-colors duration-100 whitespace-nowrap',
+                isActive
+                  ? 'border-primary text-primary font-medium'
+                  : 'border-transparent text-muted hover:text-foreground',
+              )}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+
       {/* Content */}
       {isLoading && <ListSkeleton />}
 
@@ -202,7 +260,7 @@ export default function ContactsListPage() {
       )}
 
       {!isLoading && !isError && filtered.length === 0 && (
-        <ContactsEmptyState filtered={search.trim().length > 0} />
+        <ContactsEmptyState searchActive={searchActive} roleFilter={roleFilter} />
       )}
 
       {!isLoading && !isError && filtered.length > 0 && (

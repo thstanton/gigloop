@@ -5,6 +5,18 @@ import {
 } from 'lucide-react';
 import type { BookingStatus, EventType, SongGenre } from '@/types/api';
 
+export type ContactPrimaryRole = 'CUSTOMER' | 'VENUE' | 'BOOKING_AGENT';
+
+export const PRIMARY_ROLE_LABELS: Record<ContactPrimaryRole, string> = {
+  CUSTOMER:      'Customer',
+  VENUE:         'Venue',
+  BOOKING_AGENT: 'Booking agent',
+};
+
+export const PRIMARY_ROLE_ORDER: ContactPrimaryRole[] = [
+  'CUSTOMER', 'VENUE', 'BOOKING_AGENT',
+];
+
 export const GENRE_LABELS: Record<SongGenre, string> = {
   CONTEMPORARY:    'Contemporary',
   CLASSICAL:       'Classical',
