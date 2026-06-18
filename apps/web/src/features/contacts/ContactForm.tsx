@@ -372,12 +372,12 @@ export default function ContactForm({
                   {openDisclosures.has(role) ? (
                     <>
                       <ChevronUp className="h-4 w-4" aria-hidden="true" />
-                      See less
+                      Hide {ROLE_LABEL[role]} fields
                     </>
                   ) : (
                     <>
                       <ChevronDown className="h-4 w-4" aria-hidden="true" />
-                      See more {ROLE_LABEL[role]} details
+                      Show {ROLE_LABEL[role]} fields
                     </>
                   )}
                 </button>

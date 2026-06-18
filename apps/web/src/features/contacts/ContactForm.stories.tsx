@@ -107,9 +107,9 @@ export const RoleCustomer: Story = {
     await expect(canvas.getByLabelText('Notes')).toBeVisible();
 
     // Disclosures for other types are present
-    const venueBtn = canvas.getByRole('button', { name: /see more venue details/i });
+    const venueBtn = canvas.getByRole('button', { name: /show venue fields/i });
     await expect(venueBtn).toBeVisible();
-    const agentBtn = canvas.getByRole('button', { name: /see more agent details/i });
+    const agentBtn = canvas.getByRole('button', { name: /show agent fields/i });
     await expect(agentBtn).toBeVisible();
 
     // Parking is hidden until disclosure is opened
@@ -121,7 +121,7 @@ export const RoleCustomer: Story = {
     await expect(canvas.getByLabelText('Access')).toBeVisible();
 
     // Collapse back
-    const seeLessBtn = canvas.getByRole('button', { name: /see less/i });
+    const seeLessBtn = canvas.getByRole('button', { name: /hide venue fields/i });
     await userEvent.click(seeLessBtn);
     await expect(canvas.queryByLabelText('Parking')).toBeNull();
   },
@@ -163,14 +163,14 @@ export const RoleVenue: Story = {
     await expect(canvas.getByLabelText('Equipment available')).toBeVisible();
 
     // Disclosures for other types are present
-    await expect(canvas.getByRole('button', { name: /see more customer details/i })).toBeVisible();
-    await expect(canvas.getByRole('button', { name: /see more agent details/i })).toBeVisible();
+    await expect(canvas.getByRole('button', { name: /show customer fields/i })).toBeVisible();
+    await expect(canvas.getByRole('button', { name: /show agent fields/i })).toBeVisible();
 
     // Phone is hidden (in customer disclosure)
     await expect(canvas.queryByLabelText('Phone')).toBeNull();
 
     // Open customer disclosure → phone appears
-    await userEvent.click(canvas.getByRole('button', { name: /see more customer details/i }));
+    await userEvent.click(canvas.getByRole('button', { name: /show customer fields/i }));
     await expect(canvas.getByLabelText('Phone')).toBeVisible();
   },
 };
@@ -211,12 +211,12 @@ export const RoleAgent: Story = {
     await expect(canvas.getByLabelText('Commission arrangement')).toBeVisible();
 
     // Disclosures for other types are present
-    await expect(canvas.getByRole('button', { name: /see more customer details/i })).toBeVisible();
-    await expect(canvas.getByRole('button', { name: /see more venue details/i })).toBeVisible();
+    await expect(canvas.getByRole('button', { name: /show customer fields/i })).toBeVisible();
+    await expect(canvas.getByRole('button', { name: /show venue fields/i })).toBeVisible();
 
     // Open agent disclosure → commission is already visible (no duplicate)
     // Open venue disclosure → parking appears
-    await userEvent.click(canvas.getByRole('button', { name: /see more venue details/i }));
+    await userEvent.click(canvas.getByRole('button', { name: /show venue fields/i }));
     await expect(canvas.getByLabelText('Parking')).toBeVisible();
   },
 };
