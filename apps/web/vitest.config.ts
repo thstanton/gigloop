@@ -29,7 +29,7 @@ export default defineConfig({
         test: {
           name: 'unit',
           environment: 'happy-dom',
-          setupFiles: ['./src/test/setup.ts'],
+          setupFiles: ['./src/test/setup.ts', './src/test/google-maps-stub.ts'],
           include: ['src/**/*.spec.{ts,tsx}'],
         },
       },
@@ -45,7 +45,7 @@ export default defineConfig({
         test: {
           name: 'storybook',
           environment: 'happy-dom',
-          setupFiles: ['@storybook/addon-vitest/internal/setup-file'],
+          setupFiles: ['@storybook/addon-vitest/internal/setup-file', './src/test/google-maps-stub.ts'],
         },
       },
     ],
