@@ -60,9 +60,9 @@ export class BookingsRepository {
     });
   }
 
-  create(userId: string, dto: CreateBookingDto) {
+  create(userId: string, dto: CreateBookingDto, tx?: Prisma.TransactionClient) {
     const { formatIds: _, fee, date, checklistItems: __, newSeries: ___, ...fields } = dto;
-    return this.prisma.booking.create({
+    return (tx ?? this.prisma).booking.create({
       data: {
         userId,
         ...fields,
@@ -80,7 +80,13 @@ export class BookingsRepository {
     });
   }
 
-  createWithFormats(userId: string, dto: CreateBookingDto, orderedFormats: FormatWithSlots[], songRequestFormEnabled: boolean) {
+  createWithFormats(
+    userId: string,
+    dto: CreateBookingDto,
+    orderedFormats: FormatWithSlots[],
+    songRequestFormEnabled: boolean,
+    tx?: Prisma.TransactionClient,
+  ) {
     const { formatIds: _, fee, date, checklistItems: __, newSeries: ___, ...fields } = dto;
 
     let slotOrder = 1;
@@ -105,7 +111,7 @@ export class BookingsRepository {
     );
     const allGenres = [...new Set(orderedFormats.flatMap((fmt) => fmt.defaultGenreSelection))];
 
-    return this.prisma.booking.create({
+    return (tx ?? this.prisma).booking.create({
       data: {
         userId,
         ...fields,

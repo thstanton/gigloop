@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { BookingStatus } from '@prisma/client';
+import { BookingStatus, Prisma } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
 import { BookingsRepository } from './bookings.repository';
 import { ContractRepository } from './contract.repository';
 import { MusicFormConfigRepository } from './music-form-config.repository';
@@ -69,6 +70,9 @@ export class BookingsService {
     private checklistRepo: ChecklistRepository,
     private contractRepo: ContractRepository,
     private musicFormRepo: MusicFormConfigRepository,
+    // Injected solely to open the atomic-create transaction (bounded exception
+    // to the repository-pattern rule — see ADR-0047).
+    private prisma: PrismaService,
   ) {}
 
   findAll(userId: string, status?: string | string[], q?: string, eventType?: string, from?: string, to?: string) {
@@ -114,44 +118,84 @@ export class BookingsService {
     return undefined;
   }
 
-  async create(userId: string, dto: CreateBookingDto) {
-    const resolvedSeriesId = await this.resolveSeriesId(userId, dto);
+  private async resolveOrderedFormats(
+    userId: string,
+    dto: CreateBookingDto,
+  ): Promise<{ orderedFormats: Awaited<ReturnType<BookingsRepository['findFormats']>>; songRequestFormEnabled: boolean }> {
+    if (!dto.formatIds?.length) return { orderedFormats: [], songRequestFormEnabled: false };
+    const [formats, profile] = await Promise.all([
+      this.repo.findFormats(userId, dto.formatIds),
+      this.repo.findUserProfile(userId),
+    ]);
+    const orderedFormats = dto.formatIds
+      .map((id) => formats.find((f) => f.id === id))
+      .filter((f): f is NonNullable<typeof f> => f != null);
+    return { orderedFormats, songRequestFormEnabled: profile?.songRequestFormEnabled ?? false };
+  }
 
-    if (resolvedSeriesId) {
-      await this.seriesService.assertMembershipMutable(userId, resolvedSeriesId);
-    }
+  // The atomic unit (ADR-0047): booking row + checklist seed + series-invoice-line append
+  // run inside one transaction, so a throw anywhere rolls back to zero — a retry-on-error
+  // yields exactly one booking, closing the duplicate-booking path.
+  private async persistBookingAtomically(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    args: {
+      dto: CreateBookingDto;
+      dtoWithSeries: CreateBookingDto;
+      resolvedSeriesId: string | undefined;
+      orderedFormats: Awaited<ReturnType<BookingsRepository['findFormats']>>;
+      songRequestFormEnabled: boolean;
+    },
+  ) {
+    const { dto, dtoWithSeries, resolvedSeriesId, orderedFormats, songRequestFormEnabled } = args;
 
-    const dtoWithSeries = { ...dto, seriesId: resolvedSeriesId };
-    let booking;
-    if (!dto.formatIds?.length) {
-      booking = await this.repo.create(userId, dtoWithSeries);
-    } else {
-      const [formats, profile] = await Promise.all([
-        this.repo.findFormats(userId, dto.formatIds),
-        this.repo.findUserProfile(userId),
-      ]);
-      const orderedFormats = dto.formatIds
-        .map((id) => formats.find((f) => f.id === id))
-        .filter((f): f is NonNullable<typeof f> => f != null);
-      const songRequestFormEnabled = profile?.songRequestFormEnabled ?? false;
-      booking = await this.repo.createWithFormats(userId, dtoWithSeries, orderedFormats, songRequestFormEnabled);
-    }
+    const created = dto.formatIds?.length
+      ? await this.repo.createWithFormats(userId, dtoWithSeries, orderedFormats, songRequestFormEnabled, tx)
+      : await this.repo.create(userId, dtoWithSeries, tx);
 
     if (dto.checklistItems.length > 0) {
-      await this.checklistRepo.seedChecklistItems(userId, booking.id, dto.checklistItems, booking.date, booking.createdAt);
+      await this.checklistRepo.seedChecklistItems(userId, created.id, dto.checklistItems, created.date, created.createdAt, tx);
     }
 
     if (resolvedSeriesId) {
       const syncPayload: MemberBookingForSync = {
-        id: booking.id,
-        date: booking.date,
-        fee: booking.fee as MemberBookingForSync['fee'],
-        sets: (booking.sets ?? []) as Array<{ label: string | null; duration: number }>,
+        id: created.id,
+        date: created.date,
+        fee: created.fee as MemberBookingForSync['fee'],
+        sets: (created.sets ?? []) as Array<{ label: string | null; duration: number }>,
       };
-      await this.seriesService.syncMemberJoin(userId, resolvedSeriesId, syncPayload);
+      await this.seriesService.syncMemberJoin(userId, resolvedSeriesId, syncPayload, tx);
     }
 
-    return booking;
+    return created;
+  }
+
+  async create(userId: string, dto: CreateBookingDto) {
+    // Reads (and the optional new-series insert) stay outside the transaction — see ADR-0047.
+    const resolvedSeriesId = await this.resolveSeriesId(userId, dto);
+    if (resolvedSeriesId) {
+      await this.seriesService.assertMembershipMutable(userId, resolvedSeriesId);
+    }
+    const dtoWithSeries = { ...dto, seriesId: resolvedSeriesId };
+    const { orderedFormats, songRequestFormEnabled } = await this.resolveOrderedFormats(userId, dto);
+
+    // Warm the Neon compute (scale-to-zero) *before* opening the transaction so a cold-start
+    // wake is absorbed here, not inside the interactive-transaction timeout. The no-format/
+    // no-series path has no prior DB read, so this is its only warm-up. maxWait/timeout sit
+    // above Prisma's 2s/5s defaults as defence in depth (ADR-0047: cold-start handling).
+    await this.prisma.$queryRaw`SELECT 1`;
+
+    return this.prisma.$transaction(
+      (tx) =>
+        this.persistBookingAtomically(tx, userId, {
+          dto,
+          dtoWithSeries,
+          resolvedSeriesId,
+          orderedFormats,
+          songRequestFormEnabled,
+        }),
+      { maxWait: 5000, timeout: 15000 },
+    );
   }
 
   async update(userId: string, id: string, dto: UpdateBookingDto) {

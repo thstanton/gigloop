@@ -9,7 +9,12 @@ import { SeriesRepository } from '../series/series.repository';
 import { SeriesService } from '../series/series.service';
 import { MailService } from '../mail/mail.service';
 import { ChecklistEvaluatorService } from '../checklist/checklist-evaluator.service';
+import { PrismaService } from '../prisma/prisma.service';
 import type { EmailContext } from '../mail/mail.service';
+
+// Tagged sentinel handed to the $transaction callback as `tx`. Asserting each write
+// received THIS object proves all writes are enrolled in the one transaction (ADR-0047).
+const TX = { __tx: true } as const;
 
 type MockRepo = {
   findAll: jest.Mock;
@@ -142,6 +147,16 @@ function makeMusicFormRepo(): MockMusicFormRepo {
   };
 }
 
+type MockPrisma = { $transaction: jest.Mock; $queryRaw: jest.Mock };
+
+function makePrisma(): MockPrisma {
+  return {
+    // Run the interactive-transaction callback with the tagged sentinel as `tx`.
+    $transaction: jest.fn((fn: (tx: unknown) => unknown) => fn(TX)),
+    $queryRaw: jest.fn().mockResolvedValue([{ '?column?': 1 }]),
+  };
+}
+
 const booking = { id: 'b1', userId: 'u1', status: BookingStatus.CONFIRMED };
 const set = { id: 's1', bookingId: 'b1', userId: 'u1' };
 
@@ -170,6 +185,7 @@ describe('BookingsService', () => {
   let checklistRepo: MockChecklistRepo;
   let contractRepo: MockContractRepo;
   let musicFormRepo: MockMusicFormRepo;
+  let prisma: MockPrisma;
 
   beforeEach(() => {
     repo = makeRepo();
@@ -180,6 +196,7 @@ describe('BookingsService', () => {
     checklistRepo = makeChecklistRepo();
     contractRepo = makeContractRepo();
     musicFormRepo = makeMusicFormRepo();
+    prisma = makePrisma();
     service = new BookingsService(
       repo as unknown as BookingsRepository,
       seriesRepo as unknown as SeriesRepository,
@@ -189,6 +206,7 @@ describe('BookingsService', () => {
       checklistRepo as unknown as ChecklistRepository,
       contractRepo as unknown as ContractRepository,
       musicFormRepo as unknown as MusicFormConfigRepository,
+      prisma as unknown as PrismaService,
     );
   });
 
@@ -293,7 +311,7 @@ describe('BookingsService', () => {
       repo.create.mockResolvedValue(createdBooking);
       const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', checklistItems: [] };
       const result = await service.create('u1', dto);
-      expect(repo.create).toHaveBeenCalledWith('u1', dto);
+      expect(repo.create).toHaveBeenCalledWith('u1', dto, TX);
       expect(repo.findFormats).not.toHaveBeenCalled();
       expect(result).toBe(createdBooking);
     });
@@ -304,7 +322,7 @@ describe('BookingsService', () => {
       const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', checklistItems };
       await service.create('u1', dto);
       expect(checklistRepo.seedChecklistItems).toHaveBeenCalledWith(
-        'u1', createdBooking.id, checklistItems, createdBooking.date, createdBooking.createdAt,
+        'u1', createdBooking.id, checklistItems, createdBooking.date, createdBooking.createdAt, TX,
       );
     });
 
@@ -323,7 +341,7 @@ describe('BookingsService', () => {
       const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', formatIds: ['f1'], checklistItems: [] };
       const result = await service.create('u1', dto);
       expect(repo.findFormats).toHaveBeenCalledWith('u1', ['f1']);
-      expect(repo.createWithFormats).toHaveBeenCalledWith('u1', dto, [fmt], false);
+      expect(repo.createWithFormats).toHaveBeenCalledWith('u1', dto, [fmt], false, TX);
       expect(result).toBe(createdBooking);
     });
 
@@ -334,7 +352,7 @@ describe('BookingsService', () => {
       repo.createWithFormats.mockResolvedValue(createdBooking);
       const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', formatIds: ['f1'], checklistItems: [] };
       await service.create('u1', dto);
-      expect(repo.createWithFormats).toHaveBeenCalledWith('u1', dto, [fmt], true);
+      expect(repo.createWithFormats).toHaveBeenCalledWith('u1', dto, [fmt], true, TX);
     });
 
     it('preserves order from formatIds when creating with formats', async () => {
@@ -348,6 +366,67 @@ describe('BookingsService', () => {
       const orderedFormats = repo.createWithFormats.mock.calls[0][2];
       expect(orderedFormats[0].id).toBe('f1');
       expect(orderedFormats[1].id).toBe('f2');
+    });
+
+    // ADR-0047 — atomic create (Path A regression guard). The unit-level proof is that
+    // every write is enrolled in ONE $transaction (the literal "no booking row persists"
+    // is Postgres's rollback, exercised at the integration tier, not by these mocks).
+    describe('atomicity (ADR-0047 / Path A)', () => {
+      const createdBooking = {
+        ...booking,
+        date: new Date('2026-06-01'),
+        createdAt: new Date('2026-01-01'),
+        fee: 100,
+        sets: [],
+      };
+      const checklistItems = [
+        { label: 'Send quote', key: 'send_quote', completedBy: 'USER' as const, dependsOn: [], autoCompleteRule: null, requiredForStatus: null, dueDateRule: null },
+      ];
+
+      it('opens a single transaction and enrols the booking + checklist + series writes in it', async () => {
+        repo.create.mockResolvedValue(createdBooking);
+        seriesRepo.findExists.mockResolvedValue(true);
+        const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', seriesId: 's1', checklistItems };
+
+        await service.create('u1', dto);
+
+        expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+        // The same tx sentinel reaches each write — proof they share one atomic unit.
+        expect(repo.create).toHaveBeenCalledWith('u1', expect.objectContaining({ seriesId: 's1' }), TX);
+        expect(checklistRepo.seedChecklistItems).toHaveBeenCalledWith('u1', createdBooking.id, checklistItems, createdBooking.date, createdBooking.createdAt, TX);
+        expect(seriesService.syncMemberJoin).toHaveBeenCalledWith('u1', 's1', expect.objectContaining({ id: createdBooking.id }), TX);
+      });
+
+      it('warms the connection before opening the transaction (cold-start handling)', async () => {
+        repo.create.mockResolvedValue(createdBooking);
+        const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', checklistItems: [] };
+
+        await service.create('u1', dto);
+
+        expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+        // Warm-up ping runs before the transaction so a Neon cold-start is absorbed outside the tx timeout.
+        expect(prisma.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(prisma.$transaction.mock.invocationCallOrder[0]);
+      });
+
+      it('propagates a checklist-seed failure so the transaction rolls back (no orphan booking)', async () => {
+        repo.create.mockResolvedValue(createdBooking);
+        checklistRepo.seedChecklistItems.mockRejectedValue(new Error('seed failed'));
+        const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', checklistItems };
+
+        await expect(service.create('u1', dto)).rejects.toThrow('seed failed');
+        // The throw happens inside the $transaction callback, so Prisma rolls the booking back.
+        expect(seriesService.syncMemberJoin).not.toHaveBeenCalled();
+      });
+
+      it('propagates a series-append failure from inside the transaction', async () => {
+        repo.create.mockResolvedValue(createdBooking);
+        seriesRepo.findExists.mockResolvedValue(true);
+        seriesService.syncMemberJoin.mockRejectedValue(new Error('append failed'));
+        const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', seriesId: 's1', checklistItems: [] };
+
+        await expect(service.create('u1', dto)).rejects.toThrow('append failed');
+        expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      });
     });
   });
 

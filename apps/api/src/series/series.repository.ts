@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { invoiceIncludes } from '../invoices/invoices.repository';
 
@@ -152,8 +153,8 @@ export class SeriesRepository {
     });
   }
 
-  findDraftSeriesInvoiceWithLines(userId: string, seriesId: string) {
-    return this.prisma.invoice.findFirst({
+  findDraftSeriesInvoiceWithLines(userId: string, seriesId: string, tx?: Prisma.TransactionClient) {
+    return (tx ?? this.prisma).invoice.findFirst({
       where: { seriesId, userId, status: 'DRAFT' },
       include: { lineItems: { orderBy: { order: 'asc' } } },
     });
@@ -163,8 +164,9 @@ export class SeriesRepository {
     userId: string,
     invoiceId: string,
     line: { description: string; amount: number; order: number; sourceBookingId: string },
+    tx?: Prisma.TransactionClient,
   ) {
-    return this.prisma.invoiceLineItem.create({
+    return (tx ?? this.prisma).invoiceLineItem.create({
       data: { userId, invoiceId, ...line },
     });
   }

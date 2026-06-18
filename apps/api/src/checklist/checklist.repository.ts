@@ -140,6 +140,7 @@ export class ChecklistRepository {
     defaults: ChecklistItemSeed[],
     bookingDate: Date,
     bookingCreatedAt: Date,
+    tx?: Prisma.TransactionClient,
   ) {
     const data = defaults.map((item, idx) => {
       const dependsOn = item.dependsOn ?? [];
@@ -164,7 +165,7 @@ export class ChecklistRepository {
           : {}),
       };
     });
-    return this.prisma.bookingChecklistItem.createMany({ data });
+    return (tx ?? this.prisma).bookingChecklistItem.createMany({ data });
   }
 
   async recomputeChecklistDueDates(bookingId: string, bookingDate: Date, bookingCreatedAt: Date) {
