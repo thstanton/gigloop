@@ -152,6 +152,34 @@ export const EnterNoBubble: Story = {
   },
 };
 
+export const SeeMoreDisclosure: Story = {
+  name: 'Customer block — See more/less toggles Phone and Notes',
+  args: { value: null, onChange: () => {} },
+  render: (args) => {
+    function Wrapper() {
+      const [value, setValue] = useState<string | null>(null);
+      return <InlineContactBlock {...args} value={value} onChange={setValue} />;
+    }
+    return <Wrapper />;
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    // Phone and Notes hidden initially
+    await expect(canvas.queryByLabelText('Phone')).toBeNull();
+    await expect(canvas.queryByLabelText('Notes')).toBeNull();
+
+    // Expand
+    await userEvent.click(canvas.getByRole('button', { name: /see more customer details/i }));
+    await expect(canvas.getByLabelText('Phone')).toBeVisible();
+    await expect(canvas.getByLabelText('Notes')).toBeVisible();
+
+    // Collapse
+    await userEvent.click(canvas.getByRole('button', { name: /see less customer details/i }));
+    await expect(canvas.queryByLabelText('Phone')).toBeNull();
+  },
+};
+
 export const SelectExistingTab: Story = {
   name: 'Customer block — Select existing tab shows contact picker',
   args: { value: null, onChange: () => {} },

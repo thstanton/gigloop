@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { FormField } from '@/components/common/FormField';
 import ContactPicker from './ContactPicker';
@@ -18,10 +20,13 @@ export function InlineContactBlock({ value, onChange, error }: InlineContactBloc
   const queryClient = useQueryClient();
 
   const [mode, setMode] = useState<'existing' | 'new'>('new');
+  const [showMore, setShowMore] = useState(false);
   const [name, setName] = useState('');
   const [greetingName, setGreetingName] = useState('');
   const [greetingEdited, setGreetingEdited] = useState(false);
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [notes, setNotes] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -36,6 +41,8 @@ export function InlineContactBlock({ value, onChange, error }: InlineContactBloc
         name: name.trim(),
         greetingName: greetingName.trim() || null,
         email: email.trim() || null,
+        phone: phone.trim() || null,
+        notes: notes.trim() || null,
         primaryRole: 'CUSTOMER',
       }),
     onSuccess: (created) => {
@@ -46,6 +53,9 @@ export function InlineContactBlock({ value, onChange, error }: InlineContactBloc
       setGreetingName('');
       setGreetingEdited(false);
       setEmail('');
+      setPhone('');
+      setNotes('');
+      setShowMore(false);
       setLocalError(null);
     },
     onError: () => {
@@ -131,6 +141,38 @@ export function InlineContactBlock({ value, onChange, error }: InlineContactBloc
               placeholder="email@example.com"
             />
           </FormField>
+
+          <button
+            type="button"
+            onClick={() => setShowMore((o) => !o)}
+            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {showMore ? (
+              <><ChevronUp className="h-4 w-4" aria-hidden="true" />See less customer details</>
+            ) : (
+              <><ChevronDown className="h-4 w-4" aria-hidden="true" />See more customer details</>
+            )}
+          </button>
+
+          {showMore && (
+            <div className="space-y-3">
+              <FormField label="Phone">
+                <Input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                />
+              </FormField>
+              <FormField label="Notes">
+                <Textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  rows={2}
+                />
+              </FormField>
+            </div>
+          )}
 
           <div className="flex items-center gap-3">
             <Button type="button" onClick={handleCreate} disabled={createMutation.isPending}>
