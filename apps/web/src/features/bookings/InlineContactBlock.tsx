@@ -71,23 +71,24 @@ export function InlineContactBlock({ value, onChange, error }: InlineContactBloc
 
   return (
     <div className="border border-border rounded-md p-4 space-y-3">
-      <p className="text-sm font-semibold">Customer</p>
-
       <Tabs value={mode} onValueChange={(v) => setMode(v as 'existing' | 'new')}>
-        <TabsList className="w-full h-auto p-0.5 bg-secondary border border-border">
-          <TabsTrigger
-            value="existing"
-            className="flex-1 text-foreground/60 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-none"
-          >
-            Select existing
-          </TabsTrigger>
-          <TabsTrigger
-            value="new"
-            className="flex-1 text-foreground/60 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-none"
-          >
-            + New
-          </TabsTrigger>
-        </TabsList>
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm font-semibold">Customer</p>
+          <TabsList className="h-auto p-0.5 bg-secondary border border-border">
+            <TabsTrigger
+              value="existing"
+              className="text-foreground/60 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-none"
+            >
+              Select existing
+            </TabsTrigger>
+            <TabsTrigger
+              value="new"
+              className="text-foreground/60 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-none"
+            >
+              + New
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="existing" className="mt-3">
           <ContactPicker
