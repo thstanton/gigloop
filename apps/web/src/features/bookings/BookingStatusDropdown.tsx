@@ -8,12 +8,12 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+} from '@/components/ui/responsive-dialog';
 import { cn } from '@/lib/utils';
 import { STATUS_ORDER } from '@/lib/constants';
 import type { BookingStatus, ChecklistItem } from '@/types/api';
@@ -49,15 +49,15 @@ function OutstandingChecklistDialog({ pendingStatus, outstandingItems, onConfirm
   const plural = count === 1 ? '' : 's';
 
   return (
-    <Sheet open onOpenChange={onCancel}>
-      <SheetContent side="bottom">
-        <SheetHeader>
-          <SheetTitle>Outstanding checklist items</SheetTitle>
-        </SheetHeader>
-        <SheetDescription>
+    <ResponsiveDialog open onOpenChange={onCancel}>
+      <ResponsiveDialogContent>
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>Outstanding checklist items</ResponsiveDialogTitle>
+        </ResponsiveDialogHeader>
+        <ResponsiveDialogDescription>
           {count} item{plural} still outstanding for{' '}
           <span className="font-medium text-foreground">{label}</span>:
-        </SheetDescription>
+        </ResponsiveDialogDescription>
         <ul className="text-sm space-y-1 list-disc list-inside text-foreground mt-2">
           {outstandingItems.map((item) => (
             <li key={item.id}>{item.label}</li>
@@ -68,8 +68,8 @@ function OutstandingChecklistDialog({ pendingStatus, outstandingItems, onConfirm
           <Button variant="outline" onClick={onCancel}>Cancel</Button>
           <Button onClick={onConfirm}>Mark as {label}</Button>
         </div>
-      </SheetContent>
-    </Sheet>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 }
 

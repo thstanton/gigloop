@@ -3,11 +3,16 @@ import { ChevronRight, MoreHorizontal } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -251,14 +256,14 @@ export function RowActions({ actions, label, sublabel }: Props) {
         </DropdownMenu>
       </div>
 
-      {/* Desktop confirmation sheet */}
-      <Sheet open={dialogOpen} onOpenChange={handleDialogOpenChange}>
-        <SheetContent side="bottom">
-          <SheetHeader>
-            <SheetTitle>{confirmingAction?.confirmation?.title}</SheetTitle>
-            <SheetDescription>{confirmingAction?.confirmation?.description}</SheetDescription>
-          </SheetHeader>
-          <SheetFooter className="mt-4">
+      {/* Desktop confirmation dialog (the dropdown trigger is desktop-only) */}
+      <Dialog open={dialogOpen} onOpenChange={handleDialogOpenChange}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{confirmingAction?.confirmation?.title}</DialogTitle>
+            <DialogDescription>{confirmingAction?.confirmation?.description}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-4">
             <Button
               variant="outline"
               disabled={isConfirmPending}
@@ -273,9 +278,9 @@ export function RowActions({ actions, label, sublabel }: Props) {
             <Button variant="destructive" disabled={isConfirmPending} onClick={handleDialogConfirm}>
               {isConfirmPending ? '…' : 'Confirm'}
             </Button>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

@@ -25,7 +25,10 @@ const TARGETS = [
 ];
 
 const isExcluded = (f) =>
-  f.endsWith('.stories.tsx') || f.endsWith('.test.tsx') || f === 'index.tsx';
+  f.endsWith('.stories.tsx') ||
+  f.endsWith('.spec.tsx') ||
+  f.endsWith('.test.tsx') ||
+  f === 'index.tsx';
 
 function walk(dir) {
   if (!existsSync(dir)) return [];
