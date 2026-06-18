@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Sheet,
-  SheetContent,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+} from '@/components/ui/responsive-dialog';
 import { Button } from '@/components/ui/button';
 import { DatePicker } from '@/components/ui/date-picker';
 import { apiPost } from '@/lib/api';
@@ -64,11 +64,11 @@ export default function MarkSentDialog({
   });
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" aria-describedby={undefined}>
-        <SheetHeader>
-          <SheetTitle>Mark as sent</SheetTitle>
-        </SheetHeader>
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
+      <ResponsiveDialogContent aria-describedby={undefined}>
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>Mark as sent</ResponsiveDialogTitle>
+        </ResponsiveDialogHeader>
 
         <div className="space-y-4 py-2">
           <div className="space-y-1.5">
@@ -83,15 +83,15 @@ export default function MarkSentDialog({
           </div>
         </div>
 
-        <SheetFooter>
+        <ResponsiveDialogFooter className="mt-4">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={mutation.isPending}>
             Cancel
           </Button>
           <Button onClick={() => mutation.mutate()} disabled={!issueDate || mutation.isPending}>
             {mutation.isPending ? 'Saving…' : 'Mark as sent'}
           </Button>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
+        </ResponsiveDialogFooter>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 }

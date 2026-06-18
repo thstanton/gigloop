@@ -92,6 +92,29 @@ Only the contact name (plus a `ChevronRight` size 14) is a navigable link. The s
 
 This applies to both `PersonCard` (customer, referrer) and `VenueCard` on the booking detail page, and to the bookings list on the contact detail page.
 
+### Responsive confirmation dialogs
+
+Confirmation and short quick-action popups render as a **centered `Dialog` on desktop** and a **bottom `Sheet` on mobile**, switched at the `md` (768px) breakpoint. Use the shared `ResponsiveDialog` wrapper (`components/ui/responsive-dialog.tsx`).
+
+The switch is **pure CSS** — no JS viewport detection. `Dialog` and `Sheet` are both built on `@radix-ui/react-dialog`, so the only thing that differs between them is the Content element's position/animation classes. `ResponsiveDialog` renders a single Radix instance whose Content carries the mobile bottom-sheet layout as its base and `md:` variants for the centered-dialog layout. One instance means one focus scope, one scroll-lock, aria auto-wired, and no first-render flash. (The `useMediaQuery`/hook pattern common in the ecosystem exists because mobile drawers are usually a *different* primitive — e.g. vaul with drag gestures — forcing a component swap. That does not apply here, so no hook is warranted.)
+
+```tsx
+<ResponsiveDialog open={open} onOpenChange={onOpenChange}>
+  <ResponsiveDialogContent>
+    <ResponsiveDialogHeader>
+      <ResponsiveDialogTitle>Mark as sent</ResponsiveDialogTitle>
+    </ResponsiveDialogHeader>
+    {/* …confirm/cancel actions… */}
+  </ResponsiveDialogContent>
+</ResponsiveDialog>
+```
+
+**Scope boundary:** `ResponsiveDialog` is for **confirmations and short quick-actions only** (ready/celebration prompt, outstanding-checklist warning, customer-mismatch warning, add-to-series, mark-as-sent, destructive-action confirm). Data-entry surfaces (contact creation, venue add, and other forms) go inline or to right-side Sheets per ADR-0005 — never `ResponsiveDialog`.
+
+`RowActions` is the deliberate exception: its mobile and desktop affordances are already CSS-gated (`md:hidden` action sheet vs `hidden md:flex` dropdown), so its desktop confirmation is a plain `Dialog` (it only ever opens on desktop) and its mobile flow stays an inline `Sheet` body — no `ResponsiveDialog` needed.
+
+> **Amendment (2026-06-18):** This section supersedes the unconditional `Sheet side="bottom"` introduced in commit `9240238`, which rendered confirmation popups as bottom sheets on desktop too (issue #470).
+
 ## Alternatives considered
 
 - **`Button variant="outline" size="sm"` for card actions:** Rejected — inflates header row height, adds visual weight disproportionate to the action's frequency and importance. Edit, Add, Send are secondary to reading the content.

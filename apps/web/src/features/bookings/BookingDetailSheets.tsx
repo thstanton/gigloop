@@ -4,12 +4,12 @@ import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+} from '@/components/ui/responsive-dialog';
 import {
   Select,
   SelectContent,
@@ -121,15 +121,15 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
   return (
     <>
       {readyDialogStatus && (
-        <Sheet open onOpenChange={dismissReadyDialog}>
-          <SheetContent side="bottom">
-            <SheetHeader>
-              <SheetTitle className="font-display text-xl">{celebratoryTitle}</SheetTitle>
-            </SheetHeader>
-            <SheetDescription className="mt-2">
+        <ResponsiveDialog open onOpenChange={dismissReadyDialog}>
+          <ResponsiveDialogContent>
+            <ResponsiveDialogHeader>
+              <ResponsiveDialogTitle className="font-display text-xl">{celebratoryTitle}</ResponsiveDialogTitle>
+            </ResponsiveDialogHeader>
+            <ResponsiveDialogDescription className="mt-2">
               You've completed all the tasks for this booking. Ready to move it to{' '}
               <span className="font-medium text-foreground">{STATUS_LABELS[readyDialogStatus]}</span>?
-            </SheetDescription>
+            </ResponsiveDialogDescription>
             <div className="flex gap-2 justify-end mt-4">
               <Button variant="outline" onClick={dismissReadyDialog} disabled={isConfirmingTransition}>
                 Not yet
@@ -138,8 +138,8 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
                 {isConfirmingTransition ? 'Saving…' : `Mark as ${STATUS_LABELS[readyDialogStatus]}`}
               </Button>
             </div>
-          </SheetContent>
-        </Sheet>
+          </ResponsiveDialogContent>
+        </ResponsiveDialog>
       )}
 
       <ContractSheet
@@ -192,11 +192,11 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
         />
       )}
 
-      <Sheet open={sheet === 'series'} onOpenChange={(open) => { if (!open) { setSearchParams({}); setSelectedSeriesId(null); } }}>
-        <SheetContent side="bottom" aria-describedby={undefined}>
-          <SheetHeader>
-            <SheetTitle>Add to series</SheetTitle>
-          </SheetHeader>
+      <ResponsiveDialog open={sheet === 'series'} onOpenChange={(open) => { if (!open) { setSearchParams({}); setSelectedSeriesId(null); } }}>
+        <ResponsiveDialogContent aria-describedby={undefined}>
+          <ResponsiveDialogHeader>
+            <ResponsiveDialogTitle>Add to series</ResponsiveDialogTitle>
+          </ResponsiveDialogHeader>
           <div className="space-y-4 pt-2">
             <Select value={selectedSeriesId ?? ''} onValueChange={setSelectedSeriesId}>
               <SelectTrigger>
@@ -234,15 +234,15 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
               <Button variant="outline" onClick={() => { setSearchParams({}); setSelectedSeriesId(null); }}>Cancel</Button>
             </div>
           </div>
-        </SheetContent>
-      </Sheet>
+        </ResponsiveDialogContent>
+      </ResponsiveDialog>
 
-      <Sheet open={sheet === 'customerMismatch'} onOpenChange={(open) => { if (!open) setSearchParams({ sheet: 'series' }); }}>
-        <SheetContent side="bottom">
-          <SheetHeader>
-            <SheetTitle>Customer mismatch</SheetTitle>
-          </SheetHeader>
-          <SheetDescription className="pt-2">{sheetWarning}</SheetDescription>
+      <ResponsiveDialog open={sheet === 'customerMismatch'} onOpenChange={(open) => { if (!open) setSearchParams({ sheet: 'series' }); }}>
+        <ResponsiveDialogContent>
+          <ResponsiveDialogHeader>
+            <ResponsiveDialogTitle>Customer mismatch</ResponsiveDialogTitle>
+          </ResponsiveDialogHeader>
+          <ResponsiveDialogDescription className="pt-2">{sheetWarning}</ResponsiveDialogDescription>
           <div className="flex gap-3 pt-4">
             <Button
               onClick={() => {
@@ -261,8 +261,8 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
             </Button>
             <Button variant="outline" onClick={() => setSearchParams({ sheet: 'series' })}>Cancel</Button>
           </div>
-        </SheetContent>
-      </Sheet>
+        </ResponsiveDialogContent>
+      </ResponsiveDialog>
     </>
   );
 }
