@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type FocusEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2, Music } from 'lucide-react';
 import { GhostButton } from '@/components/common/GhostButton';
@@ -37,13 +37,16 @@ function SetEditRow({
   const [startTime, setStartTime] = useState(set.startTime ?? '');
   const [savedVisible, setSavedVisible] = useState(false);
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const rowFocused = useRef(false);
 
   useEffect(() => {
     return () => { if (savedTimerRef.current) clearTimeout(savedTimerRef.current); };
   }, []);
 
-  // Sync from server after query invalidation
+  // Sync from server after query invalidation — but never while the user is
+  // mid-edit, or an in-flight save resolving would clobber what they retyped.
   useEffect(() => {
+    if (rowFocused.current) return;
     setLabel(set.label ?? '');
     setDuration(set.duration.toString());
     setStartTime(set.startTime ?? '');
@@ -67,28 +70,38 @@ function SetEditRow({
     },
   });
 
-  function handleBlur() {
+  function handleRowFocus() {
+    rowFocused.current = true;
+  }
+
+  // Save once when focus leaves the whole row — not when tabbing between the
+  // fields within it — so a multi-field edit isn't interrupted mid-flow.
+  function handleRowBlur(e: FocusEvent<HTMLDivElement>) {
+    if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+    rowFocused.current = false;
     const dirty =
       (label.trim() || null) !== (set.label ?? null) ||
       (parseInt(duration, 10) || 0) !== set.duration ||
       (startTime || null) !== (set.startTime ?? null);
-    if (!dirty || saveMutation.isPending) return;
+    if (!dirty) return;
     saveMutation.mutate({ label, duration, startTime });
   }
 
   const isPending = saveMutation.isPending;
 
   return (
-    <div className="border-b border-border last:border-0">
+    <div
+      className="border-b border-border last:border-0"
+      onFocus={handleRowFocus}
+      onBlur={handleRowBlur}
+    >
       <div className="grid grid-cols-[1fr_5rem_5rem_1.25rem] items-center gap-2 py-2">
         <input
           type="text"
           value={label}
           placeholder="Label"
           onChange={(e) => setLabel(e.target.value)}
-          onBlur={handleBlur}
-          disabled={isPending}
-          className="text-sm text-foreground border border-border rounded px-2 py-0.5 bg-background min-w-0 disabled:opacity-50"
+          className="text-sm text-foreground border border-border rounded px-2 py-0.5 bg-background min-w-0"
           aria-label="Set label"
         />
         <input
@@ -96,18 +109,14 @@ function SetEditRow({
           value={duration}
           min={1}
           onChange={(e) => setDuration(e.target.value)}
-          onBlur={handleBlur}
-          disabled={isPending}
-          className="text-sm text-foreground border border-border rounded px-2 py-0.5 bg-background w-full disabled:opacity-50"
+          className="text-sm text-foreground border border-border rounded px-2 py-0.5 bg-background w-full"
           aria-label="Duration in minutes"
         />
         <input
           type="time"
           value={startTime}
           onChange={(e) => setStartTime(e.target.value)}
-          onBlur={handleBlur}
-          disabled={isPending}
-          className="text-sm text-muted border border-border rounded px-2 py-0.5 bg-background disabled:opacity-50"
+          className="text-sm text-muted border border-border rounded px-2 py-0.5 bg-background"
           aria-label="Start time"
         />
         <button
