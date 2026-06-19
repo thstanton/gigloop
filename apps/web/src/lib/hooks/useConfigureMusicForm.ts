@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiPut } from '@/lib/api';
+import { toast } from '@/lib/hooks/use-toast';
 import type { BookingDetail, MusicFormConfig } from '@/types/api';
 
 function buildSeedPayload(_booking: BookingDetail) {
@@ -26,6 +27,7 @@ export function useConfigureMusicForm(
       queryClient.invalidateQueries({ queryKey: ['booking', bookingId] });
       onSuccess();
     },
+    onError: () => toast({ title: 'Failed to turn on the music form. Please try again.', variant: 'destructive' }),
   });
 
   return mutation;

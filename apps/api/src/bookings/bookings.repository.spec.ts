@@ -187,6 +187,24 @@ describe('BookingsRepository', () => {
       const data = prisma.booking.create.mock.calls[0][0].data;
       expect(data.fee).toBe(1500);
     });
+
+    it('does not create a musicFormConfig when enableMusicForm is false', async () => {
+      prisma.booking.create.mockResolvedValue({ id: 'b1' });
+      await repo.create('u1', baseDto, false);
+      expect(prisma.musicFormConfig.create).not.toHaveBeenCalled();
+    });
+
+    it('creates an empty musicFormConfig when enableMusicForm is true (no packages to seed from)', async () => {
+      prisma.booking.create.mockResolvedValue({ id: 'b1' });
+      prisma.musicFormConfig.create.mockResolvedValue({ id: 'mfc1' });
+      prisma.booking.findFirstOrThrow.mockResolvedValue({ id: 'b1' });
+      await repo.create('u1', baseDto, true);
+      expect(prisma.musicFormConfig.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ bookingId: 'b1', keyMoments: [], enabledGenres: [] }),
+        }),
+      );
+    });
   });
 
   describe('findPackageTemplates', () => {
@@ -244,7 +262,7 @@ describe('BookingsRepository', () => {
       );
     });
 
-    it('creates musicFormConfig with keyMoments from templates when songRequestFormEnabled', async () => {
+    it('creates musicFormConfig with keyMoments from templates when enableMusicForm', async () => {
       primeCreateChain();
       const tmpl = {
         id: 'f1',
@@ -264,7 +282,7 @@ describe('BookingsRepository', () => {
       );
     });
 
-    it('creates musicFormConfig with empty keyMoments when templates have none but songRequestFormEnabled', async () => {
+    it('creates musicFormConfig with empty keyMoments when templates have none but enableMusicForm', async () => {
       primeCreateChain();
       const tmpl = { id: 'f1', label: 'Background', icon: 'music', keyMoments: [], defaultGenreSelection: ['CONTEMPORARY'], slots: [] };
       await repo.createWithPackageTemplates('u1', baseDto, [tmpl], true);
@@ -273,7 +291,7 @@ describe('BookingsRepository', () => {
       );
     });
 
-    it('omits musicFormConfig when songRequestFormEnabled is false', async () => {
+    it('omits musicFormConfig when enableMusicForm is false', async () => {
       primeCreateChain();
       const tmpl = { id: 'f1', label: 'Background', icon: 'music', keyMoments: [], defaultGenreSelection: [], slots: [] };
       await repo.createWithPackageTemplates('u1', baseDto, [tmpl], false);

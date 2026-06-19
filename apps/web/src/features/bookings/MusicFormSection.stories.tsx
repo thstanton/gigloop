@@ -44,7 +44,8 @@ const meta = {
     documents: [],
     config: null,
     isLoading: false,
-    onUpdateConfig: noop,
+    onTurnOn: noop,
+    isTurningOn: false,
     onEdit: noop,
   },
 } satisfies Meta<typeof MusicFormSection>;
@@ -52,13 +53,26 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const NotConfigured: Story = {
+export const Off: Story = {
   args: { booking: { ...baseBooking, hasMusicFormConfig: false } },
   play: async ({ canvas }) => {
+    // Off == no config row. Card stays visible (no vanish) and offers a turn-on control.
     await expect(canvas.getByText('Music form')).toBeVisible();
-    await expect(canvas.getByText('Configure song request form')).toBeVisible();
+    await expect(canvas.getByRole('button', { name: 'Turn on music form' })).toBeVisible();
     const ghost = canvas.getByText('Music form').closest('div');
     await expect(ghost).not.toHaveClass('border');
+  },
+};
+
+export const OnButNotSetUp: Story = {
+  args: {
+    booking: { ...baseBooking, hasMusicFormConfig: true, hasMusicFormResponse: false },
+    config: { ...config, keyMoments: [], enabledGenres: [] },
+  },
+  play: async ({ canvas }) => {
+    // On (config row present) but empty — make it obvious it hasn't been set up.
+    await expect(canvas.getByText(/not set up yet/i)).toBeVisible();
+    await expect(canvas.getByRole('button', { name: 'Edit' })).toBeVisible();
   },
 };
 

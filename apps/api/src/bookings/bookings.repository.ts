@@ -59,17 +59,31 @@ export class BookingsRepository {
     });
   }
 
-  create(userId: string, dto: CreateBookingDto, tx?: Prisma.TransactionClient) {
-    const { packageTemplateIds: _, fee, date, checklistItems: __, newSeries: ___, ...fields } = dto;
-    return (tx ?? this.prisma).booking.create({
-      data: {
-        userId,
-        ...fields,
-        date: new Date(date),
-        ...(fee !== undefined ? { fee } : {}),
-      },
-      include: bookingIncludes,
+  async create(
+    userId: string,
+    dto: CreateBookingDto,
+    enableMusicForm = false,
+    tx?: Prisma.TransactionClient,
+  ) {
+    const { packageTemplateIds: _, fee, date, checklistItems: __, newSeries: ___, enableMusicForm: ____, ...fields } = dto;
+    const db = tx ?? this.prisma;
+    const data = {
+      userId,
+      ...fields,
+      date: new Date(date),
+      ...(fee !== undefined ? { fee } : {}),
+    };
+
+    // No packages here, so an enabled music form starts empty (no templates to seed from — #502).
+    if (!enableMusicForm) {
+      return db.booking.create({ data, include: bookingIncludes });
+    }
+
+    const booking = await db.booking.create({ data });
+    await db.musicFormConfig.create({
+      data: { userId, bookingId: booking.id, enabledGenres: [], keyMoments: [] },
     });
+    return db.booking.findFirstOrThrow({ where: { id: booking.id }, include: bookingIncludes });
   }
 
   findPackageTemplates(userId: string, ids: string[]) {
@@ -83,10 +97,10 @@ export class BookingsRepository {
     userId: string,
     dto: CreateBookingDto,
     orderedTemplates: PackageTemplateWithSlots[],
-    songRequestFormEnabled: boolean,
+    enableMusicForm: boolean,
     tx?: Prisma.TransactionClient,
   ) {
-    const { packageTemplateIds: _, fee, date, checklistItems: __, newSeries: ___, ...fields } = dto;
+    const { packageTemplateIds: _, fee, date, checklistItems: __, newSeries: ___, enableMusicForm: ____, ...fields } = dto;
     const db = tx ?? this.prisma;
 
     // Create the booking row first (no sets, no packages yet)
@@ -126,8 +140,8 @@ export class BookingsRepository {
       }
     }
 
-    // Create music form config when enabled
-    if (songRequestFormEnabled) {
+    // Create music form config when enabled, seeded from the chosen package templates
+    if (enableMusicForm) {
       const allKeyMoments = orderedTemplates.flatMap((tmpl) =>
         tmpl.keyMoments.map((km) => ({ label: km, section: tmpl.label })),
       );

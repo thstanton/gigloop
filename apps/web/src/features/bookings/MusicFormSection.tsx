@@ -19,9 +19,10 @@ export interface MusicFormSectionProps {
   documents: Document[];
   config: MusicFormConfig | null;
   isLoading: boolean;
-  onUpdateConfig: () => void;
+  /** Create the music form config (turn it on). Presence of the row is the on/off truth (ADR-0046). */
+  onTurnOn: () => void;
+  isTurningOn: boolean;
   onEdit: () => void;
-  hideWhenEmpty?: boolean;
 }
 
 function groupByGenre(songs: MusicFormResponseSong[]): Map<string, MusicFormResponseSong[]> {
@@ -119,9 +120,9 @@ export default function MusicFormSection({
   documents,
   config,
   isLoading,
-  onUpdateConfig,
+  onTurnOn,
+  isTurningOn,
   onEdit,
-  hideWhenEmpty = false,
 }: Readonly<MusicFormSectionProps>) {
   const [viewingResponse, setViewingResponse] = useState(false);
 
@@ -132,8 +133,8 @@ export default function MusicFormSection({
   });
   const songListDoc = documents.find((d) => d.type === 'SONG_LIST');
 
-  if (!booking.hasMusicFormConfig && hideWhenEmpty) return null;
-
+  // Off == no config row (ADR-0046). The card stays visible and offers a turn-on control
+  // rather than vanishing — so a booking that gained packages after creation still shows it.
   if (!booking.hasMusicFormConfig) {
     return (
       <div className="flex flex-col items-center text-center gap-2 py-4 text-muted min-h-[5rem]">
@@ -141,11 +142,12 @@ export default function MusicFormSection({
         <span className="text-sm font-medium">Music form</span>
         <button
           type="button"
-          onClick={onUpdateConfig}
+          onClick={onTurnOn}
+          disabled={isTurningOn}
           className="inline-flex items-center gap-1 text-sm text-primary hover:text-primary/80 transition-colors disabled:opacity-50"
         >
           <Plus size={14} />
-          Configure song request form
+          {isTurningOn ? 'Turning on…' : 'Turn on music form'}
         </button>
       </div>
     );
@@ -192,6 +194,11 @@ export default function MusicFormSection({
         }
       >
         <div className="space-y-4">
+          {sectionMap.size === 0 && config.enabledGenres.length === 0 && (
+            <p className="text-sm text-muted">
+              On, but not set up yet — add key moments and genres with Edit.
+            </p>
+          )}
           {Array.from(sectionMap.entries()).map(([section, moments]) => (
             <div key={section}>
               <div className="flex items-center gap-1.5 text-sm font-medium text-foreground mb-1">

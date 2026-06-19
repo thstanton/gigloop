@@ -313,6 +313,9 @@ export interface CreateBookingInput {
   venueId?: string;
   bookingAgentId?: string;
   packageTemplateIds?: string[];
+  /** Create the music form (song request form) on creation. Presence of the config row is the
+   *  on/off truth — this only decides whether that row is created. Seeded from chosen packages. */
+  enableMusicForm?: boolean;
   checklistItems: ChecklistDefaultItem[];
   seriesId?: string;
   newSeries?: { label: string };

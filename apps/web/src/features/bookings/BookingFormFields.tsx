@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Textarea } from '@/components/ui/textarea';
 import { TogglePill } from '@/components/ui/toggle-pill';
+import { Switch } from '@/components/ui/switch';
 import { FormField } from '@/components/common/FormField';
 import { IconButton } from '@/components/common/IconButton';
 import {
@@ -37,6 +38,7 @@ export const bookingFormSchema = z.object({
   venueId: z.string().nullable(),
   bookingAgentId: z.string().nullable(),
   packageTemplateIds: z.array(z.string()),
+  enableMusicForm: z.boolean(),
   seriesMode: z.enum(['none', 'existing', 'new']),
   seriesId: z.string().nullable().optional(),
   newSeriesLabel: z.string().optional(),
@@ -361,6 +363,28 @@ export function BookingFormFields({
             )}
           />
         </div>
+      )}
+
+      {/* Music form — presence of a config row is the on/off truth (ADR-0046); this toggle
+          decides whether one is created on booking creation, seeded from the chosen packages. */}
+      {songRequestFormEnabled && (
+        <Controller
+          name="enableMusicForm"
+          control={control}
+          render={({ field }) => (
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold text-foreground">Music form</p>
+                <p className="text-sm text-muted">Collect song requests from the customer for this booking.</p>
+              </div>
+              <Switch
+                aria-label="Music form"
+                checked={field.value}
+                onCheckedChange={field.onChange}
+              />
+            </div>
+          )}
+        />
       )}
 
       {/* Series */}

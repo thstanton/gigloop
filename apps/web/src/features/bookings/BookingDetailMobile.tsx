@@ -9,6 +9,7 @@ import { useContractActions } from '@/lib/hooks/useContractActions';
 import { useBookingCommunications } from '@/lib/hooks/useBookingCommunications';
 import { useBookingDocuments } from '@/lib/hooks/useBookingDocuments';
 import { useSeriesBookings } from '@/lib/hooks/useSeriesBookings';
+import { useConfigureMusicForm } from '@/lib/hooks/useConfigureMusicForm';
 import BookingDetailTabs from '@/features/bookings/BookingDetailTabs';
 import ChecklistSection from '@/features/bookings/ChecklistSection';
 import ItineraryCard from '@/features/bookings/ItineraryCard';
@@ -71,6 +72,7 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
     enabled: isLoaded && !!booking && booking.hasMusicFormConfig,
   });
 
+  const turnOnMusicForm = useConfigureMusicForm(bookingId, booking, () => {});
   const contractActions = useContractActions(bookingId);
   const fields = useBookingFields(bookingId);
   const {
@@ -146,9 +148,9 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
             documents={documents}
             config={musicFormConfig ?? null}
             isLoading={musicFormConfigLoading}
-            onUpdateConfig={() => editSection('musicForm')}
+            onTurnOn={() => turnOnMusicForm.mutate()}
+            isTurningOn={turnOnMusicForm.isPending}
             onEdit={() => editSection('musicForm')}
-            hideWhenEmpty
           />
           <InlineNotes
             notes={booking.notes}

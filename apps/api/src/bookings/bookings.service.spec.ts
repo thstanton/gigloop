@@ -313,7 +313,8 @@ describe('BookingsService', () => {
       repo.create.mockResolvedValue(createdBooking);
       const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', checklistItems: [] };
       const result = await service.create('u1', dto);
-      expect(repo.create).toHaveBeenCalledWith('u1', dto, TX);
+      // enableMusicForm defaults to false when the dto omits it.
+      expect(repo.create).toHaveBeenCalledWith('u1', dto, false, TX);
       expect(repo.findPackageTemplates).not.toHaveBeenCalled();
       expect(result).toBe(createdBooking);
     });
@@ -338,23 +339,29 @@ describe('BookingsService', () => {
     it('fetches templates and calls createWithPackageTemplates when packageTemplateIds provided', async () => {
       const tmpl = { id: 'f1', label: 'Wedding Ceremony', icon: 'heart', keyMoments: ['Processional'], defaultGenreSelection: ['CONTEMPORARY'], slots: [] };
       repo.findPackageTemplates.mockResolvedValue([tmpl]);
-      repo.findUserProfile.mockResolvedValue(null);
       repo.createWithPackageTemplates.mockResolvedValue(createdBooking);
       const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', packageTemplateIds: ['f1'], checklistItems: [] };
       const result = await service.create('u1', dto);
       expect(repo.findPackageTemplates).toHaveBeenCalledWith('u1', ['f1']);
+      // No enableMusicForm in the dto → music form off (config row not created).
       expect(repo.createWithPackageTemplates).toHaveBeenCalledWith('u1', dto, [tmpl], false, TX);
       expect(result).toBe(createdBooking);
     });
 
-    it('passes songRequestFormEnabled=true when profile has it enabled', async () => {
+    it('passes enableMusicForm=true to createWithPackageTemplates when the dto opts in', async () => {
       const tmpl = { id: 'f1', label: 'Wedding Ceremony', icon: 'heart', keyMoments: [], defaultGenreSelection: [], slots: [] };
       repo.findPackageTemplates.mockResolvedValue([tmpl]);
-      repo.findUserProfile.mockResolvedValue({ songRequestFormEnabled: true });
       repo.createWithPackageTemplates.mockResolvedValue(createdBooking);
-      const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', packageTemplateIds: ['f1'], checklistItems: [] };
+      const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', packageTemplateIds: ['f1'], enableMusicForm: true, checklistItems: [] };
       await service.create('u1', dto);
       expect(repo.createWithPackageTemplates).toHaveBeenCalledWith('u1', dto, [tmpl], true, TX);
+    });
+
+    it('passes enableMusicForm=true to repo.create when opting in with no packages', async () => {
+      repo.create.mockResolvedValue(createdBooking);
+      const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', enableMusicForm: true, checklistItems: [] };
+      await service.create('u1', dto);
+      expect(repo.create).toHaveBeenCalledWith('u1', expect.objectContaining({ enableMusicForm: true }), true, TX);
     });
 
     it('preserves order from packageTemplateIds when creating with templates', async () => {
@@ -394,7 +401,7 @@ describe('BookingsService', () => {
 
         expect(prisma.$transaction).toHaveBeenCalledTimes(1);
         // The same tx sentinel reaches each write — proof they share one atomic unit.
-        expect(repo.create).toHaveBeenCalledWith('u1', expect.objectContaining({ seriesId: 's1' }), TX);
+        expect(repo.create).toHaveBeenCalledWith('u1', expect.objectContaining({ seriesId: 's1' }), false, TX);
         expect(checklistRepo.seedChecklistItems).toHaveBeenCalledWith('u1', createdBooking.id, checklistItems, createdBooking.date, createdBooking.createdAt, TX);
         expect(seriesService.syncMemberJoin).toHaveBeenCalledWith('u1', 's1', expect.objectContaining({ id: createdBooking.id }), TX);
       });

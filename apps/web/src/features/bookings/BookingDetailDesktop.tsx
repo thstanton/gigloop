@@ -9,6 +9,7 @@ import { useContractActions } from '@/lib/hooks/useContractActions';
 import { useBookingCommunications } from '@/lib/hooks/useBookingCommunications';
 import { useBookingDocuments } from '@/lib/hooks/useBookingDocuments';
 import { useSeriesBookings } from '@/lib/hooks/useSeriesBookings';
+import { useConfigureMusicForm } from '@/lib/hooks/useConfigureMusicForm';
 import SeriesInvoiceCard from '@/features/bookings/SeriesInvoiceCard';
 import { SeriesEventsCard } from '@/features/bookings/SeriesEventsCard';
 import ContractCard from '@/features/bookings/ContractCard';
@@ -50,6 +51,7 @@ export function BookingDetailDesktop({ bookingId }: BookingDetailDesktopProps) {
     enabled: isLoaded && !!booking && booking.hasMusicFormConfig,
   });
 
+  const turnOnMusicForm = useConfigureMusicForm(bookingId, booking, () => {});
   const contractActions = useContractActions(bookingId);
   const fields = useBookingFields(bookingId);
   const { checklist, checklistLoading, toggleItem, addItem, isAddingItem } = useBookingChecklist(bookingId, booking, isLoaded);
@@ -102,9 +104,9 @@ export function BookingDetailDesktop({ bookingId }: BookingDetailDesktopProps) {
             documents={documents}
             config={musicFormConfig ?? null}
             isLoading={musicFormConfigLoading}
-            onUpdateConfig={() => editSection('musicForm')}
+            onTurnOn={() => turnOnMusicForm.mutate()}
+            isTurningOn={turnOnMusicForm.isPending}
             onEdit={() => editSection('musicForm')}
-            hideWhenEmpty
           />
         </section>
 

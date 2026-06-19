@@ -42,6 +42,7 @@ function buildBookingPayload(values: BookingFormValues, checklistItems: Checklis
     venueId: values.venueId ?? undefined,
     bookingAgentId: values.bookingAgentId ?? undefined,
     packageTemplateIds: values.packageTemplateIds.length ? values.packageTemplateIds : undefined,
+    enableMusicForm: values.enableMusicForm,
     checklistItems,
     ...buildSeriesPayload(values),
   };
@@ -89,6 +90,7 @@ export default function BookingNewPage() {
       venueId: locationState?.venueId ?? null,
       bookingAgentId: locationState?.bookingAgentId ?? null,
       packageTemplateIds: [],
+      enableMusicForm: false,
       seriesMode: 'none',
       seriesId: null,
       newSeriesLabel: '',
@@ -110,6 +112,9 @@ export default function BookingNewPage() {
     if (!userProfile) return;
     const pref = (userProfile.preferences as { defaultBookingStatus?: string } | undefined)?.defaultBookingStatus ?? 'PROVISIONAL';
     setValue('status', pref as BookingFormValues['status']);
+    // Music form defaults on when the user has song request forms enabled (set once on profile load,
+    // so a manual toggle afterwards is never clobbered — id is stable across refetches).
+    setValue('enableMusicForm', userProfile.songRequestFormEnabled);
   }, [userProfile?.id, setValue]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [seriesMode, selectedSeriesId] = watch(['seriesMode', 'seriesId']);

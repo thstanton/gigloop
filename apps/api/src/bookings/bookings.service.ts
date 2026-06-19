@@ -122,16 +122,12 @@ export class BookingsService {
   private async resolveOrderedPackageTemplates(
     userId: string,
     dto: CreateBookingDto,
-  ): Promise<{ orderedTemplates: Awaited<ReturnType<BookingsRepository['findPackageTemplates']>>; songRequestFormEnabled: boolean }> {
-    if (!dto.packageTemplateIds?.length) return { orderedTemplates: [], songRequestFormEnabled: false };
-    const [templates, profile] = await Promise.all([
-      this.repo.findPackageTemplates(userId, dto.packageTemplateIds),
-      this.repo.findUserProfile(userId),
-    ]);
-    const orderedTemplates = dto.packageTemplateIds
+  ): Promise<Awaited<ReturnType<BookingsRepository['findPackageTemplates']>>> {
+    if (!dto.packageTemplateIds?.length) return [];
+    const templates = await this.repo.findPackageTemplates(userId, dto.packageTemplateIds);
+    return dto.packageTemplateIds
       .map((id) => templates.find((t) => t.id === id))
       .filter((t): t is NonNullable<typeof t> => t != null);
-    return { orderedTemplates, songRequestFormEnabled: profile?.songRequestFormEnabled ?? false };
   }
 
   // The atomic unit (ADR-0047): booking row + checklist seed + series-invoice-line append
@@ -145,14 +141,14 @@ export class BookingsService {
       dtoWithSeries: CreateBookingDto;
       resolvedSeriesId: string | undefined;
       orderedTemplates: Awaited<ReturnType<BookingsRepository['findPackageTemplates']>>;
-      songRequestFormEnabled: boolean;
     },
   ) {
-    const { dto, dtoWithSeries, resolvedSeriesId, orderedTemplates, songRequestFormEnabled } = args;
+    const { dto, dtoWithSeries, resolvedSeriesId, orderedTemplates } = args;
+    const enableMusicForm = dto.enableMusicForm ?? false;
 
     const created = dto.packageTemplateIds?.length
-      ? await this.repo.createWithPackageTemplates(userId, dtoWithSeries, orderedTemplates, songRequestFormEnabled, tx)
-      : await this.repo.create(userId, dtoWithSeries, tx);
+      ? await this.repo.createWithPackageTemplates(userId, dtoWithSeries, orderedTemplates, enableMusicForm, tx)
+      : await this.repo.create(userId, dtoWithSeries, enableMusicForm, tx);
 
     if (dto.checklistItems.length > 0) {
       await this.checklistRepo.seedChecklistItems(userId, created.id, dto.checklistItems, created.date, created.createdAt, tx);
@@ -178,7 +174,7 @@ export class BookingsService {
       await this.seriesService.assertMembershipMutable(userId, resolvedSeriesId);
     }
     const dtoWithSeries = { ...dto, seriesId: resolvedSeriesId };
-    const { orderedTemplates, songRequestFormEnabled } = await this.resolveOrderedPackageTemplates(userId, dto);
+    const orderedTemplates = await this.resolveOrderedPackageTemplates(userId, dto);
 
     // Warm the Neon compute (scale-to-zero) *before* opening the transaction so a cold-start
     // wake is absorbed here, not inside the interactive-transaction timeout. The no-template/
@@ -193,7 +189,6 @@ export class BookingsService {
           dtoWithSeries,
           resolvedSeriesId,
           orderedTemplates,
-          songRequestFormEnabled,
         }),
       { maxWait: 5000, timeout: 15000 },
     );
