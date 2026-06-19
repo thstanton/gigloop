@@ -21,11 +21,11 @@ export const Default: Story = {
   play: async ({ canvasElement }) => {
     const body = within(canvasElement.ownerDocument.body);
     // The dialog telegraphs what carries vs. resets (implicit acceptance — ADR-0049).
-    await expect(await body.findByText('Copy this event')).toBeVisible();
+    await expect(await body.findByText('Repeat this booking')).toBeVisible();
     await expect(body.getByText(/Carries over:/)).toBeVisible();
     await expect(body.getByText(/Starts fresh:/)).toBeVisible();
     // Copy is disabled until a date is chosen.
-    await expect(body.getByRole('button', { name: 'Copy event' })).toBeDisabled();
+    await expect(body.getByRole('button', { name: 'Repeat booking' })).toBeDisabled();
   },
 };
 
@@ -41,7 +41,7 @@ export const PrimaryPath: Story = {
     await userEvent.click(dayButtons[0]);
 
     // With a date chosen, Copy enables and reports the YYYY-MM-DD date to the container.
-    const copy = body.getByRole('button', { name: 'Copy event' });
+    const copy = body.getByRole('button', { name: 'Repeat booking' });
     await expect(copy).toBeEnabled();
     await userEvent.click(copy);
     await expect(args.onCopy).toHaveBeenCalledWith(expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/));
@@ -52,14 +52,14 @@ export const Saving: Story = {
   args: { isPending: true },
   play: async ({ canvasElement }) => {
     const body = within(canvasElement.ownerDocument.body);
-    await expect(await body.findByRole('button', { name: 'Copying…' })).toBeDisabled();
+    await expect(await body.findByRole('button', { name: 'Repeating…' })).toBeDisabled();
   },
 };
 
 export const WithError: Story = {
-  args: { error: 'Could not copy this event. Try again.' },
+  args: { error: 'Could not repeat this booking. Try again.' },
   play: async ({ canvasElement }) => {
     const body = within(canvasElement.ownerDocument.body);
-    await expect(await body.findByText('Could not copy this event. Try again.')).toBeVisible();
+    await expect(await body.findByText('Could not repeat this booking. Try again.')).toBeVisible();
   },
 };

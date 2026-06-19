@@ -1,6 +1,6 @@
 import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, userEvent } from 'storybook/test';
+import { expect, userEvent, within } from 'storybook/test';
 import { MemoryRouter } from 'react-router-dom';
 import { SeriesEventsCard } from './SeriesEventsCard';
 import type { BookingListItem } from '@/types/api';
@@ -56,13 +56,15 @@ type Story = StoryObj<typeof meta>;
 
 export const WithBookings: Story = {
   play: async ({ canvas }) => {
-    await expect(canvas.getByText('Events in Series')).toBeVisible();
-    await expect(canvas.getByText('Copy event')).toBeVisible();
-    await expect(canvas.getByText('Add to series')).toBeVisible();
+    await expect(canvas.getByText('Bookings in Series')).toBeVisible();
     await expect(canvas.getByText('Grand Hotel Summer Ball')).toBeVisible();
     await expect(canvas.getByText('Grand Hotel August Night')).toBeVisible();
-    await userEvent.click(canvas.getByText('Copy event'));
-    await userEvent.click(canvas.getByText('Add to series'));
+    // Primary action is a labelled ghost button (not an icon-only shortcut).
+    await expect(canvas.getByText('Repeat this booking')).toBeVisible();
+    // The "…" menu lists every action — incl. the shortcut one — each with a helper line.
+    await userEvent.click(canvas.getByLabelText('More actions'));
+    await expect(await within(document.body).findByText('Copies everything onto a new date')).toBeVisible();
+    await userEvent.click(await within(document.body).findByText('New booking in series'));
   },
 };
 
@@ -73,7 +75,9 @@ export const Loading: Story = {
 export const Empty: Story = {
   args: { bookings: [], isLoading: false },
   play: async ({ canvas }) => {
-    await expect(canvas.getByText('No other events in this series yet.')).toBeVisible();
-    await expect(canvas.getByText('Add to series')).toBeVisible();
+    await expect(canvas.getByText('No other bookings in this series yet.')).toBeVisible();
+    await expect(canvas.getByText('Repeat this booking')).toBeVisible();
+    await userEvent.click(canvas.getByLabelText('More actions'));
+    await expect(await within(document.body).findByText('New booking in series')).toBeVisible();
   },
 };

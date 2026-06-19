@@ -22,7 +22,7 @@ export function useCopyBooking(bookingId: string) {
       navigate(`/admin/bookings/${created.id}`);
     },
     onError: () =>
-      toast({ title: 'Could not copy this event — please try again', variant: 'destructive' }),
+      toast({ title: 'Could not repeat this booking — please try again', variant: 'destructive' }),
   });
 
   return {

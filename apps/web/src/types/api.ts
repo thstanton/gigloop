@@ -159,14 +159,6 @@ export interface SeriesInvoice {
   lineItems: InvoiceLineItem[];
 }
 
-export interface SeriesDefaults {
-  customerId?: string;
-  venueId?: string | null;
-  bookingAgentId?: string | null;
-  checklistItems?: ChecklistDefaultItem[];
-  musicFormConfig?: { enabledGenres: string[]; keyMoments: KeyMoment[] } | null;
-}
-
 
 // ─────────────────────────────────────────
 // Bookings

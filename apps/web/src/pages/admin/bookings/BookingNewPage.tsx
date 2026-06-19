@@ -20,7 +20,6 @@ import type {
   ChecklistDefaultItem,
   EventType,
   PackageTemplate,
-  SeriesDefaults,
   UserProfile,
 } from '@/types/api';
 
@@ -77,7 +76,7 @@ export default function BookingNewPage() {
     enabled: isLoaded,
   });
 
-  const { register, control, handleSubmit, setValue, watch, formState: { errors } } = useForm<BookingFormValues>({
+  const { register, control, handleSubmit, setValue, formState: { errors } } = useForm<BookingFormValues>({
     resolver: zodResolver(bookingFormSchema),
     defaultValues: {
       eventType: 'WEDDING',
@@ -117,21 +116,6 @@ export default function BookingNewPage() {
     setValue('enableMusicForm', userProfile.songRequestFormEnabled);
   }, [userProfile?.id, setValue]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const [seriesMode, selectedSeriesId] = watch(['seriesMode', 'seriesId']);
-
-  const { data: seriesDefaults } = useQuery({
-    queryKey: ['seriesDefaults', selectedSeriesId],
-    queryFn: () => apiGet<SeriesDefaults>(`/series/${selectedSeriesId}/defaults`),
-    enabled: isLoaded && seriesMode === 'existing' && !!selectedSeriesId,
-  });
-
-  useEffect(() => {
-    if (!seriesDefaults || seriesMode !== 'existing') return;
-    if (seriesDefaults.customerId) setValue('customerId', seriesDefaults.customerId);
-    if (seriesDefaults.venueId !== undefined) setValue('venueId', seriesDefaults.venueId ?? null);
-    if (seriesDefaults.bookingAgentId !== undefined) setValue('bookingAgentId', seriesDefaults.bookingAgentId ?? null);
-  }, [seriesDefaults, seriesMode, setValue]);
-
   const mutation = useMutation({
     mutationFn: ({ values, checklistItems }: { values: BookingFormValues; checklistItems: ChecklistDefaultItem[] }) =>
       apiPost<BookingDetail>('/bookings', buildBookingPayload(values, checklistItems)),
@@ -142,9 +126,7 @@ export default function BookingNewPage() {
   });
 
   const checklistDefaults: ChecklistDefaultItem[] =
-    (pendingValues?.seriesMode === 'existing' && seriesDefaults?.checklistItems)
-    || userProfile?.preferences?.checklistDefaults
-    || [];
+    userProfile?.preferences?.checklistDefaults || [];
 
   if (step === 2 && pendingValues) {
     return (

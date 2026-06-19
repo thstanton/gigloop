@@ -31,7 +31,7 @@ export function CopyEventDialog({ open, onOpenChange, onCopy, isPending, error }
     <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
       <ResponsiveDialogContent>
         <ResponsiveDialogHeader>
-          <ResponsiveDialogTitle>Copy this event</ResponsiveDialogTitle>
+          <ResponsiveDialogTitle>Repeat this booking</ResponsiveDialogTitle>
         </ResponsiveDialogHeader>
         <ResponsiveDialogDescription className="pt-1">
           Sets up the same gig again on a new date, in the same series.
@@ -58,7 +58,7 @@ export function CopyEventDialog({ open, onOpenChange, onCopy, isPending, error }
 
           <div className="flex gap-3">
             <Button onClick={() => onCopy(date)} disabled={!date || isPending}>
-              {isPending ? 'Copying…' : 'Copy event'}
+              {isPending ? 'Repeating…' : 'Repeat booking'}
             </Button>
             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
               Cancel
