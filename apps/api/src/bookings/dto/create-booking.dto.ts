@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { BookingStatus } from '@prisma/client';
 import {
   IsArray,
+  IsBoolean,
   IsDateString,
   IsEnum,
   IsIn,
@@ -106,11 +107,19 @@ export class CreateBookingDto {
   @IsUUID()
   bookingAgentId?: string;
 
-  @ApiPropertyOptional({ type: [String], description: 'Performance format IDs to apply (in order)' })
+  @ApiPropertyOptional({ type: [String], description: 'Package template IDs to apply (in order)' })
   @IsOptional()
   @IsArray()
   @IsUUID('all', { each: true })
-  formatIds?: string[];
+  packageTemplateIds?: string[];
+
+  @ApiPropertyOptional({
+    description:
+      'Create the music form (song request form) for this booking on creation. Presence of the config row is the on/off truth — this flag only decides whether that row is created. Seeded from the chosen package templates when packages are applied.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  enableMusicForm?: boolean;
 
   @ApiProperty({ type: [ChecklistItemInput], description: 'Checklist items to seed for this booking' })
   @IsArray()

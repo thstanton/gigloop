@@ -10,7 +10,7 @@ import { PACKAGE_CATEGORY_LABELS, PACKAGE_ICON_MAP } from '@/lib/constants';
 import { PageHeader } from '@/components/common/PageHeader';
 import { PageSection } from '@/components/common/PageSection';
 import { toast } from '@/lib/hooks/use-toast';
-import type { Package } from '@/types/api';
+import type { PackageTemplate } from '@/types/api';
 
 function PackageIcon({ icon }: { icon: string }) {
   const Icon = PACKAGE_ICON_MAP[icon] ?? Music;
@@ -24,7 +24,7 @@ export default function OnboardingPackagesPage() {
 
   const { data: packages = [], isLoading } = useQuery({
     queryKey: ['packages'],
-    queryFn: () => apiGet<Package[]>('/packages'),
+    queryFn: () => apiGet<PackageTemplate[]>('/packages'),
     enabled: isLoaded,
   });
 
@@ -54,7 +54,7 @@ export default function OnboardingPackagesPage() {
     },
   });
 
-  const grouped = packages.reduce<Record<string, Package[]>>((acc, p) => {
+  const grouped = packages.reduce<Record<string, PackageTemplate[]>>((acc, p) => {
     const cat = p.category ?? 'Other';
     if (!acc[cat]) acc[cat] = [];
     acc[cat].push(p);

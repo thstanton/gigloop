@@ -172,13 +172,13 @@ export function BoldHero({ greetingName, title, formattedDate, statusMessage, po
 export function SetsCard({ sets, formats, bold }: { sets: PortalBookingSet[]; formats: PortalBookingFormat[]; bold: boolean }) {
   if (sets.length === 0) return null;
 
-  const setsByFormatId = new Map<string | null, PortalBookingSet[]>();
+  const setsByPackageId = new Map<string | null, PortalBookingSet[]>();
   for (const s of sets) {
     const key = s.packageId ?? null;
-    if (!setsByFormatId.has(key)) setsByFormatId.set(key, []);
-    setsByFormatId.get(key)!.push(s);
+    if (!setsByPackageId.has(key)) setsByPackageId.set(key, []);
+    setsByPackageId.get(key)!.push(s);
   }
-  const unassigned = setsByFormatId.get(null) ?? [];
+  const unassigned = setsByPackageId.get(null) ?? [];
 
   const mutedClass = bold ? 'text-white/50' : 'text-[#a39e97]';
   const labelClass = bold ? 'text-white' : 'text-[#1a1a1a]';
@@ -197,7 +197,7 @@ export function SetsCard({ sets, formats, bold }: { sets: PortalBookingSet[]; fo
 
       <div className={`divide-y ${dividerClass}`}>
         {formats.map((fmt) => {
-          const fmtSets = setsByFormatId.get(fmt.id) ?? [];
+          const fmtSets = setsByPackageId.get(fmt.id) ?? [];
           if (fmtSets.length === 0) return null;
           const Icon = PACKAGE_ICON_MAP[fmt.icon] ?? Music;
 

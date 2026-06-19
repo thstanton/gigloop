@@ -64,7 +64,7 @@ export class SeriesService {
       customerId: series.customerId,
       venueId: earliest.venueId,
       bookingAgentId: earliest.bookingAgentId,
-      packageIds: earliest.packages.map((bp) => bp.packageId),
+      // packageIds intentionally dropped — see findEarliestMemberBooking (ADR-0046).
       checklistItems: earliest.checklistItems.map((item) => ({
         key: item.key,
         label: item.label,

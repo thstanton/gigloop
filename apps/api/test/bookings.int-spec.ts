@@ -24,6 +24,7 @@ describe('Booking lifecycle (integration)', () => {
 
   afterAll(async () => {
     await prisma.booking.deleteMany({ where: { userId: TEST_USER_ID } });
+    await prisma.packageTemplate.deleteMany({ where: { userId: TEST_USER_ID } });
     await prisma.contact.deleteMany({ where: { userId: TEST_USER_ID } });
     await app.close();
   });
@@ -220,6 +221,251 @@ describe('Booking lifecycle (integration)', () => {
       expect(ids).toContain(bookingId);
 
       await prisma.booking.delete({ where: { id: bookingId } });
+    });
+  });
+
+  // ── ADR-0046: applied package is a snapshot, decoupled from its template ────
+
+  describe('Apply package template → booking snapshots label/icon (provenance severed)', () => {
+    it('editing the source PackageTemplate afterwards does not change the booking', async () => {
+      // Library template the musician will apply.
+      const template = await prisma.packageTemplate.create({
+        data: {
+          userId: TEST_USER_ID,
+          label: 'Wedding Ceremony',
+          icon: 'heart',
+          category: 'WEDDING',
+          keyMoments: [],
+          defaultGenreSelection: [],
+          slots: { create: [{ userId: TEST_USER_ID, label: 'Processional', duration: 30, order: 1 }] },
+        },
+      });
+
+      const create = await createBooking();
+      const bookingId = create.body.id as string;
+
+      // Apply the template to the booking.
+      const apply = await request(app.getHttpServer())
+        .post(`/api/bookings/${bookingId}/packages`)
+        .send({ packageTemplateId: template.id });
+      expect(apply.status).toBe(201);
+
+      // The booking-owned Package carries a snapshot of the template's label/icon,
+      // and a set was copied from the template's slot. Apply returns { booking, suggestion }.
+      const applied = apply.body.booking.packages as Array<{ id: string; label: string; icon: string }>;
+      expect(applied).toHaveLength(1);
+      expect(applied[0]).toMatchObject({ label: 'Wedding Ceremony', icon: 'heart' });
+      const packageId = applied[0].id;
+      const appliedSets = (apply.body.booking.sets as Array<{ packageId: string | null }>).filter(
+        (s) => s.packageId === packageId,
+      );
+      expect(appliedSets).toHaveLength(1);
+
+      // Mutate the source template after applying.
+      await prisma.packageTemplate.update({
+        where: { id: template.id },
+        data: { label: 'RENAMED TEMPLATE', icon: 'star' },
+      });
+
+      // The booking's snapshot must be unaffected — provenance is severed (ADR-0046).
+      const after = await request(app.getHttpServer()).get(`/api/bookings/${bookingId}`);
+      const pkg = (after.body.packages as Array<{ id: string; label: string; icon: string }>).find(
+        (p) => p.id === packageId,
+      );
+      expect(pkg).toBeDefined();
+      expect(pkg!.label).toBe('Wedding Ceremony');
+      expect(pkg!.icon).toBe('heart');
+
+      await prisma.booking.delete({ where: { id: bookingId } });
+      await prisma.packageTemplate.delete({ where: { id: template.id } });
+    });
+
+    it('renaming/re-iconing a booking Package leaves the source template unchanged (#500)', async () => {
+      const template = await prisma.packageTemplate.create({
+        data: {
+          userId: TEST_USER_ID,
+          label: 'Ceremony',
+          icon: 'heart',
+          category: 'WEDDING',
+          keyMoments: [],
+          defaultGenreSelection: [],
+          slots: { create: [{ userId: TEST_USER_ID, label: 'Processional', duration: 30, order: 1 }] },
+        },
+      });
+      const create = await createBooking();
+      const bookingId = create.body.id as string;
+      const apply = await request(app.getHttpServer())
+        .post(`/api/bookings/${bookingId}/packages`)
+        .send({ packageTemplateId: template.id });
+      const packageId = (apply.body.booking.packages as Array<{ id: string }>)[0].id;
+
+      // Rename + re-icon the booking-owned Package.
+      const patched = await request(app.getHttpServer())
+        .patch(`/api/bookings/${bookingId}/packages/${packageId}`)
+        .send({ label: 'Evening Reception', icon: 'music' });
+      expect(patched.status).toBe(200);
+      const pkg = (patched.body.packages as Array<{ id: string; label: string; icon: string }>).find(
+        (p) => p.id === packageId,
+      );
+      expect(pkg).toMatchObject({ label: 'Evening Reception', icon: 'music' });
+
+      // The source PackageTemplate row must be untouched — provenance is severed.
+      const templateAfter = await prisma.packageTemplate.findUnique({ where: { id: template.id } });
+      expect(templateAfter!.label).toBe('Ceremony');
+      expect(templateAfter!.icon).toBe('heart');
+
+      await prisma.booking.delete({ where: { id: bookingId } });
+      await prisma.packageTemplate.delete({ where: { id: template.id } });
+    });
+
+    it('removing a booking Package orphans its sets to ungrouped instead of deleting them (#500)', async () => {
+      const template = await prisma.packageTemplate.create({
+        data: {
+          userId: TEST_USER_ID,
+          label: 'Ceremony',
+          icon: 'heart',
+          category: 'WEDDING',
+          keyMoments: [],
+          defaultGenreSelection: [],
+          slots: { create: [{ userId: TEST_USER_ID, label: 'Processional', duration: 30, order: 1 }] },
+        },
+      });
+      const create = await createBooking();
+      const bookingId = create.body.id as string;
+      const apply = await request(app.getHttpServer())
+        .post(`/api/bookings/${bookingId}/packages`)
+        .send({ packageTemplateId: template.id });
+      const packageId = (apply.body.booking.packages as Array<{ id: string }>)[0].id;
+      const setId = (apply.body.booking.sets as Array<{ id: string; packageId: string | null }>).find(
+        (s) => s.packageId === packageId,
+      )!.id;
+
+      // Remove the package.
+      const remove = await request(app.getHttpServer()).delete(
+        `/api/bookings/${bookingId}/packages/${packageId}`,
+      );
+      expect(remove.status).toBe(204);
+
+      // The set survives, now ungrouped (packageId null); the Package is gone.
+      const after = await request(app.getHttpServer()).get(`/api/bookings/${bookingId}`);
+      expect((after.body.packages as unknown[]).length).toBe(0);
+      const survivor = (after.body.sets as Array<{ id: string; packageId: string | null }>).find(
+        (s) => s.id === setId,
+      );
+      expect(survivor).toBeDefined();
+      expect(survivor!.packageId).toBeNull();
+
+      await prisma.booking.delete({ where: { id: bookingId } });
+      await prisma.packageTemplate.delete({ where: { id: template.id } });
+    });
+  });
+
+  describe('Music form ↔ Packages (key moments, ADR-0046 / #502)', () => {
+    async function applyTemplate(bookingId: string, templateId: string) {
+      const res = await request(app.getHttpServer())
+        .post(`/api/bookings/${bookingId}/packages`)
+        .send({ packageTemplateId: templateId });
+      expect(res.status).toBe(201);
+      return res.body as {
+        booking: { packages: Array<{ id: string; label: string }> };
+        suggestion: { keyMoments: Array<{ label: string; section: string }>; genres: string[] } | null;
+      };
+    }
+
+    function getConfig(bookingId: string) {
+      return request(app.getHttpServer()).get(`/api/bookings/${bookingId}/music-form-config`);
+    }
+
+    it('applying a template while the form is on suggests its moments/genres without forcing them', async () => {
+      const template = await prisma.packageTemplate.create({
+        data: {
+          userId: TEST_USER_ID, label: 'Ceremony', icon: 'heart', category: 'WEDDING',
+          keyMoments: ['Processional', 'First dance'], defaultGenreSelection: ['JAZZ'],
+          slots: { create: [{ userId: TEST_USER_ID, label: 'Processional', duration: 30, order: 1 }] },
+        },
+      });
+      // Form on, but starts empty.
+      const create = await createBooking({ enableMusicForm: true });
+      const bookingId = create.body.id as string;
+
+      const apply = await applyTemplate(bookingId, template.id);
+
+      // Suggestion carries the template's moments (sectioned by the new package's label) + genres…
+      expect(apply.suggestion).toEqual({
+        keyMoments: [
+          { label: 'Processional', section: 'Ceremony' },
+          { label: 'First dance', section: 'Ceremony' },
+        ],
+        genres: ['JAZZ'],
+      });
+      // …but the persisted config is untouched — suggest, never force.
+      const config = await getConfig(bookingId);
+      expect(config.body.keyMoments).toEqual([]);
+      expect(config.body.enabledGenres).toEqual([]);
+
+      await prisma.booking.delete({ where: { id: bookingId } });
+      await prisma.packageTemplate.delete({ where: { id: template.id } });
+    });
+
+    it('returns no suggestion when the music form is off', async () => {
+      const template = await prisma.packageTemplate.create({
+        data: {
+          userId: TEST_USER_ID, label: 'Ceremony', icon: 'heart', category: 'WEDDING',
+          keyMoments: ['Processional'], defaultGenreSelection: ['JAZZ'],
+          slots: { create: [{ userId: TEST_USER_ID, label: 'Processional', duration: 30, order: 1 }] },
+        },
+      });
+      const create = await createBooking(); // form off
+      const bookingId = create.body.id as string;
+
+      const apply = await applyTemplate(bookingId, template.id);
+      expect(apply.suggestion).toBeNull();
+
+      await prisma.booking.delete({ where: { id: bookingId } });
+      await prisma.packageTemplate.delete({ where: { id: template.id } });
+    });
+
+    it('removing a Package moves its key moments to "Other" without deleting them; the last removal leaves all moments under "Other"', async () => {
+      const template = await prisma.packageTemplate.create({
+        data: {
+          userId: TEST_USER_ID, label: 'Ceremony', icon: 'heart', category: 'WEDDING',
+          keyMoments: [], defaultGenreSelection: [],
+          slots: { create: [{ userId: TEST_USER_ID, label: 'Processional', duration: 30, order: 1 }] },
+        },
+      });
+      const create = await createBooking({ enableMusicForm: true });
+      const bookingId = create.body.id as string;
+
+      const apply = await applyTemplate(bookingId, template.id);
+      const packageId = apply.booking.packages[0].id; // label 'Ceremony'
+
+      // Musician assigns moments to the Package and to an ad-hoc "Other" moment.
+      await request(app.getHttpServer())
+        .put(`/api/bookings/${bookingId}/music-form-config`)
+        .send({
+          enabledGenres: [],
+          keyMoments: [
+            { label: 'Processional', section: 'Ceremony' },
+            { label: 'Speeches', section: 'Other' },
+          ],
+        });
+
+      // Remove the (only) Package.
+      const remove = await request(app.getHttpServer()).delete(
+        `/api/bookings/${bookingId}/packages/${packageId}`,
+      );
+      expect(remove.status).toBe(204);
+
+      // The Ceremony moment moved to "Other"; nothing was deleted; with no Packages
+      // left, every moment is under "Other".
+      const config = await getConfig(bookingId);
+      expect(config.body.keyMoments).toEqual([
+        { label: 'Processional', section: 'Other' },
+        { label: 'Speeches', section: 'Other' },
+      ]);
+
+      await prisma.booking.delete({ where: { id: bookingId } });
+      await prisma.packageTemplate.delete({ where: { id: template.id } });
     });
   });
 

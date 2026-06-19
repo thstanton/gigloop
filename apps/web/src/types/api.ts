@@ -163,7 +163,6 @@ export interface SeriesDefaults {
   customerId?: string;
   venueId?: string | null;
   bookingAgentId?: string | null;
-  packageIds?: string[];
   checklistItems?: ChecklistDefaultItem[];
   musicFormConfig?: { enabledGenres: string[]; keyMoments: KeyMoment[] } | null;
 }
@@ -191,14 +190,8 @@ export interface PerformanceSet {
 export interface BookingPackageSummary {
   id: string;
   order: number;
-  packageId: string;
-  package: {
-    id: string;
-    label: string;
-    icon: string;
-    keyMoments: string[];
-    defaultGenreSelection: string[];
-  };
+  label: string;
+  icon: string;
 }
 
 export interface KeyMoment {
@@ -213,6 +206,18 @@ export interface MusicFormConfig {
   enabledGenres: string[];
   createdAt: string;
   updatedAt: string;
+}
+
+/** Apply-time music-form suggestion offered when a template is applied while the form is on (ADR-0046). */
+export interface MusicFormSuggestion {
+  keyMoments: KeyMoment[];
+  genres: string[];
+}
+
+/** Response from POST /bookings/:id/packages — the updated booking plus an optional suggestion. */
+export interface ApplyPackageTemplateResponse {
+  booking: BookingDetail;
+  suggestion: MusicFormSuggestion | null;
 }
 
 export interface BookingListItem {
@@ -319,7 +324,10 @@ export interface CreateBookingInput {
   notes?: string;
   venueId?: string;
   bookingAgentId?: string;
-  formatIds?: string[];
+  packageTemplateIds?: string[];
+  /** Create the music form (song request form) on creation. Presence of the config row is the
+   *  on/off truth — this only decides whether that row is created. Seeded from chosen packages. */
+  enableMusicForm?: boolean;
   checklistItems: ChecklistDefaultItem[];
   seriesId?: string;
   newSeries?: { label: string };
@@ -447,17 +455,17 @@ export interface UpdateSongInput {
 }
 
 // ─────────────────────────────────────────
-// Packages
+// Package Templates (library)
 // ─────────────────────────────────────────
 
-export interface PackageSlot {
+export interface PackageTemplateSlot {
   id: string;
   label: string | null;
   duration: number;
   order: number;
 }
 
-export interface Package {
+export interface PackageTemplate {
   id: string;
   createdAt: string;
   updatedAt: string;
@@ -469,7 +477,7 @@ export interface Package {
   notes: string | null;
   isSystemDefault: boolean;
   enabled: boolean;
-  slots: PackageSlot[];
+  slots: PackageTemplateSlot[];
 }
 
 export interface SlotInput {

@@ -12,6 +12,7 @@ import { UpdateBookingDto } from './dto/update-booking.dto';
 import { UpdateContractDto } from './dto/update-contract.dto';
 import { CreateSetDto } from './dto/create-set.dto';
 import { UpdateSetDto } from './dto/update-set.dto';
+import { UpdateBookingPackageDto } from './dto/update-booking-package.dto';
 import { UpsertMusicFormConfigDto } from './dto/upsert-music-form-config.dto';
 import { MailService } from '../mail/mail.service';
 import { substituteTiptapVariables } from '../mail/tiptap-portal';
@@ -118,19 +119,15 @@ export class BookingsService {
     return undefined;
   }
 
-  private async resolveOrderedFormats(
+  private async resolveOrderedPackageTemplates(
     userId: string,
     dto: CreateBookingDto,
-  ): Promise<{ orderedFormats: Awaited<ReturnType<BookingsRepository['findFormats']>>; songRequestFormEnabled: boolean }> {
-    if (!dto.formatIds?.length) return { orderedFormats: [], songRequestFormEnabled: false };
-    const [formats, profile] = await Promise.all([
-      this.repo.findFormats(userId, dto.formatIds),
-      this.repo.findUserProfile(userId),
-    ]);
-    const orderedFormats = dto.formatIds
-      .map((id) => formats.find((f) => f.id === id))
-      .filter((f): f is NonNullable<typeof f> => f != null);
-    return { orderedFormats, songRequestFormEnabled: profile?.songRequestFormEnabled ?? false };
+  ): Promise<Awaited<ReturnType<BookingsRepository['findPackageTemplates']>>> {
+    if (!dto.packageTemplateIds?.length) return [];
+    const templates = await this.repo.findPackageTemplates(userId, dto.packageTemplateIds);
+    return dto.packageTemplateIds
+      .map((id) => templates.find((t) => t.id === id))
+      .filter((t): t is NonNullable<typeof t> => t != null);
   }
 
   // The atomic unit (ADR-0047): booking row + checklist seed + series-invoice-line append
@@ -143,15 +140,15 @@ export class BookingsService {
       dto: CreateBookingDto;
       dtoWithSeries: CreateBookingDto;
       resolvedSeriesId: string | undefined;
-      orderedFormats: Awaited<ReturnType<BookingsRepository['findFormats']>>;
-      songRequestFormEnabled: boolean;
+      orderedTemplates: Awaited<ReturnType<BookingsRepository['findPackageTemplates']>>;
     },
   ) {
-    const { dto, dtoWithSeries, resolvedSeriesId, orderedFormats, songRequestFormEnabled } = args;
+    const { dto, dtoWithSeries, resolvedSeriesId, orderedTemplates } = args;
+    const enableMusicForm = dto.enableMusicForm ?? false;
 
-    const created = dto.formatIds?.length
-      ? await this.repo.createWithFormats(userId, dtoWithSeries, orderedFormats, songRequestFormEnabled, tx)
-      : await this.repo.create(userId, dtoWithSeries, tx);
+    const created = dto.packageTemplateIds?.length
+      ? await this.repo.createWithPackageTemplates(userId, dtoWithSeries, orderedTemplates, enableMusicForm, tx)
+      : await this.repo.create(userId, dtoWithSeries, enableMusicForm, tx);
 
     if (dto.checklistItems.length > 0) {
       await this.checklistRepo.seedChecklistItems(userId, created.id, dto.checklistItems, created.date, created.createdAt, tx);
@@ -177,10 +174,10 @@ export class BookingsService {
       await this.seriesService.assertMembershipMutable(userId, resolvedSeriesId);
     }
     const dtoWithSeries = { ...dto, seriesId: resolvedSeriesId };
-    const { orderedFormats, songRequestFormEnabled } = await this.resolveOrderedFormats(userId, dto);
+    const orderedTemplates = await this.resolveOrderedPackageTemplates(userId, dto);
 
     // Warm the Neon compute (scale-to-zero) *before* opening the transaction so a cold-start
-    // wake is absorbed here, not inside the interactive-transaction timeout. The no-format/
+    // wake is absorbed here, not inside the interactive-transaction timeout. The no-template/
     // no-series path has no prior DB read, so this is its only warm-up. maxWait/timeout sit
     // above Prisma's 2s/5s defaults as defence in depth (ADR-0047: cold-start handling).
     await this.prisma.$queryRaw`SELECT 1`;
@@ -191,8 +188,7 @@ export class BookingsService {
           dto,
           dtoWithSeries,
           resolvedSeriesId,
-          orderedFormats,
-          songRequestFormEnabled,
+          orderedTemplates,
         }),
       { maxWait: 5000, timeout: 15000 },
     );
@@ -251,19 +247,43 @@ export class BookingsService {
     return this.musicFormRepo.deleteMusicFormConfig(bookingId);
   }
 
-  async applyFormat(userId: string, bookingId: string, formatId: string) {
+  async applyPackageTemplate(userId: string, bookingId: string, packageTemplateId: string) {
     await this.findOne(userId, bookingId);
-    const formats = await this.repo.findFormats(userId, [formatId]);
-    if (!formats.length) throw new NotFoundException('Format not found');
-    const booking = await this.repo.applyFormat(userId, bookingId, formats[0]);
+    const templates = await this.repo.findPackageTemplates(userId, [packageTemplateId]);
+    if (!templates.length) throw new NotFoundException('Package template not found');
+    const template = templates[0];
+    const booking = await this.repo.applyPackageTemplate(userId, bookingId, template);
+    const mapped = this.mapBooking(booking!);
+
+    // Apply-later music-form suggestion (ADR-0046). Provenance is severed, so apply
+    // time is the only moment the template's key moments/genres are knowable for this
+    // booking. When the form is on we *offer* them — never silently write (the repo
+    // does not touch the config; the frontend lets the musician accept or dismiss).
+    const suggestion =
+      mapped.hasMusicFormConfig &&
+      (template.keyMoments.length > 0 || template.defaultGenreSelection.length > 0)
+        ? {
+            keyMoments: template.keyMoments.map((label) => ({ label, section: template.label })),
+            genres: template.defaultGenreSelection,
+          }
+        : null;
+
+    return { booking: mapped, suggestion };
+  }
+
+  async updatePackage(userId: string, bookingId: string, packageId: string, dto: UpdateBookingPackageDto) {
+    await this.findOne(userId, bookingId);
+    const pkg = await this.repo.findBookingPackage(userId, bookingId, packageId);
+    if (!pkg) throw new NotFoundException('Applied package not found');
+    const booking = await this.repo.updatePackage(bookingId, packageId, dto);
     return this.mapBooking(booking!);
   }
 
-  async removeFormat(userId: string, bookingId: string, bookingFormatId: string) {
+  async removePackage(userId: string, bookingId: string, packageId: string) {
     await this.findOne(userId, bookingId);
-    const bookingFormat = await this.repo.findBookingFormat(userId, bookingId, bookingFormatId);
-    if (!bookingFormat) throw new NotFoundException('Applied format not found');
-    const booking = await this.repo.removeFormat(bookingId, bookingFormatId, bookingFormat.packageId);
+    const pkg = await this.repo.findBookingPackage(userId, bookingId, packageId);
+    if (!pkg) throw new NotFoundException('Applied package not found');
+    const booking = await this.repo.removePackage(bookingId, packageId, pkg.label);
     return this.mapBooking(booking!);
   }
 

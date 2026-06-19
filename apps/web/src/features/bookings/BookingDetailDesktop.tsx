@@ -9,6 +9,7 @@ import { useContractActions } from '@/lib/hooks/useContractActions';
 import { useBookingCommunications } from '@/lib/hooks/useBookingCommunications';
 import { useBookingDocuments } from '@/lib/hooks/useBookingDocuments';
 import { useSeriesBookings } from '@/lib/hooks/useSeriesBookings';
+import { useConfigureMusicForm } from '@/lib/hooks/useConfigureMusicForm';
 import SeriesInvoiceCard from '@/features/bookings/SeriesInvoiceCard';
 import { SeriesEventsCard } from '@/features/bookings/SeriesEventsCard';
 import ContractCard from '@/features/bookings/ContractCard';
@@ -50,6 +51,7 @@ export function BookingDetailDesktop({ bookingId }: BookingDetailDesktopProps) {
     enabled: isLoaded && !!booking && booking.hasMusicFormConfig,
   });
 
+  const turnOnMusicForm = useConfigureMusicForm(bookingId, booking, () => editSection('musicForm'));
   const contractActions = useContractActions(bookingId);
   const fields = useBookingFields(bookingId);
   const { checklist, checklistLoading, toggleItem, addItem, isAddingItem } = useBookingChecklist(bookingId, booking, isLoaded);
@@ -76,42 +78,53 @@ export function BookingDetailDesktop({ bookingId }: BookingDetailDesktopProps) {
   return (
     <div className="grid grid-cols-[3fr_2fr] gap-8 items-start mt-6">
 
-      {/* ─── Left column top: For the Day + Packages ─── */}
-      <div className="space-y-8 md:col-start-1">
+      {/* ─── Left column: For the day + Music form, then Notes + Communications ─── */}
+      <div className="space-y-8">
 
         {/* For the day */}
         <section>
           <SectionHeader label="For the day" />
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-            <ItineraryCard
-              logistics={booking.logistics}
-              sets={booking.sets}
-              packages={booking.packages}
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <ItineraryCard
+                logistics={booking.logistics}
+                sets={booking.sets}
+                packages={booking.packages}
+              />
+              <DetailsCard
+                logistics={booking.logistics}
+              />
+            </div>
+            <BookingVenueMapWidget
+              bookingId={bookingId}
+              contactHref={`/admin/contacts/${booking.venue?.id ?? ''}`}
             />
-            <DetailsCard
-              logistics={booking.logistics}
+            {!booking.venue && <InlineVenueAdd />}
+            <MusicFormSection
+              booking={booking}
+              documents={documents}
+              config={musicFormConfig ?? null}
+              isLoading={musicFormConfigLoading}
+              onTurnOn={() => turnOnMusicForm.mutate()}
+              isTurningOn={turnOnMusicForm.isPending}
+              onEdit={() => editSection('musicForm')}
             />
           </div>
-          <BookingVenueMapWidget
-            bookingId={bookingId}
-            contactHref={`/admin/contacts/${booking.venue?.id ?? ''}`}
-          />
-          {!booking.venue && <InlineVenueAdd />}
-          <MusicFormSection
-            booking={booking}
-            documents={documents}
-            config={musicFormConfig ?? null}
-            isLoading={musicFormConfigLoading}
-            onUpdateConfig={() => editSection('musicForm')}
-            onEdit={() => editSection('musicForm')}
-            hideWhenEmpty
-          />
         </section>
+
+        <InlineNotes
+          notes={booking.notes}
+          onSave={(notes) => fields.updateNotes(notes)}
+          isSaving={fields.isNotesPending}
+        />
+        <CommunicationsSection
+          communications={communications}
+        />
 
       </div>
 
       {/* ─── Right column ─── */}
-      <div className="space-y-6 md:col-start-2 md:row-span-2">
+      <div className="space-y-6">
 
         {/* Checklist */}
         {booking.status !== 'CANCELLED' && (
@@ -200,18 +213,6 @@ export function BookingDetailDesktop({ bookingId }: BookingDetailDesktopProps) {
         />
 
       </div>{/* end right column */}
-
-      {/* ─── Left column bottom: Notes + Communications ─── */}
-      <div className="space-y-8 md:col-start-1">
-        <InlineNotes
-          notes={booking.notes}
-          onSave={(notes) => fields.updateNotes(notes)}
-          isSaving={fields.isNotesPending}
-        />
-        <CommunicationsSection
-          communications={communications}
-        />
-      </div>
 
     </div>
   );

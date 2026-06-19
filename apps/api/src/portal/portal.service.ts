@@ -125,9 +125,10 @@ function buildBookingSummary(
       packageId: string | null;
     }>;
     packages: Array<{
-      packageId: string;
+      id: string;
       order: number;
-      package: { label: string; icon: string | null };
+      label: string;
+      icon: string;
     }>;
   },
   activeContract: { status: string; signedAt: Date | null } | null,
@@ -149,9 +150,9 @@ function buildBookingSummary(
       packageId: s.packageId,
     })),
     formats: booking.packages.map((bpf) => ({
-      id: bpf.packageId,
-      label: bpf.package.label,
-      icon: bpf.package.icon,
+      id: bpf.id,
+      label: bpf.label,
+      icon: bpf.icon,
       order: bpf.order,
     })),
     contractSignedAt:

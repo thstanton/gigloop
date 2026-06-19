@@ -20,7 +20,8 @@ import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
 import { CreateSetDto } from './dto/create-set.dto';
 import { UpdateSetDto } from './dto/update-set.dto';
-import { ApplyFormatDto } from './dto/apply-format.dto';
+import { ApplyPackageTemplateDto } from './dto/apply-package-template.dto';
+import { UpdateBookingPackageDto } from './dto/update-booking-package.dto';
 import { UpsertMusicFormConfigDto } from './dto/upsert-music-form-config.dto';
 import { UpdateContractDto } from './dto/update-contract.dto';
 import { UpdateChecklistItemDto } from './dto/update-checklist-item.dto';
@@ -214,25 +215,42 @@ export class BookingsController {
     return this.service.deleteMusicFormConfig(req.userId, id);
   }
 
-  @ApiOperation({ summary: 'Apply a performance format to a booking' })
-  @Post(':id/formats')
-  applyFormat(
+  @ApiOperation({ summary: 'Apply a package template to a booking (creates a booking-owned Package snapshot)' })
+  @ApiResponse({
+    status: 201,
+    description:
+      'The updated booking plus an optional music-form suggestion (the template\'s key moments/genres) when the form is on — offered, never auto-applied (ADR-0046).',
+  })
+  @Post(':id/packages')
+  applyPackageTemplate(
     @Req() req: AuthedRequest,
     @Param('id') id: string,
-    @Body() dto: ApplyFormatDto,
+    @Body() dto: ApplyPackageTemplateDto,
   ) {
-    return this.service.applyFormat(req.userId, id, dto.formatId);
+    return this.service.applyPackageTemplate(req.userId, id, dto.packageTemplateId);
   }
 
-  @ApiOperation({ summary: 'Remove an applied format and its sets from a booking' })
-  @Delete(':id/formats/:bookingFormatId')
-  @HttpCode(204)
-  removeFormat(
+  @ApiOperation({ summary: 'Rename or re-icon a booking-owned Package (does not affect its source template)' })
+  @ApiResponse({ status: 200, description: 'Updated booking' })
+  @Patch(':id/packages/:packageId')
+  updatePackage(
     @Req() req: AuthedRequest,
     @Param('id') id: string,
-    @Param('bookingFormatId') bookingFormatId: string,
+    @Param('packageId') packageId: string,
+    @Body() dto: UpdateBookingPackageDto,
   ) {
-    return this.service.removeFormat(req.userId, id, bookingFormatId);
+    return this.service.updatePackage(req.userId, id, packageId, dto);
+  }
+
+  @ApiOperation({ summary: 'Remove a booking-owned Package, orphaning its sets to ungrouped' })
+  @Delete(':id/packages/:packageId')
+  @HttpCode(204)
+  removePackage(
+    @Req() req: AuthedRequest,
+    @Param('id') id: string,
+    @Param('packageId') packageId: string,
+  ) {
+    return this.service.removePackage(req.userId, id, packageId);
   }
 
   @ApiOperation({ summary: 'Add a performance set to a booking' })

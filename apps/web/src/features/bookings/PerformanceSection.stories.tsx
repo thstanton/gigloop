@@ -20,13 +20,11 @@ const baseBooking: BookingDetail = {
 };
 
 const weddingPackage = {
-  id: 'bp1', order: 0, packageId: 'pkg1',
-  package: { id: 'pkg1', label: 'Wedding Package', icon: 'heart', keyMoments: [], defaultGenreSelection: [] },
+  id: 'pkg1', order: 0, label: 'Wedding Package', icon: 'heart',
 };
 
 const corporatePackage = {
-  id: 'bp2', order: 1, packageId: 'pkg2',
-  package: { id: 'pkg2', label: 'Corporate Dinner', icon: 'briefcase', keyMoments: [], defaultGenreSelection: [] },
+  id: 'pkg2', order: 1, label: 'Corporate Dinner', icon: 'briefcase',
 };
 
 const meta = {
@@ -78,6 +76,44 @@ export const MultipleFormats: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Wedding Package')).toBeVisible();
     await expect(canvas.getByText('Corporate Dinner')).toBeVisible();
+  },
+};
+
+// Ungrouped sets (packageId null) render flat with no package heading — #500.
+export const UngroupedSetsOnly: Story = {
+  args: {
+    booking: {
+      ...baseBooking,
+      packages: [],
+      sets: [
+        { id: 's1', order: 0, duration: 45, startTime: '20:00', label: 'First set', packageId: null },
+        { id: 's2', order: 1, duration: 45, startTime: '21:30', label: 'Second set', packageId: null },
+      ],
+    },
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText(/First set/)).toBeVisible();
+    await expect(canvas.getByText(/Second set/)).toBeVisible();
+    // No package heading is rendered for ungrouped sets.
+    await expect(canvas.queryByText('Other sets')).toBeNull();
+  },
+};
+
+export const PackageWithUngroupedSets: Story = {
+  args: {
+    booking: {
+      ...baseBooking,
+      packages: [weddingPackage],
+      sets: [
+        { id: 's1', order: 0, duration: 60, startTime: '15:30', label: 'Ceremony', packageId: 'pkg1' },
+        { id: 's2', order: 1, duration: 45, startTime: '22:00', label: 'Late set', packageId: null },
+      ],
+    },
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Wedding Package')).toBeVisible();
+    await expect(canvas.getByText(/Late set/)).toBeVisible();
+    await expect(canvas.queryByText('Other sets')).toBeNull();
   },
 };
 

@@ -10,15 +10,11 @@ export class PackagesRepository {
   constructor(private prisma: PrismaService) {}
 
   countByUserId(userId: string) {
-    return this.prisma.package.count({ where: { userId } });
-  }
-
-  countBookingsByPackageId(packageId: string) {
-    return this.prisma.bookingPackage.count({ where: { packageId } });
+    return this.prisma.packageTemplate.count({ where: { userId } });
   }
 
   findAll(userId: string) {
-    return this.prisma.package.findMany({
+    return this.prisma.packageTemplate.findMany({
       where: { userId },
       include: SLOTS_INCLUDE,
       orderBy: { createdAt: 'asc' },
@@ -26,7 +22,7 @@ export class PackagesRepository {
   }
 
   findOne(userId: string, id: string) {
-    return this.prisma.package.findFirst({
+    return this.prisma.packageTemplate.findFirst({
       where: { userId, id },
       include: SLOTS_INCLUDE,
     });
@@ -34,7 +30,7 @@ export class PackagesRepository {
 
   create(userId: string, dto: CreatePackageDto) {
     const { slots = [], ...fields } = dto;
-    return this.prisma.package.create({
+    return this.prisma.packageTemplate.create({
       data: {
         userId,
         ...fields,
@@ -53,24 +49,24 @@ export class PackagesRepository {
       await this.syncSlots(userId, id, slots);
     }
 
-    return this.prisma.package.update({
+    return this.prisma.packageTemplate.update({
       where: { id },
       data: fields,
       include: SLOTS_INCLUDE,
     });
   }
 
-  private async syncSlots(userId: string, packageId: string, slots: SlotUpsertDto[]) {
+  private async syncSlots(userId: string, packageTemplateId: string, slots: SlotUpsertDto[]) {
     const incomingIds = slots.filter((s) => s.id).map((s) => s.id as string);
 
-    await this.prisma.packageSlot.deleteMany({
-      where: { packageId, id: { notIn: incomingIds } },
+    await this.prisma.packageTemplateSlot.deleteMany({
+      where: { packageTemplateId, id: { notIn: incomingIds } },
     });
 
     for (const slot of slots) {
       if (slot.id) {
-        await this.prisma.packageSlot.update({
-          where: { id: slot.id, packageId },
+        await this.prisma.packageTemplateSlot.update({
+          where: { id: slot.id, packageTemplateId },
           data: {
             label: slot.label,
             duration: slot.duration,
@@ -78,10 +74,10 @@ export class PackagesRepository {
           },
         });
       } else {
-        await this.prisma.packageSlot.create({
+        await this.prisma.packageTemplateSlot.create({
           data: {
             userId,
-            packageId,
+            packageTemplateId,
             label: slot.label,
             duration: slot.duration ?? 60,
             order: slot.order ?? 0,
@@ -92,7 +88,7 @@ export class PackagesRepository {
   }
 
   delete(id: string) {
-    return this.prisma.package.delete({ where: { id } });
+    return this.prisma.packageTemplate.delete({ where: { id } });
   }
 
   createMany(
@@ -110,7 +106,7 @@ export class PackagesRepository {
   ) {
     return this.prisma.$transaction(
       packages.map(({ slots, ...pkg }) =>
-        this.prisma.package.create({
+        this.prisma.packageTemplate.create({
           data: {
             userId,
             ...pkg,

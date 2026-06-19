@@ -52,16 +52,10 @@ function makeBooking(set: PerformanceSet): BookingDetail {
     seriesId: null,
     packages: [
       {
-        id: 'bpf-1',
+        id: 'pkg-1',
         order: 1,
-        packageId: 'pkg-1',
-        package: {
-          id: 'pkg-1',
-          label: 'Acoustic Set',
-          icon: 'music',
-          keyMoments: [],
-          defaultGenreSelection: [],
-        },
+        label: 'Acoustic Set',
+        icon: 'music',
       },
     ],
     depositReceivedAt: null,

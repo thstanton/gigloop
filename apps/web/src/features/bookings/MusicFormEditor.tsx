@@ -1,11 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@clerk/react';
-import { Trash2 } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { SubLabel } from '@/components/common/SubLabel';
+import { GhostButton } from '@/components/common/GhostButton';
 import { apiGet, apiPut, apiDelete } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
+import { useConfigureMusicForm } from '@/lib/hooks/useConfigureMusicForm';
 import { ALL_GENRES, GENRE_LABELS } from '@/lib/constants';
 import type { BookingDetail, KeyMoment, MusicFormConfig } from '@/types/api';
 
@@ -23,6 +24,7 @@ export default function MusicFormEditor({
   const [localGenres, setLocalGenres] = useState<string[]>([]);
   const [initialized, setInitialized] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const seededRef = useRef(false);
 
   const { data: config, isLoading } = useQuery({
     queryKey: ['booking-music-form-config', booking.id],
@@ -30,51 +32,47 @@ export default function MusicFormEditor({
     enabled: isLoaded && booking.hasMusicFormConfig,
   });
 
-  // Initialize local state from fetched config (or seed from packages for first-time setup)
+  // Seed local state once per sheet open. No `initialized`-as-guard race: a cache-hit config
+  // never transitions undefined→defined, which is what deadlocked the old split effects and
+  // left the skeleton up forever. The ref re-seeds on each open but not mid-edit, so a
+  // post-save config refetch can't clobber in-flight edits.
   useEffect(() => {
-    if (initialized) return;
+    if (!isOpen) {
+      seededRef.current = false;
+      return;
+    }
+    if (seededRef.current) return;
 
+    // First-time setup starts empty (ADR-0046 / #502): provenance is severed, so booking
+    // Packages carry no key moments to seed from. The musician adds moments here, or applies
+    // a Package Template which *suggests* its moments (PerformanceEditor).
     if (!booking.hasMusicFormConfig) {
-      const seedKeyMoments = (booking.packages ?? []).flatMap((bpf) =>
-        bpf.package.keyMoments.map((km) => ({ label: km, section: bpf.package.label })),
-      );
-      const seedGenres = [
-        ...new Set((booking.packages ?? []).flatMap((bpf) => bpf.package.defaultGenreSelection)),
-      ];
-      setLocalKeyMoments(seedKeyMoments);
-      setLocalGenres(seedGenres);
+      setLocalKeyMoments([]);
+      setLocalGenres([]);
       setInitialized(true);
+      seededRef.current = true;
       return;
     }
 
-    if (!config) return;
+    // On, but config not yet fetched — keep the skeleton until it lands.
+    if (!config) {
+      setInitialized(false);
+      return;
+    }
 
-    const existing = config.keyMoments ?? [];
-    const existingKeys = new Set(existing.map((km) => `${km.section}::${km.label}`));
-    const fromFormats: KeyMoment[] = (booking.packages ?? []).flatMap((bpf) =>
-      bpf.package.keyMoments.map((km) => ({
-        label: km,
-        section: bpf.package.label,
-      })),
-    );
-    const merged = [
-      ...existing,
-      ...fromFormats.filter((km) => !existingKeys.has(`${km.section}::${km.label}`)),
-    ];
-    const seedGenres = [
-      ...new Set(
-        (booking.packages ?? []).flatMap((bpf) => bpf.package.defaultGenreSelection),
-      ),
-    ];
-    setLocalKeyMoments(merged);
-    setLocalGenres(config.enabledGenres?.length ? config.enabledGenres : seedGenres);
+    setLocalKeyMoments(config.keyMoments ?? []);
+    setLocalGenres(config.enabledGenres ?? []);
     setInitialized(true);
-  }, [config, initialized, booking.packages, booking.hasMusicFormConfig]);
+    seededRef.current = true;
+  }, [isOpen, config, booking.hasMusicFormConfig]);
 
   const save = useMutation({
     mutationFn: () =>
       apiPut<MusicFormConfig>(`/bookings/${booking.id}/music-form-config`, {
-        keyMoments: localKeyMoments,
+        // Drop blank rows; a moment with no label is meaningless.
+        keyMoments: localKeyMoments
+          .filter((km) => km.label.trim())
+          .map((km) => ({ label: km.label.trim(), section: km.section })),
         enabledGenres: localGenres,
       }),
     onSuccess: () => {
@@ -94,20 +92,43 @@ export default function MusicFormEditor({
     onError: () => toast({ title: 'Failed to remove music form. Please try again.', variant: 'destructive' }),
   });
 
+  // Turning on creates an empty config row (presence == on, ADR-0046). Mirrors the
+  // detail card's turn-on so on/off is explicit in the edit sheet too (#469 stories 1 & 5).
+  const turnOn = useConfigureMusicForm(booking.id, booking, () => {});
+
   const { reset: saveReset } = save;
   const { reset: removeReset } = remove;
 
-  // Reset when drawer re-opens
+  // Reset transient UI when the drawer re-opens. `initialized` is owned by the seed effect
+  // above. saveReset() stays here (and NOT in the seed effect) so the post-save "Saved"
+  // indicator survives a config refetch but still clears on sheet re-open (Tier 1 convention).
   useEffect(() => {
     if (isOpen) {
-      setInitialized(false);
       setConfirmRemove(false);
       saveReset();
       removeReset();
     }
   }, [isOpen, saveReset, removeReset]);
 
-  if (booking.hasMusicFormConfig && (isLoading || !initialized)) {
+  // Off == no config row (ADR-0046). Show an explicit turn-on control rather than a
+  // full empty editor, so an off form can't be mistaken for an on-but-empty one in the
+  // edit sheet — matching the detail card (#469 stories 1 & 5).
+  if (!booking.hasMusicFormConfig) {
+    return (
+      <div>
+        <p className="text-sm font-medium text-foreground mb-3">Music form</p>
+        <p className="text-sm text-muted mb-3">
+          Off — the customer won't be asked for song requests for this booking.
+        </p>
+        <Button size="sm" onClick={() => turnOn.mutate()} disabled={turnOn.isPending}>
+          <Plus size={14} className="mr-1" />
+          {turnOn.isPending ? 'Turning on…' : 'Turn on music form'}
+        </Button>
+      </div>
+    );
+  }
+
+  if (isLoading || !initialized) {
     return (
       <div>
         <p className="text-sm font-medium text-foreground mb-3">Music form</p>
@@ -116,11 +137,11 @@ export default function MusicFormEditor({
     );
   }
 
-  const sectionMap = new Map<string, KeyMoment[]>();
-  for (const km of localKeyMoments) {
-    if (!sectionMap.has(km.section)) sectionMap.set(km.section, []);
-    sectionMap.get(km.section)!.push(km);
-  }
+  // Section is constrained to the booking's Packages or "Other" — no free-text
+  // (ADR-0046 / #502). Packages can share a label, so de-dupe.
+  const sectionOptions = Array.from(
+    new Set([...(booking.packages ?? []).map((p) => p.label), 'Other']),
+  );
 
   function toggleGenre(genre: string) {
     setLocalGenres((prev) =>
@@ -135,43 +156,68 @@ export default function MusicFormEditor({
       <div className="space-y-4">
         <div>
           <p className="text-xs font-medium text-muted mb-2">Key moments</p>
-          {sectionMap.size === 0 ? (
-            <p className="text-sm text-muted">No key moments configured.</p>
+          {localKeyMoments.length === 0 ? (
+            <p className="text-sm text-muted mb-2">No key moments yet.</p>
           ) : (
-            <div className="space-y-3">
-              {Array.from(sectionMap.entries()).map(([section, moments]) => (
-                <div key={section}>
-                  <SubLabel className="mb-1">{section}</SubLabel>
-                  <div className="space-y-1">
-                    {moments.map((km, i) => (
-                      <div key={i} className="flex items-center justify-between gap-2">
-                        <input
-                          value={km.label}
-                          onChange={(e) => {
-                            const updated = localKeyMoments.map((m) =>
-                              m === km ? { ...m, label: e.target.value } : m,
-                            );
-                            setLocalKeyMoments(updated);
-                          }}
-                          className="flex-1 text-sm bg-background border border-border rounded px-2 py-1"
-                        />
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setLocalKeyMoments((prev) => prev.filter((m) => m !== km))
-                          }
-                          className="text-muted hover:text-status-cancelled transition-colors"
-                          aria-label="Remove key moment"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    ))}
+            <div className="space-y-1 mb-2">
+              {localKeyMoments.map((km, i) => {
+                // Keep the moment's own section selectable even if it's stale
+                // (e.g. the package was renamed after the moment was created).
+                const opts = sectionOptions.includes(km.section)
+                  ? sectionOptions
+                  : [...sectionOptions, km.section];
+                return (
+                  <div key={i} className="flex items-center gap-2">
+                    <input
+                      value={km.label}
+                      placeholder="Key moment"
+                      onChange={(e) =>
+                        setLocalKeyMoments((prev) =>
+                          prev.map((m, j) => (j === i ? { ...m, label: e.target.value } : m)),
+                        )
+                      }
+                      className="flex-1 min-w-0 text-sm bg-background border border-border rounded px-2 py-1"
+                      aria-label="Key moment label"
+                    />
+                    <select
+                      value={km.section}
+                      onChange={(e) =>
+                        setLocalKeyMoments((prev) =>
+                          prev.map((m, j) => (j === i ? { ...m, section: e.target.value } : m)),
+                        )
+                      }
+                      className="text-sm bg-background border border-border rounded px-2 py-1"
+                      aria-label="Key moment section"
+                    >
+                      {opts.map((opt) => (
+                        <option key={opt} value={opt}>
+                          {opt}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setLocalKeyMoments((prev) => prev.filter((_, j) => j !== i))}
+                      className="text-muted hover:text-status-cancelled transition-colors flex-shrink-0"
+                      aria-label="Remove key moment"
+                    >
+                      <Trash2 size={13} />
+                    </button>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
+          <GhostButton
+            onClick={() =>
+              setLocalKeyMoments((prev) => [...prev, { label: '', section: 'Other' }])
+            }
+            variant="primary"
+            size="xs"
+            icon={<Plus size={12} aria-hidden="true" />}
+          >
+            Add key moment
+          </GhostButton>
         </div>
 
         <div>
@@ -204,7 +250,8 @@ export default function MusicFormEditor({
           {save.isSuccess && !confirmRemove && (
             <span className="text-xs text-muted">Saved</span>
           )}
-          {booking.hasMusicFormConfig && (!confirmRemove ? (
+          {/* Editor only renders when the form is on, so Remove (= turn off) is always available here. */}
+          {!confirmRemove ? (
             <Button
               size="sm"
               variant="ghost"
@@ -229,7 +276,7 @@ export default function MusicFormEditor({
                 Cancel
               </Button>
             </>
-          ))}
+          )}
         </div>
       </div>
     </div>

@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Textarea } from '@/components/ui/textarea';
 import { TogglePill } from '@/components/ui/toggle-pill';
+import { Switch } from '@/components/ui/switch';
 import { FormField } from '@/components/common/FormField';
 import { IconButton } from '@/components/common/IconButton';
 import {
@@ -20,7 +21,7 @@ import { InlineContactBlock } from './InlineContactBlock';
 import { InlineVenueBlock } from './InlineVenueBlock';
 import { InlineAgentBlock } from './InlineAgentBlock';
 import { EVENT_TYPE_LABELS } from '@/lib/constants';
-import type { BookingSeries, EventType, Package } from '@/types/api';
+import type { BookingSeries, EventType, PackageTemplate } from '@/types/api';
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
@@ -36,7 +37,8 @@ export const bookingFormSchema = z.object({
   customerId: z.string().min(1, 'Customer is required'),
   venueId: z.string().nullable(),
   bookingAgentId: z.string().nullable(),
-  formatIds: z.array(z.string()),
+  packageTemplateIds: z.array(z.string()),
+  enableMusicForm: z.boolean(),
   seriesMode: z.enum(['none', 'existing', 'new']),
   seriesId: z.string().nullable().optional(),
   newSeriesLabel: z.string().optional(),
@@ -56,7 +58,7 @@ function FormatSelector({
   value,
   onChange,
 }: {
-  formats: Package[];
+  formats: PackageTemplate[];
   value: string[];
   onChange: (ids: string[]) => void;
 }) {
@@ -80,7 +82,7 @@ function FormatSelector({
 
   const selected = value
     .map((id) => formats.find((f) => f.id === id))
-    .filter((f): f is Package => f !== undefined);
+    .filter((f): f is PackageTemplate => f !== undefined);
 
   return (
     <div className="space-y-3">
@@ -207,7 +209,7 @@ interface Props {
   register: UseFormRegister<BookingFormValues>;
   errors: FieldErrors<BookingFormValues>;
   songRequestFormEnabled?: boolean;
-  formats?: Package[];
+  formats?: PackageTemplate[];
   series?: BookingSeries[];
   hideNotes?: boolean;
   /** Hide the People section — the edit drawer renders its own People blocks that
@@ -350,7 +352,7 @@ export function BookingFormFields({
         <div className="space-y-3">
           <h2 className="text-sm font-semibold text-foreground">Packages</h2>
           <Controller
-            name="formatIds"
+            name="packageTemplateIds"
             control={control}
             render={({ field }) => (
               <FormatSelector
@@ -361,6 +363,28 @@ export function BookingFormFields({
             )}
           />
         </div>
+      )}
+
+      {/* Music form — presence of a config row is the on/off truth (ADR-0046); this toggle
+          decides whether one is created on booking creation, seeded from the chosen packages. */}
+      {songRequestFormEnabled && (
+        <Controller
+          name="enableMusicForm"
+          control={control}
+          render={({ field }) => (
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold text-foreground">Music form</p>
+                <p className="text-sm text-muted">Collect song requests from the customer for this booking.</p>
+              </div>
+              <Switch
+                aria-label="Music form"
+                checked={field.value}
+                onCheckedChange={field.onChange}
+              />
+            </div>
+          )}
+        />
       )}
 
       {/* Series */}

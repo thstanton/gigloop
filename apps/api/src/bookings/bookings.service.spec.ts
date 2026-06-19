@@ -20,11 +20,12 @@ type MockRepo = {
   findAll: jest.Mock;
   findOne: jest.Mock;
   create: jest.Mock;
-  findFormats: jest.Mock;
-  createWithFormats: jest.Mock;
-  findBookingFormat: jest.Mock;
-  applyFormat: jest.Mock;
-  removeFormat: jest.Mock;
+  findPackageTemplates: jest.Mock;
+  createWithPackageTemplates: jest.Mock;
+  findBookingPackage: jest.Mock;
+  applyPackageTemplate: jest.Mock;
+  updatePackage: jest.Mock;
+  removePackage: jest.Mock;
   update: jest.Mock;
   cancel: jest.Mock;
   findSet: jest.Mock;
@@ -74,11 +75,12 @@ function makeRepo(): MockRepo {
     findAll: jest.fn(),
     findOne: jest.fn(),
     create: jest.fn(),
-    findFormats: jest.fn(),
-    createWithFormats: jest.fn(),
-    findBookingFormat: jest.fn(),
-    applyFormat: jest.fn(),
-    removeFormat: jest.fn(),
+    findPackageTemplates: jest.fn(),
+    createWithPackageTemplates: jest.fn(),
+    findBookingPackage: jest.fn(),
+    applyPackageTemplate: jest.fn(),
+    updatePackage: jest.fn(),
+    removePackage: jest.fn(),
     update: jest.fn(),
     cancel: jest.fn(),
     findSet: jest.fn(),
@@ -307,12 +309,13 @@ describe('BookingsService', () => {
   describe('create', () => {
     const createdBooking = { ...booking, date: new Date('2026-06-01'), createdAt: new Date('2026-01-01') };
 
-    it('delegates to repo.create when no formatIds provided', async () => {
+    it('delegates to repo.create when no packageTemplateIds provided', async () => {
       repo.create.mockResolvedValue(createdBooking);
       const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', checklistItems: [] };
       const result = await service.create('u1', dto);
-      expect(repo.create).toHaveBeenCalledWith('u1', dto, TX);
-      expect(repo.findFormats).not.toHaveBeenCalled();
+      // enableMusicForm defaults to false when the dto omits it.
+      expect(repo.create).toHaveBeenCalledWith('u1', dto, false, TX);
+      expect(repo.findPackageTemplates).not.toHaveBeenCalled();
       expect(result).toBe(createdBooking);
     });
 
@@ -333,39 +336,45 @@ describe('BookingsService', () => {
       expect(checklistRepo.seedChecklistItems).not.toHaveBeenCalled();
     });
 
-    it('fetches formats and calls createWithFormats when formatIds provided', async () => {
-      const fmt = { id: 'f1', label: 'Wedding Ceremony', keyMoments: ['Processional'], defaultGenreSelection: ['CONTEMPORARY'], slots: [] };
-      repo.findFormats.mockResolvedValue([fmt]);
-      repo.findUserProfile.mockResolvedValue(null);
-      repo.createWithFormats.mockResolvedValue(createdBooking);
-      const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', formatIds: ['f1'], checklistItems: [] };
+    it('fetches templates and calls createWithPackageTemplates when packageTemplateIds provided', async () => {
+      const tmpl = { id: 'f1', label: 'Wedding Ceremony', icon: 'heart', keyMoments: ['Processional'], defaultGenreSelection: ['CONTEMPORARY'], slots: [] };
+      repo.findPackageTemplates.mockResolvedValue([tmpl]);
+      repo.createWithPackageTemplates.mockResolvedValue(createdBooking);
+      const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', packageTemplateIds: ['f1'], checklistItems: [] };
       const result = await service.create('u1', dto);
-      expect(repo.findFormats).toHaveBeenCalledWith('u1', ['f1']);
-      expect(repo.createWithFormats).toHaveBeenCalledWith('u1', dto, [fmt], false, TX);
+      expect(repo.findPackageTemplates).toHaveBeenCalledWith('u1', ['f1']);
+      // No enableMusicForm in the dto → music form off (config row not created).
+      expect(repo.createWithPackageTemplates).toHaveBeenCalledWith('u1', dto, [tmpl], false, TX);
       expect(result).toBe(createdBooking);
     });
 
-    it('passes songRequestFormEnabled=true when profile has it enabled', async () => {
-      const fmt = { id: 'f1', label: 'Wedding Ceremony', keyMoments: [], defaultGenreSelection: [], slots: [] };
-      repo.findFormats.mockResolvedValue([fmt]);
-      repo.findUserProfile.mockResolvedValue({ songRequestFormEnabled: true });
-      repo.createWithFormats.mockResolvedValue(createdBooking);
-      const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', formatIds: ['f1'], checklistItems: [] };
+    it('passes enableMusicForm=true to createWithPackageTemplates when the dto opts in', async () => {
+      const tmpl = { id: 'f1', label: 'Wedding Ceremony', icon: 'heart', keyMoments: [], defaultGenreSelection: [], slots: [] };
+      repo.findPackageTemplates.mockResolvedValue([tmpl]);
+      repo.createWithPackageTemplates.mockResolvedValue(createdBooking);
+      const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', packageTemplateIds: ['f1'], enableMusicForm: true, checklistItems: [] };
       await service.create('u1', dto);
-      expect(repo.createWithFormats).toHaveBeenCalledWith('u1', dto, [fmt], true, TX);
+      expect(repo.createWithPackageTemplates).toHaveBeenCalledWith('u1', dto, [tmpl], true, TX);
     });
 
-    it('preserves order from formatIds when creating with formats', async () => {
-      const fmt1 = { id: 'f1', label: 'A', keyMoments: [], defaultGenreSelection: [], slots: [] };
-      const fmt2 = { id: 'f2', label: 'B', keyMoments: [], defaultGenreSelection: [], slots: [] };
-      repo.findFormats.mockResolvedValue([fmt2, fmt1]); // reversed from DB
-      repo.findUserProfile.mockResolvedValue(null);
-      repo.createWithFormats.mockResolvedValue(createdBooking);
-      const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', formatIds: ['f1', 'f2'], checklistItems: [] };
+    it('passes enableMusicForm=true to repo.create when opting in with no packages', async () => {
+      repo.create.mockResolvedValue(createdBooking);
+      const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', enableMusicForm: true, checklistItems: [] };
       await service.create('u1', dto);
-      const orderedFormats = repo.createWithFormats.mock.calls[0][2];
-      expect(orderedFormats[0].id).toBe('f1');
-      expect(orderedFormats[1].id).toBe('f2');
+      expect(repo.create).toHaveBeenCalledWith('u1', expect.objectContaining({ enableMusicForm: true }), true, TX);
+    });
+
+    it('preserves order from packageTemplateIds when creating with templates', async () => {
+      const tmpl1 = { id: 'f1', label: 'A', icon: 'music', keyMoments: [], defaultGenreSelection: [], slots: [] };
+      const tmpl2 = { id: 'f2', label: 'B', icon: 'music', keyMoments: [], defaultGenreSelection: [], slots: [] };
+      repo.findPackageTemplates.mockResolvedValue([tmpl2, tmpl1]); // reversed from DB
+      repo.findUserProfile.mockResolvedValue(null);
+      repo.createWithPackageTemplates.mockResolvedValue(createdBooking);
+      const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', packageTemplateIds: ['f1', 'f2'], checklistItems: [] };
+      await service.create('u1', dto);
+      const orderedTemplates = repo.createWithPackageTemplates.mock.calls[0][2];
+      expect(orderedTemplates[0].id).toBe('f1');
+      expect(orderedTemplates[1].id).toBe('f2');
     });
 
     // ADR-0047 — atomic create (Path A regression guard). The unit-level proof is that
@@ -392,7 +401,7 @@ describe('BookingsService', () => {
 
         expect(prisma.$transaction).toHaveBeenCalledTimes(1);
         // The same tx sentinel reaches each write — proof they share one atomic unit.
-        expect(repo.create).toHaveBeenCalledWith('u1', expect.objectContaining({ seriesId: 's1' }), TX);
+        expect(repo.create).toHaveBeenCalledWith('u1', expect.objectContaining({ seriesId: 's1' }), false, TX);
         expect(checklistRepo.seedChecklistItems).toHaveBeenCalledWith('u1', createdBooking.id, checklistItems, createdBooking.date, createdBooking.createdAt, TX);
         expect(seriesService.syncMemberJoin).toHaveBeenCalledWith('u1', 's1', expect.objectContaining({ id: createdBooking.id }), TX);
       });
@@ -493,48 +502,109 @@ describe('BookingsService', () => {
     });
   });
 
-  describe('applyFormat', () => {
+  describe('applyPackageTemplate', () => {
     const rawBooking = { ...booking, musicFormConfig: null, musicFormResponse: null, packages: [] };
 
-    it('applies a format when booking and format both exist', async () => {
-      const fmt = { id: 'f1', label: 'Ceremony', keyMoments: [], defaultGenreSelection: [], slots: [] };
+    it('applies a template when booking and template both exist', async () => {
+      const tmpl = { id: 'f1', label: 'Ceremony', icon: 'heart', keyMoments: [], defaultGenreSelection: [], slots: [] };
       repo.findOne.mockResolvedValue(rawBooking);
-      repo.findFormats.mockResolvedValue([fmt]);
-      repo.applyFormat.mockResolvedValue(rawBooking);
-      await service.applyFormat('u1', 'b1', 'f1');
-      expect(repo.applyFormat).toHaveBeenCalledWith('u1', 'b1', fmt);
+      repo.findPackageTemplates.mockResolvedValue([tmpl]);
+      repo.applyPackageTemplate.mockResolvedValue(rawBooking);
+      await service.applyPackageTemplate('u1', 'b1', 'f1');
+      expect(repo.applyPackageTemplate).toHaveBeenCalledWith('u1', 'b1', tmpl);
     });
 
-    it('throws NotFoundException when format is not found', async () => {
+    it('offers the template key moments/genres as a suggestion when the form is on, without forcing them (ADR-0046 / #502)', async () => {
+      const tmpl = {
+        id: 'f1', label: 'Ceremony', icon: 'heart',
+        keyMoments: ['Processional', 'First dance'],
+        defaultGenreSelection: ['JAZZ'], slots: [],
+      };
+      // Form on: the applied booking carries a musicFormConfig.
+      const onBooking = { ...rawBooking, musicFormConfig: { id: 'mfc1' } };
       repo.findOne.mockResolvedValue(rawBooking);
-      repo.findFormats.mockResolvedValue([]);
-      await expect(service.applyFormat('u1', 'b1', 'bad-id')).rejects.toThrow(NotFoundException);
-      expect(repo.applyFormat).not.toHaveBeenCalled();
+      repo.findPackageTemplates.mockResolvedValue([tmpl]);
+      repo.applyPackageTemplate.mockResolvedValue(onBooking);
+
+      const result = await service.applyPackageTemplate('u1', 'b1', 'f1');
+
+      expect(result.suggestion).toEqual({
+        keyMoments: [
+          { label: 'Processional', section: 'Ceremony' },
+          { label: 'First dance', section: 'Ceremony' },
+        ],
+        genres: ['JAZZ'],
+      });
+      // "Suggest, not force": the config is never written by applying.
+      expect(musicFormRepo.upsertMusicFormConfig).not.toHaveBeenCalled();
+    });
+
+    it('returns no suggestion when the music form is off', async () => {
+      const tmpl = {
+        id: 'f1', label: 'Ceremony', icon: 'heart',
+        keyMoments: ['Processional'], defaultGenreSelection: ['JAZZ'], slots: [],
+      };
+      repo.findOne.mockResolvedValue(rawBooking);
+      repo.findPackageTemplates.mockResolvedValue([tmpl]);
+      repo.applyPackageTemplate.mockResolvedValue(rawBooking); // musicFormConfig: null
+
+      const result = await service.applyPackageTemplate('u1', 'b1', 'f1');
+
+      expect(result.suggestion).toBeNull();
+      expect(musicFormRepo.upsertMusicFormConfig).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException when template is not found', async () => {
+      repo.findOne.mockResolvedValue(rawBooking);
+      repo.findPackageTemplates.mockResolvedValue([]);
+      await expect(service.applyPackageTemplate('u1', 'b1', 'bad-id')).rejects.toThrow(NotFoundException);
+      expect(repo.applyPackageTemplate).not.toHaveBeenCalled();
     });
 
     it('throws NotFoundException when booking is not found', async () => {
       repo.findOne.mockResolvedValue(null);
-      await expect(service.applyFormat('u1', 'missing', 'f1')).rejects.toThrow(NotFoundException);
+      await expect(service.applyPackageTemplate('u1', 'missing', 'f1')).rejects.toThrow(NotFoundException);
     });
   });
 
-  describe('removeFormat', () => {
+  describe('removePackage', () => {
     const rawBooking = { ...booking, musicFormConfig: null, musicFormResponse: null, packages: [] };
 
-    it('removes a format when booking and bookingFormat both exist', async () => {
-      const bookingFormat = { id: 'bf1', packageId: 'f1' };
+    it('removes a package when booking and package both exist', async () => {
+      const bookingPackage = { id: 'pkg1', label: 'Ceremony', icon: 'heart', order: 1 };
       repo.findOne.mockResolvedValue(rawBooking);
-      repo.findBookingFormat.mockResolvedValue(bookingFormat);
-      repo.removeFormat.mockResolvedValue(rawBooking);
-      await service.removeFormat('u1', 'b1', 'bf1');
-      expect(repo.removeFormat).toHaveBeenCalledWith('b1', 'bf1', 'f1');
+      repo.findBookingPackage.mockResolvedValue(bookingPackage);
+      repo.removePackage.mockResolvedValue(rawBooking);
+      await service.removePackage('u1', 'b1', 'pkg1');
+      // The package label is threaded so the repo can move its key moments to "Other" (#502).
+      expect(repo.removePackage).toHaveBeenCalledWith('b1', 'pkg1', 'Ceremony');
     });
 
-    it('throws NotFoundException when bookingFormat is not found', async () => {
+    it('throws NotFoundException when package is not found', async () => {
       repo.findOne.mockResolvedValue(rawBooking);
-      repo.findBookingFormat.mockResolvedValue(null);
-      await expect(service.removeFormat('u1', 'b1', 'bf1')).rejects.toThrow(NotFoundException);
-      expect(repo.removeFormat).not.toHaveBeenCalled();
+      repo.findBookingPackage.mockResolvedValue(null);
+      await expect(service.removePackage('u1', 'b1', 'pkg1')).rejects.toThrow(NotFoundException);
+      expect(repo.removePackage).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('updatePackage', () => {
+    const rawBooking = { ...booking, musicFormConfig: null, musicFormResponse: null, packages: [] };
+
+    it('updates a booking-owned package when booking and package both exist', async () => {
+      const bookingPackage = { id: 'pkg1', label: 'Ceremony', icon: 'heart', order: 1 };
+      repo.findOne.mockResolvedValue(rawBooking);
+      repo.findBookingPackage.mockResolvedValue(bookingPackage);
+      repo.updatePackage.mockResolvedValue(rawBooking);
+      await service.updatePackage('u1', 'b1', 'pkg1', { label: 'Evening', icon: 'music' });
+      expect(repo.updatePackage).toHaveBeenCalledWith('b1', 'pkg1', { label: 'Evening', icon: 'music' });
+    });
+
+    it('throws NotFoundException when package is not found', async () => {
+      repo.findOne.mockResolvedValue(rawBooking);
+      repo.findBookingPackage.mockResolvedValue(null);
+      await expect(service.updatePackage('u1', 'b1', 'pkg1', { label: 'X' })).rejects.toThrow(NotFoundException);
+      expect(repo.updatePackage).not.toHaveBeenCalled();
     });
   });
 

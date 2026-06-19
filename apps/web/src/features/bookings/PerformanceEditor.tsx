@@ -1,22 +1,22 @@
 import { useEffect, useRef, useState, type FocusEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2, Music } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { GhostButton } from '@/components/common/GhostButton';
 import { SubLabel } from '@/components/common/SubLabel';
-import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
+import { PackageIcon } from '@/components/common/PackageIcon';
+import { IconPicker } from '@/components/common/IconPicker';
+import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
-import { PACKAGE_ICON_MAP } from '@/lib/constants';
 import type {
+  ApplyPackageTemplateResponse,
   BookingDetail,
   BookingPackageSummary,
-  Package,
+  MusicFormConfig,
+  MusicFormSuggestion,
+  PackageTemplate,
   PerformanceSet,
 } from '@/types/api';
-
-function FormatIcon({ icon, size = 14 }: { icon: string; size?: number }) {
-  const Icon = PACKAGE_ICON_MAP[icon] ?? Music;
-  return <Icon size={size} />;
-}
 
 // ─── Set edit row ─────────────────────────────────────────────────────────────
 
@@ -138,50 +138,165 @@ function SetEditRow({
   );
 }
 
+// ─── Package header (rename / re-icon / remove) ─────────────────────────────────
+
+function PackageHeader({
+  pkg,
+  onUpdate,
+  onRemove,
+  isRemoving,
+}: {
+  pkg: BookingPackageSummary;
+  onUpdate: (dto: { label?: string; icon?: string }) => void;
+  onRemove: () => void;
+  isRemoving: boolean;
+}) {
+  const [label, setLabel] = useState(pkg.label);
+  const [iconOpen, setIconOpen] = useState(false);
+
+  // Re-sync when the server value changes (e.g. after a save invalidation).
+  useEffect(() => setLabel(pkg.label), [pkg.label]);
+
+  function commitLabel() {
+    const next = label.trim();
+    if (!next || next === pkg.label) {
+      setLabel(pkg.label);
+      return;
+    }
+    onUpdate({ label: next });
+  }
+
+  return (
+    <div className="mb-1">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 flex-1 min-w-0">
+          <button
+            type="button"
+            onClick={() => setIconOpen((o) => !o)}
+            className="text-foreground hover:text-primary transition-colors flex-shrink-0"
+            aria-label={`Change ${pkg.label} icon`}
+          >
+            <PackageIcon icon={pkg.icon} />
+          </button>
+          <input
+            type="text"
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            onBlur={commitLabel}
+            onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+            className="text-sm font-medium text-foreground bg-transparent border border-transparent hover:border-border focus:border-border rounded px-1 py-0.5 min-w-0 flex-1"
+            aria-label={`Package name`}
+          />
+        </div>
+        <button
+          type="button"
+          onClick={onRemove}
+          disabled={isRemoving}
+          className="text-muted hover:text-status-cancelled transition-colors disabled:opacity-50 flex-shrink-0"
+          aria-label={`Remove ${pkg.label}`}
+        >
+          <Trash2 size={13} aria-hidden="true" />
+        </button>
+      </div>
+      {iconOpen && (
+        <div className="mt-2 mb-1">
+          <IconPicker
+            value={pkg.icon}
+            onChange={(icon) => { onUpdate({ icon }); setIconOpen(false); }}
+            label={null}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function PerformanceEditor({ booking, isOpen }: { booking: BookingDetail; isOpen: boolean }) {
   const queryClient = useQueryClient();
   const [addOpen, setAddOpen] = useState(false);
-  const [confirmRemoveFormatId, setConfirmRemoveFormatId] = useState<string | null>(null);
 
-  const { data: allFormats = [], isLoading: formatsLoading } = useQuery({
+  const { data: allTemplates = [], isLoading: templatesLoading } = useQuery({
     queryKey: ['packages'],
-    queryFn: () => apiGet<Package[]>('/packages'),
+    queryFn: () => apiGet<PackageTemplate[]>('/packages'),
     enabled: addOpen,
   });
 
   const [otherOpen, setOtherOpen] = useState(false);
+  const [pendingSuggestion, setPendingSuggestion] = useState<MusicFormSuggestion | null>(null);
 
-  const appliedFormatIds = new Set(
-    (booking.packages ?? []).map((bpf) => bpf.packageId),
-  );
-  const enabledUnapplied = allFormats.filter((f) => f.enabled && !appliedFormatIds.has(f.id));
-  const matchingFormats = enabledUnapplied.filter((f) => f.category === booking.eventType);
-  const otherFormats = enabledUnapplied.filter((f) => f.category !== booking.eventType);
-  const availableFormats = enabledUnapplied;
+  // Provenance is severed (ADR-0046): booking-owned Packages carry no FK back to the
+  // template, so we can't filter already-applied templates. All enabled templates are shown.
+  const enabledTemplates = allTemplates.filter((t) => t.enabled);
+  const matchingTemplates = enabledTemplates.filter((t) => t.category === booking.eventType);
+  const otherTemplates = enabledTemplates.filter((t) => t.category !== booking.eventType);
+  const availableTemplates = enabledTemplates;
 
   useEffect(() => {
     if (isOpen) {
-      setConfirmRemoveFormatId(null);
+      setAddOpen(false);
+      setPendingSuggestion(null);
     }
   }, [isOpen]);
 
-  const applyFormat = useMutation({
-    mutationFn: (formatId: string) =>
-      apiPost(`/bookings/${booking.id}/formats`, { formatId }),
-    onSuccess: () => {
+  const applyTemplate = useMutation({
+    mutationFn: (packageTemplateId: string) =>
+      apiPost<ApplyPackageTemplateResponse>(`/bookings/${booking.id}/packages`, { packageTemplateId }),
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['booking', booking.id] });
       setAddOpen(false);
+      // Apply-later suggestion (ADR-0046): when the music form is on, offer the
+      // template's key moments/genres — the musician accepts or dismisses; we never
+      // write them silently.
+      if (data.suggestion && (data.suggestion.keyMoments.length || data.suggestion.genres.length)) {
+        setPendingSuggestion(data.suggestion);
+      }
     },
     onError: () => {
       toast({ title: 'Failed to add package. Please try again.', variant: 'destructive' });
     },
   });
 
-  const removeFormat = useMutation({
-    mutationFn: (bookingFormatId: string) =>
-      apiDelete(`/bookings/${booking.id}/formats/${bookingFormatId}`),
+  // Accept a suggestion: merge into the current music-form config (de-duped) and save.
+  const acceptSuggestion = useMutation({
+    mutationFn: async (suggestion: MusicFormSuggestion) => {
+      const config = await apiGet<MusicFormConfig>(`/bookings/${booking.id}/music-form-config`);
+      const seen = new Set(config.keyMoments.map((km) => `${km.section} ${km.label}`));
+      const mergedMoments = [
+        ...config.keyMoments,
+        ...suggestion.keyMoments.filter((km) => !seen.has(`${km.section} ${km.label}`)),
+      ];
+      const mergedGenres = Array.from(new Set([...config.enabledGenres, ...suggestion.genres]));
+      return apiPut(`/bookings/${booking.id}/music-form-config`, {
+        keyMoments: mergedMoments,
+        enabledGenres: mergedGenres,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['booking', booking.id] });
+      queryClient.invalidateQueries({ queryKey: ['booking-music-form-config', booking.id] });
+      setPendingSuggestion(null);
+    },
+    onError: () => {
+      toast({ title: 'Failed to add suggestions. Please try again.', variant: 'destructive' });
+    },
+  });
+
+  const updatePackage = useMutation({
+    mutationFn: ({ packageId, ...dto }: { packageId: string; label?: string; icon?: string }) =>
+      apiPatch(`/bookings/${booking.id}/packages/${packageId}`, dto),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['booking', booking.id] }),
+    onError: () => {
+      toast({ title: 'Failed to update package. Please try again.', variant: 'destructive' });
+    },
+  });
+
+  // Removing a package is non-destructive — its sets orphan to ungrouped (#500),
+  // so no confirmation is needed.
+  const removePackage = useMutation({
+    mutationFn: (packageId: string) =>
+      apiDelete(`/bookings/${booking.id}/packages/${packageId}`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['booking', booking.id] }),
     onError: () => {
       toast({ title: 'Failed to remove package. Please try again.', variant: 'destructive' });
@@ -189,9 +304,9 @@ export default function PerformanceEditor({ booking, isOpen }: { booking: Bookin
   });
 
   const addSet = useMutation({
-    mutationFn: (payload: { packageId: string; order: number }) =>
+    mutationFn: (payload: { packageId?: string; order: number }) =>
       apiPost(`/bookings/${booking.id}/sets`, {
-        packageId: payload.packageId,
+        ...(payload.packageId ? { packageId: payload.packageId } : {}),
         order: payload.order,
         duration: 30,
       }),
@@ -209,76 +324,83 @@ export default function PerformanceEditor({ booking, isOpen }: { booking: Bookin
     },
   });
 
-  function handleRemoveFormat(bpf: BookingPackageSummary) {
-    const sets = (booking.sets ?? []).filter((s) => s.packageId === bpf.packageId);
-    const hasStartTimes = sets.some((s) => s.startTime);
-    if (hasStartTimes) {
-      setConfirmRemoveFormatId(bpf.id);
-      return;
-    }
-    removeFormat.mutate(bpf.id);
+  function nextSetOrder() {
+    return Math.max(0, ...(booking.sets ?? []).map((s) => s.order)) + 1;
   }
 
   function handleAddSet(bpf: BookingPackageSummary) {
-    const nextOrder = Math.max(0, ...(booking.sets ?? []).map((s) => s.order)) + 1;
-    addSet.mutate({ packageId: bpf.packageId, order: nextOrder });
+    addSet.mutate({ packageId: bpf.id, order: nextSetOrder() });
   }
 
-  const setsByFormatId = new Map<string | null, PerformanceSet[]>();
+  function handleAddUngroupedSet() {
+    addSet.mutate({ order: nextSetOrder() });
+  }
+
+  const setsByPackageId = new Map<string | null, PerformanceSet[]>();
   for (const set of booking.sets ?? []) {
     const key = set.packageId ?? null;
-    if (!setsByFormatId.has(key)) setsByFormatId.set(key, []);
-    setsByFormatId.get(key)!.push(set);
+    if (!setsByPackageId.has(key)) setsByPackageId.set(key, []);
+    setsByPackageId.get(key)!.push(set);
   }
-  const unassigned = setsByFormatId.get(null) ?? [];
+  const unassigned = setsByPackageId.get(null) ?? [];
 
   return (
     <div>
       <p className="text-sm font-medium text-foreground mb-3">Packages</p>
+
+      {pendingSuggestion && (
+        <div className="mb-4 rounded border border-border bg-primary/5 p-3">
+          <p className="text-sm text-foreground mb-2">
+            This package suggests{' '}
+            {pendingSuggestion.keyMoments.length > 0 && (
+              <span className="font-medium">
+                {pendingSuggestion.keyMoments.length} key moment
+                {pendingSuggestion.keyMoments.length === 1 ? '' : 's'}
+              </span>
+            )}
+            {pendingSuggestion.keyMoments.length > 0 && pendingSuggestion.genres.length > 0 && ' and '}
+            {pendingSuggestion.genres.length > 0 && (
+              <span className="font-medium">
+                {pendingSuggestion.genres.length} genre
+                {pendingSuggestion.genres.length === 1 ? '' : 's'}
+              </span>
+            )}{' '}
+            for the music form.
+          </p>
+          <div className="flex items-center gap-3">
+            <Button
+              size="sm"
+              onClick={() => acceptSuggestion.mutate(pendingSuggestion)}
+              disabled={acceptSuggestion.isPending}
+            >
+              {acceptSuggestion.isPending ? 'Adding…' : 'Add to music form'}
+            </Button>
+            <button
+              type="button"
+              onClick={() => setPendingSuggestion(null)}
+              disabled={acceptSuggestion.isPending}
+              className="text-sm text-muted hover:text-foreground transition-colors disabled:opacity-50"
+            >
+              Not now
+            </button>
+          </div>
+        </div>
+      )}
 
       {(booking.packages ?? []).length === 0 && unassigned.length === 0 && (
         <p className="text-sm text-muted mb-3">No packages added yet.</p>
       )}
 
       {(booking.packages ?? []).map((bpf) => {
-        const sets = setsByFormatId.get(bpf.packageId) ?? [];
+        const sets = setsByPackageId.get(bpf.id) ?? [];
         return (
           <div key={bpf.id} className="mb-5">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-sm font-medium text-foreground flex items-center gap-1.5">
-                <FormatIcon icon={bpf.package.icon} />
-                {bpf.package.label}
-              </span>
-              {confirmRemoveFormatId === bpf.id ? (
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => { removeFormat.mutate(bpf.id); setConfirmRemoveFormatId(null); }}
-                    disabled={removeFormat.isPending}
-                    className="text-xs text-status-cancelled hover:text-status-cancelled/80 transition-colors disabled:opacity-50"
-                  >
-                    {removeFormat.isPending ? 'Removing…' : 'Confirm remove'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setConfirmRemoveFormatId(null)}
-                    className="text-xs text-muted hover:text-foreground transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => handleRemoveFormat(bpf)}
-                  disabled={removeFormat.isPending}
-                  className="text-muted hover:text-status-cancelled transition-colors disabled:opacity-50"
-                  aria-label={`Remove ${bpf.package.label}`}
-                >
-                  <Trash2 size={13} aria-hidden="true" />
-                </button>
-              )}
-            </div>
+            <PackageHeader
+              pkg={bpf}
+              onUpdate={(dto) => updatePackage.mutate({ packageId: bpf.id, ...dto })}
+              onRemove={() => removePackage.mutate(bpf.id)}
+              isRemoving={removePackage.isPending && removePackage.variables === bpf.id}
+            />
 
             {sets.length > 0 && (
               <div className="text-xs text-muted grid grid-cols-[1fr_5rem_5rem_1.25rem] gap-2 pb-1 mb-1 border-b border-border">
@@ -313,9 +435,16 @@ export default function PerformanceEditor({ booking, isOpen }: { booking: Bookin
         );
       })}
 
+      {/* Ungrouped sets (packageId null) render flat with no heading — #500.
+          A top border separates them from package sections above. */}
       {unassigned.length > 0 && (
-        <div className="mb-5">
-          <p className="text-sm font-medium text-foreground mb-1">Other sets</p>
+        <div className={`mb-5 ${(booking.packages ?? []).length > 0 ? 'pt-3 border-t border-border' : ''}`}>
+          <div className="text-xs text-muted grid grid-cols-[1fr_5rem_5rem_1.25rem] gap-2 pb-1 mb-1 border-b border-border">
+            <span className="pl-2">Label</span>
+            <span className="pl-2">Min</span>
+            <span className="pl-2">Start</span>
+            <span />
+          </div>
           {unassigned.map((set) => (
             <SetEditRow
               key={set.id}
@@ -329,57 +458,66 @@ export default function PerformanceEditor({ booking, isOpen }: { booking: Bookin
       )}
 
       {!addOpen ? (
-        <GhostButton
-          onClick={() => setAddOpen(true)}
-          variant="primary"
-          icon={<Plus size={14} aria-hidden="true" />}
-        >
-          Add packages
-        </GhostButton>
+        <div className="flex flex-wrap items-center gap-4">
+          <GhostButton
+            onClick={() => setAddOpen(true)}
+            variant="primary"
+            icon={<Plus size={14} aria-hidden="true" />}
+          >
+            Add packages
+          </GhostButton>
+          <GhostButton
+            onClick={handleAddUngroupedSet}
+            disabled={addSet.isPending}
+            icon={<Plus size={14} aria-hidden="true" />}
+          >
+            Add set
+          </GhostButton>
+        </div>
       ) : (
         <div className="space-y-2">
-          <SubLabel>Select a format</SubLabel>
-          {formatsLoading && <p className="text-sm text-muted">Loading…</p>}
-          {!formatsLoading && availableFormats.length === 0 && (
-            <p className="text-sm text-muted">All formats already applied.</p>
+          <SubLabel>Select a package</SubLabel>
+          {templatesLoading && <p className="text-sm text-muted">Loading…</p>}
+          {!templatesLoading && availableTemplates.length === 0 && (
+            <p className="text-sm text-muted">No package templates available.</p>
           )}
-          {!formatsLoading && availableFormats.length > 0 && (
+          {!templatesLoading && availableTemplates.length > 0 && (
             <div className="space-y-3">
               <div className="flex flex-wrap gap-2">
-                {(matchingFormats.length > 0 ? matchingFormats : otherFormats).map((fmt) => (
+                {(matchingTemplates.length > 0 ? matchingTemplates : otherTemplates).map((tmpl) => (
                   <button
-                    key={fmt.id}
+                    key={tmpl.id}
                     type="button"
-                    disabled={applyFormat.isPending}
-                    onClick={() => applyFormat.mutate(fmt.id)}
+                    disabled={applyTemplate.isPending}
+                    onClick={() => applyTemplate.mutate(tmpl.id)}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border text-sm hover:border-primary transition-colors disabled:opacity-50"
                   >
-                    <FormatIcon icon={fmt.icon} />
-                    {fmt.label}
+                    <PackageIcon icon={tmpl.icon} />
+                    {tmpl.label}
                   </button>
                 ))}
               </div>
-              {matchingFormats.length > 0 && otherFormats.length > 0 && (
+              {matchingTemplates.length > 0 && otherTemplates.length > 0 && (
                 <div>
                   <button
                     type="button"
                     onClick={() => setOtherOpen((o) => !o)}
                     className="text-sm text-muted hover:text-foreground transition-colors"
                   >
-                    {otherOpen ? '▾' : '▸'} Other packages ({otherFormats.length})
+                    {otherOpen ? '▾' : '▸'} Other packages ({otherTemplates.length})
                   </button>
                   {otherOpen && (
                     <div className="flex flex-wrap gap-2 mt-2">
-                      {otherFormats.map((fmt) => (
+                      {otherTemplates.map((tmpl) => (
                         <button
-                          key={fmt.id}
+                          key={tmpl.id}
                           type="button"
-                          disabled={applyFormat.isPending}
-                          onClick={() => applyFormat.mutate(fmt.id)}
+                          disabled={applyTemplate.isPending}
+                          onClick={() => applyTemplate.mutate(tmpl.id)}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border text-sm hover:border-primary transition-colors disabled:opacity-50"
                         >
-                          <FormatIcon icon={fmt.icon} />
-                          {fmt.label}
+                          <PackageIcon icon={tmpl.icon} />
+                          {tmpl.label}
                         </button>
                       ))}
                     </div>

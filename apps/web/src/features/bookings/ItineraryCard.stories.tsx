@@ -24,10 +24,10 @@ const setsWithDurationsOnly: PerformanceSet[] = [
 
 const packages: BookingPackageSummary[] = [
   {
-    id: 'bp1',
+    id: 'pkg1',
     order: 0,
-    packageId: 'pkg1',
-    package: { id: 'pkg1', label: 'Gold', icon: 'crown', keyMoments: [], defaultGenreSelection: [] },
+    label: 'Gold',
+    icon: 'crown',
   },
 ];
 

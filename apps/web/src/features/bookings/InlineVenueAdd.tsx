@@ -11,7 +11,7 @@ export function InlineVenueAdd() {
   const [, setSearchParams] = useSearchParams();
 
   return (
-    <div className="flex flex-col items-center text-center gap-2 py-4 text-muted min-h-[5rem]">
+    <div className="flex flex-col items-center justify-center text-center gap-2 py-4 text-muted min-h-[5rem]">
       <MapPin size={20} />
       <span className="text-sm font-medium">Venue</span>
       <button

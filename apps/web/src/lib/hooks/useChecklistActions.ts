@@ -35,7 +35,7 @@ export function useChecklistActions(bookingId: string) {
   function buildSetsDescription(): string {
     if (!booking?.sets?.length) return '';
     const formatById = new Map(
-      (booking.packages ?? []).map((f) => [f.packageId, f.package.label]),
+      (booking.packages ?? []).map((f) => [f.id, f.label]),
     );
     return booking.sets
       .map((s) => {

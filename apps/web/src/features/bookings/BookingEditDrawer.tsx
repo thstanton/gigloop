@@ -38,7 +38,9 @@ function buildDefaultValues(booking: BookingDetail): BookingFormValues {
     customerId: booking.customerId,
     venueId: booking.venueId,
     bookingAgentId: booking.bookingAgentId,
-    formatIds: [],
+    packageTemplateIds: [],
+    // Edit form has no music-form toggle (create-only) and never submits this; mirror current state.
+    enableMusicForm: booking.hasMusicFormConfig,
     seriesMode: 'none',
     seriesId: null,
     newSeriesLabel: '',

@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PackagesRepository } from './packages.repository';
 import type { CreatePackageDto } from './dto/create-package.dto';
 import type { UpdatePackageDto } from './dto/update-package.dto';
@@ -102,12 +102,6 @@ export class PackagesService {
   async delete(userId: string, id: string) {
     const pkg = await this.repo.findOne(userId, id);
     if (!pkg) throw new NotFoundException('Package not found');
-
-    const bookingCount = await this.repo.countBookingsByPackageId(id);
-    if (bookingCount > 0) {
-      throw new ConflictException('This package is used by existing bookings and cannot be deleted');
-    }
-
     return this.repo.delete(id);
   }
 }

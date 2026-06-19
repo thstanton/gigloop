@@ -166,7 +166,7 @@ A billing grouping for a set of related [[Booking]]s that are invoiced together 
 
 **No series contract:** residency arrangements are informal or handled through booking agencies. Contract ownership stays per-Booking; series member bookings typically carry no contract checklist items.
 
-**New booking pre-population:** when the musician selects an existing series in the booking creation form, the following fields are pre-populated from the earliest member booking in the series (ordered by `createdAt`): venue, booking agent, performance packages, checklist items, and [[MusicFormConfig]] (which for residency bookings is typically absent — the music form feature is rarely relevant for recurring slots). Customer is pre-populated from `series.customerId`. All pre-populated values are editable before saving.
+**New booking pre-population:** when the musician selects an existing series in the booking creation form, venue, booking agent, and checklist items are pre-populated from the earliest member booking in the series (ordered by `createdAt`), and customer from `series.customerId`. All pre-populated values are editable before saving. **Performance packages and the [[MusicFormConfig]] are *not* pre-populated:** a booking-owned [[Package]] is an independent snapshot with no provenance back to a [[Package Template]] (ADR-0046), so a prior member's packages cannot be reconstructed at creation time.
 
 **Invoice section in booking UI:** the Invoice section on any member Booking's detail page shows the series invoice as a variant ("Series Invoice") — creation and edits carry a reminder that changes affect the whole series.
 
