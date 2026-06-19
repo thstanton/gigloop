@@ -216,6 +216,11 @@ export class BookingsController {
   }
 
   @ApiOperation({ summary: 'Apply a package template to a booking (creates a booking-owned Package snapshot)' })
+  @ApiResponse({
+    status: 201,
+    description:
+      'The updated booking plus an optional music-form suggestion (the template\'s key moments/genres) when the form is on — offered, never auto-applied (ADR-0046).',
+  })
   @Post(':id/packages')
   applyPackageTemplate(
     @Req() req: AuthedRequest,

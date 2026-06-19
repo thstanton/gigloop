@@ -514,6 +514,46 @@ describe('BookingsService', () => {
       expect(repo.applyPackageTemplate).toHaveBeenCalledWith('u1', 'b1', tmpl);
     });
 
+    it('offers the template key moments/genres as a suggestion when the form is on, without forcing them (ADR-0046 / #502)', async () => {
+      const tmpl = {
+        id: 'f1', label: 'Ceremony', icon: 'heart',
+        keyMoments: ['Processional', 'First dance'],
+        defaultGenreSelection: ['JAZZ'], slots: [],
+      };
+      // Form on: the applied booking carries a musicFormConfig.
+      const onBooking = { ...rawBooking, musicFormConfig: { id: 'mfc1' } };
+      repo.findOne.mockResolvedValue(rawBooking);
+      repo.findPackageTemplates.mockResolvedValue([tmpl]);
+      repo.applyPackageTemplate.mockResolvedValue(onBooking);
+
+      const result = await service.applyPackageTemplate('u1', 'b1', 'f1');
+
+      expect(result.suggestion).toEqual({
+        keyMoments: [
+          { label: 'Processional', section: 'Ceremony' },
+          { label: 'First dance', section: 'Ceremony' },
+        ],
+        genres: ['JAZZ'],
+      });
+      // "Suggest, not force": the config is never written by applying.
+      expect(musicFormRepo.upsertMusicFormConfig).not.toHaveBeenCalled();
+    });
+
+    it('returns no suggestion when the music form is off', async () => {
+      const tmpl = {
+        id: 'f1', label: 'Ceremony', icon: 'heart',
+        keyMoments: ['Processional'], defaultGenreSelection: ['JAZZ'], slots: [],
+      };
+      repo.findOne.mockResolvedValue(rawBooking);
+      repo.findPackageTemplates.mockResolvedValue([tmpl]);
+      repo.applyPackageTemplate.mockResolvedValue(rawBooking); // musicFormConfig: null
+
+      const result = await service.applyPackageTemplate('u1', 'b1', 'f1');
+
+      expect(result.suggestion).toBeNull();
+      expect(musicFormRepo.upsertMusicFormConfig).not.toHaveBeenCalled();
+    });
+
     it('throws NotFoundException when template is not found', async () => {
       repo.findOne.mockResolvedValue(rawBooking);
       repo.findPackageTemplates.mockResolvedValue([]);
@@ -536,7 +576,8 @@ describe('BookingsService', () => {
       repo.findBookingPackage.mockResolvedValue(bookingPackage);
       repo.removePackage.mockResolvedValue(rawBooking);
       await service.removePackage('u1', 'b1', 'pkg1');
-      expect(repo.removePackage).toHaveBeenCalledWith('b1', 'pkg1');
+      // The package label is threaded so the repo can move its key moments to "Other" (#502).
+      expect(repo.removePackage).toHaveBeenCalledWith('b1', 'pkg1', 'Ceremony');
     });
 
     it('throws NotFoundException when package is not found', async () => {

@@ -12,23 +12,30 @@ type MockPrisma = {
   };
   performanceSet: {
     findFirst: jest.Mock;
+    findMany: jest.Mock;
     create: jest.Mock;
     update: jest.Mock;
+    updateMany: jest.Mock;
     delete: jest.Mock;
   };
   package: {
+    findMany: jest.Mock;
     create: jest.Mock;
+    delete: jest.Mock;
   };
   packageTemplate: {
     findMany: jest.Mock;
   };
   musicFormConfig: {
     create: jest.Mock;
+    findUnique: jest.Mock;
+    update: jest.Mock;
   };
+  $transaction: jest.Mock;
 };
 
 function makePrisma(): MockPrisma {
-  return {
+  const prisma: MockPrisma = {
     booking: {
       findMany: jest.fn(),
       findFirst: jest.fn(),
@@ -38,20 +45,31 @@ function makePrisma(): MockPrisma {
     },
     performanceSet: {
       findFirst: jest.fn(),
+      findMany: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
       delete: jest.fn(),
     },
     package: {
+      findMany: jest.fn(),
       create: jest.fn(),
+      delete: jest.fn(),
     },
     packageTemplate: {
       findMany: jest.fn(),
     },
     musicFormConfig: {
       create: jest.fn(),
+      findUnique: jest.fn(),
+      update: jest.fn(),
     },
+    // Callback form runs against the same mock client (the transactional `tx`).
+    $transaction: jest.fn((arg) =>
+      typeof arg === 'function' ? arg(prisma) : Promise.all(arg),
+    ),
   };
+  return prisma;
 }
 
 describe('BookingsRepository', () => {
@@ -296,6 +314,92 @@ describe('BookingsRepository', () => {
       const tmpl = { id: 'f1', label: 'Background', icon: 'music', keyMoments: [], defaultGenreSelection: [], slots: [] };
       await repo.createWithPackageTemplates('u1', baseDto, [tmpl], false);
       expect(prisma.musicFormConfig.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('applyPackageTemplate', () => {
+    const tmpl = {
+      id: 'f1',
+      label: 'Ceremony',
+      icon: 'heart',
+      keyMoments: ['Processional'],
+      defaultGenreSelection: ['CLASSICAL'],
+      slots: [{ label: 'Processional', duration: 30, order: 1 }],
+    };
+
+    function primeApplyChain() {
+      prisma.package.findMany.mockResolvedValue([]);
+      prisma.performanceSet.findMany.mockResolvedValue([]);
+      prisma.package.create.mockResolvedValue({ id: 'pkg1' });
+      prisma.performanceSet.create.mockResolvedValue({ id: 's1' });
+      prisma.booking.findFirst.mockResolvedValue({ id: 'b1' });
+    }
+
+    it('creates the booking-owned package + sets from the template', async () => {
+      primeApplyChain();
+      await repo.applyPackageTemplate('u1', 'b1', tmpl);
+      expect(prisma.package.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ bookingId: 'b1', label: 'Ceremony', icon: 'heart' }),
+        }),
+      );
+      expect(prisma.performanceSet.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ packageId: 'pkg1', duration: 30 }) }),
+      );
+    });
+
+    it('never writes the music form config — apply suggests, it does not force (ADR-0046 / #502)', async () => {
+      primeApplyChain();
+      await repo.applyPackageTemplate('u1', 'b1', tmpl);
+      expect(prisma.musicFormConfig.create).not.toHaveBeenCalled();
+      expect(prisma.musicFormConfig.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('removePackage', () => {
+    it('orphans the package sets to ungrouped and deletes the package', async () => {
+      prisma.musicFormConfig.findUnique.mockResolvedValue(null);
+      prisma.booking.findFirst.mockResolvedValue({ id: 'b1' });
+      await repo.removePackage('b1', 'pkg1', 'Ceremony');
+      expect(prisma.performanceSet.updateMany).toHaveBeenCalledWith({
+        where: { bookingId: 'b1', packageId: 'pkg1' },
+        data: { packageId: null },
+      });
+      expect(prisma.package.delete).toHaveBeenCalledWith({ where: { id: 'pkg1' } });
+    });
+
+    it('moves the package key moments to "Other" instead of deleting them (#502)', async () => {
+      prisma.musicFormConfig.findUnique.mockResolvedValue({
+        keyMoments: [
+          { label: 'Processional', section: 'Ceremony' },
+          { label: 'First dance', section: 'Reception' },
+        ],
+      });
+      prisma.musicFormConfig.update.mockResolvedValue({ id: 'mfc1' });
+      prisma.booking.findFirst.mockResolvedValue({ id: 'b1' });
+
+      await repo.removePackage('b1', 'pkg1', 'Ceremony');
+
+      expect(prisma.musicFormConfig.update).toHaveBeenCalledWith({
+        where: { bookingId: 'b1' },
+        data: {
+          keyMoments: [
+            { label: 'Processional', section: 'Other' },
+            { label: 'First dance', section: 'Reception' },
+          ],
+        },
+      });
+    });
+
+    it('leaves the config untouched when no moments belong to the removed package', async () => {
+      prisma.musicFormConfig.findUnique.mockResolvedValue({
+        keyMoments: [{ label: 'First dance', section: 'Reception' }],
+      });
+      prisma.booking.findFirst.mockResolvedValue({ id: 'b1' });
+
+      await repo.removePackage('b1', 'pkg1', 'Ceremony');
+
+      expect(prisma.musicFormConfig.update).not.toHaveBeenCalled();
     });
   });
 

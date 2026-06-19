@@ -251,8 +251,24 @@ export class BookingsService {
     await this.findOne(userId, bookingId);
     const templates = await this.repo.findPackageTemplates(userId, [packageTemplateId]);
     if (!templates.length) throw new NotFoundException('Package template not found');
-    const booking = await this.repo.applyPackageTemplate(userId, bookingId, templates[0]);
-    return this.mapBooking(booking!);
+    const template = templates[0];
+    const booking = await this.repo.applyPackageTemplate(userId, bookingId, template);
+    const mapped = this.mapBooking(booking!);
+
+    // Apply-later music-form suggestion (ADR-0046). Provenance is severed, so apply
+    // time is the only moment the template's key moments/genres are knowable for this
+    // booking. When the form is on we *offer* them — never silently write (the repo
+    // does not touch the config; the frontend lets the musician accept or dismiss).
+    const suggestion =
+      mapped.hasMusicFormConfig &&
+      (template.keyMoments.length > 0 || template.defaultGenreSelection.length > 0)
+        ? {
+            keyMoments: template.keyMoments.map((label) => ({ label, section: template.label })),
+            genres: template.defaultGenreSelection,
+          }
+        : null;
+
+    return { booking: mapped, suggestion };
   }
 
   async updatePackage(userId: string, bookingId: string, packageId: string, dto: UpdateBookingPackageDto) {
@@ -267,7 +283,7 @@ export class BookingsService {
     await this.findOne(userId, bookingId);
     const pkg = await this.repo.findBookingPackage(userId, bookingId, packageId);
     if (!pkg) throw new NotFoundException('Applied package not found');
-    const booking = await this.repo.removePackage(bookingId, packageId);
+    const booking = await this.repo.removePackage(bookingId, packageId, pkg.label);
     return this.mapBooking(booking!);
   }
 

@@ -1,15 +1,19 @@
 import { useEffect, useRef, useState, type FocusEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { GhostButton } from '@/components/common/GhostButton';
 import { SubLabel } from '@/components/common/SubLabel';
 import { PackageIcon } from '@/components/common/PackageIcon';
 import { IconPicker } from '@/components/common/IconPicker';
-import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
+import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
 import type {
+  ApplyPackageTemplateResponse,
   BookingDetail,
   BookingPackageSummary,
+  MusicFormConfig,
+  MusicFormSuggestion,
   PackageTemplate,
   PerformanceSet,
 } from '@/types/api';
@@ -220,6 +224,7 @@ export default function PerformanceEditor({ booking, isOpen }: { booking: Bookin
   });
 
   const [otherOpen, setOtherOpen] = useState(false);
+  const [pendingSuggestion, setPendingSuggestion] = useState<MusicFormSuggestion | null>(null);
 
   // Provenance is severed (ADR-0046): booking-owned Packages carry no FK back to the
   // template, so we can't filter already-applied templates. All enabled templates are shown.
@@ -229,18 +234,52 @@ export default function PerformanceEditor({ booking, isOpen }: { booking: Bookin
   const availableTemplates = enabledTemplates;
 
   useEffect(() => {
-    if (isOpen) setAddOpen(false);
+    if (isOpen) {
+      setAddOpen(false);
+      setPendingSuggestion(null);
+    }
   }, [isOpen]);
 
   const applyTemplate = useMutation({
     mutationFn: (packageTemplateId: string) =>
-      apiPost(`/bookings/${booking.id}/packages`, { packageTemplateId }),
-    onSuccess: () => {
+      apiPost<ApplyPackageTemplateResponse>(`/bookings/${booking.id}/packages`, { packageTemplateId }),
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['booking', booking.id] });
       setAddOpen(false);
+      // Apply-later suggestion (ADR-0046): when the music form is on, offer the
+      // template's key moments/genres — the musician accepts or dismisses; we never
+      // write them silently.
+      if (data.suggestion && (data.suggestion.keyMoments.length || data.suggestion.genres.length)) {
+        setPendingSuggestion(data.suggestion);
+      }
     },
     onError: () => {
       toast({ title: 'Failed to add package. Please try again.', variant: 'destructive' });
+    },
+  });
+
+  // Accept a suggestion: merge into the current music-form config (de-duped) and save.
+  const acceptSuggestion = useMutation({
+    mutationFn: async (suggestion: MusicFormSuggestion) => {
+      const config = await apiGet<MusicFormConfig>(`/bookings/${booking.id}/music-form-config`);
+      const seen = new Set(config.keyMoments.map((km) => `${km.section} ${km.label}`));
+      const mergedMoments = [
+        ...config.keyMoments,
+        ...suggestion.keyMoments.filter((km) => !seen.has(`${km.section} ${km.label}`)),
+      ];
+      const mergedGenres = Array.from(new Set([...config.enabledGenres, ...suggestion.genres]));
+      return apiPut(`/bookings/${booking.id}/music-form-config`, {
+        keyMoments: mergedMoments,
+        enabledGenres: mergedGenres,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['booking', booking.id] });
+      queryClient.invalidateQueries({ queryKey: ['booking-music-form-config', booking.id] });
+      setPendingSuggestion(null);
+    },
+    onError: () => {
+      toast({ title: 'Failed to add suggestions. Please try again.', variant: 'destructive' });
     },
   });
 
@@ -308,6 +347,45 @@ export default function PerformanceEditor({ booking, isOpen }: { booking: Bookin
   return (
     <div>
       <p className="text-sm font-medium text-foreground mb-3">Packages</p>
+
+      {pendingSuggestion && (
+        <div className="mb-4 rounded border border-border bg-primary/5 p-3">
+          <p className="text-sm text-foreground mb-2">
+            This package suggests{' '}
+            {pendingSuggestion.keyMoments.length > 0 && (
+              <span className="font-medium">
+                {pendingSuggestion.keyMoments.length} key moment
+                {pendingSuggestion.keyMoments.length === 1 ? '' : 's'}
+              </span>
+            )}
+            {pendingSuggestion.keyMoments.length > 0 && pendingSuggestion.genres.length > 0 && ' and '}
+            {pendingSuggestion.genres.length > 0 && (
+              <span className="font-medium">
+                {pendingSuggestion.genres.length} genre
+                {pendingSuggestion.genres.length === 1 ? '' : 's'}
+              </span>
+            )}{' '}
+            for the music form.
+          </p>
+          <div className="flex items-center gap-3">
+            <Button
+              size="sm"
+              onClick={() => acceptSuggestion.mutate(pendingSuggestion)}
+              disabled={acceptSuggestion.isPending}
+            >
+              {acceptSuggestion.isPending ? 'Adding…' : 'Add to music form'}
+            </Button>
+            <button
+              type="button"
+              onClick={() => setPendingSuggestion(null)}
+              disabled={acceptSuggestion.isPending}
+              className="text-sm text-muted hover:text-foreground transition-colors disabled:opacity-50"
+            >
+              Not now
+            </button>
+          </div>
+        </div>
+      )}
 
       {(booking.packages ?? []).length === 0 && unassigned.length === 0 && (
         <p className="text-sm text-muted mb-3">No packages added yet.</p>

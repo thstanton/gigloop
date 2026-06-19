@@ -3,13 +3,6 @@ import { apiPut } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
 import type { BookingDetail, MusicFormConfig } from '@/types/api';
 
-function buildSeedPayload(_booking: BookingDetail) {
-  // #502 restores template-derived key-moment/genre suggestion. ADR-0046 severs the
-  // booking-owned Package → PackageTemplate provenance, so the snapshot no longer
-  // carries keyMoments/defaultGenreSelection to seed from.
-  return { keyMoments: [], enabledGenres: [] };
-}
-
 export function useConfigureMusicForm(
   bookingId: string,
   booking: BookingDetail | undefined,
@@ -20,7 +13,13 @@ export function useConfigureMusicForm(
   const mutation = useMutation({
     mutationFn: () => {
       if (!booking) return Promise.reject(new Error('No booking'));
-      return apiPut<MusicFormConfig>(`/bookings/${bookingId}/music-form-config`, buildSeedPayload(booking));
+      // Turning the form on starts empty (ADR-0046 / #502): provenance is severed,
+      // so there is nothing to seed from. Moments are added in the editor, or
+      // suggested when a Package Template is applied.
+      return apiPut<MusicFormConfig>(`/bookings/${bookingId}/music-form-config`, {
+        keyMoments: [],
+        enabledGenres: [],
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['booking-music-form-config', bookingId] });

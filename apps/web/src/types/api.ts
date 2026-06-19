@@ -208,6 +208,18 @@ export interface MusicFormConfig {
   updatedAt: string;
 }
 
+/** Apply-time music-form suggestion offered when a template is applied while the form is on (ADR-0046). */
+export interface MusicFormSuggestion {
+  keyMoments: KeyMoment[];
+  genres: string[];
+}
+
+/** Response from POST /bookings/:id/packages — the updated booking plus an optional suggestion. */
+export interface ApplyPackageTemplateResponse {
+  booking: BookingDetail;
+  suggestion: MusicFormSuggestion | null;
+}
+
 export interface BookingListItem {
   id: string;
   createdAt: string;

@@ -74,7 +74,8 @@ export class BookingsRepository {
       ...(fee !== undefined ? { fee } : {}),
     };
 
-    // No packages here, so an enabled music form starts empty (no templates to seed from — #502).
+    // No packages here, so an enabled music form starts empty (ADR-0046: provenance
+    // severed, nothing to seed from; moments are added later or suggested on apply).
     if (!enableMusicForm) {
       return db.booking.create({ data, include: bookingIncludes });
     }
@@ -271,14 +272,33 @@ export class BookingsRepository {
     return this.prisma.booking.findFirst({ where: { id: bookingId }, include: bookingIncludes });
   }
 
-  async removePackage(bookingId: string, packageId: string) {
-    // Removing a Package orphans its sets to ungrouped (packageId → null) rather
-    // than deleting them (ADR-0046 / #500). The schema's onDelete: SetNull would
-    // do this implicitly, but we orphan explicitly so the intent is readable here.
-    await this.prisma.$transaction([
-      this.prisma.performanceSet.updateMany({ where: { bookingId, packageId }, data: { packageId: null } }),
-      this.prisma.package.delete({ where: { id: packageId } }),
-    ]);
+  async removePackage(bookingId: string, packageId: string, packageLabel: string) {
+    // Removing a Package is non-destructive (ADR-0046 / #500 + #502). In one
+    // transaction so a booking is never left half-degraded:
+    //   - its sets orphan to ungrouped (packageId → null), not deleted;
+    //   - its music-form key moments move to the "Other" bucket, not deleted.
+    // Key-moment `section` is a snapshot label (ADR-0046), so moments are matched
+    // by label. Booking packages may share a label (free rename, #500) — moving
+    // both packages' moments to "Other" is an accepted edge, not a silent bug.
+    await this.prisma.$transaction(async (tx) => {
+      await tx.performanceSet.updateMany({ where: { bookingId, packageId }, data: { packageId: null } });
+
+      const config = await tx.musicFormConfig.findUnique({ where: { bookingId } });
+      if (config) {
+        const moments = (config.keyMoments as unknown as Array<{ label: string; section: string }>) ?? [];
+        if (moments.some((m) => m.section === packageLabel)) {
+          const rewritten = moments.map((m) =>
+            m.section === packageLabel ? { ...m, section: 'Other' } : m,
+          );
+          await tx.musicFormConfig.update({
+            where: { bookingId },
+            data: { keyMoments: rewritten as unknown as Prisma.InputJsonValue },
+          });
+        }
+      }
+
+      await tx.package.delete({ where: { id: packageId } });
+    });
     return this.prisma.booking.findFirst({ where: { id: bookingId }, include: bookingIncludes });
   }
 
