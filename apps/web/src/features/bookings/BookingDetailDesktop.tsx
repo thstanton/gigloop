@@ -78,8 +78,8 @@ export function BookingDetailDesktop({ bookingId }: BookingDetailDesktopProps) {
   return (
     <div className="grid grid-cols-[3fr_2fr] gap-8 items-start mt-6">
 
-      {/* ─── Left column top: For the Day + Packages ─── */}
-      <div className="space-y-8 md:col-start-1">
+      {/* ─── Left column: For the day + Music form, then Notes + Communications ─── */}
+      <div className="space-y-8">
 
         {/* For the day */}
         <section>
@@ -112,10 +112,19 @@ export function BookingDetailDesktop({ bookingId }: BookingDetailDesktopProps) {
           </div>
         </section>
 
+        <InlineNotes
+          notes={booking.notes}
+          onSave={(notes) => fields.updateNotes(notes)}
+          isSaving={fields.isNotesPending}
+        />
+        <CommunicationsSection
+          communications={communications}
+        />
+
       </div>
 
       {/* ─── Right column ─── */}
-      <div className="space-y-6 md:col-start-2 md:row-span-2">
+      <div className="space-y-6">
 
         {/* Checklist */}
         {booking.status !== 'CANCELLED' && (
@@ -204,18 +213,6 @@ export function BookingDetailDesktop({ bookingId }: BookingDetailDesktopProps) {
         />
 
       </div>{/* end right column */}
-
-      {/* ─── Left column bottom: Notes + Communications ─── */}
-      <div className="space-y-8 md:col-start-1">
-        <InlineNotes
-          notes={booking.notes}
-          onSave={(notes) => fields.updateNotes(notes)}
-          isSaving={fields.isNotesPending}
-        />
-        <CommunicationsSection
-          communications={communications}
-        />
-      </div>
 
     </div>
   );

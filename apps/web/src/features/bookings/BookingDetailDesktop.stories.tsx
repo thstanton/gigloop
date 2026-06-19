@@ -3,7 +3,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
 import { expect } from 'storybook/test';
 import { BookingDetailDesktop } from './BookingDetailDesktop';
-import type { BookingDetail, UserProfile } from '@/types/api';
+import type { BookingDetail, Invoice, UserProfile } from '@/types/api';
 
 const meta: Meta<typeof BookingDetailDesktop> = {
   component: BookingDetailDesktop,
@@ -114,6 +114,24 @@ const mockUserProfile: UserProfile = {
   onboardingCompletedAt: null,
 };
 
+const mockInvoice = (id: string, status: 'VOID' | 'SENT' | 'PAID', number: string): Invoice => ({
+  id,
+  createdAt: '2026-06-01T00:00:00Z',
+  updatedAt: '2026-06-01T00:00:00Z',
+  status,
+  isDeposit: false,
+  invoiceNumber: number,
+  issueDate: '2026-06-02T00:00:00Z',
+  dueDate: '2026-06-16T00:00:00Z',
+  paidAt: status === 'PAID' ? '2026-06-10T00:00:00Z' : null,
+  bookingId: 'b1',
+  billToContactId: 'c1',
+  billToContact: mockContact,
+  lineItems: [
+    { id: `${id}-l1`, createdAt: '2026-06-01T00:00:00Z', updatedAt: '2026-06-01T00:00:00Z', description: 'Performance fee', amount: '2500', order: 0, sourceBookingId: null },
+  ],
+});
+
 export const Confirmed: Story = {
   args: {
     bookingId: 'b1',
@@ -135,5 +153,41 @@ export const Confirmed: Story = {
   play: async ({ canvas }) => {
     await expect(await canvas.findByText('For the day')).toBeVisible();
     await expect(canvas.getByText('People')).toBeVisible();
+  },
+};
+
+// Visual regression for the two-column collapse: a tall right column (several invoices,
+// incl. voided) must NOT push the left column's Notes down with a gap. jsdom can't compute
+// grid heights, so this is a Chromatic/visual story — the play only asserts both columns render.
+export const VoidedInvoicesTallRight: Story = {
+  args: {
+    bookingId: 'b1',
+  },
+  parameters: {
+    msw: {
+      handlers: [
+        http.get('/api/bookings/b1', () => HttpResponse.json({ ...mockBooking, notes: 'Load-in from 4pm via the rear entrance.' })),
+        http.get('/api/bookings/b1/checklist', () => HttpResponse.json([])),
+        http.get('/api/bookings/b1/communications', () => HttpResponse.json([])),
+        http.get('/api/bookings/b1/documents', () => HttpResponse.json([])),
+        http.get('/api/bookings/b1/music-form-config', () => HttpResponse.json(null)),
+        http.get('/api/bookings/b1/invoices', () =>
+          HttpResponse.json([
+            mockInvoice('i1', 'VOID', 'INV-001'),
+            mockInvoice('i2', 'VOID', 'INV-002'),
+            mockInvoice('i3', 'VOID', 'INV-003'),
+            mockInvoice('i4', 'SENT', 'INV-004'),
+            mockInvoice('i5', 'PAID', 'INV-005'),
+          ]),
+        ),
+        http.get('/api/me', () => HttpResponse.json(mockUserProfile)),
+        http.get('/api/series', () => HttpResponse.json([])),
+      ],
+    },
+  },
+  play: async ({ canvas }) => {
+    await expect(await canvas.findByText('For the day')).toBeVisible();
+    await expect(canvas.getByText('People')).toBeVisible();
+    await expect(canvas.getByRole('heading', { name: 'Notes' })).toBeVisible();
   },
 };
