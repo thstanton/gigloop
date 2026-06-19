@@ -453,7 +453,11 @@ A **booking-owned** grouping of [[Set]]s — a non-binding, client-facing "set c
 A booking has zero-to-many Packages (ordered); each [[Set]] belongs to **at most one** Package (sets may be ungrouped — see [[Set]]). Packages are added at booking creation and edited (add / remove / reorder, plus per-Package label/icon edits) on the booking detail page. The Package is **not** a commercial/billing unit — the booking fee is authoritative and invoice line items are free-form.
 
 ### Package Template
-A named **library** builder defining what a musician offers for a specific type of performance occasion — the reusable starting point for assembling a booking. Per-user — seeded from system defaults on first access (on-demand); user-defined templates are fully supported. **Used only at apply time**: applying a Package Template to a booking creates a booking-owned [[Package]] + its Sets, and *suggests* key moments and genres to the music form (which owns them — see [[MusicFormConfig]]). A Package Template is **never linked to a booking**. See ADR-0046.
+A named **library** builder defining what a musician offers for a specific type of performance occasion — the reusable starting point for assembling a booking. Per-user — seeded from system defaults on first access (on-demand); user-defined templates are fully supported.
+
+**A Package Template is a *distinct entity* from the booking-owned [[Package]] it produces — never conflate the two.** The Package Template lives in the musician's library and is **never linked to a booking**; a [[Package]] is a booking-owned grouping of [[Set]]s. The only relationship between them is **generative**: applying a Package Template **seeds** a booking-owned [[Package]] (and its Sets) onto the booking, after which template and Package have no link (provenance severed; see ADR-0046). Editing one never touches the other.
+
+**Used only at apply time**: applying a Package Template to a booking seeds a booking-owned [[Package]] + its Sets, and *suggests* key moments and genres to the music form (which owns them — see [[MusicFormConfig]]). See ADR-0046.
 
 **Fields:**
 - `label` — human-readable name (e.g. "Wedding Ceremony", "Evening Reception", "Solo Piano")
