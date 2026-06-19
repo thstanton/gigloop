@@ -19,6 +19,8 @@ const TX = { __tx: true } as const;
 type MockRepo = {
   findAll: jest.Mock;
   findOne: jest.Mock;
+  findOneForClone: jest.Mock;
+  cloneBookingCore: jest.Mock;
   create: jest.Mock;
   findPackageTemplates: jest.Mock;
   createWithPackageTemplates: jest.Mock;
@@ -74,6 +76,8 @@ function makeRepo(): MockRepo {
   return {
     findAll: jest.fn(),
     findOne: jest.fn(),
+    findOneForClone: jest.fn(),
+    cloneBookingCore: jest.fn(),
     create: jest.fn(),
     findPackageTemplates: jest.fn(),
     createWithPackageTemplates: jest.fn(),
@@ -436,6 +440,120 @@ describe('BookingsService', () => {
         await expect(service.create('u1', dto)).rejects.toThrow('append failed');
         expect(prisma.$transaction).toHaveBeenCalledTimes(1);
       });
+    });
+  });
+
+  describe('copyBooking (Copy Event #507)', () => {
+    const newBooking = {
+      ...booking,
+      id: 'copy1',
+      status: BookingStatus.CONFIRMED,
+      date: new Date('2026-09-15'),
+      createdAt: new Date('2026-02-02'),
+      fee: 100,
+      sets: [{ label: 'Set 1', duration: 45 }],
+      seriesId: 's1',
+    };
+
+    // A source loaded for cloning: a COMPLETE checklist item that must reset, plus a
+    // seriesId so the membership guard + series sync run.
+    function sourceForClone(overrides: Record<string, unknown> = {}) {
+      return {
+        id: 'src',
+        userId: 'u1',
+        seriesId: 's1',
+        checklistItems: [
+          {
+            id: 'ci1',
+            key: 'send_quote',
+            label: 'Send quote',
+            completedBy: 'USER',
+            state: 'COMPLETE',
+            completedAt: new Date('2026-01-10'),
+            dependsOn: [],
+            autoCompleteRule: null,
+            requiredForStatus: 'PROVISIONAL',
+            dueDate: new Date('2026-01-05'),
+            dueDateRule: { basis: 'bookingDate', offsetDays: -30 },
+          },
+        ],
+        ...overrides,
+      };
+    }
+
+    it('throws NotFoundException and does not clone when the source booking is missing', async () => {
+      repo.findOneForClone.mockResolvedValue(null);
+      await expect(service.copyBooking('u1', 'missing', { date: '2026-09-15' })).rejects.toThrow(NotFoundException);
+      expect(repo.cloneBookingCore).not.toHaveBeenCalled();
+    });
+
+    it('clones the source into the new date and returns the new booking', async () => {
+      repo.findOneForClone.mockResolvedValue(sourceForClone({ seriesId: null }));
+      repo.cloneBookingCore.mockResolvedValue({ ...newBooking, seriesId: null });
+      const result = await service.copyBooking('u1', 'src', { date: '2026-09-15' });
+      expect(repo.cloneBookingCore).toHaveBeenCalledWith('u1', expect.objectContaining({ id: 'src' }), new Date('2026-09-15'), TX);
+      expect(result).toMatchObject({ id: 'copy1', status: BookingStatus.CONFIRMED });
+    });
+
+    it('reseeds the checklist with completion + due dates reset against the new booking', async () => {
+      repo.findOneForClone.mockResolvedValue(sourceForClone({ seriesId: null }));
+      repo.cloneBookingCore.mockResolvedValue({ ...newBooking, seriesId: null });
+      await service.copyBooking('u1', 'src', { date: '2026-09-15' });
+
+      const [uid, bookingId, seeds, date, createdAt, tx] = checklistRepo.seedChecklistItems.mock.calls[0];
+      expect(uid).toBe('u1');
+      expect(bookingId).toBe('copy1');
+      // Recompute basis is the NEW booking's date/createdAt, not the source's.
+      expect(date).toBe(newBooking.date);
+      expect(createdAt).toBe(newBooking.createdAt);
+      expect(tx).toBe(TX);
+      // The seed carries the rule (so seedChecklistItems recomputes the due date) but drops
+      // completion — no `state`, `completedAt`, or precomputed `dueDate` survive the copy.
+      expect(seeds[0]).toEqual({
+        key: 'send_quote',
+        label: 'Send quote',
+        completedBy: 'USER',
+        dependsOn: [],
+        autoCompleteRule: null,
+        requiredForStatus: 'PROVISIONAL',
+        dueDateRule: { basis: 'bookingDate', offsetDays: -30 },
+      });
+      expect(seeds[0]).not.toHaveProperty('state');
+      expect(seeds[0]).not.toHaveProperty('completedAt');
+      expect(seeds[0]).not.toHaveProperty('dueDate');
+    });
+
+    it('skips checklist seeding when the source has no (non-skipped) items', async () => {
+      repo.findOneForClone.mockResolvedValue(sourceForClone({ seriesId: null, checklistItems: [] }));
+      repo.cloneBookingCore.mockResolvedValue({ ...newBooking, seriesId: null });
+      await service.copyBooking('u1', 'src', { date: '2026-09-15' });
+      expect(checklistRepo.seedChecklistItems).not.toHaveBeenCalled();
+    });
+
+    it('guards membership mutability and appends the series invoice line when copying into a series', async () => {
+      repo.findOneForClone.mockResolvedValue(sourceForClone());
+      repo.cloneBookingCore.mockResolvedValue(newBooking);
+      await service.copyBooking('u1', 'src', { date: '2026-09-15' });
+      expect(seriesService.assertMembershipMutable).toHaveBeenCalledWith('u1', 's1');
+      expect(seriesService.syncMemberJoin).toHaveBeenCalledWith('u1', 's1', expect.objectContaining({ id: 'copy1' }), TX);
+    });
+
+    it('does not touch series machinery for a non-series booking', async () => {
+      repo.findOneForClone.mockResolvedValue(sourceForClone({ seriesId: null }));
+      repo.cloneBookingCore.mockResolvedValue({ ...newBooking, seriesId: null });
+      await service.copyBooking('u1', 'src', { date: '2026-09-15' });
+      expect(seriesService.assertMembershipMutable).not.toHaveBeenCalled();
+      expect(seriesService.syncMemberJoin).not.toHaveBeenCalled();
+    });
+
+    it('enrols the clone + checklist + series writes in a single transaction (ADR-0047)', async () => {
+      repo.findOneForClone.mockResolvedValue(sourceForClone());
+      repo.cloneBookingCore.mockResolvedValue(newBooking);
+      await service.copyBooking('u1', 'src', { date: '2026-09-15' });
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      expect(repo.cloneBookingCore).toHaveBeenCalledWith('u1', expect.anything(), expect.any(Date), TX);
+      expect(checklistRepo.seedChecklistItems).toHaveBeenCalledWith('u1', 'copy1', expect.any(Array), newBooking.date, newBooking.createdAt, TX);
+      expect(seriesService.syncMemberJoin).toHaveBeenCalledWith('u1', 's1', expect.anything(), TX);
     });
   });
 

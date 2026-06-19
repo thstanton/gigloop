@@ -4,11 +4,12 @@ import { PrismaService } from '../prisma/prisma.service';
 import { BookingsRepository } from './bookings.repository';
 import { ContractRepository } from './contract.repository';
 import { MusicFormConfigRepository } from './music-form-config.repository';
-import { ChecklistRepository } from '../checklist/checklist.repository';
+import { ChecklistRepository, ChecklistItemSeed } from '../checklist/checklist.repository';
 import { SeriesRepository } from '../series/series.repository';
 import { SeriesService, MemberBookingForSync } from '../series/series.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
+import { CopyBookingDto } from './dto/copy-booking.dto';
 import { UpdateContractDto } from './dto/update-contract.dto';
 import { CreateSetDto } from './dto/create-set.dto';
 import { UpdateSetDto } from './dto/update-set.dto';
@@ -190,6 +191,63 @@ export class BookingsService {
           resolvedSeriesId,
           orderedTemplates,
         }),
+      { maxWait: 5000, timeout: 15000 },
+    );
+  }
+
+  // Copy Event (#507 / ADR-0049): clone *this* booking into the same series on a new date.
+  // What the gig *is* carries (packages, sets, logistics, music form config); lifecycle
+  // state resets (status → CONFIRMED — a copied series gig is already committed — fresh
+  // portalToken, no invoices/documents/communications/music form response/deposit). Checklist
+  // items copy but their completion resets to pending and due dates recompute against the new
+  // date (reusing seedChecklistItems).
+  async copyBooking(userId: string, id: string, dto: CopyBookingDto) {
+    const source = await this.repo.findOneForClone(userId, id);
+    if (!source) throw new NotFoundException('Booking not found');
+
+    // Copying into a series appends a member line to the series invoice, so the same guard
+    // create() applies on join applies here — a locked series rejects the copy.
+    if (source.seriesId) {
+      await this.seriesService.assertMembershipMutable(userId, source.seriesId);
+    }
+
+    const newDate = new Date(dto.date);
+
+    // Map source items to seeds: completion + computed due dates are dropped so
+    // seedChecklistItems resets state to PENDING/BLOCKED and recomputes due dates against
+    // the new booking — a copied COMPLETE item on a brand-new booking would be a bug.
+    const checklistSeeds: ChecklistItemSeed[] = source.checklistItems.map((item) => ({
+      key: item.key,
+      label: item.label,
+      completedBy: item.completedBy as ChecklistItemSeed['completedBy'],
+      dependsOn: item.dependsOn,
+      autoCompleteRule: item.autoCompleteRule as ChecklistItemSeed['autoCompleteRule'],
+      requiredForStatus: item.requiredForStatus,
+      dueDateRule: item.dueDateRule as ChecklistItemSeed['dueDateRule'],
+    }));
+
+    // findOneForClone + assertMembershipMutable already warmed the Neon compute, so the
+    // transaction opens against a live connection (cf. create()'s explicit SELECT 1).
+    return this.prisma.$transaction(
+      async (tx) => {
+        const created = await this.repo.cloneBookingCore(userId, source, newDate, tx);
+
+        if (checklistSeeds.length > 0) {
+          await this.checklistRepo.seedChecklistItems(userId, created.id, checklistSeeds, created.date, created.createdAt, tx);
+        }
+
+        if (source.seriesId) {
+          const syncPayload: MemberBookingForSync = {
+            id: created.id,
+            date: created.date,
+            fee: created.fee as MemberBookingForSync['fee'],
+            sets: (created.sets ?? []) as Array<{ label: string | null; duration: number }>,
+          };
+          await this.seriesService.syncMemberJoin(userId, source.seriesId, syncPayload, tx);
+        }
+
+        return created;
+      },
       { maxWait: 5000, timeout: 15000 },
     );
   }

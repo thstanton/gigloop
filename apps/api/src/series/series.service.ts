@@ -53,37 +53,6 @@ export class SeriesService {
     };
   }
 
-  async findDefaults(userId: string, id: string) {
-    const series = await this.repo.findSeriesCustomerId(userId, id);
-    if (!series) throw new NotFoundException('Series not found');
-
-    const earliest = await this.repo.findEarliestMemberBooking(userId, id);
-    if (!earliest) return {};
-
-    return {
-      customerId: series.customerId,
-      venueId: earliest.venueId,
-      bookingAgentId: earliest.bookingAgentId,
-      // packageIds intentionally dropped — see findEarliestMemberBooking (ADR-0046).
-      checklistItems: earliest.checklistItems.map((item) => ({
-        key: item.key,
-        label: item.label,
-        completedBy: item.completedBy as 'USER' | 'CUSTOMER' | 'BAND_MEMBER',
-        dependsOn: item.dependsOn,
-        autoCompleteRule: item.autoCompleteRule as Record<string, unknown> | null,
-        requiredForStatus: item.requiredForStatus as 'PROVISIONAL' | 'CONFIRMED' | 'READY' | 'COMPLETE' | null,
-        dueDateRule: item.dueDateRule as Record<string, unknown> | null,
-        enabled: true,
-      })),
-      musicFormConfig: earliest.musicFormConfig
-        ? {
-            enabledGenres: earliest.musicFormConfig.enabledGenres,
-            keyMoments: earliest.musicFormConfig.keyMoments,
-          }
-        : null,
-    };
-  }
-
   async getBookings(userId: string, id: string) {
     const series = await this.repo.findExists(userId, id);
     if (!series) throw new NotFoundException('Series not found');

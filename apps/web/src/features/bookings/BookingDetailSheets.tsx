@@ -20,9 +20,11 @@ import {
 import { useBooking } from '@/lib/hooks/useBooking';
 import { useBookingChecklist } from '@/lib/hooks/useBookingChecklist';
 import { useBookingFields } from '@/lib/hooks/useBookingFields';
+import { useCopyBooking } from '@/lib/hooks/useCopyBooking';
 import { useContractActions } from '@/lib/hooks/useContractActions';
 import { useBookingInvoices } from '@/lib/hooks/useBookingInvoices';
 import BookingEditDrawer from '@/features/bookings/BookingEditDrawer';
+import { CopyEventDialog } from '@/features/bookings/CopyEventDialog';
 import ContractSheet from '@/features/bookings/ContractSheet';
 import ContactEditSheet from '@/features/contacts/ContactEditSheet';
 import ComposeEmailSheet from '@/features/communications/ComposeEmailSheet';
@@ -83,6 +85,7 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
   const { data: invoices = [] } = useBookingInvoices(bookingId);
   const contractActions = useContractActions(bookingId);
   const fields = useBookingFields(bookingId);
+  const copy = useCopyBooking(bookingId);
 
   const { data: userProfile } = useQuery({
     queryKey: ['me'],
@@ -189,6 +192,15 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
           userProfile={userProfile}
           open={true}
           onOpenChange={(open) => { if (!open) setSearchParams({}); }}
+        />
+      )}
+
+      {sheet === 'copyEvent' && (
+        <CopyEventDialog
+          open
+          onOpenChange={(open) => { if (!open) setSearchParams({}); }}
+          onCopy={(date) => copy.copyBooking(date)}
+          isPending={copy.isPending}
         />
       )}
 

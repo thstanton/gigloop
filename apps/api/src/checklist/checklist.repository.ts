@@ -4,7 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { computeDueDate } from '../bookings/checklist-defaults';
 import { addDays, surfaceActionItems } from './checklist-surfacing';
 
-type ChecklistItemSeed = {
+export type ChecklistItemSeed = {
   key?: string | null;
   label: string;
   completedBy?: 'USER' | 'CUSTOMER' | 'BAND_MEMBER';

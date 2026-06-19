@@ -1,4 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
+import { expect, fn, userEvent, within } from 'storybook/test';
+import { CopyPlus, Plus } from 'lucide-react';
+import React from 'react';
 import { Card } from './Card';
 
 const meta: Meta<typeof Card> = {
@@ -32,6 +35,40 @@ export const TitleAndAction: Story = {
       </button>
     ),
     children: <p className="text-sm text-muted">No invoices yet.</p>,
+  },
+};
+
+// A labelled primary action plus a "…" overflow menu of secondary actions, each with an
+// optional helper line. The menu lists every option, including the primary one.
+export const TitleActionAndMenu: Story = {
+  args: {
+    title: 'Bookings in Series',
+    action: (
+      <button className="text-xs text-primary hover:text-primary/80 transition-colors">
+        Repeat this booking
+      </button>
+    ),
+    menu: [
+      {
+        label: 'Repeat this booking',
+        description: 'Copies everything onto a new date',
+        icon: React.createElement(CopyPlus, { size: 16 }),
+        onClick: fn(),
+      },
+      {
+        label: 'New booking in series',
+        description: 'Same client, different gig',
+        icon: React.createElement(Plus, { size: 16 }),
+        onClick: fn(),
+      },
+    ],
+    children: <p className="text-sm text-muted">Three other bookings in this series.</p>,
+  },
+  play: async ({ canvas }) => {
+    await userEvent.click(canvas.getByLabelText('More actions'));
+    const body = within(document.body);
+    await expect(await body.findByText('New booking in series')).toBeVisible();
+    await expect(body.getByText('Copies everything onto a new date')).toBeVisible();
   },
 };
 

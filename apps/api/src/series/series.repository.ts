@@ -44,27 +44,6 @@ export class SeriesRepository {
     });
   }
 
-  findSeriesCustomerId(userId: string, id: string) {
-    return this.prisma.bookingSeries.findFirst({
-      where: { id, userId },
-      select: { customerId: true },
-    });
-  }
-
-  findEarliestMemberBooking(userId: string, seriesId: string) {
-    return this.prisma.booking.findFirst({
-      where: { seriesId, userId },
-      orderBy: { createdAt: 'asc' },
-      include: {
-        // Package pre-fill from the earliest member is gone: ADR-0046 severs the
-        // booking-owned Package → PackageTemplate provenance, so we can no longer
-        // recover which templates a prior booking used. See #499 follow-up.
-        checklistItems: { orderBy: { order: 'asc' } },
-        musicFormConfig: true,
-      },
-    });
-  }
-
   create(userId: string, label: string, customerId: string) {
     return this.prisma.bookingSeries.create({
       data: { userId, label, customerId },

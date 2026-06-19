@@ -197,7 +197,17 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
             <SeriesEventsCard
               bookings={seriesBookings.filter((b) => b.id !== booking.id)}
               isLoading={seriesBookingsLoading}
-              onAddToSeries={() => navigate('/admin/bookings/new', { state: { seriesId: booking.series!.id } })}
+              onCopyEvent={() => setSearchParams({ sheet: 'copyEvent' })}
+              onAddToSeries={() =>
+                navigate('/admin/bookings/new', {
+                  state: {
+                    seriesId: booking.series!.id,
+                    customerId: booking.customer.id,
+                    venueId: booking.venue?.id,
+                    bookingAgentId: booking.bookingAgent?.id,
+                  },
+                })
+              }
             />
           )}
 
