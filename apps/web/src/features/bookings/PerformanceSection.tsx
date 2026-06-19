@@ -29,7 +29,7 @@ export default function PerformanceSection({ booking, hideWhenEmpty = false }: P
   if ((booking.packages ?? []).length === 0 && unassigned.length === 0) {
     if (hideWhenEmpty) return null;
     return (
-      <div className="flex flex-col items-center text-center gap-2 py-4 text-muted min-h-[5rem]">
+      <div className="flex flex-col items-center justify-center text-center gap-2 py-4 text-muted min-h-[5rem]">
         <Music size={20} />
         <span className="text-sm font-medium">Performance</span>
         <button

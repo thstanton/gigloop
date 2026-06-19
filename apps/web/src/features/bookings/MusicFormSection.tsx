@@ -137,7 +137,7 @@ export default function MusicFormSection({
   // rather than vanishing — so a booking that gained packages after creation still shows it.
   if (!booking.hasMusicFormConfig) {
     return (
-      <div className="flex flex-col items-center text-center gap-2 py-4 text-muted min-h-[5rem]">
+      <div className="flex flex-col items-center justify-center text-center gap-2 py-4 text-muted min-h-[5rem]">
         <ClipboardList size={20} />
         <span className="text-sm font-medium">Music form</span>
         <button
@@ -155,7 +155,7 @@ export default function MusicFormSection({
 
   if (isLoading || !config) {
     return (
-      <div className="flex flex-col items-center text-center gap-2 py-4 text-muted min-h-[5rem]">
+      <div className="flex flex-col items-center justify-center text-center gap-2 py-4 text-muted min-h-[5rem]">
         <ClipboardList size={20} />
         <span className="text-sm font-medium">Music form</span>
         <div className="h-2 w-24 bg-border rounded animate-pulse" />

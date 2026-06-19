@@ -45,7 +45,7 @@ export default function DetailsCard({ logistics, hideWhenEmpty = false }: Detail
 
   if (allEntries.length === 0) {
     return (
-      <div className="flex flex-col items-center text-center gap-2 py-4 text-muted min-h-[5rem]">
+      <div className="flex flex-col items-center justify-center text-center gap-2 py-4 text-muted min-h-[5rem]">
         <Info size={20} />
         <span className="text-sm font-medium">Details</span>
         <button

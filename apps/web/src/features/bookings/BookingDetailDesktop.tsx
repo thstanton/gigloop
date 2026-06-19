@@ -84,30 +84,32 @@ export function BookingDetailDesktop({ bookingId }: BookingDetailDesktopProps) {
         {/* For the day */}
         <section>
           <SectionHeader label="For the day" />
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-            <ItineraryCard
-              logistics={booking.logistics}
-              sets={booking.sets}
-              packages={booking.packages}
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <ItineraryCard
+                logistics={booking.logistics}
+                sets={booking.sets}
+                packages={booking.packages}
+              />
+              <DetailsCard
+                logistics={booking.logistics}
+              />
+            </div>
+            <BookingVenueMapWidget
+              bookingId={bookingId}
+              contactHref={`/admin/contacts/${booking.venue?.id ?? ''}`}
             />
-            <DetailsCard
-              logistics={booking.logistics}
+            {!booking.venue && <InlineVenueAdd />}
+            <MusicFormSection
+              booking={booking}
+              documents={documents}
+              config={musicFormConfig ?? null}
+              isLoading={musicFormConfigLoading}
+              onTurnOn={() => turnOnMusicForm.mutate()}
+              isTurningOn={turnOnMusicForm.isPending}
+              onEdit={() => editSection('musicForm')}
             />
           </div>
-          <BookingVenueMapWidget
-            bookingId={bookingId}
-            contactHref={`/admin/contacts/${booking.venue?.id ?? ''}`}
-          />
-          {!booking.venue && <InlineVenueAdd />}
-          <MusicFormSection
-            booking={booking}
-            documents={documents}
-            config={musicFormConfig ?? null}
-            isLoading={musicFormConfigLoading}
-            onTurnOn={() => turnOnMusicForm.mutate()}
-            isTurningOn={turnOnMusicForm.isPending}
-            onEdit={() => editSection('musicForm')}
-          />
         </section>
 
       </div>
