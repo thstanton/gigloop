@@ -29,6 +29,7 @@ import ContractSheet from '@/features/bookings/ContractSheet';
 import ContactEditSheet from '@/features/contacts/ContactEditSheet';
 import { VenueQuickTweakSheet } from '@/features/bookings/VenueQuickTweakSheet';
 import { PeopleQuickTweakSheet } from '@/features/bookings/PeopleQuickTweakSheet';
+import { DetailsQuickTweakSheet } from '@/features/bookings/DetailsQuickTweakSheet';
 import ComposeEmailSheet from '@/features/communications/ComposeEmailSheet';
 import InvoiceSheet from '@/features/invoices/InvoiceSheet';
 import MarkSentDialog from '@/features/invoices/MarkSentDialog';
@@ -170,6 +171,12 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
         currentCustomerId={booking.customer?.id ?? null}
         currentAgentId={booking.bookingAgent?.id ?? null}
         open={sheet === 'peopleTweak'}
+        onOpenChange={(open) => { if (!open) setSearchParams({}); }}
+      />
+      <DetailsQuickTweakSheet
+        bookingId={bookingId}
+        currentLogistics={booking.logistics}
+        open={sheet === 'detailsTweak'}
         onOpenChange={(open) => { if (!open) setSearchParams({}); }}
       />
       <InvoiceSheet

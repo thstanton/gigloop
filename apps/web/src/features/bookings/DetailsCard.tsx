@@ -50,7 +50,7 @@ export default function DetailsCard({ logistics, hideWhenEmpty = false }: Detail
         <span className="text-sm font-medium">Details</span>
         <button
           type="button"
-          onClick={() => setSearchParams({ sheet: 'bookingEdit', section: 'onTheDay' })}
+          onClick={() => setSearchParams({ sheet: 'detailsTweak' })}
           className="inline-flex items-center gap-1 text-sm text-primary hover:text-primary/80 transition-colors disabled:opacity-50"
         >
           <Plus size={14} />
@@ -64,7 +64,7 @@ export default function DetailsCard({ logistics, hideWhenEmpty = false }: Detail
     <Card
       title="Details"
       action={
-        <GhostButton variant="primary" size="xs" onClick={() => setSearchParams({ sheet: 'bookingEdit', section: 'onTheDay' })}>
+        <GhostButton variant="primary" size="xs" onClick={() => setSearchParams({ sheet: 'detailsTweak' })}>
           Edit
         </GhostButton>
       }
