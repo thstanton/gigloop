@@ -14,3 +14,8 @@ ralph.log
 logs/
 ralph.current
 .playwright-cli/
+
+# Generated build artifacts (compiled config + TS incremental caches)
+*.tsbuildinfo
+apps/web/vite.config.js
+apps/web/vite.config.d.ts
