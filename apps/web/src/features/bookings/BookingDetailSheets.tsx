@@ -30,6 +30,7 @@ import ContactEditSheet from '@/features/contacts/ContactEditSheet';
 import { VenueQuickTweakSheet } from '@/features/bookings/VenueQuickTweakSheet';
 import { PeopleQuickTweakSheet } from '@/features/bookings/PeopleQuickTweakSheet';
 import { DetailsQuickTweakSheet } from '@/features/bookings/DetailsQuickTweakSheet';
+import { OverviewQuickTweakSheet } from '@/features/bookings/OverviewQuickTweakSheet';
 import ComposeEmailSheet from '@/features/communications/ComposeEmailSheet';
 import InvoiceSheet from '@/features/invoices/InvoiceSheet';
 import MarkSentDialog from '@/features/invoices/MarkSentDialog';
@@ -177,6 +178,15 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
         bookingId={bookingId}
         currentLogistics={booking.logistics}
         open={sheet === 'detailsTweak'}
+        onOpenChange={(open) => { if (!open) setSearchParams({}); }}
+      />
+      <OverviewQuickTweakSheet
+        bookingId={bookingId}
+        initialEventType={booking.eventType}
+        initialDate={booking.date.slice(0, 10)}
+        initialFee={booking.fee}
+        initialTitle={booking.title}
+        open={sheet === 'overviewTweak'}
         onOpenChange={(open) => { if (!open) setSearchParams({}); }}
       />
       <InvoiceSheet
