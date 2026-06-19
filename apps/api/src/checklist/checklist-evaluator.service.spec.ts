@@ -18,6 +18,7 @@ function makeBooking(overrides: Record<string, unknown> = {}) {
     id: 'b1',
     userId: 'u1',
     status: 'ENQUIRY',
+    venueId: null,
     depositReceivedAt: null,
     communications: [],
     invoices: [],
@@ -120,6 +121,50 @@ describe('ChecklistEvaluatorService', () => {
       const booking = makeBooking({
         communications: [{ status: 'SENT', template: { builtInType: 'thank_you' } }],
       });
+      repo.findItemsWithContext.mockResolvedValue({ items: [item], booking });
+
+      await service.evaluate('b1');
+
+      expect(repo.updateItemStates).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('completeness rule (Module A binding — add_venue)', () => {
+    const addVenueItem = (overrides: Record<string, unknown> = {}) =>
+      makeItem({
+        id: 'ci-venue',
+        key: 'add_venue',
+        autoCompleteRule: { type: 'completeness', concern: 'venue' },
+        ...overrides,
+      });
+
+    it('transitions PENDING → COMPLETE when venueId is set', async () => {
+      const item = addVenueItem();
+      const booking = makeBooking({ venueId: 'venue-1' });
+      repo.findItemsWithContext.mockResolvedValue({ items: [item], booking });
+
+      await service.evaluate('b1');
+
+      expect(repo.updateItemStates).toHaveBeenCalledWith([
+        expect.objectContaining({ id: 'ci-venue', state: 'COMPLETE' }),
+      ]);
+    });
+
+    it('stays PENDING when venueId is unset', async () => {
+      const item = addVenueItem();
+      const booking = makeBooking({ venueId: null });
+      repo.findItemsWithContext.mockResolvedValue({ items: [item], booking });
+
+      await service.evaluate('b1');
+
+      expect(repo.updateItemStates).not.toHaveBeenCalled();
+    });
+
+    it('does not regress an already-COMPLETE item when venueId is later cleared', async () => {
+      // Matches existing evaluator semantics: COMPLETE items are not re-evaluated, so
+      // clearing the venue does not bounce add_venue back to PENDING.
+      const item = addVenueItem({ state: 'COMPLETE', completedAt: new Date() });
+      const booking = makeBooking({ venueId: null });
       repo.findItemsWithContext.mockResolvedValue({ items: [item], booking });
 
       await service.evaluate('b1');

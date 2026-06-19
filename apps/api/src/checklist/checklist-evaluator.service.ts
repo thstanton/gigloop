@@ -1,15 +1,18 @@
 import { Injectable } from '@nestjs/common';
 import { ChecklistRepository } from './checklist.repository';
+import { isConcernComplete, CompletenessConcern } from '../bookings/booking-completeness';
 
 type AutoCompleteRule =
   | { type: 'bookingField'; field: string; operator: 'notNull' }
   | { type: 'communicationSent'; templateTypes: string[] }
   | { type: 'invoiceExists'; isDeposit: boolean }
   | { type: 'musicFormResponse' }
-  | { type: 'contractSigned' };
+  | { type: 'contractSigned' }
+  | { type: 'completeness'; concern: CompletenessConcern };
 
 interface BookingContext {
   status: string;
+  venueId: string | null;
   depositReceivedAt: Date | null;
   communications: Array<{ status: string; template: { builtInType: string | null } | null }>;
   invoices: Array<{ isDeposit: boolean }>;
@@ -44,6 +47,10 @@ function evaluateRule(rule: AutoCompleteRule, ctx: BookingContext): boolean {
       return ctx.musicFormResponse !== null;
     case 'contractSigned':
       return ctx.contracts.some((c) => c.status === 'SIGNED');
+    // Structural items (Module D) bind their done-state to a completeness predicate
+    // (Module A), so "is this concern done?" lives in exactly one place.
+    case 'completeness':
+      return isConcernComplete(rule.concern, ctx);
   }
 }
 

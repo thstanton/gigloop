@@ -82,6 +82,20 @@ describe('surfaceActionItems', () => {
       expect(surfaceActionItems([item()], 'CONFIRMED', CUTOFF)).toHaveLength(0);
     });
   });
+
+  // add_venue (PRD #511 Module D) is an undated, READY-staged item — it flows through the
+  // generic filter with no special-casing. These assert its concrete shape respects the gate.
+  describe('add_venue (undated, READY-staged)', () => {
+    const addVenue = () => item({ dueDate: null, requiredForStatus: 'READY' });
+
+    it('surfaces on a confirmed booking when it is the only READY blocker', () => {
+      expect(surfaceActionItems([addVenue()], 'CONFIRMED', CUTOFF)).toHaveLength(1);
+    });
+
+    it('respects the stage gate — drops once the booking has passed READY', () => {
+      expect(surfaceActionItems([addVenue()], 'COMPLETE', CUTOFF)).toHaveLength(0);
+    });
+  });
 });
 
 describe('addDays', () => {

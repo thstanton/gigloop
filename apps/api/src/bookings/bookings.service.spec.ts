@@ -323,6 +323,13 @@ describe('BookingsService', () => {
       expect(result).toBe(createdBooking);
     });
 
+    it('evaluates auto-complete rules after commit so structural items reflect data set at creation (#511)', async () => {
+      repo.create.mockResolvedValue(createdBooking);
+      const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', checklistItems: [] };
+      await service.create('u1', dto);
+      expect(evaluator.evaluate).toHaveBeenCalledWith(createdBooking.id);
+    });
+
     it('seeds checklist items from dto.checklistItems', async () => {
       repo.create.mockResolvedValue(createdBooking);
       const checklistItems = [{ label: 'Send quote', key: 'send_quote', completedBy: 'USER' as const, dependsOn: [], autoCompleteRule: null, requiredForStatus: 'PROVISIONAL' as const, dueDateRule: null }];
@@ -588,6 +595,22 @@ describe('BookingsService', () => {
       repo.update.mockResolvedValue(updated);
       await service.update('u1', 'b1', { status: BookingStatus.CONFIRMED });
       expect(checklistRepo.recomputeChecklistDueDates).not.toHaveBeenCalled();
+    });
+
+    it('re-evaluates auto-complete rules when venueId changes (auto-completes add_venue — #511)', async () => {
+      const updated = { ...booking, date: new Date(), createdAt: new Date() };
+      repo.findOne.mockResolvedValue(booking);
+      repo.update.mockResolvedValue(updated);
+      await service.update('u1', 'b1', { venueId: 'venue-1' });
+      expect(evaluator.evaluate).toHaveBeenCalledWith('b1');
+    });
+
+    it('does not re-evaluate when neither status nor venueId change', async () => {
+      const updated = { ...booking, date: new Date(), createdAt: new Date() };
+      repo.findOne.mockResolvedValue(booking);
+      repo.update.mockResolvedValue(updated);
+      await service.update('u1', 'b1', { title: 'New title' });
+      expect(evaluator.evaluate).not.toHaveBeenCalled();
     });
 
     it('round-trips logistics without modification', async () => {
