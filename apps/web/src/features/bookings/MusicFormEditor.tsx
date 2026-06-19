@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { GhostButton } from '@/components/common/GhostButton';
 import { apiGet, apiPut, apiDelete } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
+import { useConfigureMusicForm } from '@/lib/hooks/useConfigureMusicForm';
 import { ALL_GENRES, GENRE_LABELS } from '@/lib/constants';
 import type { BookingDetail, KeyMoment, MusicFormConfig } from '@/types/api';
 
@@ -77,6 +78,10 @@ export default function MusicFormEditor({
     onError: () => toast({ title: 'Failed to remove music form. Please try again.', variant: 'destructive' }),
   });
 
+  // Turning on creates an empty config row (presence == on, ADR-0046). Mirrors the
+  // detail card's turn-on so on/off is explicit in the edit sheet too (#469 stories 1 & 5).
+  const turnOn = useConfigureMusicForm(booking.id, booking, () => {});
+
   const { reset: saveReset } = save;
   const { reset: removeReset } = remove;
 
@@ -90,7 +95,25 @@ export default function MusicFormEditor({
     }
   }, [isOpen, saveReset, removeReset]);
 
-  if (booking.hasMusicFormConfig && (isLoading || !initialized)) {
+  // Off == no config row (ADR-0046). Show an explicit turn-on control rather than a
+  // full empty editor, so an off form can't be mistaken for an on-but-empty one in the
+  // edit sheet — matching the detail card (#469 stories 1 & 5).
+  if (!booking.hasMusicFormConfig) {
+    return (
+      <div>
+        <p className="text-sm font-medium text-foreground mb-3">Music form</p>
+        <p className="text-sm text-muted mb-3">
+          Off — the customer won't be asked for song requests for this booking.
+        </p>
+        <Button size="sm" onClick={() => turnOn.mutate()} disabled={turnOn.isPending}>
+          <Plus size={14} className="mr-1" />
+          {turnOn.isPending ? 'Turning on…' : 'Turn on music form'}
+        </Button>
+      </div>
+    );
+  }
+
+  if (isLoading || !initialized) {
     return (
       <div>
         <p className="text-sm font-medium text-foreground mb-3">Music form</p>
@@ -212,7 +235,8 @@ export default function MusicFormEditor({
           {save.isSuccess && !confirmRemove && (
             <span className="text-xs text-muted">Saved</span>
           )}
-          {booking.hasMusicFormConfig && (!confirmRemove ? (
+          {/* Editor only renders when the form is on, so Remove (= turn off) is always available here. */}
+          {!confirmRemove ? (
             <Button
               size="sm"
               variant="ghost"
@@ -237,7 +261,7 @@ export default function MusicFormEditor({
                 Cancel
               </Button>
             </>
-          ))}
+          )}
         </div>
       </div>
     </div>
