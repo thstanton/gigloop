@@ -49,7 +49,7 @@ export function BookingVenueMapWidget({ bookingId, contactHref }: BookingVenueMa
       cardAction={
         <button
           type="button"
-          onClick={() => setSearchParams({ sheet: 'contactEdit', contactId: venue.id })}
+          onClick={() => setSearchParams({ sheet: 'venueTweak' })}
           className="text-xs text-primary hover:text-primary/80 transition-colors"
         >
           Edit

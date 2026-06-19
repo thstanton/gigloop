@@ -27,6 +27,7 @@ import BookingEditDrawer from '@/features/bookings/BookingEditDrawer';
 import { CopyEventDialog } from '@/features/bookings/CopyEventDialog';
 import ContractSheet from '@/features/bookings/ContractSheet';
 import ContactEditSheet from '@/features/contacts/ContactEditSheet';
+import { VenueQuickTweakSheet } from '@/features/bookings/VenueQuickTweakSheet';
 import ComposeEmailSheet from '@/features/communications/ComposeEmailSheet';
 import InvoiceSheet from '@/features/invoices/InvoiceSheet';
 import MarkSentDialog from '@/features/invoices/MarkSentDialog';
@@ -156,6 +157,12 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
         contact={editingContact}
         onClose={() => { setSearchParams({}); }}
         onUnlink={editingContact?.id === booking.venue?.id ? () => { fields.updateVenue(null); setSearchParams({}); } : undefined}
+      />
+      <VenueQuickTweakSheet
+        bookingId={bookingId}
+        currentVenueId={booking.venue?.id ?? null}
+        open={sheet === 'venueTweak'}
+        onOpenChange={(open) => { if (!open) setSearchParams({}); }}
       />
       <InvoiceSheet
         bookingId={bookingId}
