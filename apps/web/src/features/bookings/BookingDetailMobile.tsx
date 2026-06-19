@@ -1,7 +1,7 @@
 import { useAuth } from '@clerk/react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { X } from 'lucide-react';
+import { Pencil, X } from 'lucide-react';
 import { useBooking } from '@/lib/hooks/useBooking';
 import { useBookingChecklist } from '@/lib/hooks/useBookingChecklist';
 import { useBookingFields } from '@/lib/hooks/useBookingFields';
@@ -26,6 +26,7 @@ import PerformanceSection from '@/features/bookings/PerformanceSection';
 import MusicFormSection from '@/features/bookings/MusicFormSection';
 import CommunicationsSection from '@/features/bookings/CommunicationsSection';
 import { SectionHeader } from '@/components/common/SectionHeader';
+import { GhostButton } from '@/components/common/GhostButton';
 import { apiGet } from '@/lib/api';
 import type {
   Invoice,
@@ -162,15 +163,26 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
       info={
         <div className="space-y-6 pt-2">
           <section>
-            <SectionHeader label="People" />
+            <SectionHeader
+              label="People"
+              action={
+                <GhostButton
+                  variant="primary"
+                  size="xs"
+                  icon={<Pencil size={13} />}
+                  onClick={() => setSearchParams({ sheet: 'peopleTweak' })}
+                >
+                  Edit
+                </GhostButton>
+              }
+            />
             <div className="flex flex-row gap-4">
-              <PersonChip role="Customer" contact={booking.customer} linkState={backState} onEdit={() => setSearchParams({ sheet: 'contactEdit', contactId: booking.customer.id })} />
+              <PersonChip role="Customer" contact={booking.customer} linkState={backState} />
               {booking.bookingAgent && (
                 <PersonChip
                   role="Booking agent"
                   contact={booking.bookingAgent}
                   linkState={backState}
-                  onEdit={() => setSearchParams({ sheet: 'contactEdit', contactId: booking.bookingAgent!.id })}
                 />
               )}
             </div>

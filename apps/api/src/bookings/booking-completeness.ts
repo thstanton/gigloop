@@ -21,12 +21,28 @@ export function venueCompleteness(booking: VenueInput): VenueCompleteness {
   return booking.venueId != null ? 'set' : 'unset';
 }
 
+/**
+ * People completeness: keyed off the customer (the required anchor of the People concern;
+ * the booking agent is genuinely optional, so its absence never makes People incomplete).
+ * A persisted booking always has a customer, so this reads `set` post-creation — the `unset`
+ * state exists for the pre-commit create flow, where the customer isn't chosen yet.
+ */
+export type PeopleCompleteness = 'set' | 'unset';
+
+export interface PeopleInput {
+  customerId: string | null;
+}
+
+export function peopleCompleteness(booking: PeopleInput): PeopleCompleteness {
+  return booking.customerId != null ? 'set' : 'unset';
+}
+
 /** The concerns a structural checklist item can bind to. Grows one entry per slice. */
-export type CompletenessConcern = 'venue';
+export type CompletenessConcern = 'venue' | 'people';
 
 // The booking shape covering every concern's predicate inputs. The checklist evaluator
 // selects exactly these fields from the booking; this union grows as concerns are added.
-export type CompletenessInput = VenueInput;
+export type CompletenessInput = VenueInput & PeopleInput;
 
 // The binding point for `{ type: 'completeness', concern }` autoCompleteRules: returns
 // whether the concern's done-state is satisfied. Defined in terms of the rich predicates
@@ -35,8 +51,15 @@ export function isConcernComplete(
   concern: CompletenessConcern,
   booking: CompletenessInput,
 ): boolean {
-  if (concern === 'venue') return venueCompleteness(booking) === 'set';
-  // Compile-time exhaustiveness: adding a concern without a branch here is a type error.
-  const unhandled: never = concern;
-  throw new Error(`Unhandled completeness concern: ${String(unhandled)}`);
+  switch (concern) {
+    case 'venue':
+      return venueCompleteness(booking) === 'set';
+    case 'people':
+      return peopleCompleteness(booking) === 'set';
+    default: {
+      // Compile-time exhaustiveness: adding a concern without a branch here is a type error.
+      const unhandled: never = concern;
+      throw new Error(`Unhandled completeness concern: ${String(unhandled)}`);
+    }
+  }
 }

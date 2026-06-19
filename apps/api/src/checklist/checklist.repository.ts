@@ -89,6 +89,7 @@ export class ChecklistRepository {
           userId: true,
           status: true,
           venueId: true,
+          customerId: true,
           depositReceivedAt: true,
           communications: {
             select: {

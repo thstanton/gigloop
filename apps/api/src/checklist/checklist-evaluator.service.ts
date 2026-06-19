@@ -13,6 +13,7 @@ type AutoCompleteRule =
 interface BookingContext {
   status: string;
   venueId: string | null;
+  customerId: string | null;
   depositReceivedAt: Date | null;
   communications: Array<{ status: string; template: { builtInType: string | null } | null }>;
   invoices: Array<{ isDeposit: boolean }>;

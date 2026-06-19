@@ -25,6 +25,8 @@ import MusicFormSection from '@/features/bookings/MusicFormSection';
 import { InlineVenueAdd } from '@/features/bookings/InlineVenueAdd';
 import { BookingVenueMapWidget } from '@/features/bookings/BookingVenueMapWidget';
 import { SectionHeader } from '@/components/common/SectionHeader';
+import { GhostButton } from '@/components/common/GhostButton';
+import { Pencil } from 'lucide-react';
 import { apiGet } from '@/lib/api';
 import { EVENT_TYPE_LABELS } from '@/lib/constants';
 import type {
@@ -141,16 +143,27 @@ export function BookingDetailDesktop({ bookingId }: BookingDetailDesktopProps) {
 
         {/* People */}
         <section>
-          <SectionHeader label="People" />
+          <SectionHeader
+            label="People"
+            action={
+              <GhostButton
+                variant="primary"
+                size="xs"
+                icon={<Pencil size={13} />}
+                onClick={() => setSearchParams({ sheet: 'peopleTweak' })}
+              >
+                Edit
+              </GhostButton>
+            }
+          />
           <div className="border-t border-border">
-            <PersonCard role="Customer" contact={booking.customer} linkState={backState} onEdit={() => setSearchParams({ sheet: 'contactEdit', contactId: booking.customer.id })} />
+            <PersonCard role="Customer" contact={booking.customer} linkState={backState} />
             {booking.bookingAgent && (
               <PersonCard
                 role="Booking agent"
                 contact={booking.bookingAgent}
                 commissionArrangement={booking.bookingAgent.commissionArrangement}
                 linkState={backState}
-                onEdit={() => setSearchParams({ sheet: 'contactEdit', contactId: booking.bookingAgent!.id })}
               />
             )}
           </div>

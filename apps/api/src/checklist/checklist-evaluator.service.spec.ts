@@ -19,6 +19,7 @@ function makeBooking(overrides: Record<string, unknown> = {}) {
     userId: 'u1',
     status: 'ENQUIRY',
     venueId: null,
+    customerId: 'cust-1',
     depositReceivedAt: null,
     communications: [],
     invoices: [],
