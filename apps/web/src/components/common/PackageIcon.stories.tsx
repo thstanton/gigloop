@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { expect } from '@storybook/test';
+import { expect } from 'storybook/test';
 import { PackageIcon } from './PackageIcon';
 
 const meta: Meta<typeof PackageIcon> = {

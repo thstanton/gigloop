@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
-import { expect, userEvent, within } from '@storybook/test';
+import { expect, userEvent, within } from 'storybook/test';
 import { IconPicker } from './IconPicker';
 import { PACKAGE_ICON_OPTIONS } from '@/lib/constants';
 
