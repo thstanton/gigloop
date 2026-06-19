@@ -1,7 +1,7 @@
 import { useSearchParams } from 'react-router-dom';
 import { Music } from 'lucide-react';
 import { Card } from '@/components/common/Card';
-import FormatIcon from './FormatIcon';
+import { PackageIcon } from '@/components/common/PackageIcon';
 import type { BookingDetail, PerformanceSet } from '@/types/api';
 
 export function formatDuration(minutes: number): string {
@@ -62,7 +62,7 @@ export default function PerformanceSection({ booking, hideWhenEmpty = false }: P
         return (
           <div key={bpf.id} className="mb-4 last:mb-0">
             <div className="flex items-center gap-1.5 text-sm font-medium text-foreground mb-1">
-              <FormatIcon icon={bpf.icon} />
+              <PackageIcon icon={bpf.icon} />
               {bpf.label}
             </div>
             {sets.map((set) => (
@@ -79,9 +79,9 @@ export default function PerformanceSection({ booking, hideWhenEmpty = false }: P
         );
       })}
 
+      {/* Ungrouped sets (packageId null) render flat with no heading — #500. */}
       {unassigned.length > 0 && (
         <div className="mb-4">
-          <p className="text-xs text-muted mb-1">Other sets</p>
           {unassigned.map((set) => (
             <div key={set.id} className="flex items-center gap-3 py-1.5 border-b border-border last:border-0">
               <span className="flex-1 text-sm text-foreground">

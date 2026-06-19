@@ -7,18 +7,12 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { Switch } from '@/components/ui/switch';
 import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
-import { PACKAGE_CATEGORY_LABELS, PACKAGE_CATEGORY_ORDER, PACKAGE_ICON_MAP, PACKAGE_ICON_OPTIONS } from '@/lib/constants';
+import { PACKAGE_CATEGORY_LABELS, PACKAGE_CATEGORY_ORDER } from '@/lib/constants';
 import type { CreatePackageInput, PackageTemplate, SlotInput, UpdatePackageInput } from '@/types/api';
-import { cn } from '@/lib/utils';
 import { Card } from '@/components/common/Card';
 import { EmptyState } from '@/components/common/EmptyState';
-
-const ICON_OPTIONS = PACKAGE_ICON_OPTIONS;
-
-function PackageIcon({ icon, size = 16 }: { icon: string; size?: number }) {
-  const Icon = PACKAGE_ICON_MAP[icon] ?? Music;
-  return <Icon size={size} strokeWidth={1.75} />;
-}
+import { IconPicker } from '@/components/common/IconPicker';
+import { PackageIcon } from '@/components/common/PackageIcon';
 
 // ─── Category display ─────────────────────────────────────────────────────────
 
@@ -185,41 +179,6 @@ function SlotEditor({
   );
 }
 
-// ─── Icon picker ──────────────────────────────────────────────────────────────
-
-function IconPicker({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (icon: string) => void;
-}) {
-  return (
-    <div>
-      <label className="block text-sm font-medium text-foreground mb-2">Icon</label>
-      <div className="flex flex-wrap gap-2">
-        {ICON_OPTIONS.map((icon) => (
-          <button
-            key={icon}
-            type="button"
-            onClick={() => onChange(icon)}
-            className={cn(
-              'w-9 h-9 flex items-center justify-center rounded border transition-colors',
-              value === icon
-                ? 'border-primary bg-primary/10 text-primary'
-                : 'border-border bg-surface text-muted hover:text-foreground',
-            )}
-            aria-label={icon}
-            title={icon}
-          >
-            <PackageIcon icon={icon} size={18} />
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 // ─── Package drawer ───────────────────────────────────────────────────────────
 
 type DrawerMode = { type: 'create' } | { type: 'edit'; pkg: PackageTemplate };
@@ -319,7 +278,7 @@ function PackageDrawer({
         <SheetHeader className="px-5 pt-5 pb-4 border-b border-border flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
-              <PackageIcon icon={icon} size={16} />
+              <PackageIcon icon={icon} size={16} strokeWidth={1.75} />
             </div>
             <SheetTitle className="text-base">
               {isEdit ? 'Edit package' : 'New package'}
@@ -466,7 +425,7 @@ function PackageCard({
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
-            <PackageIcon icon={pkg.icon} size={15} />
+            <PackageIcon icon={pkg.icon} size={15} strokeWidth={1.75} />
           </div>
           <span className="text-sm font-medium text-foreground truncate">{pkg.label}</span>
         </div>

@@ -21,6 +21,7 @@ import { UpdateBookingDto } from './dto/update-booking.dto';
 import { CreateSetDto } from './dto/create-set.dto';
 import { UpdateSetDto } from './dto/update-set.dto';
 import { ApplyPackageTemplateDto } from './dto/apply-package-template.dto';
+import { UpdateBookingPackageDto } from './dto/update-booking-package.dto';
 import { UpsertMusicFormConfigDto } from './dto/upsert-music-form-config.dto';
 import { UpdateContractDto } from './dto/update-contract.dto';
 import { UpdateChecklistItemDto } from './dto/update-checklist-item.dto';
@@ -224,7 +225,19 @@ export class BookingsController {
     return this.service.applyPackageTemplate(req.userId, id, dto.packageTemplateId);
   }
 
-  @ApiOperation({ summary: 'Remove a booking-owned Package and its sets from a booking' })
+  @ApiOperation({ summary: 'Rename or re-icon a booking-owned Package (does not affect its source template)' })
+  @ApiResponse({ status: 200, description: 'Updated booking' })
+  @Patch(':id/packages/:packageId')
+  updatePackage(
+    @Req() req: AuthedRequest,
+    @Param('id') id: string,
+    @Param('packageId') packageId: string,
+    @Body() dto: UpdateBookingPackageDto,
+  ) {
+    return this.service.updatePackage(req.userId, id, packageId, dto);
+  }
+
+  @ApiOperation({ summary: 'Remove a booking-owned Package, orphaning its sets to ungrouped' })
   @Delete(':id/packages/:packageId')
   @HttpCode(204)
   removePackage(

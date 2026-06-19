@@ -24,6 +24,7 @@ type MockRepo = {
   createWithPackageTemplates: jest.Mock;
   findBookingPackage: jest.Mock;
   applyPackageTemplate: jest.Mock;
+  updatePackage: jest.Mock;
   removePackage: jest.Mock;
   update: jest.Mock;
   cancel: jest.Mock;
@@ -78,6 +79,7 @@ function makeRepo(): MockRepo {
     createWithPackageTemplates: jest.fn(),
     findBookingPackage: jest.fn(),
     applyPackageTemplate: jest.fn(),
+    updatePackage: jest.fn(),
     removePackage: jest.fn(),
     update: jest.fn(),
     cancel: jest.fn(),
@@ -535,6 +537,26 @@ describe('BookingsService', () => {
       repo.findBookingPackage.mockResolvedValue(null);
       await expect(service.removePackage('u1', 'b1', 'pkg1')).rejects.toThrow(NotFoundException);
       expect(repo.removePackage).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('updatePackage', () => {
+    const rawBooking = { ...booking, musicFormConfig: null, musicFormResponse: null, packages: [] };
+
+    it('updates a booking-owned package when booking and package both exist', async () => {
+      const bookingPackage = { id: 'pkg1', label: 'Ceremony', icon: 'heart', order: 1 };
+      repo.findOne.mockResolvedValue(rawBooking);
+      repo.findBookingPackage.mockResolvedValue(bookingPackage);
+      repo.updatePackage.mockResolvedValue(rawBooking);
+      await service.updatePackage('u1', 'b1', 'pkg1', { label: 'Evening', icon: 'music' });
+      expect(repo.updatePackage).toHaveBeenCalledWith('b1', 'pkg1', { label: 'Evening', icon: 'music' });
+    });
+
+    it('throws NotFoundException when package is not found', async () => {
+      repo.findOne.mockResolvedValue(rawBooking);
+      repo.findBookingPackage.mockResolvedValue(null);
+      await expect(service.updatePackage('u1', 'b1', 'pkg1', { label: 'X' })).rejects.toThrow(NotFoundException);
+      expect(repo.updatePackage).not.toHaveBeenCalled();
     });
   });
 

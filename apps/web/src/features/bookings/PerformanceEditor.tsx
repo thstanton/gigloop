@@ -1,22 +1,18 @@
 import { useEffect, useRef, useState, type FocusEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2, Music } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { GhostButton } from '@/components/common/GhostButton';
 import { SubLabel } from '@/components/common/SubLabel';
+import { PackageIcon } from '@/components/common/PackageIcon';
+import { IconPicker } from '@/components/common/IconPicker';
 import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
-import { PACKAGE_ICON_MAP } from '@/lib/constants';
 import type {
   BookingDetail,
   BookingPackageSummary,
   PackageTemplate,
   PerformanceSet,
 } from '@/types/api';
-
-function FormatIcon({ icon, size = 14 }: { icon: string; size?: number }) {
-  const Icon = PACKAGE_ICON_MAP[icon] ?? Music;
-  return <Icon size={size} />;
-}
 
 // ─── Set edit row ─────────────────────────────────────────────────────────────
 
@@ -138,12 +134,84 @@ function SetEditRow({
   );
 }
 
+// ─── Package header (rename / re-icon / remove) ─────────────────────────────────
+
+function PackageHeader({
+  pkg,
+  onUpdate,
+  onRemove,
+  isRemoving,
+}: {
+  pkg: BookingPackageSummary;
+  onUpdate: (dto: { label?: string; icon?: string }) => void;
+  onRemove: () => void;
+  isRemoving: boolean;
+}) {
+  const [label, setLabel] = useState(pkg.label);
+  const [iconOpen, setIconOpen] = useState(false);
+
+  // Re-sync when the server value changes (e.g. after a save invalidation).
+  useEffect(() => setLabel(pkg.label), [pkg.label]);
+
+  function commitLabel() {
+    const next = label.trim();
+    if (!next || next === pkg.label) {
+      setLabel(pkg.label);
+      return;
+    }
+    onUpdate({ label: next });
+  }
+
+  return (
+    <div className="mb-1">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 flex-1 min-w-0">
+          <button
+            type="button"
+            onClick={() => setIconOpen((o) => !o)}
+            className="text-foreground hover:text-primary transition-colors flex-shrink-0"
+            aria-label={`Change ${pkg.label} icon`}
+          >
+            <PackageIcon icon={pkg.icon} />
+          </button>
+          <input
+            type="text"
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            onBlur={commitLabel}
+            onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+            className="text-sm font-medium text-foreground bg-transparent border border-transparent hover:border-border focus:border-border rounded px-1 py-0.5 min-w-0 flex-1"
+            aria-label={`Package name`}
+          />
+        </div>
+        <button
+          type="button"
+          onClick={onRemove}
+          disabled={isRemoving}
+          className="text-muted hover:text-status-cancelled transition-colors disabled:opacity-50 flex-shrink-0"
+          aria-label={`Remove ${pkg.label}`}
+        >
+          <Trash2 size={13} aria-hidden="true" />
+        </button>
+      </div>
+      {iconOpen && (
+        <div className="mt-2 mb-1">
+          <IconPicker
+            value={pkg.icon}
+            onChange={(icon) => { onUpdate({ icon }); setIconOpen(false); }}
+            label={null}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function PerformanceEditor({ booking, isOpen }: { booking: BookingDetail; isOpen: boolean }) {
   const queryClient = useQueryClient();
   const [addOpen, setAddOpen] = useState(false);
-  const [confirmRemovePackageId, setConfirmRemovePackageId] = useState<string | null>(null);
 
   const { data: allTemplates = [], isLoading: templatesLoading } = useQuery({
     queryKey: ['packages'],
@@ -161,9 +229,7 @@ export default function PerformanceEditor({ booking, isOpen }: { booking: Bookin
   const availableTemplates = enabledTemplates;
 
   useEffect(() => {
-    if (isOpen) {
-      setConfirmRemovePackageId(null);
-    }
+    if (isOpen) setAddOpen(false);
   }, [isOpen]);
 
   const applyTemplate = useMutation({
@@ -178,6 +244,17 @@ export default function PerformanceEditor({ booking, isOpen }: { booking: Bookin
     },
   });
 
+  const updatePackage = useMutation({
+    mutationFn: ({ packageId, ...dto }: { packageId: string; label?: string; icon?: string }) =>
+      apiPatch(`/bookings/${booking.id}/packages/${packageId}`, dto),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['booking', booking.id] }),
+    onError: () => {
+      toast({ title: 'Failed to update package. Please try again.', variant: 'destructive' });
+    },
+  });
+
+  // Removing a package is non-destructive — its sets orphan to ungrouped (#500),
+  // so no confirmation is needed.
   const removePackage = useMutation({
     mutationFn: (packageId: string) =>
       apiDelete(`/bookings/${booking.id}/packages/${packageId}`),
@@ -188,9 +265,9 @@ export default function PerformanceEditor({ booking, isOpen }: { booking: Bookin
   });
 
   const addSet = useMutation({
-    mutationFn: (payload: { packageId: string; order: number }) =>
+    mutationFn: (payload: { packageId?: string; order: number }) =>
       apiPost(`/bookings/${booking.id}/sets`, {
-        packageId: payload.packageId,
+        ...(payload.packageId ? { packageId: payload.packageId } : {}),
         order: payload.order,
         duration: 30,
       }),
@@ -208,19 +285,16 @@ export default function PerformanceEditor({ booking, isOpen }: { booking: Bookin
     },
   });
 
-  function handleRemovePackage(bpf: BookingPackageSummary) {
-    const sets = (booking.sets ?? []).filter((s) => s.packageId === bpf.id);
-    const hasStartTimes = sets.some((s) => s.startTime);
-    if (hasStartTimes) {
-      setConfirmRemovePackageId(bpf.id);
-      return;
-    }
-    removePackage.mutate(bpf.id);
+  function nextSetOrder() {
+    return Math.max(0, ...(booking.sets ?? []).map((s) => s.order)) + 1;
   }
 
   function handleAddSet(bpf: BookingPackageSummary) {
-    const nextOrder = Math.max(0, ...(booking.sets ?? []).map((s) => s.order)) + 1;
-    addSet.mutate({ packageId: bpf.id, order: nextOrder });
+    addSet.mutate({ packageId: bpf.id, order: nextSetOrder() });
+  }
+
+  function handleAddUngroupedSet() {
+    addSet.mutate({ order: nextSetOrder() });
   }
 
   const setsByPackageId = new Map<string | null, PerformanceSet[]>();
@@ -243,41 +317,12 @@ export default function PerformanceEditor({ booking, isOpen }: { booking: Bookin
         const sets = setsByPackageId.get(bpf.id) ?? [];
         return (
           <div key={bpf.id} className="mb-5">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-sm font-medium text-foreground flex items-center gap-1.5">
-                <FormatIcon icon={bpf.icon} />
-                {bpf.label}
-              </span>
-              {confirmRemovePackageId === bpf.id ? (
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => { removePackage.mutate(bpf.id); setConfirmRemovePackageId(null); }}
-                    disabled={removePackage.isPending}
-                    className="text-xs text-status-cancelled hover:text-status-cancelled/80 transition-colors disabled:opacity-50"
-                  >
-                    {removePackage.isPending ? 'Removing…' : 'Confirm remove'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setConfirmRemovePackageId(null)}
-                    className="text-xs text-muted hover:text-foreground transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => handleRemovePackage(bpf)}
-                  disabled={removePackage.isPending}
-                  className="text-muted hover:text-status-cancelled transition-colors disabled:opacity-50"
-                  aria-label={`Remove ${bpf.label}`}
-                >
-                  <Trash2 size={13} aria-hidden="true" />
-                </button>
-              )}
-            </div>
+            <PackageHeader
+              pkg={bpf}
+              onUpdate={(dto) => updatePackage.mutate({ packageId: bpf.id, ...dto })}
+              onRemove={() => removePackage.mutate(bpf.id)}
+              isRemoving={removePackage.isPending && removePackage.variables === bpf.id}
+            />
 
             {sets.length > 0 && (
               <div className="text-xs text-muted grid grid-cols-[1fr_5rem_5rem_1.25rem] gap-2 pb-1 mb-1 border-b border-border">
@@ -312,9 +357,16 @@ export default function PerformanceEditor({ booking, isOpen }: { booking: Bookin
         );
       })}
 
+      {/* Ungrouped sets (packageId null) render flat with no heading — #500.
+          A top border separates them from package sections above. */}
       {unassigned.length > 0 && (
-        <div className="mb-5">
-          <p className="text-sm font-medium text-foreground mb-1">Other sets</p>
+        <div className={`mb-5 ${(booking.packages ?? []).length > 0 ? 'pt-3 border-t border-border' : ''}`}>
+          <div className="text-xs text-muted grid grid-cols-[1fr_5rem_5rem_1.25rem] gap-2 pb-1 mb-1 border-b border-border">
+            <span className="pl-2">Label</span>
+            <span className="pl-2">Min</span>
+            <span className="pl-2">Start</span>
+            <span />
+          </div>
           {unassigned.map((set) => (
             <SetEditRow
               key={set.id}
@@ -328,13 +380,22 @@ export default function PerformanceEditor({ booking, isOpen }: { booking: Bookin
       )}
 
       {!addOpen ? (
-        <GhostButton
-          onClick={() => setAddOpen(true)}
-          variant="primary"
-          icon={<Plus size={14} aria-hidden="true" />}
-        >
-          Add packages
-        </GhostButton>
+        <div className="flex flex-wrap items-center gap-4">
+          <GhostButton
+            onClick={() => setAddOpen(true)}
+            variant="primary"
+            icon={<Plus size={14} aria-hidden="true" />}
+          >
+            Add packages
+          </GhostButton>
+          <GhostButton
+            onClick={handleAddUngroupedSet}
+            disabled={addSet.isPending}
+            icon={<Plus size={14} aria-hidden="true" />}
+          >
+            Add set
+          </GhostButton>
+        </div>
       ) : (
         <div className="space-y-2">
           <SubLabel>Select a package</SubLabel>
@@ -353,7 +414,7 @@ export default function PerformanceEditor({ booking, isOpen }: { booking: Bookin
                     onClick={() => applyTemplate.mutate(tmpl.id)}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border text-sm hover:border-primary transition-colors disabled:opacity-50"
                   >
-                    <FormatIcon icon={tmpl.icon} />
+                    <PackageIcon icon={tmpl.icon} />
                     {tmpl.label}
                   </button>
                 ))}
@@ -377,7 +438,7 @@ export default function PerformanceEditor({ booking, isOpen }: { booking: Bookin
                           onClick={() => applyTemplate.mutate(tmpl.id)}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border text-sm hover:border-primary transition-colors disabled:opacity-50"
                         >
-                          <FormatIcon icon={tmpl.icon} />
+                          <PackageIcon icon={tmpl.icon} />
                           {tmpl.label}
                         </button>
                       ))}

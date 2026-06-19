@@ -12,6 +12,7 @@ import { UpdateBookingDto } from './dto/update-booking.dto';
 import { UpdateContractDto } from './dto/update-contract.dto';
 import { CreateSetDto } from './dto/create-set.dto';
 import { UpdateSetDto } from './dto/update-set.dto';
+import { UpdateBookingPackageDto } from './dto/update-booking-package.dto';
 import { UpsertMusicFormConfigDto } from './dto/upsert-music-form-config.dto';
 import { MailService } from '../mail/mail.service';
 import { substituteTiptapVariables } from '../mail/tiptap-portal';
@@ -256,6 +257,14 @@ export class BookingsService {
     const templates = await this.repo.findPackageTemplates(userId, [packageTemplateId]);
     if (!templates.length) throw new NotFoundException('Package template not found');
     const booking = await this.repo.applyPackageTemplate(userId, bookingId, templates[0]);
+    return this.mapBooking(booking!);
+  }
+
+  async updatePackage(userId: string, bookingId: string, packageId: string, dto: UpdateBookingPackageDto) {
+    await this.findOne(userId, bookingId);
+    const pkg = await this.repo.findBookingPackage(userId, bookingId, packageId);
+    if (!pkg) throw new NotFoundException('Applied package not found');
+    const booking = await this.repo.updatePackage(bookingId, packageId, dto);
     return this.mapBooking(booking!);
   }
 

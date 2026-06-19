@@ -279,6 +279,85 @@ describe('Booking lifecycle (integration)', () => {
       await prisma.booking.delete({ where: { id: bookingId } });
       await prisma.packageTemplate.delete({ where: { id: template.id } });
     });
+
+    it('renaming/re-iconing a booking Package leaves the source template unchanged (#500)', async () => {
+      const template = await prisma.packageTemplate.create({
+        data: {
+          userId: TEST_USER_ID,
+          label: 'Ceremony',
+          icon: 'heart',
+          category: 'WEDDING',
+          keyMoments: [],
+          defaultGenreSelection: [],
+          slots: { create: [{ userId: TEST_USER_ID, label: 'Processional', duration: 30, order: 1 }] },
+        },
+      });
+      const create = await createBooking();
+      const bookingId = create.body.id as string;
+      const apply = await request(app.getHttpServer())
+        .post(`/api/bookings/${bookingId}/packages`)
+        .send({ packageTemplateId: template.id });
+      const packageId = (apply.body.packages as Array<{ id: string }>)[0].id;
+
+      // Rename + re-icon the booking-owned Package.
+      const patched = await request(app.getHttpServer())
+        .patch(`/api/bookings/${bookingId}/packages/${packageId}`)
+        .send({ label: 'Evening Reception', icon: 'music' });
+      expect(patched.status).toBe(200);
+      const pkg = (patched.body.packages as Array<{ id: string; label: string; icon: string }>).find(
+        (p) => p.id === packageId,
+      );
+      expect(pkg).toMatchObject({ label: 'Evening Reception', icon: 'music' });
+
+      // The source PackageTemplate row must be untouched — provenance is severed.
+      const templateAfter = await prisma.packageTemplate.findUnique({ where: { id: template.id } });
+      expect(templateAfter!.label).toBe('Ceremony');
+      expect(templateAfter!.icon).toBe('heart');
+
+      await prisma.booking.delete({ where: { id: bookingId } });
+      await prisma.packageTemplate.delete({ where: { id: template.id } });
+    });
+
+    it('removing a booking Package orphans its sets to ungrouped instead of deleting them (#500)', async () => {
+      const template = await prisma.packageTemplate.create({
+        data: {
+          userId: TEST_USER_ID,
+          label: 'Ceremony',
+          icon: 'heart',
+          category: 'WEDDING',
+          keyMoments: [],
+          defaultGenreSelection: [],
+          slots: { create: [{ userId: TEST_USER_ID, label: 'Processional', duration: 30, order: 1 }] },
+        },
+      });
+      const create = await createBooking();
+      const bookingId = create.body.id as string;
+      const apply = await request(app.getHttpServer())
+        .post(`/api/bookings/${bookingId}/packages`)
+        .send({ packageTemplateId: template.id });
+      const packageId = (apply.body.packages as Array<{ id: string }>)[0].id;
+      const setId = (apply.body.sets as Array<{ id: string; packageId: string | null }>).find(
+        (s) => s.packageId === packageId,
+      )!.id;
+
+      // Remove the package.
+      const remove = await request(app.getHttpServer()).delete(
+        `/api/bookings/${bookingId}/packages/${packageId}`,
+      );
+      expect(remove.status).toBe(204);
+
+      // The set survives, now ungrouped (packageId null); the Package is gone.
+      const after = await request(app.getHttpServer()).get(`/api/bookings/${bookingId}`);
+      expect((after.body.packages as unknown[]).length).toBe(0);
+      const survivor = (after.body.sets as Array<{ id: string; packageId: string | null }>).find(
+        (s) => s.id === setId,
+      );
+      expect(survivor).toBeDefined();
+      expect(survivor!.packageId).toBeNull();
+
+      await prisma.booking.delete({ where: { id: bookingId } });
+      await prisma.packageTemplate.delete({ where: { id: template.id } });
+    });
   });
 
   // ── unhappy paths ─────────────────────────────────────────────────────────

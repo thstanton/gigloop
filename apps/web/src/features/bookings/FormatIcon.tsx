@@ -1,7 +1,3 @@
-import { Music } from 'lucide-react';
-import { PACKAGE_ICON_MAP } from '@/lib/constants';
-
-export default function FormatIcon({ icon, size = 14 }: { icon: string; size?: number }) {
-  const Icon = PACKAGE_ICON_MAP[icon] ?? Music;
-  return <Icon size={size} />;
-}
+// Thin alias kept for the several booking surfaces that import this name.
+// The single implementation lives in components/common/PackageIcon.
+export { PackageIcon as default } from '@/components/common/PackageIcon';

@@ -5,6 +5,7 @@ import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
 import { CreateSetDto } from './dto/create-set.dto';
 import { UpdateSetDto } from './dto/update-set.dto';
+import { UpdateBookingPackageDto } from './dto/update-booking-package.dto';
 import { CONTRACT_INCLUDE } from './booking.includes';
 import { buildBookingSearchWhere } from './booking-search';
 
@@ -257,10 +258,18 @@ export class BookingsRepository {
   }
 
   async removePackage(bookingId: string, packageId: string) {
+    // Removing a Package orphans its sets to ungrouped (packageId → null) rather
+    // than deleting them (ADR-0046 / #500). The schema's onDelete: SetNull would
+    // do this implicitly, but we orphan explicitly so the intent is readable here.
     await this.prisma.$transaction([
-      this.prisma.performanceSet.deleteMany({ where: { bookingId, packageId } }),
+      this.prisma.performanceSet.updateMany({ where: { bookingId, packageId }, data: { packageId: null } }),
       this.prisma.package.delete({ where: { id: packageId } }),
     ]);
+    return this.prisma.booking.findFirst({ where: { id: bookingId }, include: bookingIncludes });
+  }
+
+  async updatePackage(bookingId: string, packageId: string, dto: UpdateBookingPackageDto) {
+    await this.prisma.package.update({ where: { id: packageId }, data: dto });
     return this.prisma.booking.findFirst({ where: { id: bookingId }, include: bookingIncludes });
   }
 
