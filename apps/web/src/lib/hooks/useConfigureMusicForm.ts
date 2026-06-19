@@ -21,7 +21,14 @@ export function useConfigureMusicForm(
         enabledGenres: [],
       });
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      // Prime the cache so the edit sheet — opened synchronously in onSuccess() — sees the
+      // form as ON with its (empty) config already present, with no OFF-state/skeleton flash
+      // while the invalidated booking refetch is still in flight.
+      queryClient.setQueryData<BookingDetail>(['booking', bookingId], (old) =>
+        old ? { ...old, hasMusicFormConfig: true } : old,
+      );
+      queryClient.setQueryData(['booking-music-form-config', bookingId], data);
       queryClient.invalidateQueries({ queryKey: ['booking-music-form-config', bookingId] });
       queryClient.invalidateQueries({ queryKey: ['booking', bookingId] });
       onSuccess();

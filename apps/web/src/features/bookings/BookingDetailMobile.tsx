@@ -72,7 +72,7 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
     enabled: isLoaded && !!booking && booking.hasMusicFormConfig,
   });
 
-  const turnOnMusicForm = useConfigureMusicForm(bookingId, booking, () => {});
+  const turnOnMusicForm = useConfigureMusicForm(bookingId, booking, () => editSection('musicForm'));
   const contractActions = useContractActions(bookingId);
   const fields = useBookingFields(bookingId);
   const {

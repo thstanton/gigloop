@@ -51,7 +51,7 @@ export function BookingDetailDesktop({ bookingId }: BookingDetailDesktopProps) {
     enabled: isLoaded && !!booking && booking.hasMusicFormConfig,
   });
 
-  const turnOnMusicForm = useConfigureMusicForm(bookingId, booking, () => {});
+  const turnOnMusicForm = useConfigureMusicForm(bookingId, booking, () => editSection('musicForm'));
   const contractActions = useContractActions(bookingId);
   const fields = useBookingFields(bookingId);
   const { checklist, checklistLoading, toggleItem, addItem, isAddingItem } = useBookingChecklist(bookingId, booking, isLoaded);

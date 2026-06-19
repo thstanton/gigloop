@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@clerk/react';
 import { Plus, Trash2 } from 'lucide-react';
@@ -24,6 +24,7 @@ export default function MusicFormEditor({
   const [localGenres, setLocalGenres] = useState<string[]>([]);
   const [initialized, setInitialized] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const seededRef = useRef(false);
 
   const { data: config, isLoading } = useQuery({
     queryKey: ['booking-music-form-config', booking.id],
@@ -31,26 +32,39 @@ export default function MusicFormEditor({
     enabled: isLoaded && booking.hasMusicFormConfig,
   });
 
-  // Initialize local state from fetched config (or seed from packages for first-time setup)
+  // Seed local state once per sheet open. No `initialized`-as-guard race: a cache-hit config
+  // never transitions undefined→defined, which is what deadlocked the old split effects and
+  // left the skeleton up forever. The ref re-seeds on each open but not mid-edit, so a
+  // post-save config refetch can't clobber in-flight edits.
   useEffect(() => {
-    if (initialized) return;
+    if (!isOpen) {
+      seededRef.current = false;
+      return;
+    }
+    if (seededRef.current) return;
 
-    // First-time setup starts empty (ADR-0046 / #502): provenance is severed, so
-    // booking Packages carry no key moments to seed from. The musician adds moments
-    // here, or applies a Package Template which *suggests* its moments (PerformanceEditor).
+    // First-time setup starts empty (ADR-0046 / #502): provenance is severed, so booking
+    // Packages carry no key moments to seed from. The musician adds moments here, or applies
+    // a Package Template which *suggests* its moments (PerformanceEditor).
     if (!booking.hasMusicFormConfig) {
       setLocalKeyMoments([]);
       setLocalGenres([]);
       setInitialized(true);
+      seededRef.current = true;
       return;
     }
 
-    if (!config) return;
+    // On, but config not yet fetched — keep the skeleton until it lands.
+    if (!config) {
+      setInitialized(false);
+      return;
+    }
 
     setLocalKeyMoments(config.keyMoments ?? []);
     setLocalGenres(config.enabledGenres ?? []);
     setInitialized(true);
-  }, [config, initialized, booking.packages, booking.hasMusicFormConfig]);
+    seededRef.current = true;
+  }, [isOpen, config, booking.hasMusicFormConfig]);
 
   const save = useMutation({
     mutationFn: () =>
@@ -85,10 +99,11 @@ export default function MusicFormEditor({
   const { reset: saveReset } = save;
   const { reset: removeReset } = remove;
 
-  // Reset when drawer re-opens
+  // Reset transient UI when the drawer re-opens. `initialized` is owned by the seed effect
+  // above. saveReset() stays here (and NOT in the seed effect) so the post-save "Saved"
+  // indicator survives a config refetch but still clears on sheet re-open (Tier 1 convention).
   useEffect(() => {
     if (isOpen) {
-      setInitialized(false);
       setConfirmRemove(false);
       saveReset();
       removeReset();
