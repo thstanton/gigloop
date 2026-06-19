@@ -161,6 +161,7 @@ export function BookingDetailDesktop({ bookingId }: BookingDetailDesktopProps) {
           <SeriesEventsCard
             bookings={seriesBookings.filter((b) => b.id !== booking.id)}
             isLoading={seriesBookingsLoading}
+            onCopyEvent={() => setSearchParams({ sheet: 'copyEvent' })}
             onAddToSeries={() => navigate('/admin/bookings/new', { state: { seriesId: booking.series!.id } })}
           />
         )}

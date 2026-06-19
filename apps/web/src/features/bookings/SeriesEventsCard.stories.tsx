@@ -46,6 +46,7 @@ const meta = {
   args: {
     bookings: seriesBookings,
     isLoading: false,
+    onCopyEvent: noop,
     onAddToSeries: noop,
   },
 } satisfies Meta<typeof SeriesEventsCard>;
@@ -56,9 +57,11 @@ type Story = StoryObj<typeof meta>;
 export const WithBookings: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Events in Series')).toBeVisible();
+    await expect(canvas.getByText('Copy event')).toBeVisible();
     await expect(canvas.getByText('Add to series')).toBeVisible();
     await expect(canvas.getByText('Grand Hotel Summer Ball')).toBeVisible();
     await expect(canvas.getByText('Grand Hotel August Night')).toBeVisible();
+    await userEvent.click(canvas.getByText('Copy event'));
     await userEvent.click(canvas.getByText('Add to series'));
   },
 };

@@ -18,6 +18,12 @@ type PackageTemplateWithSlots = {
   slots: Array<{ label: string | null; duration: number; order: number }>;
 };
 
+// The shape Copy Event clones from — the source booking loaded with the relations
+// cloneBookingCore re-creates (#507).
+export type BookingForClone = NonNullable<
+  Awaited<ReturnType<BookingsRepository['findOneForClone']>>
+>;
+
 const bookingIncludes = {
   customer: true,
   venue: true,
@@ -57,6 +63,93 @@ export class BookingsRepository {
       where: { id, userId },
       include: bookingIncludes,
     });
+  }
+
+  // Loads everything Copy Event clones (#507): the full booking-owned Packages + their
+  // PerformanceSets, the music form config (not the response), and the checklist. SKIPPED
+  // items are dropped — they mirror the original gig's "not needed here" decision, and the
+  // copy starts from the checklist the musician actually sees (ADR-0049).
+  findOneForClone(userId: string, id: string) {
+    return this.prisma.booking.findFirst({
+      where: { id, userId },
+      include: {
+        packages: { orderBy: { order: 'asc' } },
+        sets: { orderBy: { order: 'asc' } },
+        musicFormConfig: true,
+        checklistItems: { where: { state: { not: 'SKIPPED' } }, orderBy: { order: 'asc' } },
+      },
+    });
+  }
+
+  // Clones the booking row + packages + sets + music form config for Copy Event (#507).
+  // Lifecycle state is deliberately NOT copied: status is set to CONFIRMED (a copied series
+  // gig is "the same booking again" — already committed, so it skips the enquiry walk), a
+  // fresh portalToken + createdAt come from Prisma defaults (so they are omitted here), and
+  // depositReceivedAt stays null. The customer-submitted music form *response* is never
+  // cloned. Checklist seeding is orchestrated by the service (it reuses seedChecklistItems
+  // so completion resets and due dates recompute against the new date).
+  async cloneBookingCore(
+    userId: string,
+    source: BookingForClone,
+    newDate: Date,
+    tx?: Prisma.TransactionClient,
+  ) {
+    const db = tx ?? this.prisma;
+
+    const booking = await db.booking.create({
+      data: {
+        userId,
+        status: BookingStatus.CONFIRMED,
+        eventType: source.eventType,
+        date: newDate,
+        title: source.title,
+        ...(source.fee != null ? { fee: source.fee } : {}),
+        notes: source.notes,
+        travelMode: source.travelMode,
+        ...(source.logistics != null ? { logistics: source.logistics as Prisma.InputJsonValue } : {}),
+        customerId: source.customerId,
+        venueId: source.venueId,
+        bookingAgentId: source.bookingAgentId,
+        seriesId: source.seriesId,
+      },
+    });
+
+    // Clone Packages first, mapping old id -> new id so cloned sets can re-point at them.
+    const packageIdMap = new Map<string, string>();
+    for (const pkg of source.packages) {
+      const created = await db.package.create({
+        data: { userId, bookingId: booking.id, label: pkg.label, icon: pkg.icon, order: pkg.order },
+      });
+      packageIdMap.set(pkg.id, created.id);
+    }
+
+    // Clone PerformanceSets, including ungrouped sets (packageId === null).
+    for (const set of source.sets) {
+      await db.performanceSet.create({
+        data: {
+          userId,
+          bookingId: booking.id,
+          order: set.order,
+          duration: set.duration,
+          startTime: set.startTime,
+          label: set.label,
+          packageId: set.packageId ? (packageIdMap.get(set.packageId) ?? null) : null,
+        },
+      });
+    }
+
+    if (source.musicFormConfig) {
+      await db.musicFormConfig.create({
+        data: {
+          userId,
+          bookingId: booking.id,
+          enabledGenres: source.musicFormConfig.enabledGenres,
+          keyMoments: source.musicFormConfig.keyMoments as Prisma.InputJsonValue,
+        },
+      });
+    }
+
+    return db.booking.findFirstOrThrow({ where: { id: booking.id }, include: bookingIncludes });
   }
 
   async create(

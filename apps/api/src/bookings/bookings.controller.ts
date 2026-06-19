@@ -18,6 +18,7 @@ import { BookingStatus } from '@prisma/client';
 import { BookingsService } from './bookings.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
+import { CopyBookingDto } from './dto/copy-booking.dto';
 import { CreateSetDto } from './dto/create-set.dto';
 import { UpdateSetDto } from './dto/update-set.dto';
 import { ApplyPackageTemplateDto } from './dto/apply-package-template.dto';
@@ -72,6 +73,15 @@ export class BookingsController {
   @Post()
   create(@Req() req: AuthedRequest, @Body() dto: CreateBookingDto) {
     return this.service.create(req.userId, dto);
+  }
+
+  @ApiOperation({ summary: 'Copy a booking into the same series on a new date (clones content, resets lifecycle state)' })
+  @ApiResponse({ status: 201, description: 'The newly created booking.' })
+  @ApiResponse({ status: 404, description: 'Source booking not found.' })
+  @ApiResponse({ status: 409, description: 'Series invoice is locked — cannot copy into it.' })
+  @Post(':id/copy')
+  copy(@Req() req: AuthedRequest, @Param('id') id: string, @Body() dto: CopyBookingDto) {
+    return this.service.copyBooking(req.userId, id, dto);
   }
 
   @ApiOperation({ summary: 'Assign or remove the booking from a series; returns requiresConfirmation on customer mismatch' })

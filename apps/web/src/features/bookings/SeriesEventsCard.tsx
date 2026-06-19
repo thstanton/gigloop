@@ -1,4 +1,4 @@
-import { Plus } from 'lucide-react';
+import { Copy, Plus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '@/components/common/Card';
 import { GhostButton } from '@/components/common/GhostButton';
@@ -9,16 +9,23 @@ import type { BookingListItem } from '@/types/api';
 export interface SeriesEventsCardProps {
   bookings: BookingListItem[];
   isLoading: boolean;
+  /** "Exact same gig again" — clones this booking into the series (#507 / ADR-0049). */
+  onCopyEvent: () => void;
   onAddToSeries: () => void;
 }
 
-export function SeriesEventsCard({ bookings, isLoading, onAddToSeries }: SeriesEventsCardProps) {
+export function SeriesEventsCard({ bookings, isLoading, onCopyEvent, onAddToSeries }: SeriesEventsCardProps) {
   const navigate = useNavigate();
 
   const action = (
-    <GhostButton onClick={onAddToSeries} variant="primary" size="xs" icon={<Plus size={12} />}>
-      Add to series
-    </GhostButton>
+    <div className="flex items-center gap-3">
+      <GhostButton onClick={onCopyEvent} variant="primary" size="xs" icon={<Copy size={12} />}>
+        Copy event
+      </GhostButton>
+      <GhostButton onClick={onAddToSeries} variant="muted" size="xs" icon={<Plus size={12} />}>
+        Add to series
+      </GhostButton>
+    </div>
   );
 
   if (isLoading) {

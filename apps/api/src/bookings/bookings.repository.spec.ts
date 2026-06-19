@@ -317,6 +317,124 @@ describe('BookingsRepository', () => {
     });
   });
 
+  describe('cloneBookingCore (Copy Event)', () => {
+    // A fully-populated source: two packages, a packaged set + an ungrouped set, a music
+    // form config, and lifecycle state (status/portalToken/deposit) that must NOT carry.
+    function sourceBooking(overrides: Record<string, unknown> = {}) {
+      return {
+        id: 'src',
+        userId: 'u1',
+        status: 'COMPLETE', // a later lifecycle state — proves the copy forces a status, not carries it
+        eventType: 'WEDDING',
+        date: new Date('2026-01-01'),
+        title: 'Smith Wedding',
+        fee: '2500',
+        notes: 'Arrive early',
+        portalToken: 'old-token',
+        depositReceivedAt: new Date('2025-12-01'),
+        travelMode: 'DRIVE',
+        logistics: { loadIn: '17:00' },
+        customerId: 'cust1',
+        venueId: 'venue1',
+        bookingAgentId: 'agent1',
+        seriesId: 'series1',
+        packages: [
+          { id: 'p1', label: 'Ceremony', icon: 'heart', order: 1 },
+          { id: 'p2', label: 'Reception', icon: 'music', order: 2 },
+        ],
+        sets: [
+          { id: 's1', order: 1, duration: 30, startTime: '14:00', label: 'Vows', packageId: 'p1' },
+          { id: 's2', order: 2, duration: 45, startTime: null, label: null, packageId: null },
+        ],
+        musicFormConfig: { id: 'mfc', enabledGenres: ['JAZZ'], keyMoments: [{ label: 'First Dance', section: 'Reception' }] },
+        checklistItems: [],
+        ...overrides,
+      } as unknown as Parameters<typeof repo.cloneBookingCore>[1];
+    }
+
+    function primeCloneChain() {
+      prisma.booking.create.mockResolvedValue({ id: 'new1' });
+      prisma.package.create
+        .mockResolvedValueOnce({ id: 'newP1' })
+        .mockResolvedValueOnce({ id: 'newP2' });
+      prisma.performanceSet.create.mockResolvedValue({ id: 'newS' });
+      prisma.musicFormConfig.create.mockResolvedValue({ id: 'newMfc' });
+      prisma.booking.findFirstOrThrow.mockResolvedValue({ id: 'new1' });
+    }
+
+    it('sets status to CONFIRMED and the new date, carrying the gig content fields', async () => {
+      primeCloneChain();
+      await repo.cloneBookingCore('u1', sourceBooking(), new Date('2026-09-15'));
+      expect(prisma.booking.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          userId: 'u1',
+          status: 'CONFIRMED',
+          date: new Date('2026-09-15'),
+          eventType: 'WEDDING',
+          title: 'Smith Wedding',
+          fee: '2500',
+          notes: 'Arrive early',
+          travelMode: 'DRIVE',
+          logistics: { loadIn: '17:00' },
+          customerId: 'cust1',
+          venueId: 'venue1',
+          bookingAgentId: 'agent1',
+          seriesId: 'series1',
+        }),
+      });
+    });
+
+    it('does NOT copy lifecycle state — no portalToken or depositReceivedAt in the create data', async () => {
+      primeCloneChain();
+      await repo.cloneBookingCore('u1', sourceBooking(), new Date('2026-09-15'));
+      const data = prisma.booking.create.mock.calls[0][0].data;
+      expect(data).not.toHaveProperty('portalToken'); // fresh @default(uuid()) fires
+      expect(data).not.toHaveProperty('depositReceivedAt'); // stays null
+      // Status is forced to CONFIRMED, not carried from the source's COMPLETE.
+      expect(data.status).toBe('CONFIRMED');
+    });
+
+    it('clones each package and re-points cloned sets at the new package ids', async () => {
+      primeCloneChain();
+      await repo.cloneBookingCore('u1', sourceBooking(), new Date('2026-09-15'));
+      expect(prisma.package.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ bookingId: 'new1', label: 'Ceremony', icon: 'heart', order: 1 }) }),
+      );
+      // The packaged set must reference the CLONED package id, not the source 'p1'.
+      expect(prisma.performanceSet.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ duration: 30, startTime: '14:00', label: 'Vows', packageId: 'newP1' }) }),
+      );
+    });
+
+    it('clones ungrouped sets with packageId null', async () => {
+      primeCloneChain();
+      await repo.cloneBookingCore('u1', sourceBooking(), new Date('2026-09-15'));
+      expect(prisma.performanceSet.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ duration: 45, packageId: null }) }),
+      );
+    });
+
+    it('clones the music form config (genres + key moments) when present', async () => {
+      primeCloneChain();
+      await repo.cloneBookingCore('u1', sourceBooking(), new Date('2026-09-15'));
+      expect(prisma.musicFormConfig.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            bookingId: 'new1',
+            enabledGenres: ['JAZZ'],
+            keyMoments: [{ label: 'First Dance', section: 'Reception' }],
+          }),
+        }),
+      );
+    });
+
+    it('does not create a music form config when the source has none', async () => {
+      primeCloneChain();
+      await repo.cloneBookingCore('u1', sourceBooking({ musicFormConfig: null }), new Date('2026-09-15'));
+      expect(prisma.musicFormConfig.create).not.toHaveBeenCalled();
+    });
+  });
+
   describe('applyPackageTemplate', () => {
     const tmpl = {
       id: 'f1',
