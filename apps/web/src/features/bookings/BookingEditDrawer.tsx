@@ -17,7 +17,6 @@ import {
 } from './BookingFormFields';
 import { apiDelete, apiPatch } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
-import MusicFormEditor from './MusicFormEditor';
 import OnTheDayEditor from './OnTheDayEditor';
 import { InlineContactBlock } from './InlineContactBlock';
 import { InlineVenueBlock } from './InlineVenueBlock';
@@ -59,7 +58,6 @@ export default function BookingEditDrawer({ booking }: Props) {
   const section = searchParams.get('section');
   const queryClient = useQueryClient();
   const [deleteConfirm, setDeleteConfirm] = useState(false);
-  const musicFormRef = useRef<HTMLDivElement>(null);
   const onTheDayRef = useRef<HTMLDivElement>(null);
   const venueRef = useRef<HTMLDivElement>(null);
 
@@ -147,9 +145,8 @@ export default function BookingEditDrawer({ booking }: Props) {
         onOpenAutoFocus={(e) => {
           if (!section) return;
           e.preventDefault();
-          let ref: typeof musicFormRef | null = null;
-          if (section === 'musicForm') ref = musicFormRef;
-          else if (section === 'onTheDay') ref = onTheDayRef;
+          let ref: typeof onTheDayRef | null = null;
+          if (section === 'onTheDay') ref = onTheDayRef;
           else if (section === 'venue') ref = venueRef;
           if (!ref?.current) return;
           requestAnimationFrame(() => {
@@ -221,10 +218,6 @@ export default function BookingEditDrawer({ booking }: Props) {
 
           <div ref={onTheDayRef} className="mt-8 pt-6 border-t border-border">
             <OnTheDayEditor booking={booking} isOpen={isOpen} />
-          </div>
-
-          <div ref={musicFormRef} className="mt-8 pt-6 border-t border-border">
-            <MusicFormEditor booking={booking} isOpen={isOpen} />
           </div>
 
           <div className="mt-8 pt-6 border-t border-border">

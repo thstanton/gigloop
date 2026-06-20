@@ -52,7 +52,7 @@ export function BookingDetailDesktop({ bookingId }: BookingDetailDesktopProps) {
     enabled: isLoaded && !!booking && booking.hasMusicFormConfig,
   });
 
-  const turnOnMusicForm = useConfigureMusicForm(bookingId, booking, () => editSection('musicForm'));
+  const turnOnMusicForm = useConfigureMusicForm(bookingId, booking, () => setSearchParams({ sheet: 'musicTweak' }));
   const contractActions = useContractActions(bookingId);
   const fields = useBookingFields(bookingId);
   const { checklist, checklistLoading, toggleItem, addItem, isAddingItem } = useBookingChecklist(bookingId, booking, isLoaded);
@@ -70,10 +70,6 @@ export function BookingDetailDesktop({ bookingId }: BookingDetailDesktopProps) {
 
   function openEditInvoice(invoice: Invoice) {
     setSearchParams({ sheet: 'invoice', invoiceId: invoice.id });
-  }
-
-  function editSection(section: string) {
-    setSearchParams({ sheet: 'bookingEdit', section });
   }
 
   return (
@@ -108,7 +104,7 @@ export function BookingDetailDesktop({ bookingId }: BookingDetailDesktopProps) {
               isLoading={musicFormConfigLoading}
               onTurnOn={() => turnOnMusicForm.mutate()}
               isTurningOn={turnOnMusicForm.isPending}
-              onEdit={() => editSection('musicForm')}
+              onEdit={() => setSearchParams({ sheet: 'musicTweak' })}
             />
           </div>
         </section>

@@ -24,6 +24,7 @@ import { PeopleQuickTweakSheet } from '@/features/bookings/PeopleQuickTweakSheet
 import { DetailsQuickTweakSheet } from '@/features/bookings/DetailsQuickTweakSheet';
 import { ItineraryQuickTweakSheet } from '@/features/bookings/ItineraryQuickTweakSheet';
 import { OverviewQuickTweakSheet } from '@/features/bookings/OverviewQuickTweakSheet';
+import { MusicQuickTweakSheet } from '@/features/bookings/MusicQuickTweakSheet';
 import ComposeEmailSheet from '@/features/communications/ComposeEmailSheet';
 import InvoiceSheet from '@/features/invoices/InvoiceSheet';
 import MarkSentDialog from '@/features/invoices/MarkSentDialog';
@@ -174,6 +175,13 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
         initialTitle={booking.title}
         initialSeriesId={booking.seriesId}
         open={sheet === 'overviewTweak'}
+        onOpenChange={(open) => { if (!open) setSearchParams({}); }}
+      />
+      <MusicQuickTweakSheet
+        bookingId={bookingId}
+        hasMusicFormConfig={booking.hasMusicFormConfig}
+        packages={booking.packages}
+        open={sheet === 'musicTweak'}
         onOpenChange={(open) => { if (!open) setSearchParams({}); }}
       />
       <InvoiceSheet

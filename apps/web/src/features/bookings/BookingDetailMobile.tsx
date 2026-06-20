@@ -72,7 +72,7 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
     enabled: isLoaded && !!booking && booking.hasMusicFormConfig,
   });
 
-  const turnOnMusicForm = useConfigureMusicForm(bookingId, booking, () => editSection('musicForm'));
+  const turnOnMusicForm = useConfigureMusicForm(bookingId, booking, () => setSearchParams({ sheet: 'musicTweak' }));
   const contractActions = useContractActions(bookingId);
   const fields = useBookingFields(bookingId);
   const {
@@ -102,10 +102,6 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
 
   function openEditInvoice(invoice: Invoice) {
     setSearchParams({ sheet: 'invoice', invoiceId: invoice.id });
-  }
-
-  function editSection(section: string) {
-    setSearchParams({ sheet: 'bookingEdit', section });
   }
 
   return (
@@ -150,7 +146,7 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
             isLoading={musicFormConfigLoading}
             onTurnOn={() => turnOnMusicForm.mutate()}
             isTurningOn={turnOnMusicForm.isPending}
-            onEdit={() => editSection('musicForm')}
+            onEdit={() => setSearchParams({ sheet: 'musicTweak' })}
           />
           <InlineNotes
             notes={booking.notes}

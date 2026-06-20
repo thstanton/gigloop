@@ -34,7 +34,7 @@ import { PeopleAtom, type PeopleSelection } from '@/features/bookings/PeopleAtom
 import { VenueAtom, type VenueSelection } from '@/features/bookings/VenueAtom';
 import { DetailsAtom, LOGISTICS_TIME_KEYS, type DetailsLogistics } from '@/features/bookings/DetailsAtom';
 import { ItineraryAtom } from '@/features/bookings/ItineraryAtom';
-import MusicFormEditor from '@/features/bookings/MusicFormEditor';
+import { MusicAtom } from '@/features/bookings/MusicAtom';
 import InlineNotes from '@/features/bookings/InlineNotes';
 import { NO_PACKAGE, TemplatePicker, type SetValues } from '@/features/bookings/ItineraryFields';
 import type {
@@ -43,6 +43,7 @@ import type {
   BookingLogisticsEntry,
   BookingSeries,
   Contact,
+  KeyMoment,
   MusicFormConfig,
   MusicFormSuggestion,
   PackageTemplate,
@@ -267,6 +268,12 @@ export default function BookingBuilderPage() {
     enabled: isLoaded,
   });
 
+  const { data: musicConfig = null, isLoading: musicConfigLoading } = useQuery({
+    queryKey: ['booking-music-form-config', id],
+    queryFn: () => apiGet<MusicFormConfig>(`/bookings/${id}/music-form-config`),
+    enabled: isLoaded && booking?.hasMusicFormConfig,
+  });
+
   function invalidateBooking() {
     queryClient.invalidateQueries({ queryKey: ['booking', id!] });
     queryClient.invalidateQueries({ queryKey: ['bookings'] });
@@ -470,6 +477,43 @@ export default function BookingBuilderPage() {
         logistics: { ...preservedTimeKeys(booking?.logistics ?? null), ...detailsLogistics },
       }),
     onSuccess: invalidateBooking,
+  });
+
+  // ── Music mutations ────────────────────────────────────────────────────────
+
+  const musicSave = useMutation({
+    mutationFn: (payload: { keyMoments: KeyMoment[]; enabledGenres: string[] }) =>
+      apiPut<MusicFormConfig>(`/bookings/${id}/music-form-config`, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['booking-music-form-config', id!] });
+    },
+    onError: () => toast({ title: 'Failed to save music form. Please try again.', variant: 'destructive' }),
+  });
+
+  const musicTurnOn = useMutation({
+    mutationFn: () =>
+      apiPut<MusicFormConfig>(`/bookings/${id}/music-form-config`, { keyMoments: [], enabledGenres: [] }),
+    onSuccess: (data) => {
+      queryClient.setQueryData<BookingDetail>(['booking', id!], (old) =>
+        old ? { ...old, hasMusicFormConfig: true } : old,
+      );
+      queryClient.setQueryData(['booking-music-form-config', id!], data);
+      queryClient.invalidateQueries({ queryKey: ['booking-music-form-config', id!] });
+      queryClient.invalidateQueries({ queryKey: ['booking', id!] });
+    },
+    onError: () => toast({ title: 'Failed to turn on music form. Please try again.', variant: 'destructive' }),
+  });
+
+  const musicTurnOff = useMutation({
+    mutationFn: () => apiDelete(`/bookings/${id}/music-form-config`),
+    onSuccess: () => {
+      queryClient.setQueryData<BookingDetail>(['booking', id!], (old) =>
+        old ? { ...old, hasMusicFormConfig: false } : old,
+      );
+      queryClient.removeQueries({ queryKey: ['booking-music-form-config', id!] });
+      queryClient.invalidateQueries({ queryKey: ['booking', id!] });
+    },
+    onError: () => toast({ title: 'Failed to remove music form. Please try again.', variant: 'destructive' }),
   });
 
   // ── Loading / error guards ─────────────────────────────────────────────────
@@ -681,7 +725,25 @@ export default function BookingBuilderPage() {
 
           {/* Music */}
           <BuilderSection id="music" title="Music" sectionRef={musicRef}>
-            <MusicFormEditor booking={booking} isOpen />
+            {/* Only mount the atom after the config query settles so its state initialises
+                from the loaded config rather than from a null placeholder. */}
+            {booking.hasMusicFormConfig && musicConfigLoading ? (
+              <div className="h-16 bg-border rounded animate-pulse" />
+            ) : (
+              <MusicAtom
+                hasMusicFormConfig={booking.hasMusicFormConfig}
+                config={musicConfig}
+                packages={booking.packages}
+                onSave={(payload) => musicSave.mutate(payload)}
+                onTurnOn={() => musicTurnOn.mutate()}
+                onTurnOff={() => musicTurnOff.mutate()}
+                isSaving={musicSave.isPending}
+                saved={musicSave.isSuccess}
+                saveError={musicSave.isError ? 'Failed to save music form. Please try again.' : null}
+                isTurningOn={musicTurnOn.isPending}
+                isTurningOff={musicTurnOff.isPending}
+              />
+            )}
           </BuilderSection>
 
           {/* Notes */}
