@@ -288,7 +288,10 @@ export class BookingsService {
 
   async addSet(userId: string, bookingId: string, dto: CreateSetDto) {
     await this.findOne(userId, bookingId);
-    return this.repo.addSet(userId, bookingId, dto);
+    const result = await this.repo.addSet(userId, bookingId, dto);
+    // Re-evaluate: the first set satisfies build_itinerary (PRD #511 Story 21). Post-add + best-effort.
+    await this.evaluator.evaluate(bookingId).catch(() => {});
+    return result;
   }
 
   async updateSet(userId: string, bookingId: string, setId: string, dto: UpdateSetDto) {
@@ -347,6 +350,10 @@ export class BookingsService {
             genres: template.defaultGenreSelection,
           }
         : null;
+
+    // Re-evaluate: applying a template seeds sets, satisfying build_itinerary
+    // (PRD #511 Story 21: never nag work already done). Post-apply + best-effort.
+    await this.evaluator.evaluate(bookingId).catch(() => {});
 
     return { booking: mapped, suggestion };
   }

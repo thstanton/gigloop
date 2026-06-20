@@ -655,6 +655,15 @@ describe('BookingsService', () => {
       expect(repo.applyPackageTemplate).toHaveBeenCalledWith('u1', 'b1', tmpl);
     });
 
+    it('triggers evaluate after applying (so build_itinerary auto-completes for template-seeded sets — Story 21)', async () => {
+      const tmpl = { id: 'f1', label: 'Ceremony', icon: 'heart', keyMoments: [], defaultGenreSelection: [], slots: [] };
+      repo.findOne.mockResolvedValue(rawBooking);
+      repo.findPackageTemplates.mockResolvedValue([tmpl]);
+      repo.applyPackageTemplate.mockResolvedValue(rawBooking);
+      await service.applyPackageTemplate('u1', 'b1', 'f1');
+      expect(evaluator.evaluate).toHaveBeenCalledWith('b1');
+    });
+
     it('offers the template key moments/genres as a suggestion when the form is on, without forcing them (ADR-0046 / #502)', async () => {
       const tmpl = {
         id: 'f1', label: 'Ceremony', icon: 'heart',
@@ -763,6 +772,13 @@ describe('BookingsService', () => {
       repo.findOne.mockResolvedValue(null);
       await expect(service.addSet('u1', 'missing', { order: 1, duration: 60 })).rejects.toThrow(NotFoundException);
       expect(repo.addSet).not.toHaveBeenCalled();
+    });
+
+    it('triggers evaluate after adding (so build_itinerary can auto-complete — Story 21)', async () => {
+      repo.findOne.mockResolvedValue(booking);
+      repo.addSet.mockResolvedValue(set);
+      await service.addSet('u1', 'b1', { order: 1, duration: 60 });
+      expect(evaluator.evaluate).toHaveBeenCalledWith('b1');
     });
   });
 

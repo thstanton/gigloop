@@ -37,12 +37,34 @@ export function peopleCompleteness(booking: PeopleInput): PeopleCompleteness {
   return booking.customerId != null ? 'set' : 'unset';
 }
 
+/**
+ * Itinerary completeness: three-state — `empty` (no sets), `partial` (sets exist but not
+ * all time anchors present), `set` (sets + all three time anchors). Keyed off `setsCount`
+ * and the `logistics` JSON (arrivalTime, soundCheckTime, finishTime).
+ *
+ * `isConcernComplete` returns true for any non-empty state — "sets exist" is the
+ * done-threshold for `build_itinerary` (PRD #511 Story 21).
+ */
+export type ItineraryCompleteness = 'empty' | 'partial' | 'set';
+
+export interface ItineraryInput {
+  setsCount: number;
+  logistics: unknown;
+}
+
+export function itineraryCompleteness(booking: ItineraryInput): ItineraryCompleteness {
+  if (booking.setsCount === 0) return 'empty';
+  const l = booking.logistics as Record<string, unknown> | null;
+  const allAnchors = l?.arrivalTime != null && l?.soundCheckTime != null && l?.finishTime != null;
+  return allAnchors ? 'set' : 'partial';
+}
+
 /** The concerns a structural checklist item can bind to. Grows one entry per slice. */
-export type CompletenessConcern = 'venue' | 'people';
+export type CompletenessConcern = 'venue' | 'people' | 'itinerary';
 
 // The booking shape covering every concern's predicate inputs. The checklist evaluator
 // selects exactly these fields from the booking; this union grows as concerns are added.
-export type CompletenessInput = VenueInput & PeopleInput;
+export type CompletenessInput = VenueInput & PeopleInput & ItineraryInput;
 
 // The binding point for `{ type: 'completeness', concern }` autoCompleteRules: returns
 // whether the concern's done-state is satisfied. Defined in terms of the rich predicates
@@ -56,6 +78,8 @@ export function isConcernComplete(
       return venueCompleteness(booking) === 'set';
     case 'people':
       return peopleCompleteness(booking) === 'set';
+    case 'itinerary':
+      return itineraryCompleteness(booking) !== 'empty';
     default: {
       // Compile-time exhaustiveness: adding a concern without a branch here is a type error.
       const unhandled: never = concern;

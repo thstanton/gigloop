@@ -92,6 +92,19 @@ export const CHECKLIST_DEFAULTS: ChecklistDefaultItem[] = [
     dueDateRule: null,
   },
   {
+    // Structural setup item (PRD #511 Module D / #523): auto-completes when sets exist.
+    // Binds to the itinerary completeness predicate (Module A) — isConcernComplete returns
+    // true for any non-empty state (partial or set), so a booking with template-seeded sets
+    // never sees this as a PENDING nag (Story 21: never nag work already done).
+    key: 'build_itinerary',
+    label: 'Build itinerary',
+    completedBy: 'USER',
+    dependsOn: [],
+    autoCompleteRule: { type: 'completeness', concern: 'itinerary' },
+    requiredForStatus: 'READY',
+    dueDateRule: null,
+  },
+  {
     key: 'create_balance_invoice',
     label: 'Create balance invoice',
     completedBy: 'USER',

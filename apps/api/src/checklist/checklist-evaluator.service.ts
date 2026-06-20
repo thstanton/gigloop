@@ -15,6 +15,8 @@ interface BookingContext {
   venueId: string | null;
   customerId: string | null;
   depositReceivedAt: Date | null;
+  setsCount: number;
+  logistics: unknown;
   communications: Array<{ status: string; template: { builtInType: string | null } | null }>;
   invoices: Array<{ isDeposit: boolean }>;
   contracts: Array<{ status: string }>;
