@@ -318,8 +318,15 @@ function BottomTabBar() {
 
 // ─── AppShell ────────────────────────────────────────────────────────────────
 
+// The Booking Builder is a sustained, focused editing task — it takes over the
+// mobile bottom tab bar to remove an un-guardable exit (ADR-0051). First and only
+// surface to hide the tab bar; desktop sidebar is unaffected.
+const BUILDER_ROUTE = /^\/admin\/bookings\/[^/]+\/builder\/?$/;
+
 export default function AppShell() {
   const { businessName, isLoading } = usePublicProfileData();
+  const { pathname } = useLocation();
+  const hideTabBar = BUILDER_ROUTE.test(pathname);
 
   return (
     <div className="min-h-screen bg-surface">
@@ -336,16 +343,17 @@ export default function AppShell() {
       {/* Mobile top bar */}
       <MobileTopBar />
 
-      {/* Content — offset for sidebar on desktop, top bar on mobile */}
-      <div className="md:ml-60 flex flex-col min-h-screen pt-14 pb-16 md:pb-0">
+      {/* Content — offset for sidebar on desktop, top bar on mobile. The Builder
+          hides the mobile tab bar, so drop its pb-16 to use the full height there. */}
+      <div className={cn('md:ml-60 flex flex-col min-h-screen pt-14 md:pb-0', !hideTabBar && 'pb-16')}>
         <DesktopTopBar businessName={businessName} isLoading={isLoading} />
         <main id="main-content" className="flex-1">
           <Outlet />
         </main>
       </div>
 
-      {/* Mobile bottom tab bar */}
-      <BottomTabBar />
+      {/* Mobile bottom tab bar (hidden inside the Builder — ADR-0051) */}
+      {!hideTabBar && <BottomTabBar />}
     </div>
   );
 }

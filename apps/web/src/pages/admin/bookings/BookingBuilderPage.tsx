@@ -1,14 +1,12 @@
 import { useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   CalendarClock,
-  CheckCircle2,
   ChevronLeft,
-  Circle,
   FileText,
   ListOrdered,
   MapPin,
-  MinusCircle,
   Music,
   Package,
   StickyNote,
@@ -35,6 +33,13 @@ import { VenueAtom, type VenueSelection } from '@/features/bookings/VenueAtom';
 import { DetailsAtom, LOGISTICS_TIME_KEYS, type DetailsLogistics } from '@/features/bookings/DetailsAtom';
 import { ItineraryAtom } from '@/features/bookings/ItineraryAtom';
 import { MusicAtom } from '@/features/bookings/MusicAtom';
+import { MobileBuilderStepper, type StepperSection } from '@/features/bookings/MobileBuilderStepper';
+import {
+  CompletenessStatusIcon,
+  type CompletenessStatus,
+  type SpineId,
+} from '@/features/bookings/builderCompleteness';
+import { useScrollSpy } from '@/lib/hooks/useScrollSpy';
 import InlineNotes from '@/features/bookings/InlineNotes';
 import { NO_PACKAGE, TemplatePicker, type SetValues } from '@/features/bookings/ItineraryFields';
 import { DEFAULT_ENABLED_GENRES } from '@/lib/constants';
@@ -60,8 +65,6 @@ import type {
 
 // ─── Spine definition ─────────────────────────────────────────────────────────
 
-type SpineId = 'overview' | 'people' | 'venue' | 'templates' | 'itinerary' | 'details' | 'music' | 'notes';
-
 const SPINE: Array<{ id: SpineId; label: string; Icon: LucideIcon }> = [
   { id: 'overview',   label: 'Overview',          Icon: CalendarClock },
   { id: 'people',     label: 'People',             Icon: Users },
@@ -73,9 +76,11 @@ const SPINE: Array<{ id: SpineId; label: string; Icon: LucideIcon }> = [
   { id: 'notes',      label: 'Notes',              Icon: StickyNote },
 ];
 
-// ─── Completeness helpers (mirror Module A predicates client-side) ────────────
+// Stable element-id list for the scroll-spy (module-level so the observer isn't
+// rebuilt each render). Mirrors the BuilderSection `id={`builder-${id}`}`.
+const SECTION_DOM_IDS = SPINE.map(({ id }) => `builder-${id}`);
 
-type CompletenessStatus = 'set' | 'partial' | 'unset' | 'empty' | null;
+// ─── Completeness helpers (mirror Module A predicates client-side) ────────────
 
 function itineraryStatus(setCount: number, hasAllAnchors: boolean): CompletenessStatus {
   if (setCount === 0) return 'empty';
@@ -119,11 +124,7 @@ function CompletenessRail({
           >
             <Icon size={14} className="flex-shrink-0 text-muted" aria-hidden="true" />
             <span className="flex-1 text-left">{label}</span>
-            {status === 'set'     && <CheckCircle2 size={14} className="text-status-confirmed flex-shrink-0" aria-label="Complete" />}
-            {status === 'partial' && <MinusCircle  size={14} className="text-status-provisional flex-shrink-0" aria-label="Partial" />}
-            {(status === 'unset' || status === 'empty') && (
-              <Circle size={14} className="text-border flex-shrink-0" aria-label="Incomplete" />
-            )}
+            <CompletenessStatusIcon status={status} />
           </button>
         );
       })}
@@ -191,7 +192,8 @@ function BuilderSection({
     <section
       id={`builder-${id}`}
       ref={sectionRef}
-      className="scroll-mt-8"
+      // Mobile clears the fixed top bar (h-14) + the fixed stepper; desktop just the bar.
+      className="scroll-mt-36 md:scroll-mt-8"
     >
       <h2 className="mb-3 text-base font-semibold text-foreground">{title}</h2>
       <div className="rounded-lg border border-border bg-background p-4">
@@ -252,6 +254,11 @@ export default function BookingBuilderPage() {
     notes:      notesRef,
   };
 
+  // Mobile stepper: active node tracks scroll position, and jumps set it eagerly
+  // so the highlight moves the instant a node is tapped (ADR-0051).
+  const [activeId, setActiveId] = useState<SpineId>('overview');
+  useScrollSpy(SECTION_DOM_IDS, (domId) => setActiveId(domId.replace('builder-', '') as SpineId));
+
   const [showBackstop, setShowBackstop] = useState(false);
   const [seriesConfirmation, setSeriesConfirmation] = useState<{ seriesId: string; warning: string } | null>(null);
   const [seriesError, setSeriesError] = useState<string | null>(null);
@@ -281,6 +288,7 @@ export default function BookingBuilderPage() {
   }
 
   function scrollTo(sectionId: SpineId) {
+    setActiveId(sectionId);
     sectionRefs[sectionId].current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
@@ -547,6 +555,11 @@ export default function BookingBuilderPage() {
     const s = completeness[sid];
     return s === 'unset' || s === 'empty';
   });
+  const stepperSections: StepperSection[] = SPINE.map(({ id: sid, label }) => ({
+    id: sid,
+    label,
+    status: completeness[sid],
+  }));
 
   const itineraryAddingKey = addSet.isPending ? (addSet.variables?.packageId ?? NO_PACKAGE) : null;
 
@@ -556,20 +569,34 @@ export default function BookingBuilderPage() {
   }
 
   return (
-    <div className="px-4 md:px-6 py-6 max-w-7xl mx-auto">
-      <Link
-        to={`/admin/bookings/${id}`}
-        className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground transition-colors"
-      >
-        <ChevronLeft size={14} />
-        Back to booking
-      </Link>
+    <>
+      {/* Mobile ambient progress (ADR-0051): fixed below the top bar, full screen
+          width, visible throughout editing. Fixed (not sticky) so it never lifts
+          off at the page end. Portalled to <body> — like the AppShell bars — so no
+          page-subtree ancestor can scope its fixed positioning. md:hidden keeps it
+          off desktop, which uses the vertical rail. */}
+      {createPortal(
+        <div className="fixed top-14 inset-x-0 z-20 md:hidden">
+          <MobileBuilderStepper sections={stepperSections} activeId={activeId} onJump={scrollTo} />
+        </div>,
+        document.body,
+      )}
 
-      <h1 className="mt-4 mb-6 font-display text-2xl font-semibold text-foreground">
-        Booking Builder
-      </h1>
+      {/* pt-24 on mobile reserves room for the fixed stepper; desktop just py-6. */}
+      <div className="px-4 md:px-6 pt-24 pb-6 md:py-6 max-w-7xl mx-auto">
+        <Link
+          to={`/admin/bookings/${id}`}
+          className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground transition-colors"
+        >
+          <ChevronLeft size={14} />
+          Back to booking
+        </Link>
 
-      <div className="md:grid md:grid-cols-[1fr_220px] md:gap-8 md:items-start">
+        <h1 className="mt-4 mb-6 font-display text-2xl font-semibold text-foreground">
+          Booking Builder
+        </h1>
+
+        <div className="md:grid md:grid-cols-[1fr_220px] md:gap-8 md:items-start">
         {/* ── Spine ─────────────────────────────────────────────────────────── */}
         <div className="space-y-8">
 
@@ -779,6 +806,7 @@ export default function BookingBuilderPage() {
         onClose={() => setShowBackstop(false)}
         onExit={() => navigate(`/admin/bookings/${id}`)}
       />
-    </div>
+      </div>
+    </>
   );
 }
