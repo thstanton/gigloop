@@ -6,13 +6,15 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { apiPatch } from '@/lib/api';
+import { toast } from '@/lib/hooks/use-toast';
 import { DetailsAtom, LOGISTICS_TIME_KEYS, type DetailsLogistics } from './DetailsAtom';
 import type { BookingDetail } from '@/types/api';
 
-// PRD #511 Module B — the self-saving shell for the Details atom. Unlike the Venue/People shells
-// (Tier-2: a save creates a contact, so they close on success to prevent a double-create), Details
-// creates nothing, so this shell is **Tier-1 and stays open**: it drives the atom's `saved` /
-// `saveError` props directly (inline "Saved" / inline error) and never closes on success.
+// PRD #511 Module B — the quick-tweak shell for the Details atom. Editing a booking's details is a
+// state-changing action, so — consistent with every quick-tweak sheet — a successful save *closes
+// the sheet* (the updated Details card is the feedback) and failure toasts. The atom keeps its
+// Tier-1 inline-"Saved" props for when the Builder one-pager hosts it (which stays mounted); this
+// shell simply doesn't use them.
 //
 // The critical wiring: `logistics` is a single JSON column the API overwrites wholesale, but it is
 // shared with the Itinerary atom's time anchors (#521). So before PATCHing, the shell merges the
@@ -48,7 +50,9 @@ export function DetailsQuickTweakSheet({ bookingId, currentLogistics, open, onOp
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['booking', bookingId] });
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
+      onOpenChange(false);
     },
+    onError: () => toast({ title: 'Failed to save details. Please try again.', variant: 'destructive' }),
   });
 
   function handleOpenChange(next: boolean) {
@@ -67,8 +71,8 @@ export function DetailsQuickTweakSheet({ bookingId, currentLogistics, open, onOp
             initialLogistics={currentLogistics}
             onSave={(detailsLogistics) => saveMutation.mutate(detailsLogistics)}
             isSaving={saveMutation.isPending}
-            saved={saveMutation.isSuccess}
-            saveError={saveMutation.isError ? 'Failed to save details. Please try again.' : null}
+            saved={false}
+            saveError={null}
           />
         </div>
       </SheetContent>

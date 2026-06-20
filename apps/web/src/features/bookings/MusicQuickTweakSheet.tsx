@@ -11,10 +11,11 @@ import { toast } from '@/lib/hooks/use-toast';
 import { MusicAtom, type MusicAtomSavePayload } from './MusicAtom';
 import type { BookingDetail, BookingPackageSummary, MusicFormConfig } from '@/types/api';
 
-// PRD #511 Module B — the self-saving (Tier-1) shell for the Music atom. Mirrors the
-// DetailsQuickTweakSheet pattern: stays open on save, drives the atom's isSaving/saved/saveError
-// props, and resets on close. Turn-on (PUT empty config) and turn-off (DELETE) are wired
-// here so the atom stays mutation-free.
+// PRD #511 Module B — the quick-tweak shell for the Music atom. Mirrors the DetailsQuickTweakSheet
+// pattern: a successful *save* closes the sheet (the updated Music card is the feedback) and failure
+// toasts. Turn-on (PUT empty config) and turn-off (DELETE) are mode toggles, not saves — they keep
+// the sheet open (turn-on so the musician can immediately configure) and are wired here so the atom
+// stays mutation-free.
 //
 // Turn-on uses the same cache-priming approach as useConfigureMusicForm: the booking's
 // hasMusicFormConfig is optimistically set to true so the atom transitions without a flash.
@@ -50,6 +51,7 @@ export function MusicQuickTweakSheet({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['booking-music-form-config', bookingId] });
       queryClient.invalidateQueries({ queryKey: ['booking', bookingId] });
+      onOpenChange(false);
     },
     onError: () =>
       toast({ title: 'Failed to save music form. Please try again.', variant: 'destructive' }),
@@ -108,8 +110,8 @@ export function MusicQuickTweakSheet({
             onTurnOn={() => turnOnMutation.mutate()}
             onTurnOff={() => turnOffMutation.mutate()}
             isSaving={saveMutation.isPending}
-            saved={saveMutation.isSuccess}
-            saveError={saveMutation.isError ? 'Failed to save music form. Please try again.' : null}
+            saved={false}
+            saveError={null}
             isTurningOn={turnOnMutation.isPending}
             isTurningOff={turnOffMutation.isPending}
           />

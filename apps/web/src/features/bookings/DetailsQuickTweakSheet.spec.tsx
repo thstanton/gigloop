@@ -16,17 +16,19 @@ vi.mock('@/lib/api', () => ({
 }));
 
 function renderSheet(currentLogistics: BookingDetail['logistics']) {
+  const onOpenChange = vi.fn();
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  render(
     <QueryClientProvider client={client}>
       <DetailsQuickTweakSheet
         bookingId="b1"
         currentLogistics={currentLogistics}
         open
-        onOpenChange={() => {}}
+        onOpenChange={onOpenChange}
       />
     </QueryClientProvider>,
   );
+  return { onOpenChange };
 }
 
 describe('DetailsQuickTweakSheet', () => {
@@ -60,5 +62,18 @@ describe('DetailsQuickTweakSheet', () => {
         customField1: { value: 'Backstage code', label: 'Access', shareWithBand: false, shareWithClient: false },
       },
     });
+  });
+
+  // Consistent quick-tweak behaviour: a successful save closes the sheet (the updated card is the
+  // feedback) rather than showing an inline "Saved".
+  it('closes the sheet on a successful save', async () => {
+    const { onOpenChange } = renderSheet({
+      dressCode: { value: 'Formal', shareWithBand: false, shareWithClient: false },
+    });
+
+    await userEvent.type(screen.getByLabelText('Performance space'), 'Main hall');
+    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
   });
 });

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Sheet,
@@ -9,16 +9,18 @@ import {
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@clerk/react';
 import { apiGet, apiPatch } from '@/lib/api';
+import { toast } from '@/lib/hooks/use-toast';
 import { OverviewAtom, type OverviewChanges, type SeriesChange } from './OverviewAtom';
 import type { BookingSeries, EventType, UpdateBookingSeriesResponse } from '@/types/api';
 
-// PRD #511 Module B — the self-saving shell for the Overview atom. Tier-1 (stays open):
-// drives the atom's saved/saveError props and never closes on success. These are the booking's
-// own scalar columns; regular fields PATCH /bookings/:id (plain scalar patch, no JSON-merge seam).
-// Series assignment takes a separate path: PATCH /bookings/:id/series, which returns
-// { requiresConfirmation: true, warning } on customer mismatch (handled inline) or throws
-// ConflictException (409) when non-VOID invoices exist (surfaced as saveError). Opened from
-// the strip's ghost pencil via ?sheet=overviewTweak.
+// PRD #511 Module B — the quick-tweak shell for the Overview atom. Consistent with every
+// quick-tweak sheet, a *clean* save closes the sheet (the updated header strip is the feedback).
+// These are the booking's own scalar columns; regular fields PATCH /bookings/:id (plain scalar
+// patch, no JSON-merge seam). Series assignment takes a separate path: PATCH /bookings/:id/series,
+// which returns { requiresConfirmation: true, warning } on customer mismatch or throws
+// ConflictException (409) when non-VOID invoices exist. Those two outcomes KEEP the sheet open —
+// the confirmation is handled inline, the 409 surfaces as an inline saveError — so the close only
+// fires on an unambiguous success. Opened from the strip's ghost pencil via ?sheet=overviewTweak.
 
 function isConfirmationRequired(r: unknown): r is Required<UpdateBookingSeriesResponse> {
   return Boolean(r && typeof r === 'object' && 'requiresConfirmation' in r);
@@ -50,6 +52,10 @@ export function OverviewQuickTweakSheet({
   const queryClient = useQueryClient();
   const [seriesConfirmation, setSeriesConfirmation] = useState<{ seriesId: string; warning: string } | null>(null);
   const [seriesError, setSeriesError] = useState<string | null>(null);
+  // A single Save can fire both the scalar and the series mutation. The sheet must close exactly
+  // once, only after the relevant outcome settles cleanly — so the scalar branch defers closing to
+  // the series branch whenever a series change was part of the same save.
+  const seriesDispatchedRef = useRef(false);
 
   const { data: seriesList = [] } = useQuery({
     queryKey: ['series'],
@@ -63,7 +69,13 @@ export function OverviewQuickTweakSheet({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['booking', bookingId] });
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
+      // Close now only for a scalar-only save; if a series change rode along, the series branch owns
+      // the close (it may still need confirmation or hit a 409, both of which keep the sheet open).
+      if (!seriesDispatchedRef.current) onOpenChange(false);
     },
+    // Toast as well as the inline saveError: in the both-dispatched race the series branch may have
+    // already closed the sheet, so the inline surface can be gone when the scalar save fails.
+    onError: () => toast({ title: 'Failed to save. Please try again.', variant: 'destructive' }),
   });
 
   const seriesMutation = useMutation({
@@ -78,6 +90,7 @@ export function OverviewQuickTweakSheet({
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
       queryClient.invalidateQueries({ queryKey: ['series'] });
       setSeriesError(null);
+      onOpenChange(false);
     },
     onError: (error) => {
       const msg = error instanceof Response && error.status === 409
@@ -89,6 +102,7 @@ export function OverviewQuickTweakSheet({
 
   function handleSave(changes: OverviewChanges) {
     const { series, ...rest } = changes;
+    seriesDispatchedRef.current = !!series;
     setSeriesError(null);
     setSeriesConfirmation(null);
 
@@ -122,7 +136,8 @@ export function OverviewQuickTweakSheet({
   }
 
   const isSaving = saveMutation.isPending || seriesMutation.isPending;
-  const saved = !isSaving && (saveMutation.isSuccess || seriesMutation.isSuccess);
+  // A clean save closes the sheet, so there is no inline "Saved"; only the stay-open outcomes
+  // (scalar error, or a series 409) surface inline via saveError.
   const saveError = seriesError ?? (saveMutation.isError ? 'Failed to save. Please try again.' : null);
 
   return (
@@ -141,7 +156,7 @@ export function OverviewQuickTweakSheet({
             series={seriesList}
             onSave={handleSave}
             isSaving={isSaving}
-            saved={saved}
+            saved={false}
             saveError={saveError}
           />
 

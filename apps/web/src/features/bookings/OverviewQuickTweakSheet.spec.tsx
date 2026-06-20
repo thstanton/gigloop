@@ -13,8 +13,9 @@ vi.mock('@/lib/api', () => ({
 }));
 
 function renderSheet() {
+  const onOpenChange = vi.fn();
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  render(
     <QueryClientProvider client={client}>
       <OverviewQuickTweakSheet
         bookingId="b1"
@@ -24,17 +25,18 @@ function renderSheet() {
         initialTitle="Smith Wedding"
         initialSeriesId={null}
         open
-        onOpenChange={() => {}}
+        onOpenChange={onOpenChange}
       />
     </QueryClientProvider>,
   );
+  return { onOpenChange };
 }
 
 describe('OverviewQuickTweakSheet', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('PATCHes only the changed field', async () => {
-    renderSheet();
+  it('PATCHes only the changed field and closes the sheet on success', async () => {
+    const { onOpenChange } = renderSheet();
 
     const title = screen.getByLabelText('Title');
     await userEvent.clear(title);
@@ -43,6 +45,8 @@ describe('OverviewQuickTweakSheet', () => {
 
     await waitFor(() => expect(apiPatch).toHaveBeenCalledTimes(1));
     expect(apiPatch).toHaveBeenCalledWith('/bookings/b1', { title: 'Smith Anniversary' });
+    // A clean scalar save closes the sheet (consistent quick-tweak behaviour).
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
   });
 
   // Date is edited date-only and must round-trip as a YMD string (the event time-of-day lives in
