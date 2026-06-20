@@ -1,5 +1,5 @@
 import { useSearchParams } from 'react-router-dom';
-import { Info, Plus } from 'lucide-react';
+import { Info, Pencil, Plus } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { GhostButton } from '@/components/common/GhostButton';
 import { LOGISTICS_FIELD_ICONS, LOGISTICS_FIELD_LABELS } from '@/lib/constants';
@@ -64,7 +64,7 @@ export default function DetailsCard({ logistics, hideWhenEmpty = false }: Detail
     <Card
       title="Details"
       action={
-        <GhostButton variant="primary" size="xs" onClick={() => setSearchParams({ sheet: 'detailsTweak' })}>
+        <GhostButton variant="primary" size="xs" icon={<Pencil size={13} />} onClick={() => setSearchParams({ sheet: 'detailsTweak' })}>
           Edit
         </GhostButton>
       }

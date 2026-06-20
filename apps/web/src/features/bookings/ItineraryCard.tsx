@@ -1,6 +1,6 @@
 import { Fragment } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Clock } from 'lucide-react';
+import { Clock, Pencil } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { GhostButton } from '@/components/common/GhostButton';
 import { EmptyState } from '@/components/common/EmptyState';
@@ -116,7 +116,7 @@ export default function ItineraryCard({ logistics, sets, packages, hideWhenEmpty
     <Card
       title="Itinerary"
       action={
-        <GhostButton variant="primary" size="xs" onClick={() => setSearchParams({ sheet: 'itineraryTweak' })}>
+        <GhostButton variant="primary" size="xs" icon={<Pencil size={13} />} onClick={() => setSearchParams({ sheet: 'itineraryTweak' })}>
           Edit
         </GhostButton>
       }

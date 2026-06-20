@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ClipboardList, Download, Music2, Plus } from 'lucide-react';
+import { ClipboardList, Download, Music2, Pencil, Plus } from 'lucide-react';
 import { Card } from '@/components/common/Card';
+import { GhostButton } from '@/components/common/GhostButton';
 import { SubLabel } from '@/components/common/SubLabel';
 import {
   Sheet,
@@ -187,9 +188,9 @@ export default function MusicFormSection({
               Preview
             </button>
           ) : (
-            <button type="button" onClick={onEdit} className="text-xs text-primary hover:text-primary/80 transition-colors">
+            <GhostButton variant="primary" size="xs" icon={<Pencil size={13} />} onClick={onEdit}>
               Edit
-            </button>
+            </GhostButton>
           )
         }
       >
