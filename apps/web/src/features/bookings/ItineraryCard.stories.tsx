@@ -115,6 +115,10 @@ export const Empty: Story = {
     sets: [],
     packages: [],
   },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('No itinerary yet')).toBeVisible();
+    await expect(canvas.getByRole('button', { name: 'Add itinerary' })).toBeVisible();
+  },
 };
 
 export const WithTimeNotes: Story = {
