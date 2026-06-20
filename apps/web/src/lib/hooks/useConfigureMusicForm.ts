@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiPut } from '@/lib/api';
+import { DEFAULT_ENABLED_GENRES } from '@/lib/constants';
 import { toast } from '@/lib/hooks/use-toast';
 import type { BookingDetail, MusicFormConfig } from '@/types/api';
 
@@ -13,12 +14,13 @@ export function useConfigureMusicForm(
   const mutation = useMutation({
     mutationFn: () => {
       if (!booking) return Promise.reject(new Error('No booking'));
-      // Turning the form on starts empty (ADR-0046 / #502): provenance is severed,
-      // so there is nothing to seed from. Moments are added in the editor, or
-      // suggested when a Package Template is applied.
+      // Turn-on seeds default genres (#535) so the client's song list isn't tab-less on
+      // arrival; special requests start empty (added in the editor, or suggested when a
+      // Package Template is applied). Provenance is severed (ADR-0046 / #502) — the genre
+      // default is a system constant, not copied from a template.
       return apiPut<MusicFormConfig>(`/bookings/${bookingId}/music-form-config`, {
         keyMoments: [],
-        enabledGenres: [],
+        enabledGenres: DEFAULT_ENABLED_GENRES,
       });
     },
     onSuccess: (data) => {

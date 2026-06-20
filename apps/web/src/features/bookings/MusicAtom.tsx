@@ -1,18 +1,22 @@
-import { useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { GhostButton } from '@/components/common/GhostButton';
-import { ALL_GENRES, GENRE_LABELS } from '@/lib/constants';
+import { Switch } from '@/components/ui/switch';
+import { Separator } from '@/components/ui/separator';
+import { SubLabel } from '@/components/common/SubLabel';
+import { DEFAULT_ENABLED_GENRES } from '@/lib/constants';
+import { cn } from '@/lib/utils';
+import { GenrePills, SpecialRequestsEditor } from './MusicFields';
 import type { BookingPackageSummary, KeyMoment, MusicFormConfig } from '@/types/api';
 
-// PRD #511 Module B — the Music atom: the presentational editor of a booking's
-// MusicFormConfig (enabled genres + key moments grouped by package). The on/off
-// state is derived from `hasMusicFormConfig`; ADR-0046 treats config-row *presence*
-// as the truth — turn-on creates the row, turn-off deletes it.
+// PRD #511 Module B / #535 — the Music atom: the presentational editor of a booking's
+// MusicFormConfig (genres + "special requests" grouped by package). On/off is a single Switch;
+// ADR-0046 treats config-row *presence* as the truth — turn-on creates the row (seeding default
+// genres so the client's song list isn't tab-less), turn-off deletes it. The editor is always
+// visible below the Switch; when off it is dimmed and previews the defaults turn-on will create.
 //
-// Sheet-agnostic: owns no fetch and no mutation. It emits the user's intent via
-// `onSave`, `onTurnOn`, and `onTurnOff` and renders host-injected Tier-1 save state.
-// The same atom works in the self-saving QuickTweakSheet and in the Builder page.
+// Sheet-agnostic: owns no fetch and no mutation. It emits the user's intent via `onSave`,
+// `onTurnOn`, and `onTurnOff` and renders host-injected Tier-1 save state. The same atom works in
+// the self-saving QuickTweakSheet and in the Builder page.
 
 export interface MusicAtomSavePayload {
   keyMoments: KeyMoment[];
@@ -35,49 +39,8 @@ export interface MusicAtomProps {
   isTurningOff: boolean;
 }
 
-function renderTurnOffControl({
-  confirmRemove,
-  isSaving,
-  isTurningOff,
-  onConfirm,
-  onCancel,
-  onTurnOff,
-}: {
-  confirmRemove: boolean;
-  isSaving: boolean;
-  isTurningOff: boolean;
-  onConfirm: () => void;
-  onCancel: () => void;
-  onTurnOff: () => void;
-}) {
-  if (isTurningOff) {
-    return (
-      <Button size="sm" variant="ghost" disabled className="text-status-cancelled">
-        Removing…
-      </Button>
-    );
-  }
-  if (confirmRemove) {
-    return (
-      <>
-        <Button size="sm" variant="destructive" onClick={onTurnOff}>Yes, remove</Button>
-        <Button size="sm" variant="ghost" onClick={onCancel}>Cancel</Button>
-      </>
-    );
-  }
-  return (
-    <Button
-      size="sm"
-      variant="ghost"
-      onClick={onConfirm}
-      disabled={isSaving}
-      className="text-status-cancelled hover:text-status-cancelled/80"
-    >
-      <Trash2 size={14} className="mr-1" />
-      Remove music form
-    </Button>
-  );
-}
+const serialize = (c: { keyMoments: KeyMoment[]; enabledGenres: string[] }) =>
+  JSON.stringify({ keyMoments: c.keyMoments, enabledGenres: c.enabledGenres });
 
 export function MusicAtom({
   hasMusicFormConfig,
@@ -92,36 +55,55 @@ export function MusicAtom({
   isTurningOn,
   isTurningOff,
 }: MusicAtomProps) {
-  // Initialised once from config at mount. The atom does not re-sync from props so that
-  // an in-progress edit is not clobbered by a background refetch (same invariant as DetailsAtom).
+  const on = hasMusicFormConfig;
+
   const [localKeyMoments, setLocalKeyMoments] = useState<KeyMoment[]>(() => config?.keyMoments ?? []);
   const [localGenres, setLocalGenres] = useState<string[]>(() => config?.enabledGenres ?? []);
-  const [confirmRemove, setConfirmRemove] = useState(false);
+  const [confirmOff, setConfirmOff] = useState(false);
 
-  // Off == no config row (ADR-0046). Show an explicit turn-on control so an off form can't be
-  // mistaken for an on-but-empty form.
-  if (!hasMusicFormConfig) {
-    return (
-      <div>
-        <p className="text-sm text-muted mb-3">
-          The music form is off — the customer won't be asked for song requests for this booking.
-        </p>
-        <Button size="sm" onClick={onTurnOn} disabled={isTurningOn}>
-          <Plus size={14} className="mr-1" />
-          {isTurningOn ? 'Turning on…' : 'Turn on music form'}
-        </Button>
-      </div>
-    );
-  }
+  // Gap D (#535): re-sync local state from `config` when the config changes — but only when the
+  // atom isn't dirty, so the accept-suggestion path (config A → A+B) lands while a genuine mid-edit
+  // is never clobbered. `lastSyncedRef` holds the config snapshot the local state last matched;
+  // local !== that snapshot means the user has unsaved edits (same ref pattern as SetRow).
+  const lastSyncedRef = useRef<string | null>(config ? serialize(config) : null);
+  useEffect(() => {
+    if (!config) return;
+    const incoming = serialize(config);
+    if (lastSyncedRef.current === null) {
+      setLocalKeyMoments(config.keyMoments);
+      setLocalGenres(config.enabledGenres);
+      lastSyncedRef.current = incoming;
+      return;
+    }
+    if (incoming === lastSyncedRef.current) return;
+    const localSnapshot = serialize({ keyMoments: localKeyMoments, enabledGenres: localGenres });
+    if (localSnapshot === lastSyncedRef.current) {
+      setLocalKeyMoments(config.keyMoments);
+      setLocalGenres(config.enabledGenres);
+    }
+    lastSyncedRef.current = incoming;
+  }, [config, localKeyMoments, localGenres]);
 
-  // On, config still loading.
-  if (!config) {
+  // On, config still loading: skeleton (off renders the preview immediately).
+  if (on && !config) {
     return <div className="h-16 bg-border rounded animate-pulse" />;
   }
 
-  // Section options are the booking's package labels (de-duped) + "Other". A moment's own
-  // section stays selectable even if stale (e.g. package renamed after the moment was created).
+  // What the editor shows: live config when on; the turn-on defaults preview when off.
+  const displayGenres = on ? localGenres : (DEFAULT_ENABLED_GENRES as string[]);
+  const displayMoments = on ? localKeyMoments : [];
+
+  // Grouping options: the booking's package labels + "Other", plus any stale section a moment still
+  // carries (e.g. a package renamed after the moment was created) so it stays visible/editable.
   const sectionOptions = Array.from(new Set([...packages.map((p) => p.label), 'Other']));
+  const extraSections = Array.from(
+    new Set(displayMoments.map((km) => km.section).filter((s) => !sectionOptions.includes(s))),
+  );
+  const groups = [...sectionOptions, ...extraSections];
+  const grouped = packages.length > 0;
+  const hasRequests = localKeyMoments.some((km) => km.label.trim());
+
+  const hasChanges = on && config != null && serialize({ keyMoments: localKeyMoments, enabledGenres: localGenres }) !== serialize(config);
 
   function toggleGenre(genre: string) {
     setLocalGenres((prev) =>
@@ -129,9 +111,17 @@ export function MusicAtom({
     );
   }
 
-  const hasChanges =
-    JSON.stringify({ keyMoments: localKeyMoments, enabledGenres: localGenres }) !==
-    JSON.stringify({ keyMoments: config.keyMoments, enabledGenres: config.enabledGenres });
+  function addMoment(section: string) {
+    setLocalKeyMoments((prev) => [...prev, { label: '', section }]);
+  }
+
+  function updateMoment(index: number, patch: Partial<KeyMoment>) {
+    setLocalKeyMoments((prev) => prev.map((m, j) => (j === index ? { ...m, ...patch } : m)));
+  }
+
+  function removeMoment(index: number) {
+    setLocalKeyMoments((prev) => prev.filter((_, j) => j !== index));
+  }
 
   function handleSave() {
     onSave({
@@ -142,117 +132,89 @@ export function MusicAtom({
     });
   }
 
-  return (
-    <div className="space-y-4">
+  // The Switch stays visually ON until an off is confirmed — so a cancelled turn-off can't flip it.
+  function handleSwitch(next: boolean) {
+    if (next) {
+      onTurnOn();
+      return;
+    }
+    if (hasRequests) setConfirmOff(true);
+    else onTurnOff();
+  }
 
-      {/* Key moments */}
-      <div>
-        <p className="text-xs font-medium text-muted mb-2">Key moments</p>
-        {localKeyMoments.length === 0 ? (
-          <p className="text-sm text-muted mb-2">No key moments yet.</p>
-        ) : (
-          <div className="space-y-1 mb-2">
-            {localKeyMoments.map((km, i) => {
-              const opts = sectionOptions.includes(km.section)
-                ? sectionOptions
-                : [...sectionOptions, km.section];
-              return (
-                <div key={i} className="flex items-center gap-2">
-                  <input
-                    value={km.label}
-                    placeholder="Key moment"
-                    onChange={(e) =>
-                      setLocalKeyMoments((prev) =>
-                        prev.map((m, j) => (j === i ? { ...m, label: e.target.value } : m)),
-                      )
-                    }
-                    className="flex-1 min-w-0 text-sm bg-background border border-border rounded px-2 py-1"
-                    aria-label="Key moment label"
-                  />
-                  <select
-                    value={km.section}
-                    onChange={(e) =>
-                      setLocalKeyMoments((prev) =>
-                        prev.map((m, j) => (j === i ? { ...m, section: e.target.value } : m)),
-                      )
-                    }
-                    className="text-sm bg-background border border-border rounded px-2 py-1"
-                    aria-label="Key moment section"
-                  >
-                    {opts.map((opt) => (
-                      <option key={opt} value={opt}>{opt}</option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={() => setLocalKeyMoments((prev) => prev.filter((_, j) => j !== i))}
-                    className="text-muted hover:text-status-cancelled transition-colors flex-shrink-0"
-                    aria-label="Remove key moment"
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                </div>
-              );
-            })}
+  return (
+    <div className="space-y-5">
+      {/* On/off Switch */}
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-base font-medium text-foreground">Music form</p>
+          <p className="text-sm text-muted">
+            Collect song requests from your client for this booking.
+          </p>
+        </div>
+        <Switch
+          checked={on}
+          onCheckedChange={handleSwitch}
+          disabled={isTurningOn || isTurningOff}
+          aria-label="Music form"
+        />
+      </div>
+
+      {confirmOff && (
+        <div className="rounded-md border border-border bg-surface p-3">
+          <p className="text-sm text-foreground">
+            Turning off deletes the special requests you've added. Turn off the music form?
+          </p>
+          <div className="mt-2 flex items-center gap-2">
+            <Button size="sm" variant="destructive" disabled={isTurningOff} onClick={() => { setConfirmOff(false); onTurnOff(); }}>
+              {isTurningOff ? 'Turning off…' : 'Yes, turn off'}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setConfirmOff(false)}>Cancel</Button>
+          </div>
+        </div>
+      )}
+
+      <Separator />
+
+      {/* Editor — dimmed and inert when off (controls are disabled), previewing the defaults
+          turn-on will create. */}
+      <div className={cn('space-y-6', !on && 'opacity-50 pointer-events-none select-none')}>
+        {/* Genres first — the fundamental thing, matching the portal's section order. */}
+        <div>
+          <SubLabel>Genres</SubLabel>
+          <p className="mt-1 mb-3 text-sm text-muted">
+            The genres your client can browse when choosing songs from your library.
+          </p>
+          <GenrePills selected={displayGenres} disabled={!on} onToggle={toggleGenre} />
+        </div>
+
+        {/* Special requests — grouped by booking package (echoing the Itinerary atom). */}
+        <div>
+          <SubLabel>Special requests</SubLabel>
+          <p className="mt-1 mb-3 text-sm text-muted">
+            Add the moments that call for a specific song — first dance, cake cutting, last song.
+            Your client chooses the song for each.
+          </p>
+          <SpecialRequestsEditor
+            moments={displayMoments}
+            groups={groups}
+            grouped={grouped}
+            onAdd={addMoment}
+            onUpdate={updateMoment}
+            onRemove={removeMoment}
+          />
+        </div>
+
+        {/* Tier-1 save (only meaningful when on). */}
+        {on && (
+          <div className="flex items-center gap-3 pt-1 flex-wrap">
+            <Button size="sm" onClick={handleSave} disabled={isSaving || !hasChanges}>
+              {isSaving ? 'Saving…' : 'Save'}
+            </Button>
+            {saved && !isSaving && <span className="text-xs text-muted">Saved</span>}
+            {saveError && <p className="text-sm text-status-cancelled">{saveError}</p>}
           </div>
         )}
-        <GhostButton
-          onClick={() =>
-            setLocalKeyMoments((prev) => [
-              ...prev,
-              { label: '', section: 'Other' },
-            ])
-          }
-          variant="primary"
-          size="xs"
-          icon={<Plus size={12} aria-hidden="true" />}
-        >
-          Add key moment
-        </GhostButton>
-      </div>
-
-      {/* Genres */}
-      <div>
-        <p className="text-xs font-medium text-muted mb-2">Enabled genres</p>
-        <div className="flex flex-wrap gap-2">
-          {ALL_GENRES.map((genre) => {
-            const active = localGenres.includes(genre);
-            return (
-              <button
-                key={genre}
-                type="button"
-                onClick={() => toggleGenre(genre)}
-                className={`inline-flex items-center px-3 py-1 rounded-full border text-sm transition-colors ${
-                  active
-                    ? 'border-primary text-primary bg-primary/8'
-                    : 'border-border text-muted hover:border-primary'
-                }`}
-              >
-                {GENRE_LABELS[genre as keyof typeof GENRE_LABELS] ?? genre}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Tier-1 save + turn-off */}
-      <div className="flex items-center gap-3 pt-1 flex-wrap">
-        <Button size="sm" onClick={handleSave} disabled={isSaving || isTurningOff || !hasChanges}>
-          {isSaving ? 'Saving…' : 'Save'}
-        </Button>
-        {saved && !isSaving && !confirmRemove && (
-          <span className="text-xs text-muted">Saved</span>
-        )}
-        {saveError && <p className="text-sm text-status-cancelled">{saveError}</p>}
-
-        {renderTurnOffControl({
-          confirmRemove,
-          isSaving,
-          isTurningOff,
-          onConfirm: () => setConfirmRemove(true),
-          onCancel: () => setConfirmRemove(false),
-          onTurnOff: () => { setConfirmRemove(false); onTurnOff(); },
-        })}
       </div>
     </div>
   );

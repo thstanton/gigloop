@@ -187,7 +187,7 @@ export function ItineraryQuickTweakSheet({
             <p className="mb-2 text-sm text-foreground">
               This package suggests{' '}
               {pendingSuggestion.keyMoments.length > 0 && (
-                <span className="font-medium">{pendingSuggestion.keyMoments.length} key moment{pendingSuggestion.keyMoments.length === 1 ? '' : 's'}</span>
+                <span className="font-medium">{pendingSuggestion.keyMoments.length} special request{pendingSuggestion.keyMoments.length === 1 ? '' : 's'}</span>
               )}
               {pendingSuggestion.keyMoments.length > 0 && pendingSuggestion.genres.length > 0 && ' and '}
               {pendingSuggestion.genres.length > 0 && (

@@ -37,6 +37,7 @@ import { ItineraryAtom } from '@/features/bookings/ItineraryAtom';
 import { MusicAtom } from '@/features/bookings/MusicAtom';
 import InlineNotes from '@/features/bookings/InlineNotes';
 import { NO_PACKAGE, TemplatePicker, type SetValues } from '@/features/bookings/ItineraryFields';
+import { DEFAULT_ENABLED_GENRES } from '@/lib/constants';
 import type {
   ApplyPackageTemplateResponse,
   BookingDetail,
@@ -492,7 +493,7 @@ export default function BookingBuilderPage() {
 
   const musicTurnOn = useMutation({
     mutationFn: () =>
-      apiPut<MusicFormConfig>(`/bookings/${id}/music-form-config`, { keyMoments: [], enabledGenres: [] }),
+      apiPut<MusicFormConfig>(`/bookings/${id}/music-form-config`, { keyMoments: [], enabledGenres: DEFAULT_ENABLED_GENRES }),
     onSuccess: (data) => {
       queryClient.setQueryData<BookingDetail>(['booking', id!], (old) =>
         old ? { ...old, hasMusicFormConfig: true } : old,
@@ -565,7 +566,7 @@ export default function BookingBuilderPage() {
       </Link>
 
       <h1 className="mt-4 mb-6 font-display text-2xl font-semibold text-foreground">
-        Builder
+        Booking Builder
       </h1>
 
       <div className="md:grid md:grid-cols-[1fr_220px] md:gap-8 md:items-start">
@@ -651,7 +652,7 @@ export default function BookingBuilderPage() {
                 <p className="text-sm">
                   This package suggests{' '}
                   {pendingSuggestion.keyMoments.length > 0 && (
-                    <span className="font-medium">{pendingSuggestion.keyMoments.length} key moment{pendingSuggestion.keyMoments.length === 1 ? '' : 's'}</span>
+                    <span className="font-medium">{pendingSuggestion.keyMoments.length} special request{pendingSuggestion.keyMoments.length === 1 ? '' : 's'}</span>
                   )}
                   {pendingSuggestion.keyMoments.length > 0 && pendingSuggestion.genres.length > 0 && ' and '}
                   {pendingSuggestion.genres.length > 0 && (

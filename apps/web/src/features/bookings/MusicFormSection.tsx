@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ClipboardList, Download, Music2, Pencil } from 'lucide-react';
+import { ClipboardList, Download, Music2, Pencil, StickyNote } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { GhostButton } from '@/components/common/GhostButton';
 import { EmptyState } from '@/components/common/EmptyState';
@@ -60,7 +60,7 @@ function SongRequestsSheetBody({ response, songListDoc }: Readonly<SongRequestsS
     <div className="space-y-6">
       {hasSpecialRequests && (
         <section>
-          <SubLabel className="mb-3">Key moments</SubLabel>
+          <SubLabel className="mb-3">Special requests</SubLabel>
           <div className="space-y-2">
             {response.specialRequests.map((req) => {
               const artistSuffix = req.song?.artist ? ` — ${req.song.artist}` : '';
@@ -201,7 +201,7 @@ export default function MusicFormSection({
         <div className="space-y-4">
           {sectionMap.size === 0 && config.enabledGenres.length === 0 && (
             <p className="text-sm text-muted">
-              On, but not set up yet — add key moments and genres with Edit.
+              On, but not set up yet — add special requests and genres with Edit.
             </p>
           )}
           {Array.from(sectionMap.entries()).map(([section, moments]) => (
@@ -239,6 +239,15 @@ export default function MusicFormSection({
               <p className="text-sm text-foreground">
                 {config.enabledGenres.map((g) => GENRE_LABELS[g as keyof typeof GENRE_LABELS] ?? g).join(', ')}
               </p>
+            </div>
+          )}
+          {response?.notes && (
+            <div>
+              <div className="flex items-center gap-1.5 text-sm font-medium text-foreground mb-1">
+                <StickyNote size={14} />
+                Notes
+              </div>
+              <p className="text-sm text-foreground whitespace-pre-wrap">{response.notes}</p>
             </div>
           )}
         </div>

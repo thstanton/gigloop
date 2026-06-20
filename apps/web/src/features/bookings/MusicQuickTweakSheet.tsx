@@ -7,6 +7,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { apiDelete, apiGet, apiPut } from '@/lib/api';
+import { DEFAULT_ENABLED_GENRES } from '@/lib/constants';
 import { toast } from '@/lib/hooks/use-toast';
 import { MusicAtom, type MusicAtomSavePayload } from './MusicAtom';
 import type { BookingDetail, BookingPackageSummary, MusicFormConfig } from '@/types/api';
@@ -61,7 +62,7 @@ export function MusicQuickTweakSheet({
     mutationFn: () =>
       apiPut<MusicFormConfig>(`/bookings/${bookingId}/music-form-config`, {
         keyMoments: [],
-        enabledGenres: [],
+        enabledGenres: DEFAULT_ENABLED_GENRES,
       }),
     onSuccess: (data) => {
       // Optimistically prime the cache so the atom transitions without waiting for the

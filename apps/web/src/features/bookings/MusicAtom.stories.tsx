@@ -7,9 +7,18 @@ const emptyConfig: MusicFormConfig = {
   id: 'mfc1',
   bookingId: 'b1',
   keyMoments: [],
-  enabledGenres: [],
+  enabledGenres: ['CONTEMPORARY', 'CLASSICAL', 'JAZZ', 'FILM_TV_MUSICALS'],
   createdAt: '2026-06-01T00:00:00Z',
   updatedAt: '2026-06-01T00:00:00Z',
+};
+
+const configuredConfig: MusicFormConfig = {
+  ...emptyConfig,
+  keyMoments: [
+    { label: 'Walking down the aisle', section: 'Ceremony' },
+    { label: 'First dance', section: 'Reception' },
+    { label: 'Last song', section: 'Other' },
+  ],
 };
 
 const packages = [
@@ -38,24 +47,41 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const AddKeyMomentAndGenre: Story = {
-  name: 'Happy path: add a key moment, select its section, enable a genre, then save',
+export const OnEmptyGrouped: Story = {
+  name: 'On, empty: grouped special-request editor (a group per package + Other)',
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('switch', { name: /music form/i })).toBeChecked();
+    // Genres seeded from the turn-on defaults.
+    await expect(canvas.getByRole('button', { name: /^contemporary$/i })).toBeEnabled();
+    // One "Add request" control per group.
+    await expect(canvas.getAllByRole('button', { name: /add request/i })).toHaveLength(3);
+  },
+};
+
+export const OnConfigured: Story = {
+  name: 'On, configured: special requests grouped under their packages',
+  args: { config: configuredConfig },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByDisplayValue('Walking down the aisle')).toBeVisible();
+    await expect(canvas.getByDisplayValue('First dance')).toBeVisible();
+  },
+};
+
+export const HappyPath: Story = {
+  name: 'Happy path: add a special request, enable a genre, then save',
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
 
-    // Add a key moment row.
-    await userEvent.click(canvas.getByRole('button', { name: /add key moment/i }));
-    const labelInput = canvas.getByRole('textbox', { name: /key moment label/i });
-    await userEvent.type(labelInput, 'First dance');
+    // Add a request in the first group.
+    await userEvent.click(canvas.getAllByRole('button', { name: /add request/i })[0]);
+    const input = canvas.getByRole('textbox', { name: /special request/i });
+    await userEvent.type(input, 'First dance');
 
-    // The section select defaults to "Other" — verify it's present.
-    const sectionSelect = canvas.getByRole('combobox', { name: /key moment section/i });
-    await expect(sectionSelect).toBeVisible();
+    // Toggle a genre off (Contemporary is seeded on) to register a change either way.
+    await userEvent.click(canvas.getByRole('button', { name: /^jazz$/i }));
 
-    // Enable the Pop genre.
-    await userEvent.click(canvas.getByRole('button', { name: /^pop$/i }));
-
-    // Save is now enabled because the atom has unsaved changes.
     const save = canvas.getByRole('button', { name: /^save$/i });
     await expect(save).toBeEnabled();
     await userEvent.click(save);
@@ -63,7 +89,6 @@ export const AddKeyMomentAndGenre: Story = {
     await expect(args.onSave).toHaveBeenCalledWith(
       expect.objectContaining({
         keyMoments: [expect.objectContaining({ label: 'First dance' })],
-        enabledGenres: expect.arrayContaining(['pop']),
       }),
     );
   },
@@ -107,55 +132,52 @@ export const ErrorState: Story = {
 };
 
 export const Off: Story = {
-  name: 'Off: shows the turn-on button when hasMusicFormConfig is false',
+  name: 'Off: Switch is off and the editor is a dimmed, inert defaults preview',
   args: { hasMusicFormConfig: false, config: null },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByRole('button', { name: /turn on music form/i })).toBeVisible();
-    // The editor UI is not shown.
+    await expect(canvas.getByRole('switch', { name: /music form/i })).not.toBeChecked();
+    // The default genres are previewed but inert; there is no Save action when off.
+    await expect(canvas.getByRole('button', { name: /^contemporary$/i })).toBeDisabled();
     await expect(canvas.queryByRole('button', { name: /^save$/i })).toBeNull();
   },
 };
 
-export const TurnOnPending: Story = {
-  name: 'Off + turning on: button is disabled and relabels to "Turning on…"',
-  args: { hasMusicFormConfig: false, config: null, isTurningOn: true },
-  play: async ({ canvasElement }) => {
+export const TurnOnFromSwitch: Story = {
+  name: 'Off → flipping the Switch on fires onTurnOn',
+  args: { hasMusicFormConfig: false, config: null },
+  play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
-    const btn = canvas.getByRole('button', { name: /turning on…/i });
-    await expect(btn).toBeVisible();
-    await expect(btn).toBeDisabled();
+    await userEvent.click(canvas.getByRole('switch', { name: /music form/i }));
+    await expect(args.onTurnOn).toHaveBeenCalled();
   },
 };
 
-export const TurnOffConfirm: Story = {
-  name: 'Turn-off: confirm dialog appears before deletion, then onTurnOff fires',
+export const WarnBeforeTurnOff: Story = {
+  name: 'Turn-off with requests: confirm appears first; cancel leaves it on',
+  args: { config: configuredConfig },
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
 
-    // "Remove music form" is visible initially.
-    const removeBtn = canvas.getByRole('button', { name: /remove music form/i });
-    await expect(removeBtn).toBeVisible();
-    await userEvent.click(removeBtn);
-
-    // Confirm dialog appears.
-    const confirmBtn = canvas.getByRole('button', { name: /yes, remove/i });
-    await expect(confirmBtn).toBeVisible();
-    await expect(canvas.getByRole('button', { name: /^cancel$/i })).toBeVisible();
-
-    await userEvent.click(confirmBtn);
-    await expect(args.onTurnOff).toHaveBeenCalled();
-  },
-};
-
-export const TurnOffCancel: Story = {
-  name: 'Turn-off: cancelling the confirm dialog restores the Remove button',
-  play: async ({ args, canvasElement }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: /remove music form/i }));
-    await userEvent.click(canvas.getByRole('button', { name: /^cancel$/i }));
-    // Confirm dialog is gone; onTurnOff must NOT have been called.
-    await expect(canvas.getByRole('button', { name: /remove music form/i })).toBeVisible();
+    // Flipping the Switch off when special requests exist shows a confirm, not an immediate delete.
+    await userEvent.click(canvas.getByRole('switch', { name: /music form/i }));
+    await expect(canvas.getByRole('button', { name: /yes, turn off/i })).toBeVisible();
     await expect(args.onTurnOff).not.toHaveBeenCalled();
+
+    // Cancel restores the editor and never deletes.
+    await userEvent.click(canvas.getByRole('button', { name: /^cancel$/i }));
+    await expect(canvas.queryByRole('button', { name: /yes, turn off/i })).toBeNull();
+    await expect(args.onTurnOff).not.toHaveBeenCalled();
+  },
+};
+
+export const TurnOffSilentlyWhenEmpty: Story = {
+  name: 'Turn-off with no requests: deletes silently (no confirm)',
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    // emptyConfig has genres but no special requests → turning off fires onTurnOff immediately.
+    await userEvent.click(canvas.getByRole('switch', { name: /music form/i }));
+    await expect(args.onTurnOff).toHaveBeenCalled();
+    await expect(canvas.queryByRole('button', { name: /yes, turn off/i })).toBeNull();
   },
 };

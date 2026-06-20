@@ -28,6 +28,18 @@ export const GENRE_LABELS: Record<SongGenre, string> = {
 
 export const ALL_GENRES = Object.keys(GENRE_LABELS) as SongGenre[];
 
+// Seeded into a booking's MusicFormConfig.enabledGenres when the music form is turned on
+// without a package to copy format defaults from (#535). Mirrors a typical
+// PackageTemplate.defaultGenreSelection so the client's song list has genre tabs from the
+// off — turning on with `[]` left the portal with no tabs (dead on arrival). Making this
+// musician-configurable and library-aware is deferred (#530).
+export const DEFAULT_ENABLED_GENRES: SongGenre[] = [
+  'CONTEMPORARY',
+  'CLASSICAL',
+  'JAZZ',
+  'FILM_TV_MUSICALS',
+];
+
 export const EVENT_TYPE_LABELS: Record<EventType, string> = {
   WEDDING:   'Wedding',
   CORPORATE: 'Corporate',
