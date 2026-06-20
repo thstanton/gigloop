@@ -1,22 +1,30 @@
+import { Fragment } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Clock } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { GhostButton } from '@/components/common/GhostButton';
 import { EmptyState } from '@/components/common/EmptyState';
-import { formatDuration } from './PerformanceSection';
 import FormatIcon from './FormatIcon';
 import { LOGISTICS_FIELD_ICONS } from '@/lib/constants';
 import type { BookingLogisticsEntry, BookingPackageSummary, PerformanceSet } from '@/types/api';
 
 type TimelineRow =
   | { kind: 'time'; rowKey: string; label: string; time: string; notes?: string; group: string }
-  | { kind: 'set'; rowKey: string; set: PerformanceSet; group: string };
+  | { kind: 'set'; rowKey: string; set: PerformanceSet; group: string; pkg: BookingPackageSummary | null; startsRun: boolean };
 
 interface ItineraryCardProps {
   logistics: Record<string, BookingLogisticsEntry> | null;
   sets: PerformanceSet[];
   packages: BookingPackageSummary[];
   hideWhenEmpty?: boolean;
+}
+
+/** Minutes → human duration, e.g. 45 → "45 min", 90 → "1 hr 30 min". */
+export function formatDuration(minutes: number): string {
+  if (minutes < 60) return `${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m > 0 ? `${h} hr ${m} min` : `${h} hr`;
 }
 
 /** "HH:MM" → minutes since midnight, or null when unset/unparseable. */
@@ -70,8 +78,22 @@ function buildRows(
   if (l.soundCheckTime?.value)
     rows.push({ kind: 'time', rowKey: 'soundCheckTime', label: 'Soundcheck', time: l.soundCheckTime.value, notes: l.soundCheckTime.notes, group: 'soundcheck' });
 
-  for (const set of orderTimelineSets(sets, packages))
-    rows.push({ kind: 'set', rowKey: set.id, set, group: set.packageId ? `pkg-${set.packageId}` : `set-${set.id}` });
+  // Sets ordered by time; each contiguous run of the same package leads with a package header
+  // (its name + icon), so the grouping the musician built in the editor reads at a glance.
+  const orderedSets = orderTimelineSets(sets, packages);
+  orderedSets.forEach((set, i) => {
+    const pkg = set.packageId ? packages.find((p) => p.id === set.packageId) ?? null : null;
+    const prev = orderedSets[i - 1];
+    const startsRun = !!set.packageId && (!prev || prev.packageId !== set.packageId);
+    rows.push({
+      kind: 'set',
+      rowKey: set.id,
+      set,
+      group: set.packageId ? `pkg-${set.packageId}` : `set-${set.id}`,
+      pkg,
+      startsRun,
+    });
+  });
 
   if (l.finishTime?.value)
     rows.push({ kind: 'time', rowKey: 'finishTime', label: 'Finish', time: l.finishTime.value, notes: l.finishTime.notes, group: 'finish' });
@@ -84,12 +106,6 @@ function setLabel(set: PerformanceSet): string {
   return set.label ? `${set.label} (${dur})` : dur;
 }
 
-function getSetIcon(set: PerformanceSet, packages: BookingPackageSummary[]): string {
-  if (!set.packageId) return 'music';
-  const pkg = packages.find((p) => p.id === set.packageId);
-  return pkg?.icon ?? 'music';
-}
-
 export default function ItineraryCard({ logistics, sets, packages, hideWhenEmpty = false }: ItineraryCardProps) {
   const [, setSearchParams] = useSearchParams();
   const rows = buildRows(logistics, sets, packages);
@@ -100,7 +116,7 @@ export default function ItineraryCard({ logistics, sets, packages, hideWhenEmpty
     <Card
       title="Itinerary"
       action={
-        <GhostButton variant="primary" size="xs" onClick={() => setSearchParams({ sheet: 'bookingEdit', section: 'onTheDay' })}>
+        <GhostButton variant="primary" size="xs" onClick={() => setSearchParams({ sheet: 'itineraryTweak' })}>
           Edit
         </GhostButton>
       }
@@ -119,32 +135,35 @@ export default function ItineraryCard({ logistics, sets, packages, hideWhenEmpty
             const timeCol = row.kind === 'time' ? row.time : (row.set.startTime ?? formatDuration(row.set.duration));
             const labelCol = row.kind === 'time' ? row.label : setLabel(row.set);
             return (
-              <div
-                key={row.rowKey}
-                className={`flex gap-3 py-1.5${(row.kind === 'time' && row.notes) ? ' items-start' : ' items-center'}${showBorder ? ' border-b border-border' : ''}`}
-              >
-                <span className="w-14 flex-shrink-0 text-sm font-medium tabular-nums text-foreground">
-                  {timeCol}
-                </span>
-                {row.kind === 'time' && (
-                  <span className="flex-shrink-0 text-muted">
-                    <FormatIcon icon={LOGISTICS_FIELD_ICONS[row.rowKey] ?? 'clock'} size={14} />
-                  </span>
-                )}
-                {row.kind === 'set' && (
-                  <span className="flex-shrink-0 text-muted">
-                    <FormatIcon icon={getSetIcon(row.set, packages)} size={14} />
-                  </span>
-                )}
-                {row.kind === 'time' && row.notes ? (
-                  <div className="flex flex-col">
-                    <span className="text-sm text-foreground">{labelCol}</span>
-                    <span className="text-xs text-muted">{row.notes}</span>
+              <Fragment key={row.rowKey}>
+                {/* Package name leads each contiguous run of its sets. */}
+                {row.kind === 'set' && row.startsRun && row.pkg && (
+                  <div className="flex items-center gap-1.5 pb-1 pt-2 text-xs font-medium text-muted">
+                    <FormatIcon icon={row.pkg.icon} size={14} />
+                    {row.pkg.label}
                   </div>
-                ) : (
-                  <span className="text-sm text-foreground">{labelCol}</span>
                 )}
-              </div>
+                <div
+                  className={`flex gap-3 py-1.5${(row.kind === 'time' && row.notes) ? ' items-start' : ' items-center'}${showBorder ? ' border-b border-border' : ''}`}
+                >
+                  <span className="w-14 flex-shrink-0 text-sm font-medium tabular-nums text-foreground">
+                    {timeCol}
+                  </span>
+                  {row.kind === 'time' && (
+                    <span className="flex-shrink-0 text-muted">
+                      <FormatIcon icon={LOGISTICS_FIELD_ICONS[row.rowKey] ?? 'clock'} size={14} />
+                    </span>
+                  )}
+                  {row.kind === 'time' && row.notes ? (
+                    <div className="flex flex-col">
+                      <span className="text-sm text-foreground">{labelCol}</span>
+                      <span className="text-xs text-muted">{row.notes}</span>
+                    </div>
+                  ) : (
+                    <span className="text-sm text-foreground">{labelCol}</span>
+                  )}
+                </div>
+              </Fragment>
             );
           })}
         </div>

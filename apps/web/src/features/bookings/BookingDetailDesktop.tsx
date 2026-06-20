@@ -20,7 +20,6 @@ import InlineNotes from '@/features/bookings/InlineNotes';
 import CommunicationsSection from '@/features/bookings/CommunicationsSection';
 import ItineraryCard from '@/features/bookings/ItineraryCard';
 import DetailsCard from '@/features/bookings/DetailsCard';
-import PerformanceSection from '@/features/bookings/PerformanceSection';
 import MusicFormSection from '@/features/bookings/MusicFormSection';
 import { InlineVenueAdd } from '@/features/bookings/InlineVenueAdd';
 import { BookingVenueMapWidget } from '@/features/bookings/BookingVenueMapWidget';
@@ -229,11 +228,6 @@ export function BookingDetailDesktop({ bookingId }: BookingDetailDesktopProps) {
 
         {/* Documents */}
         <DocumentsCard bookingId={bookingId} />
-
-        <PerformanceSection
-          booking={booking}
-          hideWhenEmpty
-        />
 
       </div>{/* end right column */}
 

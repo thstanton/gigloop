@@ -295,6 +295,11 @@ export class BookingsService {
     await this.findOne(userId, bookingId);
     const set = await this.repo.findSet(userId, bookingId, setId);
     if (!set) throw new NotFoundException('Set not found');
+    // Re-parenting: a non-null target package must belong to this booking (null = ungroup).
+    if (dto.packageId != null) {
+      const pkg = await this.repo.findBookingPackage(userId, bookingId, dto.packageId);
+      if (!pkg) throw new NotFoundException('Package not found');
+    }
     return this.repo.updateSet(setId, dto);
   }
 

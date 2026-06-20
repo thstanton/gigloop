@@ -17,7 +17,6 @@ vi.mock('@/lib/api', () => ({
   apiDelete: vi.fn(),
 }));
 
-vi.mock('./PerformanceEditor', () => ({ default: () => null }));
 vi.mock('./MusicFormEditor', () => ({ default: () => null }));
 vi.mock('./OnTheDayEditor', () => ({ default: () => null }));
 

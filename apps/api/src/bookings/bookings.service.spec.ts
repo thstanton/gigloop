@@ -797,6 +797,36 @@ describe('BookingsService', () => {
       await service.updateSet('u1', 'b1', 's1', {});
       expect(repo.findSet).toHaveBeenCalledWith('u1', 'b1', 's1');
     });
+
+    // Re-parenting (#521): moving a set between packages persists packageId as a set-row change.
+    it('re-parents the set to a package on the same booking', async () => {
+      repo.findOne.mockResolvedValue(booking);
+      repo.findSet.mockResolvedValue(set);
+      repo.findBookingPackage.mockResolvedValue({ id: 'pkg1', bookingId: 'b1' });
+      const moved = { ...set, packageId: 'pkg1' };
+      repo.updateSet.mockResolvedValue(moved);
+      const result = await service.updateSet('u1', 'b1', 's1', { packageId: 'pkg1' });
+      expect(repo.findBookingPackage).toHaveBeenCalledWith('u1', 'b1', 'pkg1');
+      expect(repo.updateSet).toHaveBeenCalledWith('s1', { packageId: 'pkg1' });
+      expect(result).toBe(moved);
+    });
+
+    it('ungroups the set when packageId is null — no package lookup needed', async () => {
+      repo.findOne.mockResolvedValue(booking);
+      repo.findSet.mockResolvedValue(set);
+      repo.updateSet.mockResolvedValue({ ...set, packageId: null });
+      await service.updateSet('u1', 'b1', 's1', { packageId: null });
+      expect(repo.findBookingPackage).not.toHaveBeenCalled();
+      expect(repo.updateSet).toHaveBeenCalledWith('s1', { packageId: null });
+    });
+
+    it('rejects re-parenting to a package that is not on this booking', async () => {
+      repo.findOne.mockResolvedValue(booking);
+      repo.findSet.mockResolvedValue(set);
+      repo.findBookingPackage.mockResolvedValue(null);
+      await expect(service.updateSet('u1', 'b1', 's1', { packageId: 'other-booking-pkg' })).rejects.toThrow(NotFoundException);
+      expect(repo.updateSet).not.toHaveBeenCalled();
+    });
   });
 
   describe('deleteSet', () => {

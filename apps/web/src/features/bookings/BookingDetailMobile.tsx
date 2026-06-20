@@ -22,7 +22,6 @@ import ContractCard from '@/features/bookings/ContractCard';
 import SeriesInvoiceCard from '@/features/bookings/SeriesInvoiceCard';
 import InvoiceSection from '@/features/bookings/InvoiceSection';
 import { DocumentsCard } from '@/features/bookings/DocumentsCard';
-import PerformanceSection from '@/features/bookings/PerformanceSection';
 import MusicFormSection from '@/features/bookings/MusicFormSection';
 import CommunicationsSection from '@/features/bookings/CommunicationsSection';
 import { SectionHeader } from '@/components/common/SectionHeader';
@@ -260,11 +259,6 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
           )}
 
           <DocumentsCard bookingId={bookingId} />
-
-          <PerformanceSection
-            booking={booking}
-            hideWhenEmpty
-          />
 
           <CommunicationsSection
             communications={communications}
