@@ -84,9 +84,8 @@ export const WithCustomFields: Story = {
 export const Empty: Story = {
   args: { logistics: null },
   play: async ({ canvas }) => {
-    await expect(canvas.getByText('Details')).toBeVisible();
     await expect(canvas.getByText('No details yet')).toBeVisible();
     await expect(canvas.getByText('Add dress code, performance space, and on-the-day details.')).toBeVisible();
-    await expect(canvas.getByRole('button', { name: 'Edit' })).toBeVisible();
+    await expect(canvas.getByRole('button', { name: 'Add details' })).toBeVisible();
   },
 };

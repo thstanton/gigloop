@@ -56,8 +56,7 @@ type Story = StoryObj<typeof meta>;
 export const Off: Story = {
   args: { booking: { ...baseBooking, hasMusicFormConfig: false } },
   play: async ({ canvas }) => {
-    // Off == no config row. Card stays visible (no vanish) and offers a turn-on control.
-    await expect(canvas.getByText('Music form')).toBeVisible();
+    // Off == no config row. The empty state stays visible (no vanish) and offers a turn-on control.
     await expect(canvas.getByText('No music form')).toBeVisible();
     await expect(canvas.getByText('Set up a music form to collect song requests from your clients.')).toBeVisible();
     await expect(canvas.getByRole('button', { name: 'Turn on music form' })).toBeVisible();

@@ -143,21 +143,17 @@ export default function MusicFormSection({
   if (!booking.hasMusicFormConfig) {
     if (hideWhenOff) return null;
     return (
-      <Card
-        title="Music form"
+      <EmptyState
+        icon={<ClipboardList size={24} />}
+        heading="No music form"
+        description="Set up a music form to collect song requests from your clients."
         action={
           <GhostButton variant="primary" size="xs" disabled={isTurningOn} onClick={onTurnOn}>
             {isTurningOn ? 'Turning on…' : 'Turn on music form'}
           </GhostButton>
         }
-      >
-        <EmptyState
-          icon={<ClipboardList size={24} />}
-          heading="No music form"
-          description="Set up a music form to collect song requests from your clients."
-          className="py-6"
-        />
-      </Card>
+        className="h-full justify-center py-6"
+      />
     );
   }
 

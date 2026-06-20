@@ -1,6 +1,5 @@
 import { useSearchParams } from 'react-router-dom';
 import { MapPin, Plus } from 'lucide-react';
-import { Card } from '@/components/common/Card';
 import { GhostButton } from '@/components/common/GhostButton';
 import { EmptyState } from '@/components/common/EmptyState';
 
@@ -12,8 +11,10 @@ import { EmptyState } from '@/components/common/EmptyState';
 export function InlineVenueAdd() {
   const [, setSearchParams] = useSearchParams();
   return (
-    <Card
-      title="Venue"
+    <EmptyState
+      icon={<MapPin size={24} />}
+      heading="No venue yet"
+      description="Add a venue to include address and travel time in your booking."
       action={
         <GhostButton
           variant="primary"
@@ -24,13 +25,7 @@ export function InlineVenueAdd() {
           Add venue
         </GhostButton>
       }
-    >
-      <EmptyState
-        icon={<MapPin size={24} />}
-        heading="No venue yet"
-        description="Add a venue to include address and travel time in your booking."
-        className="py-6"
-      />
-    </Card>
+      className="h-full justify-center py-6"
+    />
   );
 }

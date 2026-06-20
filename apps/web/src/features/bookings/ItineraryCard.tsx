@@ -1,6 +1,6 @@
 import { Fragment } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Clock, Pencil } from 'lucide-react';
+import { Clock, Pencil, Plus } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { GhostButton } from '@/components/common/GhostButton';
 import { EmptyState } from '@/components/common/EmptyState';
@@ -112,6 +112,22 @@ export default function ItineraryCard({ logistics, sets, packages, hideWhenEmpty
 
   if (hideWhenEmpty && rows.length === 0) return null;
 
+  if (rows.length === 0) {
+    return (
+      <EmptyState
+        icon={<Clock size={24} />}
+        heading="No itinerary yet"
+        description="Add times and sets to build a timeline of the day."
+        action={
+          <GhostButton variant="primary" size="xs" icon={<Plus size={13} />} onClick={() => setSearchParams({ sheet: 'itineraryTweak' })}>
+            Add itinerary
+          </GhostButton>
+        }
+        className="h-full justify-center py-6"
+      />
+    );
+  }
+
   return (
     <Card
       title="Itinerary"
@@ -121,53 +137,44 @@ export default function ItineraryCard({ logistics, sets, packages, hideWhenEmpty
         </GhostButton>
       }
     >
-      {rows.length === 0 ? (
-        <EmptyState
-          icon={<Clock size={24} />}
-          heading="No itinerary yet"
-          description="Add times and sets to build a timeline of the day."
-          className="py-6"
-        />
-      ) : (
-        <div>
-          {rows.map((row, i) => {
-            const showBorder = !!rows[i + 1] && rows[i + 1].group !== row.group;
-            const timeCol = row.kind === 'time' ? row.time : (row.set.startTime ?? formatDuration(row.set.duration));
-            const labelCol = row.kind === 'time' ? row.label : setLabel(row.set);
-            return (
-              <Fragment key={row.rowKey}>
-                {/* Package name leads each contiguous run of its sets. */}
-                {row.kind === 'set' && row.startsRun && row.pkg && (
-                  <div className="flex items-center gap-1.5 pb-1 pt-2 text-xs font-medium text-muted">
-                    <FormatIcon icon={row.pkg.icon} size={14} />
-                    {row.pkg.label}
-                  </div>
-                )}
-                <div
-                  className={`flex gap-3 py-1.5${(row.kind === 'time' && row.notes) ? ' items-start' : ' items-center'}${showBorder ? ' border-b border-border' : ''}`}
-                >
-                  <span className="w-14 flex-shrink-0 text-sm font-medium tabular-nums text-foreground">
-                    {timeCol}
-                  </span>
-                  {row.kind === 'time' && (
-                    <span className="flex-shrink-0 text-muted">
-                      <FormatIcon icon={LOGISTICS_FIELD_ICONS[row.rowKey] ?? 'clock'} size={14} />
-                    </span>
-                  )}
-                  {row.kind === 'time' && row.notes ? (
-                    <div className="flex flex-col">
-                      <span className="text-sm text-foreground">{labelCol}</span>
-                      <span className="text-xs text-muted">{row.notes}</span>
-                    </div>
-                  ) : (
-                    <span className="text-sm text-foreground">{labelCol}</span>
-                  )}
+      <div>
+        {rows.map((row, i) => {
+          const showBorder = !!rows[i + 1] && rows[i + 1].group !== row.group;
+          const timeCol = row.kind === 'time' ? row.time : (row.set.startTime ?? formatDuration(row.set.duration));
+          const labelCol = row.kind === 'time' ? row.label : setLabel(row.set);
+          return (
+            <Fragment key={row.rowKey}>
+              {/* Package name leads each contiguous run of its sets. */}
+              {row.kind === 'set' && row.startsRun && row.pkg && (
+                <div className="flex items-center gap-1.5 pb-1 pt-2 text-xs font-medium text-muted">
+                  <FormatIcon icon={row.pkg.icon} size={14} />
+                  {row.pkg.label}
                 </div>
-              </Fragment>
-            );
-          })}
-        </div>
-      )}
+              )}
+              <div
+                className={`flex gap-3 py-1.5${(row.kind === 'time' && row.notes) ? ' items-start' : ' items-center'}${showBorder ? ' border-b border-border' : ''}`}
+              >
+                <span className="w-14 flex-shrink-0 text-sm font-medium tabular-nums text-foreground">
+                  {timeCol}
+                </span>
+                {row.kind === 'time' && (
+                  <span className="flex-shrink-0 text-muted">
+                    <FormatIcon icon={LOGISTICS_FIELD_ICONS[row.rowKey] ?? 'clock'} size={14} />
+                  </span>
+                )}
+                {row.kind === 'time' && row.notes ? (
+                  <div className="flex flex-col">
+                    <span className="text-sm text-foreground">{labelCol}</span>
+                    <span className="text-xs text-muted">{row.notes}</span>
+                  </div>
+                ) : (
+                  <span className="text-sm text-foreground">{labelCol}</span>
+                )}
+              </div>
+            </Fragment>
+          );
+        })}
+      </div>
     </Card>
   );
 }

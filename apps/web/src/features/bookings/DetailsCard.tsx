@@ -1,5 +1,5 @@
 import { useSearchParams } from 'react-router-dom';
-import { Info, Pencil } from 'lucide-react';
+import { Info, Pencil, Plus } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { GhostButton } from '@/components/common/GhostButton';
 import { EmptyState } from '@/components/common/EmptyState';
@@ -46,21 +46,17 @@ export default function DetailsCard({ logistics, hideWhenEmpty = false }: Detail
 
   if (allEntries.length === 0) {
     return (
-      <Card
-        title="Details"
+      <EmptyState
+        icon={<Info size={24} />}
+        heading="No details yet"
+        description="Add dress code, performance space, and on-the-day details."
         action={
-          <GhostButton variant="primary" size="xs" icon={<Pencil size={13} />} onClick={() => setSearchParams({ sheet: 'detailsTweak' })}>
-            Edit
+          <GhostButton variant="primary" size="xs" icon={<Plus size={13} />} onClick={() => setSearchParams({ sheet: 'detailsTweak' })}>
+            Add details
           </GhostButton>
         }
-      >
-        <EmptyState
-          icon={<Info size={24} />}
-          heading="No details yet"
-          description="Add dress code, performance space, and on-the-day details."
-          className="py-6"
-        />
-      </Card>
+        className="h-full justify-center py-6"
+      />
     );
   }
 
