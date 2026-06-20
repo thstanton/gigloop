@@ -121,22 +121,6 @@ export const Empty: Story = {
   },
 };
 
-export const WithTemplateAffordance: Story = {
-  name: 'Apply-template affordance (deep-links to Builder)',
-  args: {
-    bookingId: 'b-123',
-    logistics: fullLogistics,
-    sets: setsWithStartTimes,
-    packages,
-  },
-  play: async ({ canvas }) => {
-    // The affordance only appears when a bookingId is supplied (it deep-links into
-    // the Builder's Package Templates step).
-    await expect(canvas.getByRole('button', { name: 'Apply template' })).toBeVisible();
-    await expect(canvas.getByRole('button', { name: 'Edit' })).toBeVisible();
-  },
-};
-
 export const WithTimeNotes: Story = {
   args: {
     logistics: {
