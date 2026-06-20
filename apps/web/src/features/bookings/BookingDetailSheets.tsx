@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useAuth } from '@clerk/react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -10,13 +9,6 @@ import {
   ResponsiveDialogHeader,
   ResponsiveDialogTitle,
 } from '@/components/ui/responsive-dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { useBooking } from '@/lib/hooks/useBooking';
 import { useBookingChecklist } from '@/lib/hooks/useBookingChecklist';
 import { useBookingFields } from '@/lib/hooks/useBookingFields';
@@ -37,10 +29,8 @@ import InvoiceSheet from '@/features/invoices/InvoiceSheet';
 import MarkSentDialog from '@/features/invoices/MarkSentDialog';
 import { apiGet } from '@/lib/api';
 import type {
-  BookingSeries,
   BookingStatus,
   Template,
-  UpdateBookingSeriesResponse,
   UserProfile,
 } from '@/types/api';
 
@@ -53,18 +43,12 @@ const STATUS_LABELS: Record<BookingStatus, string> = {
   CANCELLED:    'Cancelled',
 };
 
-function isSeriesConfirmationRequired(r: object): r is Required<UpdateBookingSeriesResponse> {
-  return 'requiresConfirmation' in r;
-}
-
 interface BookingDetailSheetsProps {
   bookingId: string;
 }
 
 export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [selectedSeriesId, setSelectedSeriesId] = useState<string | null>(null);
-
   const sheet = searchParams.get('sheet');
 
   const sheetInvoiceId = searchParams.get('invoiceId');
@@ -73,8 +57,6 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
   const sheetIsDeposit = searchParams.get('isDeposit') === 'true';
   const sheetAmount = searchParams.get('amount') ? parseFloat(searchParams.get('amount')!) : undefined;
   const sheetDescription = searchParams.get('description') ?? undefined;
-  const sheetSeriesId = searchParams.get('seriesId') ?? null;
-  const sheetWarning = searchParams.get('warning') ?? '';
   const sheetContractReadOnly = searchParams.get('readOnly') === 'true';
 
   const { isLoaded } = useAuth();
@@ -96,12 +78,6 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
     queryKey: ['me'],
     queryFn: () => apiGet<UserProfile>('/me'),
     enabled: isLoaded,
-  });
-
-  const { data: seriesList } = useQuery({
-    queryKey: ['series'],
-    queryFn: () => apiGet<BookingSeries[]>('/series'),
-    enabled: isLoaded && sheet === 'series',
   });
 
   useQuery({
@@ -196,6 +172,7 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
         initialDate={booking.date.slice(0, 10)}
         initialFee={booking.fee}
         initialTitle={booking.title}
+        initialSeriesId={booking.seriesId}
         open={sheet === 'overviewTweak'}
         onOpenChange={(open) => { if (!open) setSearchParams({}); }}
       />
@@ -246,77 +223,6 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
         />
       )}
 
-      <ResponsiveDialog open={sheet === 'series'} onOpenChange={(open) => { if (!open) { setSearchParams({}); setSelectedSeriesId(null); } }}>
-        <ResponsiveDialogContent aria-describedby={undefined}>
-          <ResponsiveDialogHeader>
-            <ResponsiveDialogTitle>Add to series</ResponsiveDialogTitle>
-          </ResponsiveDialogHeader>
-          <div className="space-y-4 pt-2">
-            <Select value={selectedSeriesId ?? ''} onValueChange={setSelectedSeriesId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select series..." />
-              </SelectTrigger>
-              <SelectContent>
-                {seriesList?.length
-                  ? seriesList.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
-                    ))
-                  : <div className="py-2 px-2 text-sm text-muted-foreground">No series available</div>
-                }
-              </SelectContent>
-            </Select>
-            <div className="flex gap-3">
-              <Button
-                onClick={() => {
-                  if (selectedSeriesId) {
-                    fields.updateSeries({ seriesId: selectedSeriesId }, {
-                      onSuccess: (result) => {
-                        if (isSeriesConfirmationRequired(result) && selectedSeriesId) {
-                          setSearchParams({ sheet: 'customerMismatch', seriesId: selectedSeriesId, warning: result.warning });
-                          return;
-                        }
-                        setSearchParams({});
-                        setSelectedSeriesId(null);
-                      },
-                    });
-                  }
-                }}
-                disabled={!selectedSeriesId || fields.isSeriesPending}
-              >
-                {fields.isSeriesPending ? 'Saving…' : 'Add to series'}
-              </Button>
-              <Button variant="outline" onClick={() => { setSearchParams({}); setSelectedSeriesId(null); }}>Cancel</Button>
-            </div>
-          </div>
-        </ResponsiveDialogContent>
-      </ResponsiveDialog>
-
-      <ResponsiveDialog open={sheet === 'customerMismatch'} onOpenChange={(open) => { if (!open) setSearchParams({ sheet: 'series' }); }}>
-        <ResponsiveDialogContent>
-          <ResponsiveDialogHeader>
-            <ResponsiveDialogTitle>Customer mismatch</ResponsiveDialogTitle>
-          </ResponsiveDialogHeader>
-          <ResponsiveDialogDescription className="pt-2">{sheetWarning}</ResponsiveDialogDescription>
-          <div className="flex gap-3 pt-4">
-            <Button
-              onClick={() => {
-                if (sheetSeriesId) {
-                  fields.updateSeries({ seriesId: sheetSeriesId, confirm: true }, {
-                    onSuccess: () => {
-                      setSearchParams({});
-                      setSelectedSeriesId(null);
-                    },
-                  });
-                }
-              }}
-              disabled={fields.isSeriesPending}
-            >
-              {fields.isSeriesPending ? 'Saving…' : 'Continue anyway'}
-            </Button>
-            <Button variant="outline" onClick={() => setSearchParams({ sheet: 'series' })}>Cancel</Button>
-          </div>
-        </ResponsiveDialogContent>
-      </ResponsiveDialog>
     </>
   );
 }

@@ -215,6 +215,8 @@ interface Props {
   /** Hide the People section — the edit drawer renders its own People blocks that
    *  save independently (per-box), separate from this form's global Save. */
   hidePeople?: boolean;
+  /** Hide the Series section — series assignment now lives in the Overview atom. */
+  hideSeries?: boolean;
 }
 
 export function BookingFormFields({
@@ -226,6 +228,7 @@ export function BookingFormFields({
   series,
   hideNotes,
   hidePeople,
+  hideSeries,
 }: Props) {
   return (
     <div className="space-y-6">
@@ -387,8 +390,10 @@ export function BookingFormFields({
         />
       )}
 
-      {/* Series */}
-      <SeriesSection control={control} register={register} series={series} />
+      {/* Series — hidden in the edit drawer; assignment lives in the Overview atom. */}
+      {!hideSeries && (
+        <SeriesSection control={control} register={register} series={series} />
+      )}
 
       {/* Notes — hidden when managed by inline auto-save on the detail page */}
       {!hideNotes && (

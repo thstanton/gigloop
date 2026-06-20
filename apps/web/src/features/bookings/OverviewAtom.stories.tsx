@@ -10,6 +10,11 @@ const meta = {
     initialDate: '2026-08-15',
     initialFee: '2500',
     initialTitle: 'Smith Wedding',
+    initialSeriesId: null,
+    series: [
+      { id: 's1', label: 'Summer Weddings 2026' },
+      { id: 's2', label: 'Hotel Corporate Events' },
+    ],
     onSave: fn(),
     isSaving: false,
     saved: false,
@@ -65,7 +70,7 @@ export const ClearFee: Story = {
 };
 
 export const SavingState: Story = {
-  name: 'Tier-1: pending disables the button and relabels to “Saving…”',
+  name: 'Tier-1: pending disables the button and relabels to "Saving…"',
   args: { isSaving: true },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -76,7 +81,7 @@ export const SavingState: Story = {
 };
 
 export const SavedState: Story = {
-  name: 'Tier-1: success shows an inline “Saved”',
+  name: 'Tier-1: success shows an inline "Saved"',
   args: { saved: true },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -90,5 +95,77 @@ export const ErrorState: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByText(/failed to save/i)).toBeVisible();
+  },
+};
+
+// ─── Series assignment stories ────────────────────────────────────────────────
+
+export const SeriesFieldsVisible: Story = {
+  name: 'Series: toggle pills are visible; Save disabled until a selection differs from initial',
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('button', { name: /^none$/i })).toBeVisible();
+    await expect(canvas.getByRole('button', { name: /existing series/i })).toBeVisible();
+    await expect(canvas.getByRole('button', { name: /new series/i })).toBeVisible();
+    // No series change yet, so Save is disabled.
+    await expect(canvas.getByRole('button', { name: /^save$/i })).toBeDisabled();
+  },
+};
+
+export const SeriesNoneToNew: Story = {
+  name: 'Series: none → new series → save surfaces { series: { mode: "new", label } }',
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: /new series/i }));
+    const labelInput = canvas.getByLabelText('Series label');
+    await userEvent.type(labelInput, 'Hotel Grand — 2026');
+
+    const save = canvas.getByRole('button', { name: /^save$/i });
+    await expect(save).toBeEnabled();
+    await userEvent.click(save);
+
+    await expect(args.onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ series: { mode: 'new', label: 'Hotel Grand — 2026' } }),
+    );
+  },
+};
+
+export const SeriesNoneToExisting: Story = {
+  name: 'Series: none → existing series → save surfaces { series: { mode: "existing", seriesId } }',
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: /existing series/i }));
+
+    // Select from the dropdown
+    const trigger = canvas.getByLabelText('Series');
+    await userEvent.click(trigger);
+    const option = await canvas.findByText('Summer Weddings 2026');
+    await userEvent.click(option);
+
+    const save = canvas.getByRole('button', { name: /^save$/i });
+    await expect(save).toBeEnabled();
+    await userEvent.click(save);
+
+    await expect(args.onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ series: { mode: 'existing', seriesId: 's1' } }),
+    );
+  },
+};
+
+export const SeriesRemove: Story = {
+  name: 'Series: booking already in a series → switch to None → save surfaces { series: { mode: "none" } }',
+  args: { initialSeriesId: 's1' },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    // Booking starts in 'existing' mode (initialSeriesId is set); switching to 'None' is a change.
+    await userEvent.click(canvas.getByRole('button', { name: /^none$/i }));
+
+    const save = canvas.getByRole('button', { name: /^save$/i });
+    await expect(save).toBeEnabled();
+    await userEvent.click(save);
+
+    await expect(args.onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ series: { mode: 'none' } }),
+    );
   },
 };

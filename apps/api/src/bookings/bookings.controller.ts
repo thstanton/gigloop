@@ -91,7 +91,7 @@ export class BookingsController {
     @Param('id') id: string,
     @Body() dto: UpdateBookingSeriesDto,
   ) {
-    return this.service.updateSeries(req.userId, id, dto.seriesId, dto.confirm);
+    return this.service.updateSeries(req.userId, id, dto.seriesId ?? null, dto.confirm, dto.newSeriesLabel);
   }
 
   @ApiOperation({ summary: 'Update a booking' })

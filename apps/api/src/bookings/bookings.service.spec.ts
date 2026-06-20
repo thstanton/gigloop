@@ -1187,6 +1187,20 @@ describe('BookingsService', () => {
 
       await expect(service.updateSeries('u1', 'b1', 's1')).rejects.toThrow(NotFoundException);
     });
+
+    it('creates a new series and assigns the booking when newSeriesLabel is provided', async () => {
+      const newSeries = { id: 'new-s1', customerId: 'c1', customer: { name: 'Jane Smith' } };
+      repo.findOne.mockResolvedValue(bookingWithCustomer);
+      seriesRepo.create.mockResolvedValue(newSeries);
+      seriesRepo.findOneLight.mockResolvedValue(newSeries);
+      (repo.countNonVoidInvoices as jest.Mock).mockResolvedValue(0);
+      (repo.updateSeries as jest.Mock).mockResolvedValue({ ...bookingWithCustomer, seriesId: 'new-s1' });
+
+      await service.updateSeries('u1', 'b1', null, undefined, 'Hotel Grand Events');
+
+      expect(seriesRepo.create).toHaveBeenCalledWith('u1', 'Hotel Grand Events', 'c1');
+      expect(repo.updateSeries).toHaveBeenCalledWith('b1', 'new-s1');
+    });
   });
 
   describe('updateChecklistItem', () => {

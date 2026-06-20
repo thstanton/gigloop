@@ -1,7 +1,7 @@
 import { useAuth } from '@clerk/react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Pencil, X } from 'lucide-react';
+import { Pencil } from 'lucide-react';
 import { useBooking } from '@/lib/hooks/useBooking';
 import { useBookingChecklist } from '@/lib/hooks/useBookingChecklist';
 import { useBookingFields } from '@/lib/hooks/useBookingFields';
@@ -190,16 +190,8 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
           {booking.series && (
             <section>
               <SectionHeader label="Series" />
-              <span className="inline-flex items-center gap-1.5 text-sm text-foreground border border-border rounded-full px-3 py-1.5">
+              <span className="inline-flex items-center text-sm text-foreground border border-border rounded-full px-3 py-1.5">
                 {booking.series.label}
-                <button
-                  type="button"
-                  onClick={() => fields.updateSeries({ seriesId: null })}
-                  className="hover:text-foreground transition-colors"
-                  aria-label="Remove from series"
-                >
-                  <X size={12} />
-                </button>
               </span>
             </section>
           )}

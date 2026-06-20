@@ -5,7 +5,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { OverviewQuickTweakSheet } from './OverviewQuickTweakSheet';
 import { apiPatch } from '@/lib/api';
 
+vi.mock('@clerk/react', () => ({ useAuth: () => ({ isLoaded: true }) }));
+
 vi.mock('@/lib/api', () => ({
+  apiGet: vi.fn().mockResolvedValue([]),
   apiPatch: vi.fn().mockResolvedValue({}),
 }));
 
@@ -19,6 +22,7 @@ function renderSheet() {
         initialDate="2026-08-15"
         initialFee="2500"
         initialTitle="Smith Wedding"
+        initialSeriesId={null}
         open
         onOpenChange={() => {}}
       />

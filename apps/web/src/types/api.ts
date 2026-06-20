@@ -338,7 +338,8 @@ export interface UpdateBookingInput {
 }
 
 export interface UpdateBookingSeriesInput {
-  seriesId: string | null;
+  seriesId?: string | null;
+  newSeriesLabel?: string;
   confirm?: boolean;
 }
 

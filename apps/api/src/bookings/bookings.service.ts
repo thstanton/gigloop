@@ -585,9 +585,14 @@ export class BookingsService {
     return null;
   }
 
-  async updateSeries(userId: string, bookingId: string, seriesId: string | null, confirm?: boolean) {
+  async updateSeries(userId: string, bookingId: string, seriesId: string | null, confirm?: boolean, newSeriesLabel?: string) {
     const booking = await this.findOne(userId, bookingId);
     const previousSeriesId = (booking as { seriesId?: string | null }).seriesId ?? null;
+
+    if (newSeriesLabel) {
+      const created = await this.seriesRepo.create(userId, newSeriesLabel, booking.customerId);
+      seriesId = created.id;
+    }
 
     if (seriesId !== null) {
       const earlyReturn = await this.checkSeriesJoin(userId, bookingId, seriesId, booking, confirm);

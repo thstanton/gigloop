@@ -171,6 +171,7 @@ export default function BookingEditDrawer({ booking }: Props) {
               errors={errors}
               hideNotes
               hidePeople
+              hideSeries
             />
 
             {mutation.isError && (

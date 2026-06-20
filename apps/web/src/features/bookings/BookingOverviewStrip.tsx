@@ -1,6 +1,6 @@
 import { useAuth } from '@clerk/react';
 import { useSearchParams } from 'react-router-dom';
-import { Eye, Pencil, Wrench, X } from 'lucide-react';
+import { Eye, Pencil, Wrench } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { useBooking } from '@/lib/hooks/useBooking';
@@ -115,26 +115,10 @@ export default function BookingOverviewStrip({ bookingId }: BookingOverviewStrip
                 + Add fee
               </button>
             )}
-            {booking.series ? (
-              <span className="hidden md:inline-flex items-center gap-1.5 text-sm text-foreground border border-border rounded-full px-3 py-1.5">
+            {booking.series && (
+              <span className="hidden md:inline-flex items-center text-sm text-foreground border border-border rounded-full px-3 py-1.5">
                 {booking.series.label}
-                <button
-                  type="button"
-                  onClick={() => fields.updateSeries({ seriesId: null })}
-                  className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center -m-2 hover:text-foreground transition-colors"
-                  aria-label="Remove from series"
-                >
-                  <X size={12} />
-                </button>
               </span>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setSearchParams({ sheet: 'series' })}
-                className="hidden md:inline text-sm text-muted hover:text-foreground transition-colors underline underline-offset-2"
-              >
-                + Add to series
-              </button>
             )}
           </div>
         </div>
