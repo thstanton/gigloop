@@ -15,7 +15,6 @@ import { useBookingFields } from '@/lib/hooks/useBookingFields';
 import { useCopyBooking } from '@/lib/hooks/useCopyBooking';
 import { useContractActions } from '@/lib/hooks/useContractActions';
 import { useBookingInvoices } from '@/lib/hooks/useBookingInvoices';
-import BookingEditDrawer from '@/features/bookings/BookingEditDrawer';
 import { CopyEventDialog } from '@/features/bookings/CopyEventDialog';
 import ContractSheet from '@/features/bookings/ContractSheet';
 import ContactEditSheet from '@/features/contacts/ContactEditSheet';
@@ -133,7 +132,6 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
         open={sheet === 'contract'}
         onClose={() => { setSearchParams({}); }}
       />
-      <BookingEditDrawer booking={booking} />
       <ContactEditSheet
         contact={editingContact}
         onClose={() => { setSearchParams({}); }}

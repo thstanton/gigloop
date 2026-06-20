@@ -12,6 +12,8 @@ import {
   type BookingFormValues,
 } from '@/features/bookings/BookingFormFields';
 import { ChecklistStep } from '@/features/bookings/ChecklistStep';
+import { CreatedCheckpoint } from '@/features/bookings/CreatedCheckpoint';
+import { EVENT_TYPE_LABELS } from '@/lib/constants';
 import { apiGet, apiPost } from '@/lib/api';
 import type {
   BookingDetail,
@@ -55,6 +57,7 @@ export default function BookingNewPage() {
 
   const [step, setStep] = useState<1 | 2>(1);
   const [pendingValues, setPendingValues] = useState<BookingFormValues | null>(null);
+  const [created, setCreated] = useState<BookingDetail | null>(null);
 
   const locationState = location.state as { customerId?: string; venueId?: string; bookingAgentId?: string; date?: string; seriesId?: string } | null;
 
@@ -119,14 +122,28 @@ export default function BookingNewPage() {
   const mutation = useMutation({
     mutationFn: ({ values, checklistItems }: { values: BookingFormValues; checklistItems: ChecklistDefaultItem[] }) =>
       apiPost<BookingDetail>('/bookings', buildBookingPayload(values, checklistItems)),
-    onSuccess: (created) => {
+    onSuccess: (booking) => {
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
-      navigate(`/admin/bookings/${created.id}`);
+      // Land on the commit checkpoint (slice #525) rather than jumping straight to the
+      // booking — the musician chooses Finish or Continue setup from there.
+      setCreated(booking);
     },
   });
 
   const checklistDefaults: ChecklistDefaultItem[] =
     userProfile?.preferences?.checklistDefaults || [];
+
+  if (created) {
+    return (
+      <div className="px-6 py-8 max-w-3xl mx-auto">
+        <CreatedCheckpoint
+          title={created.title || EVENT_TYPE_LABELS[created.eventType]}
+          onFinish={() => navigate(`/admin/bookings/${created.id}`)}
+          onContinue={() => navigate(`/admin/bookings/${created.id}/builder`)}
+        />
+      </div>
+    );
+  }
 
   if (step === 2 && pendingValues) {
     return (

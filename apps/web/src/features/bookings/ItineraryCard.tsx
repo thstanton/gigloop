@@ -1,6 +1,6 @@
 import { Fragment } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { Clock, Pencil, Plus } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Clock, Package, Pencil, Plus } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { GhostButton } from '@/components/common/GhostButton';
 import { EmptyState } from '@/components/common/EmptyState';
@@ -17,6 +17,9 @@ interface ItineraryCardProps {
   sets: PerformanceSet[];
   packages: BookingPackageSummary[];
   hideWhenEmpty?: boolean;
+  /** When set, the card shows an "Apply template" affordance that deep-links into the
+   *  Builder's Package Templates step (PRD #511 — no separate page card; slice #525). */
+  bookingId?: string;
 }
 
 /** Minutes → human duration, e.g. 45 → "45 min", 90 → "1 hr 30 min". */
@@ -106,8 +109,9 @@ function setLabel(set: PerformanceSet): string {
   return set.label ? `${set.label} (${dur})` : dur;
 }
 
-export default function ItineraryCard({ logistics, sets, packages, hideWhenEmpty = false }: ItineraryCardProps) {
+export default function ItineraryCard({ logistics, sets, packages, hideWhenEmpty = false, bookingId }: ItineraryCardProps) {
   const [, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const rows = buildRows(logistics, sets, packages);
 
   if (hideWhenEmpty && rows.length === 0) return null;
@@ -132,9 +136,20 @@ export default function ItineraryCard({ logistics, sets, packages, hideWhenEmpty
     <Card
       title="Itinerary"
       action={
-        <GhostButton variant="primary" size="xs" icon={<Pencil size={13} />} onClick={() => setSearchParams({ sheet: 'itineraryTweak' })}>
-          Edit
-        </GhostButton>
+        <div className="flex items-center gap-3">
+          {bookingId && (
+            <GhostButton
+              size="xs"
+              icon={<Package size={13} />}
+              onClick={() => navigate(`/admin/bookings/${bookingId}/builder?section=templates`)}
+            >
+              Apply template
+            </GhostButton>
+          )}
+          <GhostButton variant="primary" size="xs" icon={<Pencil size={13} />} onClick={() => setSearchParams({ sheet: 'itineraryTweak' })}>
+            Edit
+          </GhostButton>
+        </div>
       }
     >
       <div>

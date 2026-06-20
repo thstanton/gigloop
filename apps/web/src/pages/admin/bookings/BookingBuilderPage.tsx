@@ -1,6 +1,6 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   CalendarClock,
   ChevronLeft,
@@ -228,6 +228,7 @@ function isConfirmationRequired(r: unknown): r is Required<UpdateBookingSeriesRe
 export default function BookingBuilderPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { isLoaded } = useAuth();
   const queryClient = useQueryClient();
   const { data: booking, isLoading, isError } = useBooking(id!);
@@ -291,6 +292,22 @@ export default function BookingBuilderPage() {
     setActiveId(sectionId);
     sectionRefs[sectionId].current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
+
+  // Deep-link into a step (?section=…): the checklist's structural items and the
+  // Itinerary-card "apply a template" affordance land here (slice #525). Fires once,
+  // after the booking (and therefore the sections) have mounted. Scrolls via the
+  // stable DOM id so the only deps are primitives (no unstable scrollTo/refs).
+  const didDeepLink = useRef(false);
+  const deepLinkSection = searchParams.get('section');
+  const bookingLoaded = !!booking;
+  useEffect(() => {
+    if (didDeepLink.current || !bookingLoaded || !deepLinkSection) return;
+    if (!SPINE.some((s) => s.id === deepLinkSection)) return;
+    didDeepLink.current = true;
+    setActiveId(deepLinkSection as SpineId);
+    const el = document.getElementById(`builder-${deepLinkSection}`);
+    requestAnimationFrame(() => el?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  }, [bookingLoaded, deepLinkSection]);
 
   // ── Overview mutations ─────────────────────────────────────────────────────
 

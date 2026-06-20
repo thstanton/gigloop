@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import confetti from 'canvas-confetti';
 import { useChecklistActions } from '@/lib/hooks/useChecklistActions';
 import {
@@ -61,6 +61,14 @@ function dueDateDisplay(dueDate: string | null | undefined): { text: string; cla
 type ChecklistAction = 'create_deposit_invoice' | 'create_balance_invoice' | 'create_contract';
 type MarkDoneKey = 'mark_contract_signed' | 'mark_deposit_received';
 
+// Structural setup items (PRD #511 Module D) have no shortcut action — their "done"
+// state is auto-completed from data. Their action instead deep-links into the Builder
+// at the relevant step so the musician resolves the prompt in context (Story 25, #525).
+const STRUCTURAL_BUILDER_SECTION: Record<string, string> = {
+  build_itinerary: 'itinerary',
+  add_venue: 'venue',
+};
+
 interface ChecklistItemIconProps {
   state: ChecklistItemState;
   isPlayTheGig: boolean;
@@ -104,6 +112,7 @@ function ChecklistItemIcon({ state, isPlayTheGig, itemId, onToggle }: Readonly<C
 interface ChecklistItemShortcutsProps {
   shortcutType?: string;
   shortcutTemplateType?: string;
+  itemKey?: string | null;
   isFailed: boolean;
   isActionPending: boolean;
   itemId: string;
@@ -111,10 +120,15 @@ interface ChecklistItemShortcutsProps {
   onOpenCompose: (templateType?: string) => void;
   onChecklistAction: (action: ChecklistAction) => void;
   onMarkDone: (key: MarkDoneKey) => void;
+  onDeepLink: (section: string) => void;
 }
 
-function ChecklistItemShortcuts({ shortcutType, shortcutTemplateType, isFailed, isActionPending, itemId, onToggle, onOpenCompose, onChecklistAction, onMarkDone }: ChecklistItemShortcutsProps) {
+function ChecklistItemShortcuts({ shortcutType, shortcutTemplateType, itemKey, isFailed, isActionPending, itemId, onToggle, onOpenCompose, onChecklistAction, onMarkDone, onDeepLink }: ChecklistItemShortcutsProps) {
   const label = isFailed ? 'Retry' : undefined;
+  const builderSection = itemKey ? STRUCTURAL_BUILDER_SECTION[itemKey] : undefined;
+  if (builderSection) {
+    return <button onClick={() => onDeepLink(builderSection)} className="text-xs text-primary hover:underline">{label ?? 'Set up'}</button>;
+  }
   if (shortcutType === 'send_email') {
     return <button onClick={() => onOpenCompose(shortcutTemplateType)} className="text-xs text-primary hover:underline">{label ?? 'Send'}</button>;
   }
@@ -134,6 +148,7 @@ interface ChecklistItemRowProps {
   onOpenCompose: (templateType?: string) => void;
   onChecklistAction: (action: ChecklistAction) => void;
   onMarkDone: (key: MarkDoneKey) => void;
+  onDeepLink: (section: string) => void;
 }
 
 function labelClass(isDone: boolean, isFailed: boolean): string {
@@ -142,7 +157,7 @@ function labelClass(isDone: boolean, isFailed: boolean): string {
   return 'text-foreground';
 }
 
-function ChecklistItemRow({ item, isActionPending, onToggle, onOpenCompose, onChecklistAction, onMarkDone }: Readonly<ChecklistItemRowProps>) {
+function ChecklistItemRow({ item, isActionPending, onToggle, onOpenCompose, onChecklistAction, onMarkDone, onDeepLink }: Readonly<ChecklistItemRowProps>) {
   const isDone = item.state === 'COMPLETE';
   const isFailed = item.state === 'FAILED';
   const isBlocked = item.state === 'BLOCKED';
@@ -172,6 +187,7 @@ function ChecklistItemRow({ item, isActionPending, onToggle, onOpenCompose, onCh
           <ChecklistItemShortcuts
             shortcutType={item.shortcutType}
             shortcutTemplateType={item.shortcutTemplateType}
+            itemKey={item.key}
             isFailed={isFailed}
             isActionPending={isActionPending}
             itemId={item.id}
@@ -179,6 +195,7 @@ function ChecklistItemRow({ item, isActionPending, onToggle, onOpenCompose, onCh
             onOpenCompose={onOpenCompose}
             onChecklistAction={onChecklistAction}
             onMarkDone={onMarkDone}
+            onDeepLink={onDeepLink}
           />
         </div>
       )}
@@ -255,8 +272,12 @@ export default function ChecklistSection({
 }: ChecklistSectionProps) {
   const { handleChecklistAction, handleMarkDone, isActionPending } = useChecklistActions(bookingId);
   const [, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   function openCompose(templateType?: string) {
     setSearchParams(templateType ? { sheet: 'compose', templateType } : { sheet: 'compose' });
+  }
+  function deepLinkBuilder(section: string) {
+    navigate(`/admin/bookings/${bookingId}/builder?section=${section}`);
   }
   const [showAllChecklist, setShowAllChecklist] = useState(false);
   const [showAddItem, setShowAddItem] = useState(false);
@@ -305,7 +326,7 @@ export default function ChecklistSection({
     itemsByStage.get(k)!.push(item);
   }
 
-  const rowProps = { onToggle, onOpenCompose: openCompose, onChecklistAction: handleChecklistAction, onMarkDone: handleMarkDone, isActionPending };
+  const rowProps = { onToggle, onOpenCompose: openCompose, onChecklistAction: handleChecklistAction, onMarkDone: handleMarkDone, onDeepLink: deepLinkBuilder, isActionPending };
 
   return (
     <section>

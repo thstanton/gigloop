@@ -85,7 +85,7 @@ export default function BookingOverviewStrip({ bookingId }: BookingOverviewStrip
                 <Eye size={16} />
                 <span className="hidden md:inline">Client portal</span>
               </a>
-              {/* Temporary entry — slice #525 replaces setSearchParams with this navigate */}
+              {/* Global "Edit booking" → the Builder one-pager (slice #525; BookingEditDrawer retired). */}
               <Button
                 size="sm"
                 className="w-9 px-0 md:w-auto md:px-3"
