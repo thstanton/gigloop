@@ -136,10 +136,12 @@ export const SeriesNoneToExisting: Story = {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('button', { name: /existing series/i }));
 
-    // Select from the dropdown
+    // Select from the dropdown. Radix Select renders its options in a portal on
+    // document.body, outside canvasElement — query the body, not the canvas.
     const trigger = canvas.getByLabelText('Series');
     await userEvent.click(trigger);
-    const option = await canvas.findByText('Summer Weddings 2026');
+    const body = within(canvasElement.ownerDocument.body);
+    const option = await body.findByText('Summer Weddings 2026');
     await userEvent.click(option);
 
     const save = canvas.getByRole('button', { name: /^save$/i });

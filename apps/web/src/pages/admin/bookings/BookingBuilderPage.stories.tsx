@@ -41,15 +41,18 @@ export const AllSections: Story = {
   parameters: { msw: { handlers: makeBuilderHandlers('FullySet') } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    // All eight spine sections render.
-    await expect(await canvas.findByText('Overview')).toBeVisible();
-    await expect(canvas.getByText('People')).toBeVisible();
-    await expect(canvas.getByText('Venue')).toBeVisible();
-    await expect(canvas.getByText('Package Templates')).toBeVisible();
-    await expect(canvas.getByText('Itinerary')).toBeVisible();
-    await expect(canvas.getByText('Details')).toBeVisible();
-    await expect(canvas.getByText('Music')).toBeVisible();
-    await expect(canvas.getByText('Notes')).toBeVisible();
+    // All eight spine sections render. Each section's <h2> precedes any same-named
+    // atom sub-heading in DOM order (the rail uses buttons, not headings), so the
+    // first heading match is the section title.
+    await canvas.findByRole('heading', { name: 'Overview' });
+    await expect(canvas.getAllByRole('heading', { name: 'Overview' })[0]).toBeVisible();
+    await expect(canvas.getAllByRole('heading', { name: 'People' })[0]).toBeVisible();
+    await expect(canvas.getAllByRole('heading', { name: 'Venue' })[0]).toBeVisible();
+    await expect(canvas.getAllByRole('heading', { name: 'Package Templates' })[0]).toBeVisible();
+    await expect(canvas.getAllByRole('heading', { name: 'Itinerary' })[0]).toBeVisible();
+    await expect(canvas.getAllByRole('heading', { name: 'Details' })[0]).toBeVisible();
+    await expect(canvas.getAllByRole('heading', { name: 'Music' })[0]).toBeVisible();
+    await expect(canvas.getAllByRole('heading', { name: 'Notes' })[0]).toBeVisible();
     // Completeness rail is present on desktop.
     await expect(canvas.getByText('Sections')).toBeVisible();
     // Done button is accessible.
@@ -63,8 +66,9 @@ export const ExitBackstopOnDone: Story = {
   parameters: { msw: { handlers: makeBuilderHandlers('MissingVenue') } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    // Wait for the Builder to fully load.
-    await canvas.findByText('Overview');
+    // Wait for the Builder to fully load (target the section heading — the label also
+    // appears in the completeness rail).
+    await canvas.findByRole('heading', { name: 'Overview' });
 
     // Click the Done button (desktop rail version).
     const doneButtons = canvas.getAllByRole('button', { name: /^done$/i });
