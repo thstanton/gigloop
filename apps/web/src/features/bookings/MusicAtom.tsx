@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
-import { SubLabel } from '@/components/common/SubLabel';
 import { DEFAULT_ENABLED_GENRES } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 import { GenrePills, SpecialRequestsEditor } from './MusicFields';
@@ -181,7 +180,7 @@ export function MusicAtom({
       <div className={cn('space-y-6', !on && 'opacity-50 pointer-events-none select-none')}>
         {/* Genres first — the fundamental thing, matching the portal's section order. */}
         <div>
-          <SubLabel>Genres</SubLabel>
+          <p className="text-sm font-medium text-foreground">Genres</p>
           <p className="mt-1 mb-3 text-sm text-muted">
             The genres your client can browse when choosing songs from your library.
           </p>
@@ -190,7 +189,7 @@ export function MusicAtom({
 
         {/* Special requests — grouped by booking package (echoing the Itinerary atom). */}
         <div>
-          <SubLabel>Special requests</SubLabel>
+          <p className="text-sm font-medium text-foreground">Special requests</p>
           <p className="mt-1 mb-3 text-sm text-muted">
             Add the moments that call for a specific song — first dance, cake cutting, last song.
             Your client chooses the song for each.

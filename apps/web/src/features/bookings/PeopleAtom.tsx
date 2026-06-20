@@ -113,14 +113,16 @@ function RoleField({ label, preferredRole, required, showCommission, initialCont
       <Tabs value={mode} onValueChange={handleModeChange}>
         <div className="flex items-center justify-between gap-3">
           {header}
-          <TabsList className="h-auto p-0.5 bg-secondary border border-border">
+          <TabsList size="sm" className="bg-secondary border border-border">
             <TabsTrigger
+              size="sm"
               value="existing"
               className="text-foreground/60 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-none"
             >
               Select existing
             </TabsTrigger>
             <TabsTrigger
+              size="sm"
               value="new"
               className="text-foreground/60 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-none"
             >
