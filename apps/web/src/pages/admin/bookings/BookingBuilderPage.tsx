@@ -762,7 +762,7 @@ export default function BookingBuilderPage() {
         </div>
 
         {/* ── Completeness rail (desktop only) ─────────────────────────────── */}
-        <aside className="hidden md:block sticky top-8">
+        <aside className="hidden md:block sticky top-20">
           <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted">Sections</p>
           <CompletenessRail completeness={completeness} onScrollTo={scrollTo} />
           <div className="mt-6">

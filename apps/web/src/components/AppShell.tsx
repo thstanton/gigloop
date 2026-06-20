@@ -339,7 +339,7 @@ export default function AppShell() {
       {/* Content — offset for sidebar on desktop, top bar on mobile */}
       <div className="md:ml-60 flex flex-col min-h-screen pt-14 pb-16 md:pb-0">
         <DesktopTopBar businessName={businessName} isLoading={isLoading} />
-        <main id="main-content" className="flex-1 md:overflow-y-auto">
+        <main id="main-content" className="flex-1">
           <Outlet />
         </main>
       </div>
