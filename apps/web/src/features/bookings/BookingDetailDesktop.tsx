@@ -20,11 +20,12 @@ import InlineNotes from '@/features/bookings/InlineNotes';
 import CommunicationsSection from '@/features/bookings/CommunicationsSection';
 import ItineraryCard from '@/features/bookings/ItineraryCard';
 import DetailsCard from '@/features/bookings/DetailsCard';
-import PerformanceSection from '@/features/bookings/PerformanceSection';
 import MusicFormSection from '@/features/bookings/MusicFormSection';
 import { InlineVenueAdd } from '@/features/bookings/InlineVenueAdd';
 import { BookingVenueMapWidget } from '@/features/bookings/BookingVenueMapWidget';
 import { SectionHeader } from '@/components/common/SectionHeader';
+import { GhostButton } from '@/components/common/GhostButton';
+import { Pencil } from 'lucide-react';
 import { apiGet } from '@/lib/api';
 import { EVENT_TYPE_LABELS } from '@/lib/constants';
 import type {
@@ -51,7 +52,7 @@ export function BookingDetailDesktop({ bookingId }: BookingDetailDesktopProps) {
     enabled: isLoaded && !!booking && booking.hasMusicFormConfig,
   });
 
-  const turnOnMusicForm = useConfigureMusicForm(bookingId, booking, () => editSection('musicForm'));
+  const turnOnMusicForm = useConfigureMusicForm(bookingId, booking, () => setSearchParams({ sheet: 'musicTweak' }));
   const contractActions = useContractActions(bookingId);
   const fields = useBookingFields(bookingId);
   const { checklist, checklistLoading, toggleItem, addItem, isAddingItem } = useBookingChecklist(bookingId, booking, isLoaded);
@@ -71,10 +72,6 @@ export function BookingDetailDesktop({ bookingId }: BookingDetailDesktopProps) {
     setSearchParams({ sheet: 'invoice', invoiceId: invoice.id });
   }
 
-  function editSection(section: string) {
-    setSearchParams({ sheet: 'bookingEdit', section });
-  }
-
   return (
     <div className="grid grid-cols-[3fr_2fr] gap-8 items-start mt-6">
 
@@ -87,6 +84,7 @@ export function BookingDetailDesktop({ bookingId }: BookingDetailDesktopProps) {
           <div className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <ItineraryCard
+                bookingId={bookingId}
                 logistics={booking.logistics}
                 sets={booking.sets}
                 packages={booking.packages}
@@ -107,7 +105,7 @@ export function BookingDetailDesktop({ bookingId }: BookingDetailDesktopProps) {
               isLoading={musicFormConfigLoading}
               onTurnOn={() => turnOnMusicForm.mutate()}
               isTurningOn={turnOnMusicForm.isPending}
-              onEdit={() => editSection('musicForm')}
+              onEdit={() => setSearchParams({ sheet: 'musicTweak' })}
             />
           </div>
         </section>
@@ -141,16 +139,27 @@ export function BookingDetailDesktop({ bookingId }: BookingDetailDesktopProps) {
 
         {/* People */}
         <section>
-          <SectionHeader label="People" />
+          <SectionHeader
+            label="People"
+            action={
+              <GhostButton
+                variant="primary"
+                size="xs"
+                icon={<Pencil size={13} />}
+                onClick={() => setSearchParams({ sheet: 'peopleTweak' })}
+              >
+                Edit
+              </GhostButton>
+            }
+          />
           <div className="border-t border-border">
-            <PersonCard role="Customer" contact={booking.customer} linkState={backState} onEdit={() => setSearchParams({ sheet: 'contactEdit', contactId: booking.customer.id })} />
+            <PersonCard role="Customer" contact={booking.customer} linkState={backState} />
             {booking.bookingAgent && (
               <PersonCard
                 role="Booking agent"
                 contact={booking.bookingAgent}
                 commissionArrangement={booking.bookingAgent.commissionArrangement}
                 linkState={backState}
-                onEdit={() => setSearchParams({ sheet: 'contactEdit', contactId: booking.bookingAgent!.id })}
               />
             )}
           </div>
@@ -216,11 +225,6 @@ export function BookingDetailDesktop({ bookingId }: BookingDetailDesktopProps) {
 
         {/* Documents */}
         <DocumentsCard bookingId={bookingId} />
-
-        <PerformanceSection
-          booking={booking}
-          hideWhenEmpty
-        />
 
       </div>{/* end right column */}
 

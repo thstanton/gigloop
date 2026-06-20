@@ -323,6 +323,13 @@ describe('BookingsService', () => {
       expect(result).toBe(createdBooking);
     });
 
+    it('evaluates auto-complete rules after commit so structural items reflect data set at creation (#511)', async () => {
+      repo.create.mockResolvedValue(createdBooking);
+      const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', checklistItems: [] };
+      await service.create('u1', dto);
+      expect(evaluator.evaluate).toHaveBeenCalledWith(createdBooking.id);
+    });
+
     it('seeds checklist items from dto.checklistItems', async () => {
       repo.create.mockResolvedValue(createdBooking);
       const checklistItems = [{ label: 'Send quote', key: 'send_quote', completedBy: 'USER' as const, dependsOn: [], autoCompleteRule: null, requiredForStatus: 'PROVISIONAL' as const, dueDateRule: null }];
@@ -590,6 +597,22 @@ describe('BookingsService', () => {
       expect(checklistRepo.recomputeChecklistDueDates).not.toHaveBeenCalled();
     });
 
+    it('re-evaluates auto-complete rules when venueId changes (auto-completes add_venue — #511)', async () => {
+      const updated = { ...booking, date: new Date(), createdAt: new Date() };
+      repo.findOne.mockResolvedValue(booking);
+      repo.update.mockResolvedValue(updated);
+      await service.update('u1', 'b1', { venueId: 'venue-1' });
+      expect(evaluator.evaluate).toHaveBeenCalledWith('b1');
+    });
+
+    it('does not re-evaluate when neither status nor venueId change', async () => {
+      const updated = { ...booking, date: new Date(), createdAt: new Date() };
+      repo.findOne.mockResolvedValue(booking);
+      repo.update.mockResolvedValue(updated);
+      await service.update('u1', 'b1', { title: 'New title' });
+      expect(evaluator.evaluate).not.toHaveBeenCalled();
+    });
+
     it('round-trips logistics without modification', async () => {
       const logistics = {
         arrivalTime:    { value: '14:00', shareWithBand: true,  shareWithClient: false },
@@ -630,6 +653,15 @@ describe('BookingsService', () => {
       repo.applyPackageTemplate.mockResolvedValue(rawBooking);
       await service.applyPackageTemplate('u1', 'b1', 'f1');
       expect(repo.applyPackageTemplate).toHaveBeenCalledWith('u1', 'b1', tmpl);
+    });
+
+    it('triggers evaluate after applying (so build_itinerary auto-completes for template-seeded sets — Story 21)', async () => {
+      const tmpl = { id: 'f1', label: 'Ceremony', icon: 'heart', keyMoments: [], defaultGenreSelection: [], slots: [] };
+      repo.findOne.mockResolvedValue(rawBooking);
+      repo.findPackageTemplates.mockResolvedValue([tmpl]);
+      repo.applyPackageTemplate.mockResolvedValue(rawBooking);
+      await service.applyPackageTemplate('u1', 'b1', 'f1');
+      expect(evaluator.evaluate).toHaveBeenCalledWith('b1');
     });
 
     it('offers the template key moments/genres as a suggestion when the form is on, without forcing them (ADR-0046 / #502)', async () => {
@@ -741,6 +773,13 @@ describe('BookingsService', () => {
       await expect(service.addSet('u1', 'missing', { order: 1, duration: 60 })).rejects.toThrow(NotFoundException);
       expect(repo.addSet).not.toHaveBeenCalled();
     });
+
+    it('triggers evaluate after adding (so build_itinerary can auto-complete — Story 21)', async () => {
+      repo.findOne.mockResolvedValue(booking);
+      repo.addSet.mockResolvedValue(set);
+      await service.addSet('u1', 'b1', { order: 1, duration: 60 });
+      expect(evaluator.evaluate).toHaveBeenCalledWith('b1');
+    });
   });
 
   describe('updateSet', () => {
@@ -773,6 +812,36 @@ describe('BookingsService', () => {
       repo.updateSet.mockResolvedValue(set);
       await service.updateSet('u1', 'b1', 's1', {});
       expect(repo.findSet).toHaveBeenCalledWith('u1', 'b1', 's1');
+    });
+
+    // Re-parenting (#521): moving a set between packages persists packageId as a set-row change.
+    it('re-parents the set to a package on the same booking', async () => {
+      repo.findOne.mockResolvedValue(booking);
+      repo.findSet.mockResolvedValue(set);
+      repo.findBookingPackage.mockResolvedValue({ id: 'pkg1', bookingId: 'b1' });
+      const moved = { ...set, packageId: 'pkg1' };
+      repo.updateSet.mockResolvedValue(moved);
+      const result = await service.updateSet('u1', 'b1', 's1', { packageId: 'pkg1' });
+      expect(repo.findBookingPackage).toHaveBeenCalledWith('u1', 'b1', 'pkg1');
+      expect(repo.updateSet).toHaveBeenCalledWith('s1', { packageId: 'pkg1' });
+      expect(result).toBe(moved);
+    });
+
+    it('ungroups the set when packageId is null — no package lookup needed', async () => {
+      repo.findOne.mockResolvedValue(booking);
+      repo.findSet.mockResolvedValue(set);
+      repo.updateSet.mockResolvedValue({ ...set, packageId: null });
+      await service.updateSet('u1', 'b1', 's1', { packageId: null });
+      expect(repo.findBookingPackage).not.toHaveBeenCalled();
+      expect(repo.updateSet).toHaveBeenCalledWith('s1', { packageId: null });
+    });
+
+    it('rejects re-parenting to a package that is not on this booking', async () => {
+      repo.findOne.mockResolvedValue(booking);
+      repo.findSet.mockResolvedValue(set);
+      repo.findBookingPackage.mockResolvedValue(null);
+      await expect(service.updateSet('u1', 'b1', 's1', { packageId: 'other-booking-pkg' })).rejects.toThrow(NotFoundException);
+      expect(repo.updateSet).not.toHaveBeenCalled();
     });
   });
 
@@ -1117,6 +1186,20 @@ describe('BookingsService', () => {
       seriesRepo.findOneLight.mockResolvedValue(null);
 
       await expect(service.updateSeries('u1', 'b1', 's1')).rejects.toThrow(NotFoundException);
+    });
+
+    it('creates a new series and assigns the booking when newSeriesLabel is provided', async () => {
+      const newSeries = { id: 'new-s1', customerId: 'c1', customer: { name: 'Jane Smith' } };
+      repo.findOne.mockResolvedValue(bookingWithCustomer);
+      seriesRepo.create.mockResolvedValue(newSeries);
+      seriesRepo.findOneLight.mockResolvedValue(newSeries);
+      (repo.countNonVoidInvoices as jest.Mock).mockResolvedValue(0);
+      (repo.updateSeries as jest.Mock).mockResolvedValue({ ...bookingWithCustomer, seriesId: 'new-s1' });
+
+      await service.updateSeries('u1', 'b1', null, undefined, 'Hotel Grand Events');
+
+      expect(seriesRepo.create).toHaveBeenCalledWith('u1', 'Hotel Grand Events', 'c1');
+      expect(repo.updateSeries).toHaveBeenCalledWith('b1', 'new-s1');
     });
   });
 

@@ -1,7 +1,7 @@
 import { useAuth } from '@clerk/react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { X } from 'lucide-react';
+import { Clock, ClipboardList, Info, MapPin, Pencil } from 'lucide-react';
 import { useBooking } from '@/lib/hooks/useBooking';
 import { useBookingChecklist } from '@/lib/hooks/useBookingChecklist';
 import { useBookingFields } from '@/lib/hooks/useBookingFields';
@@ -22,10 +22,11 @@ import ContractCard from '@/features/bookings/ContractCard';
 import SeriesInvoiceCard from '@/features/bookings/SeriesInvoiceCard';
 import InvoiceSection from '@/features/bookings/InvoiceSection';
 import { DocumentsCard } from '@/features/bookings/DocumentsCard';
-import PerformanceSection from '@/features/bookings/PerformanceSection';
 import MusicFormSection from '@/features/bookings/MusicFormSection';
+import { AddToTheDayCard, type AddToTheDayConcern } from '@/features/bookings/AddToTheDayCard';
 import CommunicationsSection from '@/features/bookings/CommunicationsSection';
 import { SectionHeader } from '@/components/common/SectionHeader';
+import { GhostButton } from '@/components/common/GhostButton';
 import { apiGet } from '@/lib/api';
 import type {
   Invoice,
@@ -72,7 +73,7 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
     enabled: isLoaded && !!booking && booking.hasMusicFormConfig,
   });
 
-  const turnOnMusicForm = useConfigureMusicForm(bookingId, booking, () => editSection('musicForm'));
+  const turnOnMusicForm = useConfigureMusicForm(bookingId, booking, () => setSearchParams({ sheet: 'musicTweak' }));
   const contractActions = useContractActions(bookingId);
   const fields = useBookingFields(bookingId);
   const {
@@ -96,16 +97,34 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
       ? 'checklist'
       : 'onTheDay';
 
+  // Derive which PM-hat concerns are missing so AddToTheDayCard can list them.
+  const logistics = booking.logistics;
+  const itineraryEmpty =
+    !booking.sets.length &&
+    !logistics?.arrivalTime?.value &&
+    !logistics?.soundCheckTime?.value &&
+    !logistics?.finishTime?.value;
+  const SYSTEM_DETAIL_KEYS = ['dressCode', 'performanceSpace', 'foodProvided', 'greenRoom', 'equipmentRequired'] as const;
+  const ALL_SYSTEM_KEYS = new Set(['arrivalTime', 'soundCheckTime', 'finishTime', ...SYSTEM_DETAIL_KEYS]);
+  const detailsEmpty =
+    !SYSTEM_DETAIL_KEYS.some((k) => !!(logistics ?? {})[k]?.value) &&
+    !Object.entries(logistics ?? {}).some(([k, e]) => !ALL_SYSTEM_KEYS.has(k) && !!e.value);
+  const venueEmpty = !booking.venue;
+  const musicOff = !booking.hasMusicFormConfig;
+
+  const missingConcerns = [
+    itineraryEmpty && { icon: <Clock size={16} />, label: 'Itinerary', actionLabel: 'Add', onAction: () => setSearchParams({ sheet: 'itineraryTweak' }) },
+    detailsEmpty && { icon: <Info size={16} />, label: 'Details', actionLabel: 'Add', onAction: () => setSearchParams({ sheet: 'detailsTweak' }) },
+    venueEmpty && { icon: <MapPin size={16} />, label: 'Venue', actionLabel: 'Add', onAction: () => setSearchParams({ sheet: 'venueTweak' }) },
+    musicOff && { icon: <ClipboardList size={16} />, label: 'Music form', actionLabel: 'Set up', onAction: () => turnOnMusicForm.mutate() },
+  ].filter(Boolean) as AddToTheDayConcern[];
+
   function openCompose(templateType?: string) {
     setSearchParams(templateType ? { sheet: 'compose', templateType } : { sheet: 'compose' });
   }
 
   function openEditInvoice(invoice: Invoice) {
     setSearchParams({ sheet: 'invoice', invoiceId: invoice.id });
-  }
-
-  function editSection(section: string) {
-    setSearchParams({ sheet: 'bookingEdit', section });
   }
 
   return (
@@ -129,6 +148,7 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
         <div className="space-y-4 pt-2">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <ItineraryCard
+              bookingId={bookingId}
               logistics={booking.logistics}
               sets={booking.sets}
               packages={booking.packages}
@@ -143,6 +163,7 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
             bookingId={bookingId}
             contactHref={`/admin/contacts/${booking.venue?.id ?? ''}`}
           />
+          <AddToTheDayCard concerns={missingConcerns} />
           <MusicFormSection
             booking={booking}
             documents={documents}
@@ -150,7 +171,8 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
             isLoading={musicFormConfigLoading}
             onTurnOn={() => turnOnMusicForm.mutate()}
             isTurningOn={turnOnMusicForm.isPending}
-            onEdit={() => editSection('musicForm')}
+            onEdit={() => setSearchParams({ sheet: 'musicTweak' })}
+            hideWhenOff
           />
           <InlineNotes
             notes={booking.notes}
@@ -162,15 +184,26 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
       info={
         <div className="space-y-6 pt-2">
           <section>
-            <SectionHeader label="People" />
+            <SectionHeader
+              label="People"
+              action={
+                <GhostButton
+                  variant="primary"
+                  size="xs"
+                  icon={<Pencil size={13} />}
+                  onClick={() => setSearchParams({ sheet: 'peopleTweak' })}
+                >
+                  Edit
+                </GhostButton>
+              }
+            />
             <div className="flex flex-row gap-4">
-              <PersonChip role="Customer" contact={booking.customer} linkState={backState} onEdit={() => setSearchParams({ sheet: 'contactEdit', contactId: booking.customer.id })} />
+              <PersonChip role="Customer" contact={booking.customer} linkState={backState} />
               {booking.bookingAgent && (
                 <PersonChip
                   role="Booking agent"
                   contact={booking.bookingAgent}
                   linkState={backState}
-                  onEdit={() => setSearchParams({ sheet: 'contactEdit', contactId: booking.bookingAgent!.id })}
                 />
               )}
             </div>
@@ -179,16 +212,8 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
           {booking.series && (
             <section>
               <SectionHeader label="Series" />
-              <span className="inline-flex items-center gap-1.5 text-sm text-foreground border border-border rounded-full px-3 py-1.5">
+              <span className="inline-flex items-center text-sm text-foreground border border-border rounded-full px-3 py-1.5">
                 {booking.series.label}
-                <button
-                  type="button"
-                  onClick={() => fields.updateSeries({ seriesId: null })}
-                  className="hover:text-foreground transition-colors"
-                  aria-label="Remove from series"
-                >
-                  <X size={12} />
-                </button>
               </span>
             </section>
           )}
@@ -248,11 +273,6 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
           )}
 
           <DocumentsCard bookingId={bookingId} />
-
-          <PerformanceSection
-            booking={booking}
-            hideWhenEmpty
-          />
 
           <CommunicationsSection
             communications={communications}

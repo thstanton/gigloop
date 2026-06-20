@@ -1,15 +1,24 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsOptional, IsUUID, ValidateIf } from 'class-validator';
+import { ApiPropertyOptional } from '@nestjs/swagger';
+import { IsBoolean, IsNotEmpty, IsOptional, IsString, IsUUID, ValidateIf } from 'class-validator';
 
 export class UpdateBookingSeriesDto {
-  @ApiProperty({
-    description: 'Series ID to assign, or null to remove from series',
+  @ApiPropertyOptional({
+    description: 'Existing series ID to assign, or null to remove from series. Mutually exclusive with newSeriesLabel.',
     nullable: true,
     example: 'uuid-of-series',
   })
-  @ValidateIf((o) => o.seriesId !== null)
+  @IsOptional()
+  @ValidateIf((o) => o.seriesId !== null && o.seriesId !== undefined)
   @IsUUID()
-  seriesId!: string | null;
+  seriesId?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Create a new series with this label and assign this booking to it. Mutually exclusive with seriesId.',
+  })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  newSeriesLabel?: string;
 
   @ApiPropertyOptional({
     description: 'Must be true when API returns requiresConfirmation to confirm customer mismatch',

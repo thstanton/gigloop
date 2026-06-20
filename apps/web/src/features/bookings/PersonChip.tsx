@@ -10,7 +10,9 @@ export interface PersonChipProps {
   role: 'Customer' | 'Booking agent';
   contact: Contact;
   linkState?: Record<string, string>;
-  onEdit: () => void;
+  /** Optional per-chip edit action. Omitted in the booking People section, whose single
+   *  edit affordance lives on the section header. */
+  onEdit?: () => void;
 }
 
 function getInitials(name: string): string {
@@ -62,14 +64,16 @@ export default function PersonChip({ role, contact, linkState, onEdit }: PersonC
           </div>
         )}
         <div className="p-1.5 flex flex-col">
-          <button
-            type="button"
-            onClick={onEdit}
-            className="flex items-center gap-2.5 rounded px-2 py-1.5 text-sm hover:bg-muted transition-colors text-left"
-          >
-            <Pencil size={14} className="flex-shrink-0" />
-            Edit
-          </button>
+          {onEdit && (
+            <button
+              type="button"
+              onClick={onEdit}
+              className="flex items-center gap-2.5 rounded px-2 py-1.5 text-sm hover:bg-muted transition-colors text-left"
+            >
+              <Pencil size={14} className="flex-shrink-0" />
+              Edit
+            </button>
+          )}
           {contact.phone && (
             <a
               href={`tel:${contact.phone}`}

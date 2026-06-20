@@ -53,6 +53,33 @@ export const FullTimeline: Story = {
     await expect(canvas.getByText('23:00')).toBeVisible();
     await expect(canvas.getByText('Ceremony (45 min)')).toBeVisible();
     await expect(canvas.getByText('15:30')).toBeVisible();
+    // The package name leads its run of sets as a header (ADR-0050 read view).
+    await expect(canvas.getByText('Gold')).toBeVisible();
+  },
+};
+
+export const TwoPackages: Story = {
+  name: 'Each package run leads with its own name header',
+  args: {
+    logistics: fullLogistics,
+    sets: [
+      { id: 'c1', order: 0, duration: 30, startTime: '15:30', label: 'Ceremony', packageId: 'pkg-cer' },
+      { id: 'e1', order: 1, duration: 45, startTime: '19:30', label: 'First set', packageId: 'pkg-eve' },
+      { id: 'e2', order: 2, duration: 45, startTime: '21:00', label: 'Second set', packageId: 'pkg-eve' },
+    ],
+    packages: [
+      { id: 'pkg-cer', order: 0, label: 'Ceremony package', icon: 'heart' },
+      { id: 'pkg-eve', order: 1, label: 'Evening', icon: 'guitar' },
+    ],
+  },
+  play: async ({ canvas }) => {
+    // Both package names render as run headers; anchors still bookend the day.
+    await expect(canvas.getByText('Ceremony package')).toBeVisible();
+    await expect(canvas.getByText('Evening')).toBeVisible();
+    await expect(canvas.getByText('Arrival')).toBeVisible();
+    await expect(canvas.getByText('Finish')).toBeVisible();
+    // The Evening header appears once even though it has two sets.
+    await expect(canvas.getAllByText('Evening')).toHaveLength(1);
   },
 };
 
@@ -87,6 +114,26 @@ export const Empty: Story = {
     logistics: null,
     sets: [],
     packages: [],
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('No itinerary yet')).toBeVisible();
+    await expect(canvas.getByRole('button', { name: 'Add itinerary' })).toBeVisible();
+  },
+};
+
+export const WithTemplateAffordance: Story = {
+  name: 'Apply-template affordance (deep-links to Builder)',
+  args: {
+    bookingId: 'b-123',
+    logistics: fullLogistics,
+    sets: setsWithStartTimes,
+    packages,
+  },
+  play: async ({ canvas }) => {
+    // The affordance only appears when a bookingId is supplied (it deep-links into
+    // the Builder's Package Templates step).
+    await expect(canvas.getByRole('button', { name: 'Apply template' })).toBeVisible();
+    await expect(canvas.getByRole('button', { name: 'Edit' })).toBeVisible();
   },
 };
 

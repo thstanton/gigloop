@@ -1,6 +1,8 @@
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
+import { Pencil } from 'lucide-react';
 import { VenueMapWidget } from '@/components/common/VenueMapWidget';
+import { GhostButton } from '@/components/common/GhostButton';
 import { useBooking } from '@/lib/hooks/useBooking';
 import { apiGet } from '@/lib/api';
 import type { TravelTimeResponse, UserProfile } from '@/types/api';
@@ -47,13 +49,14 @@ export function BookingVenueMapWidget({ bookingId, contactHref }: BookingVenueMa
       showHeader={true}
       cardTitle="Venue"
       cardAction={
-        <button
-          type="button"
-          onClick={() => setSearchParams({ sheet: 'contactEdit', contactId: venue.id })}
-          className="text-xs text-primary hover:text-primary/80 transition-colors"
+        <GhostButton
+          variant="primary"
+          size="xs"
+          icon={<Pencil size={13} />}
+          onClick={() => setSearchParams({ sheet: 'venueTweak' })}
         >
           Edit
-        </button>
+        </GhostButton>
       }
       contactHref={contactHref}
       travelTime={travelTime}

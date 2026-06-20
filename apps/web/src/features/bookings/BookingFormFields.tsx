@@ -211,10 +211,6 @@ interface Props {
   songRequestFormEnabled?: boolean;
   formats?: PackageTemplate[];
   series?: BookingSeries[];
-  hideNotes?: boolean;
-  /** Hide the People section — the edit drawer renders its own People blocks that
-   *  save independently (per-box), separate from this form's global Save. */
-  hidePeople?: boolean;
 }
 
 export function BookingFormFields({
@@ -224,8 +220,6 @@ export function BookingFormFields({
   songRequestFormEnabled,
   formats,
   series,
-  hideNotes,
-  hidePeople,
 }: Props) {
   return (
     <div className="space-y-6">
@@ -305,47 +299,45 @@ export function BookingFormFields({
         <Input placeholder="e.g. Smith Wedding" {...register('title')} />
       </FormField>
 
-      {/* People — only in the create form; the edit drawer renders its own
-          per-box-saving People section (see BookingEditDrawer). */}
-      {!hidePeople && (
-        <div className="space-y-4">
-          <h2 className="text-sm font-semibold text-foreground">People</h2>
+      {/* People — the lean create-form People section (3 inline blocks). Consolidating
+          this into the controlled PeopleAtom is tracked in #537. */}
+      <div className="space-y-4">
+        <h2 className="text-sm font-semibold text-foreground">People</h2>
 
-          <Controller
-            name="customerId"
-            control={control}
-            render={({ field }) => (
-              <InlineContactBlock
-                value={field.value || null}
-                onChange={(id) => field.onChange(id ?? '')}
-                error={errors.customerId?.message}
-              />
-            )}
-          />
+        <Controller
+          name="customerId"
+          control={control}
+          render={({ field }) => (
+            <InlineContactBlock
+              value={field.value || null}
+              onChange={(id) => field.onChange(id ?? '')}
+              error={errors.customerId?.message}
+            />
+          )}
+        />
 
-          <Controller
-            name="venueId"
-            control={control}
-            render={({ field }) => (
-              <InlineVenueBlock
-                value={field.value}
-                onChange={field.onChange}
-              />
-            )}
-          />
+        <Controller
+          name="venueId"
+          control={control}
+          render={({ field }) => (
+            <InlineVenueBlock
+              value={field.value}
+              onChange={field.onChange}
+            />
+          )}
+        />
 
-          <Controller
-            name="bookingAgentId"
-            control={control}
-            render={({ field }) => (
-              <InlineAgentBlock
-                value={field.value}
-                onChange={field.onChange}
-              />
-            )}
-          />
-        </div>
-      )}
+        <Controller
+          name="bookingAgentId"
+          control={control}
+          render={({ field }) => (
+            <InlineAgentBlock
+              value={field.value}
+              onChange={field.onChange}
+            />
+          )}
+        />
+      </div>
 
       {/* Packages */}
       {songRequestFormEnabled && formats && formats.length > 0 && (
@@ -387,19 +379,17 @@ export function BookingFormFields({
         />
       )}
 
-      {/* Series */}
+      {/* Series — assignment lives in the Overview atom post-creation. */}
       <SeriesSection control={control} register={register} series={series} />
 
-      {/* Notes — hidden when managed by inline auto-save on the detail page */}
-      {!hideNotes && (
-        <FormField label="Notes (optional)">
-          <Textarea
-            rows={3}
-            placeholder="Any notes about this booking..."
-            {...register('notes')}
-          />
-        </FormField>
-      )}
+      {/* Notes */}
+      <FormField label="Notes (optional)">
+        <Textarea
+          rows={3}
+          placeholder="Any notes about this booking..."
+          {...register('notes')}
+        />
+      </FormField>
     </div>
   );
 }

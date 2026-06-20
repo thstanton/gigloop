@@ -77,7 +77,7 @@ export class ChecklistRepository {
   }
 
   async findItemsWithContext(bookingId: string) {
-    const [items, booking] = await Promise.all([
+    const [items, raw] = await Promise.all([
       this.prisma.bookingChecklistItem.findMany({
         where: { bookingId },
         orderBy: { order: 'asc' },
@@ -88,7 +88,11 @@ export class ChecklistRepository {
           id: true,
           userId: true,
           status: true,
+          venueId: true,
+          customerId: true,
           depositReceivedAt: true,
+          logistics: true,
+          _count: { select: { sets: true } },
           communications: {
             select: {
               status: true,
@@ -112,6 +116,7 @@ export class ChecklistRepository {
         },
       }),
     ]);
+    const booking = raw ? { ...raw, setsCount: raw._count.sets } : null;
     return { items, booking };
   }
 

@@ -18,7 +18,11 @@ function makeBooking(overrides: Record<string, unknown> = {}) {
     id: 'b1',
     userId: 'u1',
     status: 'ENQUIRY',
+    venueId: null,
+    customerId: 'cust-1',
     depositReceivedAt: null,
+    setsCount: 0,
+    logistics: null,
     communications: [],
     invoices: [],
     contracts: [],
@@ -120,6 +124,109 @@ describe('ChecklistEvaluatorService', () => {
       const booking = makeBooking({
         communications: [{ status: 'SENT', template: { builtInType: 'thank_you' } }],
       });
+      repo.findItemsWithContext.mockResolvedValue({ items: [item], booking });
+
+      await service.evaluate('b1');
+
+      expect(repo.updateItemStates).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('completeness rule (Module A binding — add_venue)', () => {
+    const addVenueItem = (overrides: Record<string, unknown> = {}) =>
+      makeItem({
+        id: 'ci-venue',
+        key: 'add_venue',
+        autoCompleteRule: { type: 'completeness', concern: 'venue' },
+        ...overrides,
+      });
+
+    it('transitions PENDING → COMPLETE when venueId is set', async () => {
+      const item = addVenueItem();
+      const booking = makeBooking({ venueId: 'venue-1' });
+      repo.findItemsWithContext.mockResolvedValue({ items: [item], booking });
+
+      await service.evaluate('b1');
+
+      expect(repo.updateItemStates).toHaveBeenCalledWith([
+        expect.objectContaining({ id: 'ci-venue', state: 'COMPLETE' }),
+      ]);
+    });
+
+    it('stays PENDING when venueId is unset', async () => {
+      const item = addVenueItem();
+      const booking = makeBooking({ venueId: null });
+      repo.findItemsWithContext.mockResolvedValue({ items: [item], booking });
+
+      await service.evaluate('b1');
+
+      expect(repo.updateItemStates).not.toHaveBeenCalled();
+    });
+
+    it('does not regress an already-COMPLETE item when venueId is later cleared', async () => {
+      // Matches existing evaluator semantics: COMPLETE items are not re-evaluated, so
+      // clearing the venue does not bounce add_venue back to PENDING.
+      const item = addVenueItem({ state: 'COMPLETE', completedAt: new Date() });
+      const booking = makeBooking({ venueId: null });
+      repo.findItemsWithContext.mockResolvedValue({ items: [item], booking });
+
+      await service.evaluate('b1');
+
+      expect(repo.updateItemStates).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('completeness rule — build_itinerary (itinerary concern)', () => {
+    const buildItineraryItem = (overrides: Record<string, unknown> = {}) =>
+      makeItem({
+        id: 'ci-itinerary',
+        key: 'build_itinerary',
+        autoCompleteRule: { type: 'completeness', concern: 'itinerary' },
+        ...overrides,
+      });
+
+    it('transitions PENDING → COMPLETE when sets exist (partial state)', async () => {
+      const item = buildItineraryItem();
+      const booking = makeBooking({ setsCount: 1 });
+      repo.findItemsWithContext.mockResolvedValue({ items: [item], booking });
+
+      await service.evaluate('b1');
+
+      expect(repo.updateItemStates).toHaveBeenCalledWith([
+        expect.objectContaining({ id: 'ci-itinerary', state: 'COMPLETE' }),
+      ]);
+    });
+
+    it('transitions PENDING → COMPLETE when sets + all time anchors exist (set state)', async () => {
+      const item = buildItineraryItem();
+      const logistics = {
+        arrivalTime: { value: '14:00', shareWithBand: true, shareWithClient: false },
+        soundCheckTime: { value: '15:00', shareWithBand: false, shareWithClient: false },
+        finishTime: { value: '22:00', shareWithBand: true, shareWithClient: true },
+      };
+      const booking = makeBooking({ setsCount: 2, logistics });
+      repo.findItemsWithContext.mockResolvedValue({ items: [item], booking });
+
+      await service.evaluate('b1');
+
+      expect(repo.updateItemStates).toHaveBeenCalledWith([
+        expect.objectContaining({ id: 'ci-itinerary', state: 'COMPLETE' }),
+      ]);
+    });
+
+    it('stays PENDING when no sets exist', async () => {
+      const item = buildItineraryItem();
+      const booking = makeBooking({ setsCount: 0 });
+      repo.findItemsWithContext.mockResolvedValue({ items: [item], booking });
+
+      await service.evaluate('b1');
+
+      expect(repo.updateItemStates).not.toHaveBeenCalled();
+    });
+
+    it('does not regress an already-COMPLETE item when sets are later removed (sticky COMPLETE)', async () => {
+      const item = buildItineraryItem({ state: 'COMPLETE', completedAt: new Date() });
+      const booking = makeBooking({ setsCount: 0 });
       repo.findItemsWithContext.mockResolvedValue({ items: [item], booking });
 
       await service.evaluate('b1');

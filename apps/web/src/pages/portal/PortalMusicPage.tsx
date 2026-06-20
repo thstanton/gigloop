@@ -7,7 +7,7 @@ import { getMusicFormData, getPortalData, submitMusicForm } from '../../lib/port
 import { PortalLayout, getDisplayFontClass } from '../../layouts/PortalLayout';
 import type { PortalSong, PortalSpecialRequest } from '../../types/api';
 
-// ─── Song picker for key moments ──────────────────────────────────────────────
+// ─── Song picker for special requests ─────────────────────────────────────────
 
 function SongAutocomplete({
   allSongs,
@@ -255,7 +255,7 @@ export default function PortalMusicPage() {
             Song requests
           </h1>
           <p className={`text-sm ${bold ? 'text-white/60' : 'text-[#6b7280]'}`}>
-            Choose songs you'd like to hear and pick something special for key moments.
+            Choose songs you'd like to hear and pick a song for each special request.
           </p>
         </div>
 
@@ -340,11 +340,11 @@ export default function PortalMusicPage() {
           )}
         </section>
 
-        {/* 2. Key moments */}
+        {/* 2. Special requests */}
         {config.keyMoments.length > 0 && (
           <section className="space-y-4">
             <h2 className={`text-base font-semibold ${bold ? 'text-white' : 'text-[#1a1a1a]'}`}>
-              Key moments
+              Special requests
             </h2>
             <div className="space-y-5">
               {Array.from(sectionMap.entries()).map(([section, items]) => (

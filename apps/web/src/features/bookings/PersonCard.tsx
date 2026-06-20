@@ -9,7 +9,9 @@ export interface PersonCardProps {
   contact: Contact;
   commissionArrangement?: string | null;
   linkState?: Record<string, string>;
-  onEdit: () => void;
+  /** Optional per-card edit action. The booking People section omits it — its single
+   *  edit affordance lives on the section header (the concern, not the contact, is edited). */
+  onEdit?: () => void;
 }
 
 function getInitials(name: string): string {
@@ -48,13 +50,15 @@ export default function PersonCard({
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between mb-1.5">
           <SubLabel>{role}</SubLabel>
-          <button
-            type="button"
-            onClick={onEdit}
-            className="text-xs text-primary hover:text-primary/80 transition-colors"
-          >
-            Edit
-          </button>
+          {onEdit && (
+            <button
+              type="button"
+              onClick={onEdit}
+              className="text-xs text-primary hover:text-primary/80 transition-colors"
+            >
+              Edit
+            </button>
+          )}
         </div>
         <Link
           to={`/admin/contacts/${contact.id}`}

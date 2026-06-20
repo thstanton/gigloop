@@ -56,11 +56,10 @@ type Story = StoryObj<typeof meta>;
 export const Off: Story = {
   args: { booking: { ...baseBooking, hasMusicFormConfig: false } },
   play: async ({ canvas }) => {
-    // Off == no config row. Card stays visible (no vanish) and offers a turn-on control.
-    await expect(canvas.getByText('Music form')).toBeVisible();
+    // Off == no config row. The empty state stays visible (no vanish) and offers a turn-on control.
+    await expect(canvas.getByText('No music form')).toBeVisible();
+    await expect(canvas.getByText('Set up a music form to collect song requests from your clients.')).toBeVisible();
     await expect(canvas.getByRole('button', { name: 'Turn on music form' })).toBeVisible();
-    const ghost = canvas.getByText('Music form').closest('div');
-    await expect(ghost).not.toHaveClass('border');
   },
 };
 
@@ -121,7 +120,7 @@ export const WithResponse: Story = {
               { key: 'First dance', song: { id: 's1', title: 'At Last', artist: 'Etta James', genre: 'JAZZ' }, freeText: null },
               { key: 'Bridal walk-in', song: null, freeText: 'Something classical' },
             ],
-            notes: null,
+            notes: 'No heavy metal please — keep it mellow during dinner.',
             submittedAt: '2030-08-01T12:00:00Z',
           }),
         ),
@@ -131,6 +130,8 @@ export const WithResponse: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.findByText(/At Last/)).resolves.toBeVisible();
     await expect(canvas.findByText(/Something classical/)).resolves.toBeVisible();
+    // The client's submitted notes surface on the completed card (#535).
+    await expect(canvas.findByText(/keep it mellow during dinner/)).resolves.toBeVisible();
     await expect(canvas.getByRole('button', { name: 'Preview' })).toBeVisible();
     await userEvent.click(canvas.getByRole('button', { name: 'Preview' }));
     const sheet = within(document.body);

@@ -183,7 +183,7 @@ export class BookingsService {
     // above Prisma's 2s/5s defaults as defence in depth (ADR-0047: cold-start handling).
     await this.prisma.$queryRaw`SELECT 1`;
 
-    return this.prisma.$transaction(
+    const created = await this.prisma.$transaction(
       (tx) =>
         this.persistBookingAtomically(tx, userId, {
           dto,
@@ -193,6 +193,14 @@ export class BookingsService {
         }),
       { maxWait: 5000, timeout: 15000 },
     );
+
+    // Auto-complete any structural item whose data already exists at creation — e.g. a
+    // booking created with a venue must not seed add_venue as a PENDING nag (PRD #511
+    // Story 20: never nag work already done). Post-commit + best-effort, so it never
+    // affects the atomic create unit (ADR-0047).
+    await this.evaluator.evaluate(created.id).catch(() => {});
+
+    return created;
   }
 
   // Copy Event (#507 / ADR-0049): clone *this* booking into the same series on a new date.
@@ -228,7 +236,7 @@ export class BookingsService {
 
     // findOneForClone + assertMembershipMutable already warmed the Neon compute, so the
     // transaction opens against a live connection (cf. create()'s explicit SELECT 1).
-    return this.prisma.$transaction(
+    const copied = await this.prisma.$transaction(
       async (tx) => {
         const created = await this.repo.cloneBookingCore(userId, source, newDate, tx);
 
@@ -250,6 +258,12 @@ export class BookingsService {
       },
       { maxWait: 5000, timeout: 15000 },
     );
+
+    // A copied booking carries its source's venue, so add_venue must start COMPLETE rather
+    // than re-nag work already done (PRD #511 Story 20). Post-commit + best-effort.
+    await this.evaluator.evaluate(copied.id).catch(() => {});
+
+    return copied;
   }
 
   async update(userId: string, id: string, dto: UpdateBookingDto) {
@@ -258,7 +272,10 @@ export class BookingsService {
     if (dto.date !== undefined) {
       await this.checklistRepo.recomputeChecklistDueDates(id, updated.date, updated.createdAt);
     }
-    if (dto.status !== undefined) {
+    // Re-evaluate auto-complete rules when a field a rule binds to changes. venueId drives
+    // the add_venue structural item (PRD #511 Module A/D): setting it must auto-complete the
+    // item without the musician ticking it.
+    if (dto.status !== undefined || dto.venueId !== undefined) {
       await this.evaluator.evaluate(id).catch(() => {});
     }
     return updated;
@@ -271,13 +288,21 @@ export class BookingsService {
 
   async addSet(userId: string, bookingId: string, dto: CreateSetDto) {
     await this.findOne(userId, bookingId);
-    return this.repo.addSet(userId, bookingId, dto);
+    const result = await this.repo.addSet(userId, bookingId, dto);
+    // Re-evaluate: the first set satisfies build_itinerary (PRD #511 Story 21). Post-add + best-effort.
+    await this.evaluator.evaluate(bookingId).catch(() => {});
+    return result;
   }
 
   async updateSet(userId: string, bookingId: string, setId: string, dto: UpdateSetDto) {
     await this.findOne(userId, bookingId);
     const set = await this.repo.findSet(userId, bookingId, setId);
     if (!set) throw new NotFoundException('Set not found');
+    // Re-parenting: a non-null target package must belong to this booking (null = ungroup).
+    if (dto.packageId != null) {
+      const pkg = await this.repo.findBookingPackage(userId, bookingId, dto.packageId);
+      if (!pkg) throw new NotFoundException('Package not found');
+    }
     return this.repo.updateSet(setId, dto);
   }
 
@@ -325,6 +350,10 @@ export class BookingsService {
             genres: template.defaultGenreSelection,
           }
         : null;
+
+    // Re-evaluate: applying a template seeds sets, satisfying build_itinerary
+    // (PRD #511 Story 21: never nag work already done). Post-apply + best-effort.
+    await this.evaluator.evaluate(bookingId).catch(() => {});
 
     return { booking: mapped, suggestion };
   }
@@ -556,9 +585,14 @@ export class BookingsService {
     return null;
   }
 
-  async updateSeries(userId: string, bookingId: string, seriesId: string | null, confirm?: boolean) {
+  async updateSeries(userId: string, bookingId: string, seriesId: string | null, confirm?: boolean, newSeriesLabel?: string) {
     const booking = await this.findOne(userId, bookingId);
     const previousSeriesId = (booking as { seriesId?: string | null }).seriesId ?? null;
+
+    if (newSeriesLabel) {
+      const created = await this.seriesRepo.create(userId, newSeriesLabel, booking.customerId);
+      seriesId = created.id;
+    }
 
     if (seriesId !== null) {
       const earlyReturn = await this.checkSeriesJoin(userId, bookingId, seriesId, booking, confirm);

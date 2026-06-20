@@ -259,7 +259,7 @@ function PreviewMusicView({
       )
     : PREVIEW_SONGS.filter((s) => s.genre === activeGenre);
 
-  // Group key moments by section
+  // Group special requests by section
   const sectionMap = new Map<string, typeof PREVIEW_KEY_MOMENTS>();
   for (const km of PREVIEW_KEY_MOMENTS) {
     if (!sectionMap.has(km.section)) sectionMap.set(km.section, []);
@@ -345,10 +345,10 @@ function PreviewMusicView({
           )}
         </section>
 
-        {/* 2. Key moments */}
+        {/* 2. Special requests */}
         <section className="space-y-4">
           <h2 className={`text-base font-semibold ${t.primaryText}`}>
-            Key moments
+            Special requests
           </h2>
           <div className="space-y-5">
             {Array.from(sectionMap.entries()).map(([section, items]) => (

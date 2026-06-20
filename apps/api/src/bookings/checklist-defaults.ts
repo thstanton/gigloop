@@ -79,6 +79,32 @@ export const CHECKLIST_DEFAULTS: ChecklistDefaultItem[] = [
     dueDateRule: { basis: 'bookingDate', offsetDays: -30 },
   },
   {
+    // Structural setup item (PRD #511 Module D): auto-completes when a venue is chosen.
+    // Binds to the venue completeness predicate (Module A) via the `completeness` rule —
+    // never re-checks `venueId` independently. READY-staged (operational prep) and a
+    // disablable default, like every seeded item.
+    key: 'add_venue',
+    label: 'Add venue',
+    completedBy: 'USER',
+    dependsOn: [],
+    autoCompleteRule: { type: 'completeness', concern: 'venue' },
+    requiredForStatus: 'READY',
+    dueDateRule: null,
+  },
+  {
+    // Structural setup item (PRD #511 Module D / #523): auto-completes when sets exist.
+    // Binds to the itinerary completeness predicate (Module A) — isConcernComplete returns
+    // true for any non-empty state (partial or set), so a booking with template-seeded sets
+    // never sees this as a PENDING nag (Story 21: never nag work already done).
+    key: 'build_itinerary',
+    label: 'Build itinerary',
+    completedBy: 'USER',
+    dependsOn: [],
+    autoCompleteRule: { type: 'completeness', concern: 'itinerary' },
+    requiredForStatus: 'READY',
+    dueDateRule: null,
+  },
+  {
     key: 'create_balance_invoice',
     label: 'Create balance invoice',
     completedBy: 'USER',

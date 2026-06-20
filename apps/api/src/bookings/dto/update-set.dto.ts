@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsInt, IsNotEmpty, IsOptional, IsString, Min, ValidateIf } from 'class-validator';
+import { IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Min, ValidateIf } from 'class-validator';
 
 export class UpdateSetDto {
   @ApiPropertyOptional({ example: 1 })
@@ -26,4 +26,13 @@ export class UpdateSetDto {
   @IsString()
   @IsNotEmpty()
   label?: string | null;
+
+  @ApiPropertyOptional({
+    nullable: true,
+    description: 'Re-parent the set to this booking-owned package; null moves it to ungrouped.',
+  })
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsUUID()
+  packageId?: string | null;
 }

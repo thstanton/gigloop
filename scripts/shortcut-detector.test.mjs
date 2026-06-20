@@ -118,6 +118,31 @@ test('markdown/docs exempt — prose naming a pattern is not a suppression', () 
   );
 });
 
+test('deleted file (assertions in deleted file) — no violation', () => {
+  // When a file is deleted ("+++ /dev/null"), its removed assertions should not be
+  // attributed to a neighbouring file in the diff. Deleting a file and replacing its
+  // component with a new one (with new tests) is not a quality regression.
+  const raw = [
+    'diff --git a/foo.stories.tsx b/foo.stories.tsx',
+    'index abc..def 100644',
+    '--- a/foo.stories.tsx',
+    '+++ /dev/null',
+    '@@ -1,5 +0,0 @@',
+    '-export const Foo = {',
+    '-  play: async ({ canvas }) => {',
+    '-    await expect(canvas.getByText("hello")).toBeVisible();',
+    '-  },',
+    '-};',
+    'diff --git a/bar.stories.tsx b/bar.stories.tsx',
+    'index abc..def 100644',
+    '--- a/bar.stories.tsx',
+    '+++ b/bar.stories.tsx',
+    '@@ -1 +0,0 @@',
+    '+const x = 1;',
+  ].join('\n');
+  assert.deepEqual(detectViolations(raw), []);
+});
+
 test('diff header lines not flagged', () => {
   const raw = [
     'diff --git a/foo.ts b/foo.ts',

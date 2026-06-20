@@ -74,14 +74,18 @@ export const InSeries: Story = {
   },
 };
 
+// Series assignment was relocated (#528) off the detail page into the Overview atom,
+// reached via the strip's "Edit overview" pencil — these drive that new entry point.
 export const AddToSeriesNoSeries: Story = {
   parameters: { msw: { handlers: makeBookingDetailHandlers('AddToSeriesNoSeries') } },
   play: async ({ canvas }) => {
     await canvas.findByText("Sophie's Wedding");
-    await userEvent.click(await canvas.findByText('+ Add to series'));
+    await userEvent.click(canvas.getByRole('button', { name: 'Edit overview' }));
     const dialog = within(await screen.findByRole('dialog'));
-    await expect(dialog.getByRole('heading', { name: 'Add to series' })).toBeVisible();
-    await expect(dialog.getByRole('button', { name: 'Add to series' })).toBeDisabled();
+    await expect(dialog.getByText('Series (optional)')).toBeVisible();
+    await expect(dialog.getByRole('button', { name: /existing series/i })).toBeVisible();
+    // No assignment change made yet, so the save stays disabled.
+    await expect(dialog.getByRole('button', { name: /^save$/i })).toBeDisabled();
   },
 };
 
@@ -89,9 +93,10 @@ export const AddToSeriesWithSeries: Story = {
   parameters: { msw: { handlers: makeBookingDetailHandlers('AddToSeriesWithSeries') } },
   play: async ({ canvas }) => {
     await canvas.findByText("Sophie's Wedding");
-    await userEvent.click(await canvas.findByText('+ Add to series'));
+    await userEvent.click(canvas.getByRole('button', { name: 'Edit overview' }));
     const dialog = within(await screen.findByRole('dialog'));
-    await expect(dialog.getByRole('heading', { name: 'Add to series' })).toBeVisible();
-    await expect(dialog.getByRole('combobox')).toBeVisible();
+    await userEvent.click(dialog.getByRole('button', { name: /existing series/i }));
+    // Selecting 'existing' reveals the series picker fed by GET /series.
+    await expect(dialog.getByRole('combobox', { name: 'Series' })).toBeVisible();
   },
 };

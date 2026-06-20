@@ -1,6 +1,7 @@
-import { ChevronRight, Car, KeyRound, Speaker, type LucideIcon } from 'lucide-react';
+import { ChevronRight, Car, KeyRound, Pencil, Speaker, type LucideIcon } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Card } from '@/components/common/Card';
+import { GhostButton } from '@/components/common/GhostButton';
 import type { Contact } from '@/types/api';
 
 export interface VenueCardProps {
@@ -28,9 +29,9 @@ export default function VenueCard({ venue, linkState, onEdit }: VenueCardProps) 
     <Card
       title="Venue"
       action={
-        <button type="button" onClick={onEdit} className="text-xs text-primary hover:text-primary/80 transition-colors">
+        <GhostButton variant="primary" size="xs" icon={<Pencil size={13} />} onClick={onEdit}>
           Edit
-        </button>
+        </GhostButton>
       }
     >
       <Link to={`/admin/contacts/${venue.id}`} state={linkState} className="inline-flex items-center gap-1 group">

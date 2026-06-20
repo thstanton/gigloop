@@ -1,22 +1,33 @@
-import { useSearchParams } from 'react-router-dom';
-import { Clock } from 'lucide-react';
+import { Fragment } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Clock, Package, Pencil, Plus } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { GhostButton } from '@/components/common/GhostButton';
 import { EmptyState } from '@/components/common/EmptyState';
-import { formatDuration } from './PerformanceSection';
 import FormatIcon from './FormatIcon';
 import { LOGISTICS_FIELD_ICONS } from '@/lib/constants';
 import type { BookingLogisticsEntry, BookingPackageSummary, PerformanceSet } from '@/types/api';
 
 type TimelineRow =
   | { kind: 'time'; rowKey: string; label: string; time: string; notes?: string; group: string }
-  | { kind: 'set'; rowKey: string; set: PerformanceSet; group: string };
+  | { kind: 'set'; rowKey: string; set: PerformanceSet; group: string; pkg: BookingPackageSummary | null; startsRun: boolean };
 
 interface ItineraryCardProps {
   logistics: Record<string, BookingLogisticsEntry> | null;
   sets: PerformanceSet[];
   packages: BookingPackageSummary[];
   hideWhenEmpty?: boolean;
+  /** When set, the card shows an "Apply template" affordance that deep-links into the
+   *  Builder's Package Templates step (PRD #511 — no separate page card; slice #525). */
+  bookingId?: string;
+}
+
+/** Minutes → human duration, e.g. 45 → "45 min", 90 → "1 hr 30 min". */
+export function formatDuration(minutes: number): string {
+  if (minutes < 60) return `${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m > 0 ? `${h} hr ${m} min` : `${h} hr`;
 }
 
 /** "HH:MM" → minutes since midnight, or null when unset/unparseable. */
@@ -70,8 +81,22 @@ function buildRows(
   if (l.soundCheckTime?.value)
     rows.push({ kind: 'time', rowKey: 'soundCheckTime', label: 'Soundcheck', time: l.soundCheckTime.value, notes: l.soundCheckTime.notes, group: 'soundcheck' });
 
-  for (const set of orderTimelineSets(sets, packages))
-    rows.push({ kind: 'set', rowKey: set.id, set, group: set.packageId ? `pkg-${set.packageId}` : `set-${set.id}` });
+  // Sets ordered by time; each contiguous run of the same package leads with a package header
+  // (its name + icon), so the grouping the musician built in the editor reads at a glance.
+  const orderedSets = orderTimelineSets(sets, packages);
+  orderedSets.forEach((set, i) => {
+    const pkg = set.packageId ? packages.find((p) => p.id === set.packageId) ?? null : null;
+    const prev = orderedSets[i - 1];
+    const startsRun = !!set.packageId && (!prev || prev.packageId !== set.packageId);
+    rows.push({
+      kind: 'set',
+      rowKey: set.id,
+      set,
+      group: set.packageId ? `pkg-${set.packageId}` : `set-${set.id}`,
+      pkg,
+      startsRun,
+    });
+  });
 
   if (l.finishTime?.value)
     rows.push({ kind: 'time', rowKey: 'finishTime', label: 'Finish', time: l.finishTime.value, notes: l.finishTime.notes, group: 'finish' });
@@ -84,43 +109,64 @@ function setLabel(set: PerformanceSet): string {
   return set.label ? `${set.label} (${dur})` : dur;
 }
 
-function getSetIcon(set: PerformanceSet, packages: BookingPackageSummary[]): string {
-  if (!set.packageId) return 'music';
-  const pkg = packages.find((p) => p.id === set.packageId);
-  return pkg?.icon ?? 'music';
-}
-
-export default function ItineraryCard({ logistics, sets, packages, hideWhenEmpty = false }: ItineraryCardProps) {
+export default function ItineraryCard({ logistics, sets, packages, hideWhenEmpty = false, bookingId }: ItineraryCardProps) {
   const [, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const rows = buildRows(logistics, sets, packages);
 
   if (hideWhenEmpty && rows.length === 0) return null;
+
+  if (rows.length === 0) {
+    return (
+      <EmptyState
+        icon={<Clock size={24} />}
+        heading="No itinerary yet"
+        description="Add times and sets to build a timeline of the day."
+        action={
+          <GhostButton variant="primary" size="xs" icon={<Plus size={13} />} onClick={() => setSearchParams({ sheet: 'itineraryTweak' })}>
+            Add itinerary
+          </GhostButton>
+        }
+        className="h-full justify-center py-6"
+      />
+    );
+  }
 
   return (
     <Card
       title="Itinerary"
       action={
-        <GhostButton variant="primary" size="xs" onClick={() => setSearchParams({ sheet: 'bookingEdit', section: 'onTheDay' })}>
-          Edit
-        </GhostButton>
+        <div className="flex items-center gap-3">
+          {bookingId && (
+            <GhostButton
+              size="xs"
+              icon={<Package size={13} />}
+              onClick={() => navigate(`/admin/bookings/${bookingId}/builder?section=templates`)}
+            >
+              Apply template
+            </GhostButton>
+          )}
+          <GhostButton variant="primary" size="xs" icon={<Pencil size={13} />} onClick={() => setSearchParams({ sheet: 'itineraryTweak' })}>
+            Edit
+          </GhostButton>
+        </div>
       }
     >
-      {rows.length === 0 ? (
-        <EmptyState
-          icon={<Clock size={24} />}
-          heading="No itinerary yet"
-          description="Add times and sets to build a timeline of the day."
-          className="py-6"
-        />
-      ) : (
-        <div>
-          {rows.map((row, i) => {
-            const showBorder = !!rows[i + 1] && rows[i + 1].group !== row.group;
-            const timeCol = row.kind === 'time' ? row.time : (row.set.startTime ?? formatDuration(row.set.duration));
-            const labelCol = row.kind === 'time' ? row.label : setLabel(row.set);
-            return (
+      <div>
+        {rows.map((row, i) => {
+          const showBorder = !!rows[i + 1] && rows[i + 1].group !== row.group;
+          const timeCol = row.kind === 'time' ? row.time : (row.set.startTime ?? formatDuration(row.set.duration));
+          const labelCol = row.kind === 'time' ? row.label : setLabel(row.set);
+          return (
+            <Fragment key={row.rowKey}>
+              {/* Package name leads each contiguous run of its sets. */}
+              {row.kind === 'set' && row.startsRun && row.pkg && (
+                <div className="flex items-center gap-1.5 pb-1 pt-2 text-xs font-medium text-muted">
+                  <FormatIcon icon={row.pkg.icon} size={14} />
+                  {row.pkg.label}
+                </div>
+              )}
               <div
-                key={row.rowKey}
                 className={`flex gap-3 py-1.5${(row.kind === 'time' && row.notes) ? ' items-start' : ' items-center'}${showBorder ? ' border-b border-border' : ''}`}
               >
                 <span className="w-14 flex-shrink-0 text-sm font-medium tabular-nums text-foreground">
@@ -129,11 +175,6 @@ export default function ItineraryCard({ logistics, sets, packages, hideWhenEmpty
                 {row.kind === 'time' && (
                   <span className="flex-shrink-0 text-muted">
                     <FormatIcon icon={LOGISTICS_FIELD_ICONS[row.rowKey] ?? 'clock'} size={14} />
-                  </span>
-                )}
-                {row.kind === 'set' && (
-                  <span className="flex-shrink-0 text-muted">
-                    <FormatIcon icon={getSetIcon(row.set, packages)} size={14} />
                   </span>
                 )}
                 {row.kind === 'time' && row.notes ? (
@@ -145,10 +186,10 @@ export default function ItineraryCard({ logistics, sets, packages, hideWhenEmpty
                   <span className="text-sm text-foreground">{labelCol}</span>
                 )}
               </div>
-            );
-          })}
-        </div>
-      )}
+            </Fragment>
+          );
+        })}
+      </div>
     </Card>
   );
 }
