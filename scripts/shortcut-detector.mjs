@@ -49,6 +49,14 @@ export function detectViolations(diff) {
       skipFile = EXEMPT.test(currentFile);
       continue;
     }
+    // Deleted files use "+++ /dev/null" instead of "+++ b/<path>". Flush the previous
+    // file's state and skip the deleted file's removed lines — they are retired code, not
+    // a quality regression. The CI story-presence scan catches accidentally deleted stories.
+    if (line === '+++ /dev/null') {
+      flushAssertionViolations();
+      skipFile = true;
+      continue;
+    }
     if (
       line.startsWith('+++') ||
       line.startsWith('---') ||
