@@ -34,9 +34,9 @@ type DetailFieldKey = 'dressCode' | 'performanceSpace' | 'foodProvided' | 'green
 
 const DETAIL_FIELDS: Array<{ key: DetailFieldKey; label: string; type: 'input' | 'select' | 'textarea' }> = [
   { key: 'dressCode',          label: 'Dress code',          type: 'select' },
-  { key: 'performanceSpace',   label: 'Performance space',   type: 'input' },
-  { key: 'foodProvided',       label: 'Food provided',       type: 'input' },
-  { key: 'greenRoom',          label: 'Green room',          type: 'input' },
+  { key: 'performanceSpace',   label: 'Performance space',   type: 'textarea' },
+  { key: 'foodProvided',       label: 'Food provided',       type: 'textarea' },
+  { key: 'greenRoom',          label: 'Green room',          type: 'textarea' },
   { key: 'equipmentRequired',  label: 'Equipment required',  type: 'textarea' },
 ];
 
