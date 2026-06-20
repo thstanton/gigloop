@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ClipboardList, Download, Music2, Pencil, Plus } from 'lucide-react';
+import { ClipboardList, Download, Music2, Pencil } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { GhostButton } from '@/components/common/GhostButton';
+import { EmptyState } from '@/components/common/EmptyState';
 import { SubLabel } from '@/components/common/SubLabel';
 import {
   Sheet,
@@ -24,6 +25,8 @@ export interface MusicFormSectionProps {
   onTurnOn: () => void;
   isTurningOn: boolean;
   onEdit: () => void;
+  /** When true, returns null instead of the off-state card (for mobile, where AddToTheDayCard handles it). */
+  hideWhenOff?: boolean;
 }
 
 function groupByGenre(songs: MusicFormResponseSong[]): Map<string, MusicFormResponseSong[]> {
@@ -124,6 +127,7 @@ export default function MusicFormSection({
   onTurnOn,
   isTurningOn,
   onEdit,
+  hideWhenOff = false,
 }: Readonly<MusicFormSectionProps>) {
   const [viewingResponse, setViewingResponse] = useState(false);
 
@@ -134,33 +138,37 @@ export default function MusicFormSection({
   });
   const songListDoc = documents.find((d) => d.type === 'SONG_LIST');
 
-  // Off == no config row (ADR-0046). The card stays visible and offers a turn-on control
-  // rather than vanishing — so a booking that gained packages after creation still shows it.
+  // Off == no config row (ADR-0046). On desktop, the card stays visible and offers a turn-on
+  // control. On mobile (hideWhenOff), AddToTheDayCard handles it instead.
   if (!booking.hasMusicFormConfig) {
+    if (hideWhenOff) return null;
     return (
-      <div className="flex flex-col items-center justify-center text-center gap-2 py-4 text-muted min-h-[5rem]">
-        <ClipboardList size={20} />
-        <span className="text-sm font-medium">Music form</span>
-        <button
-          type="button"
-          onClick={onTurnOn}
-          disabled={isTurningOn}
-          className="inline-flex items-center gap-1 text-sm text-primary hover:text-primary/80 transition-colors disabled:opacity-50"
-        >
-          <Plus size={14} />
-          {isTurningOn ? 'Turning on…' : 'Turn on music form'}
-        </button>
-      </div>
+      <Card
+        title="Music form"
+        action={
+          <GhostButton variant="primary" size="xs" disabled={isTurningOn} onClick={onTurnOn}>
+            {isTurningOn ? 'Turning on…' : 'Turn on music form'}
+          </GhostButton>
+        }
+      >
+        <EmptyState
+          icon={<ClipboardList size={24} />}
+          heading="No music form"
+          description="Set up a music form to collect song requests from your clients."
+          className="py-6"
+        />
+      </Card>
     );
   }
 
   if (isLoading || !config) {
     return (
-      <div className="flex flex-col items-center justify-center text-center gap-2 py-4 text-muted min-h-[5rem]">
-        <ClipboardList size={20} />
-        <span className="text-sm font-medium">Music form</span>
-        <div className="h-2 w-24 bg-border rounded animate-pulse" />
-      </div>
+      <Card title="Music form">
+        <div className="flex flex-col items-center justify-center text-center gap-2 py-4 text-muted min-h-[5rem]">
+          <ClipboardList size={20} />
+          <div className="h-2 w-24 bg-border rounded animate-pulse" />
+        </div>
+      </Card>
     );
   }
 

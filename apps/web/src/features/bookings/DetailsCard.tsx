@@ -1,7 +1,8 @@
 import { useSearchParams } from 'react-router-dom';
-import { Info, Pencil, Plus } from 'lucide-react';
+import { Info, Pencil } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { GhostButton } from '@/components/common/GhostButton';
+import { EmptyState } from '@/components/common/EmptyState';
 import { LOGISTICS_FIELD_ICONS, LOGISTICS_FIELD_LABELS } from '@/lib/constants';
 import FormatIcon from './FormatIcon';
 import type { BookingLogisticsEntry } from '@/types/api';
@@ -45,18 +46,21 @@ export default function DetailsCard({ logistics, hideWhenEmpty = false }: Detail
 
   if (allEntries.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center text-center gap-2 py-4 text-muted min-h-[5rem]">
-        <Info size={20} />
-        <span className="text-sm font-medium">Details</span>
-        <button
-          type="button"
-          onClick={() => setSearchParams({ sheet: 'detailsTweak' })}
-          className="inline-flex items-center gap-1 text-sm text-primary hover:text-primary/80 transition-colors disabled:opacity-50"
-        >
-          <Plus size={14} />
-          Add details
-        </button>
-      </div>
+      <Card
+        title="Details"
+        action={
+          <GhostButton variant="primary" size="xs" icon={<Pencil size={13} />} onClick={() => setSearchParams({ sheet: 'detailsTweak' })}>
+            Edit
+          </GhostButton>
+        }
+      >
+        <EmptyState
+          icon={<Info size={24} />}
+          heading="No details yet"
+          description="Add dress code, performance space, and on-the-day details."
+          className="py-6"
+        />
+      </Card>
     );
   }
 

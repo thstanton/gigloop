@@ -1,7 +1,7 @@
 import { useAuth } from '@clerk/react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Pencil } from 'lucide-react';
+import { Clock, ClipboardList, Info, MapPin, Pencil } from 'lucide-react';
 import { useBooking } from '@/lib/hooks/useBooking';
 import { useBookingChecklist } from '@/lib/hooks/useBookingChecklist';
 import { useBookingFields } from '@/lib/hooks/useBookingFields';
@@ -23,6 +23,7 @@ import SeriesInvoiceCard from '@/features/bookings/SeriesInvoiceCard';
 import InvoiceSection from '@/features/bookings/InvoiceSection';
 import { DocumentsCard } from '@/features/bookings/DocumentsCard';
 import MusicFormSection from '@/features/bookings/MusicFormSection';
+import { AddToTheDayCard, type AddToTheDayConcern } from '@/features/bookings/AddToTheDayCard';
 import CommunicationsSection from '@/features/bookings/CommunicationsSection';
 import { SectionHeader } from '@/components/common/SectionHeader';
 import { GhostButton } from '@/components/common/GhostButton';
@@ -96,6 +97,28 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
       ? 'checklist'
       : 'onTheDay';
 
+  // Derive which PM-hat concerns are missing so AddToTheDayCard can list them.
+  const logistics = booking.logistics;
+  const itineraryEmpty =
+    !booking.sets.length &&
+    !logistics?.arrivalTime?.value &&
+    !logistics?.soundCheckTime?.value &&
+    !logistics?.finishTime?.value;
+  const SYSTEM_DETAIL_KEYS = ['dressCode', 'performanceSpace', 'foodProvided', 'greenRoom', 'equipmentRequired'] as const;
+  const ALL_SYSTEM_KEYS = new Set(['arrivalTime', 'soundCheckTime', 'finishTime', ...SYSTEM_DETAIL_KEYS]);
+  const detailsEmpty =
+    !SYSTEM_DETAIL_KEYS.some((k) => !!(logistics ?? {})[k]?.value) &&
+    !Object.entries(logistics ?? {}).some(([k, e]) => !ALL_SYSTEM_KEYS.has(k) && !!e.value);
+  const venueEmpty = !booking.venue;
+  const musicOff = !booking.hasMusicFormConfig;
+
+  const missingConcerns = [
+    itineraryEmpty && { icon: <Clock size={16} />, label: 'Itinerary', actionLabel: 'Add', onAction: () => setSearchParams({ sheet: 'itineraryTweak' }) },
+    detailsEmpty && { icon: <Info size={16} />, label: 'Details', actionLabel: 'Add', onAction: () => setSearchParams({ sheet: 'detailsTweak' }) },
+    venueEmpty && { icon: <MapPin size={16} />, label: 'Venue', actionLabel: 'Add', onAction: () => setSearchParams({ sheet: 'venueTweak' }) },
+    musicOff && { icon: <ClipboardList size={16} />, label: 'Music form', actionLabel: 'Set up', onAction: () => turnOnMusicForm.mutate() },
+  ].filter(Boolean) as AddToTheDayConcern[];
+
   function openCompose(templateType?: string) {
     setSearchParams(templateType ? { sheet: 'compose', templateType } : { sheet: 'compose' });
   }
@@ -139,6 +162,7 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
             bookingId={bookingId}
             contactHref={`/admin/contacts/${booking.venue?.id ?? ''}`}
           />
+          <AddToTheDayCard concerns={missingConcerns} />
           <MusicFormSection
             booking={booking}
             documents={documents}
@@ -147,6 +171,7 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
             onTurnOn={() => turnOnMusicForm.mutate()}
             isTurningOn={turnOnMusicForm.isPending}
             onEdit={() => setSearchParams({ sheet: 'musicTweak' })}
+            hideWhenOff
           />
           <InlineNotes
             notes={booking.notes}

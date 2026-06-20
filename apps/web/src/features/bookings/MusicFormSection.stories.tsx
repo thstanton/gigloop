@@ -58,9 +58,9 @@ export const Off: Story = {
   play: async ({ canvas }) => {
     // Off == no config row. Card stays visible (no vanish) and offers a turn-on control.
     await expect(canvas.getByText('Music form')).toBeVisible();
+    await expect(canvas.getByText('No music form')).toBeVisible();
+    await expect(canvas.getByText('Set up a music form to collect song requests from your clients.')).toBeVisible();
     await expect(canvas.getByRole('button', { name: 'Turn on music form' })).toBeVisible();
-    const ghost = canvas.getByText('Music form').closest('div');
-    await expect(ghost).not.toHaveClass('border');
   },
 };
 
