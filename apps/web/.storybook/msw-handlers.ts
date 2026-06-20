@@ -400,6 +400,46 @@ const songCatalogue = [
   },
 ];
 
+// Builder-specific booking fixtures. The existing `weddingPackage` fixture uses an old
+// nested shape; Builder stories need BookingPackageSummary: { id, order, label, icon }.
+const builderPackages = [
+  { id: 'bp1', order: 0, label: 'Wedding Package', icon: 'heart' },
+];
+
+const builderBookingBase = {
+  ...baseDetail,
+  status: 'CONFIRMED',
+  packages: builderPackages,
+  sets: [
+    { id: 's1', order: 0, duration: 60, startTime: '15:30', label: 'Ceremony', packageId: 'bp1' },
+    { id: 's2', order: 1, duration: 45, startTime: '19:00', label: 'Evening set', packageId: null },
+  ],
+  logistics: {
+    arrivalTime:    { value: '14:00', shareWithBand: true,  shareWithClient: false },
+    soundCheckTime: { value: '15:00', shareWithBand: true,  shareWithClient: false },
+    finishTime:     { value: '23:00', shareWithBand: false, shareWithClient: false },
+  },
+};
+
+const builderFixtures: Record<string, object> = {
+  FullySet:     builderBookingBase,
+  MissingVenue: { ...builderBookingBase, venueId: null, venue: null },
+};
+
+export function makeBuilderHandlers(scenario: 'FullySet' | 'MissingVenue') {
+  return [
+    http.get('/api/bookings/bd1', () => HttpResponse.json(builderFixtures[scenario])),
+    http.get('/api/me', () => HttpResponse.json(userProfile)),
+    http.get('/api/packages', () => HttpResponse.json(packages)),
+    http.get('/api/contacts', () => HttpResponse.json(contacts)),
+    http.get('/api/contacts/:id', ({ params }) => {
+      const c = contacts.find((x) => x.id === params.id);
+      return c ? HttpResponse.json(c) : new HttpResponse(null, { status: 404 });
+    }),
+    http.get('/api/series', () => HttpResponse.json(series)),
+  ];
+}
+
 export function makeBookingDetailHandlers(scenario: string) {
   return [
     http.get('/api/bookings/bd1', () => HttpResponse.json(bookingDetails[scenario])),

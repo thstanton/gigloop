@@ -1,5 +1,5 @@
 import { useAuth } from '@clerk/react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Eye, Pencil, Wrench } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
@@ -26,6 +26,7 @@ interface BookingOverviewStripProps {
 
 export default function BookingOverviewStrip({ bookingId }: BookingOverviewStripProps) {
   const { isLoaded } = useAuth();
+  const navigate = useNavigate();
   const [, setSearchParams] = useSearchParams();
   const { data: booking } = useBooking(bookingId);
   const { data: userProfile } = useQuery({
@@ -84,10 +85,11 @@ export default function BookingOverviewStrip({ bookingId }: BookingOverviewStrip
                 <Eye size={16} />
                 <span className="hidden md:inline">Client portal</span>
               </a>
+              {/* Temporary entry — slice #525 replaces setSearchParams with this navigate */}
               <Button
                 size="sm"
                 className="w-9 px-0 md:w-auto md:px-3"
-                onClick={() => setSearchParams({ sheet: 'bookingEdit' })}
+                onClick={() => navigate(`/admin/bookings/${bookingId}/builder`)}
               >
                 <Wrench size={16} />
                 <span className="hidden md:inline">Builder</span>

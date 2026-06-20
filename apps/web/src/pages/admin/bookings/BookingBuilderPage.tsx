@@ -1,0 +1,721 @@
+import { useRef, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import {
+  CalendarClock,
+  CheckCircle2,
+  ChevronLeft,
+  Circle,
+  FileText,
+  ListOrdered,
+  MapPin,
+  MinusCircle,
+  Music,
+  Package,
+  StickyNote,
+  Users,
+  type LucideIcon,
+} from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@clerk/react';
+import { Button } from '@/components/ui/button';
+import {
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+  ResponsiveDialogDescription,
+} from '@/components/ui/responsive-dialog';
+import { useBooking } from '@/lib/hooks/useBooking';
+import { useBookingFields } from '@/lib/hooks/useBookingFields';
+import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from '@/lib/api';
+import { toast } from '@/lib/hooks/use-toast';
+import { OverviewAtom, type OverviewChanges, type SeriesChange } from '@/features/bookings/OverviewAtom';
+import { PeopleAtom, type PeopleSelection } from '@/features/bookings/PeopleAtom';
+import { VenueAtom, type VenueSelection } from '@/features/bookings/VenueAtom';
+import { DetailsAtom, LOGISTICS_TIME_KEYS, type DetailsLogistics } from '@/features/bookings/DetailsAtom';
+import { ItineraryAtom } from '@/features/bookings/ItineraryAtom';
+import MusicFormEditor from '@/features/bookings/MusicFormEditor';
+import InlineNotes from '@/features/bookings/InlineNotes';
+import { NO_PACKAGE, TemplatePicker, type SetValues } from '@/features/bookings/ItineraryFields';
+import type {
+  ApplyPackageTemplateResponse,
+  BookingDetail,
+  BookingLogisticsEntry,
+  BookingSeries,
+  Contact,
+  MusicFormConfig,
+  MusicFormSuggestion,
+  PackageTemplate,
+  UpdateBookingSeriesResponse,
+} from '@/types/api';
+
+// PRD #511 Module C — the Booking Builder: a single scrolling one-pager stacking the
+// concern atoms in spine order. All atoms run in self-saving (Tier-1) regime; row-level
+// operations are immediate-persist (Tier-3). The completeness rail derives from the
+// Module A predicates (venueCompleteness, peopleCompleteness, itineraryCompleteness)
+// so the rail and the checklist are never out of sync. Accessible at
+// /admin/bookings/:id/builder; wired into the global Edit action in slice #525.
+
+// ─── Spine definition ─────────────────────────────────────────────────────────
+
+type SpineId = 'overview' | 'people' | 'venue' | 'templates' | 'itinerary' | 'details' | 'music' | 'notes';
+
+const SPINE: Array<{ id: SpineId; label: string; Icon: LucideIcon }> = [
+  { id: 'overview',   label: 'Overview',          Icon: CalendarClock },
+  { id: 'people',     label: 'People',             Icon: Users },
+  { id: 'venue',      label: 'Venue',              Icon: MapPin },
+  { id: 'templates',  label: 'Package Templates',  Icon: Package },
+  { id: 'itinerary',  label: 'Itinerary',          Icon: ListOrdered },
+  { id: 'details',    label: 'Details',            Icon: FileText },
+  { id: 'music',      label: 'Music',              Icon: Music },
+  { id: 'notes',      label: 'Notes',              Icon: StickyNote },
+];
+
+// ─── Completeness helpers (mirror Module A predicates client-side) ────────────
+
+type CompletenessStatus = 'set' | 'partial' | 'unset' | 'empty' | null;
+
+function itineraryStatus(setCount: number, hasAllAnchors: boolean): CompletenessStatus {
+  if (setCount === 0) return 'empty';
+  return hasAllAnchors ? 'set' : 'partial';
+}
+
+function buildCompletenessMap(booking: BookingDetail): Record<SpineId, CompletenessStatus> {
+  const hasAllAnchors = (['arrivalTime', 'soundCheckTime', 'finishTime'] as const)
+    .every((k) => !!booking.logistics?.[k]?.value);
+  return {
+    overview:   null,
+    people:     booking.customer ? 'set' : 'unset',
+    venue:      booking.venue ? 'set' : 'unset',
+    templates:  null,
+    itinerary:  itineraryStatus(booking.sets.length, hasAllAnchors),
+    details:    null,
+    music:      null,
+    notes:      null,
+  };
+}
+
+// ─── Completeness rail ────────────────────────────────────────────────────────
+
+function CompletenessRail({
+  completeness,
+  onScrollTo,
+}: {
+  completeness: Record<SpineId, CompletenessStatus>;
+  onScrollTo: (id: SpineId) => void;
+}): React.JSX.Element {
+  return (
+    <nav aria-label="Builder sections" className="space-y-1">
+      {SPINE.map(({ id, label, Icon }) => {
+        const status = completeness[id];
+        return (
+          <button
+            key={id}
+            type="button"
+            onClick={() => onScrollTo(id)}
+            className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm text-muted transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <Icon size={14} className="flex-shrink-0 text-muted" aria-hidden="true" />
+            <span className="flex-1 text-left">{label}</span>
+            {status === 'set'     && <CheckCircle2 size={14} className="text-status-confirmed flex-shrink-0" aria-label="Complete" />}
+            {status === 'partial' && <MinusCircle  size={14} className="text-status-provisional flex-shrink-0" aria-label="Partial" />}
+            {(status === 'unset' || status === 'empty') && (
+              <Circle size={14} className="text-border flex-shrink-0" aria-label="Incomplete" />
+            )}
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
+// ─── Exit-backstop dialog ─────────────────────────────────────────────────────
+
+function ExitBackstopDialog({
+  open,
+  undone,
+  onScrollTo,
+  onClose,
+  onExit,
+}: {
+  open: boolean;
+  undone: Array<{ id: SpineId; label: string }>;
+  onScrollTo: (id: SpineId) => void;
+  onClose: () => void;
+  onExit: () => void;
+}) {
+  return (
+    <ResponsiveDialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <ResponsiveDialogContent>
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>A few things still need setting up</ResponsiveDialogTitle>
+        </ResponsiveDialogHeader>
+        <ResponsiveDialogDescription className="mt-2">
+          These sections are still empty. You can set them up now or come back later.
+        </ResponsiveDialogDescription>
+        <ul className="mt-4 space-y-2">
+          {undone.map(({ id, label }) => (
+            <li key={id} className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
+              <span className="text-sm font-medium text-foreground">{label}</span>
+              <Button size="sm" variant="outline" onClick={() => { onClose(); onScrollTo(id); }}>
+                Set up
+              </Button>
+            </li>
+          ))}
+        </ul>
+        <div className="mt-6 flex justify-end gap-2">
+          <Button variant="outline" onClick={onClose}>Keep editing</Button>
+          <Button onClick={onExit}>Exit anyway</Button>
+        </div>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
+  );
+}
+
+// ─── Builder section wrapper ──────────────────────────────────────────────────
+
+function BuilderSection({
+  id,
+  title,
+  sectionRef,
+  children,
+}: {
+  id: SpineId;
+  title: string;
+  sectionRef?: React.RefObject<HTMLElement>;
+  children: React.ReactNode;
+}) {
+  return (
+    <section
+      id={`builder-${id}`}
+      ref={sectionRef}
+      className="scroll-mt-8"
+    >
+      <h2 className="mb-3 text-base font-semibold text-foreground">{title}</h2>
+      <div className="rounded-lg border border-border bg-background p-4">
+        {children}
+      </div>
+    </section>
+  );
+}
+
+// ─── Shared logistics helpers (mirror QuickTweakSheet seams) ─────────────────
+
+function nonAnchorKeys(logistics: BookingDetail['logistics']): Record<string, BookingLogisticsEntry> {
+  const anchors = new Set<string>(LOGISTICS_TIME_KEYS);
+  return Object.fromEntries(Object.entries(logistics ?? {}).filter(([k]) => !anchors.has(k)));
+}
+
+function preservedTimeKeys(logistics: BookingDetail['logistics']): DetailsLogistics {
+  const out: DetailsLogistics = {};
+  for (const key of LOGISTICS_TIME_KEYS) {
+    const entry = logistics?.[key];
+    if (entry) out[key] = entry;
+  }
+  return out;
+}
+
+function isConfirmationRequired(r: unknown): r is Required<UpdateBookingSeriesResponse> {
+  return Boolean(r && typeof r === 'object' && 'requiresConfirmation' in r);
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
+export default function BookingBuilderPage() {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const { isLoaded } = useAuth();
+  const queryClient = useQueryClient();
+  const { data: booking, isLoading, isError } = useBooking(id!);
+  const fields = useBookingFields(id!);
+
+  // Section scroll refs (individual declarations to satisfy the Rules of Hooks).
+  const overviewRef   = useRef<HTMLElement>(null);
+  const peopleRef     = useRef<HTMLElement>(null);
+  const venueRef      = useRef<HTMLElement>(null);
+  const templatesRef  = useRef<HTMLElement>(null);
+  const itineraryRef  = useRef<HTMLElement>(null);
+  const detailsRef    = useRef<HTMLElement>(null);
+  const musicRef      = useRef<HTMLElement>(null);
+  const notesRef      = useRef<HTMLElement>(null);
+
+  const sectionRefs: Record<SpineId, React.RefObject<HTMLElement>> = {
+    overview:   overviewRef,
+    people:     peopleRef,
+    venue:      venueRef,
+    templates:  templatesRef,
+    itinerary:  itineraryRef,
+    details:    detailsRef,
+    music:      musicRef,
+    notes:      notesRef,
+  };
+
+  const [showBackstop, setShowBackstop] = useState(false);
+  const [seriesConfirmation, setSeriesConfirmation] = useState<{ seriesId: string; warning: string } | null>(null);
+  const [seriesError, setSeriesError] = useState<string | null>(null);
+  const [pendingSuggestion, setPendingSuggestion] = useState<MusicFormSuggestion | null>(null);
+
+  const { data: seriesList = [] } = useQuery({
+    queryKey: ['series'],
+    queryFn: () => apiGet<BookingSeries[]>('/series'),
+    enabled: isLoaded,
+  });
+
+  const { data: templates = [], isLoading: templatesLoading } = useQuery({
+    queryKey: ['packages'],
+    queryFn: () => apiGet<PackageTemplate[]>('/packages'),
+    enabled: isLoaded,
+  });
+
+  function invalidateBooking() {
+    queryClient.invalidateQueries({ queryKey: ['booking', id!] });
+    queryClient.invalidateQueries({ queryKey: ['bookings'] });
+  }
+
+  function scrollTo(sectionId: SpineId) {
+    sectionRefs[sectionId].current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  // ── Overview mutations ─────────────────────────────────────────────────────
+
+  const overviewSave = useMutation({
+    mutationFn: (changes: Omit<OverviewChanges, 'series'>) => apiPatch(`/bookings/${id}`, changes),
+    onSuccess: invalidateBooking,
+    onError: () => {},
+  });
+
+  const seriesSave = useMutation({
+    mutationFn: (payload: { seriesId?: string | null; newSeriesLabel?: string; confirm?: boolean }) =>
+      apiPatch<UpdateBookingSeriesResponse | object>(`/bookings/${id}/series`, payload),
+    onSuccess: (result, vars) => {
+      if (isConfirmationRequired(result)) {
+        setSeriesConfirmation({ seriesId: vars.seriesId!, warning: result.warning });
+        return;
+      }
+      invalidateBooking();
+      queryClient.invalidateQueries({ queryKey: ['series'] });
+      setSeriesError(null);
+    },
+    onError: (error) => {
+      const msg = error instanceof Response && error.status === 409
+        ? 'This booking has non-VOID invoices. Void or delete them before adding to a series.'
+        : 'Failed to update series assignment. Please try again.';
+      setSeriesError(msg);
+    },
+  });
+
+  function handleOverviewSave(changes: OverviewChanges) {
+    const { series, ...rest } = changes;
+    setSeriesError(null);
+    setSeriesConfirmation(null);
+    if (Object.keys(rest).length > 0) overviewSave.mutate(rest);
+    if (series) dispatchSeriesChange(series);
+  }
+
+  function dispatchSeriesChange(series: SeriesChange, confirm?: boolean) {
+    if (series.mode === 'none')     seriesSave.mutate({ seriesId: null });
+    else if (series.mode === 'existing') seriesSave.mutate({ seriesId: series.seriesId, confirm });
+    else                            seriesSave.mutate({ newSeriesLabel: series.label });
+  }
+
+  // ── People mutations ───────────────────────────────────────────────────────
+
+  const peopleSave = useMutation({
+    mutationFn: async (selection: PeopleSelection): Promise<void> => {
+      const patch: { customerId?: string; bookingAgentId?: string | null } = {};
+      if (selection.customer) {
+        if (selection.customer.kind === 'new') {
+          const c = await apiPost<Contact>('/contacts', { ...selection.customer.contact, primaryRole: 'CUSTOMER' });
+          patch.customerId = c.id;
+        } else if (selection.customer.contactId) {
+          patch.customerId = selection.customer.contactId;
+        }
+      }
+      if (selection.agent) {
+        if (selection.agent.kind === 'new') {
+          const c = await apiPost<Contact>('/contacts', { ...selection.agent.contact, primaryRole: 'BOOKING_AGENT' });
+          patch.bookingAgentId = c.id;
+        } else {
+          patch.bookingAgentId = selection.agent.contactId;
+        }
+      }
+      await apiPatch(`/bookings/${id}`, patch);
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['contacts'] }); invalidateBooking(); },
+    onError: () => toast({ title: 'Failed to save people. Please try again.', variant: 'destructive' }),
+  });
+
+  // ── Venue mutations ────────────────────────────────────────────────────────
+
+  const venueSave = useMutation({
+    mutationFn: async (selection: VenueSelection): Promise<void> => {
+      let venueId: string | null;
+      if (selection.kind === 'new') {
+        const c = await apiPost<Contact>('/contacts', { ...selection.venue, primaryRole: 'VENUE' });
+        venueId = c.id;
+        queryClient.invalidateQueries({ queryKey: ['contacts'] });
+      } else {
+        venueId = selection.venueId;
+      }
+      await apiPatch(`/bookings/${id}`, { venueId });
+    },
+    onSuccess: invalidateBooking,
+    onError: () => toast({ title: 'Failed to save venue. Please try again.', variant: 'destructive' }),
+  });
+
+  // ── Template mutations (Package Templates + Itinerary share the accept-suggestion path) ─
+
+  const acceptSuggestion = useMutation({
+    mutationFn: async (suggestion: MusicFormSuggestion) => {
+      const config = await apiGet<MusicFormConfig>(`/bookings/${id}/music-form-config`);
+      const seen = new Set(config.keyMoments.map((km) => `${km.section} ${km.label}`));
+      return apiPut(`/bookings/${id}/music-form-config`, {
+        keyMoments: [
+          ...config.keyMoments,
+          ...suggestion.keyMoments.filter((km) => !seen.has(`${km.section} ${km.label}`)),
+        ],
+        enabledGenres: Array.from(new Set([...config.enabledGenres, ...suggestion.genres])),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['booking-music-form-config', id] });
+      setPendingSuggestion(null);
+    },
+    onError: () => toast({ title: 'Failed to add suggestions. Please try again.', variant: 'destructive' }),
+  });
+
+  const templatesApply = useMutation({
+    mutationFn: (packageTemplateId: string) =>
+      apiPost<ApplyPackageTemplateResponse>(`/bookings/${id}/packages`, { packageTemplateId }),
+    onSuccess: (data) => {
+      invalidateBooking();
+      const s = data.suggestion;
+      if (s && (s.keyMoments.length || s.genres.length)) setPendingSuggestion(s);
+    },
+    onError: () => toast({ title: 'Failed to apply template. Please try again.', variant: 'destructive' }),
+  });
+
+  const itineraryApplyTemplate = useMutation({
+    mutationFn: (packageTemplateId: string) =>
+      apiPost<ApplyPackageTemplateResponse>(`/bookings/${id}/packages`, { packageTemplateId }),
+    onSuccess: (data) => {
+      invalidateBooking();
+      const s = data.suggestion;
+      if (s && (s.keyMoments.length || s.genres.length)) setPendingSuggestion(s);
+    },
+    onError: () => toast({ title: 'Failed to add package. Please try again.', variant: 'destructive' }),
+  });
+
+  // ── Itinerary mutations ────────────────────────────────────────────────────
+
+  const addSet = useMutation({
+    mutationFn: ({ packageId, values }: { packageId: string | null; values: SetValues }) => {
+      const sets = booking?.sets ?? [];
+      return apiPost(`/bookings/${id}/sets`, {
+        order: Math.max(0, ...sets.map((s) => s.order)) + 1,
+        duration: values.duration,
+        ...(values.startTime ? { startTime: values.startTime } : {}),
+        ...(values.label    ? { label: values.label }         : {}),
+        ...(packageId        ? { packageId }                   : {}),
+      });
+    },
+    onSuccess: invalidateBooking,
+    onError: () => toast({ title: 'Failed to add set. Please try again.', variant: 'destructive' }),
+  });
+
+  const updateSet = useMutation({
+    mutationFn: ({ setId, values }: { setId: string; values: SetValues }) =>
+      apiPatch(`/bookings/${id}/sets/${setId}`, values),
+    onSuccess: invalidateBooking,
+    onError: () => toast({ title: 'Failed to save set. Please try again.', variant: 'destructive' }),
+  });
+
+  const deleteSet = useMutation({
+    mutationFn: (setId: string) => apiDelete(`/bookings/${id}/sets/${setId}`),
+    onSuccess: invalidateBooking,
+    onError: () => toast({ title: 'Failed to delete set. Please try again.', variant: 'destructive' }),
+  });
+
+  const moveSet = useMutation({
+    mutationFn: ({ setId, packageId }: { setId: string; packageId: string | null }) =>
+      apiPatch(`/bookings/${id}/sets/${setId}`, { packageId }),
+    onSuccess: invalidateBooking,
+    onError: () => toast({ title: 'Failed to move set. Please try again.', variant: 'destructive' }),
+  });
+
+  const updatePackage = useMutation({
+    mutationFn: ({ packageId, dto }: { packageId: string; dto: { label?: string; icon?: string } }) =>
+      apiPatch(`/bookings/${id}/packages/${packageId}`, dto),
+    onSuccess: invalidateBooking,
+    onError: () => toast({ title: 'Failed to update package. Please try again.', variant: 'destructive' }),
+  });
+
+  const removePackage = useMutation({
+    mutationFn: (packageId: string) => apiDelete(`/bookings/${id}/packages/${packageId}`),
+    onSuccess: invalidateBooking,
+    onError: () => toast({ title: 'Failed to remove package. Please try again.', variant: 'destructive' }),
+  });
+
+  const saveAnchors = useMutation({
+    mutationFn: (anchors: Record<string, BookingLogisticsEntry>) =>
+      apiPatch(`/bookings/${id}`, { logistics: { ...nonAnchorKeys(booking?.logistics ?? null), ...anchors } }),
+    onSuccess: invalidateBooking,
+  });
+
+  // ── Details mutations ──────────────────────────────────────────────────────
+
+  const detailsSave = useMutation({
+    mutationFn: (detailsLogistics: DetailsLogistics) =>
+      apiPatch(`/bookings/${id}`, {
+        logistics: { ...preservedTimeKeys(booking?.logistics ?? null), ...detailsLogistics },
+      }),
+    onSuccess: invalidateBooking,
+  });
+
+  // ── Loading / error guards ─────────────────────────────────────────────────
+
+  if (isLoading) {
+    return (
+      <div className="px-4 md:px-6 py-6 max-w-7xl mx-auto space-y-6 animate-pulse">
+        <div className="h-4 w-20 bg-border rounded" />
+        <div className="h-6 w-40 bg-border rounded" />
+        {[0, 1, 2, 3].map((i) => <div key={i} className="h-40 bg-border rounded-lg" />)}
+      </div>
+    );
+  }
+
+  if (isError || !booking) {
+    return (
+      <div className="px-4 md:px-6 py-6">
+        <p className="text-sm text-muted">Booking not found.</p>
+        <Link to="/admin/bookings" className="text-sm text-primary underline underline-offset-2 mt-2 block">
+          Back to bookings
+        </Link>
+      </div>
+    );
+  }
+
+  // ── Completeness (derived from current booking data for rail + backstop) ────
+
+  const completeness = buildCompletenessMap(booking);
+  const undone = SPINE.filter(({ id: sid }) => {
+    const s = completeness[sid];
+    return s === 'unset' || s === 'empty';
+  });
+
+  const itineraryAddingKey = addSet.isPending ? (addSet.variables?.packageId ?? NO_PACKAGE) : null;
+
+  function handleDone() {
+    if (undone.length > 0) setShowBackstop(true);
+    else navigate(`/admin/bookings/${id}`);
+  }
+
+  return (
+    <div className="px-4 md:px-6 py-6 max-w-7xl mx-auto">
+      <Link
+        to={`/admin/bookings/${id}`}
+        className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground transition-colors"
+      >
+        <ChevronLeft size={14} />
+        Back to booking
+      </Link>
+
+      <h1 className="mt-4 mb-6 font-display text-2xl font-semibold text-foreground">
+        Builder
+      </h1>
+
+      <div className="md:grid md:grid-cols-[1fr_220px] md:gap-8 md:items-start">
+        {/* ── Spine ─────────────────────────────────────────────────────────── */}
+        <div className="space-y-8">
+
+          {/* Overview */}
+          <BuilderSection id="overview" title="Overview" sectionRef={overviewRef}>
+            <OverviewAtom
+              initialEventType={booking.eventType}
+              initialDate={booking.date.slice(0, 10)}
+              initialFee={booking.fee}
+              initialTitle={booking.title}
+              initialSeriesId={booking.seriesId}
+              series={seriesList}
+              onSave={handleOverviewSave}
+              isSaving={overviewSave.isPending || seriesSave.isPending}
+              saved={!overviewSave.isPending && !seriesSave.isPending && (overviewSave.isSuccess || seriesSave.isSuccess)}
+              saveError={seriesError ?? (overviewSave.isError ? 'Failed to save. Please try again.' : null)}
+            />
+            {seriesConfirmation && (
+              <div className="mt-4 p-4 border border-border rounded-md bg-muted/30 space-y-3">
+                <p className="text-sm">{seriesConfirmation.warning}</p>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      const { seriesId } = seriesConfirmation;
+                      setSeriesConfirmation(null);
+                      seriesSave.mutate({ seriesId, confirm: true });
+                    }}
+                    disabled={seriesSave.isPending}
+                  >
+                    {seriesSave.isPending ? 'Saving…' : 'Continue anyway'}
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setSeriesConfirmation(null)}>
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
+          </BuilderSection>
+
+          {/* People */}
+          <BuilderSection id="people" title="People" sectionRef={peopleRef}>
+            <PeopleAtom
+              initialCustomerId={booking.customer?.id ?? null}
+              initialAgentId={booking.bookingAgent?.id ?? null}
+              onSave={(sel) => peopleSave.mutate(sel)}
+              isSaving={peopleSave.isPending}
+              saved={peopleSave.isSuccess}
+              saveError={peopleSave.isError ? 'Failed to save. Please try again.' : null}
+            />
+          </BuilderSection>
+
+          {/* Venue */}
+          <BuilderSection id="venue" title="Venue" sectionRef={venueRef}>
+            <VenueAtom
+              initialVenueId={booking.venue?.id ?? null}
+              onSave={(sel) => venueSave.mutate(sel)}
+              isSaving={venueSave.isPending}
+              saved={venueSave.isSuccess}
+              saveError={venueSave.isError ? 'Failed to save. Please try again.' : null}
+            />
+          </BuilderSection>
+
+          {/* Package Templates */}
+          <BuilderSection id="templates" title="Package Templates" sectionRef={templatesRef}>
+            {booking.packages.length > 0 && (
+              <div className="mb-4 flex flex-wrap gap-2">
+                {booking.packages.map((pkg) => (
+                  <span
+                    key={pkg.id}
+                    className="inline-flex items-center rounded-full bg-secondary border border-border px-3 py-1 text-sm"
+                  >
+                    {pkg.label}
+                  </span>
+                ))}
+              </div>
+            )}
+            {pendingSuggestion && (
+              <div className="mb-4 rounded border border-border bg-primary/5 p-3 space-y-2">
+                <p className="text-sm">
+                  This package suggests{' '}
+                  {pendingSuggestion.keyMoments.length > 0 && (
+                    <span className="font-medium">{pendingSuggestion.keyMoments.length} key moment{pendingSuggestion.keyMoments.length === 1 ? '' : 's'}</span>
+                  )}
+                  {pendingSuggestion.keyMoments.length > 0 && pendingSuggestion.genres.length > 0 && ' and '}
+                  {pendingSuggestion.genres.length > 0 && (
+                    <span className="font-medium">{pendingSuggestion.genres.length} genre{pendingSuggestion.genres.length === 1 ? '' : 's'}</span>
+                  )}{' '}
+                  for the music form.
+                </p>
+                <div className="flex items-center gap-3">
+                  <Button size="sm" onClick={() => acceptSuggestion.mutate(pendingSuggestion)} disabled={acceptSuggestion.isPending}>
+                    {acceptSuggestion.isPending ? 'Adding…' : 'Add to music form'}
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={() => setPendingSuggestion(null)}
+                    className="text-sm text-muted transition-colors hover:text-foreground"
+                  >
+                    Not now
+                  </button>
+                </div>
+              </div>
+            )}
+            <TemplatePicker
+              templates={templates}
+              templatesLoading={templatesLoading}
+              eventType={booking.eventType}
+              isApplying={templatesApply.isPending}
+              onApply={(templateId) => templatesApply.mutate(templateId)}
+              onCancel={() => {}}
+            />
+          </BuilderSection>
+
+          {/* Itinerary */}
+          <BuilderSection id="itinerary" title="Itinerary" sectionRef={itineraryRef}>
+            <ItineraryAtom
+              sets={booking.sets}
+              packages={booking.packages}
+              initialLogistics={booking.logistics}
+              eventType={booking.eventType}
+              templates={templates}
+              templatesLoading={templatesLoading}
+              onAddSet={(packageId, values) => addSet.mutate({ packageId, values })}
+              onUpdateSet={(setId, values) => updateSet.mutate({ setId, values })}
+              onDeleteSet={(setId) => deleteSet.mutate(setId)}
+              onMoveSet={(setId, packageId) => moveSet.mutate({ setId, packageId })}
+              onApplyTemplate={(templateId) => itineraryApplyTemplate.mutate(templateId)}
+              onUpdatePackage={(packageId, dto) => updatePackage.mutate({ packageId, dto })}
+              onRemovePackage={(packageId) => removePackage.mutate(packageId)}
+              onSaveAnchors={(anchors) => saveAnchors.mutate(anchors)}
+              savingSetId={updateSet.isPending ? updateSet.variables?.setId ?? null : null}
+              deletingSetId={deleteSet.isPending ? deleteSet.variables ?? null : null}
+              movingSetId={moveSet.isPending ? moveSet.variables?.setId ?? null : null}
+              addingKey={itineraryAddingKey}
+              isApplyingTemplate={itineraryApplyTemplate.isPending}
+              removingPackageId={removePackage.isPending ? removePackage.variables ?? null : null}
+              anchorsSaving={saveAnchors.isPending}
+              anchorsSaved={saveAnchors.isSuccess}
+              anchorsError={saveAnchors.isError ? 'Failed to save times. Please try again.' : null}
+            />
+          </BuilderSection>
+
+          {/* Details */}
+          <BuilderSection id="details" title="Details" sectionRef={detailsRef}>
+            <DetailsAtom
+              initialLogistics={booking.logistics}
+              onSave={(detailsLogistics) => detailsSave.mutate(detailsLogistics)}
+              isSaving={detailsSave.isPending}
+              saved={detailsSave.isSuccess}
+              saveError={detailsSave.isError ? 'Failed to save details. Please try again.' : null}
+            />
+          </BuilderSection>
+
+          {/* Music */}
+          <BuilderSection id="music" title="Music" sectionRef={musicRef}>
+            <MusicFormEditor booking={booking} isOpen />
+          </BuilderSection>
+
+          {/* Notes */}
+          <BuilderSection id="notes" title="Notes" sectionRef={notesRef}>
+            <InlineNotes
+              notes={booking.notes}
+              onSave={(notes) => fields.updateNotes(notes)}
+              isSaving={fields.isNotesPending}
+            />
+          </BuilderSection>
+
+          {/* Mobile Done button */}
+          <div className="flex justify-end pb-8 md:hidden">
+            <Button onClick={handleDone}>Done</Button>
+          </div>
+        </div>
+
+        {/* ── Completeness rail (desktop only) ─────────────────────────────── */}
+        <aside className="hidden md:block sticky top-8">
+          <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted">Sections</p>
+          <CompletenessRail completeness={completeness} onScrollTo={scrollTo} />
+          <div className="mt-6">
+            <Button className="w-full" onClick={handleDone}>Done</Button>
+          </div>
+        </aside>
+      </div>
+
+      <ExitBackstopDialog
+        open={showBackstop}
+        undone={undone}
+        onScrollTo={scrollTo}
+        onClose={() => setShowBackstop(false)}
+        onExit={() => navigate(`/admin/bookings/${id}`)}
+      />
+    </div>
+  );
+}

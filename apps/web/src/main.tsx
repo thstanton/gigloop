@@ -14,6 +14,7 @@ import DashboardPage from './pages/admin/DashboardPage';
 import SettingsPage from './pages/admin/SettingsPage';
 import BookingsListPage from './pages/admin/bookings/BookingsListPage';
 import BookingDetailPage from './pages/admin/bookings/BookingDetailPage';
+import BookingBuilderPage from './pages/admin/bookings/BookingBuilderPage';
 import BookingNewPage from './pages/admin/bookings/BookingNewPage';
 import ContactsListPage from './pages/admin/contacts/ContactsListPage';
 import ContactNewPage from './pages/admin/contacts/ContactNewPage';
@@ -106,6 +107,7 @@ const router = createBrowserRouter([
       { path: 'bookings', element: <BookingsListPage /> },
       { path: 'bookings/new', element: <BookingNewPage /> },
       { path: 'bookings/:id', element: <BookingDetailPage /> },
+      { path: 'bookings/:id/builder', element: <BookingBuilderPage /> },
       { path: 'contacts', element: <ContactsListPage /> },
       { path: 'contacts/new', element: <ContactNewPage /> },
       { path: 'contacts/:id', element: <ContactDetailPage /> },

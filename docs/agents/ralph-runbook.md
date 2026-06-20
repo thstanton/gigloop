@@ -23,3 +23,7 @@ Without this one-time setup, `git push` and `gh issue edit` will fail with 401/a
 ## CI / scripts
 
 Files in `scripts/` are in the `web` filter (the `scripts/**` glob). Changes there trigger the web test job (node `--test` runs) but do NOT trigger ESLint (the lint job only runs `cd apps/web && bun run lint`, not scripts). So removing a `.mjs` in `scripts/` will never surface an ESLint error — verify by running `node --test scripts/<file>.test.mjs` directly instead.
+
+## Web tests (vitest)
+
+The `@rolldown/binding-linux-arm64-gnu` native binding may be missing after a fresh install (only darwin-arm64 ships in the lockfile). Symptom: `vitest run` exits immediately with "Cannot find native binding." Fix: run `bun install` from the repo root — bun resolves the correct platform binding. Tests (`bun run test`) work after that.
