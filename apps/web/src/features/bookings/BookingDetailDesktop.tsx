@@ -84,7 +84,6 @@ export function BookingDetailDesktop({ bookingId }: BookingDetailDesktopProps) {
           <div className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <ItineraryCard
-                bookingId={bookingId}
                 logistics={booking.logistics}
                 sets={booking.sets}
                 packages={booking.packages}
