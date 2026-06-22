@@ -17,9 +17,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { InlineContactBlock } from './InlineContactBlock';
-import { InlineVenueBlock } from './InlineVenueBlock';
-import { InlineAgentBlock } from './InlineAgentBlock';
+import { RoleField, type RoleSelection } from './PeopleFields';
+import { VenueFields, type VenueSelection } from './VenueFields';
 import { EVENT_TYPE_LABELS } from '@/lib/constants';
 import type { BookingSeries, EventType, PackageTemplate } from '@/types/api';
 
@@ -34,9 +33,16 @@ export const bookingFormSchema = z.object({
   title: z.string(),
   fee: z.string(),
   notes: z.string(),
-  customerId: z.string().min(1, 'Customer is required'),
-  venueId: z.string().nullable(),
-  bookingAgentId: z.string().nullable(),
+  // People + Venue bubble an existing-or-new selection from the shared atom cores (ADR-0053);
+  // the create shell resolves a `new` selection to an id (eager POST /contacts) at submit.
+  customer: z
+    .custom<RoleSelection>()
+    .refine(
+      (s) => (s && s.kind === 'new' ? s.contact.name.trim().length > 0 : !!s && s.contactId != null),
+      { message: 'Customer is required' },
+    ),
+  bookingAgent: z.custom<RoleSelection>(),
+  venue: z.custom<VenueSelection>(),
   packageTemplateIds: z.array(z.string()),
   enableMusicForm: z.boolean(),
   seriesMode: z.enum(['none', 'existing', 'new']),
@@ -299,45 +305,67 @@ export function BookingFormFields({
         <Input placeholder="e.g. Smith Wedding" {...register('title')} />
       </FormField>
 
-      {/* People — the lean create-form People section (3 inline blocks). Consolidating
-          this into the controlled PeopleAtom is tracked in #537. */}
-      <div className="space-y-4">
-        <h2 className="text-sm font-semibold text-foreground">People</h2>
+      {/* People — consolidated customer + booking agent, from the shared People atom core
+          (ADR-0053). Section chrome (header + bordered container) mirrors the Builder's
+          BuilderSection so the two surfaces look identical. Create-mode regime: each role
+          bubbles its existing-or-new selection up; the shell resolves a `new` selection to an
+          id at submit. */}
+      <section>
+        <h2 className="mb-3 text-base font-semibold text-foreground">People</h2>
+        <div className="rounded-lg border border-border bg-background p-4 space-y-4">
+          <Controller
+            name="customer"
+            control={control}
+            render={({ field }) => (
+              <RoleField
+                label="Customer"
+                preferredRole="CUSTOMER"
+                required
+                variant="customer"
+                initialContactId={field.value.kind === 'existing' ? field.value.contactId : null}
+                initialMode={
+                  field.value.kind === 'existing' && field.value.contactId ? 'existing' : 'new'
+                }
+                error={errors.customer?.message}
+                onChange={field.onChange}
+              />
+            )}
+          />
 
-        <Controller
-          name="customerId"
-          control={control}
-          render={({ field }) => (
-            <InlineContactBlock
-              value={field.value || null}
-              onChange={(id) => field.onChange(id ?? '')}
-              error={errors.customerId?.message}
-            />
-          )}
-        />
+          <Controller
+            name="bookingAgent"
+            control={control}
+            render={({ field }) => (
+              <RoleField
+                label="Booking agent"
+                preferredRole="BOOKING_AGENT"
+                required={false}
+                variant="agent"
+                initialContactId={field.value.kind === 'existing' ? field.value.contactId : null}
+                onChange={field.onChange}
+              />
+            )}
+          />
+        </div>
+      </section>
 
-        <Controller
-          name="venueId"
-          control={control}
-          render={({ field }) => (
-            <InlineVenueBlock
-              value={field.value}
-              onChange={field.onChange}
-            />
-          )}
-        />
-
-        <Controller
-          name="bookingAgentId"
-          control={control}
-          render={({ field }) => (
-            <InlineAgentBlock
-              value={field.value}
-              onChange={field.onChange}
-            />
-          )}
-        />
-      </div>
+      {/* Venue — its own section, same Builder chrome. VenueFields renders its own
+          "Venue (optional)" sub-header inside the container, mirroring the Builder. */}
+      <section>
+        <h2 className="mb-3 text-base font-semibold text-foreground">Venue</h2>
+        <div className="rounded-lg border border-border bg-background p-4">
+          <Controller
+            name="venue"
+            control={control}
+            render={({ field }) => (
+              <VenueFields
+                initialVenueId={field.value.kind === 'existing' ? field.value.venueId : null}
+                onChange={field.onChange}
+              />
+            )}
+          />
+        </div>
+      </section>
 
       {/* Packages */}
       {songRequestFormEnabled && formats && formats.length > 0 && (
