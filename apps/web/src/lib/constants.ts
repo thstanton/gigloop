@@ -82,6 +82,30 @@ export const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
   CANCELLED:   'Cancelled',
 };
 
+// Point-of-use distillation of the CONTEXT lifecycle canon (the [[Booking]] lifecycle
+// definitions). The single source for status-meaning copy — the create form's coaching
+// control reads it so there is no parallel copy to drift. Each describes what the status
+// *means*, not how often it is chosen (the creation default is a per-user setting). ADR-0053.
+export const STATUS_DESCRIPTIONS: Record<BookingStatus, string> = {
+  ENQUIRY:     'Initial interest. You haven’t sent a quote yet, or it’s not been accepted.',
+  PROVISIONAL: 'The client has agreed your quote in principle. Contract and deposit are still to come.',
+  CONFIRMED:   'Locked in — contract signed and deposit received.',
+  READY:       'Fully prepped — balance invoiced, music form in, logistics resolved.',
+  COMPLETE:    'Played and wrapped up — thank-you sent, post-gig admin done.',
+  CANCELLED:   'Cancelled at any point in the lifecycle.',
+};
+
+// The forward lifecycle statuses offered when creating a booking, in order. Cancelled is
+// excluded — you don't create a cancelled booking. Ready and Complete are legitimate
+// creation statuses (a no-prep series gig; backfilling an already-played gig). ADR-0053.
+export const CREATABLE_BOOKING_STATUSES: BookingStatus[] = [
+  'ENQUIRY',
+  'PROVISIONAL',
+  'CONFIRMED',
+  'READY',
+  'COMPLETE',
+];
+
 export const PACKAGE_CATEGORY_LABELS: Record<string, string> = {
   WEDDING:   'Wedding',
   CORPORATE: 'Corporate',

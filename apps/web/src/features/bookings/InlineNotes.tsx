@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Textarea } from '@/components/ui/textarea';
+import { NotesField } from './NotesFields';
 
 export interface InlineNotesProps {
   notes: string | null;
@@ -66,13 +66,7 @@ export default function InlineNotes({ notes, onSave, isSaving }: Readonly<Inline
           {statusText ?? 'Saved'}
         </span>
       </div>
-      <Textarea
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        placeholder="Add notes about this booking…"
-        rows={5}
-        className="resize-none text-sm"
-      />
+      <NotesField value={value} onChange={setValue} />
     </section>
   );
 }
