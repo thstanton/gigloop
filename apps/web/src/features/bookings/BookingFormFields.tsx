@@ -3,8 +3,6 @@ import type { Control, UseFormRegister, FieldErrors } from 'react-hook-form';
 import { z } from 'zod';
 import { ChevronUp, ChevronDown, Music, Check } from 'lucide-react';
 import { PACKAGE_ICON_MAP } from '@/lib/constants';
-import { Input } from '@/components/ui/input';
-import { DatePicker } from '@/components/ui/date-picker';
 import { Textarea } from '@/components/ui/textarea';
 import { TogglePill } from '@/components/ui/toggle-pill';
 import { Switch } from '@/components/ui/switch';
@@ -19,19 +17,18 @@ import {
 } from '@/components/ui/select';
 import { RoleField, type RoleSelection } from './PeopleFields';
 import { VenueFields, type VenueSelection } from './VenueFields';
-import { EVENT_TYPE_LABELS } from '@/lib/constants';
-import type { BookingSeries, EventType, PackageTemplate } from '@/types/api';
+import { OverviewFields, type OverviewFieldsValue } from './OverviewFields';
+import type { BookingSeries, PackageTemplate } from '@/types/api';
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
 export const bookingFormSchema = z.object({
-  eventType: z.enum([
-    'WEDDING', 'CORPORATE', 'PRIVATE', 'RESIDENCY', 'FESTIVAL', 'OUTDOOR', 'FUNCTION', 'OTHER',
-  ] as const),
-  date: z.string().min(1, 'Date is required'),
+  // Overview bubbles the booking's identity (event type, date, fee, title, series) from the
+  // shared atom core (ADR-0053). Series flows to the atomic POST via seriesId / newSeries.
+  overview: z
+    .custom<OverviewFieldsValue>()
+    .refine((o) => !!o && o.date.trim().length > 0, { message: 'Date is required' }),
   status: z.enum(['ENQUIRY', 'PROVISIONAL', 'CONFIRMED', 'READY', 'COMPLETE', 'CANCELLED'] as const),
-  title: z.string(),
-  fee: z.string(),
   notes: z.string(),
   // People + Venue bubble an existing-or-new selection from the shared atom cores (ADR-0053);
   // the create shell resolves a `new` selection to an id (eager POST /contacts) at submit.
@@ -45,9 +42,6 @@ export const bookingFormSchema = z.object({
   venue: z.custom<VenueSelection>(),
   packageTemplateIds: z.array(z.string()),
   enableMusicForm: z.boolean(),
-  seriesMode: z.enum(['none', 'existing', 'new']),
-  seriesId: z.string().nullable().optional(),
-  newSeriesLabel: z.string().optional(),
 });
 
 export type BookingFormValues = z.infer<typeof bookingFormSchema>;
@@ -135,79 +129,6 @@ function FormatSelector({
   );
 }
 
-const SERIES_MODE_LABELS: Record<string, string> = {
-  none: 'None',
-  existing: 'Existing series',
-  new: 'New series',
-};
-
-// ─── Series section ───────────────────────────────────────────────────────────
-
-function SeriesSection({
-  control,
-  register,
-  series,
-}: {
-  control: Control<BookingFormValues>;
-  register: UseFormRegister<BookingFormValues>;
-  series?: BookingSeries[];
-}) {
-  return (
-    <div className="space-y-3">
-      <h2 className="text-sm font-semibold text-foreground">Series (optional)</h2>
-      <Controller
-        name="seriesMode"
-        control={control}
-        render={({ field }) => (
-          <>
-            <div className="flex gap-2">
-              {(['none', 'existing', 'new'] as const).map((mode) => (
-                <TogglePill
-                  key={mode}
-                  active={field.value === mode}
-                  onClick={() => field.onChange(mode)}
-                >
-                  {SERIES_MODE_LABELS[mode]}
-                </TogglePill>
-              ))}
-            </div>
-            {field.value === 'existing' && series && series.length > 0 && (
-              <Controller
-                name="seriesId"
-                control={control}
-                render={({ field: seriesField }) => (
-                  <Select value={seriesField.value ?? ''} onValueChange={seriesField.onChange}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select series..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {series.map((s) => (
-                        <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-            )}
-            {field.value === 'existing' && (!series || series.length === 0) && (
-              <p className="text-sm text-muted">No series yet. Use "New series" to create one.</p>
-            )}
-            {field.value === 'new' && (
-              <FormField label="Series label">
-                <Input
-                  placeholder="e.g. Hotel Intercontinental — May 2026"
-                  {...register('newSeriesLabel')}
-                />
-              </FormField>
-            )}
-          </>
-        )}
-      />
-    </div>
-  );
-}
-
-
 // ─── Component ────────────────────────────────────────────────────────────────
 
 interface Props {
@@ -229,80 +150,48 @@ export function BookingFormFields({
 }: Props) {
   return (
     <div className="space-y-6">
-      {/* Event type + Date */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <FormField label="Event type">
+      {/* Overview — booking identity (event type, date, fee, title, series) from the shared
+          Overview atom core (ADR-0053). Section chrome mirrors the Builder's BuilderSection. */}
+      <section>
+        <h2 className="mb-3 text-base font-semibold text-foreground">Overview</h2>
+        <div className="rounded-lg border border-border bg-background p-4">
           <Controller
-            name="eventType"
+            name="overview"
             control={control}
             render={({ field }) => (
-              <Select value={field.value} onValueChange={field.onChange}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {(Object.entries(EVENT_TYPE_LABELS) as [EventType, string][]).map(
-                    ([value, label]) => (
-                      <SelectItem key={value} value={value}>
-                        {label}
-                      </SelectItem>
-                    ),
-                  )}
-                </SelectContent>
-              </Select>
+              <OverviewFields
+                value={field.value}
+                onChange={field.onChange}
+                series={(series ?? []).map((s) => ({ id: s.id, label: s.label }))}
+                dateError={errors.overview?.message}
+              />
             )}
           />
-        </FormField>
+        </div>
+      </section>
 
-        <FormField label="Date" error={errors.date?.message}>
-          <Controller
-            name="date"
-            control={control}
-            render={({ field }) => (
-              <DatePicker value={field.value} onChange={field.onChange} />
-            )}
-          />
-        </FormField>
-      </div>
-
-      {/* Status + Fee */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <FormField label="Status">
-          <Controller
-            name="status"
-            control={control}
-            render={({ field }) => (
-              <Select value={field.value} onValueChange={field.onChange}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ENQUIRY">Enquiry</SelectItem>
-                  <SelectItem value="PROVISIONAL">Provisional</SelectItem>
-                  <SelectItem value="CONFIRMED">Confirmed</SelectItem>
-                  <SelectItem value="READY">Ready</SelectItem>
-                  <SelectItem value="COMPLETE">Complete</SelectItem>
-                  <SelectItem value="CANCELLED">Cancelled</SelectItem>
-                </SelectContent>
-              </Select>
-            )}
-          />
-        </FormField>
-
-        <FormField label="Fee (optional)">
-          <Input
-            type="number"
-            min="0"
-            step="0.01"
-            placeholder="0.00"
-            {...register('fee')}
-          />
-        </FormField>
-      </div>
-
-      {/* Title */}
-      <FormField label="Title (optional)">
-        <Input placeholder="e.g. Smith Wedding" {...register('title')} />
+      {/* Status — stays a standalone, create-shell-owned control (not an Overview field);
+          slice #545 reworks this into the coaching control. */}
+      <FormField label="Status">
+        <Controller
+          name="status"
+          control={control}
+          render={({ field }) => (
+            <Select value={field.value} onValueChange={field.onChange}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ENQUIRY">Enquiry</SelectItem>
+                <SelectItem value="PROVISIONAL">Provisional</SelectItem>
+                <SelectItem value="CONFIRMED">Confirmed</SelectItem>
+                <SelectItem value="READY">Ready</SelectItem>
+                <SelectItem value="COMPLETE">Complete</SelectItem>
+                <SelectItem value="CANCELLED">Cancelled</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+        />
       </FormField>
 
       {/* People — consolidated customer + booking agent, from the shared People atom core
@@ -406,9 +295,6 @@ export function BookingFormFields({
           )}
         />
       )}
-
-      {/* Series — assignment lives in the Overview atom post-creation. */}
-      <SeriesSection control={control} register={register} series={series} />
 
       {/* Notes */}
       <FormField label="Notes (optional)">

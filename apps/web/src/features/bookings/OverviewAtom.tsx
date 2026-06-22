@@ -1,27 +1,16 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { DatePicker } from '@/components/ui/date-picker';
-import { FormField } from '@/components/common/FormField';
-import { TogglePill } from '@/components/ui/toggle-pill';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { EVENT_TYPE_LABELS } from '@/lib/constants';
+import { OverviewFields, type OverviewFieldsValue } from './OverviewFields';
 import type { EventType } from '@/types/api';
 
-// PRD #511 Module B — the Overview atom: the booking's identity (event type, date, fee, title,
-// and series assignment). Status is deliberately NOT here — the status transition stays a
-// standalone action with its confirmation dialog (rendered in the strip), never folded into a
-// field. Series assignment is the one field that takes a separate API path — surfaced via
-// `onSave(changes)` like the others; the shell owns the `PATCH /bookings/:id/series` call,
-// the `requiresConfirmation` confirmation flow, and the ConflictException error display.
-
-type SeriesMode = 'none' | 'existing' | 'new';
+// PRD #511 Module B — the Overview atom: composes the shared OverviewFields core (the booking's
+// identity: event type, date, fee, title, series assignment) with a Tier-1 save row, owning the
+// diff (only-changed-fields) and the orchestrated save. Status is deliberately NOT here — the
+// status transition stays a standalone action with its confirmation dialog (rendered in the
+// strip), never folded into a field. Series assignment is the one field that takes a separate
+// API path — surfaced via `onSave(changes)` like the others; the shell owns the
+// `PATCH /bookings/:id/series` call, the `requiresConfirmation` confirmation flow, and the
+// ConflictException error display.
 
 /** The series change the atom detected — included in changes only when series actually changed. */
 export type SeriesChange =
@@ -77,125 +66,41 @@ export function OverviewAtom({
 }: OverviewAtomProps) {
   // Self-initialized once (Venue/People/Details style): the post-save ['booking'] refetch must not
   // stomp an in-progress edit while the self-saving shell stays open.
-  const [eventType, setEventType] = useState<EventType>(initialEventType);
-  const [date, setDate] = useState(initialDate);
-  const [fee, setFee] = useState(initialFee ?? '');
-  const [title, setTitle] = useState(initialTitle ?? '');
+  const [value, setValue] = useState<OverviewFieldsValue>({
+    eventType: initialEventType,
+    date: initialDate,
+    fee: initialFee ?? '',
+    title: initialTitle ?? '',
+    seriesMode: initialSeriesId ? 'existing' : 'none',
+    seriesId: initialSeriesId,
+    newSeriesLabel: '',
+  });
 
-  const initialSeriesMode: SeriesMode = initialSeriesId ? 'existing' : 'none';
-  const [seriesMode, setSeriesMode] = useState<SeriesMode>(initialSeriesMode);
-  const [seriesId, setSeriesId] = useState<string | null>(initialSeriesId);
-  const [newSeriesLabel, setNewSeriesLabel] = useState('');
-
-  const normalizedFee = feeStringToNumber(fee);
+  const normalizedFee = feeStringToNumber(value.fee);
   const initialNormalizedFee = feeStringToNumber(initialFee ?? '');
-  const normalizedTitle = title.trim() === '' ? null : title.trim();
+  const normalizedTitle = value.title.trim() === '' ? null : value.title.trim();
   const initialNormalizedTitle = initialTitle ?? null;
 
   const changes: OverviewChanges = {};
-  if (eventType !== initialEventType) changes.eventType = eventType;
-  if (date !== initialDate) changes.date = date;
+  if (value.eventType !== initialEventType) changes.eventType = value.eventType;
+  if (value.date !== initialDate) changes.date = value.date;
   if (normalizedFee !== initialNormalizedFee) changes.fee = normalizedFee;
   if (normalizedTitle !== initialNormalizedTitle) changes.title = normalizedTitle;
 
   // Series dirty detection: only include a series change when the assignment actually differs.
-  if (seriesMode === 'none' && initialSeriesId !== null) {
+  if (value.seriesMode === 'none' && initialSeriesId !== null) {
     changes.series = { mode: 'none' };
-  } else if (seriesMode === 'existing' && seriesId && seriesId !== initialSeriesId) {
-    changes.series = { mode: 'existing', seriesId };
-  } else if (seriesMode === 'new' && newSeriesLabel.trim()) {
-    changes.series = { mode: 'new', label: newSeriesLabel.trim() };
+  } else if (value.seriesMode === 'existing' && value.seriesId && value.seriesId !== initialSeriesId) {
+    changes.series = { mode: 'existing', seriesId: value.seriesId };
+  } else if (value.seriesMode === 'new' && value.newSeriesLabel.trim()) {
+    changes.series = { mode: 'new', label: value.newSeriesLabel.trim() };
   }
 
   const dirty = Object.keys(changes).length > 0;
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <FormField label="Event type">
-          <Select value={eventType} onValueChange={(v) => setEventType(v as EventType)}>
-            <SelectTrigger aria-label="Event type">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {(Object.entries(EVENT_TYPE_LABELS) as [EventType, string][]).map(([value, label]) => (
-                <SelectItem key={value} value={value}>{label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </FormField>
-
-        <FormField label="Date">
-          <DatePicker value={date} onChange={setDate} />
-        </FormField>
-      </div>
-
-      <FormField label="Fee (optional)">
-        <Input
-          type="number"
-          min="0"
-          step="0.01"
-          placeholder="0.00"
-          aria-label="Fee"
-          value={fee}
-          onChange={(e) => setFee(e.target.value)}
-        />
-      </FormField>
-
-      <FormField label="Title (optional)">
-        <Input
-          placeholder="e.g. Smith Wedding"
-          aria-label="Title"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-        />
-      </FormField>
-
-      {/* Series assignment — none / existing / new toggle. */}
-      <div className="space-y-3">
-        <p className="text-sm font-medium leading-none">Series (optional)</p>
-        <div className="flex flex-wrap gap-2">
-          {(['none', 'existing', 'new'] as const).map((mode) => (
-            <TogglePill
-              key={mode}
-              active={seriesMode === mode}
-              onClick={() => {
-                setSeriesMode(mode);
-                if (mode === 'existing') setSeriesId(initialSeriesId);
-                if (mode === 'new') setNewSeriesLabel('');
-              }}
-            >
-              {{ none: 'None', existing: 'Existing series', new: 'New series' }[mode]}
-            </TogglePill>
-          ))}
-        </div>
-        {seriesMode === 'existing' && (
-          series.length > 0 ? (
-            <Select value={seriesId ?? ''} onValueChange={setSeriesId}>
-              <SelectTrigger aria-label="Series">
-                <SelectValue placeholder="Select series…" />
-              </SelectTrigger>
-              <SelectContent>
-                {series.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : (
-            <p className="text-sm text-muted">No series yet. Use "New series" to create one.</p>
-          )
-        )}
-        {seriesMode === 'new' && (
-          <FormField label="Series label">
-            <Input
-              placeholder="e.g. Hotel Intercontinental — May 2026"
-              aria-label="Series label"
-              value={newSeriesLabel}
-              onChange={(e) => setNewSeriesLabel(e.target.value)}
-            />
-          </FormField>
-        )}
-      </div>
+      <OverviewFields value={value} onChange={setValue} series={series} />
 
       {/* Tier-1 inline save (CLAUDE.md Loading & Feedback): disabled + "Saving…" while pending,
           inline "Saved" on success, inline error below the action. */}

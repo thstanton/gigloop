@@ -17,20 +17,22 @@ function Harness() {
   const { control, register, formState: { errors } } = useForm<BookingFormValues>({
     resolver: zodResolver(bookingFormSchema),
     defaultValues: {
-      eventType: 'WEDDING',
-      date: '',
+      overview: {
+        eventType: 'WEDDING',
+        date: '',
+        fee: '',
+        title: '',
+        seriesMode: 'none',
+        seriesId: null,
+        newSeriesLabel: '',
+      },
       status: 'PROVISIONAL',
-      title: '',
-      fee: '',
       notes: '',
       customer: { kind: 'existing', contactId: null },
       bookingAgent: { kind: 'existing', contactId: null },
       venue: { kind: 'existing', venueId: null },
       packageTemplateIds: [],
       enableMusicForm: false,
-      seriesMode: 'none',
-      seriesId: null,
-      newSeriesLabel: '',
     },
   });
 
@@ -56,9 +58,12 @@ export default meta;
 type Story = StoryObj<typeof BookingFormFields>;
 
 export const ConvergedPeopleAndVenue: Story = {
-  name: 'Renders one People block (customer + agent) and a separate Venue block',
+  name: 'Renders Overview, one People block (customer + agent), and a separate Venue block',
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    // Overview section (basics + series) from the shared atom core.
+    await expect(canvas.getByRole('heading', { name: 'Overview' })).toBeVisible();
+    await expect(canvas.getByLabelText('Event type')).toBeVisible();
     await expect(canvas.getByRole('heading', { name: 'People' })).toBeVisible();
     await expect(canvas.getByText('Customer')).toBeVisible();
     await expect(canvas.getByText(/Booking agent/)).toBeVisible();

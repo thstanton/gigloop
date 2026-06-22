@@ -28,9 +28,9 @@ import type {
   UserProfile,
 } from '@/types/api';
 
-function buildSeriesPayload(values: BookingFormValues): { seriesId?: string; newSeries?: { label: string } } {
-  if (values.seriesMode === 'existing' && values.seriesId) return { seriesId: values.seriesId };
-  if (values.seriesMode === 'new' && values.newSeriesLabel?.trim()) return { newSeries: { label: values.newSeriesLabel.trim() } };
+function buildSeriesPayload(overview: BookingFormValues['overview']): { seriesId?: string; newSeries?: { label: string } } {
+  if (overview.seriesMode === 'existing' && overview.seriesId) return { seriesId: overview.seriesId };
+  if (overview.seriesMode === 'new' && overview.newSeriesLabel.trim()) return { newSeries: { label: overview.newSeriesLabel.trim() } };
   return {};
 }
 
@@ -67,20 +67,21 @@ function buildBookingPayload(
   ids: ResolvedIds,
   checklistItems: ChecklistDefaultItem[],
 ) {
+  const { overview } = values;
   return {
-    eventType: values.eventType as EventType,
-    date: values.date,
+    eventType: overview.eventType as EventType,
+    date: overview.date,
     customerId: ids.customerId,
     status: values.status as BookingStatus,
-    title: values.title || undefined,
-    fee: values.fee ? parseFloat(values.fee) : undefined,
+    title: overview.title.trim() || undefined,
+    fee: overview.fee.trim() ? parseFloat(overview.fee) : undefined,
     notes: values.notes || undefined,
     venueId: ids.venueId,
     bookingAgentId: ids.bookingAgentId,
     packageTemplateIds: values.packageTemplateIds.length ? values.packageTemplateIds : undefined,
     enableMusicForm: values.enableMusicForm,
     checklistItems,
-    ...buildSeriesPayload(values),
+    ...buildSeriesPayload(overview),
   };
 }
 
@@ -122,33 +123,27 @@ export default function BookingNewPage() {
   const { register, control, handleSubmit, setValue, formState: { errors } } = useForm<BookingFormValues>({
     resolver: zodResolver(bookingFormSchema),
     defaultValues: {
-      eventType: 'WEDDING',
-      date: locationState?.date ?? '',
+      overview: {
+        eventType: 'WEDDING',
+        date: locationState?.date ?? '',
+        fee: '',
+        title: '',
+        seriesMode: locationState?.seriesId ? 'existing' : 'none',
+        seriesId: locationState?.seriesId ?? null,
+        newSeriesLabel: '',
+      },
       status: 'PROVISIONAL',
-      title: '',
-      fee: '',
       notes: '',
       customer: { kind: 'existing', contactId: locationState?.customerId ?? null },
       bookingAgent: { kind: 'existing', contactId: locationState?.bookingAgentId ?? null },
       venue: { kind: 'existing', venueId: locationState?.venueId ?? null },
       packageTemplateIds: [],
       enableMusicForm: false,
-      seriesMode: 'none',
-      seriesId: null,
-      newSeriesLabel: '',
     },
   });
 
-  // Customer/venue/agent prefills flow through defaultValues into the (uncontrolled) atom cores;
-  // only date + series need a post-mount setValue.
-  useEffect(() => {
-    if (locationState?.date) setValue('date', locationState.date);
-    if (locationState?.seriesId) {
-      setValue('seriesMode', 'existing');
-      setValue('seriesId', locationState.seriesId);
-    }
-  }, [locationState?.date, locationState?.seriesId, setValue]);
-
+  // All prefills (customer/venue/agent/date/series) flow through defaultValues into the
+  // controlled cores; only the profile-driven status default needs a post-mount setValue.
   useEffect(() => {
     if (!userProfile) return;
     const pref = (userProfile.preferences as { defaultBookingStatus?: string } | undefined)?.defaultBookingStatus ?? 'PROVISIONAL';
