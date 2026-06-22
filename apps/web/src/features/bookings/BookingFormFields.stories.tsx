@@ -25,7 +25,7 @@ const FORMATS: PackageTemplate[] = [
 ];
 
 function Harness() {
-  const { control, register, formState: { errors } } = useForm<BookingFormValues>({
+  const { control, formState: { errors } } = useForm<BookingFormValues>({
     resolver: zodResolver(bookingFormSchema),
     defaultValues: {
       overview: {
@@ -51,7 +51,6 @@ function Harness() {
     <div className="max-w-3xl">
       <BookingFormFields
         control={control}
-        register={register}
         errors={errors}
         songRequestFormEnabled
         formats={FORMATS}
@@ -94,6 +93,19 @@ export const ConvergedPeopleAndVenue: Story = {
     await expect(canvas.getByRole('switch', { name: 'Music form' })).toBeVisible();
     await expect(canvas.queryByText('Genres')).not.toBeInTheDocument();
     await expect(canvas.queryByText('Special requests')).not.toBeInTheDocument();
+    // Notes section renders the shared Notes core (same editor as the Builder's Notes section).
+    await expect(canvas.getByRole('heading', { name: 'Notes' })).toBeVisible();
+    await expect(canvas.getByPlaceholderText('Add notes about this booking…')).toBeVisible();
+  },
+};
+
+export const TypeNotes: Story = {
+  name: 'Typing into the shared Notes core flows through the create-form Controller',
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const notes = canvas.getByPlaceholderText('Add notes about this booking…');
+    await userEvent.type(notes, 'Sound check at 5pm');
+    await expect(notes).toHaveValue('Sound check at 5pm');
   },
 };
 

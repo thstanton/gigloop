@@ -1,14 +1,13 @@
 import { Controller, useWatch } from 'react-hook-form';
-import type { Control, UseFormRegister, FieldErrors } from 'react-hook-form';
+import type { Control, FieldErrors } from 'react-hook-form';
 import { z } from 'zod';
-import { Textarea } from '@/components/ui/textarea';
-import { FormField } from '@/components/common/FormField';
 import { StatusCoachingField } from './StatusCoachingField';
 import { RoleField, type RoleSelection } from './PeopleFields';
 import { VenueFields, type VenueSelection } from './VenueFields';
 import { OverviewFields, type OverviewFieldsValue } from './OverviewFields';
 import { PackagePicker } from './PackagePicker';
 import { MusicFormToggle } from './MusicFields';
+import { NotesField } from './NotesFields';
 import type { BookingSeries, PackageTemplate } from '@/types/api';
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
@@ -41,7 +40,6 @@ export type BookingFormValues = z.infer<typeof bookingFormSchema>;
 
 interface Props {
   control: Control<BookingFormValues>;
-  register: UseFormRegister<BookingFormValues>;
   errors: FieldErrors<BookingFormValues>;
   songRequestFormEnabled?: boolean;
   formats?: PackageTemplate[];
@@ -50,7 +48,6 @@ interface Props {
 
 export function BookingFormFields({
   control,
-  register,
   errors,
   songRequestFormEnabled,
   formats,
@@ -205,14 +202,22 @@ export function BookingFormFields({
         </section>
       )}
 
-      {/* Notes */}
-      <FormField label="Notes (optional)">
-        <Textarea
-          rows={3}
-          placeholder="Any notes about this booking..."
-          {...register('notes')}
-        />
-      </FormField>
+      {/* Notes — the shared Notes core (ADR-0053 / #548), the same editor the Builder's Notes
+          section uses. Section chrome mirrors the Builder's BuilderSection (item 7); the inner
+          "Notes" header + Saving/Saved status are InlineNotes' self-saving chrome, which the lean
+          create form omits — the value bubbles to the atomic POST's notes unchanged. */}
+      <section>
+        <h2 className="mb-3 text-base font-semibold text-foreground">Notes</h2>
+        <div className="rounded-lg border border-border bg-background p-4">
+          <Controller
+            name="notes"
+            control={control}
+            render={({ field }) => (
+              <NotesField value={field.value} onChange={field.onChange} />
+            )}
+          />
+        </div>
+      </section>
     </div>
   );
 }

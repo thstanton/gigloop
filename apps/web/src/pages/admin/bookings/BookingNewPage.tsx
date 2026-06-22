@@ -122,7 +122,7 @@ export default function BookingNewPage() {
     enabled: isLoaded,
   });
 
-  const { register, control, handleSubmit, setValue, formState: { errors } } = useForm<BookingFormValues>({
+  const { control, handleSubmit, setValue, formState: { errors } } = useForm<BookingFormValues>({
     resolver: zodResolver(bookingFormSchema),
     defaultValues: {
       overview: {
@@ -207,7 +207,6 @@ export default function BookingNewPage() {
         <form onSubmit={handleSubmit((values) => { setPendingValues(values); setStep(2); })} className="space-y-6">
           <BookingFormFields
             control={control}
-            register={register}
             errors={errors}
             songRequestFormEnabled={userProfile?.songRequestFormEnabled}
             formats={formats}
