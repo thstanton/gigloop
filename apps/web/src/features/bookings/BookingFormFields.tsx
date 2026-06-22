@@ -8,13 +8,7 @@ import { TogglePill } from '@/components/ui/toggle-pill';
 import { Switch } from '@/components/ui/switch';
 import { FormField } from '@/components/common/FormField';
 import { IconButton } from '@/components/common/IconButton';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { StatusCoachingField } from './StatusCoachingField';
 import { RoleField, type RoleSelection } from './PeopleFields';
 import { VenueFields, type VenueSelection } from './VenueFields';
 import { OverviewFields, type OverviewFieldsValue } from './OverviewFields';
@@ -170,29 +164,15 @@ export function BookingFormFields({
         </div>
       </section>
 
-      {/* Status — stays a standalone, create-shell-owned control (not an Overview field);
-          slice #545 reworks this into the coaching control. */}
-      <FormField label="Status">
-        <Controller
-          name="status"
-          control={control}
-          render={({ field }) => (
-            <Select value={field.value} onValueChange={field.onChange}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ENQUIRY">Enquiry</SelectItem>
-                <SelectItem value="PROVISIONAL">Provisional</SelectItem>
-                <SelectItem value="CONFIRMED">Confirmed</SelectItem>
-                <SelectItem value="READY">Ready</SelectItem>
-                <SelectItem value="COMPLETE">Complete</SelectItem>
-                <SelectItem value="CANCELLED">Cancelled</SelectItem>
-              </SelectContent>
-            </Select>
-          )}
-        />
-      </FormField>
+      {/* Starting status — stays a standalone, create-shell-owned control (not an Overview
+          field); the coaching control teaches the lifecycle at the point of use (slice #545). */}
+      <Controller
+        name="status"
+        control={control}
+        render={({ field }) => (
+          <StatusCoachingField value={field.value} onChange={field.onChange} />
+        )}
+      />
 
       {/* People — consolidated customer + booking agent, from the shared People atom core
           (ADR-0053). Section chrome (header + bordered container) mirrors the Builder's
