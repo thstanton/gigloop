@@ -88,6 +88,25 @@ export const ConvergedPeopleAndVenue: Story = {
     await expect(canvas.getByRole('heading', { name: 'Venue' })).toBeVisible();
     // Package Templates render for everyone (ungated from the music-form flag), shared picker.
     await expect(canvas.getByRole('heading', { name: 'Package Templates' })).toBeVisible();
+    // Music section renders the shared on/off core (same toggle the Builder's Music atom uses),
+    // with no genre / special-request editing pre-commit (Story 39 lean variant).
+    await expect(canvas.getByRole('heading', { name: 'Music' })).toBeVisible();
+    await expect(canvas.getByRole('switch', { name: 'Music form' })).toBeVisible();
+    await expect(canvas.queryByText('Genres')).not.toBeInTheDocument();
+    await expect(canvas.queryByText('Special requests')).not.toBeInTheDocument();
+  },
+};
+
+export const ToggleMusicForm: Story = {
+  name: 'Toggling the shared Music on/off core flows through the create-form Controller',
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const toggle = canvas.getByRole('switch', { name: 'Music form' });
+    await expect(toggle).toHaveAttribute('aria-checked', 'false');
+    await userEvent.click(toggle);
+    await expect(toggle).toHaveAttribute('aria-checked', 'true');
+    await userEvent.click(toggle);
+    await expect(toggle).toHaveAttribute('aria-checked', 'false');
   },
 };
 

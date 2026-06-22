@@ -1,5 +1,6 @@
 import { Plus, Trash2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 import { GhostButton } from '@/components/common/GhostButton';
 import { ALL_GENRES, GENRE_LABELS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
@@ -10,6 +11,38 @@ import type { KeyMoment } from '@/types/api';
 // atom). These own NO mutation and NO fetch — controlled state in, intent out via callbacks. The
 // atom composes them; the host shell turns the callbacks into persistence. Sibling to
 // ItineraryFields / DetailsFields.
+
+// ─── On/off core: the "Music form" toggle header ──────────────────────────────
+
+// The shared on/off core (ADR-0053 / #547): a controlled Switch + its header. Both the self-saving
+// MusicAtom and the lean create form render this one block, so the two surfaces are identical at
+// the toggle. Create stops here (on/off only — Story 39); MusicAtom renders the editor below it.
+export function MusicFormToggle({
+  checked,
+  onCheckedChange,
+  disabled,
+}: {
+  checked: boolean;
+  onCheckedChange: (next: boolean) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <div>
+        <p className="text-base font-medium text-foreground">Music form</p>
+        <p className="text-sm text-muted">
+          Collect song requests from your client for this booking.
+        </p>
+      </div>
+      <Switch
+        checked={checked}
+        onCheckedChange={onCheckedChange}
+        disabled={disabled}
+        aria-label="Music form"
+      />
+    </div>
+  );
+}
 
 export function GenrePills({
   selected,

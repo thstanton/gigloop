@@ -2,13 +2,13 @@ import { Controller, useWatch } from 'react-hook-form';
 import type { Control, UseFormRegister, FieldErrors } from 'react-hook-form';
 import { z } from 'zod';
 import { Textarea } from '@/components/ui/textarea';
-import { Switch } from '@/components/ui/switch';
 import { FormField } from '@/components/common/FormField';
 import { StatusCoachingField } from './StatusCoachingField';
 import { RoleField, type RoleSelection } from './PeopleFields';
 import { VenueFields, type VenueSelection } from './VenueFields';
 import { OverviewFields, type OverviewFieldsValue } from './OverviewFields';
 import { PackagePicker } from './PackagePicker';
+import { MusicFormToggle } from './MusicFields';
 import type { BookingSeries, PackageTemplate } from '@/types/api';
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
@@ -184,26 +184,25 @@ export function BookingFormFields({
         </section>
       )}
 
-      {/* Music form — presence of a config row is the on/off truth (ADR-0046); this toggle
-          decides whether one is created on booking creation, seeded from the chosen packages. */}
+      {/* Music — on/off only in create (Story 39 lean variant): the shared MusicFormToggle core,
+          the same on/off block the Builder's Music atom renders (ADR-0053 / #547). Genre and
+          special-request editing stays post-commit. Presence of a config row is the on/off truth
+          (ADR-0046); this boolean flows into the atomic POST's enableMusicForm unchanged, which
+          creates the row on booking creation, seeded from the chosen packages. Section chrome
+          mirrors the Builder's BuilderSection (item 7). */}
       {songRequestFormEnabled && (
-        <Controller
-          name="enableMusicForm"
-          control={control}
-          render={({ field }) => (
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="text-sm font-semibold text-foreground">Music form</p>
-                <p className="text-sm text-muted">Collect song requests from the customer for this booking.</p>
-              </div>
-              <Switch
-                aria-label="Music form"
-                checked={field.value}
-                onCheckedChange={field.onChange}
-              />
-            </div>
-          )}
-        />
+        <section>
+          <h2 className="mb-3 text-base font-semibold text-foreground">Music</h2>
+          <div className="rounded-lg border border-border bg-background p-4">
+            <Controller
+              name="enableMusicForm"
+              control={control}
+              render={({ field }) => (
+                <MusicFormToggle checked={field.value} onCheckedChange={field.onChange} />
+              )}
+            />
+          </div>
+        </section>
       )}
 
       {/* Notes */}

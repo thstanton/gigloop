@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { DEFAULT_ENABLED_GENRES } from '@/lib/constants';
 import { cn } from '@/lib/utils';
-import { GenrePills, SpecialRequestsEditor } from './MusicFields';
+import { GenrePills, MusicFormToggle, SpecialRequestsEditor } from './MusicFields';
 import type { BookingPackageSummary, KeyMoment, MusicFormConfig } from '@/types/api';
 
 // PRD #511 Module B / #535 — the Music atom: the presentational editor of a booking's
@@ -143,21 +142,12 @@ export function MusicAtom({
 
   return (
     <div className="space-y-5">
-      {/* On/off Switch */}
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-base font-medium text-foreground">Music form</p>
-          <p className="text-sm text-muted">
-            Collect song requests from your client for this booking.
-          </p>
-        </div>
-        <Switch
-          checked={on}
-          onCheckedChange={handleSwitch}
-          disabled={isTurningOn || isTurningOff}
-          aria-label="Music form"
-        />
-      </div>
+      {/* On/off core — shared with the create form (ADR-0053 / #547). */}
+      <MusicFormToggle
+        checked={on}
+        onCheckedChange={handleSwitch}
+        disabled={isTurningOn || isTurningOff}
+      />
 
       {confirmOff && (
         <div className="rounded-md border border-border bg-surface p-3">
