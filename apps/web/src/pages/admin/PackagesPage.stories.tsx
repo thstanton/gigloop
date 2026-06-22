@@ -28,6 +28,6 @@ export const Empty: Story = {
     },
   },
   play: async ({ canvas }) => {
-    await expect(await canvas.findByText(/no packages/i)).toBeVisible();
+    await expect(await canvas.findByText(/no package templates/i)).toBeVisible();
   },
 };

@@ -13,6 +13,7 @@ import { Card } from '@/components/common/Card';
 import { EmptyState } from '@/components/common/EmptyState';
 import { IconPicker } from '@/components/common/IconPicker';
 import { PackageIcon } from '@/components/common/PackageIcon';
+import { PackageMusicSummary } from '@/features/packages/PackageMusicSummary';
 
 // ─── Category display ─────────────────────────────────────────────────────────
 
@@ -75,7 +76,7 @@ function TagInput({
   );
 }
 
-// ─── Slot list editor ─────────────────────────────────────────────────────────
+// ─── Set list editor ──────────────────────────────────────────────────────────
 
 type SlotDraft = SlotInput & { key: string };
 
@@ -117,7 +118,7 @@ function SlotEditor({
 
   return (
     <div>
-      <label className="block text-sm font-medium text-foreground mb-2">Slots</label>
+      <label className="block text-sm font-medium text-foreground mb-2">Sets</label>
       <div className="space-y-2">
         {slots.map((slot, i) => (
           <div key={slot.key} className="flex items-center gap-2">
@@ -161,7 +162,7 @@ function SlotEditor({
               type="button"
               onClick={() => remove(i)}
               className="text-muted hover:text-status-cancelled flex-shrink-0"
-              aria-label="Remove slot"
+              aria-label="Remove set"
             >
               ×
             </button>
@@ -173,7 +174,7 @@ function SlotEditor({
         onClick={add}
         className="mt-2 text-sm text-primary hover:underline"
       >
-        + Add slot
+        + Add set
       </button>
     </div>
   );
@@ -447,6 +448,9 @@ function PackageCard({
         </ul>
       )}
 
+      {/* Intrinsic template data on the management surface — always shown when present (no gate). */}
+      <PackageMusicSummary genres={pkg.defaultGenreSelection} moments={pkg.keyMoments} />
+
       <Button
         variant="outline"
         size="sm"
@@ -504,7 +508,7 @@ export default function PackagesPage() {
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-foreground">Packages</h1>
+        <h1 className="text-xl font-semibold text-foreground">Package Templates</h1>
         <Button onClick={() => setDrawerMode({ type: 'create' })}>+ New package</Button>
       </div>
 
@@ -519,8 +523,8 @@ export default function PackagesPage() {
       {!isLoading && packages.length === 0 && (
         <EmptyState
           icon={<Music size={40} strokeWidth={1.5} />}
-          heading="No packages yet"
-          description="Create a package to get started."
+          heading="No package templates yet"
+          description="Create a package template to get started."
           action={<Button onClick={() => setDrawerMode({ type: 'create' })}>New package</Button>}
         />
       )}
