@@ -41,7 +41,8 @@ import {
 } from '@/features/bookings/builderCompleteness';
 import { useScrollSpy } from '@/lib/hooks/useScrollSpy';
 import InlineNotes from '@/features/bookings/InlineNotes';
-import { NO_PACKAGE, TemplatePicker, type SetValues } from '@/features/bookings/ItineraryFields';
+import { NO_PACKAGE, type SetValues } from '@/features/bookings/ItineraryFields';
+import { PackagePicker } from '@/features/bookings/PackagePicker';
 import { DEFAULT_ENABLED_GENRES } from '@/lib/constants';
 import type {
   ApplyPackageTemplateResponse,
@@ -219,6 +220,10 @@ function preservedTimeKeys(logistics: BookingDetail['logistics']): DetailsLogist
   return out;
 }
 
+function pluralPackages(n: number): string {
+  return `${n} ${n === 1 ? 'package' : 'packages'}`;
+}
+
 function isConfirmationRequired(r: unknown): r is Required<UpdateBookingSeriesResponse> {
   return Boolean(r && typeof r === 'object' && 'requiresConfirmation' in r);
 }
@@ -264,6 +269,9 @@ export default function BookingBuilderPage() {
   const [seriesConfirmation, setSeriesConfirmation] = useState<{ seriesId: string; warning: string } | null>(null);
   const [seriesError, setSeriesError] = useState<string | null>(null);
   const [pendingSuggestion, setPendingSuggestion] = useState<MusicFormSuggestion | null>(null);
+  // Package Templates step (#546): templates are STAGED, then applied together via one deliberate
+  // action — no blind one-click apply (the apply is destructive: it creates Packages + Sets).
+  const [stagedTemplateIds, setStagedTemplateIds] = useState<string[]>([]);
 
   const { data: seriesList = [] } = useQuery({
     queryKey: ['series'],
@@ -417,15 +425,37 @@ export default function BookingBuilderPage() {
     onError: () => toast({ title: 'Failed to add suggestions. Please try again.', variant: 'destructive' }),
   });
 
-  const templatesApply = useMutation({
-    mutationFn: (packageTemplateId: string) =>
-      apiPost<ApplyPackageTemplateResponse>(`/bookings/${id}/packages`, { packageTemplateId }),
-    onSuccess: (data) => {
-      invalidateBooking();
-      const s = data.suggestion;
-      if (s && (s.keyMoments.length || s.genres.length)) setPendingSuggestion(s);
+  const applyStagedTemplates = useMutation({
+    // Apply staged templates sequentially, merging their music-form suggestions into one banner.
+    // Each apply is destructive (creates a Package + Sets), so a mid-batch failure must NOT lose
+    // what already landed nor risk re-applying it: succeeded ids drop out and only the failed
+    // remainder stays staged, so a retry applies just those (cf. the #543 contact-resolve cache).
+    mutationFn: async (templateIds: string[]) => {
+      let merged: MusicFormSuggestion | null = null;
+      const failed: string[] = [];
+      for (const packageTemplateId of templateIds) {
+        try {
+          const data = await apiPost<ApplyPackageTemplateResponse>(`/bookings/${id}/packages`, { packageTemplateId });
+          const s = data.suggestion;
+          if (s && (s.keyMoments.length || s.genres.length)) {
+            merged = merged
+              ? { genres: [...new Set([...merged.genres, ...s.genres])], keyMoments: [...merged.keyMoments, ...s.keyMoments] }
+              : s;
+          }
+        } catch {
+          failed.push(packageTemplateId);
+        }
+      }
+      return { merged, failed };
     },
-    onError: () => toast({ title: 'Failed to apply template. Please try again.', variant: 'destructive' }),
+    onSuccess: ({ merged, failed }) => {
+      invalidateBooking();
+      setStagedTemplateIds(failed); // keep only what didn't land, so a retry can't double-apply
+      if (merged) setPendingSuggestion(merged);
+      if (failed.length) {
+        toast({ title: `Couldn't apply ${pluralPackages(failed.length)}. Please try again.`, variant: 'destructive' });
+      }
+    },
   });
 
   const itineraryApplyTemplate = useMutation({
@@ -718,14 +748,28 @@ export default function BookingBuilderPage() {
                 </div>
               </div>
             )}
-            <TemplatePicker
+            <PackagePicker
               templates={templates}
               templatesLoading={templatesLoading}
               eventType={booking.eventType}
-              isApplying={templatesApply.isPending}
-              onApply={(templateId) => templatesApply.mutate(templateId)}
-              onCancel={() => {}}
+              selectedIds={stagedTemplateIds}
+              onToggle={(tid) =>
+                setStagedTemplateIds((s) => (s.includes(tid) ? s.filter((x) => x !== tid) : [...s, tid]))
+              }
+              showMusic={booking.hasMusicFormConfig}
             />
+            {stagedTemplateIds.length > 0 && (
+              <div className="mt-4 flex items-center gap-3 rounded-lg border border-border bg-primary/5 p-3">
+                <Button
+                  size="sm"
+                  onClick={() => applyStagedTemplates.mutate(stagedTemplateIds)}
+                  disabled={applyStagedTemplates.isPending}
+                >
+                  {applyStagedTemplates.isPending ? 'Applying…' : `Apply ${pluralPackages(stagedTemplateIds.length)}`}
+                </Button>
+                <p className="text-xs text-muted">Staged — nothing is added until you Apply.</p>
+              </div>
+            )}
           </BuilderSection>
 
           {/* Itinerary */}

@@ -108,10 +108,12 @@ export default function BookingNewPage() {
     enabled: isLoaded,
   });
 
+  // Packages are performance structure, independent of the music form (ADR-0046) — offer them to
+  // everyone, like the Builder (#546). The music-form *toggle* stays gated on the feature flag.
   const { data: formats } = useQuery({
     queryKey: ['packages'],
     queryFn: () => apiGet<PackageTemplate[]>('/packages'),
-    enabled: isLoaded && (userProfile?.songRequestFormEnabled ?? false),
+    enabled: isLoaded,
   });
 
   const { data: seriesList } = useQuery({

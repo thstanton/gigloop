@@ -1,17 +1,14 @@
-import { Controller } from 'react-hook-form';
+import { Controller, useWatch } from 'react-hook-form';
 import type { Control, UseFormRegister, FieldErrors } from 'react-hook-form';
 import { z } from 'zod';
-import { ChevronUp, ChevronDown, Music, Check } from 'lucide-react';
-import { PACKAGE_ICON_MAP } from '@/lib/constants';
 import { Textarea } from '@/components/ui/textarea';
-import { TogglePill } from '@/components/ui/toggle-pill';
 import { Switch } from '@/components/ui/switch';
 import { FormField } from '@/components/common/FormField';
-import { IconButton } from '@/components/common/IconButton';
 import { StatusCoachingField } from './StatusCoachingField';
 import { RoleField, type RoleSelection } from './PeopleFields';
 import { VenueFields, type VenueSelection } from './VenueFields';
 import { OverviewFields, type OverviewFieldsValue } from './OverviewFields';
+import { PackagePicker } from './PackagePicker';
 import type { BookingSeries, PackageTemplate } from '@/types/api';
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
@@ -40,89 +37,6 @@ export const bookingFormSchema = z.object({
 
 export type BookingFormValues = z.infer<typeof bookingFormSchema>;
 
-function FormatIcon({ icon, size = 16 }: { icon: string; size?: number }) {
-  const Icon = PACKAGE_ICON_MAP[icon] ?? Music;
-  return <Icon size={size} />;
-}
-
-// ─── Format selector ──────────────────────────────────────────────────────────
-
-function FormatSelector({
-  formats,
-  value,
-  onChange,
-}: {
-  formats: PackageTemplate[];
-  value: string[];
-  onChange: (ids: string[]) => void;
-}) {
-  function toggle(id: string) {
-    if (value.includes(id)) {
-      onChange(value.filter((v) => v !== id));
-    } else {
-      onChange([...value, id]);
-    }
-  }
-
-  function move(id: string, direction: 'up' | 'down') {
-    const idx = value.indexOf(id);
-    if (direction === 'up' && idx === 0) return;
-    if (direction === 'down' && idx === value.length - 1) return;
-    const next = [...value];
-    const swap = direction === 'up' ? idx - 1 : idx + 1;
-    [next[idx], next[swap]] = [next[swap], next[idx]];
-    onChange(next);
-  }
-
-  const selected = value
-    .map((id) => formats.find((f) => f.id === id))
-    .filter((f): f is PackageTemplate => f !== undefined);
-
-  return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap gap-2">
-        {formats.map((fmt) => {
-          const active = value.includes(fmt.id);
-          return (
-            <TogglePill key={fmt.id} active={active} onClick={() => toggle(fmt.id)}>
-              <FormatIcon icon={fmt.icon} size={14} />
-              {fmt.label}
-              {active && <Check size={12} />}
-            </TogglePill>
-          );
-        })}
-      </div>
-
-      {selected.length > 0 && (
-        <div className="space-y-1">
-          {selected.map((fmt, idx) => (
-            <div key={fmt.id} className="flex items-center gap-2 px-3 py-2 border border-border rounded-md">
-              <FormatIcon icon={fmt.icon} size={14} />
-              <span className="flex-1 text-sm">{fmt.label}</span>
-              <div className="flex gap-1">
-                <IconButton
-                  label={`Move ${fmt.label} up`}
-                  disabled={idx === 0}
-                  onClick={() => move(fmt.id, 'up')}
-                >
-                  <ChevronUp size={14} aria-hidden="true" />
-                </IconButton>
-                <IconButton
-                  label={`Move ${fmt.label} down`}
-                  disabled={idx === selected.length - 1}
-                  onClick={() => move(fmt.id, 'down')}
-                >
-                  <ChevronDown size={14} aria-hidden="true" />
-                </IconButton>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ─── Component ────────────────────────────────────────────────────────────────
 
 interface Props {
@@ -142,6 +56,10 @@ export function BookingFormFields({
   formats,
   series,
 }: Props) {
+  // The package picker groups templates by the live event type (matching leads), so it reacts as
+  // the musician changes it in the Overview section above.
+  const eventType = useWatch({ control, name: 'overview.eventType' });
+
   return (
     <div className="space-y-6">
       {/* Overview — booking identity (event type, date, fee, title, series) from the shared
@@ -236,22 +154,34 @@ export function BookingFormFields({
         </div>
       </section>
 
-      {/* Packages */}
-      {songRequestFormEnabled && formats && formats.length > 0 && (
-        <div className="space-y-3">
-          <h2 className="text-sm font-semibold text-foreground">Packages</h2>
-          <Controller
-            name="packageTemplateIds"
-            control={control}
-            render={({ field }) => (
-              <FormatSelector
-                formats={formats}
-                value={field.value}
-                onChange={field.onChange}
-              />
-            )}
-          />
-        </div>
+      {/* Packages — shared template picker (ADR-0053 / #546), same component the Builder uses.
+          Ungated from the music-form flag (packages are performance structure, independent of
+          the music form); the music-form contribution in previews is what `showMusic` gates. */}
+      {formats && formats.length > 0 && (
+        <section>
+          <h2 className="mb-3 text-base font-semibold text-foreground">Package Templates</h2>
+          <div className="rounded-lg border border-border bg-background p-4">
+            <Controller
+              name="packageTemplateIds"
+              control={control}
+              render={({ field }) => (
+                <PackagePicker
+                  templates={formats}
+                  eventType={eventType}
+                  selectedIds={field.value}
+                  onToggle={(id) =>
+                    field.onChange(
+                      field.value.includes(id)
+                        ? field.value.filter((x) => x !== id)
+                        : [...field.value, id],
+                    )
+                  }
+                  showMusic={!!songRequestFormEnabled}
+                />
+              )}
+            />
+          </div>
+        </section>
       )}
 
       {/* Music form — presence of a config row is the on/off truth (ADR-0046); this toggle

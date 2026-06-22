@@ -8,11 +8,22 @@ import {
   bookingFormSchema,
   type BookingFormValues,
 } from './BookingFormFields';
+import type { PackageTemplate } from '@/types/api';
 
 // Smoke coverage for the converged create form (ADR-0053): the consolidated People block
 // (customer + booking agent, from the shared atom core) and the separate Venue block render
 // from the same atoms as the Builder. Pick/create interactions are unit-covered by
-// PeopleFields.stories / VenueFields.stories.
+// PeopleFields.stories / VenueFields.stories; the package picker by PackagePicker.stories.
+
+const FORMATS: PackageTemplate[] = [
+  {
+    id: 'p1', createdAt: '2030-01-01T00:00:00Z', updatedAt: '2030-01-01T00:00:00Z',
+    label: 'Wedding Ceremony', category: 'WEDDING', icon: 'church', keyMoments: [],
+    defaultGenreSelection: [], notes: null, isSystemDefault: false, enabled: true,
+    slots: [{ id: 'p1-s1', label: 'Processional', duration: 5, order: 0 }],
+  },
+];
+
 function Harness() {
   const { control, register, formState: { errors } } = useForm<BookingFormValues>({
     resolver: zodResolver(bookingFormSchema),
@@ -38,7 +49,13 @@ function Harness() {
 
   return (
     <div className="max-w-3xl">
-      <BookingFormFields control={control} register={register} errors={errors} />
+      <BookingFormFields
+        control={control}
+        register={register}
+        errors={errors}
+        songRequestFormEnabled
+        formats={FORMATS}
+      />
     </div>
   );
 }
@@ -69,6 +86,21 @@ export const ConvergedPeopleAndVenue: Story = {
     await expect(canvas.getByText(/Booking agent/)).toBeVisible();
     // Venue is its own section (not nested under People), with matching Builder chrome.
     await expect(canvas.getByRole('heading', { name: 'Venue' })).toBeVisible();
+    // Package Templates render for everyone (ungated from the music-form flag), shared picker.
+    await expect(canvas.getByRole('heading', { name: 'Package Templates' })).toBeVisible();
+  },
+};
+
+export const SelectPackage: Story = {
+  name: 'Selecting a package chip flows through the create-form Controller (multiselect)',
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const chip = canvas.getByRole('button', { name: 'Wedding Ceremony' });
+    await expect(chip).toHaveAttribute('aria-pressed', 'false');
+    await userEvent.click(chip);
+    await expect(chip).toHaveAttribute('aria-pressed', 'true');
+    await userEvent.click(chip);
+    await expect(chip).toHaveAttribute('aria-pressed', 'false');
   },
 };
 
