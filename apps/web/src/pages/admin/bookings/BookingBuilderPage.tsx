@@ -41,7 +41,8 @@ import {
 } from '@/features/bookings/builderCompleteness';
 import { useScrollSpy } from '@/lib/hooks/useScrollSpy';
 import InlineNotes from '@/features/bookings/InlineNotes';
-import { NO_PACKAGE, type SetValues } from '@/features/bookings/ItineraryFields';
+import { NO_PACKAGE } from '@/features/bookings/ItineraryFields';
+import { useItineraryMutations } from '@/features/bookings/useItineraryMutations';
 import { PackagePicker } from '@/features/bookings/PackagePicker';
 import { DEFAULT_ENABLED_GENRES } from '@/lib/constants';
 import type {
@@ -471,53 +472,8 @@ export default function BookingBuilderPage() {
 
   // ── Itinerary mutations ────────────────────────────────────────────────────
 
-  const addSet = useMutation({
-    mutationFn: ({ packageId, values }: { packageId: string | null; values: SetValues }) => {
-      const sets = booking?.sets ?? [];
-      return apiPost(`/bookings/${id}/sets`, {
-        order: Math.max(0, ...sets.map((s) => s.order)) + 1,
-        duration: values.duration,
-        ...(values.startTime ? { startTime: values.startTime } : {}),
-        ...(values.label    ? { label: values.label }         : {}),
-        ...(packageId        ? { packageId }                   : {}),
-      });
-    },
-    onSuccess: invalidateBooking,
-    onError: () => toast({ title: 'Failed to add set. Please try again.', variant: 'destructive' }),
-  });
-
-  const updateSet = useMutation({
-    mutationFn: ({ setId, values }: { setId: string; values: SetValues }) =>
-      apiPatch(`/bookings/${id}/sets/${setId}`, values),
-    onSuccess: invalidateBooking,
-    onError: () => toast({ title: 'Failed to save set. Please try again.', variant: 'destructive' }),
-  });
-
-  const deleteSet = useMutation({
-    mutationFn: (setId: string) => apiDelete(`/bookings/${id}/sets/${setId}`),
-    onSuccess: invalidateBooking,
-    onError: () => toast({ title: 'Failed to delete set. Please try again.', variant: 'destructive' }),
-  });
-
-  const moveSet = useMutation({
-    mutationFn: ({ setId, packageId }: { setId: string; packageId: string | null }) =>
-      apiPatch(`/bookings/${id}/sets/${setId}`, { packageId }),
-    onSuccess: invalidateBooking,
-    onError: () => toast({ title: 'Failed to move set. Please try again.', variant: 'destructive' }),
-  });
-
-  const updatePackage = useMutation({
-    mutationFn: ({ packageId, dto }: { packageId: string; dto: { label?: string; icon?: string } }) =>
-      apiPatch(`/bookings/${id}/packages/${packageId}`, dto),
-    onSuccess: invalidateBooking,
-    onError: () => toast({ title: 'Failed to update package. Please try again.', variant: 'destructive' }),
-  });
-
-  const removePackage = useMutation({
-    mutationFn: (packageId: string) => apiDelete(`/bookings/${id}/packages/${packageId}`),
-    onSuccess: invalidateBooking,
-    onError: () => toast({ title: 'Failed to remove package. Please try again.', variant: 'destructive' }),
-  });
+  const { addSet, updateSet, deleteSet, moveSet, updatePackage, removePackage } =
+    useItineraryMutations(id!, booking?.sets ?? []);
 
   const saveAnchors = useMutation({
     mutationFn: (anchors: Record<string, BookingLogisticsEntry>) =>

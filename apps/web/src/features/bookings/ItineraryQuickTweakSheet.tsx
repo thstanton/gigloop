@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
-import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from '@/lib/api';
+import { apiGet, apiPatch, apiPost, apiPut } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
 import { ItineraryAtom } from './ItineraryAtom';
-import { NO_PACKAGE, type SetValues } from './ItineraryFields';
+import { useItineraryMutations } from './useItineraryMutations';
+import { NO_PACKAGE } from './ItineraryFields';
 import { LOGISTICS_TIME_KEYS } from './DetailsAtom';
 import type {
   ApplyPackageTemplateResponse,
@@ -35,10 +36,6 @@ function nonAnchorKeys(logistics: BookingDetail['logistics']): Record<string, Bo
     if (!anchors.has(key)) out[key] = entry;
   }
   return out;
-}
-
-function nextOrder(sets: PerformanceSet[]): number {
-  return Math.max(0, ...sets.map((s) => s.order)) + 1;
 }
 
 interface Props {
@@ -74,38 +71,8 @@ export function ItineraryQuickTweakSheet({
     enabled: open,
   });
 
-  const addSet = useMutation({
-    mutationFn: ({ packageId, values }: { packageId: string | null; values: SetValues }) =>
-      apiPost(`/bookings/${bookingId}/sets`, {
-        order: nextOrder(sets),
-        duration: values.duration,
-        ...(values.startTime ? { startTime: values.startTime } : {}),
-        ...(values.label ? { label: values.label } : {}),
-        ...(packageId ? { packageId } : {}),
-      }),
-    onSuccess: invalidateBooking,
-    onError: () => toast({ title: 'Failed to add set. Please try again.', variant: 'destructive' }),
-  });
-
-  const updateSet = useMutation({
-    mutationFn: ({ setId, values }: { setId: string; values: SetValues }) =>
-      apiPatch(`/bookings/${bookingId}/sets/${setId}`, values),
-    onSuccess: invalidateBooking,
-    onError: () => toast({ title: 'Failed to save set. Please try again.', variant: 'destructive' }),
-  });
-
-  const deleteSet = useMutation({
-    mutationFn: (setId: string) => apiDelete(`/bookings/${bookingId}/sets/${setId}`),
-    onSuccess: invalidateBooking,
-    onError: () => toast({ title: 'Failed to delete set. Please try again.', variant: 'destructive' }),
-  });
-
-  const moveSet = useMutation({
-    mutationFn: ({ setId, packageId }: { setId: string; packageId: string | null }) =>
-      apiPatch(`/bookings/${bookingId}/sets/${setId}`, { packageId }),
-    onSuccess: invalidateBooking,
-    onError: () => toast({ title: 'Failed to move set. Please try again.', variant: 'destructive' }),
-  });
+  const { addSet, updateSet, deleteSet, moveSet, updatePackage, removePackage } =
+    useItineraryMutations(bookingId, sets);
 
   const applyTemplate = useMutation({
     mutationFn: (packageTemplateId: string) =>
@@ -140,19 +107,6 @@ export function ItineraryQuickTweakSheet({
       setPendingSuggestion(null);
     },
     onError: () => toast({ title: 'Failed to add suggestions. Please try again.', variant: 'destructive' }),
-  });
-
-  const updatePackage = useMutation({
-    mutationFn: ({ packageId, dto }: { packageId: string; dto: { label?: string; icon?: string } }) =>
-      apiPatch(`/bookings/${bookingId}/packages/${packageId}`, dto),
-    onSuccess: invalidateBooking,
-    onError: () => toast({ title: 'Failed to update package. Please try again.', variant: 'destructive' }),
-  });
-
-  const removePackage = useMutation({
-    mutationFn: (packageId: string) => apiDelete(`/bookings/${bookingId}/packages/${packageId}`),
-    onSuccess: invalidateBooking,
-    onError: () => toast({ title: 'Failed to remove package. Please try again.', variant: 'destructive' }),
   });
 
   // Anchors — Tier-1 stay-open; the inverse merge preserves Details + custom keys.
