@@ -180,6 +180,12 @@ export default function BookingNewPage() {
       // booking — the musician chooses Finish or Continue setup from there.
       setCreated(booking);
     },
+    onError: () => {
+      // Failure surfaces inline via `mutation.isError` (ChecklistStep) — pinned to the Create
+      // button, which beats an auto-dismissing toast for a form submit, so the handler is light.
+      // Deliberately do NOT clear `resolvedIds` here: it's retained so a retry reuses the contacts
+      // already created this attempt (see the ref comment above). Clearing it duplicates them.
+    },
   });
 
   const checklistDefaults: ChecklistDefaultItem[] =
