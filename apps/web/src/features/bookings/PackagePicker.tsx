@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Check, Eye, Music, Clock, Sparkles } from 'lucide-react';
-import { PACKAGE_ICON_MAP, GENRE_LABELS } from '@/lib/constants';
+import { Check, Eye, Music, Clock } from 'lucide-react';
+import { PACKAGE_ICON_MAP } from '@/lib/constants';
 import { cn } from '@/lib/utils';
+import { PackageMusicSummary } from '@/features/packages/PackageMusicSummary';
 import type { PackageTemplate } from '@/types/api';
 
 // PRD #511 Module B / ADR-0053 / #546 — the shared package-template picker core. One controlled
@@ -54,33 +55,7 @@ function TemplatePreview({ template, showMusic }: { template: PackageTemplate; s
         </ul>
       </div>
 
-      {showMusic && (genres.length > 0 || moments.length > 0) && (
-        <div className="space-y-2 rounded border border-border bg-primary/5 p-2.5">
-          <p className="flex items-center gap-1.5 text-xs font-medium text-foreground">
-            <Sparkles size={12} aria-hidden="true" />Sets up the music form with:
-          </p>
-          {genres.length > 0 && (
-            <div>
-              <p className="text-xs text-muted">Genres the client can request songs from</p>
-              <div className="mt-1 flex flex-wrap gap-1">
-                {genres.map((g) => (
-                  <span key={g} className="rounded-full bg-secondary px-2 py-0.5 text-xs text-foreground">
-                    {GENRE_LABELS[g as keyof typeof GENRE_LABELS] ?? g}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-          {moments.length > 0 && (
-            <div>
-              <p className="text-xs text-muted">Special-request moments the client can fill in</p>
-              <ul className="mt-1 list-inside list-disc text-xs text-foreground">
-                {moments.map((m) => <li key={m}>{m}</li>)}
-              </ul>
-            </div>
-          )}
-        </div>
-      )}
+      {showMusic && <PackageMusicSummary genres={genres} moments={moments} />}
     </div>
   );
 }

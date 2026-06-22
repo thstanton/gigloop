@@ -36,7 +36,7 @@ const primaryNav: NavItem[] = [
 ];
 
 const secondaryNav: NavItem[] = [
-  { label: 'Packages',  to: '/admin/packages',  icon: Package },
+  { label: 'Package Templates',  to: '/admin/packages',  icon: Package },
   { label: 'Templates', to: '/admin/templates', icon: FileText },
   { label: 'Settings',  to: '/admin/settings',  icon: Settings },
 ];
