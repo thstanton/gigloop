@@ -50,6 +50,35 @@ describe('selectApplicableReminders', () => {
       });
       expect(keys(out)).toEqual(['send_quote', 'send_contract', 'music_form_invite', 'send_thank_you']);
     });
+
+    it('shows the future Overview deal spine on an ENQUIRY booking, in template order', () => {
+      const out = selectApplicableReminders('overview', {
+        items: [],
+        status: 'ENQUIRY',
+        disabledKeys: new Set(),
+      });
+      expect(keys(out)).toEqual([
+        'confirm_quote',
+        'create_deposit_invoice',
+        'create_contract',
+        'contract_signed',
+        'deposit_received',
+        'create_balance_invoice',
+        'play_the_gig',
+      ]);
+    });
+
+    it('drops past-stage Overview reminders on a READY booking, keeping the current and future stages', () => {
+      // confirm_quote (PROVISIONAL) and the CONFIRMED-stage spine are passed by a READY booking;
+      // create_balance_invoice (READY, current) and play_the_gig (COMPLETE, future) remain.
+      const out = selectApplicableReminders('overview', {
+        items: [],
+        status: 'READY',
+        disabledKeys: new Set(),
+      });
+      expect(find(out, 'confirm_quote')).toBeUndefined();
+      expect(keys(out)).toEqual(['create_balance_invoice', 'play_the_gig']);
+    });
   });
 
   describe('system reminders — global disable', () => {

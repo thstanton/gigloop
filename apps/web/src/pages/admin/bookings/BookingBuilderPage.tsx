@@ -639,6 +639,9 @@ export default function BookingBuilderPage() {
                 </div>
               </div>
             )}
+            <div className="mt-6">
+              <RemindMeAboutContainer bookingId={id!} concern="overview" />
+            </div>
           </BuilderSection>
 
           {/* People */}

@@ -16,6 +16,9 @@ export function useBookingFields(bookingId: string) {
     onSuccess: () => {
       invalidateBookingList();
       queryClient.invalidateQueries({ queryKey: ['bookingChecklist', bookingId] });
+      // A status transition shifts the stage gate, so past-stage reminders must drop out of
+      // every concern's "Remind me about" control (Overview is the status-driven deal spine).
+      queryClient.invalidateQueries({ queryKey: ['bookingReminders', bookingId] });
     },
     onError: () => toast({ title: 'Failed to update status', variant: 'destructive' }),
   });
