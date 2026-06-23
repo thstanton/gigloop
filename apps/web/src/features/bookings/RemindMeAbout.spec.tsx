@@ -13,6 +13,7 @@ function reminder(overrides: Partial<ReminderRow> = {}): ReminderRow {
     state: 'PENDING',
     requiredForStatus: 'CONFIRMED',
     autoCompleteHint: null,
+    after: null,
     ...overrides,
   };
 }
@@ -120,6 +121,19 @@ describe('RemindMeAbout', () => {
       render(<RemindMeAbout reminders={[reminder({ key: 'send_quote', label: 'Send quote', autoCompleteHint: null })]} onToggle={vi.fn()} />);
       // The hint clause is separated by a middot; absent means no clause was rendered.
       expect(screen.getByText('Send quote').closest('li')).not.toHaveTextContent('·');
+    });
+
+    it('renders the dependency clause and the auto-complete hint together, in order', () => {
+      // contract_signed gated by an outstanding send_contract is the densest line: both fields set.
+      render(
+        <RemindMeAbout
+          reminders={[reminder({ key: 'contract_signed', label: 'Contract signed', after: 'send the contract', autoCompleteHint: 'when the client signs in the portal' })]}
+          onToggle={vi.fn()}
+        />,
+      );
+      expect(screen.getByText('Contract signed').closest('li')).toHaveTextContent(
+        'Reminding you when the booking is Provisional, after you send the contract · when the client signs in the portal',
+      );
     });
   });
 

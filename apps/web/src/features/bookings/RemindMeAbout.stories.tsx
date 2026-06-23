@@ -7,17 +7,17 @@ import type { ApplicableReminder } from '@/types/api';
 // just `add_venue`): on, off-skipped, off-discoverable, and a custom item with no tied status.
 const reminders: ApplicableReminder[] = [
   // Discoverable system reminder, never seeded → off, turning on seeds on demand.
-  { itemId: null, key: 'add_venue', label: 'Confirm the venue', on: false, source: 'system', state: null, requiredForStatus: 'READY', autoCompleteHint: null },
+  { itemId: null, key: 'add_venue', label: 'Confirm the venue', on: false, source: 'system', state: null, requiredForStatus: 'READY', autoCompleteHint: null, after: null },
   // Tracked.
-  { itemId: '1', key: 'send_contract', label: 'Send the contract', on: true, source: 'system', state: 'PENDING', requiredForStatus: 'CONFIRMED', autoCompleteHint: null },
+  { itemId: '1', key: 'send_contract', label: 'Send the contract', on: true, source: 'system', state: 'PENDING', requiredForStatus: 'CONFIRMED', autoCompleteHint: null, after: null },
   // On + complete — still reads "on" (no lifecycle shown; that's the checklist's job).
-  { itemId: '2', key: 'send_quote', label: 'Send the quote', on: true, source: 'system', state: 'COMPLETE', requiredForStatus: 'PROVISIONAL', autoCompleteHint: null },
+  { itemId: '2', key: 'send_quote', label: 'Send the quote', on: true, source: 'system', state: 'COMPLETE', requiredForStatus: 'PROVISIONAL', autoCompleteHint: null, after: null },
   // Client-committed milestone (#567): carries an auto-complete condition, shown after a tick icon.
-  { itemId: '5', key: 'contract_signed', label: 'Contract signed', on: true, source: 'system', state: 'PENDING', requiredForStatus: 'CONFIRMED', autoCompleteHint: 'when the client signs in the portal' },
+  { itemId: '5', key: 'contract_signed', label: 'Contract signed', on: true, source: 'system', state: 'PENDING', requiredForStatus: 'CONFIRMED', autoCompleteHint: 'when the client signs in the portal', after: null },
   // User-skipped, was seeded → off, re-enableable.
-  { itemId: '3', key: 'send_thank_you', label: 'Send a thank-you', on: false, source: 'system', state: 'SKIPPED', requiredForStatus: 'COMPLETE', autoCompleteHint: null },
+  { itemId: '3', key: 'send_thank_you', label: 'Send a thank-you', on: false, source: 'system', state: 'SKIPPED', requiredForStatus: 'COMPLETE', autoCompleteHint: null, after: null },
   // Custom concern-tagged reminder, no tied status.
-  { itemId: '4', key: null, label: 'Order the celebration cake', on: true, source: 'custom', state: 'PENDING', requiredForStatus: null, autoCompleteHint: null },
+  { itemId: '4', key: null, label: 'Order the celebration cake', on: true, source: 'custom', state: 'PENDING', requiredForStatus: null, autoCompleteHint: null, after: null },
 ];
 
 const meta = {
@@ -81,11 +81,11 @@ export const BusyRowDisabled: Story = {
 };
 
 export const WithDependency: Story = {
-  name: 'Dependency chain: "…, after you <prerequisite>" (deferred wiring, #557/#558)',
+  name: 'Dependency chain: "…, after you <prerequisite>" (#557/#558)',
   args: {
     reminders: [
-      // `after` is set by the container only when the dependency is a live gate. Shown here so the
-      // wording is reviewable; the Venue tracer won't populate it (add_venue has no dependsOn).
+      // `after` is populated by the selector only while the dependency is a live gate (the prereq is
+      // outstanding + tracked, per #554). Shown here so the wording is reviewable.
       { itemId: '1', key: 'send_contract', label: 'Send the contract', on: true, source: 'system', state: 'PENDING', requiredForStatus: 'CONFIRMED', autoCompleteHint: null, after: 'create the contract' },
       { itemId: '2', key: 'deposit_received', label: 'Take the deposit', on: false, source: 'system', state: null, requiredForStatus: 'CONFIRMED', autoCompleteHint: null, after: 'send the contract' },
     ],
@@ -108,9 +108,9 @@ export const PassedStagesCollapsed: Story = {
     // work window and collapse; only the Ready/Complete ones stay listed.
     currentStatus: 'CONFIRMED',
     reminders: [
-      { itemId: '1', key: 'send_contract', label: 'Send the contract', on: true, source: 'system', state: 'PENDING', requiredForStatus: 'CONFIRMED', autoCompleteHint: null }, // passed
-      { itemId: '2', key: 'create_balance_invoice', label: 'Create the balance invoice', on: false, source: 'system', state: null, requiredForStatus: 'READY', autoCompleteHint: null }, // active
-      { itemId: '3', key: 'play_the_gig', label: 'Play the gig', on: true, source: 'system', state: 'PENDING', requiredForStatus: 'COMPLETE', autoCompleteHint: null }, // active
+      { itemId: '1', key: 'send_contract', label: 'Send the contract', on: true, source: 'system', state: 'PENDING', requiredForStatus: 'CONFIRMED', autoCompleteHint: null, after: null }, // passed
+      { itemId: '2', key: 'create_balance_invoice', label: 'Create the balance invoice', on: false, source: 'system', state: null, requiredForStatus: 'READY', autoCompleteHint: null, after: null }, // active
+      { itemId: '3', key: 'play_the_gig', label: 'Play the gig', on: true, source: 'system', state: 'PENDING', requiredForStatus: 'COMPLETE', autoCompleteHint: null, after: null }, // active
     ],
   },
   play: async ({ canvasElement }) => {

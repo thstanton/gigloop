@@ -32,16 +32,12 @@ const STATUS_TONE: Record<'ENQUIRY' | 'PROVISIONAL' | 'CONFIRMED' | 'READY', str
   READY: 'text-status-ready',
 };
 
-/** A reminder row plus presentational extras the raw selector output doesn't carry. */
-export interface ReminderRow extends ApplicableReminder {
-  /**
-   * The dependency action phrase, rendered as "…, after you <after>" (e.g. "send the contract").
-   * Deferred wiring (#557/#558): the #555 selector DTO carries no dependency field yet, so this is
-   * undefined for the Venue tracer. The container will only set it when the dependency is a *live
-   * gate* — still pending, tracked, and not globally disabled — matching the blocking predicate.
-   */
-  after?: string;
-}
+/**
+ * A reminder row. The selector output carries everything the control renders, including the
+ * dependency `after` clause (#557/#558) and the auto-complete `autoCompleteHint` (#567); this alias
+ * exists so the presentational layer has a name distinct from the DTO type.
+ */
+export type ReminderRow = ApplicableReminder;
 
 /**
  * Stable per-row identity. The system `key` is preferred because it is stable across an
@@ -81,7 +77,7 @@ function StatusName({ status, dimmed }: { status: NonNullable<RequiredStatus>; d
 
 // The dependency chain, e.g. ", after you send the contract". Only present once the dependency
 // is a live gate (set by the container; see ReminderRow.after).
-function AfterClause({ after }: { after?: string }) {
+function AfterClause({ after }: { after: string | null }) {
   if (!after) return null;
   return <>, after you {after}</>;
 }

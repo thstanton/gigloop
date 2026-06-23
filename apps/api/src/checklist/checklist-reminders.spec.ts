@@ -2,7 +2,9 @@ import {
   selectApplicableReminders,
   ReminderItemInput,
   ApplicableReminder,
+  PREREQUISITE_PHRASES,
 } from './checklist-reminders';
+import { CHECKLIST_DEFAULTS } from '../bookings/checklist-defaults';
 
 function item(overrides: Partial<ReminderItemInput> = {}): ReminderItemInput {
   return {
@@ -214,6 +216,51 @@ describe('selectApplicableReminders', () => {
       expect(find(people, 'send_quote')?.autoCompleteHint).toBeNull();
       expect(find(people, 'send_contract')?.autoCompleteHint).toBeNull();
       expect(find(selectApplicableReminders('overview', ctx), 'create_deposit_invoice')?.autoCompleteHint).toBeNull();
+    });
+  });
+
+  describe('dependency clause — after (#557/#558)', () => {
+    // send_contract (people concern) depends on create_contract; drive create_contract's state.
+    const sendContractAfter = (createContractState?: string) => {
+      const items = createContractState
+        ? [item({ id: 'cc', key: 'create_contract', state: createContractState })]
+        : [];
+      const out = selectApplicableReminders('people', { items, status: 'CONFIRMED', disabledKeys: new Set() });
+      return find(out, 'send_contract')?.after;
+    };
+
+    it.each(['PENDING', 'BLOCKED', 'FAILED'])(
+      'shows the clause while the prerequisite is outstanding (%s)',
+      (state) => {
+        expect(sendContractAfter(state)).toBe('create the contract');
+      },
+    );
+
+    it.each(['COMPLETE', 'SKIPPED'])('hides the clause once the prerequisite is %s', (state) => {
+      expect(sendContractAfter(state)).toBeNull();
+    });
+
+    it('hides the clause when the prerequisite is absent (never seeded)', () => {
+      expect(sendContractAfter()).toBeNull();
+    });
+
+    it('stacks with the auto-complete hint on a client-committed reminder', () => {
+      // contract_signed (overview) gated by an outstanding send_contract → both fields populated.
+      const out = selectApplicableReminders('overview', {
+        items: [item({ id: 'sc', key: 'send_contract', state: 'PENDING' })],
+        status: 'CONFIRMED',
+        disabledKeys: new Set(),
+      });
+      const cs = find(out, 'contract_signed');
+      expect(cs?.after).toBe('send the contract');
+      expect(cs?.autoCompleteHint).toBe('when the client signs in the portal');
+    });
+
+    it('every prerequisite key referenced in a dependsOn has an action phrase (no silent drop)', () => {
+      const prereqKeys = new Set(CHECKLIST_DEFAULTS.flatMap((d) => d.dependsOn));
+      for (const key of prereqKeys) {
+        expect(PREREQUISITE_PHRASES[key]).toBeDefined();
+      }
     });
   });
 });

@@ -283,6 +283,9 @@ export interface ApplicableReminder {
   // Auto-complete condition ("when …" tail) for non-obvious/client-committed reminders; null
   // otherwise. Rendered after a tick icon in the control (#567).
   autoCompleteHint: string | null;
+  // Dependency clause ("after you <phrase>"), present only while an unmet prerequisite is a live
+  // gate (outstanding + tracked, per #554); null otherwise (#557/#558).
+  after: string | null;
 }
 
 export interface BookingLogisticsEntry {

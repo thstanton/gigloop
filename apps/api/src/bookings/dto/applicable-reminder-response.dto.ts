@@ -37,4 +37,12 @@ export class ApplicableReminderResponseDto {
       'the label (the client-committed milestones); null otherwise. Rendered after a tick icon.',
   })
   autoCompleteHint: string | null;
+
+  @ApiPropertyOptional({
+    nullable: true,
+    description:
+      'Dependency clause ("after you <phrase>"), present only while an unmet prerequisite is a live ' +
+      'gate (outstanding and tracked, per #554); null once the prerequisite is met, skipped, or absent.',
+  })
+  after: string | null;
 }

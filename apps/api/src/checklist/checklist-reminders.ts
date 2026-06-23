@@ -12,6 +12,7 @@
 import { CHECKLIST_DEFAULTS } from '../bookings/checklist-defaults';
 import { concernForKey, keysForConcern, ReminderConcern } from './checklist-concerns';
 import { isPastStage } from './checklist-surfacing';
+import { isDepSatisfied } from './checklist-evaluator.service';
 
 // The booking checklist item fields the selector reads.
 export interface ReminderItemInput {
@@ -41,6 +42,10 @@ export interface ApplicableReminder {
   // from the label — the client-committed milestones (#567). Null for the self-evident Send/Create
   // items and the manual ones. The control renders it after a tick icon: "✓ when the client signs".
   autoCompleteHint: string | null;
+  // The dependency clause (#557/#558), rendered as ", after you <after>". Present only while an
+  // unmet prerequisite is a *live gate* — outstanding (PENDING/BLOCKED/FAILED) and tracked, matching
+  // the #554 blocking predicate. Null once the prereq is COMPLETE/SKIPPED/absent (nothing to wait for).
+  after: string | null;
 }
 
 export interface SelectorContext {
@@ -68,8 +73,36 @@ function autoCompleteHintFor(rule: Record<string, unknown> | null): string | nul
   return type ? AUTO_COMPLETE_HINTS[type] ?? null : null;
 }
 
+// The action phrase for a *prerequisite* key, used in the "after you <phrase>" dependency clause
+// (#557/#558). Keyed by the prereq's key (not the dependent's). Every key that appears in any
+// default's `dependsOn` must have an entry — guarded by a test so a new dependency can't silently
+// drop its clause.
+export const PREREQUISITE_PHRASES: Record<string, string> = {
+  send_quote: 'send the quote',
+  confirm_quote: 'confirm the quote',
+  create_contract: 'create the contract',
+  send_contract: 'send the contract',
+  music_form_invite: 'send the music form invite',
+  play_the_gig: 'play the gig',
+};
+
+// The dependency clause for a reminder: the phrases of its unmet prerequisites, joined with "and".
+// "Unmet" mirrors the #554 blocking predicate exactly (reusing isDepSatisfied) — a prereq gates only
+// while outstanding (PENDING/BLOCKED/FAILED) and tracked; COMPLETE/SKIPPED/absent never gate.
+function afterClauseFor(dependsOn: string[], stateMap: Map<string, string>): string | null {
+  const phrases = dependsOn
+    .filter((depKey) => !isDepSatisfied(depKey, stateMap))
+    .map((depKey) => PREREQUISITE_PHRASES[depKey])
+    .filter((phrase): phrase is string => Boolean(phrase));
+  if (phrases.length === 0) return null;
+  if (phrases.length === 1) return phrases[0];
+  return `${phrases.slice(0, -1).join(', ')} and ${phrases[phrases.length - 1]}`;
+}
+
 function systemReminders(concern: ReminderConcern, ctx: SelectorContext): ApplicableReminder[] {
   const byKey = new Map(ctx.items.filter((i) => i.key).map((i) => [i.key as string, i]));
+  // key→state for the dependency live-gate check (absent keys read as satisfied, per #554).
+  const stateMap = new Map(ctx.items.filter((i) => i.key).map((i) => [i.key as string, i.state]));
 
   return keysForConcern(concern)
     .map((key) => CHECKLIST_DEFAULTS.find((d) => d.key === key))
@@ -89,6 +122,7 @@ function systemReminders(concern: ReminderConcern, ctx: SelectorContext): Applic
         state: item?.state ?? null,
         requiredForStatus: d.requiredForStatus,
         autoCompleteHint: autoCompleteHintFor(d.autoCompleteRule),
+        after: afterClauseFor(d.dependsOn, stateMap),
       };
     })
     .sort((a, b) => (TEMPLATE_INDEX[a.key as string] ?? 0) - (TEMPLATE_INDEX[b.key as string] ?? 0));
@@ -111,6 +145,8 @@ function customReminders(concern: ReminderConcern, ctx: SelectorContext): Applic
       requiredForStatus: i.requiredForStatus,
       // Custom items carry no autoCompleteRule in the selector input, so never a hint.
       autoCompleteHint: null,
+      // Custom items carry no dependsOn in the selector input, so never a dependency clause.
+      after: null,
     }));
 }
 

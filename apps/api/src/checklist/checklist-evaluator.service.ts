@@ -96,7 +96,7 @@ function resolveSkip(item: ChecklistItem, bookingStatus: string): boolean {
 // it as BLOCKED forever (a SKIPPED dep can never become COMPLETE). Absent is
 // satisfied for robustness; in practice seed-time `dependsOn` stripping means a
 // dep is never absent on a real booking.
-function isDepSatisfied(depKey: string, stateMap: Map<string, string>): boolean {
+export function isDepSatisfied(depKey: string, stateMap: Map<string, string>): boolean {
   const depState = stateMap.get(depKey);
   return depState === undefined || depState === 'COMPLETE' || depState === 'SKIPPED';
 }
