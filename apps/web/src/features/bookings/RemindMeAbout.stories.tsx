@@ -40,8 +40,11 @@ export const FullRange: Story = {
     await expect(canvas.getByText('Remind me about')).toBeInTheDocument();
     await expect(canvas.getByText('Confirm the venue')).toBeInTheDocument();
     await expect(canvas.getByText('Order the celebration cake')).toBeInTheDocument();
-    // Coaching sub-line names the *preceding* status (work done during that stage).
-    await expect(canvas.getByText('Provisional')).toBeInTheDocument(); // send the quote → prereq for Provisional
+    // Coaching sub-line names the *preceding* status (work done during that stage) — scoped to one
+    // row since several CONFIRMED-staged reminders all coach "Provisional".
+    await expect(
+      within(canvas.getByText('Send the contract').closest('li')!).getByText('Provisional'),
+    ).toBeInTheDocument(); // send_contract → prereq for Confirmed → done during Provisional
     await expect(canvas.getByText('Confirm the venue').closest('li')).toHaveTextContent(/Could remind you when the booking is Confirmed/);
     // A client-committed milestone carries its auto-complete condition (#567).
     await expect(canvas.getByText('Contract signed').closest('li')).toHaveTextContent(
