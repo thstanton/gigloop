@@ -30,6 +30,7 @@ import { toast } from '@/lib/hooks/use-toast';
 import { OverviewAtom, type OverviewChanges, type SeriesChange } from '@/features/bookings/OverviewAtom';
 import { PeopleAtom, type PeopleSelection } from '@/features/bookings/PeopleAtom';
 import { VenueAtom, type VenueSelection } from '@/features/bookings/VenueAtom';
+import { RemindMeAboutContainer } from '@/features/bookings/RemindMeAboutContainer';
 import { DetailsAtom, LOGISTICS_TIME_KEYS, type DetailsLogistics } from '@/features/bookings/DetailsAtom';
 import { ItineraryAtom } from '@/features/bookings/ItineraryAtom';
 import { MusicAtom } from '@/features/bookings/MusicAtom';
@@ -661,6 +662,9 @@ export default function BookingBuilderPage() {
               saved={venueSave.isSuccess}
               saveError={venueSave.isError ? 'Failed to save. Please try again.' : null}
             />
+            <div className="mt-6">
+              <RemindMeAboutContainer bookingId={id!} concern="venue" />
+            </div>
           </BuilderSection>
 
           {/* Package Templates */}

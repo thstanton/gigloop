@@ -25,3 +25,28 @@ The reframe that unlocked this: from the musician's point of view the checklist 
 **Considered and rejected:** a single post-creation config home on the Checklist card (handles all items, one mental model — rejected because it keeps a "configure your checklist" screen the reframe is trying to dissolve, and forgoes the in-context discoverability that is the whole point); keeping the wizard's standalone checklist step (the UAT confusion source); keeping create/send pairs whole under Overview (rejected on UX preference for the People grouping, once point 5 removed the correctness cost); a distinct state/flag to mark user-opt-out separately from system stage-retirement (unnecessary once the stage filter disambiguates).
 
 **Consequences:** a `concern` column lands on `BookingChecklistItem` and the template item shape; the checklist evaluator's blocking test changes (with a regression test for the skip-mid-chain case); the create/seed path gains an on-demand single-item seed; the Builder, new-booking form, and Settings all grow per-concern "Remind me about" controls. **Deferred:** wizard ↔ Builder convergence (dissolving the standalone wizard step into per-concern controls) is its own slice; surfacing reminder config on the detail-page record cards (Contract, Invoice, Communications) is a future extension; the user-facing "Smart Reminder" name is parked. **For the PRD/impl:** the "on/off" control must define how it renders an item already in a COMPLETE / BLOCKED / FAILED lifecycle state (cleanest: the toggle is tracked-vs-skipped, and lifecycle state shows *within* "on"); and on-demand-seeded items need a sensible `order` derived from template position, not appended, or the checklist loses its workflow narrative.
+
+---
+
+**Amendment (#556 — control build, 2026-06-23):** the design loop that built the reusable
+"Remind me about" control (variant chosen via throwaway prototype) settled four points that
+refine the "For the PRD/impl" note above:
+
+- **The control does not render lifecycle state.** It overturns the parenthetical above
+  ("lifecycle state shows within 'on'"): COMPLETE / BLOCKED / FAILED are **not** shown in the
+  control — that is the **checklist's** job. The control is purely tracked-vs-skipped (on/off).
+  A completed-but-tracked reminder simply reads as "on". This keeps the control a discovery +
+  opt-out surface, not a status display.
+- **Unified off-state.** A user-skipped reminder and a never-seeded (discoverable) one render
+  **identically** — "Could remind you when the booking is X" / "Remind me". The seed-vs-un-skip
+  distinction is the container's concern (different API calls: `POST …/reminders/:key/enable`
+  vs `PATCH …/:itemId {SKIPPED|PENDING}`), never surfaced to the user.
+- **Status coaching = the preceding stage.** Each reminder names the booking status the work is
+  done *during* — i.e. the stage **before** its `requiredForStatus` (a prerequisite *for* the
+  next stage), bold and in that status's colour. ENQUIRY appears as a display value though it is
+  not a valid `requiredForStatus`.
+- **Dependency chain deferred.** The "…, after you <prerequisite>" clause (the `dependsOn` chain,
+  shown only when the dependency is a live gate — pending, tracked, not globally disabled,
+  mirroring the point-5 blocking semantics) is **deferred to #557/#558**: the #555 selector DTO
+  carries no dependency field, and the Venue tracer's only reminder (`add_venue`) has none. The
+  presentational atom exposes an optional `after` slot ready for it.
