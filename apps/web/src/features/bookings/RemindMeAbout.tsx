@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { CheckCircle2, ChevronDown } from 'lucide-react';
 import { BOOKING_STATUS_LABELS, statusGte } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 import type { ApplicableReminder, BookingStatus } from '@/types/api';
@@ -143,8 +143,19 @@ export function RemindMeAbout({ reminders, onToggle, busyKeys, currentStatus }: 
           <span className={cn('block truncate text-base', !reminder.on && 'text-muted')}>
             {reminder.label}
           </span>
-          <span className="text-sm text-muted">
+          <span className="block text-sm text-muted">
             <Subline reminder={reminder} />
+            {/* Auto-complete condition (#567): the "when …" tail, led by a muted circled tick so it
+                reads "✓ when the client signs in the portal". Muted (not success-green) keeps it on
+                the right side of ADR-0052's no-lifecycle-state line — it explains how the reminder
+                resolves, without implying it's already done. */}
+            {reminder.autoCompleteHint && (
+              <span className="text-muted/80">
+                {' · '}
+                <CheckCircle2 className="inline h-3.5 w-3.5 align-text-bottom" aria-hidden />{' '}
+                {reminder.autoCompleteHint}
+              </span>
+            )}
           </span>
         </div>
         <button

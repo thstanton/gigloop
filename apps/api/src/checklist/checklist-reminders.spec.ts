@@ -186,5 +186,34 @@ describe('selectApplicableReminders', () => {
       expect(out[0].key).toBe('add_venue');
       expect(out[out.length - 1].itemId).toBe('cu5');
     });
+
+    it('a custom item never carries an auto-complete hint', () => {
+      const out = selectApplicableReminders('venue', {
+        items: [item({ id: 'cu6', key: null, concern: 'venue', label: 'Arrange parking' })],
+        status: 'ENQUIRY',
+        disabledKeys: new Set(),
+      });
+      expect(out.find((r) => r.itemId === 'cu6')?.autoCompleteHint).toBeNull();
+    });
+  });
+
+  describe('auto-complete hint (#567)', () => {
+    const ctx = { items: [], status: 'ENQUIRY', disabledKeys: new Set<string>() };
+
+    it('surfaces the condition for the client-committed milestones', () => {
+      expect(find(selectApplicableReminders('overview', ctx), 'contract_signed')?.autoCompleteHint).toBe(
+        'when the client signs in the portal',
+      );
+      expect(find(selectApplicableReminders('music', ctx), 'song_requests')?.autoCompleteHint).toBe(
+        'when the client sends their requests',
+      );
+    });
+
+    it('leaves the self-evident Send/Create items without a hint', () => {
+      const people = selectApplicableReminders('people', ctx);
+      expect(find(people, 'send_quote')?.autoCompleteHint).toBeNull();
+      expect(find(people, 'send_contract')?.autoCompleteHint).toBeNull();
+      expect(find(selectApplicableReminders('overview', ctx), 'create_deposit_invoice')?.autoCompleteHint).toBeNull();
+    });
   });
 });

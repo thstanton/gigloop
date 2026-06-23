@@ -280,6 +280,9 @@ export interface ApplicableReminder {
   source: 'system' | 'custom';
   state: ChecklistItemState | null;
   requiredForStatus: 'PROVISIONAL' | 'CONFIRMED' | 'READY' | 'COMPLETE' | null;
+  // Auto-complete condition ("when …" tail) for non-obvious/client-committed reminders; null
+  // otherwise. Rendered after a tick icon in the control (#567).
+  autoCompleteHint: string | null;
 }
 
 export interface BookingLogisticsEntry {

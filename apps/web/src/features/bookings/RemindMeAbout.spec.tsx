@@ -12,6 +12,7 @@ function reminder(overrides: Partial<ReminderRow> = {}): ReminderRow {
     source: 'system',
     state: 'PENDING',
     requiredForStatus: 'CONFIRMED',
+    autoCompleteHint: null,
     ...overrides,
   };
 }
@@ -97,6 +98,29 @@ describe('RemindMeAbout', () => {
   it('disables a row whose toggle is in flight', () => {
     render(<RemindMeAbout reminders={[reminder()]} onToggle={vi.fn()} busyKeys={new Set(['send_contract'])} />);
     expect(screen.getByRole('button', { name: 'Turn off' })).toBeDisabled();
+  });
+
+  describe('auto-complete condition (#567)', () => {
+    it.each([
+      ['on', true],
+      ['off', false],
+    ])('renders the auto-complete hint inline when present (%s)', (_label, on) => {
+      render(
+        <RemindMeAbout
+          reminders={[reminder({ key: 'contract_signed', label: 'Contract signed', on, autoCompleteHint: 'when the client signs in the portal' })]}
+          onToggle={vi.fn()}
+        />,
+      );
+      expect(screen.getByText('Contract signed').closest('li')).toHaveTextContent(
+        '· when the client signs in the portal',
+      );
+    });
+
+    it('renders no hint clause when autoCompleteHint is null', () => {
+      render(<RemindMeAbout reminders={[reminder({ key: 'send_quote', label: 'Send quote', autoCompleteHint: null })]} onToggle={vi.fn()} />);
+      // The hint clause is separated by a middot; absent means no clause was rendered.
+      expect(screen.getByText('Send quote').closest('li')).not.toHaveTextContent('·');
+    });
   });
 
   describe('passed-stage collapse (currentStatus)', () => {

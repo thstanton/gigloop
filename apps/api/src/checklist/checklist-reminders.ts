@@ -37,6 +37,10 @@ export interface ApplicableReminder {
   // control show COMPLETE/BLOCKED/FAILED *within* the "on" state.
   state: string | null;
   requiredForStatus: string | null;
+  // The auto-complete *condition* (the "when …" tail) for reminders whose resolution isn't obvious
+  // from the label — the client-committed milestones (#567). Null for the self-evident Send/Create
+  // items and the manual ones. The control renders it after a tick icon: "✓ when the client signs".
+  autoCompleteHint: string | null;
 }
 
 export interface SelectorContext {
@@ -49,6 +53,20 @@ export interface SelectorContext {
 const TEMPLATE_INDEX: Record<string, number> = Object.fromEntries(
   CHECKLIST_DEFAULTS.map((d, idx) => [d.key, idx] as const),
 );
+
+// The auto-complete condition surfaced in the control (#567), keyed by autoCompleteRule.type. Only
+// the *non-obvious* resolvers — the client-committed milestones — get a hint; the self-evident
+// Send/Create items and the manual ones (no rule) return null. The phrase is the "when …" tail, so
+// it reads "✓ when the client signs in the portal" after the control's tick icon.
+const AUTO_COMPLETE_HINTS: Record<string, string> = {
+  contractSigned: 'when the client signs in the portal',
+  musicFormResponse: 'when the client sends their requests',
+};
+
+function autoCompleteHintFor(rule: Record<string, unknown> | null): string | null {
+  const type = typeof rule?.type === 'string' ? rule.type : null;
+  return type ? AUTO_COMPLETE_HINTS[type] ?? null : null;
+}
 
 function systemReminders(concern: ReminderConcern, ctx: SelectorContext): ApplicableReminder[] {
   const byKey = new Map(ctx.items.filter((i) => i.key).map((i) => [i.key as string, i]));
@@ -70,6 +88,7 @@ function systemReminders(concern: ReminderConcern, ctx: SelectorContext): Applic
         source: 'system' as const,
         state: item?.state ?? null,
         requiredForStatus: d.requiredForStatus,
+        autoCompleteHint: autoCompleteHintFor(d.autoCompleteRule),
       };
     })
     .sort((a, b) => (TEMPLATE_INDEX[a.key as string] ?? 0) - (TEMPLATE_INDEX[b.key as string] ?? 0));
@@ -90,6 +109,8 @@ function customReminders(concern: ReminderConcern, ctx: SelectorContext): Applic
       source: 'custom' as const,
       state: i.state,
       requiredForStatus: i.requiredForStatus,
+      // Custom items carry no autoCompleteRule in the selector input, so never a hint.
+      autoCompleteHint: null,
     }));
 }
 

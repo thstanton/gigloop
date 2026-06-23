@@ -29,4 +29,12 @@ export class ApplicableReminderResponseDto {
 
   @ApiPropertyOptional({ nullable: true })
   requiredForStatus: string | null;
+
+  @ApiPropertyOptional({
+    nullable: true,
+    description:
+      'Auto-complete condition ("when …" tail) for reminders whose resolution is not obvious from ' +
+      'the label (the client-committed milestones); null otherwise. Rendered after a tick icon.',
+  })
+  autoCompleteHint: string | null;
 }
