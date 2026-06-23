@@ -1,13 +1,15 @@
-import { BOOKING_STATUS_LABELS } from '@/lib/constants';
+import { useState } from 'react';
+import { ChevronDown } from 'lucide-react';
+import { BOOKING_STATUS_LABELS, statusGte } from '@/lib/constants';
 import { cn } from '@/lib/utils';
-import type { ApplicableReminder } from '@/types/api';
+import type { ApplicableReminder, BookingStatus } from '@/types/api';
 
 // The reusable "Remind me about" control (Smart Reminders, ADR-0052 / #556). Presentational
 // only: it renders the engine selector's output for one concern as a quiet on/off list and
 // emits the user's toggle intent via `onToggle`. It owns no fetch and no mutation — the
 // container decides enable-vs-skip from the row's source/state and injects per-row busy state.
 //
-// Design (prototype verdict, #556): a "Remind me to" list. Each row names the booking status
+// Design (prototype verdict, #556): a "Remind me about" list. Each row names the booking status
 // the work is done *during* — coaching the lifecycle vocabulary — in that status's colour while
 // on, dimmed while off. Lifecycle state (COMPLETE/BLOCKED/FAILED) is deliberately NOT shown:
 // that is the checklist's job; this control is on/off only.
@@ -58,6 +60,13 @@ export interface RemindMeAboutProps {
   onToggle: (reminder: ApplicableReminder) => void;
   /** Rows with an in-flight toggle — their action is disabled to prevent a double-fire. */
   busyKeys?: ReadonlySet<string>;
+  /**
+   * The booking's current status. When provided, reminders whose work window has already passed
+   * (the work happens during the stage *preceding* `requiredForStatus`, so it has passed once the
+   * booking reaches `requiredForStatus` — i.e. `requiredForStatus <= currentStatus`) are collapsed
+   * behind a "show passed" disclosure instead of listed. Omit to list every reminder.
+   */
+  currentStatus?: BookingStatus;
 }
 
 // The status the work is done during — bold, and in its status colour unless the reminder is off.
@@ -98,47 +107,80 @@ function actionLabel(reminder: ApplicableReminder): string {
   return reminder.on ? 'Turn off' : 'Remind me';
 }
 
-export function RemindMeAbout({ reminders, onToggle, busyKeys }: RemindMeAboutProps) {
+export function RemindMeAbout({ reminders, onToggle, busyKeys, currentStatus }: RemindMeAboutProps) {
+  const [showPassed, setShowPassed] = useState(false);
   if (reminders.length === 0) return null;
+
+  // A reminder's work happens during the stage preceding `requiredForStatus`, so that window has
+  // passed once the booking reaches `requiredForStatus`. Stage-less customs never count as passed.
+  const isPassed = (r: ReminderRow) =>
+    currentStatus != null &&
+    r.requiredForStatus != null &&
+    statusGte(currentStatus, r.requiredForStatus);
+  let active = reminders.filter((r) => !isPassed(r));
+  let passed = reminders.filter(isPassed);
+
+  // Always lead with at least one reminder. When every reminder has passed (e.g. a single-reminder
+  // concern past its stage, or a fully-played booking), promote the most recent — last in workflow
+  // order, i.e. closest to now — so the section never collapses to a bare disclosure.
+  if (active.length === 0 && passed.length > 0) {
+    active = [passed[passed.length - 1]];
+    passed = passed.slice(0, -1);
+  }
+
+  const renderRow = (reminder: ReminderRow) => {
+    const id = reminderRowId(reminder);
+    const busy = busyKeys?.has(id) ?? false;
+    return (
+      <li
+        key={id}
+        className={cn(
+          'flex items-center gap-3 rounded-lg border border-border px-4 py-1.5',
+          !reminder.on && 'bg-secondary/40',
+        )}
+      >
+        <div className="min-w-0 flex-1">
+          <span className={cn('block truncate text-base', !reminder.on && 'text-muted')}>
+            {reminder.label}
+          </span>
+          <span className="text-sm text-muted">
+            <Subline reminder={reminder} />
+          </span>
+        </div>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => onToggle(reminder)}
+          className={cn(
+            'shrink-0 text-sm font-medium disabled:opacity-50',
+            reminder.on ? 'text-muted hover:text-foreground' : 'text-primary',
+          )}
+        >
+          {actionLabel(reminder)}
+        </button>
+      </li>
+    );
+  };
 
   return (
     <div className="space-y-2">
-      <p className="text-sm font-medium text-muted">Remind me to</p>
-      <ul className="space-y-2">
-        {reminders.map((reminder) => {
-          const id = reminderRowId(reminder);
-          const busy = busyKeys?.has(id) ?? false;
-          return (
-            <li
-              key={id}
-              className={cn(
-                'flex items-center gap-3 rounded-lg border border-border px-4 py-3',
-                !reminder.on && 'bg-secondary/40',
-              )}
-            >
-              <div className="min-w-0 flex-1">
-                <span className={cn('block truncate text-base', !reminder.on && 'text-muted')}>
-                  {reminder.label}
-                </span>
-                <span className="text-sm text-muted">
-                  <Subline reminder={reminder} />
-                </span>
-              </div>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => onToggle(reminder)}
-                className={cn(
-                  'shrink-0 text-sm font-medium disabled:opacity-50',
-                  reminder.on ? 'text-muted hover:text-foreground' : 'text-primary',
-                )}
-              >
-                {actionLabel(reminder)}
-              </button>
-            </li>
-          );
-        })}
-      </ul>
+      {/* `active` always holds ≥1 reminder (the min-1 promotion above), so the header always sits
+          above a non-empty list. */}
+      <p className="text-sm font-medium text-muted">Remind me about</p>
+      <ul className="space-y-2">{active.map(renderRow)}</ul>
+      {passed.length > 0 && (
+        <div className="space-y-2">
+          <button
+            type="button"
+            onClick={() => setShowPassed((v) => !v)}
+            className="flex items-center gap-1 text-sm font-medium text-muted hover:text-foreground"
+          >
+            <ChevronDown className={cn('h-4 w-4 transition-transform', !showPassed && '-rotate-90')} />
+            {showPassed ? 'Hide' : 'Show'} {passed.length} passed reminder{passed.length === 1 ? '' : 's'}
+          </button>
+          {showPassed && <ul className="space-y-2">{passed.map(renderRow)}</ul>}
+        </div>
+      )}
     </div>
   );
 }

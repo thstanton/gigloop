@@ -640,7 +640,7 @@ export default function BookingBuilderPage() {
               </div>
             )}
             <div className="mt-6">
-              <RemindMeAboutContainer bookingId={id!} concern="overview" />
+              <RemindMeAboutContainer bookingId={id!} concern="overview" currentStatus={booking.status} />
             </div>
           </BuilderSection>
 
@@ -655,7 +655,7 @@ export default function BookingBuilderPage() {
               saveError={peopleSave.isError ? 'Failed to save. Please try again.' : null}
             />
             <div className="mt-6">
-              <RemindMeAboutContainer bookingId={id!} concern="people" />
+              <RemindMeAboutContainer bookingId={id!} concern="people" currentStatus={booking.status} />
             </div>
           </BuilderSection>
 
@@ -669,7 +669,7 @@ export default function BookingBuilderPage() {
               saveError={venueSave.isError ? 'Failed to save. Please try again.' : null}
             />
             <div className="mt-6">
-              <RemindMeAboutContainer bookingId={id!} concern="venue" />
+              <RemindMeAboutContainer bookingId={id!} concern="venue" currentStatus={booking.status} />
             </div>
           </BuilderSection>
 
@@ -766,7 +766,7 @@ export default function BookingBuilderPage() {
               anchorsError={saveAnchors.isError ? 'Failed to save times. Please try again.' : null}
             />
             <div className="mt-6">
-              <RemindMeAboutContainer bookingId={id!} concern="itinerary" />
+              <RemindMeAboutContainer bookingId={id!} concern="itinerary" currentStatus={booking.status} />
             </div>
           </BuilderSection>
 
@@ -803,7 +803,7 @@ export default function BookingBuilderPage() {
               />
             )}
             <div className="mt-6">
-              <RemindMeAboutContainer bookingId={id!} concern="music" />
+              <RemindMeAboutContainer bookingId={id!} concern="music" currentStatus={booking.status} />
             </div>
           </BuilderSection>
 

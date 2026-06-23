@@ -17,9 +17,9 @@ function reminder(overrides: Partial<ReminderRow> = {}): ReminderRow {
 }
 
 describe('RemindMeAbout', () => {
-  it('renders the "Remind me to" header and a row per reminder', () => {
+  it('renders the "Remind me about" header and a row per reminder', () => {
     render(<RemindMeAbout reminders={[reminder(), reminder({ itemId: '2', key: 'send_quote', label: 'Send the quote' })]} onToggle={vi.fn()} />);
-    expect(screen.getByText('Remind me to')).toBeInTheDocument();
+    expect(screen.getByText('Remind me about')).toBeInTheDocument();
     expect(screen.getByText('Send the contract')).toBeInTheDocument();
     expect(screen.getByText('Send the quote')).toBeInTheDocument();
   });
@@ -97,6 +97,64 @@ describe('RemindMeAbout', () => {
   it('disables a row whose toggle is in flight', () => {
     render(<RemindMeAbout reminders={[reminder()]} onToggle={vi.fn()} busyKeys={new Set(['send_contract'])} />);
     expect(screen.getByRole('button', { name: 'Turn off' })).toBeDisabled();
+  });
+
+  describe('passed-stage collapse (currentStatus)', () => {
+    // send_contract is required-for CONFIRMED → its work window has passed on a CONFIRMED booking;
+    // create_balance_invoice is required-for READY → still ahead, so it stays active.
+    const passedRow = () =>
+      reminder({ key: 'send_contract', label: 'Send the contract', requiredForStatus: 'CONFIRMED' });
+    const activeRow = () =>
+      reminder({ key: 'create_balance_invoice', label: 'Create the balance invoice', requiredForStatus: 'READY' });
+
+    it('lists every reminder when no currentStatus is given (default)', () => {
+      render(<RemindMeAbout reminders={[passedRow(), activeRow()]} onToggle={vi.fn()} />);
+      expect(screen.getByText('Send the contract')).toBeInTheDocument();
+      expect(screen.getByText('Create the balance invoice')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /passed/ })).not.toBeInTheDocument();
+    });
+
+    it('hides passed-stage reminders behind a disclosure, revealing them on expand', async () => {
+      render(<RemindMeAbout reminders={[passedRow(), activeRow()]} onToggle={vi.fn()} currentStatus="CONFIRMED" />);
+      // Active row shows; the passed one is hidden until expanded.
+      expect(screen.getByText('Create the balance invoice')).toBeInTheDocument();
+      expect(screen.queryByText('Send the contract')).not.toBeInTheDocument();
+      // The disclosure names the count.
+      const disclosure = screen.getByRole('button', { name: /Show 1 passed reminder/ });
+      await userEvent.click(disclosure);
+      expect(screen.getByText('Send the contract')).toBeInTheDocument();
+    });
+
+    it('keeps a single passed reminder visible rather than collapsing the whole section (min 1)', () => {
+      render(<RemindMeAbout reminders={[passedRow()]} onToggle={vi.fn()} currentStatus="CONFIRMED" />);
+      expect(screen.getByText('Remind me about')).toBeInTheDocument();
+      expect(screen.getByText('Send the contract')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /passed/ })).not.toBeInTheDocument();
+    });
+
+    it('promotes the most recent passed reminder and collapses the rest when all have passed', async () => {
+      // Both passed on a CONFIRMED booking; deposit_received (CONFIRMED) is more recent than
+      // confirm_quote (PROVISIONAL), so it leads and the older one collapses.
+      const older = reminder({ key: 'confirm_quote', label: 'Quote confirmed', requiredForStatus: 'PROVISIONAL' });
+      const recent = reminder({ key: 'deposit_received', label: 'Deposit received', requiredForStatus: 'CONFIRMED' });
+      render(<RemindMeAbout reminders={[older, recent]} onToggle={vi.fn()} currentStatus="CONFIRMED" />);
+      expect(screen.getByText('Deposit received')).toBeInTheDocument();
+      expect(screen.queryByText('Quote confirmed')).not.toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: /Show 1 passed reminder/ }));
+      expect(screen.getByText('Quote confirmed')).toBeInTheDocument();
+    });
+
+    it('never treats a stage-less custom reminder as passed', () => {
+      render(
+        <RemindMeAbout
+          reminders={[reminder({ key: null, source: 'custom', label: 'Order the cake', requiredForStatus: null })]}
+          onToggle={vi.fn()}
+          currentStatus="COMPLETE"
+        />,
+      );
+      expect(screen.getByText('Order the cake')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /passed/ })).not.toBeInTheDocument();
+    });
   });
 });
 

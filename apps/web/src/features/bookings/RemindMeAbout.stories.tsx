@@ -35,7 +35,7 @@ export const FullRange: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     // Header + every row's label renders.
-    await expect(canvas.getByText('Remind me to')).toBeInTheDocument();
+    await expect(canvas.getByText('Remind me about')).toBeInTheDocument();
     await expect(canvas.getByText('Confirm the venue')).toBeInTheDocument();
     await expect(canvas.getByText('Order the celebration cake')).toBeInTheDocument();
     // Coaching sub-line names the *preceding* status (work done during that stage).
@@ -92,6 +92,28 @@ export const WithDependency: Story = {
     await expect(canvas.getByText('Take the deposit').closest('li')).toHaveTextContent(
       'Could remind you when the booking is Provisional, after you send the contract',
     );
+  },
+};
+
+export const PassedStagesCollapsed: Story = {
+  name: 'Passed-stage reminders collapse behind a disclosure',
+  args: {
+    // The booking is Confirmed, so reminders required-for Confirmed (or earlier) have passed their
+    // work window and collapse; only the Ready/Complete ones stay listed.
+    currentStatus: 'CONFIRMED',
+    reminders: [
+      { itemId: '1', key: 'send_contract', label: 'Send the contract', on: true, source: 'system', state: 'PENDING', requiredForStatus: 'CONFIRMED' }, // passed
+      { itemId: '2', key: 'create_balance_invoice', label: 'Create the balance invoice', on: false, source: 'system', state: null, requiredForStatus: 'READY' }, // active
+      { itemId: '3', key: 'play_the_gig', label: 'Play the gig', on: true, source: 'system', state: 'PENDING', requiredForStatus: 'COMPLETE' }, // active
+    ],
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    // Future-stage reminders show; the passed one is hidden until the disclosure is opened.
+    await expect(canvas.getByText('Create the balance invoice')).toBeInTheDocument();
+    await expect(canvas.queryByText('Send the contract')).not.toBeInTheDocument();
+    await userEvent.click(canvas.getByRole('button', { name: /Show 1 passed reminder/ }));
+    await expect(canvas.getByText('Send the contract')).toBeInTheDocument();
   },
 };
 

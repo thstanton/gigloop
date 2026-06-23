@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@clerk/react';
 import { apiGet, apiPatch, apiPost } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
-import type { ApplicableReminder, ReminderConcern } from '@/types/api';
+import type { ApplicableReminder, BookingStatus, ReminderConcern } from '@/types/api';
 import { RemindMeAbout, reminderRowId } from './RemindMeAbout';
 
 // The container for the "Remind me about" control (Smart Reminders, ADR-0052 / #556). Fetches a
@@ -16,9 +16,11 @@ const remindersKey = (bookingId: string, concern: ReminderConcern) =>
 interface RemindMeAboutContainerProps {
   bookingId: string;
   concern: ReminderConcern;
+  /** The booking's current status — lets the control collapse passed-stage reminders. */
+  currentStatus?: BookingStatus;
 }
 
-export function RemindMeAboutContainer({ bookingId, concern }: RemindMeAboutContainerProps) {
+export function RemindMeAboutContainer({ bookingId, concern, currentStatus }: RemindMeAboutContainerProps) {
   const { isLoaded } = useAuth();
   const queryClient = useQueryClient();
   const queryKey = remindersKey(bookingId, concern);
@@ -77,5 +79,12 @@ export function RemindMeAboutContainer({ bookingId, concern }: RemindMeAboutCont
     },
   });
 
-  return <RemindMeAbout reminders={reminders} onToggle={(r) => toggle.mutate(r)} busyKeys={busyKeys} />;
+  return (
+    <RemindMeAbout
+      reminders={reminders}
+      onToggle={(r) => toggle.mutate(r)}
+      busyKeys={busyKeys}
+      currentStatus={currentStatus}
+    />
+  );
 }
