@@ -288,6 +288,26 @@ export interface ApplicableReminder {
   after: string | null;
 }
 
+// One in-scope prerequisite of a previewed reminder (#560), with the phrase the New Booking form
+// uses to recompute the "after you …" clause from the live selection.
+export interface ReminderPrerequisite {
+  key: string;
+  phrase: string;
+}
+
+// One previewed system reminder for the New Booking form (#560). Pre-creation there is no booking
+// to seed against, so the create surface previews the system reminders a booking started at a given
+// status would offer — grouped by concern, with the same coaching as the Builder. Selection state
+// (on/off) and the "after you …" clause live on the frontend; this is the static offer.
+export interface ReminderPreview {
+  key: string;
+  label: string;
+  concern: ReminderConcern;
+  requiredForStatus: 'PROVISIONAL' | 'CONFIRMED' | 'READY' | 'COMPLETE' | null;
+  autoCompleteHint: string | null;
+  prerequisites: ReminderPrerequisite[];
+}
+
 export interface BookingLogisticsEntry {
   value: string;
   icon?: string;

@@ -16,6 +16,9 @@ export type ChecklistItemSeed = {
   autoCompleteRule?: Record<string, unknown> | null;
   requiredForStatus?: string | null;
   dueDateRule?: { basis: 'bookingDate' | 'bookingCreation'; offsetDays: number } | null;
+  // A custom item seeded with its user-chosen concern (#560); null for system items and
+  // concern-less customs.
+  concern?: string | null;
 };
 
 type ActionChecklistItem = {
@@ -168,6 +171,7 @@ export class ChecklistRepository {
           ? { autoCompleteRule: autoCompleteRule as Prisma.InputJsonValue }
           : {}),
         requiredForStatus: item.requiredForStatus ?? null,
+        concern: item.concern ?? null,
         dueDate: computeDueDate(dueDateRule, bookingDate, bookingCreatedAt),
         ...(dueDateRule !== null
           ? { dueDateRule: dueDateRule as unknown as Prisma.InputJsonValue }

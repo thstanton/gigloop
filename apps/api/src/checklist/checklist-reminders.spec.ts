@@ -1,7 +1,9 @@
 import {
   selectApplicableReminders,
+  previewApplicableReminders,
   ReminderItemInput,
   ApplicableReminder,
+  ReminderPreview,
   PREREQUISITE_PHRASES,
 } from './checklist-reminders';
 import { CHECKLIST_DEFAULTS } from '../bookings/checklist-defaults';
@@ -262,5 +264,62 @@ describe('selectApplicableReminders', () => {
         expect(PREREQUISITE_PHRASES[key]).toBeDefined();
       }
     });
+  });
+});
+
+const pfind = (out: ReminderPreview[], key: string) => out.find((r) => r.key === key);
+
+describe('previewApplicableReminders (pre-creation, #560)', () => {
+  it('offers every in-scope system key, each tagged with its concern', () => {
+    const out = previewApplicableReminders({ status: 'PROVISIONAL', disabledKeys: new Set() });
+    // A PROVISIONAL-starting booking still has every CONFIRMED+ reminder ahead of it.
+    expect(pfind(out, 'send_contract')?.concern).toBe('people');
+    expect(pfind(out, 'add_venue')?.concern).toBe('venue');
+    expect(pfind(out, 'play_the_gig')?.concern).toBe('overview');
+    // Every offered row maps to a concern (no orphans).
+    expect(out.every((r) => r.concern)).toBe(true);
+  });
+
+  it('preserves template (workflow) order', () => {
+    const out = previewApplicableReminders({ status: 'ENQUIRY', disabledKeys: new Set() });
+    const order = out.map((r) => CHECKLIST_DEFAULTS.findIndex((d) => d.key === r.key));
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+  });
+
+  it('applies the same past-stage filter as the Builder', () => {
+    // send_quote is PROVISIONAL-staged; a CONFIRMED-starting booking has passed it.
+    const out = previewApplicableReminders({ status: 'CONFIRMED', disabledKeys: new Set() });
+    expect(pfind(out, 'send_quote')).toBeUndefined();
+    expect(pfind(out, 'send_thank_you')).toBeDefined(); // COMPLETE-staged, still ahead
+  });
+
+  it('drops a disabled key entirely (master switch parity with the Builder)', () => {
+    const out = previewApplicableReminders({ status: 'ENQUIRY', disabledKeys: new Set(['add_venue']) });
+    expect(pfind(out, 'add_venue')).toBeUndefined();
+  });
+
+  it('surfaces cross-concern prerequisites with their phrases', () => {
+    // send_contract (people) depends on create_contract (overview) — the clause must survive the
+    // concern boundary, with the prereq key + phrase for the frontend to gate by selection.
+    const out = previewApplicableReminders({ status: 'PROVISIONAL', disabledKeys: new Set() });
+    expect(pfind(out, 'send_contract')?.prerequisites).toContainEqual({
+      key: 'create_contract',
+      phrase: 'create the contract',
+    });
+  });
+
+  it('omits a prerequisite that has itself been filtered out as past-stage', () => {
+    // On a READY-starting booking, create_contract (CONFIRMED-staged) has passed, so a still-ahead
+    // dependent must not carry a clause pointing at an out-of-scope prerequisite.
+    const out = previewApplicableReminders({ status: 'READY', disabledKeys: new Set() });
+    for (const row of out) {
+      expect(row.prerequisites.map((p) => p.key)).not.toContain('create_contract');
+    }
+  });
+
+  it('carries the auto-complete hint for client-committed milestones', () => {
+    const out = previewApplicableReminders({ status: 'ENQUIRY', disabledKeys: new Set() });
+    expect(pfind(out, 'contract_signed')?.autoCompleteHint).toBe('when the client signs in the portal');
+    expect(pfind(out, 'send_quote')?.autoCompleteHint).toBeNull();
   });
 });

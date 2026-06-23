@@ -25,6 +25,7 @@ import type {
   Contact,
   EventType,
   PackageTemplate,
+  ReminderPreview,
   UserProfile,
 } from '@/types/api';
 
@@ -120,6 +121,16 @@ export default function BookingNewPage() {
     queryKey: ['series'],
     queryFn: () => apiGet<BookingSeries[]>('/series'),
     enabled: isLoaded,
+  });
+
+  // The per-concern reminders to offer on step 2, previewed for the chosen starting status (#560).
+  // Runs the Builder's selector over the user's template server-side, so the create surface matches
+  // the Builder without duplicating the concern/hint/phrase maps. Fetched once the status is known.
+  const previewStatus = pendingValues?.status as BookingStatus | undefined;
+  const { data: reminderPreview = [], isLoading: isPreviewLoading } = useQuery({
+    queryKey: ['reminderPreview', previewStatus],
+    queryFn: () => apiGet<ReminderPreview[]>(`/bookings/checklist/reminders/preview?status=${previewStatus}`),
+    enabled: isLoaded && !!previewStatus,
   });
 
   const { control, handleSubmit, setValue, formState: { errors } } = useForm<BookingFormValues>({
@@ -232,8 +243,9 @@ export default function BookingNewPage() {
 
       {step === 2 && pendingValues && (
         <ChecklistStep
-          defaults={checklistDefaults}
-          startingStatus={pendingValues.status as BookingStatus}
+          preview={reminderPreview}
+          isPreviewLoading={isPreviewLoading}
+          checklistDefaults={checklistDefaults}
           onBack={() => { mutation.reset(); resolvedIds.current = {}; setStep(1); }}
           onCreate={(checklistItems) => mutation.mutate({ values: pendingValues, checklistItems })}
           isCreating={mutation.isPending}

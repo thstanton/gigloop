@@ -61,6 +61,15 @@ export class ChecklistItemInput {
   @ApiPropertyOptional({ nullable: true })
   @IsOptional()
   dueDateRule?: DueDateRule | null;
+
+  @ApiPropertyOptional({
+    enum: ['overview', 'people', 'venue', 'itinerary', 'music'],
+    nullable: true,
+    description: 'Tag a custom item to a concern so it appears in that section’s control (#560).',
+  })
+  @IsOptional()
+  @IsIn(['overview', 'people', 'venue', 'itinerary', 'music', null])
+  concern?: 'overview' | 'people' | 'venue' | 'itinerary' | 'music' | null;
 }
 
 export class CreateBookingDto {

@@ -161,6 +161,83 @@ export function selectApplicableReminders(
   return [...systemReminders(concern, ctx), ...customReminders(concern, ctx)];
 }
 
+// ───────────────────────────────────────────────────────────────────────────
+// Preview (pre-creation) — the New Booking form (#560).
+//
+// Before a booking exists there is no checklist to seed against (atomic create,
+// ADR-0047), so the create form can't use selectApplicableReminders (which keys
+// off real booking items). Instead it previews the *system* reminders a booking
+// started at `status` would offer, grouped by concern, so the create surface
+// matches the Builder without the frontend re-deriving the concern map, the
+// auto-complete hints, or the prerequisite phrases.
+//
+// Pre-creation is "selection-as-state": every previewed reminder defaults on
+// (will be seeded) and the user toggles to exclude. The "after you …" clause is
+// recomputed on the frontend from the live selection, so the preview does not
+// resolve `after` itself — it returns each row's in-scope prerequisites as
+// { key, phrase } pairs and the frontend gates them by what's currently selected.
+
+export interface ReminderPrerequisite {
+  // The prerequisite system key (e.g. 'create_contract').
+  key: string;
+  // Its action phrase for the "after you <phrase>" clause (e.g. 'create the contract').
+  phrase: string;
+}
+
+export interface ReminderPreview {
+  key: string;
+  label: string;
+  concern: ReminderConcern;
+  requiredForStatus: string | null;
+  autoCompleteHint: string | null;
+  // In-scope prerequisites (see PreviewContext) with their phrases; the frontend shows the clause
+  // only while a prerequisite is itself still selected. Empty when the row has no live prerequisite.
+  prerequisites: ReminderPrerequisite[];
+}
+
+export interface PreviewContext {
+  // The booking's starting status — drives the same past-stage filter as the Builder.
+  status: string;
+  // System keys disabled in the user's template (enabled === false) — never offered, matching the
+  // Builder's master switch.
+  disabledKeys: Set<string>;
+}
+
+/**
+ * The system reminders the New Booking form previews for a booking starting at `status`, in
+ * template (workflow) order with their concern. Mirrors the Builder's system-reminder set: same
+ * past-stage filter, same disabled-key master switch, same labels/hints from the global catalog
+ * (the user's template customises only the enabled flags, exactly as the Builder reads them).
+ *
+ * Prerequisite scope is the *global, stage-filtered* set of in-scope keys — a dependency that spans
+ * concerns (send_contract → create_contract) is preserved, and a prerequisite that has itself been
+ * filtered out as past-stage never appears in a dependent's clause.
+ */
+export function previewApplicableReminders(ctx: PreviewContext): ReminderPreview[] {
+  const inScope = CHECKLIST_DEFAULTS.filter(
+    (d) => !ctx.disabledKeys.has(d.key) && !isPastStage(ctx.status, d.requiredForStatus),
+  );
+  const inScopeKeys = new Set(inScope.map((d) => d.key));
+
+  return inScope.flatMap((d) => {
+    const concern = concernForKey(d.key);
+    // Every catalogued key maps to a concern (guarded by checklist-concerns tests); skip defensively.
+    if (!concern) return [];
+    return [
+      {
+        key: d.key,
+        label: d.label,
+        concern,
+        requiredForStatus: d.requiredForStatus,
+        autoCompleteHint: autoCompleteHintFor(d.autoCompleteRule),
+        prerequisites: d.dependsOn
+          .filter((dep) => inScopeKeys.has(dep) && PREREQUISITE_PHRASES[dep])
+          .map((dep) => ({ key: dep, phrase: PREREQUISITE_PHRASES[dep] })),
+      },
+    ];
+  });
+}
+
 // Re-exported for callers that resolve a system item's concern (e.g. building the
 // selector response for an item that carries a key).
 export { concernForKey };

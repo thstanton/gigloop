@@ -353,6 +353,19 @@ describe('BookingsService', () => {
       expect(checklistRepo.seedChecklistItems).not.toHaveBeenCalled();
     });
 
+    it('threads a concern-tagged custom item through to the seed (#560)', async () => {
+      repo.create.mockResolvedValue(createdBooking);
+      const checklistItems = [
+        { label: 'Hire the marquee', completedBy: 'USER' as const, dependsOn: [], autoCompleteRule: null, requiredForStatus: 'CONFIRMED' as const, dueDateRule: null, concern: 'venue' as const },
+      ];
+      const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', checklistItems };
+      await service.create('u1', dto);
+      expect(checklistRepo.seedChecklistItems).toHaveBeenCalledWith(
+        'u1', createdBooking.id, expect.arrayContaining([expect.objectContaining({ concern: 'venue' })]),
+        createdBooking.date, createdBooking.createdAt, TX,
+      );
+    });
+
     it('fetches templates and calls createWithPackageTemplates when packageTemplateIds provided', async () => {
       const tmpl = { id: 'f1', label: 'Wedding Ceremony', icon: 'heart', keyMoments: ['Processional'], defaultGenreSelection: ['CONTEMPORARY'], slots: [] };
       repo.findPackageTemplates.mockResolvedValue([tmpl]);
@@ -1314,6 +1327,32 @@ describe('BookingsService', () => {
       });
 
       const result = await service.getApplicableReminders('u1', 'b1', 'people');
+
+      expect(result.find((r) => r.key === 'send_quote')).toBeUndefined();
+    });
+  });
+
+  describe('previewReminders (pre-creation, #560)', () => {
+    it('previews the system reminders for the starting status, no booking required', async () => {
+      repo.findUserProfile.mockResolvedValue(null);
+
+      const result = await service.previewReminders('u1', 'PROVISIONAL');
+
+      // No findOne / findChecklistItemsForReminders — preview runs off the template alone.
+      expect(repo.findOne).not.toHaveBeenCalled();
+      const sendContract = result.find((r) => r.key === 'send_contract');
+      expect(sendContract).toMatchObject({ concern: 'people' });
+      expect(sendContract?.prerequisites).toContainEqual({ key: 'create_contract', phrase: 'create the contract' });
+    });
+
+    it('drops a template-disabled key (master switch parity with the Builder)', async () => {
+      repo.findUserProfile.mockResolvedValue({
+        preferences: {
+          checklistDefaults: [{ key: 'send_quote', enabled: false, label: 'Send quote' }],
+        },
+      });
+
+      const result = await service.previewReminders('u1', 'ENQUIRY');
 
       expect(result.find((r) => r.key === 'send_quote')).toBeUndefined();
     });

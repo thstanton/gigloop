@@ -21,7 +21,9 @@ import { ChecklistEvaluatorService } from '../checklist/checklist-evaluator.serv
 import { getChecklistDefaults } from './checklist-defaults';
 import {
   selectApplicableReminders,
+  previewApplicableReminders,
   ReminderItemInput,
+  ReminderPreview,
 } from '../checklist/checklist-reminders';
 import { ReminderConcern } from '../checklist/checklist-concerns';
 
@@ -612,6 +614,18 @@ export class BookingsService {
       status: booking.status,
       disabledKeys,
     });
+  }
+
+  // Pre-creation preview for the New Booking form (#560): the system reminders a booking started at
+  // `status` would offer, grouped by concern. No booking exists yet, so this runs over the user's
+  // template defaults (for the disabled-key master switch) rather than a real checklist.
+  async previewReminders(userId: string, status: string): Promise<ReminderPreview[]> {
+    const profile = await this.repo.findUserProfile(userId);
+    const defaults = getChecklistDefaults(profile?.preferences as Record<string, unknown> | null);
+    const disabledKeys = new Set(
+      defaults.filter((d) => d.enabled === false && d.key).map((d) => d.key as string),
+    );
+    return previewApplicableReminders({ status, disabledKeys });
   }
 
   private async checkSeriesJoin(
