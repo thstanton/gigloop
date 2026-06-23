@@ -123,7 +123,21 @@ export const PassedStagesCollapsed: Story = {
   },
 };
 
+export const AddYourOwn: Story = {
+  name: 'Add your own: tag a personal reminder to the concern (#559)',
+  args: {
+    onAdd: fn(async () => {}),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: /add your own/i }));
+    await userEvent.type(canvas.getByPlaceholderText('Item label'), 'Book the photographer');
+    await userEvent.click(canvas.getByRole('button', { name: 'Add' }));
+    await expect(args.onAdd).toHaveBeenCalledWith('Book the photographer');
+  },
+};
+
 export const Empty: Story = {
   name: 'No applicable reminders: renders nothing',
-  args: { reminders: [] },
+  args: { reminders: [], onAdd: undefined },
 };

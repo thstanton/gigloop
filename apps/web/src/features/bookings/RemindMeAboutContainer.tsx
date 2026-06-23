@@ -79,12 +79,27 @@ export function RemindMeAboutContainer({ bookingId, concern, currentStatus }: Re
     },
   });
 
+  // The "add your own" path (#559): create a custom checklist item tagged to this concern, so it
+  // joins the concern's list. The selector includes concern-tagged customs, so a reminders refetch
+  // surfaces it. Returns the mutation promise so the form can clear on success / keep draft on error.
+  const addReminder = useMutation({
+    mutationFn: (label: string) =>
+      apiPost(`/bookings/${bookingId}/checklist`, { label, concern }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey });
+      queryClient.invalidateQueries({ queryKey: ['bookingChecklist', bookingId] });
+      queryClient.invalidateQueries({ queryKey: ['booking', bookingId] });
+    },
+    onError: () => toast({ title: 'Failed to add reminder. Please try again.', variant: 'destructive' }),
+  });
+
   return (
     <RemindMeAbout
       reminders={reminders}
       onToggle={(r) => toggle.mutate(r)}
       busyKeys={busyKeys}
       currentStatus={currentStatus}
+      onAdd={(label) => addReminder.mutateAsync(label)}
     />
   );
 }

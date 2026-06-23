@@ -137,6 +137,33 @@ describe('RemindMeAbout', () => {
     });
   });
 
+  describe('add your own (#559)', () => {
+    it('shows no add affordance when onAdd is not provided', () => {
+      render(<RemindMeAbout reminders={[reminder()]} onToggle={vi.fn()} />);
+      expect(screen.queryByRole('button', { name: /add your own/i })).not.toBeInTheDocument();
+    });
+
+    it('offers the add affordance even on a concern with no reminders', () => {
+      render(<RemindMeAbout reminders={[]} onToggle={vi.fn()} onAdd={vi.fn().mockResolvedValue(undefined)} />);
+      expect(screen.getByRole('button', { name: /add your own/i })).toBeInTheDocument();
+    });
+
+    it('reveals a label input and calls onAdd with the trimmed label', async () => {
+      const onAdd = vi.fn().mockResolvedValue(undefined);
+      render(<RemindMeAbout reminders={[reminder()]} onToggle={vi.fn()} onAdd={onAdd} />);
+      await userEvent.click(screen.getByRole('button', { name: /add your own/i }));
+      await userEvent.type(screen.getByPlaceholderText('Item label'), '  Book photographer  ');
+      await userEvent.click(screen.getByRole('button', { name: 'Add' }));
+      expect(onAdd).toHaveBeenCalledWith('Book photographer');
+    });
+
+    it('disables Add until a label is entered', async () => {
+      render(<RemindMeAbout reminders={[reminder()]} onToggle={vi.fn()} onAdd={vi.fn().mockResolvedValue(undefined)} />);
+      await userEvent.click(screen.getByRole('button', { name: /add your own/i }));
+      expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
+    });
+  });
+
   describe('passed-stage collapse (currentStatus)', () => {
     // send_contract is required-for CONFIRMED → its work window has passed on a CONFIRMED booking;
     // create_balance_invoice is required-for READY → still ahead, so it stays active.

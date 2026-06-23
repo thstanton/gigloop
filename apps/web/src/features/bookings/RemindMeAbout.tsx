@@ -1,5 +1,8 @@
 import { useState } from 'react';
-import { CheckCircle2, ChevronDown } from 'lucide-react';
+import { CheckCircle2, ChevronDown, Plus } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { GhostButton } from '@/components/common/GhostButton';
 import { BOOKING_STATUS_LABELS, statusGte } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 import type { ApplicableReminder, BookingStatus } from '@/types/api';
@@ -57,6 +60,12 @@ export interface RemindMeAboutProps {
   /** Rows with an in-flight toggle — their action is disabled to prevent a double-fire. */
   busyKeys?: ReadonlySet<string>;
   /**
+   * The "add your own" path (#559): create a personal reminder tagged to this concern. When
+   * provided, the control offers an add affordance. Returns the create promise so the form can
+   * clear + close on success and keep the draft on failure (the container surfaces the error).
+   */
+  onAdd?: (label: string) => Promise<unknown>;
+  /**
    * The booking's current status. When provided, reminders whose work window has already passed
    * (the work happens during the stage *preceding* `requiredForStatus`, so it has passed once the
    * booking reaches `requiredForStatus` — i.e. `requiredForStatus <= currentStatus`) are collapsed
@@ -103,9 +112,62 @@ function actionLabel(reminder: ApplicableReminder): string {
   return reminder.on ? 'Turn off' : 'Remind me';
 }
 
-export function RemindMeAbout({ reminders, onToggle, busyKeys, currentStatus }: RemindMeAboutProps) {
+// The "add your own" affordance (#559): a quiet "+ Add your own" trigger that reveals a label input.
+// Mirrors the Checklist card's add-item idiom. Tagging to the concern is the container's job — this
+// only collects the label. Awaits onAdd so it clears + closes on success and keeps the draft on
+// failure (the container toasts).
+function AddYourOwn({ onAdd }: { onAdd: (label: string) => Promise<unknown> }) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const label = draft.trim();
+
+  if (!open) {
+    return (
+      <GhostButton variant="primary" size="xs" icon={<Plus size={12} />} onClick={() => setOpen(true)}>
+        Add your own
+      </GhostButton>
+    );
+  }
+
+  const submit = async () => {
+    if (!label || submitting) return;
+    setSubmitting(true);
+    try {
+      await onAdd(label);
+      setDraft('');
+      setOpen(false);
+    } catch {
+      // The container surfaces the failure via toast; keep the form open with the draft intact.
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <form className="flex items-center gap-2" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
+      <Input
+        autoFocus
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        placeholder="Item label"
+        className="flex-1 text-sm"
+      />
+      <Button type="submit" size="sm" disabled={!label || submitting}>
+        {submitting ? 'Adding…' : 'Add'}
+      </Button>
+      <Button type="button" size="sm" variant="outline" onClick={() => { setDraft(''); setOpen(false); }}>
+        Cancel
+      </Button>
+    </form>
+  );
+}
+
+export function RemindMeAbout({ reminders, onToggle, busyKeys, currentStatus, onAdd }: RemindMeAboutProps) {
   const [showPassed, setShowPassed] = useState(false);
-  if (reminders.length === 0) return null;
+  // Render the control when there's anything to show — reminders, or just the add-your-own entry
+  // point on an otherwise-empty concern.
+  if (reminders.length === 0 && !onAdd) return null;
 
   // A reminder's work happens during the stage preceding `requiredForStatus`, so that window has
   // passed once the booking reaches `requiredForStatus`. Stage-less customs never count as passed.
@@ -171,10 +233,10 @@ export function RemindMeAbout({ reminders, onToggle, busyKeys, currentStatus }: 
 
   return (
     <div className="space-y-2">
-      {/* `active` always holds ≥1 reminder (the min-1 promotion above), so the header always sits
-          above a non-empty list. */}
       <p className="text-sm font-medium text-muted">Remind me about</p>
-      <ul className="space-y-2">{active.map(renderRow)}</ul>
+      {/* `active` holds ≥1 reminder whenever any exist (the min-1 promotion above); it is only empty
+          on a concern with no reminders at all, where just the add-your-own entry point shows. */}
+      {active.length > 0 && <ul className="space-y-2">{active.map(renderRow)}</ul>}
       {passed.length > 0 && (
         <div className="space-y-2">
           <button
@@ -188,6 +250,7 @@ export function RemindMeAbout({ reminders, onToggle, busyKeys, currentStatus }: 
           {showPassed && <ul className="space-y-2">{passed.map(renderRow)}</ul>}
         </div>
       )}
+      {onAdd && <AddYourOwn onAdd={onAdd} />}
     </div>
   );
 }
