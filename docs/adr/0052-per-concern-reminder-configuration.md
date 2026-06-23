@@ -50,3 +50,44 @@ refine the "For the PRD/impl" note above:
   mirroring the point-5 blocking semantics) is **deferred to #557/#558**: the #555 selector DTO
   carries no dependency field, and the Venue tracer's only reminder (`add_venue`) has none. The
   presentational atom exposes an optional `after` slot ready for it.
+
+---
+
+**Amendment (#560 — create-surface resolution, 2026-06-23):** a design pass settled how the
+"Remind me about" control reaches the New Booking form, and refined the dependency clause and the
+custom-item shape. Supersedes the original "deferred: dissolving the standalone wizard step" note
+for the create surface.
+
+- **Dependency clause shipped (no longer deferred).** The "…, after you <prerequisite>" clause is
+  built (#557/#558): the selector computes `after` from each default's `dependsOn`, reusing the
+  evaluator's `isDepSatisfied` so it mirrors the point-5 blocking semantics exactly (COMPLETE /
+  SKIPPED / absent never gate). Phrases are curated per prerequisite key; the auto-complete *hint*
+  (a separate "✓ when …" tail for the client-committed milestones `contract_signed` /
+  `song_requests`) also ships (#567). Both render on the shared atom.
+- **The create form keeps its step-2 checklist configurator — re-skinned, not dissolved.** Rather
+  than scatter per-concern controls into the step-1 section atoms (which would leave *two*
+  configurators of the same seed array) or dissolve the step (blocked on a pre-creation home for
+  concern-less customs), step 2 is **rebuilt as concern-grouped `RemindMeAbout` controls** (the
+  five concerns, matching the Builder) plus a general "Other items" catch-all for concern-less
+  customs. One configurator, the shared control, the richer coaching — satisfying Story 20 while
+  honouring "don't remove the step". This supersedes the considered-and-rejected "single
+  post-creation config screen": the screen stays, but becomes the in-context control.
+- **Pre-creation = selection-as-state.** There is no booking (creation is atomic, ADR-0047), so
+  the live-mutation container is *not* reused; only the presentational atom is, backed by local
+  state that feeds the existing `checklistItems[]` create payload. Every *offered* reminder
+  (applicable concern, current/future stage, not globally disabled) defaults **on** = "will be
+  seeded"; the user toggles **off** to exclude. The rows + coaching come from a **preview
+  endpoint** that runs the same selector over the user's template defaults at the chosen starting
+  status (no selector/maps duplicated on the frontend). The **"after you …" clause is recomputed
+  on the frontend from the live selection**, using backend-authored phrases the preview returns
+  per row (`{prereqKey, phrase}`): a dependent shows the clause only while its prerequisite is
+  itself selected — i.e. the same live-gate rule, with "selected" standing in for "will be
+  PENDING". This makes the clause a *justification* for the more-dependent options (why keep both
+  "create contract" and "send contract") exactly when the user is choosing what to seed.
+- **Custom items carry a stage.** Every custom reminder — concern-tagged (added from a concern
+  control) or concern-less (the "Other items" catch-all) — carries a `requiredForStatus` so it
+  participates in the stage filter like a system reminder. (Refines #559, whose first cut made the
+  per-concern add label-only; a follow-up adds the stage picker to that path.) A **per-booking**
+  custom may be concern-less; a **global** template custom (#561) should carry **both** a stage
+  **and** a concern — the concern is useful flagging for a reminder the musician knows they want
+  on every booking.
