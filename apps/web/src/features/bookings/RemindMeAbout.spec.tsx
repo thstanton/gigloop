@@ -148,13 +148,21 @@ describe('RemindMeAbout', () => {
       expect(screen.getByRole('button', { name: /add your own/i })).toBeInTheDocument();
     });
 
-    it('reveals a label input and calls onAdd with the trimmed label', async () => {
+    it('reveals a label input and calls onAdd with the trimmed label and the default (no) stage', async () => {
       const onAdd = vi.fn().mockResolvedValue(undefined);
       render(<RemindMeAbout reminders={[reminder()]} onToggle={vi.fn()} onAdd={onAdd} />);
       await userEvent.click(screen.getByRole('button', { name: /add your own/i }));
       await userEvent.type(screen.getByPlaceholderText('Item label'), '  Book photographer  ');
       await userEvent.click(screen.getByRole('button', { name: 'Add' }));
-      expect(onAdd).toHaveBeenCalledWith('Book photographer');
+      // Stage defaults to "no requirement" → null (the Radix Select is driven in the story, where a
+      // real browser env supports its pointer interactions; jsdom covers the label + default here).
+      expect(onAdd).toHaveBeenCalledWith('Book photographer', null);
+    });
+
+    it('offers a stage picker, defaulting to no stage requirement', async () => {
+      render(<RemindMeAbout reminders={[reminder()]} onToggle={vi.fn()} onAdd={vi.fn().mockResolvedValue(undefined)} />);
+      await userEvent.click(screen.getByRole('button', { name: /add your own/i }));
+      expect(screen.getByRole('combobox')).toHaveTextContent('No stage requirement');
     });
 
     it('disables Add until a label is entered', async () => {

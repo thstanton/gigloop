@@ -127,7 +127,7 @@ export const PassedStagesCollapsed: Story = {
 };
 
 export const AddYourOwn: Story = {
-  name: 'Add your own: tag a personal reminder to the concern (#559)',
+  name: 'Add your own: tag a personal reminder to the concern, with a stage (#559/#568)',
   args: {
     onAdd: fn(async () => {}),
   },
@@ -135,8 +135,13 @@ export const AddYourOwn: Story = {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('button', { name: /add your own/i }));
     await userEvent.type(canvas.getByPlaceholderText('Item label'), 'Book the photographer');
+    // Pick a stage so the custom joins the stage filter like a system reminder (#568). Radix renders
+    // its options in a portal, so query the document body, not the canvas.
+    await userEvent.click(canvas.getByRole('combobox'));
+    const option = await within(document.body).findByRole('option', { name: 'Required for Confirmed' });
+    await userEvent.click(option);
     await userEvent.click(canvas.getByRole('button', { name: 'Add' }));
-    await expect(args.onAdd).toHaveBeenCalledWith('Book the photographer');
+    await expect(args.onAdd).toHaveBeenCalledWith('Book the photographer', 'CONFIRMED');
   },
 };
 

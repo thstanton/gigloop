@@ -2,6 +2,13 @@ import { useState } from 'react';
 import { CheckCircle2, ChevronDown, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { GhostButton } from '@/components/common/GhostButton';
 import { BOOKING_STATUS_LABELS, statusGte } from '@/lib/constants';
 import { cn } from '@/lib/utils';
@@ -61,10 +68,12 @@ export interface RemindMeAboutProps {
   busyKeys?: ReadonlySet<string>;
   /**
    * The "add your own" path (#559): create a personal reminder tagged to this concern. When
-   * provided, the control offers an add affordance. Returns the create promise so the form can
-   * clear + close on success and keep the draft on failure (the container surfaces the error).
+   * provided, the control offers an add affordance collecting a label and a stage (#568) — the
+   * stage (`requiredForStatus`) lets the custom join the stage filter / passed-stage collapse like
+   * a system reminder. Returns the create promise so the form can clear + close on success and
+   * keep the draft on failure (the container surfaces the error).
    */
-  onAdd?: (label: string) => Promise<unknown>;
+  onAdd?: (label: string, requiredForStatus: RequiredStatus) => Promise<unknown>;
   /**
    * The booking's current status. When provided, reminders whose work window has already passed
    * (the work happens during the stage *preceding* `requiredForStatus`, so it has passed once the
@@ -112,13 +121,28 @@ function actionLabel(reminder: ApplicableReminder): string {
   return reminder.on ? 'Turn off' : 'Remind me';
 }
 
-// The "add your own" affordance (#559): a quiet "+ Add your own" trigger that reveals a label input.
-// Mirrors the Checklist card's add-item idiom. Tagging to the concern is the container's job — this
-// only collects the label. Awaits onAdd so it clears + closes on success and keeps the draft on
-// failure (the container toasts).
-function AddYourOwn({ onAdd }: { onAdd: (label: string) => Promise<unknown> }) {
+// The "add your own" affordance (#559): a quiet "+ Add your own" trigger that reveals a label input
+// plus a stage picker (#568). Mirrors the Checklist card's add-item idiom (label, then a "Required
+// for …" stage Select). Tagging to the concern is the container's job — this collects the label and
+// the chosen stage. Awaits onAdd so it clears + closes on success and keeps the draft on failure
+// (the container toasts). Stacks vertically so it fits at 375px.
+//
+// `NO_STAGE` is the Select sentinel for "no stage requirement"; it maps to a null requiredForStatus
+// (the row never enters the stage filter / passed collapse). The other options mirror the lifecycle
+// statuses a checklist item can gate — ENQUIRY is excluded because it is the first stage, so nothing
+// can be required *for* it (matching the Checklist card and the PRECEDING coaching map above).
+const NO_STAGE = 'NONE';
+const STAGE_OPTIONS: { value: NonNullable<RequiredStatus>; label: string }[] = [
+  { value: 'PROVISIONAL', label: 'Required for Provisional' },
+  { value: 'CONFIRMED', label: 'Required for Confirmed' },
+  { value: 'READY', label: 'Required for Ready' },
+  { value: 'COMPLETE', label: 'Required for Complete' },
+];
+
+function AddYourOwn({ onAdd }: { onAdd: (label: string, requiredForStatus: RequiredStatus) => Promise<unknown> }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState('');
+  const [stage, setStage] = useState<string>(NO_STAGE);
   const [submitting, setSubmitting] = useState(false);
   const label = draft.trim();
 
@@ -130,13 +154,14 @@ function AddYourOwn({ onAdd }: { onAdd: (label: string) => Promise<unknown> }) {
     );
   }
 
+  const reset = () => { setDraft(''); setStage(NO_STAGE); setOpen(false); };
+
   const submit = async () => {
     if (!label || submitting) return;
     setSubmitting(true);
     try {
-      await onAdd(label);
-      setDraft('');
-      setOpen(false);
+      await onAdd(label, stage === NO_STAGE ? null : (stage as NonNullable<RequiredStatus>));
+      reset();
     } catch {
       // The container surfaces the failure via toast; keep the form open with the draft intact.
     } finally {
@@ -145,20 +170,33 @@ function AddYourOwn({ onAdd }: { onAdd: (label: string) => Promise<unknown> }) {
   };
 
   return (
-    <form className="flex items-center gap-2" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
+    <form className="space-y-2" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
       <Input
         autoFocus
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         placeholder="Item label"
-        className="flex-1 text-sm"
+        className="text-sm"
       />
-      <Button type="submit" size="sm" disabled={!label || submitting}>
-        {submitting ? 'Adding…' : 'Add'}
-      </Button>
-      <Button type="button" size="sm" variant="outline" onClick={() => { setDraft(''); setOpen(false); }}>
-        Cancel
-      </Button>
+      <Select value={stage} onValueChange={setStage}>
+        <SelectTrigger className="h-8 w-full text-sm">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={NO_STAGE}>No stage requirement</SelectItem>
+          {STAGE_OPTIONS.map((o) => (
+            <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <div className="flex gap-2">
+        <Button type="submit" size="sm" disabled={!label || submitting}>
+          {submitting ? 'Adding…' : 'Add'}
+        </Button>
+        <Button type="button" size="sm" variant="outline" onClick={reset}>
+          Cancel
+        </Button>
+      </div>
     </form>
   );
 }

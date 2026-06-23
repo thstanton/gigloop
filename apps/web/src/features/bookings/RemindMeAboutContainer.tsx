@@ -80,11 +80,13 @@ export function RemindMeAboutContainer({ bookingId, concern, currentStatus }: Re
   });
 
   // The "add your own" path (#559): create a custom checklist item tagged to this concern, so it
-  // joins the concern's list. The selector includes concern-tagged customs, so a reminders refetch
-  // surfaces it. Returns the mutation promise so the form can clear on success / keep draft on error.
+  // joins the concern's list. The chosen stage (#568) is threaded through as `requiredForStatus` so
+  // the custom participates in the stage filter / passed-stage collapse like a system reminder. The
+  // selector includes concern-tagged customs, so a reminders refetch surfaces it. Returns the
+  // mutation promise so the form can clear on success / keep draft on error.
   const addReminder = useMutation({
-    mutationFn: (label: string) =>
-      apiPost(`/bookings/${bookingId}/checklist`, { label, concern }),
+    mutationFn: ({ label, requiredForStatus }: { label: string; requiredForStatus: ApplicableReminder['requiredForStatus'] }) =>
+      apiPost(`/bookings/${bookingId}/checklist`, { label, concern, requiredForStatus }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey });
       queryClient.invalidateQueries({ queryKey: ['bookingChecklist', bookingId] });
@@ -99,7 +101,7 @@ export function RemindMeAboutContainer({ bookingId, concern, currentStatus }: Re
       onToggle={(r) => toggle.mutate(r)}
       busyKeys={busyKeys}
       currentStatus={currentStatus}
-      onAdd={(label) => addReminder.mutateAsync(label)}
+      onAdd={(label, requiredForStatus) => addReminder.mutateAsync({ label, requiredForStatus })}
     />
   );
 }
