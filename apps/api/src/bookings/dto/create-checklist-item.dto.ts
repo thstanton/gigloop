@@ -19,4 +19,13 @@ export class CreateChecklistItemDto {
   @IsOptional()
   @IsDateString()
   dueDate?: string | null;
+
+  @ApiPropertyOptional({
+    enum: ['overview', 'people', 'venue', 'itinerary', 'music'],
+    nullable: true,
+    description: 'Tag the custom item to a concern so it appears in that section’s control.',
+  })
+  @IsOptional()
+  @IsIn(['overview', 'people', 'venue', 'itinerary', 'music', null])
+  concern?: 'overview' | 'people' | 'venue' | 'itinerary' | 'music' | null;
 }

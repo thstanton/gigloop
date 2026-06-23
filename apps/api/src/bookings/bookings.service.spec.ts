@@ -39,6 +39,7 @@ type MockRepo = {
   countNonVoidInvoices: jest.Mock;
   updateSeries: jest.Mock;
   findChecklistItemById: jest.Mock;
+  findChecklistItemsForReminders: jest.Mock;
   setDepositReceivedAt: jest.Mock;
   clearDepositReceivedAt: jest.Mock;
 };
@@ -70,6 +71,8 @@ type MockChecklistRepo = {
   seedChecklistItems: jest.Mock;
   recomputeChecklistDueDates: jest.Mock;
   updateChecklistItemState: jest.Mock;
+  findItemByKey: jest.Mock;
+  seedReminderItem: jest.Mock;
 };
 
 function makeRepo(): MockRepo {
@@ -96,6 +99,7 @@ function makeRepo(): MockRepo {
     countNonVoidInvoices: jest.fn(),
     updateSeries: jest.fn(),
     findChecklistItemById: jest.fn(),
+    findChecklistItemsForReminders: jest.fn().mockResolvedValue([]),
     setDepositReceivedAt: jest.fn().mockResolvedValue(undefined),
     clearDepositReceivedAt: jest.fn().mockResolvedValue(undefined),
   };
@@ -127,6 +131,8 @@ function makeChecklistRepo(): MockChecklistRepo {
     seedChecklistItems: jest.fn().mockResolvedValue({ count: 10 }),
     recomputeChecklistDueDates: jest.fn().mockResolvedValue(undefined),
     updateChecklistItemState: jest.fn().mockResolvedValue({ count: 1 }),
+    findItemByKey: jest.fn().mockResolvedValue(null),
+    seedReminderItem: jest.fn().mockResolvedValue({ id: 'seeded' }),
   };
 }
 
@@ -1224,6 +1230,92 @@ describe('BookingsService', () => {
 
       expect(repo.setDepositReceivedAt).toHaveBeenCalledWith('b1', expect.any(Date));
       expect(repo.clearDepositReceivedAt).not.toHaveBeenCalled();
+    });
+
+    it('does NOT clear depositReceivedAt when deposit_received is SKIPPED (opt-out is not an un-tick)', async () => {
+      repo.findOne.mockResolvedValue(booking);
+      repo.findChecklistItemById.mockResolvedValue({ id: 'i1', key: 'deposit_received' });
+      checklistRepo.updateChecklistItemState.mockResolvedValue({ count: 1 });
+
+      await service.updateChecklistItem('u1', 'b1', 'i1', 'SKIPPED');
+
+      expect(repo.clearDepositReceivedAt).not.toHaveBeenCalled();
+      expect(repo.setDepositReceivedAt).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('enableReminder', () => {
+    const bookingWithDates = {
+      id: 'b1',
+      userId: 'u1',
+      status: BookingStatus.CONFIRMED,
+      date: new Date('2025-06-01T19:00:00.000Z'),
+      createdAt: new Date('2025-01-01T00:00:00.000Z'),
+    };
+
+    it('un-skips an existing SKIPPED reminder rather than re-seeding', async () => {
+      repo.findOne.mockResolvedValue(bookingWithDates);
+      checklistRepo.findItemByKey.mockResolvedValue({ id: 'ci1', state: 'SKIPPED' });
+
+      await service.enableReminder('u1', 'b1', 'add_venue');
+
+      expect(checklistRepo.updateChecklistItemState).toHaveBeenCalledWith('u1', 'b1', 'ci1', 'PENDING');
+      expect(checklistRepo.seedReminderItem).not.toHaveBeenCalled();
+      expect(evaluator.evaluate).toHaveBeenCalledWith('b1');
+    });
+
+    it('is a no-op when the reminder already exists and is not skipped', async () => {
+      repo.findOne.mockResolvedValue(bookingWithDates);
+      checklistRepo.findItemByKey.mockResolvedValue({ id: 'ci1', state: 'PENDING' });
+
+      await service.enableReminder('u1', 'b1', 'add_venue');
+
+      expect(checklistRepo.updateChecklistItemState).not.toHaveBeenCalled();
+      expect(checklistRepo.seedReminderItem).not.toHaveBeenCalled();
+    });
+
+    it('on-demand seeds the reminder when no record exists', async () => {
+      repo.findOne.mockResolvedValue(bookingWithDates);
+      checklistRepo.findItemByKey.mockResolvedValue(null);
+
+      await service.enableReminder('u1', 'b1', 'add_venue');
+
+      expect(checklistRepo.seedReminderItem).toHaveBeenCalledWith(
+        'u1',
+        'b1',
+        'add_venue',
+        bookingWithDates.date,
+        bookingWithDates.createdAt,
+      );
+      expect(evaluator.evaluate).toHaveBeenCalledWith('b1');
+    });
+  });
+
+  describe('getApplicableReminders', () => {
+    it('returns the selector output, with a not-yet-seeded reminder as off/discoverable', async () => {
+      repo.findOne.mockResolvedValue({ ...booking, status: BookingStatus.CONFIRMED });
+      repo.findChecklistItemsForReminders.mockResolvedValue([]);
+      repo.findUserProfile.mockResolvedValue(null);
+
+      const result = await service.getApplicableReminders('u1', 'b1', 'venue');
+
+      // add_venue (READY-staged) is current/future on a CONFIRMED booking, not yet seeded.
+      const addVenue = result.find((r) => r.key === 'add_venue');
+      expect(addVenue).toMatchObject({ on: false, itemId: null, source: 'system' });
+    });
+
+    it('drops a globally-disabled reminder, resolved from the profile template', async () => {
+      repo.findOne.mockResolvedValue({ ...booking, status: BookingStatus.ENQUIRY });
+      repo.findChecklistItemsForReminders.mockResolvedValue([]);
+      repo.findUserProfile.mockResolvedValue({
+        preferences: {
+          checklistDefaults: [{ key: 'send_quote', enabled: false, label: 'Send quote' }],
+        },
+      });
+
+      const result = await service.getApplicableReminders('u1', 'b1', 'people');
+
+      expect(result.find((r) => r.key === 'send_quote')).toBeUndefined();
     });
   });
 });

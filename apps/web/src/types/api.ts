@@ -246,6 +246,9 @@ export interface Contract {
 
 export type ChecklistItemState = 'PENDING' | 'BLOCKED' | 'COMPLETE' | 'FAILED' | 'SKIPPED';
 
+// The concerns a reminder can belong to (ADR-0052). Mirrors the API's ReminderConcern.
+export type ReminderConcern = 'overview' | 'people' | 'venue' | 'itinerary' | 'music';
+
 export interface ChecklistItem {
   id: string;
   createdAt: string;
@@ -262,8 +265,21 @@ export interface ChecklistItem {
   completedAt: string | null;
   dueDate: string | null;
   dueDateRule: DueDateRule | null;
+  // Per-concern reminder grouping. Null for concern-less custom items.
+  concern: string | null;
   shortcutType?: string;
   shortcutTemplateType?: string;
+}
+
+// One row of a concern's "Remind me about" control (selector output).
+export interface ApplicableReminder {
+  itemId: string | null;
+  key: string | null;
+  label: string;
+  on: boolean;
+  source: 'system' | 'custom';
+  state: ChecklistItemState | null;
+  requiredForStatus: 'PROVISIONAL' | 'CONFIRMED' | 'READY' | 'COMPLETE' | null;
 }
 
 export interface BookingLogisticsEntry {
@@ -605,12 +621,17 @@ export interface ChecklistDefaultItem {
   requiredForStatus: 'PROVISIONAL' | 'CONFIRMED' | 'READY' | 'COMPLETE' | null;
   dueDateRule: DueDateRule | null;
   enabled?: boolean;
+  // A custom global-template item carries its user-chosen concern; system defaults
+  // resolve theirs from the concern map and leave this unset.
+  concern?: string | null;
 }
 
 export interface CreateChecklistItemInput {
   label: string;
   requiredForStatus?: 'PROVISIONAL' | 'CONFIRMED' | 'READY' | 'COMPLETE' | null;
   dueDate?: string | null;
+  // Tag a custom item to a concern so it appears in that section's control.
+  concern?: string | null;
 }
 
 export interface InvoiceNumberPreview {

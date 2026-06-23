@@ -21,6 +21,7 @@ function item(overrides: Partial<ChecklistItem> & { label: string }): ChecklistI
     completedAt: null,
     dueDate: null,
     dueDateRule: null,
+    concern: null,
     ...overrides,
   };
 }

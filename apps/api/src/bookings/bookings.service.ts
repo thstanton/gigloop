@@ -18,6 +18,12 @@ import { UpsertMusicFormConfigDto } from './dto/upsert-music-form-config.dto';
 import { MailService } from '../mail/mail.service';
 import { substituteTiptapVariables } from '../mail/tiptap-portal';
 import { ChecklistEvaluatorService } from '../checklist/checklist-evaluator.service';
+import { getChecklistDefaults } from './checklist-defaults';
+import {
+  selectApplicableReminders,
+  ReminderItemInput,
+} from '../checklist/checklist-reminders';
+import { ReminderConcern } from '../checklist/checklist-concerns';
 
 const VALID_STATUSES = new Set<string>(Object.values(BookingStatus));
 
@@ -515,15 +521,22 @@ export class BookingsService {
     }));
   }
 
-  async updateChecklistItem(userId: string, bookingId: string, itemId: string, state: 'COMPLETE' | 'PENDING') {
+  async updateChecklistItem(
+    userId: string,
+    bookingId: string,
+    itemId: string,
+    state: 'COMPLETE' | 'PENDING' | 'SKIPPED',
+  ) {
     await this.findOne(userId, bookingId);
     const item = await this.repo.findChecklistItemById(userId, bookingId, itemId);
     const result = await this.checklistRepo.updateChecklistItemState(userId, bookingId, itemId, state);
     if (result.count === 0) throw new NotFoundException('Checklist item not found');
     if (item?.key === 'deposit_received') {
+      // COMPLETE records the real deposit fact; PENDING (a genuine un-tick) clears it.
+      // SKIPPED is an opt-out of the *reminder* — it must not wipe a real deposit date.
       if (state === 'COMPLETE') {
         await this.repo.setDepositReceivedAt(bookingId, new Date()).catch(() => {});
-      } else {
+      } else if (state === 'PENDING') {
         await this.repo.clearDepositReceivedAt(bookingId).catch(() => {});
       }
     }
@@ -537,6 +550,7 @@ export class BookingsService {
     label: string,
     requiredForStatus: string | null,
     dueDate: string | null,
+    concern: string | null = null,
   ) {
     await this.findOne(userId, bookingId);
     const maxOrder = await this.repo.getMaxChecklistOrder(bookingId);
@@ -547,6 +561,7 @@ export class BookingsService {
       requiredForStatus ?? null,
       dueDate ? new Date(dueDate) : null,
       maxOrder + 1,
+      concern,
     );
     return {
       ...item,
@@ -555,6 +570,48 @@ export class BookingsService {
       completedAt: null,
       dueDate: item.dueDate?.toISOString() ?? null,
     };
+  }
+
+  // Turn a system reminder on for a booking (ADR-0052): un-skip an existing record,
+  // or on-demand seed one if none exists. Idempotent if it is already on.
+  async enableReminder(userId: string, bookingId: string, key: string) {
+    const booking = await this.findOne(userId, bookingId);
+    const existing = await this.checklistRepo.findItemByKey(bookingId, key);
+    if (existing) {
+      if (existing.state === 'SKIPPED') {
+        await this.checklistRepo.updateChecklistItemState(userId, bookingId, existing.id, 'PENDING');
+      }
+    } else {
+      await this.checklistRepo.seedReminderItem(
+        userId,
+        bookingId,
+        key,
+        booking.date,
+        booking.createdAt,
+      );
+    }
+    // Settle dependency/auto-complete state for the (possibly new) item and downstream.
+    await this.evaluator.evaluate(bookingId).catch(() => {});
+    return { success: true };
+  }
+
+  // The ordered "Remind me about" list for one concern on one booking (selector,
+  // Module 2). Global master-switch disables come from the user's checklist template.
+  async getApplicableReminders(userId: string, bookingId: string, concern: ReminderConcern) {
+    const booking = await this.findOne(userId, bookingId);
+    const [items, profile] = await Promise.all([
+      this.repo.findChecklistItemsForReminders(userId, bookingId),
+      this.repo.findUserProfile(userId),
+    ]);
+    const defaults = getChecklistDefaults(profile?.preferences as Record<string, unknown> | null);
+    const disabledKeys = new Set(
+      defaults.filter((d) => d.enabled === false && d.key).map((d) => d.key as string),
+    );
+    return selectApplicableReminders(concern, {
+      items: items as ReminderItemInput[],
+      status: booking.status,
+      disabledKeys,
+    });
   }
 
   private async checkSeriesJoin(

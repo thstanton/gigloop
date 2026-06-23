@@ -422,6 +422,7 @@ export class BookingsRepository {
     requiredForStatus: string | null,
     dueDate: Date | null,
     order: number,
+    concern: string | null = null,
   ) {
     return this.prisma.bookingChecklistItem.create({
       data: {
@@ -435,6 +436,7 @@ export class BookingsRepository {
         dependsOn: [],
         requiredForStatus,
         dueDate,
+        concern,
       },
     });
   }
@@ -443,6 +445,25 @@ export class BookingsRepository {
     return this.prisma.bookingChecklistItem.findFirst({
       where: { id: itemId, bookingId, userId },
       select: { key: true },
+    });
+  }
+
+  // The per-concern "Remind me about" selector must SEE skipped items (to render
+  // them as off/re-enableable), unlike findChecklistItems which hides them from the
+  // Checklist card. Returns the fields the selector reads, all states included.
+  findChecklistItemsForReminders(userId: string, bookingId: string) {
+    return this.prisma.bookingChecklistItem.findMany({
+      where: { bookingId, userId },
+      orderBy: { order: 'asc' },
+      select: {
+        id: true,
+        key: true,
+        state: true,
+        requiredForStatus: true,
+        concern: true,
+        label: true,
+        order: true,
+      },
     });
   }
 

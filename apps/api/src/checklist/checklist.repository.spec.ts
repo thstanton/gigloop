@@ -5,9 +5,11 @@ type MockPrisma = {
   booking: { findMany: jest.Mock };
   bookingChecklistItem: {
     findMany: jest.Mock;
+    findFirst: jest.Mock;
     findUnique: jest.Mock;
     updateMany: jest.Mock;
     update: jest.Mock;
+    create: jest.Mock;
   };
   $transaction: jest.Mock;
 };
@@ -17,9 +19,11 @@ function makePrisma(): MockPrisma {
     booking: { findMany: jest.fn() },
     bookingChecklistItem: {
       findMany: jest.fn(),
+      findFirst: jest.fn(),
       findUnique: jest.fn(),
       updateMany: jest.fn(),
       update: jest.fn(),
+      create: jest.fn(),
     },
     $transaction: jest.fn(),
   };
@@ -243,5 +247,88 @@ describe('ChecklistRepository — findActionItems', () => {
       customer: { name: 'Jane Doe' },
       venue: { name: 'The Venue' },
     });
+  });
+});
+
+describe('ChecklistRepository — findItemByKey', () => {
+  let repo: ChecklistRepository;
+  let prisma: MockPrisma;
+
+  beforeEach(() => {
+    prisma = makePrisma();
+    repo = new ChecklistRepository(prisma as unknown as PrismaService);
+  });
+
+  it('looks up an item by booking + key, selecting id and state', async () => {
+    prisma.bookingChecklistItem.findFirst.mockResolvedValue({ id: 'ci9', state: 'SKIPPED' });
+    const result = await repo.findItemByKey('b1', 'add_venue');
+    expect(prisma.bookingChecklistItem.findFirst).toHaveBeenCalledWith({
+      where: { bookingId: 'b1', key: 'add_venue' },
+      select: { id: true, state: true },
+    });
+    expect(result).toEqual({ id: 'ci9', state: 'SKIPPED' });
+  });
+});
+
+describe('ChecklistRepository — seedReminderItem (Module 4)', () => {
+  let repo: ChecklistRepository;
+  let prisma: MockPrisma;
+  const BOOKING_DATE = new Date('2025-06-01T19:00:00.000Z');
+  const CREATED_AT = new Date('2025-01-01T00:00:00.000Z');
+
+  beforeEach(() => {
+    prisma = makePrisma();
+    repo = new ChecklistRepository(prisma as unknown as PrismaService);
+    // $transaction(callback) runs the callback with the same mock as the tx client.
+    prisma.$transaction.mockImplementation((cb: (tx: MockPrisma) => unknown) => cb(prisma));
+  });
+
+  it('is idempotent — returns the existing item without inserting when the key is present', async () => {
+    prisma.bookingChecklistItem.findFirst.mockResolvedValue({ id: 'existing', key: 'add_venue' });
+
+    const result = await repo.seedReminderItem('u1', 'b1', 'add_venue', BOOKING_DATE, CREATED_AT);
+
+    expect(result).toEqual({ id: 'existing', key: 'add_venue' });
+    expect(prisma.bookingChecklistItem.create).not.toHaveBeenCalled();
+    expect(prisma.bookingChecklistItem.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('throws for an unknown reminder key', async () => {
+    prisma.bookingChecklistItem.findFirst.mockResolvedValue(null);
+    await expect(
+      repo.seedReminderItem('u1', 'b1', 'not_a_key', BOOKING_DATE, CREATED_AT),
+    ).rejects.toThrow('Unknown reminder key: not_a_key');
+  });
+
+  it('inserts in template position and shifts the tail by +1', async () => {
+    prisma.bookingChecklistItem.findFirst.mockResolvedValue(null);
+    // A booking that only has a later-template item (create_balance_invoice, order 1).
+    prisma.bookingChecklistItem.findMany.mockResolvedValue([
+      { key: 'create_balance_invoice', order: 1 },
+    ]);
+    prisma.bookingChecklistItem.create.mockResolvedValue({ id: 'new', key: 'confirm_quote', order: 1 });
+
+    await repo.seedReminderItem('u1', 'b1', 'confirm_quote', BOOKING_DATE, CREATED_AT);
+
+    // confirm_quote precedes create_balance_invoice → inserted at order 1, tail shifted.
+    expect(prisma.bookingChecklistItem.updateMany).toHaveBeenCalledWith({
+      where: { bookingId: 'b1', order: { gte: 1 } },
+      data: { order: { increment: 1 } },
+    });
+    const createArg = prisma.bookingChecklistItem.create.mock.calls[0][0];
+    expect(createArg.data).toMatchObject({ key: 'confirm_quote', order: 1, bookingId: 'b1', userId: 'u1' });
+  });
+
+  it('seeds a dependent item as BLOCKED and computes its due date from the rule', async () => {
+    prisma.bookingChecklistItem.findFirst.mockResolvedValue(null);
+    prisma.bookingChecklistItem.findMany.mockResolvedValue([]);
+    prisma.bookingChecklistItem.create.mockResolvedValue({ id: 'new' });
+
+    // song_requests dependsOn music_form_invite, dueDateRule bookingDate -14.
+    await repo.seedReminderItem('u1', 'b1', 'song_requests', BOOKING_DATE, CREATED_AT);
+
+    const createArg = prisma.bookingChecklistItem.create.mock.calls[0][0];
+    expect(createArg.data.state).toBe('BLOCKED');
+    expect(createArg.data.dueDate).toEqual(new Date('2025-05-18T19:00:00.000Z')); // -14 days
   });
 });

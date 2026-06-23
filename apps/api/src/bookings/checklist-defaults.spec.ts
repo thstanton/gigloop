@@ -1,5 +1,6 @@
 import {
   CHECKLIST_DEFAULTS,
+  computeReminderInsertOrder,
   filterItemsByStartingStatus,
   type ChecklistDefaultItem,
 } from './checklist-defaults';
@@ -104,6 +105,47 @@ describe('build_itinerary checklist default (Module D / #523)', () => {
       const keys = filterItemsByStartingStatus(defaults, 'CONFIRMED').map((i) => i.key);
       expect(keys).not.toContain('build_itinerary');
       expect(keys).toContain('add_venue');
+    });
+  });
+
+  describe('computeReminderInsertOrder (on-demand seed, Module 4)', () => {
+    it('places an early-template key first when only later items exist', () => {
+      // A booking started at CONFIRMED only seeded READY-stage items.
+      const existing = [
+        { key: 'create_balance_invoice', order: 1 },
+        { key: 'song_requests', order: 2 },
+      ];
+      // confirm_quote is earlier in the template than both — it should go first.
+      expect(computeReminderInsertOrder('confirm_quote', existing)).toBe(1);
+    });
+
+    it('places a mid-template key just after its template predecessor (not appended)', () => {
+      const existing = [
+        { key: 'send_quote', order: 1 }, // template idx 0
+        { key: 'play_the_gig', order: 2 }, // template idx 12
+      ];
+      // create_contract (idx 3) follows send_quote, precedes play_the_gig.
+      const order = computeReminderInsertOrder('create_contract', existing);
+      expect(order).toBe(2); // after send_quote(1); caller shifts play_the_gig to 3
+      expect(order).toBeLessThan(3); // strictly before the later item — not appended
+    });
+
+    it('ignores custom (keyless) items when finding the preceding position', () => {
+      const existing = [
+        { key: 'send_quote', order: 1 },
+        { key: null, order: 2 }, // a custom item — no template index
+      ];
+      // confirm_quote (idx 1) follows send_quote; the custom item does not count.
+      expect(computeReminderInsertOrder('confirm_quote', existing)).toBe(2);
+    });
+
+    it('appends a last-template key after all preceding items', () => {
+      const existing = [
+        { key: 'send_quote', order: 1 },
+        { key: 'confirm_quote', order: 2 },
+      ];
+      // send_thank_you is the final template item.
+      expect(computeReminderInsertOrder('send_thank_you', existing)).toBe(3);
     });
   });
 });

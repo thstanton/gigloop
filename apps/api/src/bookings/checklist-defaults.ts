@@ -12,6 +12,10 @@ export interface ChecklistDefaultItem {
   requiredForStatus: 'PROVISIONAL' | 'CONFIRMED' | 'READY' | 'COMPLETE' | null;
   dueDateRule: DueDateRule | null;
   enabled?: boolean;
+  // Per-concern grouping (ADR-0052). System defaults resolve their concern from the
+  // static concern map, so this is left unset for them; a custom global-template item
+  // carries its user-chosen concern here so it appears in that section on every booking.
+  concern?: string | null;
 }
 
 export const CHECKLIST_DEFAULTS: ChecklistDefaultItem[] = [
@@ -160,6 +164,28 @@ export function computeDueDate(
   const base = new Date(rule.basis === 'bookingDate' ? bookingDate : bookingCreatedAt);
   base.setDate(base.getDate() + rule.offsetDays);
   return base;
+}
+
+// The `order` to assign an on-demand-seeded reminder (ADR-0052 / PRD #538 Module 4)
+// so it lands in template (workflow) position rather than appended. The caller shifts
+// every existing item with `order >= this value` by +1 before inserting, so the new
+// item slots exactly after the last existing item that precedes it in the template
+// (or first, if none precede it). Custom items (no template index) never count as
+// "preceding" but are carried along by the shift, preserving their relative order.
+export function computeReminderInsertOrder(
+  key: string,
+  existingItems: Array<{ key: string | null; order: number }>,
+): number {
+  const templateIndex = (k: string | null): number =>
+    k === null ? -1 : CHECKLIST_DEFAULTS.findIndex((d) => d.key === k);
+  const newIdx = templateIndex(key);
+  const precedingOrders = existingItems
+    .filter((i) => {
+      const idx = templateIndex(i.key);
+      return idx !== -1 && idx < newIdx;
+    })
+    .map((i) => i.order);
+  return precedingOrders.length ? Math.max(...precedingOrders) + 1 : 1;
 }
 
 export function getChecklistDefaults(
