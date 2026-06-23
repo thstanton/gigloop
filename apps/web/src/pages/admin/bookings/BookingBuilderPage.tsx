@@ -654,6 +654,9 @@ export default function BookingBuilderPage() {
               saved={peopleSave.isSuccess}
               saveError={peopleSave.isError ? 'Failed to save. Please try again.' : null}
             />
+            <div className="mt-6">
+              <RemindMeAboutContainer bookingId={id!} concern="people" />
+            </div>
           </BuilderSection>
 
           {/* Venue */}
@@ -762,6 +765,9 @@ export default function BookingBuilderPage() {
               anchorsSaved={saveAnchors.isSuccess}
               anchorsError={saveAnchors.isError ? 'Failed to save times. Please try again.' : null}
             />
+            <div className="mt-6">
+              <RemindMeAboutContainer bookingId={id!} concern="itinerary" />
+            </div>
           </BuilderSection>
 
           {/* Details */}
@@ -796,6 +802,9 @@ export default function BookingBuilderPage() {
                 isTurningOff={musicTurnOff.isPending}
               />
             )}
+            <div className="mt-6">
+              <RemindMeAboutContainer bookingId={id!} concern="music" />
+            </div>
           </BuilderSection>
 
           {/* Notes */}
