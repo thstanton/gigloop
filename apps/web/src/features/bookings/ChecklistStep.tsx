@@ -2,9 +2,10 @@ import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/common/PageHeader';
 import { PageSection } from '@/components/common/PageSection';
-import { REMINDER_CONCERN_LABELS, REMINDER_CONCERN_ORDER } from '@/lib/constants';
+import { REMINDER_CONCERN_LABELS, REMINDER_CONCERN_ORDER, STATUS_ORDER } from '@/lib/constants';
 import { RemindMeAbout, type ReminderRow } from './RemindMeAbout';
 import type {
+  BookingStatus,
   ChecklistDefaultItem,
   ReminderConcern,
   ReminderPrerequisite,
@@ -39,12 +40,26 @@ function afterFromSelection(prerequisites: ReminderPrerequisite[], excluded: Set
   return `${phrases.slice(0, -1).join(', ')} and ${phrases[phrases.length - 1]}`;
 }
 
+// A global custom default's stage has passed if its requiredForStatus sits strictly before the
+// booking's starting status — matching the backend preview's isPastStage gate for system reminders,
+// so both row sources are filtered the same way (a stage equal to the start is still offered).
+function isStagePassed(startingStatus: BookingStatus, requiredForStatus: Stage): boolean {
+  if (requiredForStatus == null) return false;
+  return STATUS_ORDER.indexOf(requiredForStatus) < STATUS_ORDER.indexOf(startingStatus);
+}
+
+// The id prefix marking a row as a global custom default (a durable template item) rather than a
+// reminder added inline this session — they toggle differently (exclude-and-stay vs remove).
+const GLOBAL_PREFIX = 'global-';
+
 interface Props {
   /** The system reminders to offer, grouped by concern (backend preview, stage-filtered). */
   preview: ReminderPreview[];
   isPreviewLoading: boolean;
   /** The user's full template defaults — the source for the create payload (keyed by selection). */
   checklistDefaults: ChecklistDefaultItem[];
+  /** The status the booking will be created at — gates which staged global customs are offered. */
+  startingStatus: BookingStatus;
   onBack: () => void;
   onCreate: (items: ChecklistDefaultItem[]) => void;
   isCreating: boolean;
@@ -55,24 +70,48 @@ export function ChecklistStep({
   preview,
   isPreviewLoading,
   checklistDefaults,
+  startingStatus,
   onBack,
   onCreate,
   isCreating,
   isError,
 }: Props) {
-  // `excluded` holds the system keys turned off; everything else is on (default-seeded). Customs are
-  // held locally until the atomic create. A counter gives each local custom a stable row id.
+  // `excluded` holds the system keys / global-custom ids turned off; everything else is on
+  // (default-seeded). Inline-added customs are held locally until the atomic create. A counter gives
+  // each a stable row id.
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [customs, setCustoms] = useState<LocalCustom[]>([]);
   const customId = useRef(0);
 
-  const toggleKey = (key: string) =>
+  const toggleExclude = (id: string) =>
     setExcluded((prev) => {
       const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
+
+  // The user's global custom template defaults to offer (enabled, not past the starting stage),
+  // paired with their index into `checklistDefaults` for a stable row id and the create payload.
+  // Their concern is stored on the item, so they slot into their section with no concern map.
+  const globalCustoms = checklistDefaults
+    .map((d, idx) => ({ d, idx }))
+    .filter(({ d }) => d.key == null && d.enabled !== false && !isStagePassed(startingStatus, d.requiredForStatus));
+
+  const globalCustomRow = ({ d, idx }: { d: ChecklistDefaultItem; idx: number }): ReminderRow => {
+    const id = `${GLOBAL_PREFIX}${idx}`;
+    return {
+      itemId: id,
+      key: null,
+      label: d.label,
+      on: !excluded.has(id),
+      source: 'custom',
+      state: null,
+      requiredForStatus: d.requiredForStatus,
+      autoCompleteHint: null,
+      after: null,
+    };
+  };
 
   const addCustom = (concern: ReminderConcern | null) => (label: string, requiredForStatus: Stage) => {
     customId.current += 1;
@@ -107,10 +146,12 @@ export function ChecklistStep({
     after: null,
   });
 
-  // A system row toggles its selection (stays shown, off, re-addable); a locally-added custom has no
-  // record to keep as an off state, so toggling it off removes it.
+  // Three row kinds toggle differently: a system reminder (has `key`) or a global custom default
+  // (`global-` id) is a durable item — toggling excludes it but it stays shown and re-addable; an
+  // inline-added custom has no durable record, so toggling it off removes it.
   const onToggle = (r: ReminderRow) => {
-    if (r.key) toggleKey(r.key);
+    if (r.key) toggleExclude(r.key);
+    else if (r.itemId?.startsWith(GLOBAL_PREFIX)) toggleExclude(r.itemId);
     else if (r.itemId) removeCustom(r.itemId);
   };
 
@@ -131,6 +172,20 @@ export function ChecklistStep({
         requiredForStatus: d.requiredForStatus,
         dueDateRule: d.dueDateRule,
       }));
+    // Global custom defaults still selected — mapped to the clean DTO shape (dropping `enabled`),
+    // keeping their stored concern so the seeded item lands in that section.
+    const globalCustomItems: ChecklistDefaultItem[] = globalCustoms
+      .filter(({ idx }) => !excluded.has(`${GLOBAL_PREFIX}${idx}`))
+      .map(({ d }) => ({
+        key: null,
+        label: d.label,
+        completedBy: d.completedBy,
+        dependsOn: d.dependsOn,
+        autoCompleteRule: d.autoCompleteRule,
+        requiredForStatus: d.requiredForStatus,
+        dueDateRule: d.dueDateRule,
+        concern: d.concern,
+      }));
     const customItems: ChecklistDefaultItem[] = customs.map((c) => ({
       key: null,
       label: c.label,
@@ -141,17 +196,21 @@ export function ChecklistStep({
       dueDateRule: null,
       concern: c.concern,
     }));
-    onCreate([...systemItems, ...customItems]);
+    onCreate([...systemItems, ...globalCustomItems, ...customItems]);
   }
 
   const byConcern = REMINDER_CONCERN_ORDER.map((concern) => ({
     concern,
     rows: [
       ...preview.filter((r) => r.concern === concern).map(systemRow),
+      ...globalCustoms.filter(({ d }) => d.concern === concern).map(globalCustomRow),
       ...customs.filter((c) => c.concern === concern).map(customRow),
     ],
   }));
-  const otherItems = customs.filter((c) => c.concern === null).map(customRow);
+  const otherItems = [
+    ...globalCustoms.filter(({ d }) => !d.concern).map(globalCustomRow),
+    ...customs.filter((c) => c.concern === null).map(customRow),
+  ];
 
   return (
     <div className="px-6 py-8 max-w-3xl mx-auto">

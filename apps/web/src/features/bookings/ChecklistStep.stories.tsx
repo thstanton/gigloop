@@ -11,7 +11,7 @@ const preview: ReminderPreview[] = [
   { key: 'add_venue', label: 'Confirm the venue', concern: 'venue', requiredForStatus: 'READY', autoCompleteHint: null, prerequisites: [] },
 ];
 
-const d = (over: Partial<ChecklistDefaultItem> & { key: string; label: string }): ChecklistDefaultItem => ({
+const d = (over: Partial<ChecklistDefaultItem> & { key: string | null; label: string }): ChecklistDefaultItem => ({
   completedBy: 'USER', dependsOn: [], autoCompleteRule: null, requiredForStatus: null, dueDateRule: null, ...over,
 });
 
@@ -21,6 +21,9 @@ const checklistDefaults: ChecklistDefaultItem[] = [
   d({ key: 'send_contract', label: 'Send the contract', requiredForStatus: 'CONFIRMED', dependsOn: ['create_contract'] }),
   d({ key: 'contract_signed', label: 'Contract signed', requiredForStatus: 'CONFIRMED', dependsOn: ['send_contract'] }),
   d({ key: 'add_venue', label: 'Confirm the venue', requiredForStatus: 'READY' }),
+  // Global custom defaults from Settings (#561): one tagged to a concern, one concern-less.
+  d({ key: null, label: 'Book parking', concern: 'venue', requiredForStatus: null }),
+  d({ key: null, label: 'Charge the camera', concern: null, requiredForStatus: null }),
 ];
 
 const meta = {
@@ -30,6 +33,7 @@ const meta = {
     preview,
     isPreviewLoading: false,
     checklistDefaults,
+    startingStatus: 'PROVISIONAL',
     onBack: fn(),
     onCreate: fn(),
     isCreating: false,
@@ -84,5 +88,20 @@ export const DependencyClauseFollowsSelection: Story = {
     const sendRow = people.getByText('Send the contract').closest('li')!;
     await userEvent.click(within(sendRow).getByRole('button', { name: 'Turn off' }));
     await expect(canvas.getByText('Contract signed').closest('li')!).not.toHaveTextContent(/after you send the contract/i);
+  },
+};
+
+export const GlobalCustomTogglesButStays: Story = {
+  name: 'A global custom default toggles off but stays shown (durable item, #561)',
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    // "Book parking" is a concern-tagged global custom — it appears in the Venue section, on.
+    const venue = within(canvas.getByRole('region', { name: 'Venue' }));
+    const parkingRow = venue.getByText('Book parking').closest('li')!;
+    await userEvent.click(within(parkingRow).getByRole('button', { name: 'Turn off' }));
+    // Unlike an inline custom it does NOT vanish — it stays shown and re-addable, so its action
+    // flips to "Remind me". (Payload exclusion is asserted in the spec.)
+    await expect(venue.getByText('Book parking')).toBeVisible();
+    await expect(within(venue.getByText('Book parking').closest('li')!).getByRole('button', { name: 'Remind me' })).toBeVisible();
   },
 };

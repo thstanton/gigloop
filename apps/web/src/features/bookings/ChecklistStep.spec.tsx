@@ -23,19 +23,23 @@ const def = (over: Partial<ChecklistDefaultItem> & { key: string | null; label: 
 
 // The full template the form holds — the create payload is built from these. `play_the_gig` is in
 // the template but NOT the preview (e.g. filtered as past-stage), so it must never reach the payload.
+// Two global custom defaults (key: null, from Settings #561): one tagged to Venue, one concern-less.
 const checklistDefaults: ChecklistDefaultItem[] = [
   def({ key: 'send_quote', label: 'Send the quote', requiredForStatus: 'PROVISIONAL' }),
   def({ key: 'create_contract', label: 'Create the contract', requiredForStatus: 'CONFIRMED' }),
   def({ key: 'send_contract', label: 'Send the contract', requiredForStatus: 'CONFIRMED', dependsOn: ['create_contract'] }),
   def({ key: 'play_the_gig', label: 'Play the gig', requiredForStatus: 'COMPLETE' }),
+  def({ key: null, label: 'Book parking', concern: 'venue', requiredForStatus: null }),
+  def({ key: null, label: 'Charge the camera', concern: null, requiredForStatus: null }),
 ];
 
-function renderStep(onCreate = vi.fn()) {
+function renderStep(onCreate = vi.fn(), defaults = checklistDefaults, startingStatus: 'PROVISIONAL' | 'CONFIRMED' | 'READY' | 'COMPLETE' = 'PROVISIONAL') {
   render(
     <ChecklistStep
       preview={preview}
       isPreviewLoading={false}
-      checklistDefaults={checklistDefaults}
+      checklistDefaults={defaults}
+      startingStatus={startingStatus}
       onBack={vi.fn()}
       onCreate={onCreate}
       isCreating={false}
@@ -45,8 +49,13 @@ function renderStep(onCreate = vi.fn()) {
   return onCreate;
 }
 
-const payloadKeys = (onCreate: ReturnType<typeof vi.fn>) =>
-  (onCreate.mock.calls[0][0] as ChecklistDefaultItem[]).map((i) => i.key);
+const payloadItems = (onCreate: ReturnType<typeof vi.fn>) =>
+  onCreate.mock.calls[0][0] as ChecklistDefaultItem[];
+// System (keyed) reminders only — global/inline customs carry a null key and are asserted by label.
+const systemKeys = (onCreate: ReturnType<typeof vi.fn>) =>
+  payloadItems(onCreate).map((i) => i.key).filter((k): k is string => k != null);
+const payloadLabels = (onCreate: ReturnType<typeof vi.fn>) =>
+  payloadItems(onCreate).map((i) => i.label);
 
 describe('ChecklistStep (New Booking reminders, #560)', () => {
   it('shows a loading state while the preview is in flight', () => {
@@ -55,6 +64,7 @@ describe('ChecklistStep (New Booking reminders, #560)', () => {
         preview={[]}
         isPreviewLoading
         checklistDefaults={[]}
+        startingStatus="PROVISIONAL"
         onBack={vi.fn()}
         onCreate={vi.fn()}
         isCreating={false}
@@ -77,7 +87,7 @@ describe('ChecklistStep (New Booking reminders, #560)', () => {
       const onCreate = renderStep();
       await userEvent.click(screen.getByRole('button', { name: 'Create booking' }));
       // Every preview key, in template order; play_the_gig (not previewed) excluded.
-      expect(payloadKeys(onCreate)).toEqual(['send_quote', 'create_contract', 'send_contract']);
+      expect(systemKeys(onCreate)).toEqual(['send_quote', 'create_contract', 'send_contract']);
     });
 
     it('excluding one reminder drops exactly that key, nothing else', async () => {
@@ -86,7 +96,7 @@ describe('ChecklistStep (New Booking reminders, #560)', () => {
       const quoteRow = screen.getByText('Send the quote').closest('li')!;
       await userEvent.click(within(quoteRow).getByRole('button', { name: 'Turn off' }));
       await userEvent.click(screen.getByRole('button', { name: 'Create booking' }));
-      expect(payloadKeys(onCreate)).toEqual(['create_contract', 'send_contract']);
+      expect(systemKeys(onCreate)).toEqual(['create_contract', 'send_contract']);
     });
 
     it('a re-enabled reminder returns to the payload', async () => {
@@ -95,7 +105,7 @@ describe('ChecklistStep (New Booking reminders, #560)', () => {
       await userEvent.click(within(quoteRow).getByRole('button', { name: 'Turn off' }));
       await userEvent.click(within(quoteRow).getByRole('button', { name: 'Remind me' }));
       await userEvent.click(screen.getByRole('button', { name: 'Create booking' }));
-      expect(payloadKeys(onCreate)).toEqual(['send_quote', 'create_contract', 'send_contract']);
+      expect(systemKeys(onCreate)).toEqual(['send_quote', 'create_contract', 'send_contract']);
     });
 
     it('a concern-tagged custom lands in the payload with that concern (default stage)', async () => {
@@ -117,13 +127,13 @@ describe('ChecklistStep (New Booking reminders, #560)', () => {
       const onCreate = renderStep();
       const other = within(screen.getByRole('region', { name: 'Other items' }));
       await userEvent.click(other.getByRole('button', { name: /add your own/i }));
-      await userEvent.type(other.getByPlaceholderText('Item label'), 'Charge the camera');
+      await userEvent.type(other.getByPlaceholderText('Item label'), 'Pack spare strings');
       await userEvent.click(other.getByRole('button', { name: 'Add' }));
       await userEvent.click(screen.getByRole('button', { name: 'Create booking' }));
 
       const items = onCreate.mock.calls[0][0] as ChecklistDefaultItem[];
       expect(items).toContainEqual(
-        expect.objectContaining({ key: null, label: 'Charge the camera', concern: null }),
+        expect.objectContaining({ key: null, label: 'Pack spare strings', concern: null }),
       );
     });
   });
@@ -148,12 +158,53 @@ describe('ChecklistStep (New Booking reminders, #560)', () => {
     renderStep();
     const other = within(screen.getByRole('region', { name: 'Other items' }));
     await userEvent.click(other.getByRole('button', { name: /add your own/i }));
-    await userEvent.type(other.getByPlaceholderText('Item label'), 'Charge the camera');
+    await userEvent.type(other.getByPlaceholderText('Item label'), 'Pack spare strings');
     await userEvent.click(other.getByRole('button', { name: 'Add' }));
-    expect(screen.getByText('Charge the camera')).toBeInTheDocument();
+    expect(screen.getByText('Pack spare strings')).toBeInTheDocument();
 
-    const customRow = screen.getByText('Charge the camera').closest('li')!;
+    const customRow = screen.getByText('Pack spare strings').closest('li')!;
     await userEvent.click(within(customRow).getByRole('button', { name: 'Turn off' }));
-    expect(screen.queryByText('Charge the camera')).not.toBeInTheDocument();
+    expect(screen.queryByText('Pack spare strings')).not.toBeInTheDocument();
+  });
+
+  describe('global custom defaults from Settings (#561)', () => {
+    it('offers a concern-tagged global custom in its section, on by default', () => {
+      renderStep();
+      const venue = within(screen.getByRole('region', { name: 'Venue' }));
+      expect(venue.getByText('Book parking')).toBeInTheDocument();
+    });
+
+    it('offers a concern-less global custom under "Other items"', () => {
+      renderStep();
+      const other = within(screen.getByRole('region', { name: 'Other items' }));
+      expect(other.getByText('Charge the camera')).toBeInTheDocument();
+    });
+
+    it('seeds both global customs by default, each keeping its concern', async () => {
+      const onCreate = renderStep();
+      await userEvent.click(screen.getByRole('button', { name: 'Create booking' }));
+      const items = payloadItems(onCreate);
+      expect(items).toContainEqual(expect.objectContaining({ key: null, label: 'Book parking', concern: 'venue' }));
+      expect(items).toContainEqual(expect.objectContaining({ key: null, label: 'Charge the camera', concern: null }));
+    });
+
+    it('toggling a global custom off keeps it shown but excludes it from the payload', async () => {
+      const onCreate = renderStep();
+      const parkingRow = screen.getByText('Book parking').closest('li')!;
+      await userEvent.click(within(parkingRow).getByRole('button', { name: 'Turn off' }));
+      // Still shown (durable item, re-addable), unlike an inline custom which vanishes.
+      expect(screen.getByText('Book parking')).toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: 'Create booking' }));
+      expect(payloadLabels(onCreate)).not.toContain('Book parking');
+    });
+
+    it('does not offer a global custom whose stage has already passed at the starting status', () => {
+      const defaults: ChecklistDefaultItem[] = [
+        def({ key: null, label: 'Confirm catering', concern: 'venue', requiredForStatus: 'CONFIRMED' }),
+      ];
+      // Starting at READY → a CONFIRMED-staged custom is past and not offered.
+      renderStep(vi.fn(), defaults, 'READY');
+      expect(screen.queryByText('Confirm catering')).not.toBeInTheDocument();
+    });
   });
 });

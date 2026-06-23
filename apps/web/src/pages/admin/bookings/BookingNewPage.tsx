@@ -246,6 +246,7 @@ export default function BookingNewPage() {
           preview={reminderPreview}
           isPreviewLoading={isPreviewLoading}
           checklistDefaults={checklistDefaults}
+          startingStatus={pendingValues.status as BookingStatus}
           onBack={() => { mutation.reset(); resolvedIds.current = {}; setStep(1); }}
           onCreate={(checklistItems) => mutation.mutate({ values: pendingValues, checklistItems })}
           isCreating={mutation.isPending}

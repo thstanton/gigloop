@@ -13,7 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ChevronRight, ImageIcon, Pencil, Plus, Trash2, Upload } from 'lucide-react';
 import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
-import type { PublicProfile, UserProfile, UpdatePublicProfileInput, UpdateUserProfileInput, UserPreferences, DueDateRule, ChecklistDefaultItem, InvoiceNumberFormat, PaddingWidth } from '@/types/api';
+import type { PublicProfile, UserProfile, UpdatePublicProfileInput, UpdateUserProfileInput, UserPreferences, DueDateRule, ChecklistDefaultItem, InvoiceNumberFormat, PaddingWidth, ReminderConcern } from '@/types/api';
+import { REMINDER_CONCERN_LABELS, REMINDER_CONCERN_ORDER } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 import { Card } from '@/components/common/Card';
 import { PageSection } from '@/components/common/PageSection';
@@ -874,10 +875,35 @@ type CustomItemForm = {
   label: string;
   completedBy: 'USER' | 'CUSTOMER';
   requiredForStatus: 'NONE' | 'CONFIRMED' | 'READY' | 'COMPLETE';
+  // The concern this global custom belongs to, so it appears in that section on every booking
+  // (#561). 'NONE' = concern-less (lives in the create form's "Other items").
+  concern: ReminderConcern | 'NONE';
   dueDateBasis: 'bookingDate' | 'bookingCreation';
   dueDateOffset: string; // signed: negative = before
   hasDueDate: boolean;
 };
+
+// A "Section" (concern) picker for a global custom checklist item, reused by the add form and both
+// edit forms (#561). Kept inline as a render helper — extracting a shared component is its own work.
+function ConcernSelect({
+  value,
+  onChange,
+}: {
+  value: ReminderConcern | 'NONE';
+  onChange: (v: ReminderConcern | 'NONE') => void;
+}) {
+  return (
+    <Select value={value} onValueChange={(v) => onChange(v as ReminderConcern | 'NONE')}>
+      <SelectTrigger className="w-40 text-xs"><SelectValue /></SelectTrigger>
+      <SelectContent>
+        <SelectItem value="NONE">No section</SelectItem>
+        {REMINDER_CONCERN_ORDER.map((c) => (
+          <SelectItem key={c} value={c}>{REMINDER_CONCERN_LABELS[c]}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
 
 function BookingSettingsSection({ profile }: { profile: UserProfile }) {
   const queryClient = useQueryClient();
@@ -947,6 +973,7 @@ function BookingSettingsSection({ profile }: { profile: UserProfile }) {
     label: '',
     completedBy: 'USER',
     requiredForStatus: 'NONE',
+    concern: 'NONE',
     dueDateBasis: 'bookingDate',
     dueDateOffset: '',
     hasDueDate: false,
@@ -964,6 +991,7 @@ function BookingSettingsSection({ profile }: { profile: UserProfile }) {
       label: item.label,
       completedBy: item.completedBy === 'BAND_MEMBER' ? 'USER' : item.completedBy,
       requiredForStatus: (item.requiredForStatus ?? 'NONE') as CustomItemForm['requiredForStatus'],
+      concern: (item.concern ?? 'NONE') as ReminderConcern | 'NONE',
       hasDueDate: !!item.dueDateRule,
       dueDateBasis: item.dueDateRule?.basis ?? 'bookingDate',
       dueDateOffset: days.toString(),
@@ -986,6 +1014,7 @@ function BookingSettingsSection({ profile }: { profile: UserProfile }) {
               requiredForStatus: editCustom.requiredForStatus === 'NONE'
                 ? null
                 : (editCustom.requiredForStatus as ChecklistDefaultItem['requiredForStatus']),
+              concern: editCustom.concern === 'NONE' ? null : editCustom.concern,
               dueDateRule,
             }
           : item,
@@ -1026,6 +1055,7 @@ function BookingSettingsSection({ profile }: { profile: UserProfile }) {
           label: item.label,
           completedBy: item.completedBy,
           requiredForStatus: item.requiredForStatus ?? null,
+          concern: item.concern ?? null,
           dueDateRule: item.dueDateRule ?? null,
           ...(item.enabled === false ? { enabled: false } : {}),
         })),
@@ -1076,10 +1106,11 @@ function BookingSettingsSection({ profile }: { profile: UserProfile }) {
         dependsOn: [],
         autoCompleteRule: null,
         requiredForStatus: (newItem.requiredForStatus === 'NONE' ? null : newItem.requiredForStatus) as ChecklistDefaultItem['requiredForStatus'],
+        concern: newItem.concern === 'NONE' ? null : newItem.concern,
         dueDateRule,
       },
     ]);
-    setNewItem({ label: '', completedBy: 'USER', requiredForStatus: 'NONE', dueDateBasis: 'bookingDate', dueDateOffset: '', hasDueDate: false });
+    setNewItem({ label: '', completedBy: 'USER', requiredForStatus: 'NONE', concern: 'NONE', dueDateBasis: 'bookingDate', dueDateOffset: '', hasDueDate: false });
   };
 
   return (
@@ -1190,6 +1221,7 @@ function BookingSettingsSection({ profile }: { profile: UserProfile }) {
                           <SelectItem value="COMPLETE">Required for Complete</SelectItem>
                         </SelectContent>
                       </Select>
+                      <ConcernSelect value={editCustom!.concern} onChange={(v) => setEditCustom((p) => p && { ...p, concern: v })} />
                     </div>
                     <div className="flex items-center gap-3 flex-wrap">
                       <label className="flex items-center gap-2 cursor-pointer">
@@ -1223,6 +1255,7 @@ function BookingSettingsSection({ profile }: { profile: UserProfile }) {
                       <span className={cn('text-sm', item.enabled !== false ? 'text-foreground' : 'text-muted')}>{item.label}</span>
                       <span className="text-xs text-muted border border-border rounded px-1 py-0.5 leading-none">{item.completedBy === 'CUSTOMER' ? 'Client' : 'Me'}</span>
                       <span className="text-xs text-primary/60 border border-primary/30 rounded px-1 py-0.5 leading-none">Custom</span>
+                      {item.concern && <span className="text-xs text-muted border border-border rounded px-1 py-0.5 leading-none">{REMINDER_CONCERN_LABELS[item.concern as ReminderConcern]}</span>}
                     </div>
                     <div className="w-full sm:w-auto pl-12 sm:pl-0">
                       <button type="button" onClick={() => startEditCustom(idx)} className="flex items-center gap-1 text-xs text-primary hover:underline" aria-label={`Edit ${item.label}`}>
@@ -1309,6 +1342,7 @@ function BookingSettingsSection({ profile }: { profile: UserProfile }) {
                               <SelectItem value="COMPLETE">Required for Complete</SelectItem>
                             </SelectContent>
                           </Select>
+                          <ConcernSelect value={editCustom!.concern} onChange={(v) => setEditCustom((p) => p && { ...p, concern: v })} />
                         </div>
                         <div className="flex items-center gap-3 flex-wrap">
                           <label className="flex items-center gap-2 cursor-pointer">
@@ -1342,6 +1376,7 @@ function BookingSettingsSection({ profile }: { profile: UserProfile }) {
                           <span className={cn('text-sm', item.enabled !== false ? 'text-foreground' : 'text-muted')}>{item.label}</span>
                           <span className="text-xs text-muted border border-border rounded px-1 py-0.5 leading-none">{item.completedBy === 'CUSTOMER' ? 'Client' : 'Me'}</span>
                           <span className="text-xs text-primary/60 border border-primary/30 rounded px-1 py-0.5 leading-none">Custom</span>
+                          {item.concern && <span className="text-xs text-muted border border-border rounded px-1 py-0.5 leading-none">{REMINDER_CONCERN_LABELS[item.concern as ReminderConcern]}</span>}
                         </div>
                         <div className="w-full sm:w-auto pl-12 sm:pl-0">
                           <button type="button" onClick={() => startEditCustom(idx)} className="flex items-center gap-1 text-xs text-primary hover:underline" aria-label={`Edit ${item.label}`}>
@@ -1389,6 +1424,7 @@ function BookingSettingsSection({ profile }: { profile: UserProfile }) {
                   <SelectItem value="COMPLETE">Required for Complete</SelectItem>
                 </SelectContent>
               </Select>
+              <ConcernSelect value={newItem.concern} onChange={(v) => setNewItem((p) => ({ ...p, concern: v }))} />
             </div>
             <div className="flex items-center gap-3">
               <label className="flex items-center gap-2 cursor-pointer">
