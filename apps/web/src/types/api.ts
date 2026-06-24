@@ -679,6 +679,8 @@ export interface UserPreferences {
   defaultBookingStatus?: 'ENQUIRY' | 'PROVISIONAL' | 'CONFIRMED';
   invoiceNumberFormat?: InvoiceNumberFormat;
   customDressCodeOptions?: string[];
+  // Ids of dismissed teaching surfaces (tips + concept cards) — one shared namespace.
+  dismissedHints?: string[];
 }
 
 export interface UserProfile {
