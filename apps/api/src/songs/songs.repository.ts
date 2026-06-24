@@ -15,7 +15,7 @@ export class SongsRepository {
         ...(genre !== undefined ? { genre } : {}),
         ...(active !== undefined ? { active } : {}),
       },
-      orderBy: [{ artist: 'asc' }, { title: 'asc' }],
+      orderBy: [{ title: 'asc' }, { artist: 'asc' }],
     });
   }
 

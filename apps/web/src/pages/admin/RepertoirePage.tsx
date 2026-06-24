@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import type { UseFormRegister, Control, FieldErrors } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -132,6 +132,15 @@ function SongFields({
 
 function AddSongRow({ onDone }: { onDone: () => void }) {
   const queryClient = useQueryClient();
+  const [addedVisible, setAddedVisible] = useState(false);
+  const addedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(
+    () => () => {
+      if (addedTimerRef.current) clearTimeout(addedTimerRef.current);
+    },
+    [],
+  );
 
   const {
     register,
@@ -154,6 +163,9 @@ function AddSongRow({ onDone }: { onDone: () => void }) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['songs'] });
       reset({ title: '', artist: '', genre: 'CONTEMPORARY' });
+      setAddedVisible(true);
+      if (addedTimerRef.current) clearTimeout(addedTimerRef.current);
+      addedTimerRef.current = setTimeout(() => setAddedVisible(false), 2000);
     },
   });
 
@@ -179,6 +191,9 @@ function AddSongRow({ onDone }: { onDone: () => void }) {
           <Button type="button" size="sm" variant="outline" onClick={onDone}>
             Done
           </Button>
+          {addedVisible && !mutation.isPending && (
+            <span className="self-center text-xs text-muted">Song added</span>
+          )}
         </div>
       </form>
     </div>
