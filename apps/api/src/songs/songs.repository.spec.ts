@@ -33,12 +33,12 @@ describe('SongsRepository', () => {
   });
 
   describe('findAll', () => {
-    it('scopes query to userId and orders by artist then title', async () => {
+    it('scopes query to userId and orders by title then artist', async () => {
       prisma.song.findMany.mockResolvedValue([]);
       await repo.findAll('u1');
       const call = prisma.song.findMany.mock.calls[0][0];
       expect(call.where.userId).toBe('u1');
-      expect(call.orderBy).toEqual([{ artist: 'asc' }, { title: 'asc' }]);
+      expect(call.orderBy).toEqual([{ title: 'asc' }, { artist: 'asc' }]);
     });
 
     it('applies genre filter when provided', async () => {
