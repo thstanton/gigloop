@@ -79,8 +79,12 @@ export const InSeries: Story = {
 export const AddToSeriesNoSeries: Story = {
   parameters: { msw: { handlers: makeBookingDetailHandlers('AddToSeriesNoSeries') } },
   play: async ({ canvas }) => {
+    // Radix locks <body> pointer-events while the dialog is open; under full-suite
+    // load that effect can race userEvent's CSS guard (the button is genuinely
+    // interactive in a real browser). Skip the guard for these dialog interactions.
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
     await canvas.findByText("Sophie's Wedding");
-    await userEvent.click(canvas.getByRole('button', { name: 'Edit overview' }));
+    await user.click(canvas.getByRole('button', { name: 'Edit overview' }));
     const dialog = within(await screen.findByRole('dialog'));
     await expect(dialog.getByText('Series (optional)')).toBeVisible();
     await expect(dialog.getByRole('button', { name: /existing series/i })).toBeVisible();
@@ -92,10 +96,13 @@ export const AddToSeriesNoSeries: Story = {
 export const AddToSeriesWithSeries: Story = {
   parameters: { msw: { handlers: makeBookingDetailHandlers('AddToSeriesWithSeries') } },
   play: async ({ canvas }) => {
+    // See AddToSeriesNoSeries: skip userEvent's pointer-events guard, which races
+    // Radix's <body> lock under full-suite load (line 98 flaked here — #495).
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
     await canvas.findByText("Sophie's Wedding");
-    await userEvent.click(canvas.getByRole('button', { name: 'Edit overview' }));
+    await user.click(canvas.getByRole('button', { name: 'Edit overview' }));
     const dialog = within(await screen.findByRole('dialog'));
-    await userEvent.click(dialog.getByRole('button', { name: /existing series/i }));
+    await user.click(dialog.getByRole('button', { name: /existing series/i }));
     // Selecting 'existing' reveals the series picker fed by GET /series.
     await expect(dialog.getByRole('combobox', { name: 'Series' })).toBeVisible();
   },
