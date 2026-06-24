@@ -15,6 +15,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { GhostButton } from '@/components/common/GhostButton';
+import { BookingConceptCardContainer } from './BookingConceptCardContainer';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -338,6 +339,8 @@ export default function ChecklistSection({
           </GhostButton>
         </div>
       )}
+
+      <BookingConceptCardContainer />
 
       {hideHeader && (
         <GhostButton

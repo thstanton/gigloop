@@ -15,6 +15,12 @@ vi.mock('@/lib/hooks/useChecklistActions', () => ({
   }),
 }));
 
+// The embedded concept-card container fetches via useMe/useQueryClient — out of scope
+// for this spec (it has its own coverage); stub it so ChecklistSection renders without providers.
+vi.mock('./BookingConceptCardContainer', () => ({
+  BookingConceptCardContainer: () => null,
+}));
+
 function item(partial: Partial<ChecklistItem> & { id: string; key: string | null }): ChecklistItem {
   return {
     id: partial.id,
