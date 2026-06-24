@@ -214,6 +214,10 @@ model BookingChecklistItem {
   completedAt      DateTime?
   dueDate          DateTime?
   dueDateRule      Json?
+  // Per-concern reminder grouping (ADR-0052). System items resolve their concern
+  // from the static concern map; custom items store a user-chosen concern here.
+  // Null = a concern-less custom item that lives only on the Checklist card.
+  concern          String?
 
   @@index([userId])
   @@index([bookingId])

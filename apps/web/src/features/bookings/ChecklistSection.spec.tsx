@@ -32,6 +32,7 @@ function item(partial: Partial<ChecklistItem> & { id: string; key: string | null
     completedAt: null,
     dueDate: null,
     dueDateRule: null,
+    concern: null,
     shortcutType: partial.shortcutType,
     shortcutTemplateType: partial.shortcutTemplateType,
   };

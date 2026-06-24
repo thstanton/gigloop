@@ -359,8 +359,15 @@ describe('ChecklistEvaluatorService', () => {
       expect(sendUpdate).toMatchObject({ state: 'PENDING' });
     });
 
-    it('keeps item BLOCKED when not all dependencies are COMPLETE', async () => {
-      const item = makeItem({
+    it('keeps item BLOCKED when a present dependency is genuinely outstanding (PENDING)', async () => {
+      const depItem = makeItem({
+        id: 'ci1',
+        key: 'create_contract',
+        state: 'PENDING',
+        dependsOn: [],
+        autoCompleteRule: null,
+      });
+      const blockedItem = makeItem({
         id: 'ci2',
         key: 'send_contract',
         state: 'BLOCKED',
@@ -368,12 +375,65 @@ describe('ChecklistEvaluatorService', () => {
         autoCompleteRule: null,
       });
       const booking = makeBooking();
-      // create_contract not in items list — not complete
-      repo.findItemsWithContext.mockResolvedValue({ items: [item], booking });
+      repo.findItemsWithContext.mockResolvedValue({ items: [depItem, blockedItem], booking });
 
       await service.evaluate('b1');
 
       expect(repo.updateItemStates).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('dependsOn satisfied by SKIPPED/absent (#554)', () => {
+    it('treats an absent dependency as satisfied — unblocks downstream to PENDING', async () => {
+      const item = makeItem({
+        id: 'ci2',
+        key: 'send_contract',
+        state: 'BLOCKED',
+        dependsOn: ['create_contract'], // create_contract not in items list — absent
+        autoCompleteRule: null,
+      });
+      const booking = makeBooking();
+      repo.findItemsWithContext.mockResolvedValue({ items: [item], booking });
+
+      await service.evaluate('b1');
+
+      expect(repo.updateItemStates).toHaveBeenCalledWith([
+        expect.objectContaining({ id: 'ci2', state: 'PENDING' }),
+      ]);
+    });
+
+    it('treats a SKIPPED mid-chain dependency as satisfied — downstream goes PENDING, not BLOCKED', async () => {
+      const items = [
+        makeItem({ id: 'i1', key: 'create_contract', state: 'COMPLETE', dependsOn: [], completedAt: new Date(), autoCompleteRule: null }),
+        makeItem({ id: 'i2', key: 'send_contract', state: 'SKIPPED', dependsOn: ['create_contract'], autoCompleteRule: null }),
+        makeItem({ id: 'i3', key: 'contract_signed', state: 'BLOCKED', dependsOn: ['send_contract'], autoCompleteRule: null }),
+      ];
+      const booking = makeBooking();
+      repo.findItemsWithContext.mockResolvedValue({ items, booking });
+
+      await service.evaluate('b1');
+
+      expect(repo.updateItemStates).toHaveBeenCalledWith([
+        expect.objectContaining({ id: 'i3', state: 'PENDING' }),
+      ]);
+    });
+
+    it('re-blocks downstream when a previously-SKIPPED dependency is un-skipped back to PENDING', async () => {
+      // Post-skip state: send_contract is PENDING again, contract_signed had been
+      // unblocked to PENDING — un-skipping must drive it back PENDING → BLOCKED.
+      const items = [
+        makeItem({ id: 'i1', key: 'create_contract', state: 'COMPLETE', dependsOn: [], completedAt: new Date(), autoCompleteRule: null }),
+        makeItem({ id: 'i2', key: 'send_contract', state: 'PENDING', dependsOn: ['create_contract'], autoCompleteRule: null }),
+        makeItem({ id: 'i3', key: 'contract_signed', state: 'PENDING', dependsOn: ['send_contract'], autoCompleteRule: null }),
+      ];
+      const booking = makeBooking();
+      repo.findItemsWithContext.mockResolvedValue({ items, booking });
+
+      await service.evaluate('b1');
+
+      expect(repo.updateItemStates).toHaveBeenCalledWith([
+        expect.objectContaining({ id: 'i3', state: 'BLOCKED' }),
+      ]);
     });
   });
 

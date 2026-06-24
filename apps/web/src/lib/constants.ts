@@ -3,7 +3,7 @@ import {
   GlassWater, Utensils, Moon, Briefcase, Music2, Sparkles, Radio, Headphones,
   Volume2, Users, Clock, Shirt, Sofa, type LucideIcon,
 } from 'lucide-react';
-import type { BookingStatus, EventType, SongGenre } from '@/types/api';
+import type { BookingStatus, EventType, ReminderConcern, SongGenre } from '@/types/api';
 
 export type ContactPrimaryRole = 'CUSTOMER' | 'VENUE' | 'BOOKING_AGENT';
 
@@ -179,3 +179,17 @@ export const DRESS_CODE_OPTIONS = [
   'Casual',
   'Cocktail',
 ];
+
+// The reminder concerns, in Builder spine order — the order the New Booking form (#560) renders the
+// per-concern "Remind me about" controls so the create surface matches the Builder.
+export const REMINDER_CONCERN_ORDER: ReminderConcern[] = [
+  'overview', 'people', 'venue', 'itinerary', 'music',
+];
+
+export const REMINDER_CONCERN_LABELS: Record<ReminderConcern, string> = {
+  overview: 'Overview',
+  people: 'People',
+  venue: 'Venue',
+  itinerary: 'Itinerary',
+  music: 'Music',
+};

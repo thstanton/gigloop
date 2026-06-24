@@ -28,6 +28,10 @@ import { UpdateContractDto } from './dto/update-contract.dto';
 import { UpdateChecklistItemDto } from './dto/update-checklist-item.dto';
 import { CreateChecklistItemDto } from './dto/create-checklist-item.dto';
 import { BookingChecklistItemResponseDto } from './dto/checklist-item-response.dto';
+import { ApplicableReminderResponseDto } from './dto/applicable-reminder-response.dto';
+import { RemindersQueryDto } from './dto/reminders-query.dto';
+import { ReminderPreviewQueryDto } from './dto/reminder-preview-query.dto';
+import { ReminderPreviewResponseDto } from './dto/reminder-preview-response.dto';
 import { UpdateBookingSeriesDto } from './dto/update-booking-series.dto';
 import type { Request } from 'express';
 
@@ -61,6 +65,17 @@ export class BookingsController {
   @Get('actions')
   getActions(@Req() req: AuthedRequest) {
     return this.service.getActions(req.userId);
+  }
+
+  @ApiOperation({
+    summary: 'Preview the "Remind me about" reminders for a booking about to be created at a status',
+  })
+  @ApiResponse({ status: 200, type: [ReminderPreviewResponseDto] })
+  // Declared before @Get(':id') so the literal `checklist/reminders/preview` path is never captured
+  // by the :id param route.
+  @Get('checklist/reminders/preview')
+  previewReminders(@Req() req: AuthedRequest, @Query() query: ReminderPreviewQueryDto) {
+    return this.service.previewReminders(req.userId, query.status);
   }
 
   @ApiOperation({ summary: 'Get a booking by ID' })
@@ -182,10 +197,36 @@ export class BookingsController {
       dto.label,
       dto.requiredForStatus ?? null,
       dto.dueDate ?? null,
+      dto.concern ?? null,
     );
   }
 
-  @ApiOperation({ summary: 'Update a checklist item state' })
+  @ApiOperation({
+    summary: 'Get the "Remind me about" reminders applicable to a concern for a booking',
+  })
+  @ApiResponse({ status: 200, type: [ApplicableReminderResponseDto] })
+  @Get(':id/checklist/reminders')
+  getApplicableReminders(
+    @Req() req: AuthedRequest,
+    @Param('id') id: string,
+    @Query() query: RemindersQueryDto,
+  ) {
+    return this.service.getApplicableReminders(req.userId, id, query.concern);
+  }
+
+  @ApiOperation({
+    summary: 'Turn a system reminder on for a booking (un-skip, or on-demand seed if absent)',
+  })
+  @Post(':id/checklist/reminders/:key/enable')
+  enableReminder(
+    @Req() req: AuthedRequest,
+    @Param('id') id: string,
+    @Param('key') key: string,
+  ) {
+    return this.service.enableReminder(req.userId, id, key);
+  }
+
+  @ApiOperation({ summary: 'Update a checklist item state (tick, un-tick, or skip/opt-out)' })
   @Patch(':id/checklist/:itemId')
   updateChecklistItem(
     @Req() req: AuthedRequest,

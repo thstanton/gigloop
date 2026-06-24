@@ -246,6 +246,9 @@ export interface Contract {
 
 export type ChecklistItemState = 'PENDING' | 'BLOCKED' | 'COMPLETE' | 'FAILED' | 'SKIPPED';
 
+// The concerns a reminder can belong to (ADR-0052). Mirrors the API's ReminderConcern.
+export type ReminderConcern = 'overview' | 'people' | 'venue' | 'itinerary' | 'music';
+
 export interface ChecklistItem {
   id: string;
   createdAt: string;
@@ -262,8 +265,47 @@ export interface ChecklistItem {
   completedAt: string | null;
   dueDate: string | null;
   dueDateRule: DueDateRule | null;
+  // Per-concern reminder grouping. Null for concern-less custom items.
+  concern: string | null;
   shortcutType?: string;
   shortcutTemplateType?: string;
+}
+
+// One row of a concern's "Remind me about" control (selector output).
+export interface ApplicableReminder {
+  itemId: string | null;
+  key: string | null;
+  label: string;
+  on: boolean;
+  source: 'system' | 'custom';
+  state: ChecklistItemState | null;
+  requiredForStatus: 'PROVISIONAL' | 'CONFIRMED' | 'READY' | 'COMPLETE' | null;
+  // Auto-complete condition ("when …" tail) for non-obvious/client-committed reminders; null
+  // otherwise. Rendered after a tick icon in the control (#567).
+  autoCompleteHint: string | null;
+  // Dependency clause ("after you <phrase>"), present only while an unmet prerequisite is a live
+  // gate (outstanding + tracked, per #554); null otherwise (#557/#558).
+  after: string | null;
+}
+
+// One in-scope prerequisite of a previewed reminder (#560), with the phrase the New Booking form
+// uses to recompute the "after you …" clause from the live selection.
+export interface ReminderPrerequisite {
+  key: string;
+  phrase: string;
+}
+
+// One previewed system reminder for the New Booking form (#560). Pre-creation there is no booking
+// to seed against, so the create surface previews the system reminders a booking started at a given
+// status would offer — grouped by concern, with the same coaching as the Builder. Selection state
+// (on/off) and the "after you …" clause live on the frontend; this is the static offer.
+export interface ReminderPreview {
+  key: string;
+  label: string;
+  concern: ReminderConcern;
+  requiredForStatus: 'PROVISIONAL' | 'CONFIRMED' | 'READY' | 'COMPLETE' | null;
+  autoCompleteHint: string | null;
+  prerequisites: ReminderPrerequisite[];
 }
 
 export interface BookingLogisticsEntry {
@@ -605,12 +647,17 @@ export interface ChecklistDefaultItem {
   requiredForStatus: 'PROVISIONAL' | 'CONFIRMED' | 'READY' | 'COMPLETE' | null;
   dueDateRule: DueDateRule | null;
   enabled?: boolean;
+  // A custom global-template item carries its user-chosen concern; system defaults
+  // resolve theirs from the concern map and leave this unset.
+  concern?: string | null;
 }
 
 export interface CreateChecklistItemInput {
   label: string;
   requiredForStatus?: 'PROVISIONAL' | 'CONFIRMED' | 'READY' | 'COMPLETE' | null;
   dueDate?: string | null;
+  // Tag a custom item to a concern so it appears in that section's control.
+  concern?: string | null;
 }
 
 export interface InvoiceNumberPreview {

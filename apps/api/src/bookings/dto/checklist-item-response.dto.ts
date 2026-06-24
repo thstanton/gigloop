@@ -47,6 +47,13 @@ export class BookingChecklistItemResponseDto {
   dueDateRule: Record<string, unknown> | null;
 
   @ApiPropertyOptional({
+    nullable: true,
+    enum: ['overview', 'people', 'venue', 'itinerary', 'music'],
+    description: 'Per-concern grouping; null for a concern-less custom item.',
+  })
+  concern: string | null;
+
+  @ApiPropertyOptional({
     description:
       'Derived from autoCompleteRule: send_email | create_contract | create_deposit_invoice | create_balance_invoice | mark_contract_signed | mark_deposit_received',
   })

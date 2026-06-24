@@ -26,7 +26,9 @@ export function addDays(date: Date, days: number): Date {
 
 // An item required for a stage strictly earlier than the booking's current status
 // is no longer actionable — the musician has moved the booking on past it.
-function isPastStage(bookingStatus: string, requiredForStatus: string | null): boolean {
+// Exported so the per-concern reminder selector (checklist-reminders.ts) applies
+// the *same* stage gate the surfaces do — the two cannot drift.
+export function isPastStage(bookingStatus: string, requiredForStatus: string | null): boolean {
   if (requiredForStatus === null) return false;
   const current = STAGE_ORDER.indexOf(bookingStatus);
   const required = STAGE_ORDER.indexOf(requiredForStatus);

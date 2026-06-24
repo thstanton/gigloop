@@ -57,6 +57,7 @@ export class UserProfileService {
       autoCompleteRule: null,
       requiredForStatus: item.requiredForStatus ?? null,
       dueDateRule: item.dueDateRule ?? null,
+      concern: item.concern ?? null,
       ...(item.enabled === false ? { enabled: false } : {}),
     }));
 

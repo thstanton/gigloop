@@ -1,7 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { computeDueDate } from '../bookings/checklist-defaults';
+import {
+  CHECKLIST_DEFAULTS,
+  computeDueDate,
+  computeReminderInsertOrder,
+} from '../bookings/checklist-defaults';
 import { addDays, surfaceActionItems } from './checklist-surfacing';
 
 export type ChecklistItemSeed = {
@@ -12,6 +16,9 @@ export type ChecklistItemSeed = {
   autoCompleteRule?: Record<string, unknown> | null;
   requiredForStatus?: string | null;
   dueDateRule?: { basis: 'bookingDate' | 'bookingCreation'; offsetDays: number } | null;
+  // A custom item seeded with its user-chosen concern (#560); null for system items and
+  // concern-less customs.
+  concern?: string | null;
 };
 
 type ActionChecklistItem = {
@@ -164,6 +171,7 @@ export class ChecklistRepository {
           ? { autoCompleteRule: autoCompleteRule as Prisma.InputJsonValue }
           : {}),
         requiredForStatus: item.requiredForStatus ?? null,
+        concern: item.concern ?? null,
         dueDate: computeDueDate(dueDateRule, bookingDate, bookingCreatedAt),
         ...(dueDateRule !== null
           ? { dueDateRule: dueDateRule as unknown as Prisma.InputJsonValue }
@@ -171,6 +179,66 @@ export class ChecklistRepository {
       };
     });
     return (tx ?? this.prisma).bookingChecklistItem.createMany({ data });
+  }
+
+  // On-demand seed of a single system reminder (ADR-0052 / PRD #538 Module 4):
+  // materialise one BookingChecklistItem from the defaults for a `key` that has no
+  // record yet. Idempotent — if the key already exists on the booking it returns the
+  // existing item untouched. The new item lands in template (workflow) position: the
+  // tail of items at-or-after that position is shifted by +1, inside one transaction.
+  async seedReminderItem(
+    userId: string,
+    bookingId: string,
+    key: string,
+    bookingDate: Date,
+    bookingCreatedAt: Date,
+  ): Promise<{ id: string } & Record<string, unknown>> {
+    const existing = await this.prisma.bookingChecklistItem.findFirst({
+      where: { bookingId, key },
+    });
+    if (existing) return existing;
+
+    const def = CHECKLIST_DEFAULTS.find((d) => d.key === key);
+    if (!def) {
+      throw new Error(`Unknown reminder key: ${key}`);
+    }
+
+    const allItems = await this.prisma.bookingChecklistItem.findMany({
+      where: { bookingId },
+      select: { key: true, order: true },
+    });
+    const insertOrder = computeReminderInsertOrder(key, allItems);
+
+    const dependsOn = def.dependsOn ?? [];
+    const autoCompleteRule = def.autoCompleteRule ?? null;
+    const dueDateRule = def.dueDateRule ?? null;
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.bookingChecklistItem.updateMany({
+        where: { bookingId, order: { gte: insertOrder } },
+        data: { order: { increment: 1 } },
+      });
+      return tx.bookingChecklistItem.create({
+        data: {
+          userId,
+          bookingId,
+          key: def.key,
+          label: def.label,
+          completedBy: def.completedBy ?? 'USER',
+          state: dependsOn.length > 0 ? 'BLOCKED' : 'PENDING',
+          order: insertOrder,
+          dependsOn,
+          ...(autoCompleteRule !== null
+            ? { autoCompleteRule: autoCompleteRule as Prisma.InputJsonValue }
+            : {}),
+          requiredForStatus: def.requiredForStatus ?? null,
+          dueDate: computeDueDate(dueDateRule, bookingDate, bookingCreatedAt),
+          ...(dueDateRule !== null
+            ? { dueDateRule: dueDateRule as unknown as Prisma.InputJsonValue }
+            : {}),
+        },
+      });
+    });
   }
 
   async recomputeChecklistDueDates(bookingId: string, bookingDate: Date, bookingCreatedAt: Date) {
@@ -191,13 +259,27 @@ export class ChecklistRepository {
     );
   }
 
-  updateChecklistItemState(userId: string, bookingId: string, itemId: string, state: 'COMPLETE' | 'PENDING') {
+  updateChecklistItemState(
+    userId: string,
+    bookingId: string,
+    itemId: string,
+    state: 'COMPLETE' | 'PENDING' | 'SKIPPED',
+  ) {
     return this.prisma.bookingChecklistItem.updateMany({
       where: { id: itemId, bookingId, userId },
       data: {
         state,
         completedAt: state === 'COMPLETE' ? new Date() : null,
       },
+    });
+  }
+
+  // Look up a single checklist item by its system `key` on a booking (used by the
+  // enable-reminder flow to decide between un-skip and on-demand seed).
+  findItemByKey(bookingId: string, key: string) {
+    return this.prisma.bookingChecklistItem.findFirst({
+      where: { bookingId, key },
+      select: { id: true, state: true },
     });
   }
 }

@@ -30,6 +30,7 @@ import { toast } from '@/lib/hooks/use-toast';
 import { OverviewAtom, type OverviewChanges, type SeriesChange } from '@/features/bookings/OverviewAtom';
 import { PeopleAtom, type PeopleSelection } from '@/features/bookings/PeopleAtom';
 import { VenueAtom, type VenueSelection } from '@/features/bookings/VenueAtom';
+import { RemindMeAboutContainer } from '@/features/bookings/RemindMeAboutContainer';
 import { DetailsAtom, LOGISTICS_TIME_KEYS, type DetailsLogistics } from '@/features/bookings/DetailsAtom';
 import { ItineraryAtom } from '@/features/bookings/ItineraryAtom';
 import { MusicAtom } from '@/features/bookings/MusicAtom';
@@ -638,6 +639,9 @@ export default function BookingBuilderPage() {
                 </div>
               </div>
             )}
+            <div className="mt-6">
+              <RemindMeAboutContainer bookingId={id!} concern="overview" currentStatus={booking.status} />
+            </div>
           </BuilderSection>
 
           {/* People */}
@@ -650,6 +654,9 @@ export default function BookingBuilderPage() {
               saved={peopleSave.isSuccess}
               saveError={peopleSave.isError ? 'Failed to save. Please try again.' : null}
             />
+            <div className="mt-6">
+              <RemindMeAboutContainer bookingId={id!} concern="people" currentStatus={booking.status} />
+            </div>
           </BuilderSection>
 
           {/* Venue */}
@@ -661,6 +668,9 @@ export default function BookingBuilderPage() {
               saved={venueSave.isSuccess}
               saveError={venueSave.isError ? 'Failed to save. Please try again.' : null}
             />
+            <div className="mt-6">
+              <RemindMeAboutContainer bookingId={id!} concern="venue" currentStatus={booking.status} />
+            </div>
           </BuilderSection>
 
           {/* Package Templates */}
@@ -755,6 +765,9 @@ export default function BookingBuilderPage() {
               anchorsSaved={saveAnchors.isSuccess}
               anchorsError={saveAnchors.isError ? 'Failed to save times. Please try again.' : null}
             />
+            <div className="mt-6">
+              <RemindMeAboutContainer bookingId={id!} concern="itinerary" currentStatus={booking.status} />
+            </div>
           </BuilderSection>
 
           {/* Details */}
@@ -789,6 +802,9 @@ export default function BookingBuilderPage() {
                 isTurningOff={musicTurnOff.isPending}
               />
             )}
+            <div className="mt-6">
+              <RemindMeAboutContainer bookingId={id!} concern="music" currentStatus={booking.status} />
+            </div>
           </BuilderSection>
 
           {/* Notes */}

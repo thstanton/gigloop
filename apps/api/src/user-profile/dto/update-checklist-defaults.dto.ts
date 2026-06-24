@@ -73,6 +73,16 @@ export class CustomChecklistItemDto {
   @Type(() => DueDateRuleDto)
   @IsObject()
   dueDateRule?: DueDateRuleDto | null;
+
+  @ApiPropertyOptional({
+    enum: ['overview', 'people', 'venue', 'itinerary', 'music'],
+    nullable: true,
+    description: 'Tag this global custom default to a concern so it appears in that section on every booking (#561).',
+  })
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsIn(['overview', 'people', 'venue', 'itinerary', 'music'])
+  concern?: 'overview' | 'people' | 'venue' | 'itinerary' | 'music' | null;
 }
 
 export class UpdateChecklistDefaultsDto {
