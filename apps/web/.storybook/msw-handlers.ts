@@ -499,3 +499,14 @@ export const allHandlers = [
   ...mswHandlers.templates,
   ...mswHandlers.me,
 ];
+
+/**
+ * Last-resort fallback for any `/api/*` request a story's handler set doesn't
+ * mock. Without it, `onUnhandledRequest: 'bypass'` lets the request hit the real
+ * dev API on :3000, which is then aborted at window teardown — surfacing as an
+ * unhandled AbortError/ECANCELED and flaking the suite's exit code (#495).
+ * Returning 404 in-process means no socket is opened, so there is nothing to
+ * abort. Registered as an *initial* handler (see preview.ts) so per-story runtime
+ * handlers always take precedence; this only fires when nothing else matched.
+ */
+export const apiFallbackHandler = http.all('/api/*', () => new HttpResponse(null, { status: 404 }));
