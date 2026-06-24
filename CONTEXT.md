@@ -432,12 +432,21 @@ No payment functionality on the portal for MVP.
 
 This is a system-generated email (not a [[Template]]).
 
-**Cancelled bookings:** the portal still loads for cancelled bookings (the token remains valid). A notice is shown ("This booking has been cancelled"). The booking summary is visible. Contract signing is hidden. Signed contract download remains visible if it exists.
+**Cancelled bookings:** the portal still loads for cancelled bookings (the token remains valid). A notice is shown ("This booking has been cancelled"). The booking summary remains visible, but the **entire contract concern is hidden** — both signing and the signed-contract download (cancellation is the outermost gate on the contract). Invoice [[Document]]s keep their own gate, so a legitimately-owed cancellation-fee [[Invoice]] can still be visible and payable. See [[Portal visibility indicator]] / ADR-0054.
+
+### Portal visibility indicator
+The admin-side answer to the musician's recurring question *"what can my client see on the [[Portal]] right now?"*. Every **conditionally-visible** portal-touching concern on the booking detail page carries a consistent indicator: a prominent **"Visible on Client Portal"** badge when the client can currently see it, or a subordinate muted **"Not visible …"** hint naming the gate holding it back (*until sent*, *— voided*, *to client*, *— cancelled*; and, once #533 lands a draft/Published model, *until published*). The hint mirrors the badge's word *visible*, so it reads as the same axis without repeating "Client Portal".
+
+It is a **passive mirror, never a control**: it reports visibility, it does not change it (the concern's own actions — send, issue — do that). Crucially, its verdict is the *same source truth* that drives what the [[Portal]] actually renders (ADR-0021 / ADR-0031): visibility is computed by a single authority consumed by both the portal and this indicator, so the two can never disagree — surfacing the scattered rules rather than re-implementing them. See ADR-0054.
+
+Concerns are flagged where visibility is **non-obvious**: the always-visible [[Portal]] booking summary carries no indicator (nothing to predict), but a gated concern (contract, invoices) — or a silently-private UPLOAD [[Document]] sitting among client-visible rows — *is* flagged, because the musician cannot tell at a glance. Granularity follows the concern: singleton concerns (contract, music form) show one indicator; list concerns (invoice / [[Document]] rows) show one **per row**, since each [[Document]] is gated independently. Today the music-form indicator only ever reads "Visible" (the form goes live the instant it is turned on — #533); that thinness is itself a standing reminder that the draft/Published gap is unaddressed.
 
 ### Document
 A PDF stored in Cloudflare R2, associated with a Booking. Four types (stored as `DocumentType` Prisma enum): **INVOICE**, **CONTRACT**, **SONG_LIST**, **UPLOAD**.
 
 The first three types are *system-generated* — GigMan creates the PDF automatically as part of a workflow (invoice send, contract signing, music form submission). **UPLOAD** documents are *musician-uploaded* — the musician receives a PDF from an external party (e.g. a booking agent contract) and uploads it manually. Uploaded documents carry a user-provided `name` (displayed in the Documents list); system-generated documents derive their label from their type and associated records. Uploaded documents may be deleted by the musician; system-generated documents are immutable.
+
+**Portal visibility:** UPLOAD documents are **never shown on the client [[Portal]]** — they are private musician paperwork (an agent contract, a venue rider). Only `CONTRACT` (active, signed), `SONG_LIST`, and `Sent`/`Paid` `INVOICE` documents are client-facing (see [[Portal]] → Documents, ADR-0021 / ADR-0031). Per-document client sharing for UPLOADs is a possible future feature, not current behaviour.
 
 **Invoice PDF:** generated at invoice **issue** time (when the invoice is created/issued, not at send — see ADR-0042), stored in R2 as an `INVOICE` Document, then attached unchanged to the outbound email at send time. Uses a fixed `@react-pdf/renderer` layout with Tiptap-JSON-driven content sections (variable substitution + line items table). Balance invoices include a deposit deduction section (subtotal, less deposit, balance due) when a deposit [[Invoice]] exists on the booking. On the client [[Portal]] the document is surfaced only once the invoice is `Sent`/`Paid` (see Portal → Documents).
 
