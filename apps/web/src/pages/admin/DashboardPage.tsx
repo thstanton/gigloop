@@ -11,6 +11,7 @@ import BookingStatusPill from '@/components/common/BookingStatusPill';
 import { PageSection } from '@/components/common/PageSection';
 import { formatDate } from '@/lib/formatters';
 import { DateBadge } from '@/components/common/DateBadge';
+import { TipsWidgetContainer } from '@/features/dashboard/TipsWidgetContainer';
 import type { DashboardAction, BookingListItem } from '@/types/api';
 import { cn } from '@/lib/utils';
 
@@ -404,6 +405,9 @@ export default function DashboardPage() {
             </Button>
           </div>
         )}
+
+        {/* Setup tips — one at a time, full-width above the grid; renders nothing once resolved */}
+        <TipsWidgetContainer />
 
         {/* Two-column grid */}
         <div className="md:grid md:grid-cols-2 md:gap-8 space-y-4 md:space-y-0">
