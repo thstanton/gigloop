@@ -26,6 +26,10 @@ export const NoUpcomingGigs: Story = {
       handlers: [
         http.get('/api/bookings', () => HttpResponse.json([])),
         http.get('/api/bookings/actions', () => HttpResponse.json([])),
+        // TipsWidgetContainer fetches these — mock them so no request leaks to the network.
+        http.get('/api/me', () => HttpResponse.json({})),
+        http.get('/api/me/public', () => HttpResponse.json({})),
+        http.get('/api/packages', () => HttpResponse.json([])),
       ],
     },
   },

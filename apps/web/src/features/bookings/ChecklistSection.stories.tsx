@@ -41,6 +41,8 @@ const noop = () => {};
 const mswHandlers = [
   http.get('/api/bookings/b1', () => HttpResponse.json({ id: 'b1', fee: null, sets: [], packages: [], activeContract: null })),
   http.get('/api/bookings/b1/invoices', () => HttpResponse.json([])),
+  // BookingConceptCardContainer (useDismissibleHint) fetches /api/me — mock it so no request leaks.
+  http.get('/api/me', () => HttpResponse.json({})),
 ];
 
 const meta = {
