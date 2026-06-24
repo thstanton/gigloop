@@ -61,6 +61,7 @@ export function BookingVenueMapWidget({ bookingId, contactHref }: BookingVenueMa
       contactHref={contactHref}
       travelTime={travelTime}
       isLoadingTravelTime={isFetchingTravelTime}
+      homeAddressMissing={hasVenueCoords && !hasHomeCoords}
       onRefreshTravelTime={() => queryClient.invalidateQueries({ queryKey: ['contact-travel-time', venueId] })}
     />
   );

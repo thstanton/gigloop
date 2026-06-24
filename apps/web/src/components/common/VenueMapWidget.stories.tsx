@@ -90,6 +90,25 @@ export const NoTravelTime: Story = {
   },
 };
 
+/** Venue is geocoded but the musician has no home address — prompt to add it. */
+export const NoHomeAddress: Story = {
+  args: {
+    showHeader: true,
+    travelTime: null,
+    isLoadingTravelTime: false,
+    homeAddressMissing: true,
+    contactHref: '/admin/contacts/v1',
+  },
+  play: async ({ canvas }) => {
+    const link = canvas.getByRole('link', { name: /add your home address/i });
+    await expect(link).toBeVisible();
+    await expect(link).toHaveAttribute('href', '/admin/settings');
+    // The generic failure text and the (useless) refresh button are suppressed.
+    await expect(canvas.queryByText('Travel time unavailable')).toBeNull();
+    await expect(canvas.queryByRole('button', { name: /refresh travel time/i })).toBeNull();
+  },
+};
+
 export const NoAddress: Story = {
   args: {
     venue: venueNoCoords,

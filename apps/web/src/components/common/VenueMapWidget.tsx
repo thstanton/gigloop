@@ -4,6 +4,7 @@ import { Car, KeyRound, MapPin, RefreshCw, Speaker } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { EmptyState } from '@/components/common/EmptyState';
 import { IconButton } from '@/components/common/IconButton';
+import { InlineHint } from '@/components/common/InlineHint';
 import { SubLabel } from '@/components/common/SubLabel';
 
 export interface VenueMapWidgetProps {
@@ -30,6 +31,12 @@ export interface VenueMapWidgetProps {
   travelTime?: { minutes: number; distanceMetres: number } | null;
   isLoadingTravelTime?: boolean;
   onRefreshTravelTime?: () => void;
+  /**
+   * The venue is geocoded but the musician has no home address, so travel time
+   * can't be computed. When true, the travel-time slot prompts them to add it
+   * instead of showing the generic "unavailable" text.
+   */
+  homeAddressMissing?: boolean;
   contactHref?: string;
 }
 
@@ -73,6 +80,7 @@ export function VenueMapWidget({
   travelTime,
   isLoadingTravelTime = false,
   onRefreshTravelTime,
+  homeAddressMissing = false,
   contactHref,
 }: VenueMapWidgetProps) {
   const mapDivRef = useRef<HTMLDivElement>(null);
@@ -122,11 +130,19 @@ export function VenueMapWidget({
     };
   }, [hasCoords, venue.latitude, venue.longitude]);
 
+  // The home-address prompt replaces both the status text and the (useless)
+  // refresh button: refreshing can't compute travel time without a base location.
+  const showHomeAddressHint = !isLoadingTravelTime && !travelTime && homeAddressMissing;
+
   let travelTimeStatus: ReactNode;
   if (isLoadingTravelTime) {
     travelTimeStatus = <RefreshCw size={14} className="animate-spin text-muted-foreground" />;
   } else if (travelTime) {
     travelTimeStatus = <span className="text-sm text-foreground">~{travelTime.minutes} min · {distanceKm} km driving</span>;
+  } else if (showHomeAddressHint) {
+    travelTimeStatus = (
+      <InlineHint actionLabel="Add your home address to see travel time" href="/admin/settings" />
+    );
   } else {
     travelTimeStatus = <span className="text-sm text-muted-foreground">Travel time unavailable</span>;
   }
@@ -198,7 +214,7 @@ export function VenueMapWidget({
               {onRefreshTravelTime !== undefined && (
                 <div className="flex items-center gap-2 pt-1">
                   {travelTimeStatus}
-                  {!isLoadingTravelTime && (
+                  {!isLoadingTravelTime && !showHomeAddressHint && (
                     <IconButton label="Refresh travel time" onClick={onRefreshTravelTime}>
                       <RefreshCw size={14} />
                     </IconButton>
