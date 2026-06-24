@@ -80,13 +80,93 @@ The Dashboard today deliberately ships with *"No analytics (deferred)."*
 their business — earnings over time, conversion through the pipeline, which event types pay.
 
 **Already plumbed for it.** Most of the raw data already exists and is retained: invoices carry
-issue/paid dates and statuses; bookings carry fee, status, event type, and dates; `depositReceivedAt`
-is recorded; and void/cancellation history is **preserved, not deleted**.
+issue/paid dates (`issueDate`, `paidAt`) and statuses — including the distinct `ISSUED` state that
+decouples *issuing* an invoice from *sending* it (ADR-0042/0043), which sharpens an "invoiced total"
+definition; bookings carry fee, status, event type, and dates; `depositReceivedAt` is recorded; and
+void/cancellation history is **preserved, not deleted**.
 
 **Keep in mind.** Favour capturing timestamps and outcome data so metrics can be computed
 *retroactively* — e.g. the existing P2 note about letting the musician enter the *actual*
 deposit-received date. Don't destroy historical signal (keep voiding/soft-state over hard deletes).
-A dedicated aggregation surface may be worth it, but isn't decided here.
+A dedicated aggregation surface may be worth it, but isn't decided here. **The one genuine gap:**
+`Booking` stores only its *current* `status` plus created/updated — there is **no status-transition
+history**, so conversion-funnel / time-in-stage / pipeline-over-time analytics are impossible to
+compute retroactively. They are not a Wave 2 deliverable (the user's priorities are earnings, export,
+and busyness — not "am I winning the work"), but if a later wave wants them, append-only transition
+capture is cheap to start now and impossible to reconstruct later — a plumb-it-forward open question.
+Two further open questions for the feature's own ADR: a **charting dependency** (no charting lib in
+the repo today — `recharts` vs hand-rolled SVG/CSS bars, weighed against the borders-only/no-shadow,
+375px-first design system); and the **shared aggregate backend** — scoped Prisma aggregates here are
+the *same* backend Pillar 4's AI assistant calls for aggregate questions (links to Pillar 4).
+
+**Explored direction (sketch, 2026-06-24 — directional, not a committed design).** A first pass at
+*how* this could work, grounded in what a working musician actually said they want to know. None of
+it is decided; the real choices are parked as questions for the feature's own future ADR. A prior
+grill (2026-06-14) settled much of the money model, recorded below as directional ground; this sketch
+refines it against the live user input.
+
+- **What the musician actually asks.** In their words: *bookings confirmed in a period* (this month /
+  this year), *payments received in a period*, *projected earnings* for the rest of the year, a yearly
+  *target*, *how does this compare to last year*, and — most emphasised — *a clean export to hand the
+  accountant*. The grill's priority ordering holds: earnings and the accountant export lead, busyness
+  follows, conversion-funnel questions did not come up and stay out. **Expenses / net-profit are
+  explicitly out of Wave 2** (the user ruled them out) — Wave 2 analytics is turnover-side only.
+
+- **Money, three lenses.** The user named three money views that don't
+  collapse into one: (1) **booked / projected fees** — Σ `Booking.fee` over CONFIRMED-and-beyond,
+  including future-dated gigs ("rest of the year"); (2) **payments actually received** in a window —
+  real cash, anchored by payment date (`paidAt` / `depositReceivedAt`); (3) **invoiced total** — the
+  figure for the accountant (Σ amounts of issued invoices: status ∈ {`ISSUED`, `SENT`, `PAID`},
+  excluding `DRAFT` and `VOID`). The parked grill deliberately leaned *away* from payment-marking
+  ("users treat Paid as a reminder driver, not proof money landed") and made the export invoice-based;
+  the live user **resolves that tension the other way**: the cash-received view *is* wanted, so
+  marking-as-paid should be embraced as a reporting driver — which carries three obligations (next
+  bullet) to make it trustworthy.
+
+- **Making the cash-received lens trustworthy.** If paid-marking drives reporting, three things the
+  data model doesn't carry today must follow — directional, with the schema/UX specifics parked for
+  the feature's ADR: (1) **set the expectation** — the UI must make clear that marking an invoice paid
+  *drives the financial reporting*, not just dismisses a reminder; (2) **a separately-enterable actual
+  payment date** — today the only signal is the moment the user taps "paid"; the real payment date can
+  differ, so the musician needs to record the *actual* date distinct from the mark-paid timestamp. This
+  reuses the two-path pattern already proven by `depositReceivedAt` (automatic signal + manual
+  override); (3) **an optional payment reference** — stored when known, useful on the accountant
+  export. None of these three fields/behaviours exists yet; they are the gap this lens opens.
+
+- **Projection and a target.** Beyond money-to-date, the user wants a *forward* number: confirmed-and-
+  beyond fees for the rest of the year, plus an aspirational **target** that folds in the speculative
+  tier (provisional + enquiry). This refines the grill's three tiers (Earned / Confirmed / Potential):
+  the conservative headline stays conservative, but there is appetite for a separate target figure that
+  *does* include speculative work. How the target is composed and shown distinctly from the booked
+  headline is parked.
+
+- **Period model: tax year as the primary lens, flexible queries as the multiplier.** The **UK tax
+  year is the single most useful lens** (6 Apr–5 Apr) and the natural anchor for the accountant export —
+  but the user is clear that **customisation is the key that unlocks the rest**: flexible period queries
+  (month, this-year, rest-of-the-year, vs-last-year, arbitrary ranges) open up many use cases beyond the
+  tax-year default. So the direction is a tax-year-default surface layered over a **flexible period-query
+  capability**, not a single fixed window. Year-over-year comparison — a nice-to-have at the grill — is
+  promoted by the user to a wanted view. The exact query model (preset set vs arbitrary ranges, how far
+  back prior years reach) is parked for the feature's ADR.
+
+- **Export, two shapes.** (1) A **bookings CSV** over a chosen period — the user asked for this
+  directly. (2) The **accountant export** — tax-year-aligned, invoice-sourced, the most emphasised
+  item ("particularly useful"). Formats (CSV vs a styled PDF summary reusing the existing PDF infra),
+  exact columns, and delivery (stream-download vs email) are parked for the feature's own design.
+
+- **Surface: hybrid (unchanged from the grill).** Glanceable **headlines on Home** (earnings + booking
+  counts in the same status tiers); a dedicated **Analytics page** for fuller breakdowns, period
+  selection, comparisons, and the exports. Build each widget as a self-contained, independently-
+  mountable unit so a future customisable-dashboard layer can select them — matching the existing
+  feature-component principle.
+
+- **What v1 defers.** Expenses / net-profit (explicitly ruled out). Conversion-funnel & time-in-stage
+  analytics (no status-transition history — see *Keep in mind*). Per-event-type / per-venue / per-
+  customer breakdowns (dropped at the grill). Customisable dashboard. The cash-received lens is now
+  *directionally adopted* (embrace paid-marking), but its three supporting pieces — the paid-driven
+  reporting expectation, the separately-enterable actual payment date, and the optional payment
+  reference — plus the target's composition and the flexible period-query model are handed to the
+  feature's own grill/ADR.
 
 ### 3. Collaboration & band members
 
