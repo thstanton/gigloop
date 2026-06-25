@@ -34,7 +34,12 @@ export function useBookingActions(bookingId: string) {
         isDeposit,
         lineItems: [{ description: isDeposit ? 'Deposit' : 'Balance', amount }],
       }),
-    onSuccess: () => {
+    onSuccess: (invoice) => {
+      // Seed the new draft into the list so a caller opening the sheet on it resolves the
+      // editingInvoice immediately — no create→edit flicker while the refetch is in flight.
+      queryClient.setQueryData<Invoice[]>(['bookingInvoices', bookingId], (old) =>
+        old ? [...old, invoice] : old,
+      );
       queryClient.invalidateQueries({ queryKey: ['bookingInvoices', bookingId] });
       invalidateBooking();
     },
@@ -55,8 +60,10 @@ export function useBookingActions(bookingId: string) {
   return {
     markContractSigned: (contractId: string) => contractMutation.mutate(contractId),
     markDepositReceived: () => depositMutation.mutate(),
-    autoCreateInvoice: (args: { isDeposit: boolean; amount: number }) =>
-      autoCreateInvoiceMutation.mutate(args),
+    autoCreateInvoice: (
+      args: { isDeposit: boolean; amount: number },
+      onCreated?: (invoice: Invoice) => void,
+    ) => autoCreateInvoiceMutation.mutate(args, { onSuccess: onCreated }),
     deleteInvoice: (invoiceId: string) => deleteInvoiceMutation.mutate(invoiceId),
     isDeletingInvoice: deleteInvoiceMutation.isPending,
     isPending:

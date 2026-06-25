@@ -82,6 +82,38 @@ function buildCreatePayload(values: FormValues) {
   };
 }
 
+// Diff the form's line items against the saved invoice and persist the changes (create/update/
+// delete). Does not close the sheet or toast — callers compose it. A no-op when nothing changed.
+async function persistLineItemEdits(bookingId: string, invoice: Invoice, values: FormValues) {
+  const originalById = Object.fromEntries(invoice.lineItems.map((i) => [i.id, i]));
+  const keptServerIds = new Set(values.lineItems.map((i) => i.serverId).filter(Boolean));
+
+  const toDelete = invoice.lineItems.filter((i) => !keptServerIds.has(i.id));
+  const toCreate = values.lineItems.filter((i) => !i.serverId);
+  const toUpdate = values.lineItems.filter(
+    (i) => i.serverId && hasChanged(i, originalById[i.serverId]),
+  );
+
+  await Promise.all([
+    ...toDelete.map((i) =>
+      apiDelete(`/bookings/${bookingId}/invoices/${invoice.id}/line-items/${i.id}`),
+    ),
+    ...toCreate.map((item, idx) =>
+      apiPost(`/bookings/${bookingId}/invoices/${invoice.id}/line-items`, {
+        description: item.description,
+        amount: parseFloat(item.amount),
+        order: values.lineItems.indexOf(item) + idx,
+      }),
+    ),
+    ...toUpdate.map((item) =>
+      apiPatch(`/bookings/${bookingId}/invoices/${invoice.id}/line-items/${item.serverId}`, {
+        description: item.description,
+        amount: parseFloat(item.amount),
+      }),
+    ),
+  ]);
+}
+
 // Shared wrapper for the invoice create/issue mutations: callers supply mutationFn + onSuccess; the 409-aware error toast is identical and lives here.
 function useInvoiceAction<TResult>(opts: {
   mutationFn: (values: FormValues) => Promise<TResult>;
@@ -198,37 +230,7 @@ export default function InvoiceSheet({
   const editMutation = useMutation({
     mutationFn: async (values: FormValues) => {
       if (!invoice) return;
-
-      const originalById = Object.fromEntries(invoice.lineItems.map((i) => [i.id, i]));
-      const keptServerIds = new Set(values.lineItems.map((i) => i.serverId).filter(Boolean));
-
-      const toDelete = invoice.lineItems.filter((i) => !keptServerIds.has(i.id));
-      const toCreate = values.lineItems.filter((i) => !i.serverId);
-      const toUpdate = values.lineItems.filter(
-        (i) => i.serverId && hasChanged(i, originalById[i.serverId]),
-      );
-
-      await Promise.all([
-        ...toDelete.map((i) =>
-          apiDelete(`/bookings/${bookingId}/invoices/${invoice.id}/line-items/${i.id}`),
-        ),
-        ...toCreate.map((item, idx) =>
-          apiPost(`/bookings/${bookingId}/invoices/${invoice.id}/line-items`, {
-            description: item.description,
-            amount: parseFloat(item.amount),
-            order: values.lineItems.indexOf(item) + idx,
-          }),
-        ),
-        ...toUpdate.map((item) =>
-          apiPatch(
-            `/bookings/${bookingId}/invoices/${invoice.id}/line-items/${item.serverId}`,
-            {
-              description: item.description,
-              amount: parseFloat(item.amount),
-            },
-          ),
-        ),
-      ]);
+      await persistLineItemEdits(bookingId, invoice, values);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bookingInvoices', bookingId] });
@@ -240,19 +242,53 @@ export default function InvoiceSheet({
     },
   });
 
-  function onCreateInvoice(values: FormValues) {
+  // Issue an existing DRAFT: persist the current form edits first (WYSIWYG — issuing locks the
+  // invoice, so what the user sees must be what gets locked), then DRAFT → ISSUED, then compose.
+  const issueDraftMutation = useMutation({
+    mutationFn: async (values: FormValues) => {
+      if (!invoice) throw new Error('No invoice to issue');
+      await persistLineItemEdits(bookingId, invoice, values);
+      return apiPost<Invoice>(`/bookings/${bookingId}/invoices/${invoice.id}/issue`, {});
+    },
+    onSuccess: (issuedInvoice) => {
+      queryClient.invalidateQueries({ queryKey: ['bookingInvoices', bookingId] });
+      queryClient.invalidateQueries({ queryKey: ['bookingDocuments', bookingId] });
+      queryClient.invalidateQueries({ queryKey: ['bookingChecklist', bookingId] });
+      onOpenChange(false);
+      onAfterIssue?.(issuedInvoice);
+    },
+    onError: () => toast({ title: 'Failed to issue invoice', variant: 'destructive' }),
+  });
+
+  // Validate + capture the form values, then open the irreversible-issue confirmation.
+  function onRequestIssue(values: FormValues) {
     setPendingFormValues(values);
     setConfirmOpen(true);
   }
 
+  const isDraft = invoice?.status === 'DRAFT';
+
   function onConfirmIssue() {
-    if (!pendingFormValues) return;
     setConfirmOpen(false);
+    if (!pendingFormValues) return;
+    // Edit-mode on a DRAFT: save edits then issue. Create-mode: create-then-issue.
+    if (isEdit && isDraft) {
+      issueDraftMutation.mutate(pendingFormValues);
+      return;
+    }
     createAndIssueMutation.mutate(pendingFormValues);
   }
 
   const showDepositToggle = !isEdit && !hasDepositInvoice;
-  const isBusy = saveDraftMutation.isPending || createAndIssueMutation.isPending || isSubmitting;
+  const isIssuing = createAndIssueMutation.isPending || issueDraftMutation.isPending;
+  let confirmButtonLabel: string;
+  if (isDraft) confirmButtonLabel = issueDraftMutation.isPending ? 'Issuing…' : 'Issue invoice';
+  else confirmButtonLabel = createAndIssueMutation.isPending ? 'Creating…' : 'Create invoice';
+  const isBusy =
+    saveDraftMutation.isPending ||
+    editMutation.isPending ||
+    isIssuing ||
+    isSubmitting;
 
   return (
     <>
@@ -363,8 +399,31 @@ export default function InvoiceSheet({
               </p>
             )}
 
-            {/* Actions */}
-            {isEdit ? (
+            {/* Actions — edit-on-a-draft: issue (primary) + save (secondary) */}
+            {isDraft && (
+              <div className="flex flex-col gap-2">
+                <Button
+                  type="button"
+                  disabled={isBusy}
+                  className="w-full"
+                  onClick={handleSubmit(onRequestIssue)}
+                >
+                  {issueDraftMutation.isPending ? 'Issuing…' : 'Issue invoice'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={isBusy}
+                  className="w-full"
+                  onClick={handleSubmit((v) => editMutation.mutate(v))}
+                >
+                  {editMutation.isPending ? 'Saving…' : 'Save changes'}
+                </Button>
+              </div>
+            )}
+
+            {/* Edit on a locked (non-draft) invoice: save only */}
+            {isEdit && !isDraft && (
               <Button
                 type="button"
                 disabled={isBusy}
@@ -373,13 +432,16 @@ export default function InvoiceSheet({
               >
                 {editMutation.isPending ? 'Saving…' : 'Save changes'}
               </Button>
-            ) : (
+            )}
+
+            {/* Create: create+issue (primary) + save draft (secondary) */}
+            {!isEdit && (
               <div className="flex flex-col gap-2">
                 <Button
                   type="button"
                   disabled={isBusy}
                   className="w-full"
-                  onClick={handleSubmit(onCreateInvoice)}
+                  onClick={handleSubmit(onRequestIssue)}
                 >
                   {createAndIssueMutation.isPending ? 'Creating…' : 'Create invoice'}
                 </Button>
@@ -402,7 +464,7 @@ export default function InvoiceSheet({
       <Sheet open={confirmOpen} onOpenChange={setConfirmOpen}>
         <SheetContent side="bottom" aria-describedby="confirm-desc">
           <SheetHeader>
-            <SheetTitle>Create and lock this invoice?</SheetTitle>
+            <SheetTitle>{isDraft ? 'Issue and lock this invoice?' : 'Create and lock this invoice?'}</SheetTitle>
             <SheetDescription id="confirm-desc">
               {buildConfirmText(numberPreview)}{' '}A PDF will be generated.
             </SheetDescription>
@@ -411,15 +473,15 @@ export default function InvoiceSheet({
             <Button
               variant="outline"
               onClick={() => setConfirmOpen(false)}
-              disabled={createAndIssueMutation.isPending}
+              disabled={isIssuing}
             >
               Cancel
             </Button>
             <Button
               onClick={onConfirmIssue}
-              disabled={createAndIssueMutation.isPending}
+              disabled={isIssuing}
             >
-              {createAndIssueMutation.isPending ? 'Creating…' : 'Create invoice'}
+              {confirmButtonLabel}
             </Button>
           </SheetFooter>
         </SheetContent>

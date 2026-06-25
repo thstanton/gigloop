@@ -77,7 +77,10 @@ export function useChecklistActions(bookingId: string) {
     const pct = userProfile?.depositPercentage;
     if (fee && pct) {
       const amount = isDeposit ? (fee * pct) / 100 : fee * (1 - pct / 100);
-      actions.autoCreateInvoice({ isDeposit, amount: Math.round(amount * 100) / 100 });
+      // Land the user in the editable draft (with a visible path to issue) — no silent drafts.
+      actions.autoCreateInvoice({ isDeposit, amount: Math.round(amount * 100) / 100 }, (invoice) => {
+        setSearchParams({ sheet: 'invoice', invoiceId: invoice.id });
+      });
     } else {
       openCreateInvoice({ isDeposit });
     }
