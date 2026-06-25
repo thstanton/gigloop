@@ -410,6 +410,10 @@ export default function InvoiceSheet({
                 >
                   {issueDraftMutation.isPending ? 'Issuing…' : 'Issue invoice'}
                 </Button>
+                <p className="text-sm text-muted-foreground">
+                  Generates the PDF ready to send to your client. You won&apos;t be able to edit it
+                  after it&apos;s issued.
+                </p>
                 <Button
                   type="button"
                   variant="outline"
@@ -417,7 +421,7 @@ export default function InvoiceSheet({
                   className="w-full"
                   onClick={handleSubmit((v) => editMutation.mutate(v))}
                 >
-                  {editMutation.isPending ? 'Saving…' : 'Save changes'}
+                  {editMutation.isPending ? 'Saving…' : 'Save draft'}
                 </Button>
               </div>
             )}

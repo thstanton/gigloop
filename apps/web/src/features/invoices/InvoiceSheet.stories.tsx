@@ -97,7 +97,7 @@ export const EditMode: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement.ownerDocument.body);
     await expect(canvas.findByText('Edit Invoice')).resolves.toBeVisible();
-    await expect(canvas.findByText('Save changes')).resolves.toBeVisible();
+    await expect(canvas.findByText('Save draft')).resolves.toBeVisible();
   },
 };
 
@@ -109,7 +109,9 @@ export const EditModeDraftIssue: Story = {
     const issueButton = await canvas.findByRole('button', { name: 'Issue invoice' });
     await expect(issueButton).toBeVisible();
     // Both the issue and save paths are offered on a draft.
-    await expect(canvas.findByText('Save changes')).resolves.toBeVisible();
+    await expect(canvas.findByText('Save draft')).resolves.toBeVisible();
+    // The issue caption warns that issuing locks the invoice.
+    await expect(canvas.findByText(/won't be able to edit it/)).resolves.toBeVisible();
 
     // Issuing locks the invoice, so it must route through the confirmation step.
     await userEvent.click(issueButton);
