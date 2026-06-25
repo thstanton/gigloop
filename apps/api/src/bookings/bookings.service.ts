@@ -40,7 +40,7 @@ function resolveContractTemplate(items: Array<{ key: string | null }>): string {
     : 'contract_cover';
 }
 
-function deriveShortcut(
+export function deriveShortcut(
   rule: Record<string, unknown> | null,
   items: Array<{ key: string | null }>,
 ): { shortcutType?: string; shortcutTemplateType?: string } {

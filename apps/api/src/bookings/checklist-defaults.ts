@@ -118,6 +118,19 @@ export const CHECKLIST_DEFAULTS: ChecklistDefaultItem[] = [
     dueDateRule: { basis: 'bookingDate', offsetDays: -14 },
   },
   {
+    // The outbound send that pairs with create_balance_invoice (#586). Auto-completes when a
+    // balance_invoice_cover email is sent; until then it sits as an advisory READY reminder.
+    // Auto-completion is at DRAFT level (it depends on the create item's invoiceExists), which
+    // is acceptable for an advisory checklist.
+    key: 'send_balance_invoice',
+    label: 'Send balance invoice',
+    completedBy: 'USER',
+    dependsOn: ['create_balance_invoice'],
+    autoCompleteRule: { type: 'communicationSent', templateTypes: ['balance_invoice_cover'] },
+    requiredForStatus: 'READY',
+    dueDateRule: { basis: 'bookingDate', offsetDays: -14 },
+  },
+  {
     key: 'music_form_invite',
     label: 'Send music form invite',
     completedBy: 'USER',

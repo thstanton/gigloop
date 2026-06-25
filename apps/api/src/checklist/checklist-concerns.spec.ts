@@ -37,7 +37,7 @@ describe('checklist concern map', () => {
 
   it('groups the sends under People and the deal spine under Overview', () => {
     expect(keysForConcern('people').sort(alpha)).toEqual(
-      ['music_form_invite', 'send_contract', 'send_quote', 'send_thank_you'].sort(alpha),
+      ['music_form_invite', 'send_balance_invoice', 'send_contract', 'send_quote', 'send_thank_you'].sort(alpha),
     );
     expect(keysForConcern('venue')).toEqual(['add_venue']);
     expect(keysForConcern('itinerary')).toEqual(['build_itinerary']);
