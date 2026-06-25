@@ -543,7 +543,9 @@ export class BookingsService {
       }
     }
     await this.evaluator.evaluate(bookingId).catch(() => {});
-    return { success: true };
+    // Return the recomputed checklist (post-evaluate) so the client settles the
+    // toggle and its dependency cascade in one round-trip — no follow-up refetch.
+    return this.getChecklist(userId, bookingId);
   }
 
   async addChecklistItem(

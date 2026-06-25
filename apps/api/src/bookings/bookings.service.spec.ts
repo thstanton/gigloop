@@ -1227,6 +1227,7 @@ describe('BookingsService', () => {
       repo.findOne.mockResolvedValue(booking);
       repo.findChecklistItemById.mockResolvedValue({ id: 'i1', key: 'deposit_received' });
       checklistRepo.updateChecklistItemState.mockResolvedValue({ count: 1 });
+      repo.findChecklistItems.mockResolvedValue([]);
 
       await service.updateChecklistItem('u1', 'b1', 'i1', 'PENDING');
 
@@ -1238,6 +1239,7 @@ describe('BookingsService', () => {
       repo.findOne.mockResolvedValue(booking);
       repo.findChecklistItemById.mockResolvedValue({ id: 'i1', key: 'deposit_received' });
       checklistRepo.updateChecklistItemState.mockResolvedValue({ count: 1 });
+      repo.findChecklistItems.mockResolvedValue([]);
 
       await service.updateChecklistItem('u1', 'b1', 'i1', 'COMPLETE');
 
@@ -1249,11 +1251,48 @@ describe('BookingsService', () => {
       repo.findOne.mockResolvedValue(booking);
       repo.findChecklistItemById.mockResolvedValue({ id: 'i1', key: 'deposit_received' });
       checklistRepo.updateChecklistItemState.mockResolvedValue({ count: 1 });
+      repo.findChecklistItems.mockResolvedValue([]);
 
       await service.updateChecklistItem('u1', 'b1', 'i1', 'SKIPPED');
 
       expect(repo.clearDepositReceivedAt).not.toHaveBeenCalled();
       expect(repo.setDepositReceivedAt).not.toHaveBeenCalled();
+    });
+
+    it('returns the recomputed checklist (post-evaluate) so the toggle settles in one round-trip', async () => {
+      const callOrder: string[] = [];
+      repo.findOne.mockResolvedValue(booking);
+      repo.findChecklistItemById.mockResolvedValue({ id: 'i1', key: null });
+      checklistRepo.updateChecklistItemState.mockResolvedValue({ count: 1 });
+      evaluator.evaluate.mockImplementation(async () => {
+        callOrder.push('evaluate');
+      });
+      repo.findChecklistItems.mockImplementation(async () => {
+        callOrder.push('read');
+        return [
+          {
+            id: 'i1',
+            key: null,
+            label: 'Item',
+            state: 'COMPLETE',
+            order: 0,
+            dependsOn: [],
+            autoCompleteRule: null,
+            completedAt: new Date('2025-06-01T00:00:00.000Z'),
+            createdAt: new Date('2025-01-01T00:00:00.000Z'),
+            updatedAt: new Date('2025-01-02T00:00:00.000Z'),
+            dueDate: null,
+          },
+        ];
+      });
+
+      const result = await service.updateChecklistItem('u1', 'b1', 'i1', 'COMPLETE');
+
+      // evaluate() must run before the read so the returned array already reflects the cascade.
+      expect(callOrder).toEqual(['evaluate', 'read']);
+      expect(Array.isArray(result)).toBe(true);
+      expect(result).toHaveLength(1);
+      expect(result[0]).toMatchObject({ id: 'i1', state: 'COMPLETE', completedAt: '2025-06-01T00:00:00.000Z' });
     });
   });
 
