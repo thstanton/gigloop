@@ -344,10 +344,14 @@ item-as-user-facing-unit code. A lean child table keeps every column meaningful.
 contract item-clusters *collapse* into one goal + child steps (the `autoCompleteRule` from each
 old item moves onto its step).
 
-### One open sub-choice (author's call)
+### Sub-choice — RATIFIED: atomic-goals-stepless (pragmatic)
 
-**Atomic-goals-stepless (pragmatic, proposed) vs every-goal-has-≥1-step (pure-uniform).**
-Pragmatic: lower migration cost, no redundant rows, one `hasSteps?` branch in the evaluator.
-Uniform: every goal rolls up from ≥1 step → a single eval path (mildly cleaner for the
-registry/materialisation) and a stricter invariant, at the cost of a redundant step row per
-atomic goal and a heavier migration. Proposal leans **pragmatic**; not yet ratified.
+An atomic goal carries its own `autoCompleteRule` and **no step rows** (so today's flat items
+are already atomic goals — near-trivial migration, no redundant duplicate rows). A multi-step
+goal has child steps and rolls up (own rule null). The evaluator branches:
+`goal.steps.length ? rollUp(steps) : evaluate(goal.ownRule)`.
+
+Rejected: every-goal-has-≥1-step (pure-uniform) — a single eval path and stricter invariant,
+but it costs a redundant step row per atomic goal and a heavier migration for no behavioural
+gain. The difference is purity vs migration cost; both produce identical behaviour, so the
+cheaper, lower-disruption option wins.
