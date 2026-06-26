@@ -63,27 +63,32 @@ export function useChecklistActions(bookingId: string) {
     }
     const isDeposit = action === 'create_deposit_invoice';
     const invoiceType = isDeposit ? 'deposit' : 'balance';
-    const hasInvoiceType = invoices.some((inv) => inv.isDeposit === isDeposit && inv.status !== 'VOID');
+    const existing = invoices.find((inv) => inv.isDeposit === isDeposit && inv.status !== 'VOID');
 
-    if (hasInvoiceType) {
-      toast({
-        title: `A ${invoiceType} invoice already exists — void it before creating a new one`,
-        variant: 'destructive',
-      });
+    // A draft is the user's to finish — open it so they can issue it. An already-issued invoice
+    // is locked, so creating another means voiding the existing one first (ADR-0056).
+    if (existing) {
+      if (existing.status === 'DRAFT') {
+        setSearchParams({ sheet: 'invoice', invoiceId: existing.id });
+      } else {
+        toast({
+          title: `A ${invoiceType} invoice already exists — void it before creating a new one`,
+          variant: 'destructive',
+        });
+      }
       return;
     }
 
+    // No invoice yet: open the create sheet (nothing is persisted until the user saves or issues),
+    // prefilling the deposit/balance amount when the fee and deposit percentage are both known.
     const fee = booking?.fee ? parseFloat(booking.fee) : null;
     const pct = userProfile?.depositPercentage;
+    let amount: number | undefined;
     if (fee && pct) {
-      const amount = isDeposit ? (fee * pct) / 100 : fee * (1 - pct / 100);
-      // Land the user in the editable draft (with a visible path to issue) — no silent drafts.
-      actions.autoCreateInvoice({ isDeposit, amount: Math.round(amount * 100) / 100 }, (invoice) => {
-        setSearchParams({ sheet: 'invoice', invoiceId: invoice.id });
-      });
-    } else {
-      openCreateInvoice({ isDeposit });
+      const raw = isDeposit ? (fee * pct) / 100 : fee * (1 - pct / 100);
+      amount = Math.round(raw * 100) / 100;
     }
+    openCreateInvoice({ isDeposit, amount });
   }
 
   function handleMarkDone(key: 'mark_contract_signed' | 'mark_deposit_received') {

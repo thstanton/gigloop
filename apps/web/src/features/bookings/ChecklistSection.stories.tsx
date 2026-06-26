@@ -32,7 +32,7 @@ const pendingItems: ChecklistItem[] = [
   item({ label: 'Create contract', key: 'create_contract', shortcutType: 'create_contract', requiredForStatus: 'CONFIRMED' }),
   item({ label: 'Send contract', key: 'send_contract', shortcutType: 'send_email', shortcutTemplateType: 'contract_cover', requiredForStatus: 'CONFIRMED' }),
   item({ label: 'Contract signed', key: 'contract_signed', shortcutType: 'mark_contract_signed', requiredForStatus: 'CONFIRMED' }),
-  item({ label: 'Create deposit invoice', key: 'create_deposit_invoice', shortcutType: 'create_deposit_invoice', requiredForStatus: 'CONFIRMED' }),
+  item({ label: 'Issue deposit invoice', key: 'create_deposit_invoice', shortcutType: 'create_deposit_invoice', requiredForStatus: 'CONFIRMED' }),
   item({ label: 'Deposit received', key: 'deposit_received', shortcutType: 'mark_deposit_received', requiredForStatus: 'CONFIRMED' }),
 ];
 
@@ -124,7 +124,7 @@ export const ShowAllToggle: Story = {
       item({ label: 'Send quote', requiredForStatus: 'PROVISIONAL' }),
       item({ label: 'Create contract', requiredForStatus: 'CONFIRMED' }),
       item({ label: 'Send contract', requiredForStatus: 'CONFIRMED' }),
-      item({ label: 'Create balance invoice', requiredForStatus: 'READY' }),
+      item({ label: 'Issue balance invoice', requiredForStatus: 'READY' }),
       item({ label: 'Send thank you', key: 'send_thank_you', requiredForStatus: 'COMPLETE' }),
     ],
     bookingStatus: 'PROVISIONAL',
@@ -133,7 +133,7 @@ export const ShowAllToggle: Story = {
     await expect(canvas.getByText('Show all')).toBeVisible();
     await userEvent.click(canvas.getByText('Show all'));
     await expect(canvas.getByText('Show fewer')).toBeVisible();
-    await expect(canvas.getByText('Create balance invoice')).toBeVisible();
+    await expect(canvas.getByText('Issue balance invoice')).toBeVisible();
   },
 };
 

@@ -39,7 +39,7 @@ export const CHECKLIST_DEFAULTS: ChecklistDefaultItem[] = [
   },
   {
     key: 'create_deposit_invoice',
-    label: 'Create deposit invoice',
+    label: 'Issue deposit invoice',
     completedBy: 'USER',
     dependsOn: ['confirm_quote'],
     autoCompleteRule: { type: 'invoiceExists', isDeposit: true },
@@ -110,7 +110,7 @@ export const CHECKLIST_DEFAULTS: ChecklistDefaultItem[] = [
   },
   {
     key: 'create_balance_invoice',
-    label: 'Create balance invoice',
+    label: 'Issue balance invoice',
     completedBy: 'USER',
     dependsOn: [],
     autoCompleteRule: { type: 'invoiceExists', isDeposit: false },

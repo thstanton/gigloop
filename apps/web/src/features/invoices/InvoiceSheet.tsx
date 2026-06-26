@@ -8,11 +8,17 @@ import { Plus, Trash2 } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
-  SheetDescription,
-  SheetFooter,
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import {
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+} from '@/components/ui/responsive-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { apiGet, apiPost, apiPatch, apiDelete } from '@/lib/api';
@@ -281,9 +287,8 @@ export default function InvoiceSheet({
 
   const showDepositToggle = !isEdit && !hasDepositInvoice;
   const isIssuing = createAndIssueMutation.isPending || issueDraftMutation.isPending;
-  let confirmButtonLabel: string;
-  if (isDraft) confirmButtonLabel = issueDraftMutation.isPending ? 'Issuing…' : 'Issue invoice';
-  else confirmButtonLabel = createAndIssueMutation.isPending ? 'Creating…' : 'Create invoice';
+  // Issue is the single committing verb across create and draft-edit (ADR-0056).
+  const confirmButtonLabel = isIssuing ? 'Issuing…' : 'Issue invoice';
   const isBusy =
     saveDraftMutation.isPending ||
     editMutation.isPending ||
@@ -438,7 +443,8 @@ export default function InvoiceSheet({
               </Button>
             )}
 
-            {/* Create: create+issue (primary) + save draft (secondary) */}
+            {/* Create: issue (primary) + save draft (secondary) — same verbs as the draft-edit
+                footer (ADR-0056). Issue here creates + issues in one step. */}
             {!isEdit && (
               <div className="flex flex-col gap-2">
                 <Button
@@ -447,8 +453,12 @@ export default function InvoiceSheet({
                   className="w-full"
                   onClick={handleSubmit(onRequestIssue)}
                 >
-                  {createAndIssueMutation.isPending ? 'Creating…' : 'Create invoice'}
+                  {createAndIssueMutation.isPending ? 'Issuing…' : 'Issue invoice'}
                 </Button>
+                <p className="text-sm text-muted-foreground">
+                  Generates the PDF ready to send to your client. You won&apos;t be able to edit it
+                  after it&apos;s issued.
+                </p>
                 <Button
                   type="button"
                   variant="outline"
@@ -464,16 +474,17 @@ export default function InvoiceSheet({
         </SheetContent>
       </Sheet>
 
-      {/* Issue confirmation: warns that issuing is irreversible, states the concrete number */}
-      <Sheet open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <SheetContent side="bottom" aria-describedby="confirm-desc">
-          <SheetHeader>
-            <SheetTitle>{isDraft ? 'Issue and lock this invoice?' : 'Create and lock this invoice?'}</SheetTitle>
-            <SheetDescription id="confirm-desc">
+      {/* Issue confirmation: warns that issuing is irreversible, states the concrete number.
+          ResponsiveDialog (ADR-0012) — centred dialog on desktop, bottom sheet on mobile. */}
+      <ResponsiveDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <ResponsiveDialogContent aria-describedby="confirm-desc">
+          <ResponsiveDialogHeader>
+            <ResponsiveDialogTitle>Issue and lock this invoice?</ResponsiveDialogTitle>
+            <ResponsiveDialogDescription id="confirm-desc">
               {buildConfirmText(numberPreview)}{' '}A PDF will be generated.
-            </SheetDescription>
-          </SheetHeader>
-          <SheetFooter className="mt-4">
+            </ResponsiveDialogDescription>
+          </ResponsiveDialogHeader>
+          <ResponsiveDialogFooter className="mt-4">
             <Button
               variant="outline"
               onClick={() => setConfirmOpen(false)}
@@ -487,9 +498,9 @@ export default function InvoiceSheet({
             >
               {confirmButtonLabel}
             </Button>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
+          </ResponsiveDialogFooter>
+        </ResponsiveDialogContent>
+      </ResponsiveDialog>
     </>
   );
 }
