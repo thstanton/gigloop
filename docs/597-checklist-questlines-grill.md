@@ -284,12 +284,70 @@ grill → ADR").
   decoupling + the digest cron bring it anyway). Net: adds bounded write/scheduled cost,
   removes the dominant cost (full synchronous recompute per toggle that #587 fought).
 
-## Unresolved — the data-model fork (next session starts here)
+## Proposed data-model resolution
 
-Is the Goal a **new table** (steps stay `BookingChecklistItem` + `goalId`) or a
-**self-referential `BookingChecklistItem`** (a goal is a top-level item — *leaf* when
-atomic, *parent* when multi-step; steps are its children)? Lean: **reuse**, for the
-efficiency/extensibility aim (one table, the existing evaluator/auto-complete machinery, a
-goal's state rolls up from its steps) — but it carries a polymorphism cost (some fields
-meaningful only for goals, some only for steps; the evaluator gains a roll-up path) that
-must be weighed honestly. **Not decided.**
+**Steps are PERSISTED rows, not derived/computed (decided).** Same rationale ADR-0016 used
+to kill the original computed checklist — derived state gave too little control when the user
+deviates — plus two reasons specific to this model: (a) follow-ups have **no canonical source**
+to derive from ("chase the client" is backed by no entity); (b) we need per-step override,
+SKIP, and "when did it happen" history. The registry/inverted-index (eval section) is an
+*indexing* optimisation over stored rows — it must **not** be misread as a licence to compute
+steps at read time. Milestone steps *shadow* canonical entity state (auto-complete is *written*
+on the entity event, e.g. `invoice.status → ISSUED`); precondition/follow-up steps are pure
+checklist state. Authoritative + stored, never derived-on-read.
+
+**Two tables (proposed).** Keep the existing `BookingChecklistItem` as the **goal** (the
+user-facing row — minimal disruption to surfacing, the per-concern control, DTOs) and add a
+lean child table for steps:
+
+```
+BookingChecklistItem   // = the GOAL (evolves the existing table)
+  id, userId, bookingId, createdAt, updatedAt   // hard-rule fields, unchanged
+  key                String?            // null = custom goal
+  label              String
+  concern            String?            // ADR-0052 section
+  requiredForStatus  BookingStatus?     // single stage this goal serves (decision 4)
+  order              Int
+  state              ChecklistState     // materialised: roll-up of steps, OR own rule if atomic
+  autoCompleteRule   Json?              // present ONLY for atomic goals; null once steps exist
+  dueDate            DateTime?
+  // dependsOn DROPPED — intra-goal ordering → step.order; inter-goal is soft/stage
+  // owner is always the musician; per-actor routing lives on the step
+
+BookingChecklistStep   // NEW — children of a multi-step goal
+  id, userId, bookingId, createdAt, updatedAt
+  goalId             String             // FK → BookingChecklistItem.id
+  key                String?            // 'issue', 'send', 'chase'
+  label              String
+  order              Int                // intrinsic sequence within the goal
+  role               ACTION | AWAITED   // decision 9 — continuation vs follow-up
+  kind               MILESTONE | PRECONDITION | FOLLOWUP   // decision 8
+  state              ChecklistState
+  completedBy        USER | CUSTOMER | BAND_MEMBER         // routes the action
+  autoCompleteRule   Json?              // the predicate (registry-referenced)
+  dueDateRule        Json?              // event-anchored (sibling completedAt + N) for follow-ups
+```
+
+**Atomic goals are stepless** — they carry their own `autoCompleteRule` and no step rows, so
+they are *unchanged from today* ("Add the venue" stays one row, no redundant duplicate step).
+**Multi-step goals** have child steps and roll up (goal `autoCompleteRule` null). Evaluator
+branches trivially: `goal.steps.length ? rollUp(steps) : evaluate(goal.ownRule)`. The goal row
+holds the *materialised* roll-up + active-step pointer (cheap surfacing reads); step rows are
+the predicate source the inverted input-index hits — goal = summary, steps = granular source.
+
+**Why two tables over self-referential `BookingChecklistItem` + `parentId`:** steps have a
+genuinely different shape (role/kind, no concern/`requiredForStatus`, never user-toggled, fold
+away) and lifecycle; a `parentId` makes the item heavily polymorphic and muddies the existing
+item-as-user-facing-unit code. A lean child table keeps every column meaningful.
+
+**Migration (bounded):** most existing items become atomic goals untouched; the invoice and
+contract item-clusters *collapse* into one goal + child steps (the `autoCompleteRule` from each
+old item moves onto its step).
+
+### One open sub-choice (author's call)
+
+**Atomic-goals-stepless (pragmatic, proposed) vs every-goal-has-≥1-step (pure-uniform).**
+Pragmatic: lower migration cost, no redundant rows, one `hasSteps?` branch in the evaluator.
+Uniform: every goal rolls up from ≥1 step → a single eval path (mildly cleaner for the
+registry/materialisation) and a stricter invariant, at the cost of a redundant step row per
+atomic goal and a heavier migration. Proposal leans **pragmatic**; not yet ratified.
