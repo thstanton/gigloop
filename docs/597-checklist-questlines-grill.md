@@ -248,6 +248,42 @@ user's benefit of "seeing where they're at."
   simplified; the unbuilt left-behind-task dialog (`:366`) retired (solved spatially).
 - **Detail-page** aggressive hide + "Show all" → collapse/expand quest log.
 
+## Evaluation architecture (added at grill close — implications for the parked H1 redesign)
+
+The model has direct implications for evaluator efficiency, and reframes the parked
+`evaluate()` redesign (audit **H1**, parked by #584 and #587 for "its own profiling →
+grill → ADR").
+
+- **The #584 quick-wins (#588–593) are orthogonal** — over-fetch / over-invalidation /
+  the `enabled: isLoaded` gate; none touch checklist evaluation. Stay valid as-is. The
+  one checklist-touching pattern (#587's recomputed-checklist return + #590's
+  `setQueryData`) **refines** rather than conflicts: a toggle's blast radius is now **one
+  goal**, so return/cache the affected *goal*, not the whole checklist (smaller payload,
+  narrower invalidation).
+- **The model supplies the containment H1 has been missing.** The flat model can't bound
+  what an event affects (`dependsOn` is arbitrary keys), so `evaluate()` defensively
+  recomputes everything synchronously in the request path — that *is* the H1 problem. The
+  goal model bounds it: cascades are **goal-local** (intra-goal ordering; inter-goal is
+  soft, no hard locks), goal state is a **roll-up** (materialisable for cheap reads), and
+  predicates are already per-step and declarative. **So H1 and this grill are the same
+  architecture from two ends — sequence the model first / fold them.** Running H1 on the
+  flat model hand-tunes a structure about to be replaced, and its hardest sub-problem
+  (bounding re-evaluation) is dissolved by the containment, not solved by profiling.
+- **The registry the model produces:** a **predicate registry** (`stepKey → { predicate,
+  inputs[], role: action|awaited, surfaceWhen, resolveWhen }`) — the reification of
+  "step = config of one mechanism", cleanly splitting the *system predicate catalog*
+  (static, shared) from *per-booking instances* (materialised state) and *per-user
+  defaults* (selected goals). An **inverted index on `inputs`** turns a business event
+  into an O(1) lookup of affected predicates → re-evaluate only those steps → roll up only
+  their goals. The **same index serves the temporal path**: a follow-up cron tick is a
+  targeted query ("`awaited` steps whose event-anchored due has elapsed"), not a full
+  sweep (rides the existing digest cron).
+- **Honest new costs:** roll-up computation (bounded); **materialised goal state** (the one
+  new discipline — a pure function of its steps, recomputed on any step change, blast-radius
+  one goal); a **scheduled eval path** for follow-ups (new surface area, but H1's async
+  decoupling + the digest cron bring it anyway). Net: adds bounded write/scheduled cost,
+  removes the dominant cost (full synchronous recompute per toggle that #587 fought).
+
 ## Unresolved — the data-model fork (next session starts here)
 
 Is the Goal a **new table** (steps stay `BookingChecklistItem` + `goalId`) or a
