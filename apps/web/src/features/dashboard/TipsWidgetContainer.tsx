@@ -29,8 +29,8 @@ function buildSnapshot(
 function useTipRotationSeed(): number {
   const [seed] = useState(() => {
     try {
-      const KEY = 'gigman:tipSeed';
-      const SESSION = 'gigman:tipSeedBumped';
+      const KEY = 'gigloop:tipSeed';
+      const SESSION = 'gigloop:tipSeedBumped';
       let n = Number(window.localStorage.getItem(KEY) ?? '0') || 0;
       if (!window.sessionStorage.getItem(SESSION)) {
         n += 1;

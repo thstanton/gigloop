@@ -8,6 +8,7 @@ const config: Config = {
         sans: ['Commissioner', 'system-ui', 'sans-serif'],
         serif: ['Playfair Display', 'serif'],
         display: ['Playfair Display', 'serif'],
+        wordmark: ['Major Mono Display', 'monospace'],
       },
       fontSize: {
         xs: ['0.75rem', { lineHeight: '1.4' }],

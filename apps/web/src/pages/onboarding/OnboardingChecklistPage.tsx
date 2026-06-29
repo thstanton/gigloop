@@ -64,7 +64,7 @@ export default function OnboardingChecklistPage() {
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Booking checklist defaults"
-        subheading="These are the tasks GigMan will track for every booking. You can customise them fully in Settings → Booking defaults."
+        subheading="These are the tasks GigLoop will track for every booking. You can customise them fully in Settings → Booking defaults."
         className="mb-0"
       />
 

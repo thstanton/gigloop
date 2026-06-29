@@ -9,7 +9,7 @@ export function LaunchHero() {
       <div className="flex flex-col items-center gap-6 max-w-sm w-full text-center">
         <div className="flex items-center gap-2 text-primary">
           <Music2 className="size-8" />
-          <span className="font-display text-3xl font-semibold text-foreground">GigMan</span>
+          <span className="font-wordmark text-3xl font-semibold text-foreground">GigLoop</span>
         </div>
 
         <p className="text-base text-muted">

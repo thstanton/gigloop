@@ -216,7 +216,7 @@ export function ChecklistStep({
     <div className="px-6 py-8 max-w-3xl mx-auto">
       <PageHeader title="Reminders" onBack={onBack} backLabel="Back" />
       <p className="text-sm text-muted -mt-4 mb-6">
-        Choose what GigMan reminds you about for this booking. Everything's on by default — turn off
+        Choose what GigLoop reminds you about for this booking. Everything's on by default — turn off
         anything you don't need. You can change these any time on the booking.
       </p>
 

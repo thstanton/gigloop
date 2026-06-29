@@ -7,7 +7,7 @@ import type { TipDisplay } from './tipEngine';
 
 const sampleTip: TipDisplay = {
   id: 'home-address-missing',
-  text: 'Add your home address so GigMan can show travel times to venues',
+  text: 'Add your home address so GigLoop can show travel times to venues',
   href: '/admin/settings',
 };
 

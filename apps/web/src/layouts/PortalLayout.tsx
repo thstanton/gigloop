@@ -60,7 +60,7 @@ export function PortalLayout({ profile, children, wide = false, hero }: PortalLa
       </main>
 
       <footer className={`mt-16 px-6 py-6 text-center text-xs ${bold ? 'text-white/25' : 'text-[#c4bdb4]'}`}>
-        Powered by GigMan
+        Powered by GigLoop
       </footer>
     </div>
   );

@@ -24,7 +24,7 @@ async function bootstrap() {
   );
 
   const config = new DocumentBuilder()
-    .setTitle('GigMan API')
+    .setTitle('GigLoop API')
     .setDescription('CRM for musicians — all endpoints require a Clerk JWT bearer token')
     .setVersion('1.0')
     .addBearerAuth(
@@ -45,7 +45,7 @@ async function bootstrap() {
     res.send(`<!doctype html>
 <html>
   <head>
-    <title>GigMan API Reference</title>
+    <title>GigLoop API Reference</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
   </head>

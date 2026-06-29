@@ -4,7 +4,7 @@ import { formatDateBadge } from '@/lib/formatters';
 /**
  * A tear-off calendar page showing a booking's day + month, used as a leading
  * visual anchor wherever a booking is referenced. Dates are first-class in
- * GigMan — see the "date as first-class anchor" design principle in CONTEXT.md.
+ * GigLoop — see the "date as first-class anchor" design principle in CONTEXT.md.
  *
  * Purely presentational: takes an ISO date and a size, nothing booking-aware.
  * The year is deliberately NOT shown here. Time is never shown. Weekday appears

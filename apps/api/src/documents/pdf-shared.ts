@@ -45,7 +45,7 @@ export function buildPdfHeader(data: PdfHeaderData, brandColour: string): Conten
 
 export function buildPdfFooter(): (currentPage: number, pageCount: number) => Content {
   return () => ({
-    text: 'Powered by GigMan',
+    text: 'Powered by GigLoop',
     alignment: 'center',
     fontSize: 8,
     color: '#999999',

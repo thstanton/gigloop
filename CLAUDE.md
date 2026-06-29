@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-GigMan — a CRM for musicians. Greenfield monorepo; SPEC.md is the source of truth for architecture and requirements. For where the product is heading next, see `docs/north-star.md` — the directional (non-binding) statement of the Wave 2 (P2) feature direction.
+GigLoop — a CRM for musicians. Greenfield monorepo; SPEC.md is the source of truth for architecture and requirements. For where the product is heading next, see `docs/north-star.md` — the directional (non-binding) statement of the Wave 2 (P2) feature direction.
 
 ## Stack
 
@@ -25,7 +25,7 @@ bun run dev          # start both apps in dev mode
 bun run build        # build all workspaces
 bun run lint         # lint all workspaces
 bun run test         # run all tests
-bun --filter @gigman/api run test -- --testPathPattern=<file>  # run single test file
+bun --filter @gigloop/api run test -- --testPathPattern=<file>  # run single test file
 ```
 
 ## Hard Rules (from SPEC.md — never violate)
@@ -253,7 +253,7 @@ The feature branch persists across sessions; my context does not. "Too big" mean
 
 ## Mobile-first UI
 
-GigMan is used on phones. Design every screen for 375px first, then enhance for larger widths.
+GigLoop is used on phones. Design every screen for 375px first, then enhance for larger widths.
 
 **Layout**
 - AppShell provides a fixed top bar (h-14) + fixed bottom tab bar (h-16) on mobile. Content gets `pt-14 pb-16` automatically — never add extra spacing to account for these bars inside page components.
@@ -317,7 +317,7 @@ Issues are tracked in GitHub Issues. See `docs/agents/issue-tracker.md`.
 
 ### Issue authoring (planning gate)
 
-Non-trivial features are planned into issues before any code. `/to-issues` and `/grill-with-docs` are generic global skills; the GigMan-specific requirements their output must meet live in `docs/agents/issue-authoring.md`. **When authoring issues for this repo, conform to that spec and get the human's approval before coding.**
+Non-trivial features are planned into issues before any code. `/to-issues` and `/grill-with-docs` are generic global skills; the GigLoop-specific requirements their output must meet live in `docs/agents/issue-authoring.md`. **When authoring issues for this repo, conform to that spec and get the human's approval before coding.**
 
 ### Strategic shaping (North Star)
 

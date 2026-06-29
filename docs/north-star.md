@@ -1,8 +1,8 @@
-# GigMan — Wave 2 (P2) North Star
+# GigLoop — Wave 2 (P2) North Star
 
 ## How to use this doc
 
-This is the agreed **direction** for the next wave of GigMan features — where we are heading after
+This is the agreed **direction** for the next wave of GigLoop features — where we are heading after
 the MVP, so that individual feature designs can keep it in mind and **plumb things forward in a way
 that supports what's coming**.
 
@@ -33,7 +33,7 @@ the musician's business/brand profile.
 
 ## The North Star
 
-GigMan's core differentiator is already stated in `CONTEXT.md`: *"a smart management system that
+GigLoop's core differentiator is already stated in `CONTEXT.md`: *"a smart management system that
 surfaces the right action at the right time, rather than a passive record-keeper the musician has to
 manually interrogate."* P1 got the data *in* and managed individual bookings well. **Wave 2's
 throughline is putting that data to work** — turning a record store into an active asset.
@@ -48,7 +48,7 @@ Each of the four pillars serves that one story from a different angle:
   on the gig.
 - **AI assistant** — *find* the data faster, by asking for it in plain language.
 
-Each makes GigMan more of a proactive partner and less of a passive ledger.
+Each makes GigLoop more of a proactive partner and less of a passive ledger.
 
 ## The four pillars
 
@@ -171,9 +171,9 @@ refines it against the live user input.
 ### 3. Collaboration & band members
 
 **What.** Band-member portals, sharing booking logistics with the players on a gig, and multi-person
-gigs — expanding GigMan from a solo-musician tool toward ensemble use.
+gigs — expanding GigLoop from a solo-musician tool toward ensemble use.
 
-**Why it matters.** Many of the musicians GigMan serves lead bands; coordinating the players is real
+**Why it matters.** Many of the musicians GigLoop serves lead bands; coordinating the players is real
 work the app doesn't yet touch.
 
 **Already plumbed for it.** Several hooks already anticipate this: `BookingChecklistItem.completedBy`
@@ -217,7 +217,7 @@ model.
   `PublicProfile` was reserved in ADR-0015 for any band-specific overrides). What the portal shows:
   booking date/time/venue, logistics entries where `shareWithBand: true` (already stored per entry —
   ADR-0034), the PerformanceSets running order, and the member's own instrument/role. A single "I
-  confirm I'm available" action updates their status in GigMan. The portal is **read-only beyond
+  confirm I'm available" action updates their status in GigLoop. The portal is **read-only beyond
   confirmation** in v1.
 
 - **Checklist integration: the BAND_MEMBER actor activates.** `BookingChecklistItem.completedBy:
@@ -257,7 +257,7 @@ model.
 - **Calendar: .ics attachment as the universal bridge.** The band member invite email (via Resend;
   a `band_invite` built-in template) includes a `.ics` calendar attachment: event date/time, venue
   address, and a link to their portal. This lands in the dep's existing calendar workflow with zero
-  friction — no account, no app. A separate iCal feed for the *organiser* (so their own GigMan
+  friction — no account, no app. A separate iCal feed for the *organiser* (so their own GigLoop
   bookings appear in Google Calendar / Apple Calendar / Outlook) is a related but distinct feature.
 
 - **Customer insight: musicians operate in WhatsApp.** Deps are resistant to adopting new tools and
@@ -269,12 +269,12 @@ model.
   two-way WhatsApp confirmation is high complexity and not in near-term scope.
 
 - **Network effect principle: the booking as a multi-stakeholder event.** Every band member is a
-  potential future GigMan user — many deps lead their own bands; the band member portal is a product
-  demo and should be polished accordingly. Looking further ahead: if a dep signs up to GigMan, their
+  potential future GigLoop user — many deps lead their own bands; the band member portal is a product
+  demo and should be polished accordingly. Looking further ahead: if a dep signs up to GigLoop, their
   email address is the natural link to Contact records where they are already listed as a band member
   on other users' bookings. The shared layer defined here — logistics with `shareWithBand: true`, the
   running order, `BookingBandMember.sessionFee` — is the foundation for future **authenticated
-  cross-user visibility**: a dep's GigMan account surfacing gigs they're part of alongside gigs they
+  cross-user visibility**: a dep's GigLoop account surfacing gigs they're part of alongside gigs they
   organise. The full implications (GDPR, consent model, cross-tenant read access architecture) are
   not designed here and will need their own ADR(s). **The design principle for now:** model band
   member data with a clear shared / organiser-only distinction from the start, so this future can be
