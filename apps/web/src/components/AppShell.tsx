@@ -201,7 +201,7 @@ function Sidebar() {
 function DesktopTopBar({ businessName, isLoading }: { businessName: string; isLoading: boolean }) {
   return (
     <header className="hidden md:flex fixed top-0 inset-x-0 h-14 bg-chrome items-center px-6 z-30">
-      <span className="text-xl font-display font-semibold text-chrome-foreground tracking-wide">GigMan</span>
+      <span className="text-2xl font-semibold text-chrome-foreground tracking-wide" style={{ fontFamily: "'Major Mono Display', monospace" }}>GigLoop</span>
       <div className="ml-auto">
         {isLoading
           ? <div className="h-3 w-28 bg-chrome-muted/40 rounded animate-pulse" />
@@ -217,7 +217,7 @@ function DesktopTopBar({ businessName, isLoading }: { businessName: string; isLo
 function MobileTopBar() {
   return (
     <header className="md:hidden fixed top-0 inset-x-0 h-14 bg-chrome flex items-center px-4 z-20">
-      <span className="text-sm font-display font-semibold text-chrome-foreground tracking-wide">GigMan</span>
+      <span className="text-base font-semibold text-chrome-foreground tracking-wide" style={{ fontFamily: "'Major Mono Display', monospace" }}>GigLoop</span>
     </header>
   );
 }
