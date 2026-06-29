@@ -47,29 +47,54 @@ function completeModeForRule(rule: AutoCompleteRule): CompleteMode {
   return 'ACTION';
 }
 
+/** Build one catalog entry from a rule, with an explicit kind/completeMode override
+ *  (a step supplies its own; an atomic goal derives completeMode from the rule). */
+function entryForRule(
+  rule: AutoCompleteRule,
+  kind: StepKind,
+  completeMode: CompleteMode,
+): PredicateEntry {
+  return {
+    predicate: (ctx: BookingContext) => evaluateRuleState(rule, ctx),
+    inputs: inputsForRule(rule),
+    kind,
+    completeMode,
+    rule,
+  } satisfies PredicateEntry;
+}
+
 /**
- * The static predicate catalog (ADR-0057): `stepKey → { predicate, inputs, kind,
+ * The static predicate catalog (ADR-0057): `key → { predicate, inputs, kind,
  * completeMode }`. Built from the system template's auto-completing keys, so the
  * catalog and the seeded rules can never disagree. This splits the *shared static
  * catalog* (here) from *per-booking step instances* (materialised state on rows)
- * and *per-user defaults* (which goals are selected). v1 entries are all MILESTONE.
+ * and *per-user defaults* (which goals are selected).
  *
- * Manual keys (no autoCompleteRule — `confirm_quote`, `play_the_gig`) have no
- * predicate and are absent: they are atomic goals the musician ticks by hand.
+ * A multi-step goal contributes one entry per step (keyed by the step's unique
+ * template key, with the step's own kind/completeMode); an atomic goal contributes
+ * one entry under its own key. The goal row of a multi-step goal carries no rule and
+ * so is absent — its state is the roll-up of its steps. Manual keys (no rule —
+ * `confirm_quote`, `play_the_gig`) are likewise absent: the musician ticks them.
+ *
+ * Step keys must be globally unique across all goals (a flat record cannot hold two
+ * `create` keys) — hence steps reuse the unique flat-template keys (`create_contract`,
+ * `send_contract`, …), never bare verbs.
  */
 export const STEP_PREDICATES: Record<string, PredicateEntry> = Object.fromEntries(
-  CHECKLIST_DEFAULTS.filter((d) => d.autoCompleteRule != null).map((d) => {
-    const rule = d.autoCompleteRule as unknown as AutoCompleteRule;
-    return [
-      d.key,
-      {
-        predicate: (ctx: BookingContext) => evaluateRuleState(rule, ctx),
-        inputs: inputsForRule(rule),
-        kind: 'MILESTONE' as const,
-        completeMode: completeModeForRule(rule),
-        rule,
-      } satisfies PredicateEntry,
-    ];
+  CHECKLIST_DEFAULTS.flatMap((d) => {
+    if (d.steps && d.steps.length > 0) {
+      return d.steps
+        .filter((s) => s.autoCompleteRule != null)
+        .map((s) => {
+          const rule = s.autoCompleteRule as unknown as AutoCompleteRule;
+          return [s.key, entryForRule(rule, s.kind, s.completeMode)] as const;
+        });
+    }
+    if (d.autoCompleteRule != null) {
+      const rule = d.autoCompleteRule as unknown as AutoCompleteRule;
+      return [[d.key, entryForRule(rule, 'MILESTONE', completeModeForRule(rule))] as const];
+    }
+    return [];
   }),
 );
 

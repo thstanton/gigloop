@@ -3,13 +3,13 @@ import { ChecklistRepository } from './checklist.repository';
 
 type MockRepo = {
   findItemsWithContext: jest.Mock;
-  updateItemStates: jest.Mock;
+  applyStateUpdates: jest.Mock;
 };
 
 function makeRepo(): MockRepo {
   return {
     findItemsWithContext: jest.fn(),
-    updateItemStates: jest.fn().mockResolvedValue(undefined),
+    applyStateUpdates: jest.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -55,13 +55,13 @@ describe('ChecklistEvaluatorService', () => {
   it('does nothing when booking not found', async () => {
     repo.findItemsWithContext.mockResolvedValue({ items: [], booking: null });
     await service.evaluate('b1');
-    expect(repo.updateItemStates).not.toHaveBeenCalled();
+    expect(repo.applyStateUpdates).not.toHaveBeenCalled();
   });
 
   it('does nothing when no items', async () => {
     repo.findItemsWithContext.mockResolvedValue({ items: [], booking: makeBooking() });
     await service.evaluate('b1');
-    expect(repo.updateItemStates).not.toHaveBeenCalled();
+    expect(repo.applyStateUpdates).not.toHaveBeenCalled();
   });
 
   describe('communicationSent rule', () => {
@@ -76,9 +76,9 @@ describe('ChecklistEvaluatorService', () => {
 
       await service.evaluate('b1');
 
-      expect(repo.updateItemStates).toHaveBeenCalledWith([
+      expect(repo.applyStateUpdates).toHaveBeenCalledWith([
         expect.objectContaining({ id: 'ci1', state: 'COMPLETE' }),
-      ]);
+      ], []);
     });
 
     it('transitions PENDING → FAILED when last matching communication FAILED', async () => {
@@ -92,9 +92,9 @@ describe('ChecklistEvaluatorService', () => {
 
       await service.evaluate('b1');
 
-      expect(repo.updateItemStates).toHaveBeenCalledWith([
+      expect(repo.applyStateUpdates).toHaveBeenCalledWith([
         expect.objectContaining({ id: 'ci1', state: 'FAILED' }),
-      ]);
+      ], []);
     });
 
     it('transitions FAILED → COMPLETE when retry succeeds (SENT after FAILED)', async () => {
@@ -112,9 +112,9 @@ describe('ChecklistEvaluatorService', () => {
 
       await service.evaluate('b1');
 
-      expect(repo.updateItemStates).toHaveBeenCalledWith([
+      expect(repo.applyStateUpdates).toHaveBeenCalledWith([
         expect.objectContaining({ id: 'ci1', state: 'COMPLETE' }),
-      ]);
+      ], []);
     });
 
     it('does not match communication of different template type', async () => {
@@ -128,7 +128,7 @@ describe('ChecklistEvaluatorService', () => {
 
       await service.evaluate('b1');
 
-      expect(repo.updateItemStates).not.toHaveBeenCalled();
+      expect(repo.applyStateUpdates).not.toHaveBeenCalled();
     });
   });
 
@@ -148,9 +148,9 @@ describe('ChecklistEvaluatorService', () => {
 
       await service.evaluate('b1');
 
-      expect(repo.updateItemStates).toHaveBeenCalledWith([
+      expect(repo.applyStateUpdates).toHaveBeenCalledWith([
         expect.objectContaining({ id: 'ci-venue', state: 'COMPLETE' }),
-      ]);
+      ], []);
     });
 
     it('stays PENDING when venueId is unset', async () => {
@@ -160,7 +160,7 @@ describe('ChecklistEvaluatorService', () => {
 
       await service.evaluate('b1');
 
-      expect(repo.updateItemStates).not.toHaveBeenCalled();
+      expect(repo.applyStateUpdates).not.toHaveBeenCalled();
     });
 
     it('does not regress an already-COMPLETE item when venueId is later cleared', async () => {
@@ -172,7 +172,7 @@ describe('ChecklistEvaluatorService', () => {
 
       await service.evaluate('b1');
 
-      expect(repo.updateItemStates).not.toHaveBeenCalled();
+      expect(repo.applyStateUpdates).not.toHaveBeenCalled();
     });
   });
 
@@ -192,9 +192,9 @@ describe('ChecklistEvaluatorService', () => {
 
       await service.evaluate('b1');
 
-      expect(repo.updateItemStates).toHaveBeenCalledWith([
+      expect(repo.applyStateUpdates).toHaveBeenCalledWith([
         expect.objectContaining({ id: 'ci-itinerary', state: 'COMPLETE' }),
-      ]);
+      ], []);
     });
 
     it('transitions PENDING → COMPLETE when sets + all time anchors exist (set state)', async () => {
@@ -209,9 +209,9 @@ describe('ChecklistEvaluatorService', () => {
 
       await service.evaluate('b1');
 
-      expect(repo.updateItemStates).toHaveBeenCalledWith([
+      expect(repo.applyStateUpdates).toHaveBeenCalledWith([
         expect.objectContaining({ id: 'ci-itinerary', state: 'COMPLETE' }),
-      ]);
+      ], []);
     });
 
     it('stays PENDING when no sets exist', async () => {
@@ -221,7 +221,7 @@ describe('ChecklistEvaluatorService', () => {
 
       await service.evaluate('b1');
 
-      expect(repo.updateItemStates).not.toHaveBeenCalled();
+      expect(repo.applyStateUpdates).not.toHaveBeenCalled();
     });
 
     it('does not regress an already-COMPLETE item when sets are later removed (sticky COMPLETE)', async () => {
@@ -231,7 +231,7 @@ describe('ChecklistEvaluatorService', () => {
 
       await service.evaluate('b1');
 
-      expect(repo.updateItemStates).not.toHaveBeenCalled();
+      expect(repo.applyStateUpdates).not.toHaveBeenCalled();
     });
   });
 
@@ -246,9 +246,9 @@ describe('ChecklistEvaluatorService', () => {
 
       await service.evaluate('b1');
 
-      expect(repo.updateItemStates).toHaveBeenCalledWith([
+      expect(repo.applyStateUpdates).toHaveBeenCalledWith([
         expect.objectContaining({ id: 'ci1', state: 'COMPLETE' }),
-      ]);
+      ], []);
     });
 
     it('does not match when only balance invoice exists for deposit rule', async () => {
@@ -261,7 +261,7 @@ describe('ChecklistEvaluatorService', () => {
 
       await service.evaluate('b1');
 
-      expect(repo.updateItemStates).not.toHaveBeenCalled();
+      expect(repo.applyStateUpdates).not.toHaveBeenCalled();
     });
   });
 
@@ -276,9 +276,9 @@ describe('ChecklistEvaluatorService', () => {
 
       await service.evaluate('b1');
 
-      expect(repo.updateItemStates).toHaveBeenCalledWith([
+      expect(repo.applyStateUpdates).toHaveBeenCalledWith([
         expect.objectContaining({ id: 'ci1', state: 'COMPLETE' }),
-      ]);
+      ], []);
     });
 
     it('transitions PENDING → COMPLETE when activeContract exists', async () => {
@@ -291,9 +291,9 @@ describe('ChecklistEvaluatorService', () => {
 
       await service.evaluate('b1');
 
-      expect(repo.updateItemStates).toHaveBeenCalledWith([
+      expect(repo.applyStateUpdates).toHaveBeenCalledWith([
         expect.objectContaining({ id: 'ci1', state: 'COMPLETE' }),
-      ]);
+      ], []);
     });
   });
 
@@ -308,9 +308,9 @@ describe('ChecklistEvaluatorService', () => {
 
       await service.evaluate('b1');
 
-      expect(repo.updateItemStates).toHaveBeenCalledWith([
+      expect(repo.applyStateUpdates).toHaveBeenCalledWith([
         expect.objectContaining({ id: 'ci1', state: 'COMPLETE' }),
-      ]);
+      ], []);
     });
   });
 
@@ -325,9 +325,9 @@ describe('ChecklistEvaluatorService', () => {
 
       await service.evaluate('b1');
 
-      expect(repo.updateItemStates).toHaveBeenCalledWith([
+      expect(repo.applyStateUpdates).toHaveBeenCalledWith([
         expect.objectContaining({ id: 'ci1', state: 'COMPLETE' }),
-      ]);
+      ], []);
     });
   });
 
@@ -357,7 +357,7 @@ describe('ChecklistEvaluatorService', () => {
 
       await service.evaluate('b1');
 
-      const updates = repo.updateItemStates.mock.calls[0][0];
+      const updates = repo.applyStateUpdates.mock.calls[0][0];
       const contractUpdate = updates.find((u: { id: string }) => u.id === 'ci1');
       const sendUpdate = updates.find((u: { id: string }) => u.id === 'ci2');
       expect(contractUpdate).toMatchObject({ state: 'COMPLETE' });
@@ -384,9 +384,9 @@ describe('ChecklistEvaluatorService', () => {
 
       await service.evaluate('b1');
 
-      expect(repo.updateItemStates).toHaveBeenCalledWith([
+      expect(repo.applyStateUpdates).toHaveBeenCalledWith([
         expect.objectContaining({ id: 'ci2', state: 'PENDING' }),
-      ]);
+      ], []);
     });
 
     it('auto-completes a goal out of order — its own rule fires regardless of an unfinished predecessor', async () => {
@@ -411,7 +411,7 @@ describe('ChecklistEvaluatorService', () => {
 
       await service.evaluate('b1');
 
-      const updates = repo.updateItemStates.mock.calls[0][0];
+      const updates = repo.applyStateUpdates.mock.calls[0][0];
       expect(updates.find((u: { id: string }) => u.id === 'i-dep')).toMatchObject({ state: 'COMPLETE' });
       // send_contract stays PENDING (its own rule unmet) — an unchanged goal emits
       // no update, and crucially is never written BLOCKED to gate the deposit.
@@ -429,7 +429,7 @@ describe('ChecklistEvaluatorService', () => {
 
       await service.evaluate('b1');
 
-      const updates = repo.updateItemStates.mock.calls[0][0];
+      const updates = repo.applyStateUpdates.mock.calls[0][0];
       expect(updates.every((u: { state: string }) => u.state !== 'BLOCKED')).toBe(true);
       expect(updates.find((u: { id: string }) => u.id === 'i3')).toMatchObject({ state: 'PENDING' });
     });
@@ -445,7 +445,7 @@ describe('ChecklistEvaluatorService', () => {
 
       await service.evaluate('b1');
 
-      expect(repo.updateItemStates).not.toHaveBeenCalled();
+      expect(repo.applyStateUpdates).not.toHaveBeenCalled();
     });
   });
 
@@ -457,7 +457,7 @@ describe('ChecklistEvaluatorService', () => {
 
       await service.evaluate('b1');
 
-      expect(repo.updateItemStates).not.toHaveBeenCalled();
+      expect(repo.applyStateUpdates).not.toHaveBeenCalled();
     });
 
     it('does not skip send_quote when booking status is PROVISIONAL', async () => {
@@ -467,29 +467,29 @@ describe('ChecklistEvaluatorService', () => {
 
       await service.evaluate('b1');
 
-      expect(repo.updateItemStates).not.toHaveBeenCalled();
+      expect(repo.applyStateUpdates).not.toHaveBeenCalled();
     });
 
-    it('skips contract_signed when booking status is READY', async () => {
-      const item = makeItem({ key: 'contract_signed', state: 'PENDING' });
+    it('skips the contract goal when booking status is READY', async () => {
+      const item = makeItem({ key: 'get_contract_signed', state: 'PENDING' });
       const booking = makeBooking({ status: 'READY' });
       repo.findItemsWithContext.mockResolvedValue({ items: [item], booking });
 
       await service.evaluate('b1');
 
-      expect(repo.updateItemStates).toHaveBeenCalledWith([
+      expect(repo.applyStateUpdates).toHaveBeenCalledWith([
         expect.objectContaining({ state: 'SKIPPED' }),
-      ]);
+      ], []);
     });
 
-    it('does not skip contract_signed when booking status is CONFIRMED', async () => {
-      const item = makeItem({ key: 'contract_signed', state: 'PENDING' });
+    it('does not skip the contract goal when booking status is CONFIRMED', async () => {
+      const item = makeItem({ key: 'get_contract_signed', state: 'PENDING' });
       const booking = makeBooking({ status: 'CONFIRMED' });
       repo.findItemsWithContext.mockResolvedValue({ items: [item], booking });
 
       await service.evaluate('b1');
 
-      expect(repo.updateItemStates).not.toHaveBeenCalled();
+      expect(repo.applyStateUpdates).not.toHaveBeenCalled();
     });
 
     it('never skips an already-COMPLETE item', async () => {
@@ -499,7 +499,7 @@ describe('ChecklistEvaluatorService', () => {
 
       await service.evaluate('b1');
 
-      expect(repo.updateItemStates).not.toHaveBeenCalled();
+      expect(repo.applyStateUpdates).not.toHaveBeenCalled();
     });
 
     it('never changes an already-SKIPPED item', async () => {
@@ -509,7 +509,7 @@ describe('ChecklistEvaluatorService', () => {
 
       await service.evaluate('b1');
 
-      expect(repo.updateItemStates).not.toHaveBeenCalled();
+      expect(repo.applyStateUpdates).not.toHaveBeenCalled();
     });
   });
 
@@ -524,30 +524,65 @@ describe('ChecklistEvaluatorService', () => {
 
       await service.evaluate('b1');
 
-      expect(repo.updateItemStates).not.toHaveBeenCalled();
+      expect(repo.applyStateUpdates).not.toHaveBeenCalled();
     });
   });
 
-  describe('full contract-sign integration (#49)', () => {
-    it('marks create_contract COMPLETE then unblocks send_contract then marks contract_signed when signed', async () => {
-      const items = [
-        makeItem({ id: 'i1', key: 'create_contract', state: 'PENDING', dependsOn: [], autoCompleteRule: { type: 'bookingField', field: 'activeContract', operator: 'notNull' } }),
-        makeItem({ id: 'i2', key: 'send_contract', state: 'BLOCKED', dependsOn: ['create_contract'], autoCompleteRule: { type: 'communicationSent', templateTypes: ['contract_cover'] } }),
-        makeItem({ id: 'i3', key: 'contract_signed', state: 'BLOCKED', dependsOn: ['send_contract'], autoCompleteRule: { type: 'contractSigned' } }),
-      ];
+  describe('full contract-sign integration (#49 / ADR-0057 multi-step)', () => {
+    it('completes every step and rolls the contract goal up to COMPLETE when created, sent and signed', async () => {
+      const goal = makeItem({
+        id: 'g-contract',
+        key: 'get_contract_signed',
+        state: 'PENDING',
+        autoCompleteRule: null, // multi-step goal: state rolls up from its steps
+        steps: [
+          { id: 's1', key: 'create_contract', state: 'PENDING', completedAt: null },
+          { id: 's2', key: 'send_contract', state: 'PENDING', completedAt: null },
+          { id: 's3', key: 'contract_signed', state: 'PENDING', completedAt: null },
+        ],
+      });
       const booking = makeBooking({
-        status: 'ENQUIRY',
+        status: 'CONFIRMED',
         contracts: [{ status: 'SIGNED' }],
         communications: [{ status: 'SENT', template: { builtInType: 'contract_cover' } }],
       });
-      repo.findItemsWithContext.mockResolvedValue({ items, booking });
+      repo.findItemsWithContext.mockResolvedValue({ items: [goal], booking });
 
       await service.evaluate('b1');
 
-      const updates = repo.updateItemStates.mock.calls[0][0];
-      expect(updates.find((u: { id: string }) => u.id === 'i1')).toMatchObject({ state: 'COMPLETE' });
-      expect(updates.find((u: { id: string }) => u.id === 'i2')).toMatchObject({ state: 'COMPLETE' });
-      expect(updates.find((u: { id: string }) => u.id === 'i3')).toMatchObject({ state: 'COMPLETE' });
+      const [goalUpdates, stepUpdates] = repo.applyStateUpdates.mock.calls[0];
+      expect(goalUpdates).toEqual([expect.objectContaining({ id: 'g-contract', state: 'COMPLETE' })]);
+      expect(stepUpdates.find((u: { id: string }) => u.id === 's1')).toMatchObject({ state: 'COMPLETE' });
+      expect(stepUpdates.find((u: { id: string }) => u.id === 's2')).toMatchObject({ state: 'COMPLETE' });
+      expect(stepUpdates.find((u: { id: string }) => u.id === 's3')).toMatchObject({ state: 'COMPLETE' });
+    });
+
+    it('keeps the contract goal PENDING and surfaces the active step while the client has not signed', async () => {
+      const goal = makeItem({
+        id: 'g-contract',
+        key: 'get_contract_signed',
+        state: 'PENDING',
+        autoCompleteRule: null,
+        steps: [
+          { id: 's1', key: 'create_contract', state: 'COMPLETE', completedAt: new Date() },
+          { id: 's2', key: 'send_contract', state: 'PENDING', completedAt: null },
+          { id: 's3', key: 'contract_signed', state: 'PENDING', completedAt: null },
+        ],
+      });
+      // Contract exists + sent, but not signed → send step completes, goal stays PENDING.
+      const booking = makeBooking({
+        status: 'CONFIRMED',
+        contracts: [{ status: 'SENT' }],
+        communications: [{ status: 'SENT', template: { builtInType: 'contract_cover' } }],
+      });
+      repo.findItemsWithContext.mockResolvedValue({ items: [goal], booking });
+
+      await service.evaluate('b1');
+
+      const [goalUpdates, stepUpdates] = repo.applyStateUpdates.mock.calls[0];
+      // Goal stays PENDING (not all steps complete) → no goal update emitted.
+      expect(goalUpdates).toEqual([]);
+      expect(stepUpdates).toEqual([expect.objectContaining({ id: 's2', state: 'COMPLETE' })]);
     });
   });
 
@@ -568,9 +603,13 @@ describe('ChecklistEvaluatorService', () => {
 
       await service.evaluate('b1');
 
-      expect(repo.updateItemStates).toHaveBeenCalledWith([
-        expect.objectContaining({ id: 'g-deposit', state: 'COMPLETE' }),
-      ]);
+      expect(repo.applyStateUpdates).toHaveBeenCalledWith(
+        [expect.objectContaining({ id: 'g-deposit', state: 'COMPLETE' })],
+        [
+          expect.objectContaining({ id: 's1', state: 'COMPLETE' }),
+          expect.objectContaining({ id: 's2', state: 'COMPLETE' }),
+        ],
+      );
     });
 
     it('rolls a multi-step goal up to FAILED when any step fails (bounced send)', async () => {
@@ -592,9 +631,10 @@ describe('ChecklistEvaluatorService', () => {
 
       await service.evaluate('b1');
 
-      expect(repo.updateItemStates).toHaveBeenCalledWith([
-        expect.objectContaining({ id: 'g-deposit', state: 'FAILED' }),
-      ]);
+      expect(repo.applyStateUpdates).toHaveBeenCalledWith(
+        [expect.objectContaining({ id: 'g-deposit', state: 'FAILED' })],
+        [expect.objectContaining({ id: 's2', state: 'FAILED' })],
+      );
     });
   });
 
@@ -624,12 +664,12 @@ describe('ChecklistEvaluatorService', () => {
 
       repo.findItemsWithContext.mockResolvedValue({ items: fixture(), booking });
       await service.evaluate('b1');
-      const fullSweep = repo.updateItemStates.mock.calls[0][0];
+      const fullSweep = repo.applyStateUpdates.mock.calls[0][0];
 
-      repo.updateItemStates.mockClear();
+      repo.applyStateUpdates.mockClear();
       repo.findItemsWithContext.mockResolvedValue({ items: fixture(), booking });
       await service.evaluateForEvent('b1', [...ALL_INPUTS]);
-      const targeted = repo.updateItemStates.mock.calls[0][0];
+      const targeted = repo.applyStateUpdates.mock.calls[0][0];
 
       const byId = (us: Array<{ id: string }>) => [...us].sort((a, b) => a.id.localeCompare(b.id));
       expect(byId(targeted)).toEqual(byId(fullSweep));
@@ -641,7 +681,7 @@ describe('ChecklistEvaluatorService', () => {
 
       await service.evaluateForEvent('b1', ['invoices']);
 
-      const updates = repo.updateItemStates.mock.calls[0][0];
+      const updates = repo.applyStateUpdates.mock.calls[0][0];
       expect(updates).toHaveLength(1);
       expect(updates[0]).toMatchObject({ id: 'i-inv', state: 'COMPLETE' });
       expect(updates.find((u: { id: string }) => u.id === 'i-venue')).toBeUndefined();
@@ -655,7 +695,7 @@ describe('ChecklistEvaluatorService', () => {
       // 'setsCount' is observed only by build_itinerary, absent from this fixture.
       await service.evaluateForEvent('b1', ['setsCount']);
 
-      expect(repo.updateItemStates).not.toHaveBeenCalled();
+      expect(repo.applyStateUpdates).not.toHaveBeenCalled();
     });
 
     it('leaves a manually-COMPLETE goal sticky even when targeted', async () => {
@@ -667,7 +707,7 @@ describe('ChecklistEvaluatorService', () => {
 
       await service.evaluateForEvent('b1', ['invoices']);
 
-      expect(repo.updateItemStates).not.toHaveBeenCalled();
+      expect(repo.applyStateUpdates).not.toHaveBeenCalled();
     });
   });
 });

@@ -246,8 +246,26 @@ export interface Contract {
 
 export type ChecklistItemState = 'PENDING' | 'BLOCKED' | 'COMPLETE' | 'FAILED' | 'SKIPPED';
 
+// A step's state never includes SKIPPED (the opt-out lives on the goal) — ADR-0057.
+export type ChecklistStepState = 'PENDING' | 'COMPLETE' | 'FAILED';
+
 // The concerns a reminder can belong to (ADR-0052). Mirrors the API's ReminderConcern.
 export type ReminderConcern = 'overview' | 'people' | 'venue' | 'itinerary' | 'music';
+
+// A step of a multi-step goal (ADR-0057). Mirrors BookingChecklistStepResponseDto. The
+// active step (first non-terminal by order) and completed-step fold are derived client-side.
+export interface ChecklistStep {
+  id: string;
+  key: string | null;
+  label: string;
+  order: number;
+  kind: 'MILESTONE' | 'PRECONDITION' | 'FOLLOWUP';
+  completeMode: 'ACTION' | 'AWAITED';
+  state: ChecklistStepState;
+  completedBy: 'USER' | 'CUSTOMER' | 'BAND_MEMBER';
+  completedAt: string | null;
+  autoCompleteRule: Record<string, unknown> | null;
+}
 
 export interface ChecklistItem {
   id: string;
@@ -269,6 +287,9 @@ export interface ChecklistItem {
   concern: string | null;
   shortcutType?: string;
   shortcutTemplateType?: string;
+  // Ordered steps of a multi-step goal (ADR-0057). Empty/absent for an atomic goal;
+  // the goal state is the roll-up of these steps.
+  steps?: ChecklistStep[];
 }
 
 // One row of a concern's "Remind me about" control (selector output).

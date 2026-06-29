@@ -22,15 +22,17 @@ const KEY_TO_CONCERN: Record<string, ReminderConcern> = {
   song_requests: 'music',
   // People — the sends
   send_quote: 'people',
-  send_contract: 'people',
   music_form_invite: 'people',
   send_thank_you: 'people',
   send_balance_invoice: 'people',
   // Overview — deal spine + the gig
   confirm_quote: 'overview',
   create_deposit_invoice: 'overview',
-  create_contract: 'overview',
-  contract_signed: 'overview',
+  // ADR-0057 / #607: the contract is now one multi-step *goal*. Its create/send/signed
+  // steps are not independently toggleable reminders — the goal is the unit. (The picker
+  // listing goals as the toggle unit is #609; here we just keep the system-key authority
+  // pointing at the real key.)
+  get_contract_signed: 'overview',
   deposit_received: 'overview',
   create_balance_invoice: 'overview',
   play_the_gig: 'overview',

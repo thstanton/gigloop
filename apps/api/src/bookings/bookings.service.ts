@@ -513,13 +513,27 @@ export class BookingsService {
   async getChecklist(userId: string, bookingId: string) {
     await this.findOne(userId, bookingId);
     const items = await this.repo.findChecklistItems(userId, bookingId);
-    return items.map((item) => ({
+    return items.map(({ steps, ...item }) => ({
       ...item,
       createdAt: item.createdAt.toISOString(),
       updatedAt: item.updatedAt.toISOString(),
       completedAt: item.completedAt?.toISOString() ?? null,
       dueDate: item.dueDate?.toISOString() ?? null,
       ...deriveShortcut(item.autoCompleteRule as Record<string, unknown> | null, items),
+      // Multi-step goal steps (ADR-0057). The client derives the active step + fold;
+      // #611 routes the active step's action via its autoCompleteRule.
+      steps: (steps ?? []).map((step) => ({
+        id: step.id,
+        key: step.key,
+        label: step.label,
+        order: step.order,
+        kind: step.kind,
+        completeMode: step.completeMode,
+        state: step.state,
+        completedBy: step.completedBy,
+        completedAt: step.completedAt?.toISOString() ?? null,
+        autoCompleteRule: step.autoCompleteRule as Record<string, unknown> | null,
+      })),
     }));
   }
 

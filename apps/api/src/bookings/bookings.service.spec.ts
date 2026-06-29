@@ -1379,9 +1379,11 @@ describe('BookingsService', () => {
 
       // No findOne / findChecklistItemsForReminders — preview runs off the template alone.
       expect(repo.findOne).not.toHaveBeenCalled();
-      const sendContract = result.find((r) => r.key === 'send_contract');
-      expect(sendContract).toMatchObject({ concern: 'people' });
-      expect(sendContract?.prerequisites).toContainEqual({ key: 'create_contract', phrase: 'create the contract' });
+      // song_requests (music) depends cross-concern on music_form_invite (people) — post-#607 the
+      // surviving cross-concern prerequisite (the contract collapsed into one stepless-keyed goal).
+      const songRequests = result.find((r) => r.key === 'song_requests');
+      expect(songRequests).toMatchObject({ concern: 'music' });
+      expect(songRequests?.prerequisites).toContainEqual({ key: 'music_form_invite', phrase: 'send the music form invite' });
     });
 
     it('drops a template-disabled key (master switch parity with the Builder)', async () => {

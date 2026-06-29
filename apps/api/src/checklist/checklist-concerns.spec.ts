@@ -36,8 +36,10 @@ describe('checklist concern map', () => {
   });
 
   it('groups the sends under People and the deal spine under Overview', () => {
+    // ADR-0057 / #607: the contract is one multi-step *goal* (get_contract_signed),
+    // its create/send/signed steps no longer independent reminder keys.
     expect(keysForConcern('people').sort(alpha)).toEqual(
-      ['music_form_invite', 'send_balance_invoice', 'send_contract', 'send_quote', 'send_thank_you'].sort(alpha),
+      ['music_form_invite', 'send_balance_invoice', 'send_quote', 'send_thank_you'].sort(alpha),
     );
     expect(keysForConcern('venue')).toEqual(['add_venue']);
     expect(keysForConcern('itinerary')).toEqual(['build_itinerary']);
@@ -46,8 +48,7 @@ describe('checklist concern map', () => {
       [
         'confirm_quote',
         'create_deposit_invoice',
-        'create_contract',
-        'contract_signed',
+        'get_contract_signed',
         'deposit_received',
         'create_balance_invoice',
         'play_the_gig',

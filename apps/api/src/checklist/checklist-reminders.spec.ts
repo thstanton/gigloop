@@ -54,7 +54,6 @@ describe('selectApplicableReminders', () => {
       });
       expect(keys(out)).toEqual([
         'send_quote',
-        'send_contract',
         'send_balance_invoice',
         'music_form_invite',
         'send_thank_you',
@@ -70,8 +69,7 @@ describe('selectApplicableReminders', () => {
       expect(keys(out)).toEqual([
         'confirm_quote',
         'create_deposit_invoice',
-        'create_contract',
-        'contract_signed',
+        'get_contract_signed',
         'deposit_received',
         'create_balance_invoice',
         'play_the_gig',
@@ -96,9 +94,9 @@ describe('selectApplicableReminders', () => {
       const out = selectApplicableReminders('people', {
         items: [],
         status: 'ENQUIRY',
-        disabledKeys: new Set(['send_contract']),
+        disabledKeys: new Set(['send_balance_invoice']),
       });
-      expect(find(out, 'send_contract')).toBeUndefined();
+      expect(find(out, 'send_balance_invoice')).toBeUndefined();
       expect(find(out, 'send_quote')).toBeDefined();
     });
   });
@@ -211,57 +209,57 @@ describe('selectApplicableReminders', () => {
     const ctx = { items: [], status: 'ENQUIRY', disabledKeys: new Set<string>() };
 
     it('surfaces the condition for the client-committed milestones', () => {
-      expect(find(selectApplicableReminders('overview', ctx), 'contract_signed')?.autoCompleteHint).toBe(
-        'when the client signs in the portal',
-      );
       expect(find(selectApplicableReminders('music', ctx), 'song_requests')?.autoCompleteHint).toBe(
         'when the client sends their requests',
       );
+      // The contract is now a multi-step goal with no own rule (ADR-0057) → no goal-level hint;
+      // its "when the client signs" condition lives on the contract_signed step, not the reminder.
+      expect(find(selectApplicableReminders('overview', ctx), 'get_contract_signed')?.autoCompleteHint).toBeNull();
     });
 
     it('leaves the self-evident Send/Create items without a hint', () => {
       const people = selectApplicableReminders('people', ctx);
       expect(find(people, 'send_quote')?.autoCompleteHint).toBeNull();
-      expect(find(people, 'send_contract')?.autoCompleteHint).toBeNull();
+      expect(find(people, 'send_balance_invoice')?.autoCompleteHint).toBeNull();
       expect(find(selectApplicableReminders('overview', ctx), 'create_deposit_invoice')?.autoCompleteHint).toBeNull();
     });
   });
 
   describe('dependency clause — after (#557/#558)', () => {
-    // send_contract (people concern) depends on create_contract; drive create_contract's state.
-    const sendContractAfter = (createContractState?: string) => {
-      const items = createContractState
-        ? [item({ id: 'cc', key: 'create_contract', state: createContractState })]
+    // song_requests (music concern) depends on music_form_invite (people); drive the invite's state.
+    const songRequestsAfter = (inviteState?: string) => {
+      const items = inviteState
+        ? [item({ id: 'mfi', key: 'music_form_invite', state: inviteState })]
         : [];
-      const out = selectApplicableReminders('people', { items, status: 'CONFIRMED', disabledKeys: new Set() });
-      return find(out, 'send_contract')?.after;
+      const out = selectApplicableReminders('music', { items, status: 'READY', disabledKeys: new Set() });
+      return find(out, 'song_requests')?.after;
     };
 
     it.each(['PENDING', 'BLOCKED', 'FAILED'])(
       'shows the clause while the prerequisite is outstanding (%s)',
       (state) => {
-        expect(sendContractAfter(state)).toBe('create the contract');
+        expect(songRequestsAfter(state)).toBe('send the music form invite');
       },
     );
 
     it.each(['COMPLETE', 'SKIPPED'])('hides the clause once the prerequisite is %s', (state) => {
-      expect(sendContractAfter(state)).toBeNull();
+      expect(songRequestsAfter(state)).toBeNull();
     });
 
     it('hides the clause when the prerequisite is absent (never seeded)', () => {
-      expect(sendContractAfter()).toBeNull();
+      expect(songRequestsAfter()).toBeNull();
     });
 
     it('stacks with the auto-complete hint on a client-committed reminder', () => {
-      // contract_signed (overview) gated by an outstanding send_contract → both fields populated.
-      const out = selectApplicableReminders('overview', {
-        items: [item({ id: 'sc', key: 'send_contract', state: 'PENDING' })],
-        status: 'CONFIRMED',
+      // song_requests (music) gated by an outstanding music_form_invite → both fields populated.
+      const out = selectApplicableReminders('music', {
+        items: [item({ id: 'mfi', key: 'music_form_invite', state: 'PENDING' })],
+        status: 'READY',
         disabledKeys: new Set(),
       });
-      const cs = find(out, 'contract_signed');
-      expect(cs?.after).toBe('send the contract');
-      expect(cs?.autoCompleteHint).toBe('when the client signs in the portal');
+      const sr = find(out, 'song_requests');
+      expect(sr?.after).toBe('send the music form invite');
+      expect(sr?.autoCompleteHint).toBe('when the client sends their requests');
     });
 
     it('every prerequisite key referenced in a dependsOn has an action phrase (no silent drop)', () => {
@@ -279,7 +277,8 @@ describe('previewApplicableReminders (pre-creation, #560)', () => {
   it('offers every in-scope system key, each tagged with its concern', () => {
     const out = previewApplicableReminders({ status: 'PROVISIONAL', disabledKeys: new Set() });
     // A PROVISIONAL-starting booking still has every CONFIRMED+ reminder ahead of it.
-    expect(pfind(out, 'send_contract')?.concern).toBe('people');
+    expect(pfind(out, 'music_form_invite')?.concern).toBe('people');
+    expect(pfind(out, 'get_contract_signed')?.concern).toBe('overview');
     expect(pfind(out, 'add_venue')?.concern).toBe('venue');
     expect(pfind(out, 'play_the_gig')?.concern).toBe('overview');
     // Every offered row maps to a concern (no orphans).
@@ -305,27 +304,28 @@ describe('previewApplicableReminders (pre-creation, #560)', () => {
   });
 
   it('surfaces cross-concern prerequisites with their phrases', () => {
-    // send_contract (people) depends on create_contract (overview) — the clause must survive the
+    // song_requests (music) depends on music_form_invite (people) — the clause must survive the
     // concern boundary, with the prereq key + phrase for the frontend to gate by selection.
     const out = previewApplicableReminders({ status: 'PROVISIONAL', disabledKeys: new Set() });
-    expect(pfind(out, 'send_contract')?.prerequisites).toContainEqual({
-      key: 'create_contract',
-      phrase: 'create the contract',
+    expect(pfind(out, 'song_requests')?.prerequisites).toContainEqual({
+      key: 'music_form_invite',
+      phrase: 'send the music form invite',
     });
   });
 
   it('omits a prerequisite that has itself been filtered out as past-stage', () => {
-    // On a READY-starting booking, create_contract (CONFIRMED-staged) has passed, so a still-ahead
-    // dependent must not carry a clause pointing at an out-of-scope prerequisite.
+    // On a READY-starting booking, send_quote (PROVISIONAL-staged) has passed, so no still-ahead
+    // dependent may carry a clause pointing at it. (Post-#607 the contract is one goal, so this
+    // now guards the general past-stage-prereq filter rather than the old contract chain.)
     const out = previewApplicableReminders({ status: 'READY', disabledKeys: new Set() });
     for (const row of out) {
-      expect(row.prerequisites.map((p) => p.key)).not.toContain('create_contract');
+      expect(row.prerequisites.map((p) => p.key)).not.toContain('send_quote');
     }
   });
 
   it('carries the auto-complete hint for client-committed milestones', () => {
     const out = previewApplicableReminders({ status: 'ENQUIRY', disabledKeys: new Set() });
-    expect(pfind(out, 'contract_signed')?.autoCompleteHint).toBe('when the client signs in the portal');
+    expect(pfind(out, 'song_requests')?.autoCompleteHint).toBe('when the client sends their requests');
     expect(pfind(out, 'send_quote')?.autoCompleteHint).toBeNull();
   });
 });

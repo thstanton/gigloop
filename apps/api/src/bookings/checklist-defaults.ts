@@ -3,6 +3,27 @@ export interface DueDateRule {
   offsetDays: number;
 }
 
+// A milestone step of a multi-step goal (ADR-0057). The goal (the user-facing row)
+// owns ordered steps along the deliverable spine; each step carries the predicate
+// that auto-completes it. v1 ships `kind: 'MILESTONE'` only. The step `key` is the
+// goal's *unique* flat-template key (e.g. `send_contract`), NOT a bare `send`, so the
+// flat predicate registry (a `Record<stepKey, …>`) can never collide — the locked
+// precedent for #608's deposit/balance steps.
+export interface ChecklistDefaultStep {
+  key: string;
+  label: string;
+  kind: 'MILESTONE' | 'PRECONDITION' | 'FOLLOWUP';
+  // How the step reaches COMPLETE — the musician acting now (ACTION) or awaiting an
+  // external event (AWAITED). Orthogonal to `completedBy`: a CUSTOMER-completed step
+  // is AWAITED. Drives the surfacing omission (passive client waits never nag).
+  completeMode: 'ACTION' | 'AWAITED';
+  completedBy: 'USER' | 'CUSTOMER' | 'BAND_MEMBER';
+  autoCompleteRule: Record<string, unknown> | null;
+  // Carried for FOLLOWUP-step anchoring (a later increment); v1 steps have no
+  // materialised dueDate column — the surfaced deadline lives on the goal.
+  dueDateRule?: DueDateRule | null;
+}
+
 export interface ChecklistDefaultItem {
   key: string;
   label: string;
@@ -16,6 +37,10 @@ export interface ChecklistDefaultItem {
   // static concern map, so this is left unset for them; a custom global-template item
   // carries its user-chosen concern here so it appears in that section on every booking.
   concern?: string | null;
+  // ADR-0057: a multi-step goal owns ordered steps and has `autoCompleteRule: null`
+  // (its state rolls up from its steps). An atomic goal has no `steps` and carries its
+  // own rule. Present on the contract goal (v1); deposit/balance/song-requests follow.
+  steps?: ChecklistDefaultStep[];
 }
 
 export const CHECKLIST_DEFAULTS: ChecklistDefaultItem[] = [
@@ -47,31 +72,48 @@ export const CHECKLIST_DEFAULTS: ChecklistDefaultItem[] = [
     dueDateRule: null,
   },
   {
-    key: 'create_contract',
-    label: 'Create contract',
+    // ADR-0057 / #607: the first multi-step goal. "Get the contract signed" is the
+    // outcome; the system sequences create → send → signed beneath it. The goal carries
+    // no rule (its state rolls up from the steps) and a goal-level dueDate of -60 days —
+    // the *send* deadline, the first hard musician deadline, which is what surfacing
+    // dates against while create/send is the active step (the signing step is CUSTOMER /
+    // AWAITED, so never surfaces to the musician). `completedBy: USER` so the goal passes
+    // the findActionItems USER filter; surfacing then refines by the active step.
+    key: 'get_contract_signed',
+    label: 'Get the contract signed',
     completedBy: 'USER',
-    dependsOn: ['confirm_quote'],
-    autoCompleteRule: { type: 'bookingField', field: 'activeContract', operator: 'notNull' },
-    requiredForStatus: 'CONFIRMED',
-    dueDateRule: null,
-  },
-  {
-    key: 'send_contract',
-    label: 'Send contract & deposit email',
-    completedBy: 'USER',
-    dependsOn: ['create_contract'],
-    autoCompleteRule: { type: 'communicationSent', templateTypes: ['contract_cover', 'contract_and_deposit_cover'] },
+    dependsOn: [],
+    autoCompleteRule: null,
     requiredForStatus: 'CONFIRMED',
     dueDateRule: { basis: 'bookingDate', offsetDays: -60 },
-  },
-  {
-    key: 'contract_signed',
-    label: 'Contract signed',
-    completedBy: 'CUSTOMER',
-    dependsOn: ['send_contract'],
-    autoCompleteRule: { type: 'contractSigned' },
-    requiredForStatus: 'CONFIRMED',
-    dueDateRule: { basis: 'bookingDate', offsetDays: -45 },
+    steps: [
+      {
+        key: 'create_contract',
+        label: 'Draft the contract',
+        kind: 'MILESTONE',
+        completeMode: 'ACTION',
+        completedBy: 'USER',
+        autoCompleteRule: { type: 'bookingField', field: 'activeContract', operator: 'notNull' },
+      },
+      {
+        key: 'send_contract',
+        label: 'Send it to the client',
+        kind: 'MILESTONE',
+        completeMode: 'ACTION',
+        completedBy: 'USER',
+        autoCompleteRule: { type: 'communicationSent', templateTypes: ['contract_cover', 'contract_and_deposit_cover'] },
+        dueDateRule: { basis: 'bookingDate', offsetDays: -60 },
+      },
+      {
+        key: 'contract_signed',
+        label: 'Client signs the contract',
+        kind: 'MILESTONE',
+        completeMode: 'AWAITED',
+        completedBy: 'CUSTOMER',
+        autoCompleteRule: { type: 'contractSigned' },
+        dueDateRule: { basis: 'bookingDate', offsetDays: -45 },
+      },
+    ],
   },
   {
     key: 'deposit_received',

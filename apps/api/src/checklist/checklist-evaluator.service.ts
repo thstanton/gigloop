@@ -16,10 +16,13 @@ function statusGte(current: string, threshold: string): boolean {
   return STATUS_ORDER.indexOf(current) >= STATUS_ORDER.indexOf(threshold);
 }
 
-// Goals that become SKIPPED when booking status reaches a threshold. (contract_signed
-// is an awaited milestone the READY transition makes moot — it is skipped, not failed.)
+// Goals that become SKIPPED when booking status reaches a threshold. The contract
+// outcome is an awaited goal the READY transition makes moot (the gig is happening) —
+// it is skipped, not failed. Keyed on the GOAL (`get_contract_signed`) now that the
+// contract is a multi-step goal; resolveSkip sets the goal SKIPPED directly, ahead of
+// any step roll-up. (Pre-#607 this keyed on the flat `contract_signed` item.)
 const SKIP_RULES: Array<{ keys: string[]; threshold: string }> = [
-  { keys: ['contract_signed'], threshold: 'READY' },
+  { keys: ['get_contract_signed'], threshold: 'READY' },
 ];
 
 /**
@@ -157,11 +160,16 @@ export class ChecklistEvaluatorService {
   async evaluate(bookingId: string): Promise<void> {
     const { items, booking } = await this.repo.findItemsWithContext(bookingId);
     if (!booking || !items.length) return;
-    const { goalUpdates } = computeUpdates(items as EvalGoal[], booking as BookingContext);
-    // NOTE: step persistence (and surfacing the resulting step updates) lands with
-    // #607 when the first multi-step goals are seeded. Until then every goal is
-    // atomic, so computeUpdates emits goal updates only.
-    if (goalUpdates.length) await this.repo.updateItemStates(goalUpdates);
+    const { goalUpdates, stepUpdates } = computeUpdates(
+      items as EvalGoal[],
+      booking as BookingContext,
+    );
+    // Goal state is a roll-up of its steps, so the two writes must land together —
+    // a split write leaves a window where a goal reads COMPLETE while a step is still
+    // PENDING. The repo applies both in one transaction.
+    if (goalUpdates.length || stepUpdates.length) {
+      await this.repo.applyStateUpdates(goalUpdates, stepUpdates);
+    }
   }
 
   /**
@@ -169,10 +177,12 @@ export class ChecklistEvaluatorService {
    * its `changedInputs` to exactly the affected goals via the predicate registry's
    * inverted index, re-evaluating only those instead of the whole checklist.
    *
-   * Built and unit-tested here; production call sites stay on {@link evaluate}
-   * (full-sweep) until steps exist — with no steps the two paths are behaviourally
-   * identical, and wiring the inverted index in early risks silently dropping an
-   * auto-complete. Rewiring lands with #607.
+   * Built and unit-tested here. Production call sites currently stay on full-sweep
+   * {@link evaluate} — it now persists step updates too, so it is correct for the
+   * multi-step contract goal; the inverted-index path remains available for a later
+   * containment pass without changing observable behaviour. Status/date-driven
+   * re-evaluation must always use {@link evaluate}: the SKIP_RULES path keys on
+   * booking status, which is not an InputKey the index can target.
    */
   async evaluateForEvent(bookingId: string, changedInputs: InputKey[]): Promise<void> {
     const { items, booking } = await this.repo.findItemsWithContext(bookingId);
@@ -180,7 +190,9 @@ export class ChecklistEvaluatorService {
     const keys = affectedKeys(changedInputs);
     const targeted = (items as EvalGoal[]).filter((g) => goalIsAffected(g, keys));
     if (!targeted.length) return;
-    const { goalUpdates } = computeUpdates(targeted, booking as BookingContext);
-    if (goalUpdates.length) await this.repo.updateItemStates(goalUpdates);
+    const { goalUpdates, stepUpdates } = computeUpdates(targeted, booking as BookingContext);
+    if (goalUpdates.length || stepUpdates.length) {
+      await this.repo.applyStateUpdates(goalUpdates, stepUpdates);
+    }
   }
 }

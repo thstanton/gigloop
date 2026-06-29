@@ -404,6 +404,9 @@ export class BookingsRepository {
     return this.prisma.bookingChecklistItem.findMany({
       where: { bookingId, userId, state: { not: 'SKIPPED' } },
       orderBy: { order: 'asc' },
+      // Multi-step goals carry their steps to the client (ADR-0057); the active step
+      // (first non-terminal by order) and the fold are derived on the frontend.
+      include: { steps: { orderBy: { order: 'asc' } } },
     });
   }
 

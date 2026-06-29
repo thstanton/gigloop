@@ -124,8 +124,8 @@ describe('build_itinerary checklist default (Module D / #523)', () => {
         { key: 'send_quote', order: 1 }, // template idx 0
         { key: 'play_the_gig', order: 2 }, // template idx 12
       ];
-      // create_contract (idx 3) follows send_quote, precedes play_the_gig.
-      const order = computeReminderInsertOrder('create_contract', existing);
+      // get_contract_signed (a mid-template key) follows send_quote, precedes play_the_gig.
+      const order = computeReminderInsertOrder('get_contract_signed', existing);
       expect(order).toBe(2); // after send_quote(1); caller shifts play_the_gig to 3
       expect(order).toBeLessThan(3); // strictly before the later item — not appended
     });
