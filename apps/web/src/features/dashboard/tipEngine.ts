@@ -33,7 +33,7 @@ export const TIP_POOL: Tip[] = [
   {
     id: 'home-address-missing',
     condition: (s) => !s.hasHomeAddress,
-    text: 'Add your home address so GigMan can show travel times to venues',
+    text: 'Add your home address so GigLoop can show travel times to venues',
     href: '/admin/settings',
   },
   {

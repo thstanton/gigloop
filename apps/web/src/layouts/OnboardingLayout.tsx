@@ -73,7 +73,7 @@ export default function OnboardingLayout() {
       <header className="h-14 border-b border-border flex items-center justify-between px-4 md:px-8">
         <div className="flex items-center gap-2 text-foreground">
           <Music2 className="size-5 text-primary" />
-          <span className="font-display font-semibold text-base">GigMan</span>
+          <span className="font-wordmark font-semibold text-base">GigLoop</span>
         </div>
         <ProgressIndicator currentPath={location.pathname} />
       </header>

@@ -1,6 +1,6 @@
 # Ralph — one cold iteration
 
-You are one cold iteration of GigMan's agent loop. Your context starts empty.
+You are one cold iteration of GigLoop's agent loop. Your context starts empty.
 Standing doctrine lives in CLAUDE.md (auto-loaded), CONTEXT.md, and docs/adr/ —
 read them; this file never repeats them. It is just the loop's driver.
 

@@ -12,7 +12,7 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
   play: async ({ canvas }) => {
-    await expect((await canvas.findAllByText('GigMan'))[0]).toBeVisible();
+    await expect((await canvas.findAllByText('GigLoop'))[0]).toBeVisible();
     await expect((await canvas.findAllByText('Get started free'))[0]).toBeVisible();
     await expect((await canvas.findAllByText('Sign in'))[0]).toBeVisible();
   },

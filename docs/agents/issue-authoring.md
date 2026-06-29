@@ -2,7 +2,7 @@
 
 How a feature is broken into issues *before any code is written*. This is the calm, fresh, human-in-the-loop moment where the judgement that is unreliable at coding time gets made once and made visible. See ADR-0030.
 
-`/to-issues` and `/grill-with-docs` are generic, user-global skills — they provide the machinery (vertical slicing, grilling) but know nothing about GigMan. This document is the GigMan-specific spec their output must conform to. **When authoring issues for this repo — whether via `/to-issues` or by hand — produce issues that meet every requirement below, then get the human's approval before coding.**
+`/to-issues` and `/grill-with-docs` are generic, user-global skills — they provide the machinery (vertical slicing, grilling) but know nothing about GigLoop. This document is the GigLoop-specific spec their output must conform to. **When authoring issues for this repo — whether via `/to-issues` or by hand — produce issues that meet every requirement below, then get the human's approval before coding.**
 
 ## When the gate applies
 
