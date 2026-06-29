@@ -227,6 +227,7 @@ export class BookingsController {
   }
 
   @ApiOperation({ summary: 'Update a checklist item state (tick, un-tick, or skip/opt-out)' })
+  @ApiResponse({ status: 200, type: [BookingChecklistItemResponseDto] })
   @Patch(':id/checklist/:itemId')
   updateChecklistItem(
     @Req() req: AuthedRequest,

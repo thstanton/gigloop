@@ -40,7 +40,7 @@ function resolveContractTemplate(items: Array<{ key: string | null }>): string {
     : 'contract_cover';
 }
 
-function deriveShortcut(
+export function deriveShortcut(
   rule: Record<string, unknown> | null,
   items: Array<{ key: string | null }>,
 ): { shortcutType?: string; shortcutTemplateType?: string } {
@@ -543,7 +543,9 @@ export class BookingsService {
       }
     }
     await this.evaluator.evaluate(bookingId).catch(() => {});
-    return { success: true };
+    // Return the recomputed checklist (post-evaluate) so the client settles the
+    // toggle and its dependency cascade in one round-trip — no follow-up refetch.
+    return this.getChecklist(userId, bookingId);
   }
 
   async addChecklistItem(

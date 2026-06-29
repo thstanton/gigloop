@@ -123,7 +123,7 @@ export const Confirmed: Story = {
       handlers: [
         http.get('/api/bookings/b1', () => HttpResponse.json(mockBooking)),
         http.get('/api/bookings/b1/checklist', () => HttpResponse.json([])),
-        http.patch('/api/bookings/b1/checklist/:itemId', () => HttpResponse.json({})),
+        http.patch('/api/bookings/b1/checklist/:itemId', () => HttpResponse.json([])),
         http.post('/api/bookings/b1/checklist', () => HttpResponse.json({})),
         http.patch('/api/bookings/b1', () => HttpResponse.json(mockBooking)),
         http.get('/api/bookings/b1/communications', () => HttpResponse.json([])),

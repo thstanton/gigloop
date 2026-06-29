@@ -149,3 +149,53 @@ describe('build_itinerary checklist default (Module D / #523)', () => {
     });
   });
 });
+
+describe('send_balance_invoice checklist default (#586)', () => {
+  const sendBalance = () => {
+    const item = CHECKLIST_DEFAULTS.find((d) => d.key === 'send_balance_invoice');
+    if (!item) throw new Error('send_balance_invoice default missing');
+    return item;
+  };
+
+  it('is a READY-staged send that depends on create_balance_invoice', () => {
+    const item = sendBalance();
+    expect(item.requiredForStatus).toBe('READY');
+    expect(item.dependsOn).toEqual(['create_balance_invoice']);
+    expect(item.completedBy).toBe('USER');
+    expect(item.autoCompleteRule).toEqual({
+      type: 'communicationSent',
+      templateTypes: ['balance_invoice_cover'],
+    });
+    expect(item.dueDateRule).not.toBeNull();
+  });
+
+  it('is ordered immediately after create_balance_invoice in the catalog', () => {
+    const createIdx = CHECKLIST_DEFAULTS.findIndex((d) => d.key === 'create_balance_invoice');
+    const sendIdx = CHECKLIST_DEFAULTS.findIndex((d) => d.key === 'send_balance_invoice');
+    expect(sendIdx).toBe(createIdx + 1);
+  });
+
+  it('is enabled by default (a seeded item, just disablable)', () => {
+    expect(sendBalance().enabled).not.toBe(false);
+  });
+
+  describe('seeding inclusion by starting status', () => {
+    const keysFor = (status: string) =>
+      filterItemsByStartingStatus(CHECKLIST_DEFAULTS, status).map((i) => i.key);
+
+    it.each(['ENQUIRY', 'PROVISIONAL', 'CONFIRMED'])(
+      'includes send_balance_invoice for a booking starting at %s',
+      (status) => {
+        expect(keysFor(status)).toContain('send_balance_invoice');
+      },
+    );
+
+    it.each(['READY', 'COMPLETE'])(
+      'excludes send_balance_invoice for a booking starting at %s (same as other READY items)',
+      (status) => {
+        expect(keysFor(status)).not.toContain('send_balance_invoice');
+        expect(keysFor(status)).not.toContain('create_balance_invoice');
+      },
+    );
+  });
+});

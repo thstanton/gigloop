@@ -82,6 +82,7 @@ export const PREREQUISITE_PHRASES: Record<string, string> = {
   confirm_quote: 'confirm the quote',
   create_contract: 'create the contract',
   send_contract: 'send the contract',
+  create_balance_invoice: 'create the balance invoice',
   music_form_invite: 'send the music form invite',
   play_the_gig: 'play the gig',
 };

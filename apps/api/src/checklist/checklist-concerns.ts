@@ -25,6 +25,7 @@ const KEY_TO_CONCERN: Record<string, ReminderConcern> = {
   send_contract: 'people',
   music_form_invite: 'people',
   send_thank_you: 'people',
+  send_balance_invoice: 'people',
   // Overview — deal spine + the gig
   confirm_quote: 'overview',
   create_deposit_invoice: 'overview',

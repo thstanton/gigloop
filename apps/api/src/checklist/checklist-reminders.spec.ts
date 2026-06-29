@@ -52,7 +52,13 @@ describe('selectApplicableReminders', () => {
         status: 'ENQUIRY',
         disabledKeys: new Set(),
       });
-      expect(keys(out)).toEqual(['send_quote', 'send_contract', 'music_form_invite', 'send_thank_you']);
+      expect(keys(out)).toEqual([
+        'send_quote',
+        'send_contract',
+        'send_balance_invoice',
+        'music_form_invite',
+        'send_thank_you',
+      ]);
     });
 
     it('shows the future Overview deal spine on an ENQUIRY booking, in template order', () => {
