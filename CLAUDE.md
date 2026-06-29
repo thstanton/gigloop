@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-GigLoop — a CRM for musicians. Greenfield monorepo; SPEC.md is the source of truth for architecture and requirements. For where the product is heading next, see `docs/north-star.md` — the directional (non-binding) statement of the Wave 2 (P2) feature direction.
+GigLoop — a CRM for musicians. Greenfield monorepo. The living sources of truth are this file (**CLAUDE.md** — hard rules + working conventions) and **CONTEXT.md** (the domain model: booking lifecycle, entities, design principles). `SPEC.md` is a historical, pre-MVP reference only — where it disagrees with CLAUDE.md or CONTEXT.md, they win (its booking lifecycle and several entity fields have drifted from current reality). For where the product is heading next, see `docs/north-star.md` — the directional (non-binding) statement of the Wave 2 (P2) feature direction.
 
 ## Stack
 
@@ -28,7 +28,7 @@ bun run test         # run all tests
 bun --filter @gigloop/api run test -- --testPathPattern=<file>  # run single test file
 ```
 
-## Hard Rules (from SPEC.md — never violate)
+## Hard Rules (never violate)
 
 - **Auth:** Use Clerk exclusively. Never implement custom auth.
 - **Prisma models:** Every model must include `id` (UUID), `userId` (String), `createdAt`, `updatedAt`.
@@ -46,10 +46,10 @@ The NestJS API uses a global `AuthGuard` applied to all routes except portal rou
 PDF generation runs in the API process using `@react-pdf/renderer` and the result is streamed directly to the client — do not generate PDFs in the frontend.
 
 ## Before Every Session
-- Read SPEC.md before writing any code
+- Read CONTEXT.md before writing any code
 - Confirm you understand the hard rules below before proceeding
-- If anything in the task contradicts SPEC.md, flag it rather 
-  than resolving it yourself
+- If anything in the task contradicts CONTEXT.md or the Hard Rules, flag it
+  rather than resolving it yourself
 
 ## Code Quality
 
