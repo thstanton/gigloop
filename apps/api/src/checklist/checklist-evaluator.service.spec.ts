@@ -331,8 +331,13 @@ describe('ChecklistEvaluatorService', () => {
     });
   });
 
-  describe('dependsOn unblocking', () => {
-    it('unblocks BLOCKED item when its dependency transitions to COMPLETE in the same pass', async () => {
+  // ADR-0057 retires BLOCKED and dependsOn gating: a stored BLOCKED state is
+  // normalised to its derived state (PENDING, or COMPLETE/FAILED if its own rule
+  // fires), and nothing the evaluator emits is ever BLOCKED. Intra-goal order is
+  // intrinsic step.order; inter-goal order is soft status. These tests pin the
+  // retirement and its sanctioned consequence (out-of-order auto-complete).
+  describe('BLOCKED retired (ADR-0057)', () => {
+    it('normalises a stored BLOCKED goal to PENDING while its predecessor completes', async () => {
       const depItem = makeItem({
         id: 'ci1',
         key: 'create_contract',
@@ -359,7 +364,7 @@ describe('ChecklistEvaluatorService', () => {
       expect(sendUpdate).toMatchObject({ state: 'PENDING' });
     });
 
-    it('keeps item BLOCKED when a present dependency is genuinely outstanding (PENDING)', async () => {
+    it('normalises a stored BLOCKED goal to PENDING even while a predecessor is still outstanding (no hard lock)', async () => {
       const depItem = makeItem({
         id: 'ci1',
         key: 'create_contract',
@@ -379,30 +384,41 @@ describe('ChecklistEvaluatorService', () => {
 
       await service.evaluate('b1');
 
-      expect(repo.updateItemStates).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('dependsOn satisfied by SKIPPED/absent (#554)', () => {
-    it('treats an absent dependency as satisfied — unblocks downstream to PENDING', async () => {
-      const item = makeItem({
-        id: 'ci2',
-        key: 'send_contract',
-        state: 'BLOCKED',
-        dependsOn: ['create_contract'], // create_contract not in items list — absent
-        autoCompleteRule: null,
-      });
-      const booking = makeBooking();
-      repo.findItemsWithContext.mockResolvedValue({ items: [item], booking });
-
-      await service.evaluate('b1');
-
       expect(repo.updateItemStates).toHaveBeenCalledWith([
         expect.objectContaining({ id: 'ci2', state: 'PENDING' }),
       ]);
     });
 
-    it('treats a SKIPPED mid-chain dependency as satisfied — downstream goes PENDING, not BLOCKED', async () => {
+    it('auto-completes a goal out of order — its own rule fires regardless of an unfinished predecessor', async () => {
+      // deposit_received's rule holds (depositReceivedAt set) before send_contract
+      // is done. Pre-ADR-0057 the dep gate kept it BLOCKED; now it completes.
+      const sendContract = makeItem({
+        id: 'i-send',
+        key: 'send_contract',
+        state: 'PENDING',
+        dependsOn: [],
+        autoCompleteRule: { type: 'communicationSent', templateTypes: ['contract_cover'] },
+      });
+      const depositReceived = makeItem({
+        id: 'i-dep',
+        key: 'deposit_received',
+        state: 'BLOCKED',
+        dependsOn: ['send_contract'],
+        autoCompleteRule: { type: 'bookingField', field: 'depositReceivedAt', operator: 'notNull' },
+      });
+      const booking = makeBooking({ depositReceivedAt: new Date() });
+      repo.findItemsWithContext.mockResolvedValue({ items: [sendContract, depositReceived], booking });
+
+      await service.evaluate('b1');
+
+      const updates = repo.updateItemStates.mock.calls[0][0];
+      expect(updates.find((u: { id: string }) => u.id === 'i-dep')).toMatchObject({ state: 'COMPLETE' });
+      // send_contract stays PENDING (its own rule unmet) — an unchanged goal emits
+      // no update, and crucially is never written BLOCKED to gate the deposit.
+      expect(updates.find((u: { id: string }) => u.id === 'i-send')).toBeUndefined();
+    });
+
+    it('never emits a BLOCKED state, even when seeded items carry dependsOn', async () => {
       const items = [
         makeItem({ id: 'i1', key: 'create_contract', state: 'COMPLETE', dependsOn: [], completedAt: new Date(), autoCompleteRule: null }),
         makeItem({ id: 'i2', key: 'send_contract', state: 'SKIPPED', dependsOn: ['create_contract'], autoCompleteRule: null }),
@@ -413,14 +429,12 @@ describe('ChecklistEvaluatorService', () => {
 
       await service.evaluate('b1');
 
-      expect(repo.updateItemStates).toHaveBeenCalledWith([
-        expect.objectContaining({ id: 'i3', state: 'PENDING' }),
-      ]);
+      const updates = repo.updateItemStates.mock.calls[0][0];
+      expect(updates.every((u: { state: string }) => u.state !== 'BLOCKED')).toBe(true);
+      expect(updates.find((u: { id: string }) => u.id === 'i3')).toMatchObject({ state: 'PENDING' });
     });
 
-    it('re-blocks downstream when a previously-SKIPPED dependency is un-skipped back to PENDING', async () => {
-      // Post-skip state: send_contract is PENDING again, contract_signed had been
-      // unblocked to PENDING — un-skipping must drive it back PENDING → BLOCKED.
+    it('does not touch an already-PENDING goal that has a dependsOn (no re-block)', async () => {
       const items = [
         makeItem({ id: 'i1', key: 'create_contract', state: 'COMPLETE', dependsOn: [], completedAt: new Date(), autoCompleteRule: null }),
         makeItem({ id: 'i2', key: 'send_contract', state: 'PENDING', dependsOn: ['create_contract'], autoCompleteRule: null }),
@@ -431,9 +445,7 @@ describe('ChecklistEvaluatorService', () => {
 
       await service.evaluate('b1');
 
-      expect(repo.updateItemStates).toHaveBeenCalledWith([
-        expect.objectContaining({ id: 'i3', state: 'BLOCKED' }),
-      ]);
+      expect(repo.updateItemStates).not.toHaveBeenCalled();
     });
   });
 
@@ -536,6 +548,126 @@ describe('ChecklistEvaluatorService', () => {
       expect(updates.find((u: { id: string }) => u.id === 'i1')).toMatchObject({ state: 'COMPLETE' });
       expect(updates.find((u: { id: string }) => u.id === 'i2')).toMatchObject({ state: 'COMPLETE' });
       expect(updates.find((u: { id: string }) => u.id === 'i3')).toMatchObject({ state: 'COMPLETE' });
+    });
+  });
+
+  describe('multi-step goal roll-up (ADR-0057)', () => {
+    it('rolls a multi-step goal up to COMPLETE when every step completes', async () => {
+      const goal = makeItem({
+        id: 'g-deposit',
+        key: 'deposit_invoice',
+        state: 'PENDING',
+        autoCompleteRule: null, // multi-step goals carry no own rule
+        steps: [
+          { id: 's1', key: 'create_deposit_invoice', state: 'PENDING', completedAt: null },
+          { id: 's2', key: 'deposit_received', state: 'PENDING', completedAt: null },
+        ],
+      });
+      const booking = makeBooking({ invoices: [{ isDeposit: true }], depositReceivedAt: new Date() });
+      repo.findItemsWithContext.mockResolvedValue({ items: [goal], booking });
+
+      await service.evaluate('b1');
+
+      expect(repo.updateItemStates).toHaveBeenCalledWith([
+        expect.objectContaining({ id: 'g-deposit', state: 'COMPLETE' }),
+      ]);
+    });
+
+    it('rolls a multi-step goal up to FAILED when any step fails (bounced send)', async () => {
+      const goal = makeItem({
+        id: 'g-deposit',
+        key: 'deposit_invoice',
+        state: 'PENDING',
+        autoCompleteRule: null,
+        steps: [
+          { id: 's1', key: 'create_deposit_invoice', state: 'COMPLETE', completedAt: new Date() },
+          { id: 's2', key: 'send_balance_invoice', state: 'PENDING', completedAt: null },
+        ],
+      });
+      const booking = makeBooking({
+        invoices: [{ isDeposit: true }],
+        communications: [{ status: 'FAILED', template: { builtInType: 'balance_invoice_cover' } }],
+      });
+      repo.findItemsWithContext.mockResolvedValue({ items: [goal], booking });
+
+      await service.evaluate('b1');
+
+      expect(repo.updateItemStates).toHaveBeenCalledWith([
+        expect.objectContaining({ id: 'g-deposit', state: 'FAILED' }),
+      ]);
+    });
+  });
+
+  describe('evaluateForEvent (event-targeted, ADR-0057)', () => {
+    const ALL_INPUTS = [
+      'communications',
+      'invoices',
+      'contracts',
+      'depositReceivedAt',
+      'musicFormResponse',
+      'venueId',
+      'customerId',
+      'setsCount',
+      'logistics',
+    ] as const;
+
+    function fixture() {
+      return [
+        makeItem({ id: 'i-inv', key: 'create_deposit_invoice', state: 'PENDING', autoCompleteRule: { type: 'invoiceExists', isDeposit: true } }),
+        makeItem({ id: 'i-venue', key: 'add_venue', state: 'PENDING', autoCompleteRule: { type: 'completeness', concern: 'venue' } }),
+        makeItem({ id: 'i-sign', key: 'contract_signed', state: 'PENDING', autoCompleteRule: { type: 'contractSigned' } }),
+      ];
+    }
+
+    it('produces the same updates as a full sweep when all inputs are flagged changed', async () => {
+      const booking = makeBooking({ invoices: [{ isDeposit: true }], venueId: 'v1', contracts: [{ status: 'SIGNED' }] });
+
+      repo.findItemsWithContext.mockResolvedValue({ items: fixture(), booking });
+      await service.evaluate('b1');
+      const fullSweep = repo.updateItemStates.mock.calls[0][0];
+
+      repo.updateItemStates.mockClear();
+      repo.findItemsWithContext.mockResolvedValue({ items: fixture(), booking });
+      await service.evaluateForEvent('b1', [...ALL_INPUTS]);
+      const targeted = repo.updateItemStates.mock.calls[0][0];
+
+      const byId = (us: Array<{ id: string }>) => [...us].sort((a, b) => a.id.localeCompare(b.id));
+      expect(byId(targeted)).toEqual(byId(fullSweep));
+    });
+
+    it('re-evaluates only the goals whose inputs changed', async () => {
+      const booking = makeBooking({ invoices: [{ isDeposit: true }], venueId: 'v1', contracts: [{ status: 'SIGNED' }] });
+      repo.findItemsWithContext.mockResolvedValue({ items: fixture(), booking });
+
+      await service.evaluateForEvent('b1', ['invoices']);
+
+      const updates = repo.updateItemStates.mock.calls[0][0];
+      expect(updates).toHaveLength(1);
+      expect(updates[0]).toMatchObject({ id: 'i-inv', state: 'COMPLETE' });
+      expect(updates.find((u: { id: string }) => u.id === 'i-venue')).toBeUndefined();
+      expect(updates.find((u: { id: string }) => u.id === 'i-sign')).toBeUndefined();
+    });
+
+    it('does nothing when no goal observes the changed input', async () => {
+      const booking = makeBooking({ invoices: [{ isDeposit: true }] });
+      repo.findItemsWithContext.mockResolvedValue({ items: fixture(), booking });
+
+      // 'setsCount' is observed only by build_itinerary, absent from this fixture.
+      await service.evaluateForEvent('b1', ['setsCount']);
+
+      expect(repo.updateItemStates).not.toHaveBeenCalled();
+    });
+
+    it('leaves a manually-COMPLETE goal sticky even when targeted', async () => {
+      const items = [
+        makeItem({ id: 'i-inv', key: 'create_deposit_invoice', state: 'COMPLETE', completedAt: new Date(), autoCompleteRule: { type: 'invoiceExists', isDeposit: true } }),
+      ];
+      const booking = makeBooking({ invoices: [] }); // rule no longer holds
+      repo.findItemsWithContext.mockResolvedValue({ items, booking });
+
+      await service.evaluateForEvent('b1', ['invoices']);
+
+      expect(repo.updateItemStates).not.toHaveBeenCalled();
     });
   });
 });

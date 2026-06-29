@@ -117,7 +117,7 @@ describe('ChecklistEvaluator (integration)', () => {
         getItem(bookingId, 'confirm_quote'),
       ]);
       expect(sendQuote?.state).toBe('COMPLETE');
-      expect(confirmQuote?.state).toBe('PENDING'); // was BLOCKED, now unblocked
+      expect(confirmQuote?.state).toBe('PENDING'); // atomic goal, actionable throughout (ADR-0057)
 
       await prisma.booking.delete({ where: { id: bookingId } });
     });
@@ -172,7 +172,7 @@ describe('ChecklistEvaluator (integration)', () => {
     it('booking advanced to READY → contract_signed SKIPPED', async () => {
       const bookingId = await createBooking();
 
-      // contract_signed starts BLOCKED; SKIP_RULES fire when status reaches READY
+      // contract_signed is an awaited goal; SKIP_RULES fire when status reaches READY
       const res = await request(app.getHttpServer())
         .patch(`/api/bookings/${bookingId}`)
         .send({ status: 'READY' });
@@ -255,7 +255,7 @@ describe('ChecklistEvaluator (integration)', () => {
       await prisma.booking.delete({ where: { id: bookingId } });
     });
 
-    it('custom dependency chain: completing dependency unblocks dependent', async () => {
+    it('custom item with dependsOn is never gated — it is PENDING throughout (BLOCKED retired, ADR-0057)', async () => {
       const bookingId = await createBooking({
         checklistItems: [
           {
@@ -279,14 +279,18 @@ describe('ChecklistEvaluator (integration)', () => {
         ],
       });
 
+      // Seeding still writes BLOCKED, but the create-time evaluate normalises it:
+      // ADR-0057 retires the dependsOn gate, so step_b surfaces as PENDING from the
+      // start rather than waiting on step_a.
       const stepBefore = await getItem(bookingId, 'step_b');
-      expect(stepBefore?.state).toBe('BLOCKED');
+      expect(stepBefore?.state).toBe('PENDING');
 
       const stepA = await getItem(bookingId, 'step_a');
       await request(app.getHttpServer())
         .patch(`/api/bookings/${bookingId}/checklist/${stepA!.id}`)
         .send({ state: 'COMPLETE' });
 
+      // Completing step_a does not "unblock" step_b — it was already actionable.
       const stepAfter = await getItem(bookingId, 'step_b');
       expect(stepAfter?.state).toBe('PENDING');
 
