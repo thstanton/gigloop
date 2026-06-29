@@ -1,5 +1,7 @@
 # CRM for Musicians — SPEC
 
+> ⚠️ **Historical / pre-MVP reference — NOT authoritative.** This document captured the original architecture intent before the product was built. The living sources of truth are now **`CLAUDE.md`** (hard rules + working conventions) and **`CONTEXT.md`** (the domain model: booking lifecycle, entities, design principles). **Where this file disagrees with those, they win.** Several sections are known to have drifted from current reality — notably the booking **status lifecycle** (this file predates the `Provisional` and `Ready` stages and still lists the retired `INVOICED`/`SETTLED` stages), the removed per-booking **`depositTrackingMode`** override, and **`Contact.referrerId`**. It is retained for history only; do not treat it as a spec to build against.
+
 ## Before Every Session
 - Read SPEC.md before writing any code
 - Confirm you understand the hard rules below before proceeding
