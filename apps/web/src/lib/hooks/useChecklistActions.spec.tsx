@@ -3,6 +3,7 @@ import { renderHook, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { useChecklistActions } from './useChecklistActions';
+import { apiGet } from '@/lib/api';
 import type { Invoice } from '@/types/api';
 
 const setSearchParams = vi.fn();
@@ -20,6 +21,10 @@ vi.mock('@/lib/api', () => ({
 const toast = vi.fn();
 vi.mock('@/lib/hooks/use-toast', () => ({ toast: (...a: unknown[]) => toast(...a) }));
 
+// Controllable Clerk auth state so a test can assert queries stay gated until Clerk initialises.
+const authState = { isLoaded: true, isSignedIn: true };
+vi.mock('@clerk/react', () => ({ useAuth: () => authState }));
+
 function invoice(over: Partial<Invoice>): Invoice {
   return { id: 'i1', isDeposit: false, status: 'DRAFT', ...over } as unknown as Invoice;
 }
@@ -36,8 +41,30 @@ function setup(invoices: Invoice[]) {
   return { result };
 }
 
+describe('useChecklistActions — query gating (#593)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    authState.isLoaded = true;
+    authState.isSignedIn = true;
+  });
+
+  it('does not fire any query before Clerk has initialised', () => {
+    authState.isLoaded = false;
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    renderHook(() => useChecklistActions('b1'), { wrapper });
+    expect(apiGet).not.toHaveBeenCalled();
+  });
+});
+
 describe('useChecklistActions — draft-aware invoice shortcut (ADR-0056)', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    authState.isLoaded = true;
+    authState.isSignedIn = true;
+  });
 
   it('opens the existing DRAFT in the edit sheet (does not create a second invoice)', () => {
     const { result } = setup([invoice({ id: 'd1', isDeposit: true, status: 'DRAFT' })]);

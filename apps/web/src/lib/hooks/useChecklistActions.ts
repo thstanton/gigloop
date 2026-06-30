@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { useAuth } from '@clerk/react';
 import { useQuery } from '@tanstack/react-query';
 import { useBookingActions } from '@/lib/hooks/useBookingActions';
 import { useContractActions } from '@/lib/hooks/useContractActions';
@@ -11,21 +12,25 @@ import type { BookingDetail, Contract, Invoice, UserProfile } from '@/types/api'
 export function useChecklistActions(bookingId: string) {
   const [, setSearchParams] = useSearchParams();
   const [pendingContract, setPendingContract] = useState<Contract | null>(null);
+  // Gate every query on Clerk being initialised, or a page refresh can fire them before the JWT
+  // is ready and they 401 (project data-fetching rule). The `['me']` query keys off the signed-in
+  // user, not the booking, so it gates on isSignedIn rather than bookingId.
+  const { isLoaded, isSignedIn } = useAuth();
 
   const { data: booking } = useQuery({
     queryKey: ['booking', bookingId],
     queryFn: () => apiGet<BookingDetail>(`/bookings/${bookingId}`),
-    enabled: !!bookingId,
+    enabled: isLoaded && !!bookingId,
   });
   const { data: invoices = [] } = useQuery({
     queryKey: ['bookingInvoices', bookingId],
     queryFn: () => apiGet<Invoice[]>(`/bookings/${bookingId}/invoices`),
-    enabled: !!bookingId,
+    enabled: isLoaded && !!bookingId,
   });
   const { data: userProfile } = useQuery({
     queryKey: ['me'],
     queryFn: () => apiGet<UserProfile>('/me'),
-    enabled: !!bookingId,
+    enabled: isLoaded && !!isSignedIn,
   });
 
   const actions = useBookingActions(bookingId);

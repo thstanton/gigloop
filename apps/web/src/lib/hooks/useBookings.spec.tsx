@@ -74,7 +74,7 @@ describe('updateBookingInListCaches', () => {
 
     updateBookingInListCaches(client, fullBooking);
 
-    const row = client.getQueryData<BookingListItem[]>(key)![0] as Record<string, unknown>;
+    const row = client.getQueryData<BookingListItem[]>(key)![0];
     expect(row).not.toHaveProperty('notes');
     expect(row).not.toHaveProperty('logistics');
     expect(row).not.toHaveProperty('packages');
