@@ -523,8 +523,9 @@ export class BookingsService {
       completedAt: item.completedAt?.toISOString() ?? null,
       dueDate: item.dueDate?.toISOString() ?? null,
       ...deriveShortcut(item.autoCompleteRule as Record<string, unknown> | null, items),
-      // Multi-step goal steps (ADR-0057). The client derives the active step + fold;
-      // #611 routes the active step's action via its autoCompleteRule.
+      // Multi-step goal steps (ADR-0057). The client derives the active step + fold; the
+      // active step's action (#611) routes via the same `deriveShortcut` the goal uses, so
+      // both atomic goals and active steps share one shortcut-routing code path on the client.
       steps: (steps ?? []).map((step) => ({
         id: step.id,
         key: step.key,
@@ -536,6 +537,7 @@ export class BookingsService {
         completedBy: step.completedBy,
         completedAt: step.completedAt?.toISOString() ?? null,
         autoCompleteRule: step.autoCompleteRule as Record<string, unknown> | null,
+        ...deriveShortcut(step.autoCompleteRule as Record<string, unknown> | null, items),
       })),
     }));
   }

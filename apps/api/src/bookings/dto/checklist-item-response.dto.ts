@@ -32,6 +32,19 @@ export class BookingChecklistStepResponseDto {
 
   @ApiPropertyOptional({ nullable: true, type: Object })
   autoCompleteRule: Record<string, unknown> | null;
+
+  // ADR-0057 / #611: a multi-step goal carries no goal-level rule, so its action lives on the
+  // active step. Derived from the step's autoCompleteRule with the same `deriveShortcut` the
+  // goal uses, so the client routes the active step exactly like an atomic item (one code path,
+  // no duplicated derivation). Absent for AWAITED steps the musician never acts on.
+  @ApiPropertyOptional({
+    description:
+      'Derived from autoCompleteRule: send_email | create_contract | create_deposit_invoice | create_balance_invoice | mark_contract_signed | mark_deposit_received',
+  })
+  shortcutType?: string;
+
+  @ApiPropertyOptional({ description: 'Template type for send_email shortcuts' })
+  shortcutTemplateType?: string;
 }
 
 export class BookingChecklistItemResponseDto {

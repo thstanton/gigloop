@@ -267,6 +267,10 @@ export interface ChecklistStep {
   completedBy: 'USER' | 'CUSTOMER' | 'BAND_MEMBER';
   completedAt: string | null;
   autoCompleteRule: Record<string, unknown> | null;
+  // Derived server-side from autoCompleteRule (ADR-0057 / #611) so the active step routes its
+  // action exactly like an atomic item. Absent for AWAITED steps the musician never acts on.
+  shortcutType?: string;
+  shortcutTemplateType?: string;
 }
 
 export interface ChecklistItem {

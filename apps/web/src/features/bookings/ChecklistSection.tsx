@@ -25,6 +25,13 @@ import {
 } from '@/components/ui/select';
 import { DatePicker } from '@/components/ui/date-picker';
 import { cn } from '@/lib/utils';
+import { GoalRow } from './GoalRow';
+import {
+  resolveChecklistShortcut,
+  type ChecklistAction,
+  type ChecklistShortcutHandlers,
+  type MarkDoneKey,
+} from './checklistShortcuts';
 import type { BookingStatus, ChecklistItem, ChecklistItemState } from '@/types/api';
 
 const STAGE_LABELS: Record<string, string> = {
@@ -57,17 +64,6 @@ function dueDateDisplay(dueDate: string | null | undefined): { text: string; cla
     className: 'text-muted',
   };
 }
-
-type ChecklistAction = 'create_deposit_invoice' | 'create_balance_invoice' | 'create_contract';
-type MarkDoneKey = 'mark_contract_signed' | 'mark_deposit_received';
-
-// Structural setup items (PRD #511 Module D) have no shortcut action — their "done"
-// state is auto-completed from data. Their action instead deep-links into the Builder
-// at the relevant step so the musician resolves the prompt in context (Story 25, #525).
-const STRUCTURAL_BUILDER_SECTION: Record<string, string> = {
-  build_itinerary: 'itinerary',
-  add_venue: 'venue',
-};
 
 interface ChecklistItemIconProps {
   state: ChecklistItemState;
@@ -121,21 +117,19 @@ interface ChecklistItemShortcutsProps {
 }
 
 function ChecklistItemShortcuts({ shortcutType, shortcutTemplateType, itemKey, isFailed, isActionPending, itemId, onToggle, onOpenCompose, onChecklistAction, onMarkDone, onDeepLink }: ChecklistItemShortcutsProps) {
-  const label = isFailed ? 'Retry' : undefined;
-  const builderSection = itemKey ? STRUCTURAL_BUILDER_SECTION[itemKey] : undefined;
-  if (builderSection) {
-    return <button onClick={() => onDeepLink(builderSection)} className="text-xs text-primary hover:underline">{label ?? 'Set up'}</button>;
+  const resolved = resolveChecklistShortcut(
+    { shortcutType, shortcutTemplateType, itemKey, isFailed },
+    { onOpenCompose, onChecklistAction, onMarkDone, onDeepLink, isActionPending },
+  );
+  // No known action — fall back to a manual "Mark done" toggle (atomic items only).
+  if (!resolved) {
+    return <button onClick={() => onToggle(itemId, 'COMPLETE')} className="text-xs text-primary hover:underline">Mark done</button>;
   }
-  if (shortcutType === 'send_email') {
-    return <button onClick={() => onOpenCompose(shortcutTemplateType)} className="text-xs text-primary hover:underline">{label ?? 'Send'}</button>;
-  }
-  if (shortcutType === 'create_contract' || shortcutType === 'create_deposit_invoice' || shortcutType === 'create_balance_invoice') {
-    return <button onClick={() => onChecklistAction(shortcutType as ChecklistAction)} disabled={isActionPending} className="text-xs text-primary hover:underline disabled:opacity-50 disabled:cursor-not-allowed">{isActionPending ? 'Creating…' : (label ?? 'Create')}</button>;
-  }
-  if (shortcutType === 'mark_contract_signed' || shortcutType === 'mark_deposit_received') {
-    return <button onClick={() => onMarkDone(shortcutType as MarkDoneKey)} disabled={isActionPending} className="text-xs text-primary hover:underline disabled:opacity-50 disabled:cursor-not-allowed">{isActionPending ? 'Marking…' : (label ?? 'Mark done')}</button>;
-  }
-  return <button onClick={() => onToggle(itemId, 'COMPLETE')} className="text-xs text-primary hover:underline">Mark done</button>;
+  return (
+    <button onClick={resolved.onClick} disabled={resolved.pending} className="text-xs text-primary hover:underline disabled:opacity-50 disabled:cursor-not-allowed">
+      {resolved.pending ? (resolved.pendingLabel ?? resolved.label) : resolved.label}
+    </button>
+  );
 }
 
 interface ChecklistItemRowProps {
@@ -326,6 +320,23 @@ export default function ChecklistSection({
 
   const rowProps = { onToggle, onOpenCompose: openCompose, onChecklistAction: handleChecklistAction, onMarkDone: handleMarkDone, onDeepLink: deepLinkBuilder, isActionPending };
 
+  // A multi-step goal (ADR-0057) renders as the two-tier GoalRow showing its active step; an
+  // atomic goal keeps the single-line row. The active step routes through the same shortcut
+  // handlers as an atomic item (#611). Unifying atomic rows into the GoalRow look is #610.
+  const shortcutHandlers: ChecklistShortcutHandlers = {
+    onOpenCompose: openCompose,
+    onChecklistAction: handleChecklistAction,
+    onMarkDone: handleMarkDone,
+    onDeepLink: deepLinkBuilder,
+    isActionPending,
+  };
+  function renderItem(item: ChecklistItem) {
+    if (item.steps && item.steps.length > 0) {
+      return <GoalRow key={item.id} item={item} handlers={shortcutHandlers} />;
+    }
+    return <ChecklistItemRow key={item.id} item={item} {...rowProps} />;
+  }
+
   return (
     <section>
       {!hideHeader && (
@@ -373,18 +384,14 @@ export default function ChecklistSection({
         />
       )}
 
-      {(itemsByStage.get(null) ?? []).map((item) => (
-        <ChecklistItemRow key={item.id} item={item} {...rowProps} />
-      ))}
+      {(itemsByStage.get(null) ?? []).map(renderItem)}
 
       {STAGE_DISPLAY_ORDER.map((stage) => {
         const stageItems = itemsByStage.get(stage) ?? [];
         if (!stageItems.length) return null;
         return (
           <div key={stage}>
-            {stageItems.map((item) => (
-              <ChecklistItemRow key={item.id} item={item} {...rowProps} />
-            ))}
+            {stageItems.map(renderItem)}
             <div className="flex items-center gap-2 my-2">
               <div className="flex-1 h-px bg-border" />
               <span className="text-[10px] font-medium text-muted uppercase tracking-wider">{STAGE_LABELS[stage]}</span>

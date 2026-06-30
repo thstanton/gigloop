@@ -961,6 +961,48 @@ describe('BookingsService', () => {
       await expect(service.getChecklist('u1', 'missing')).rejects.toThrow(NotFoundException);
       expect(repo.findChecklistItems).not.toHaveBeenCalled();
     });
+
+    it('derives a shortcut on each step of a multi-step goal (ADR-0057 / #611)', async () => {
+      // A multi-step goal carries no goal-level rule — its action lives on the active step,
+      // so the active step must route exactly like an atomic item. Assert the steps' derived
+      // shortcuts (create → create_contract, send → send_email; AWAITED signed → mark).
+      const contractGoal = {
+        id: 'cg1', userId: 'u1', bookingId: 'b1', createdAt: now, updatedAt: now,
+        key: 'get_contract_signed', label: 'Get the contract signed', completedBy: 'USER',
+        state: 'PENDING', order: 2, dependsOn: [], autoCompleteRule: null,
+        requiredForStatus: 'CONFIRMED', completedAt: null, dueDate: null, dueDateRule: null,
+        steps: [
+          {
+            id: 's1', key: 'create_contract', label: 'Draft the contract', order: 1,
+            kind: 'MILESTONE', completeMode: 'ACTION', state: 'COMPLETE', completedBy: 'USER',
+            completedAt: now,
+            autoCompleteRule: { type: 'bookingField', field: 'activeContract', operator: 'notNull' },
+          },
+          {
+            id: 's2', key: 'send_contract', label: 'Send it to the client', order: 2,
+            kind: 'MILESTONE', completeMode: 'ACTION', state: 'PENDING', completedBy: 'USER',
+            completedAt: null,
+            autoCompleteRule: { type: 'communicationSent', templateTypes: ['contract_cover', 'contract_and_deposit_cover'] },
+          },
+          {
+            id: 's3', key: 'contract_signed', label: 'Client signs the contract', order: 3,
+            kind: 'MILESTONE', completeMode: 'AWAITED', state: 'PENDING', completedBy: 'CUSTOMER',
+            completedAt: null, autoCompleteRule: { type: 'contractSigned' },
+          },
+        ],
+      };
+      repo.findOne.mockResolvedValue({ ...booking, musicFormConfig: null, musicFormResponse: null, contracts: [] });
+      repo.findChecklistItems.mockResolvedValue([contractGoal]);
+
+      const result = await service.getChecklist('u1', 'b1');
+      const steps = result[0].steps!;
+      expect(steps[0].shortcutType).toBe('create_contract');
+      expect(steps[1].shortcutType).toBe('send_email');
+      expect(steps[1].shortcutTemplateType).toBe('contract_cover');
+      expect(steps[2].shortcutType).toBe('mark_contract_signed');
+      // The goal itself rolls up — no goal-level shortcut.
+      expect(result[0].shortcutType).toBeUndefined();
+    });
   });
 
   describe('createContract', () => {
