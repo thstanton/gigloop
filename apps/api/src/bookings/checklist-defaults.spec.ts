@@ -115,34 +115,34 @@ describe('build_itinerary checklist default (Module D / #523)', () => {
         { key: 'invoice_the_balance', order: 1 },
         { key: 'gather_song_requests', order: 2 },
       ];
-      // confirm_quote is earlier in the template than both — it should go first.
-      expect(computeReminderInsertOrder('confirm_quote', existing)).toBe(1);
+      // get_the_quote_accepted is earlier in the template than both — it should go first.
+      expect(computeReminderInsertOrder('get_the_quote_accepted', existing)).toBe(1);
     });
 
     it('places a mid-template key just after its template predecessor (not appended)', () => {
       const existing = [
-        { key: 'send_quote', order: 1 }, // template idx 0
-        { key: 'play_the_gig', order: 2 }, // template idx 12
+        { key: 'get_the_quote_accepted', order: 1 }, // template idx 0
+        { key: 'play_the_gig', order: 2 }, // a later template item
       ];
-      // get_contract_signed (a mid-template key) follows send_quote, precedes play_the_gig.
+      // get_contract_signed (a mid-template key) follows the quote goal, precedes play_the_gig.
       const order = computeReminderInsertOrder('get_contract_signed', existing);
-      expect(order).toBe(2); // after send_quote(1); caller shifts play_the_gig to 3
+      expect(order).toBe(2); // after the quote goal(1); caller shifts play_the_gig to 3
       expect(order).toBeLessThan(3); // strictly before the later item — not appended
     });
 
     it('ignores custom (keyless) items when finding the preceding position', () => {
       const existing = [
-        { key: 'send_quote', order: 1 },
+        { key: 'get_the_quote_accepted', order: 1 },
         { key: null, order: 2 }, // a custom item — no template index
       ];
-      // confirm_quote (idx 1) follows send_quote; the custom item does not count.
-      expect(computeReminderInsertOrder('confirm_quote', existing)).toBe(2);
+      // get_deposit_paid follows the quote goal; the custom item does not count.
+      expect(computeReminderInsertOrder('get_deposit_paid', existing)).toBe(2);
     });
 
     it('appends a last-template key after all preceding items', () => {
       const existing = [
-        { key: 'send_quote', order: 1 },
-        { key: 'confirm_quote', order: 2 },
+        { key: 'get_the_quote_accepted', order: 1 },
+        { key: 'get_deposit_paid', order: 2 },
       ];
       // send_thank_you is the final template item.
       expect(computeReminderInsertOrder('send_thank_you', existing)).toBe(3);

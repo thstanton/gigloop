@@ -1421,12 +1421,12 @@ describe('BookingsService', () => {
 
       // No findOne / findChecklistItemsForReminders — preview runs off the template alone.
       expect(repo.findOne).not.toHaveBeenCalled();
-      // confirm_quote (overview) depends cross-concern on send_quote (people) — the surviving
-      // cross-concern prerequisite after the deposit/balance/song clusters collapsed into goals
-      // (ADR-0057 / #607–#608), whose intra-goal deps retired.
-      const confirmQuote = result.find((r) => r.key === 'confirm_quote');
-      expect(confirmQuote).toMatchObject({ concern: 'overview' });
-      expect(confirmQuote?.prerequisites).toContainEqual({ key: 'send_quote', phrase: 'send the quote' });
+      // send_thank_you (people) depends cross-concern on play_the_gig (overview) — the surviving
+      // cross-concern prerequisite after the quote/deposit/balance/song clusters collapsed into
+      // goals (ADR-0057 / #607–#608 / #616), whose intra-goal deps retired.
+      const thankYou = result.find((r) => r.key === 'send_thank_you');
+      expect(thankYou).toMatchObject({ concern: 'people' });
+      expect(thankYou?.prerequisites).toContainEqual({ key: 'play_the_gig', phrase: 'play the gig' });
       // The song-request deliverable is now one multi-step goal in Music.
       expect(result.find((r) => r.key === 'gather_song_requests')).toMatchObject({ concern: 'music' });
     });
@@ -1434,13 +1434,15 @@ describe('BookingsService', () => {
     it('drops a template-disabled key (master switch parity with the Builder)', async () => {
       repo.findUserProfile.mockResolvedValue({
         preferences: {
-          checklistDefaults: [{ key: 'send_quote', enabled: false, label: 'Send quote' }],
+          checklistDefaults: [
+            { key: 'get_the_quote_accepted', enabled: false, label: 'Get the quote accepted' },
+          ],
         },
       });
 
       const result = await service.previewReminders('u1', 'ENQUIRY');
 
-      expect(result.find((r) => r.key === 'send_quote')).toBeUndefined();
+      expect(result.find((r) => r.key === 'get_the_quote_accepted')).toBeUndefined();
     });
   });
 });

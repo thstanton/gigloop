@@ -118,6 +118,67 @@ export const AwaitingClient: Story = {
   },
 };
 
+// ── Quote goal (#616): send → accept, mirroring the contract but USER-awaited at the end ──────
+
+function quoteGoal(steps: ChecklistStep[]): ChecklistItem {
+  return {
+    ...contractGoal(steps),
+    id: 'g-quote',
+    key: 'get_the_quote_accepted',
+    label: 'Get the quote accepted',
+    requiredForStatus: 'PROVISIONAL',
+  };
+}
+
+const sendQuote = step({
+  id: 's-send-quote',
+  label: 'Send the quote',
+  order: 1,
+  shortcutType: 'send_email',
+  shortcutTemplateType: 'quote',
+});
+const quoteAccepted = step({
+  id: 's-quote-accepted',
+  label: 'Client accepts the quote',
+  order: 2,
+  completeMode: 'AWAITED',
+  completedBy: 'USER', // chase the sale — the musician marks it, no client portal signal
+});
+
+// Send is the active ACTION step — the wand-led CTA routes to compose with the quote template.
+export const QuoteActiveSend: Story = {
+  args: { item: quoteGoal([sendQuote, quoteAccepted]), handlers: handlers() },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('button', { name: /Send the quote/ })).toBeVisible();
+    await expect(canvas.getByText('1/2')).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: /Send the quote/ }));
+    await expect(args.handlers.onOpenCompose).toHaveBeenCalledWith('quote');
+  },
+};
+
+// Sent; now awaiting acceptance. Because the awaited step is USER-completedBy (not the client),
+// it shows as a plain muted wait with NO "Waiting on …" party, and the musician resolves it via
+// the goal's "Mark complete" — the precedent for a USER-awaited step with no system signal.
+export const QuoteAwaitingAcceptance: Story = {
+  args: {
+    item: quoteGoal([{ ...sendQuote, state: 'COMPLETE' }, quoteAccepted]),
+    handlers: handlers(),
+    onSetState: fn(),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText('Client accepts the quote')).toBeVisible();
+    // USER-awaited ⇒ no "Waiting on the client" suffix (that is only for CUSTOMER/BAND waits).
+    await expect(canvas.queryByText(/Waiting on/)).toBeNull();
+    await expect(canvas.getByText('2/2')).toBeVisible();
+    // Resolved by marking the goal complete (no system signal for a quote acceptance).
+    await userEvent.click(canvas.getByRole('button', { name: 'More actions' }), { pointerEventsCheck: 0 });
+    await userEvent.click(await within(document.body).findByText('Mark complete'), { pointerEventsCheck: 0 });
+    await expect(args.onSetState).toHaveBeenCalledWith('g-quote', 'COMPLETE');
+  },
+};
+
 // ── Atomic goals (no steps), unified into the same row in #610 ──────────────────────────────
 
 function atomicGoal(overrides: Partial<ChecklistItem>): ChecklistItem {

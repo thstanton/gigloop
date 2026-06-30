@@ -54,7 +54,11 @@ describe('selectApplicableReminders', () => {
         status: 'ENQUIRY',
         disabledKeys: new Set(),
       });
-      expect(keys(out)).toEqual(['send_quote', 'send_thank_you']);
+      // ADR-0057 / #616: the quote is now a multi-step goal in Overview (its send_quote step's old
+      // People home retires with the fold), so send_thank_you is the only standalone People send.
+      expect(keys(out)).toEqual(['send_thank_you']);
+      // The collapsed quote goal lives in Overview now — it must not leak back into People.
+      expect(find(out, 'get_the_quote_accepted')).toBeUndefined();
     });
 
     it('shows the future Overview deal spine on an ENQUIRY booking, in template order', () => {
@@ -63,9 +67,10 @@ describe('selectApplicableReminders', () => {
         status: 'ENQUIRY',
         disabledKeys: new Set(),
       });
-      // ADR-0057 / #607–#608: the contract, deposit and balance are each one multi-step goal.
+      // ADR-0057 / #607–#608 / #616: the quote, contract, deposit and balance are each one
+      // multi-step goal; the quote goal leads the spine.
       expect(keys(out)).toEqual([
-        'confirm_quote',
+        'get_the_quote_accepted',
         'get_deposit_paid',
         'get_contract_signed',
         'invoice_the_balance',
@@ -74,7 +79,7 @@ describe('selectApplicableReminders', () => {
     });
 
     it('drops past-stage Overview reminders on a READY booking, keeping the current and future stages', () => {
-      // confirm_quote (PROVISIONAL) and the CONFIRMED-stage goals (get_deposit_paid,
+      // get_the_quote_accepted (PROVISIONAL) and the CONFIRMED-stage goals (get_deposit_paid,
       // get_contract_signed) are passed by a READY booking; invoice_the_balance (READY, current)
       // and play_the_gig (COMPLETE, future) remain.
       const out = selectApplicableReminders('overview', {
@@ -82,20 +87,21 @@ describe('selectApplicableReminders', () => {
         status: 'READY',
         disabledKeys: new Set(),
       });
-      expect(find(out, 'confirm_quote')).toBeUndefined();
+      expect(find(out, 'get_the_quote_accepted')).toBeUndefined();
       expect(keys(out)).toEqual(['invoice_the_balance', 'play_the_gig']);
     });
   });
 
   describe('system reminders — global disable', () => {
     it('excludes a globally-disabled key', () => {
-      const out = selectApplicableReminders('people', {
+      // Overview carries several goals, so disabling one leaves its siblings to assert against.
+      const out = selectApplicableReminders('overview', {
         items: [],
         status: 'ENQUIRY',
-        disabledKeys: new Set(['send_thank_you']),
+        disabledKeys: new Set(['get_deposit_paid']),
       });
-      expect(find(out, 'send_thank_you')).toBeUndefined();
-      expect(find(out, 'send_quote')).toBeDefined();
+      expect(find(out, 'get_deposit_paid')).toBeUndefined();
+      expect(find(out, 'get_the_quote_accepted')).toBeDefined();
     });
   });
 
@@ -216,42 +222,43 @@ describe('selectApplicableReminders', () => {
     });
 
     it('leaves the self-evident Send items without a hint', () => {
+      // send_quote is a step of the quote goal now; send_thank_you is the standalone People send.
       const people = selectApplicableReminders('people', ctx);
-      expect(find(people, 'send_quote')?.autoCompleteHint).toBeNull();
       expect(find(people, 'send_thank_you')?.autoCompleteHint).toBeNull();
     });
   });
 
   describe('dependency clause — after (#557/#558)', () => {
-    // confirm_quote (overview) depends on send_quote (people); drive the quote send's state. The
-    // intra-goal deps (e.g. song_requests → music_form_invite) retired with the goal⊃step fold
-    // (ADR-0057: steps are intrinsically ordered); this cross-goal dep is what remains.
-    const confirmQuoteAfter = (quoteState?: string) => {
-      const items = quoteState ? [item({ id: 'sq', key: 'send_quote', state: quoteState })] : [];
-      const out = selectApplicableReminders('overview', { items, status: 'ENQUIRY', disabledKeys: new Set() });
-      return find(out, 'confirm_quote')?.after;
+    // send_thank_you (people) depends on play_the_gig (overview); drive the gig's state. The
+    // intra-goal deps (e.g. confirm←send, song_requests→music_form_invite) retired with the
+    // goal⊃step fold (ADR-0057: steps are intrinsically ordered); the quote's send→accepted
+    // collapsed into one goal in #616, so this cross-concern dep is what remains.
+    const thankYouAfter = (gigState?: string) => {
+      const items = gigState ? [item({ id: 'ptg', key: 'play_the_gig', state: gigState })] : [];
+      const out = selectApplicableReminders('people', { items, status: 'ENQUIRY', disabledKeys: new Set() });
+      return find(out, 'send_thank_you')?.after;
     };
 
     it.each(['PENDING', 'FAILED'])(
       'shows the clause while the prerequisite is outstanding (%s)',
       (state) => {
-        expect(confirmQuoteAfter(state)).toBe('send the quote');
+        expect(thankYouAfter(state)).toBe('play the gig');
       },
     );
 
     it.each(['COMPLETE', 'SKIPPED'])('hides the clause once the prerequisite is %s', (state) => {
-      expect(confirmQuoteAfter(state)).toBeNull();
+      expect(thankYouAfter(state)).toBeNull();
     });
 
     it('hides the clause when the prerequisite is absent (never seeded)', () => {
-      expect(confirmQuoteAfter()).toBeNull();
+      expect(thankYouAfter()).toBeNull();
     });
 
     it('a multi-step goal carries no after-clause (its ordering is intrinsic to its steps)', () => {
       // gather_song_requests has dependsOn: [] — the invite→response order is intrinsic step
       // order now, not a dependency clause, and the goal carries no goal-level hint either.
       const out = selectApplicableReminders('music', {
-        items: [item({ id: 'sq', key: 'send_quote', state: 'PENDING' })],
+        items: [item({ id: 'ptg', key: 'play_the_gig', state: 'PENDING' })],
         status: 'READY',
         disabledKeys: new Set(),
       });
@@ -290,9 +297,9 @@ describe('previewApplicableReminders (pre-creation, #560)', () => {
   });
 
   it('applies the same past-stage filter as the Builder', () => {
-    // send_quote is PROVISIONAL-staged; a CONFIRMED-starting booking has passed it.
+    // get_the_quote_accepted is PROVISIONAL-staged; a CONFIRMED-starting booking has passed it.
     const out = previewApplicableReminders({ status: 'CONFIRMED', disabledKeys: new Set() });
-    expect(pfind(out, 'send_quote')).toBeUndefined();
+    expect(pfind(out, 'get_the_quote_accepted')).toBeUndefined();
     expect(pfind(out, 'send_thank_you')).toBeDefined(); // COMPLETE-staged, still ahead
   });
 
@@ -302,32 +309,35 @@ describe('previewApplicableReminders (pre-creation, #560)', () => {
   });
 
   it('surfaces cross-concern prerequisites with their phrases', () => {
-    // confirm_quote (overview) depends on send_quote (people) — the clause must survive the
+    // send_thank_you (people) depends on play_the_gig (overview) — the clause must survive the
     // concern boundary, with the prereq key + phrase for the frontend to gate by selection.
-    // (The old song_requests → music_form_invite dep retired with the goal⊃step fold.)
+    // (The quote's confirm←send dep collapsed into one goal in #616.)
     const out = previewApplicableReminders({ status: 'ENQUIRY', disabledKeys: new Set() });
-    expect(pfind(out, 'confirm_quote')?.prerequisites).toContainEqual({
-      key: 'send_quote',
-      phrase: 'send the quote',
+    expect(pfind(out, 'send_thank_you')?.prerequisites).toContainEqual({
+      key: 'play_the_gig',
+      phrase: 'play the gig',
     });
   });
 
-  it('omits a prerequisite that has itself been filtered out as past-stage', () => {
-    // On a READY-starting booking, send_quote (PROVISIONAL-staged) has passed, so no still-ahead
-    // dependent may carry a clause pointing at it. (Post-#607 the contract is one goal, so this
-    // now guards the general past-stage-prereq filter rather than the old contract chain.)
+  it('only surfaces prerequisites that are themselves still in scope (no past-stage clause)', () => {
+    // The in-scope filter must drop any prereq that has itself been filtered out as past-stage, so
+    // a still-offered row never carries a dangling clause. (With the current catalogue the only
+    // dependency is the COMPLETE-staged play_the_gig, so this guards the filter generically.)
     const out = previewApplicableReminders({ status: 'READY', disabledKeys: new Set() });
+    const offeredKeys = new Set(out.map((r) => r.key));
     for (const row of out) {
-      expect(row.prerequisites.map((p) => p.key)).not.toContain('send_quote');
+      for (const prereq of row.prerequisites) {
+        expect(offeredKeys.has(prereq.key)).toBe(true);
+      }
     }
   });
 
   it('gives multi-step goals no goal-level hint in the preview either', () => {
-    // ADR-0057 / #607–#608: client-committed conditions live on steps, not the goal — so the
-    // preview row for a multi-step goal carries no goal-level hint, like the live selector.
+    // ADR-0057 / #607–#608 / #616: client-committed conditions live on steps, not the goal — so
+    // the preview row for a multi-step goal carries no goal-level hint, like the live selector.
     const out = previewApplicableReminders({ status: 'ENQUIRY', disabledKeys: new Set() });
     expect(pfind(out, 'gather_song_requests')?.autoCompleteHint).toBeNull();
     expect(pfind(out, 'get_contract_signed')?.autoCompleteHint).toBeNull();
-    expect(pfind(out, 'send_quote')?.autoCompleteHint).toBeNull();
+    expect(pfind(out, 'get_the_quote_accepted')?.autoCompleteHint).toBeNull();
   });
 });

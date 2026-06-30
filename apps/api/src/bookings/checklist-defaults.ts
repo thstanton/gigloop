@@ -45,22 +45,41 @@ export interface ChecklistDefaultItem {
 
 export const CHECKLIST_DEFAULTS: ChecklistDefaultItem[] = [
   {
-    key: 'send_quote',
-    label: 'Send quote',
+    // ADR-0057 / #616: the quote deliverable as one multi-step goal — send the quote → the
+    // client accepts it. Mirrors the contract goal: the goal carries no rule (its state rolls
+    // up from its steps), `completedBy: USER` so it passes the findActionItems USER filter
+    // (surfacing then refines to the active step), and a goal-level dueDate of bookingCreation+2
+    // (the send deadline, the quote's binding deadline). `quote_accepted` is AWAITED with no
+    // system signal (a quote acceptance has no portal event), so it completes by the musician
+    // marking the goal done — the locked precedent for a USER-awaited step with no rule. It is
+    // USER-completedBy, so per the chase-the-money policy the goal keeps surfacing (chase the
+    // sale) until the booking advances past PROVISIONAL.
+    key: 'get_the_quote_accepted',
+    label: 'Get the quote accepted',
     completedBy: 'USER',
     dependsOn: [],
-    autoCompleteRule: { type: 'communicationSent', templateTypes: ['quote'] },
-    requiredForStatus: 'PROVISIONAL',
-    dueDateRule: { basis: 'bookingCreation', offsetDays: 2 },
-  },
-  {
-    key: 'confirm_quote',
-    label: 'Quote confirmed',
-    completedBy: 'USER',
-    dependsOn: ['send_quote'],
     autoCompleteRule: null,
     requiredForStatus: 'PROVISIONAL',
-    dueDateRule: null,
+    dueDateRule: { basis: 'bookingCreation', offsetDays: 2 },
+    steps: [
+      {
+        key: 'send_quote',
+        label: 'Send the quote',
+        kind: 'MILESTONE',
+        completeMode: 'ACTION',
+        completedBy: 'USER',
+        autoCompleteRule: { type: 'communicationSent', templateTypes: ['quote'] },
+        dueDateRule: { basis: 'bookingCreation', offsetDays: 2 },
+      },
+      {
+        key: 'quote_accepted',
+        label: 'Client accepts the quote',
+        kind: 'MILESTONE',
+        completeMode: 'AWAITED',
+        completedBy: 'USER',
+        autoCompleteRule: null,
+      },
+    ],
   },
   {
     // ADR-0057 / #608: the deposit billing deliverable as one multi-step goal — issue the

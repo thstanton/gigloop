@@ -24,10 +24,11 @@ const KEY_TO_CONCERN: Record<string, ReminderConcern> = {
   // retires with the fold).
   gather_song_requests: 'music',
   // People — the sends
-  send_quote: 'people',
   send_thank_you: 'people',
   // Overview — deal spine + the gig
-  confirm_quote: 'overview',
+  // ADR-0057 / #616: the quote is now one multi-step *goal* (send → accepted). Its send step's
+  // old 'people' home retires with the fold; the goal lives on the deal spine in 'overview'.
+  get_the_quote_accepted: 'overview',
   // ADR-0057 / #607–#608: the contract, deposit and balance are each one multi-step *goal*.
   // Their create/send/signed/received steps are not independently toggleable reminders — the
   // goal is the unit. (The picker listing goals as the toggle unit is #609; here we just keep

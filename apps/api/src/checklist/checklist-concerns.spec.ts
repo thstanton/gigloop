@@ -36,19 +36,18 @@ describe('checklist concern map', () => {
   });
 
   it('groups the sends under People and the deal spine under Overview', () => {
-    // ADR-0057 / #607–#608: the contract, deposit, balance and song-request deliverables are each
-    // one multi-step *goal* — their create/send/issue/received/invite/response steps are no longer
-    // independent reminder keys. People holds only the standalone sends; the multi-step billing
-    // goals live in Overview; the song-request goal's outcome is musical so it lives in Music.
-    expect(keysForConcern('people').sort(alpha)).toEqual(
-      ['send_quote', 'send_thank_you'].sort(alpha),
-    );
+    // ADR-0057 / #607–#608 / #616: the quote, contract, deposit, balance and song-request
+    // deliverables are each one multi-step *goal* — their send/create/issue/accepted/received/
+    // invite/response steps are no longer independent reminder keys. People holds only the
+    // standalone sends; the multi-step billing goals (quote included) live in Overview; the
+    // song-request goal's outcome is musical so it lives in Music.
+    expect(keysForConcern('people').sort(alpha)).toEqual(['send_thank_you'].sort(alpha));
     expect(keysForConcern('venue')).toEqual(['add_venue']);
     expect(keysForConcern('itinerary')).toEqual(['build_itinerary']);
     expect(keysForConcern('music')).toEqual(['gather_song_requests']);
     expect(keysForConcern('overview').sort(alpha)).toEqual(
       [
-        'confirm_quote',
+        'get_the_quote_accepted',
         'get_deposit_paid',
         'get_contract_signed',
         'invoice_the_balance',
