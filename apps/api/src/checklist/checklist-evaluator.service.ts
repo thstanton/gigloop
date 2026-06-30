@@ -1,27 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { ChecklistRepository } from './checklist.repository';
-import { isConcernComplete, CompletenessConcern } from '../bookings/booking-completeness';
-
-type AutoCompleteRule =
-  | { type: 'bookingField'; field: string; operator: 'notNull' }
-  | { type: 'communicationSent'; templateTypes: string[] }
-  | { type: 'invoiceExists'; isDeposit: boolean }
-  | { type: 'musicFormResponse' }
-  | { type: 'contractSigned' }
-  | { type: 'completeness'; concern: CompletenessConcern };
-
-interface BookingContext {
-  status: string;
-  venueId: string | null;
-  customerId: string | null;
-  depositReceivedAt: Date | null;
-  setsCount: number;
-  logistics: unknown;
-  communications: Array<{ status: string; template: { builtInType: string | null } | null }>;
-  invoices: Array<{ isDeposit: boolean }>;
-  contracts: Array<{ status: string }>;
-  musicFormResponse: { id: string } | null;
-}
+import {
+  AutoCompleteRule,
+  BookingContext,
+  InputKey,
+  RuleState,
+  evaluateRuleState,
+} from './checklist-rules';
+import { ChecklistState, StepState, rollUp } from './checklist-rollup';
+import { STEP_PREDICATES, affectedKeys } from './checklist-predicate-registry';
 
 const STATUS_ORDER = ['ENQUIRY', 'PROVISIONAL', 'CONFIRMED', 'READY', 'COMPLETE', 'CANCELLED'];
 
@@ -29,136 +16,183 @@ function statusGte(current: string, threshold: string): boolean {
   return STATUS_ORDER.indexOf(current) >= STATUS_ORDER.indexOf(threshold);
 }
 
-// Items that become SKIPPED when booking status reaches a threshold
+// Goals that become SKIPPED when booking status reaches a threshold. The contract
+// outcome is an awaited goal the READY transition makes moot (the gig is happening) —
+// it is skipped, not failed. Keyed on the GOAL (`get_contract_signed`) now that the
+// contract is a multi-step goal; resolveSkip sets the goal SKIPPED directly, ahead of
+// any step roll-up. (Pre-#607 this keyed on the flat `contract_signed` item.)
 const SKIP_RULES: Array<{ keys: string[]; threshold: string }> = [
-  { keys: ['contract_signed'], threshold: 'READY' },
+  { keys: ['get_contract_signed'], threshold: 'READY' },
 ];
 
-function evaluateRule(rule: AutoCompleteRule, ctx: BookingContext): boolean {
-  switch (rule.type) {
-    case 'bookingField':
-      if (rule.field === 'depositReceivedAt') return ctx.depositReceivedAt !== null;
-      if (rule.field === 'activeContract') return ctx.contracts.length > 0;
-      return false;
-    case 'communicationSent':
-      return ctx.communications.some(
-        (c) => c.status === 'SENT' && rule.templateTypes.includes(c.template?.builtInType ?? ''),
-      );
-    case 'invoiceExists':
-      return ctx.invoices.some((i) => i.isDeposit === rule.isDeposit);
-    case 'musicFormResponse':
-      return ctx.musicFormResponse !== null;
-    case 'contractSigned':
-      return ctx.contracts.some((c) => c.status === 'SIGNED');
-    // Structural items (Module D) bind their done-state to a completeness predicate
-    // (Module A), so "is this concern done?" lives in exactly one place.
-    case 'completeness':
-      return isConcernComplete(rule.concern, ctx);
-  }
-}
-
-function isCommFailed(rule: AutoCompleteRule, ctx: BookingContext): boolean {
-  if (rule.type !== 'communicationSent') return false;
-  const matching = ctx.communications.filter((c) =>
-    rule.templateTypes.includes(c.template?.builtInType ?? ''),
-  );
-  return matching.length > 0 && matching[matching.length - 1].status === 'FAILED';
-}
-
-type ChecklistItem = {
-  id: string;
-  key: string | null;
-  state: string;
-  completedAt: Date | null;
-  dependsOn: string[];
-  autoCompleteRule: unknown;
-};
-
-function buildStateMap(items: ChecklistItem[]): Map<string, string> {
-  const map = new Map<string, string>();
-  for (const item of items) {
-    if (item.key) map.set(item.key, item.state);
-  }
-  return map;
-}
-
-function resolveSkip(item: ChecklistItem, bookingStatus: string): boolean {
-  return SKIP_RULES.some(
-    ({ keys, threshold }) =>
-      item.key && keys.includes(item.key) && statusGte(bookingStatus, threshold),
-  );
-}
-
-// A dependency is *satisfied* (does not block downstream) when it is COMPLETE,
-// SKIPPED, or absent from the checklist. It blocks only while genuinely
-// outstanding — PENDING, BLOCKED, or FAILED. Treating SKIPPED as satisfying is
-// what lets a user opt out of a mid-chain item without stranding everything below
-// it as BLOCKED forever (a SKIPPED dep can never become COMPLETE). Absent is
-// satisfied for robustness; in practice seed-time `dependsOn` stripping means a
-// dep is never absent on a real booking.
+/**
+ * A dependency is *satisfied* (does not block downstream) when it is COMPLETE,
+ * SKIPPED, or absent. Retained for the reminders selector's "after you …" clause
+ * (ADR-0052). The evaluator itself no longer consults it: ADR-0057 retires the
+ * BLOCKED state and `dependsOn` gating — intra-goal order is intrinsic `step.order`
+ * (the active step is derived, never stored) and inter-goal order is soft status.
+ */
 export function isDepSatisfied(depKey: string, stateMap: Map<string, string>): boolean {
   const depState = stateMap.get(depKey);
   return depState === undefined || depState === 'COMPLETE' || depState === 'SKIPPED';
 }
 
-function resolveNewState(item: ChecklistItem, booking: BookingContext, stateMap: Map<string, string>): string {
-  const rule = item.autoCompleteRule as AutoCompleteRule | null;
-  const blocked = item.dependsOn.some((dep) => !isDepSatisfied(dep, stateMap));
+type EvalStep = {
+  id: string;
+  key: string | null;
+  state: string;
+  completedAt: Date | null;
+};
 
-  if (!rule) return blocked ? 'BLOCKED' : 'PENDING';
-  if (evaluateRule(rule, booking)) return 'COMPLETE';
-  if (isCommFailed(rule, booking)) return 'FAILED';
-  return blocked ? 'BLOCKED' : 'PENDING';
+/** A Goal: the user-facing checklist row. Atomic goals carry their own rule and
+ * have no steps; multi-step goals roll their state up from `steps`. */
+type EvalGoal = {
+  id: string;
+  key: string | null;
+  state: string;
+  completedAt: Date | null;
+  autoCompleteRule: unknown;
+  steps?: EvalStep[];
+};
+
+type StateUpdate = { id: string; state: string; completedAt?: Date | null };
+
+function isTerminalGoal(state: string): boolean {
+  return state === 'COMPLETE' || state === 'SKIPPED';
 }
 
-function buildItemUpdate(
-  item: ChecklistItem,
-  booking: BookingContext,
-  stateMap: Map<string, string>,
-): { id: string; state: string; completedAt?: Date | null } | null {
-  const newState = resolveNewState(item, booking, stateMap);
-  if (newState === item.state) return null;
-  const update: { id: string; state: string; completedAt?: Date | null } = { id: item.id, state: newState };
+function resolveSkip(goal: EvalGoal, bookingStatus: string): boolean {
+  return SKIP_RULES.some(
+    ({ keys, threshold }) =>
+      goal.key && keys.includes(goal.key) && statusGte(bookingStatus, threshold),
+  );
+}
+
+/** Re-evaluate a single step against the registry, respecting COMPLETE stickiness.
+ * A step with no registered predicate keeps its stored state. */
+function nextStepState(step: EvalStep, ctx: BookingContext): RuleState {
+  if (step.state === 'COMPLETE') return 'COMPLETE'; // sticky — manual or prior auto-complete
+  const entry = step.key ? STEP_PREDICATES[step.key] : undefined;
+  if (!entry) return step.state as RuleState;
+  return entry.predicate(ctx);
+}
+
+/**
+ * The materialised next state of a goal, plus any step transitions it implies.
+ * Multi-step goals re-evaluate their steps and roll up; atomic goals evaluate
+ * their own rule. Never returns BLOCKED.
+ */
+function nextGoalState(
+  goal: EvalGoal,
+  ctx: BookingContext,
+): { state: ChecklistState; stepUpdates: StateUpdate[] } {
+  if (goal.steps && goal.steps.length > 0) {
+    const stepUpdates: StateUpdate[] = [];
+    const rolled = goal.steps.map((step) => {
+      const next = nextStepState(step, ctx);
+      if (next !== step.state) {
+        const update: StateUpdate = { id: step.id, state: next };
+        if (next === 'COMPLETE') update.completedAt = new Date();
+        else if (step.completedAt) update.completedAt = null;
+        stepUpdates.push(update);
+      }
+      return { state: next as StepState };
+    });
+    return { state: rollUp(rolled), stepUpdates };
+  }
+  const rule = goal.autoCompleteRule as AutoCompleteRule | null;
+  return { state: rule ? evaluateRuleState(rule, ctx) : 'PENDING', stepUpdates: [] };
+}
+
+/** Build a sparse goal update, or null when the state is unchanged. */
+function buildGoalUpdate(goal: EvalGoal, newState: ChecklistState): StateUpdate | null {
+  if (newState === goal.state) return null;
+  const update: StateUpdate = { id: goal.id, state: newState };
   if (newState === 'COMPLETE') update.completedAt = new Date();
-  else if (item.completedAt) update.completedAt = null;
+  else if (goal.completedAt) update.completedAt = null;
   return update;
 }
 
-function evaluateItem(
-  item: ChecklistItem,
-  booking: BookingContext,
-  stateMap: Map<string, string>,
-): { id: string; state: string; completedAt?: Date | null } | null {
-  if (resolveSkip(item, booking.status)) return { id: item.id, state: 'SKIPPED' };
-  return buildItemUpdate(item, booking, stateMap);
+/** Evaluate one goal (SKIP rule first), returning its goal update and step updates. */
+function evaluateGoal(
+  goal: EvalGoal,
+  ctx: BookingContext,
+): { goalUpdate: StateUpdate | null; stepUpdates: StateUpdate[] } {
+  if (resolveSkip(goal, ctx.status)) {
+    return { goalUpdate: buildGoalUpdate(goal, 'SKIPPED'), stepUpdates: [] };
+  }
+  const { state, stepUpdates } = nextGoalState(goal, ctx);
+  return { goalUpdate: buildGoalUpdate(goal, state), stepUpdates };
+}
+
+/** Whether an event touching `keys` can move this goal (its own key, or any step). */
+function goalIsAffected(goal: EvalGoal, keys: Set<string>): boolean {
+  if (goal.steps && goal.steps.length > 0) {
+    return goal.steps.some((s) => s.key != null && keys.has(s.key));
+  }
+  return goal.key != null && keys.has(goal.key);
 }
 
 function computeUpdates(
-  items: ChecklistItem[],
-  booking: BookingContext,
-  stateMap: Map<string, string>,
-): Array<{ id: string; state: string; completedAt?: Date | null }> {
-  const updates: Array<{ id: string; state: string; completedAt?: Date | null }> = [];
-  for (const item of items) {
-    if (item.state === 'SKIPPED' || item.state === 'COMPLETE') continue;
-    const update = evaluateItem(item, booking, stateMap);
-    if (update) {
-      updates.push(update);
-      if (item.key) stateMap.set(item.key, update.state);
-    }
+  goals: EvalGoal[],
+  ctx: BookingContext,
+): { goalUpdates: StateUpdate[]; stepUpdates: StateUpdate[] } {
+  const goalUpdates: StateUpdate[] = [];
+  const stepUpdates: StateUpdate[] = [];
+  for (const goal of goals) {
+    if (isTerminalGoal(goal.state)) continue; // COMPLETE/SKIPPED are sticky
+    const { goalUpdate, stepUpdates: steps } = evaluateGoal(goal, ctx);
+    if (goalUpdate) goalUpdates.push(goalUpdate);
+    stepUpdates.push(...steps);
   }
-  return updates;
+  return { goalUpdates, stepUpdates };
 }
 
 @Injectable()
 export class ChecklistEvaluatorService {
   constructor(private repo: ChecklistRepository) {}
 
+  /**
+   * Full-sweep evaluation — re-evaluates every non-terminal goal. The entry point
+   * for booking creation, the data migration, and booking-date changes, where the
+   * affected set is unknown. Event-driven call sites can use {@link evaluateForEvent}.
+   */
   async evaluate(bookingId: string): Promise<void> {
     const { items, booking } = await this.repo.findItemsWithContext(bookingId);
     if (!booking || !items.length) return;
-    const stateMap = buildStateMap(items);
-    const updates = computeUpdates(items, booking, stateMap);
-    if (updates.length) await this.repo.updateItemStates(updates);
+    const { goalUpdates, stepUpdates } = computeUpdates(
+      items as EvalGoal[],
+      booking as BookingContext,
+    );
+    // Goal state is a roll-up of its steps, so the two writes must land together —
+    // a split write leaves a window where a goal reads COMPLETE while a step is still
+    // PENDING. The repo applies both in one transaction.
+    if (goalUpdates.length || stepUpdates.length) {
+      await this.repo.applyStateUpdates(goalUpdates, stepUpdates);
+    }
+  }
+
+  /**
+   * Event-targeted evaluation (ADR-0057 containment): a business event resolves
+   * its `changedInputs` to exactly the affected goals via the predicate registry's
+   * inverted index, re-evaluating only those instead of the whole checklist.
+   *
+   * Built and unit-tested here. Production call sites currently stay on full-sweep
+   * {@link evaluate} — it now persists step updates too, so it is correct for the
+   * multi-step contract goal; the inverted-index path remains available for a later
+   * containment pass without changing observable behaviour. Status/date-driven
+   * re-evaluation must always use {@link evaluate}: the SKIP_RULES path keys on
+   * booking status, which is not an InputKey the index can target.
+   */
+  async evaluateForEvent(bookingId: string, changedInputs: InputKey[]): Promise<void> {
+    const { items, booking } = await this.repo.findItemsWithContext(bookingId);
+    if (!booking || !items.length) return;
+    const keys = affectedKeys(changedInputs);
+    const targeted = (items as EvalGoal[]).filter((g) => goalIsAffected(g, keys));
+    if (!targeted.length) return;
+    const { goalUpdates, stepUpdates } = computeUpdates(targeted, booking as BookingContext);
+    if (goalUpdates.length || stepUpdates.length) {
+      await this.repo.applyStateUpdates(goalUpdates, stepUpdates);
+    }
   }
 }

@@ -34,10 +34,22 @@ const BOOKING_FIELD_SHORTCUT: Readonly<Record<string, string>> = {
   depositReceivedAt: 'mark_deposit_received',
 };
 
+// The booking fields a checklist auto-complete rule binds to: changing any of them must re-run the
+// evaluator so the dependent goal/step auto-completes. Add a field here when a new rule binds to it.
+const RULE_BOUND_FIELDS = ['status', 'venueId', 'depositReceivedAt'] as const satisfies ReadonlyArray<
+  keyof UpdateBookingDto
+>;
+
+function touchesRuleBoundField(dto: UpdateBookingDto): boolean {
+  return RULE_BOUND_FIELDS.some((field) => dto[field] !== undefined);
+}
+
 function resolveContractTemplate(items: Array<{ key: string | null }>): string {
-  return items.some((i) => i.key === 'deposit_received')
-    ? 'contract_and_deposit_cover'
-    : 'contract_cover';
+  // A booking expects a deposit when it carries the deposit deliverable. Detect both shapes
+  // (ADR-0057): the migrated multi-step goal (`get_deposit_paid`) or, on an un-migrated booking,
+  // the flat `deposit_received` item.
+  const hasDeposit = items.some((i) => i.key === 'get_deposit_paid' || i.key === 'deposit_received');
+  return hasDeposit ? 'contract_and_deposit_cover' : 'contract_cover';
 }
 
 export function deriveShortcut(
@@ -230,8 +242,8 @@ export class BookingsService {
     const newDate = new Date(dto.date);
 
     // Map source items to seeds: completion + computed due dates are dropped so
-    // seedChecklistItems resets state to PENDING/BLOCKED and recomputes due dates against
-    // the new booking — a copied COMPLETE item on a brand-new booking would be a bug.
+    // seedChecklistItems resets every goal to PENDING (ADR-0057: BLOCKED retired) and recomputes
+    // due dates against the new booking — a copied COMPLETE item on a brand-new booking would be a bug.
     const checklistSeeds: ChecklistItemSeed[] = source.checklistItems.map((item) => ({
       key: item.key,
       label: item.label,
@@ -280,10 +292,9 @@ export class BookingsService {
     if (dto.date !== undefined) {
       await this.checklistRepo.recomputeChecklistDueDates(id, updated.date, updated.createdAt);
     }
-    // Re-evaluate auto-complete rules when a field a rule binds to changes. venueId drives
-    // the add_venue structural item (PRD #511 Module A/D): setting it must auto-complete the
-    // item without the musician ticking it.
-    if (dto.status !== undefined || dto.venueId !== undefined) {
+    // Re-evaluate auto-complete rules when a field a rule binds to changes (status drives stage
+    // gates, venueId the add_venue item, depositReceivedAt the deposit_received step — ADR-0057).
+    if (touchesRuleBoundField(dto)) {
       await this.evaluator.evaluate(id).catch(() => {});
     }
     return updated;
@@ -513,13 +524,29 @@ export class BookingsService {
   async getChecklist(userId: string, bookingId: string) {
     await this.findOne(userId, bookingId);
     const items = await this.repo.findChecklistItems(userId, bookingId);
-    return items.map((item) => ({
+    return items.map(({ steps, ...item }) => ({
       ...item,
       createdAt: item.createdAt.toISOString(),
       updatedAt: item.updatedAt.toISOString(),
       completedAt: item.completedAt?.toISOString() ?? null,
       dueDate: item.dueDate?.toISOString() ?? null,
       ...deriveShortcut(item.autoCompleteRule as Record<string, unknown> | null, items),
+      // Multi-step goal steps (ADR-0057). The client derives the active step + fold; the
+      // active step's action (#611) routes via the same `deriveShortcut` the goal uses, so
+      // both atomic goals and active steps share one shortcut-routing code path on the client.
+      steps: (steps ?? []).map((step) => ({
+        id: step.id,
+        key: step.key,
+        label: step.label,
+        order: step.order,
+        kind: step.kind,
+        completeMode: step.completeMode,
+        state: step.state,
+        completedBy: step.completedBy,
+        completedAt: step.completedAt?.toISOString() ?? null,
+        autoCompleteRule: step.autoCompleteRule as Record<string, unknown> | null,
+        ...deriveShortcut(step.autoCompleteRule as Record<string, unknown> | null, items),
+      })),
     }));
   }
 

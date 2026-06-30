@@ -22,7 +22,6 @@ function item(overrides: Partial<ChecklistItem> & Pick<ChecklistItem, 'id' | 'st
     label: 'Item',
     completedBy: 'USER',
     order: 0,
-    dependsOn: [],
     autoCompleteRule: null,
     requiredForStatus: null,
     completedAt: null,

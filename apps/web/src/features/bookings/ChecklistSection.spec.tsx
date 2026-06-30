@@ -32,7 +32,6 @@ function item(partial: Partial<ChecklistItem> & { id: string; key: string | null
     completedBy: 'USER',
     state: partial.state ?? 'PENDING',
     order: partial.order ?? 0,
-    dependsOn: [],
     autoCompleteRule: null,
     requiredForStatus: partial.requiredForStatus ?? null,
     completedAt: null,
@@ -94,10 +93,10 @@ describe('ChecklistSection structural-item deep-links', () => {
     expect(screen.getByTestId('location')).toHaveTextContent('/admin/bookings/b1/builder?section=venue');
   });
 
-  it('a non-structural item keeps its plain "Mark done" action (no deep-link)', () => {
+  it('a non-structural item gets the manual "Mark complete" action (no deep-link)', () => {
     renderChecklist([item({ id: 'c1', key: 'custom_item', label: 'Bring the PA', requiredForStatus: 'READY' })]);
 
-    expect(screen.getByRole('button', { name: 'Mark done' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Mark complete' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Set up' })).not.toBeInTheDocument();
   });
 });

@@ -244,10 +244,34 @@ export interface Contract {
   signedAt: string | null;
 }
 
-export type ChecklistItemState = 'PENDING' | 'BLOCKED' | 'COMPLETE' | 'FAILED' | 'SKIPPED';
+// ADR-0057 / #609: BLOCKED retires. The active step is derived (first non-terminal), intra-goal
+// order is intrinsic and inter-goal order is soft status — nothing produces BLOCKED any more.
+export type ChecklistItemState = 'PENDING' | 'COMPLETE' | 'FAILED' | 'SKIPPED';
+
+// A step's state never includes SKIPPED (the opt-out lives on the goal) — ADR-0057.
+export type ChecklistStepState = 'PENDING' | 'COMPLETE' | 'FAILED';
 
 // The concerns a reminder can belong to (ADR-0052). Mirrors the API's ReminderConcern.
 export type ReminderConcern = 'overview' | 'people' | 'venue' | 'itinerary' | 'music';
+
+// A step of a multi-step goal (ADR-0057). Mirrors BookingChecklistStepResponseDto. The
+// active step (first non-terminal by order) and completed-step fold are derived client-side.
+export interface ChecklistStep {
+  id: string;
+  key: string | null;
+  label: string;
+  order: number;
+  kind: 'MILESTONE' | 'PRECONDITION' | 'FOLLOWUP';
+  completeMode: 'ACTION' | 'AWAITED';
+  state: ChecklistStepState;
+  completedBy: 'USER' | 'CUSTOMER' | 'BAND_MEMBER';
+  completedAt: string | null;
+  autoCompleteRule: Record<string, unknown> | null;
+  // Derived server-side from autoCompleteRule (ADR-0057 / #611) so the active step routes its
+  // action exactly like an atomic item. Absent for AWAITED steps the musician never acts on.
+  shortcutType?: string;
+  shortcutTemplateType?: string;
+}
 
 export interface ChecklistItem {
   id: string;
@@ -259,7 +283,6 @@ export interface ChecklistItem {
   completedBy: 'USER' | 'CUSTOMER' | 'BAND_MEMBER';
   state: ChecklistItemState;
   order: number;
-  dependsOn: string[];
   autoCompleteRule: Record<string, unknown> | null;
   requiredForStatus: 'PROVISIONAL' | 'CONFIRMED' | 'READY' | 'COMPLETE' | null;
   completedAt: string | null;
@@ -269,6 +292,9 @@ export interface ChecklistItem {
   concern: string | null;
   shortcutType?: string;
   shortcutTemplateType?: string;
+  // Ordered steps of a multi-step goal (ADR-0057). Empty/absent for an atomic goal;
+  // the goal state is the roll-up of these steps.
+  steps?: ChecklistStep[];
 }
 
 // One row of a concern's "Remind me about" control (selector output).
@@ -642,7 +668,8 @@ export interface ChecklistDefaultItem {
   key: string | null;
   label: string;
   completedBy: 'USER' | 'CUSTOMER' | 'BAND_MEMBER';
-  dependsOn: string[];
+  // ADR-0057 / #609: `dependsOn` retired from the frontend contract. The create form chooses goals
+  // by key; the backend owns step structure and the soft after-clause reads the server catalog.
   autoCompleteRule: Record<string, unknown> | null;
   requiredForStatus: 'PROVISIONAL' | 'CONFIRMED' | 'READY' | 'COMPLETE' | null;
   dueDateRule: DueDateRule | null;

@@ -828,23 +828,23 @@ const CHECKLIST_STAGE_GROUPS: Array<{
     ],
   },
   {
+    // ADR-0057 / #609: the user toggles and dates GOALS, not their internal steps. The deposit,
+    // contract, balance and song-request deliverables are multi-step goals — the system sequences
+    // create → send → received beneath each. The goal's own dueDate is the user-configurable one
+    // (the cluster's binding deadline); step-level dates are system-owned.
     stage: 'CONFIRMED',
     label: 'Confirmed',
     items: [
-      { key: 'create_deposit_invoice', label: 'Create deposit invoice', completedBy: 'USER', defaultDueDateRule: null },
-      { key: 'create_contract', label: 'Create contract', completedBy: 'USER', defaultDueDateRule: null },
-      { key: 'send_contract', label: 'Send contract & deposit email', completedBy: 'USER', defaultDueDateRule: { basis: 'bookingDate', offsetDays: -60 } },
-      { key: 'contract_signed', label: 'Contract signed', completedBy: 'CUSTOMER', defaultDueDateRule: { basis: 'bookingDate', offsetDays: -45 } },
-      { key: 'deposit_received', label: 'Deposit received', completedBy: 'USER', defaultDueDateRule: { basis: 'bookingDate', offsetDays: -30 } },
+      { key: 'get_deposit_paid', label: 'Get the deposit paid', completedBy: 'USER', defaultDueDateRule: { basis: 'bookingDate', offsetDays: -30 } },
+      { key: 'get_contract_signed', label: 'Get the contract signed', completedBy: 'USER', defaultDueDateRule: { basis: 'bookingDate', offsetDays: -60 } },
     ],
   },
   {
     stage: 'READY',
     label: 'Ready',
     items: [
-      { key: 'create_balance_invoice', label: 'Create balance invoice', completedBy: 'USER', defaultDueDateRule: { basis: 'bookingDate', offsetDays: -14 } },
-      { key: 'music_form_invite', label: 'Send music form invite', completedBy: 'USER', defaultDueDateRule: { basis: 'bookingDate', offsetDays: -30 }, musicFormGated: true },
-      { key: 'song_requests', label: 'Song requests received', completedBy: 'CUSTOMER', defaultDueDateRule: { basis: 'bookingDate', offsetDays: -14 }, musicFormGated: true },
+      { key: 'invoice_the_balance', label: 'Invoice the balance', completedBy: 'USER', defaultDueDateRule: { basis: 'bookingDate', offsetDays: -14 } },
+      { key: 'gather_song_requests', label: 'Gather song requests', completedBy: 'USER', defaultDueDateRule: { basis: 'bookingDate', offsetDays: -30 }, musicFormGated: true },
     ],
   },
   {
@@ -1103,7 +1103,6 @@ function BookingSettingsSection({ profile }: { profile: UserProfile }) {
         key: null,
         label: newItem.label.trim(),
         completedBy: newItem.completedBy,
-        dependsOn: [],
         autoCompleteRule: null,
         requiredForStatus: (newItem.requiredForStatus === 'NONE' ? null : newItem.requiredForStatus) as ChecklistDefaultItem['requiredForStatus'],
         concern: newItem.concern === 'NONE' ? null : newItem.concern,

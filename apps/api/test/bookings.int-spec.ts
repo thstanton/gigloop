@@ -38,11 +38,10 @@ describe('Booking lifecycle (integration)', () => {
         eventType: 'WEDDING',
         date: FUTURE_DATE,
         customerId,
-        checklistItems: CHECKLIST_DEFAULTS.map(({ key, label, completedBy, dependsOn, autoCompleteRule, requiredForStatus, dueDateRule }) => ({
+        checklistItems: CHECKLIST_DEFAULTS.map(({ key, label, completedBy, autoCompleteRule, requiredForStatus, dueDateRule }) => ({
           key,
           label,
           completedBy,
-          dependsOn,
           autoCompleteRule,
           requiredForStatus,
           dueDateRule,
@@ -54,30 +53,27 @@ describe('Booking lifecycle (integration)', () => {
   // ── happy paths ──────────────────────────────────────────────────────────
 
   describe('Create booking → checklist seeded', () => {
-    it('seeds key checklist items on creation', async () => {
+    it('seeds key checklist goals + steps on creation', async () => {
       const res = await createBooking();
       expect(res.status).toBe(201);
 
       const bookingId = res.body.id as string;
-      const checklist = await prisma.bookingChecklistItem.findMany({
-        where: { bookingId },
-      });
+      const goals = await prisma.bookingChecklistItem.findMany({ where: { bookingId } });
+      const steps = await prisma.bookingChecklistStep.findMany({ where: { bookingId } });
 
-      const depositItem = checklist.find((i) => i.key === 'deposit_received');
-      const contractItem = checklist.find((i) => i.key === 'create_contract');
-      expect(depositItem).toBeDefined();
-      // deposit_received has dependsOn: ['send_contract'] → starts BLOCKED, not PENDING
-      expect(depositItem?.state).toBe('BLOCKED');
-      expect(contractItem).toBeDefined();
-      // create_contract has dependsOn: ['confirm_quote'] → starts BLOCKED, not PENDING
-      expect(contractItem?.state).toBe('BLOCKED');
+      // The deposit + contract deliverables seed as multi-step goals (ADR-0057), PENDING — BLOCKED
+      // is retired; the old flat keys (create_contract, deposit_received) are now steps.
+      const depositGoal = goals.find((g) => g.key === 'get_deposit_paid');
+      const contractGoal = goals.find((g) => g.key === 'get_contract_signed');
+      expect(depositGoal?.state).toBe('PENDING');
+      expect(contractGoal?.state).toBe('PENDING');
+      expect(steps.find((s) => s.key === 'create_contract')?.state).toBe('PENDING');
+      expect(steps.find((s) => s.key === 'deposit_received')?.state).toBe('PENDING');
 
-      // due dates for items with bookingDate-based rules should be near the booking date
-      const sendContractItem = checklist.find((i) => i.key === 'send_contract');
-      expect(sendContractItem?.dueDate).toBeTruthy();
+      // The contract goal carries the -60d send deadline as its own dueDate.
+      expect(contractGoal?.dueDate).toBeTruthy();
       const bookingDate = new Date(FUTURE_DATE).getTime();
-      const dueDate = new Date(sendContractItem!.dueDate!).getTime();
-      // -60 days from bookingDate
+      const dueDate = new Date(contractGoal!.dueDate!).getTime();
       expect(Math.abs(dueDate - (bookingDate - 60 * 24 * 60 * 60 * 1000))).toBeLessThan(1000);
 
       await prisma.booking.delete({ where: { id: bookingId } });
@@ -143,20 +139,22 @@ describe('Booking lifecycle (integration)', () => {
   });
 
   describe('deposit_received checklist item', () => {
-    it('marking COMPLETE sets depositReceivedAt on booking', async () => {
+    it('recording the deposit on the booking sets depositReceivedAt + completes the step', async () => {
+      // ADR-0057: deposit_received is an AWAITED step, not user-PATCHable; the deposit fact is
+      // recorded on the booking (the invoice mark-paid / booking action), which the evaluator
+      // then reflects onto the step.
       const create = await createBooking();
       const bookingId = create.body.id as string;
 
-      const checklist = await prisma.bookingChecklistItem.findMany({ where: { bookingId } });
-      const depositItem = checklist.find((i) => i.key === 'deposit_received')!;
-
       const patch = await request(app.getHttpServer())
-        .patch(`/api/bookings/${bookingId}/checklist/${depositItem.id}`)
-        .send({ state: 'COMPLETE' });
+        .patch(`/api/bookings/${bookingId}`)
+        .send({ depositReceivedAt: FUTURE_DATE });
       expect(patch.status).toBe(200);
 
       const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
       expect(booking?.depositReceivedAt).not.toBeNull();
+      const step = await prisma.bookingChecklistStep.findFirst({ where: { bookingId, key: 'deposit_received' } });
+      expect(step?.state).toBe('COMPLETE');
 
       await prisma.booking.delete({ where: { id: bookingId } });
     });
@@ -167,8 +165,10 @@ describe('Booking lifecycle (integration)', () => {
       const create = await createBooking();
       const bookingId = create.body.id as string;
 
+      // The contract goal carries the -60d send deadline as its dueDate (the step's dueDateRule
+      // rolls up to the goal); it recomputes when the booking date moves.
       const before = await prisma.bookingChecklistItem.findFirst({
-        where: { bookingId, key: 'send_contract' },
+        where: { bookingId, key: 'get_contract_signed' },
       });
       expect(before?.dueDate).toBeTruthy();
 
@@ -177,7 +177,7 @@ describe('Booking lifecycle (integration)', () => {
         .send({ date: LATER_DATE });
 
       const after = await prisma.bookingChecklistItem.findFirst({
-        where: { bookingId, key: 'send_contract' },
+        where: { bookingId, key: 'get_contract_signed' },
       });
 
       // Due date should have shifted with the new booking date.

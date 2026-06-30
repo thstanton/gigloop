@@ -12,14 +12,14 @@ const preview: ReminderPreview[] = [
 ];
 
 const d = (over: Partial<ChecklistDefaultItem> & { key: string | null; label: string }): ChecklistDefaultItem => ({
-  completedBy: 'USER', dependsOn: [], autoCompleteRule: null, requiredForStatus: null, dueDateRule: null, ...over,
+  completedBy: 'USER', autoCompleteRule: null, requiredForStatus: null, dueDateRule: null, ...over,
 });
 
 const checklistDefaults: ChecklistDefaultItem[] = [
   d({ key: 'send_quote', label: 'Send the quote', requiredForStatus: 'PROVISIONAL' }),
   d({ key: 'create_contract', label: 'Create the contract', requiredForStatus: 'CONFIRMED' }),
-  d({ key: 'send_contract', label: 'Send the contract', requiredForStatus: 'CONFIRMED', dependsOn: ['create_contract'] }),
-  d({ key: 'contract_signed', label: 'Contract signed', requiredForStatus: 'CONFIRMED', dependsOn: ['send_contract'] }),
+  d({ key: 'send_contract', label: 'Send the contract', requiredForStatus: 'CONFIRMED' }),
+  d({ key: 'contract_signed', label: 'Contract signed', requiredForStatus: 'CONFIRMED' }),
   d({ key: 'add_venue', label: 'Confirm the venue', requiredForStatus: 'READY' }),
   // Global custom defaults from Settings (#561): one tagged to a concern, one concern-less.
   d({ key: null, label: 'Book parking', concern: 'venue', requiredForStatus: null }),

@@ -1,6 +1,6 @@
 import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, userEvent } from 'storybook/test';
 import { MemoryRouter } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
 import ChecklistSection from './ChecklistSection';
@@ -16,7 +16,6 @@ function item(overrides: Partial<ChecklistItem> & { label: string }): ChecklistI
     completedBy: 'USER',
     state: 'PENDING',
     order: 0,
-    dependsOn: [],
     autoCompleteRule: null,
     requiredForStatus: null,
     completedAt: null,
@@ -26,15 +25,6 @@ function item(overrides: Partial<ChecklistItem> & { label: string }): ChecklistI
     ...overrides,
   };
 }
-
-const pendingItems: ChecklistItem[] = [
-  item({ label: 'Send quote', key: 'send_quote', shortcutType: 'send_email', shortcutTemplateType: 'quote', requiredForStatus: 'PROVISIONAL' }),
-  item({ label: 'Create contract', key: 'create_contract', shortcutType: 'create_contract', requiredForStatus: 'CONFIRMED' }),
-  item({ label: 'Send contract', key: 'send_contract', shortcutType: 'send_email', shortcutTemplateType: 'contract_cover', requiredForStatus: 'CONFIRMED' }),
-  item({ label: 'Contract signed', key: 'contract_signed', shortcutType: 'mark_contract_signed', requiredForStatus: 'CONFIRMED' }),
-  item({ label: 'Issue deposit invoice', key: 'create_deposit_invoice', shortcutType: 'create_deposit_invoice', requiredForStatus: 'CONFIRMED' }),
-  item({ label: 'Deposit received', key: 'deposit_received', shortcutType: 'mark_deposit_received', requiredForStatus: 'CONFIRMED' }),
-];
 
 const noop = () => {};
 
@@ -63,40 +53,59 @@ type Story = StoryObj<typeof meta>;
 
 export const Empty: Story = {
   args: { items: [] },
-};
-
-export const AllPendingWithShortcuts: Story = {
-  args: { items: pendingItems, bookingStatus: 'PROVISIONAL' },
   play: async ({ canvas }) => {
-    await expect(canvas.getByText('Checklist')).toBeVisible();
-    await expect(canvas.getByText('Send quote')).toBeVisible();
-    await expect(canvas.getAllByText('Send')[0]).toBeVisible();
-    await expect(canvas.getAllByText('Create')[0]).toBeVisible();
-    await expect(canvas.getAllByText('Mark done')[0]).toBeVisible();
+    // No goals — the always-present "Anytime" section still offers a place to add one.
+    await expect(canvas.getByText('Anytime')).toBeVisible();
+    await expect(canvas.getAllByText('Add item').length).toBeGreaterThan(0);
   },
 };
 
-export const MixedStates: Story = {
+// The current lifecycle bracket is open and foreground-weighted; each goal shows its next action.
+// A CONFIRMED booking's open bracket is "Confirmed" — the READY-gated work to advance from here.
+export const CurrentStageOpen: Story = {
   args: {
-    bookingStatus: 'PROVISIONAL',
+    bookingStatus: 'CONFIRMED',
     items: [
-      item({ label: 'Send quote', key: 'send_quote', state: 'COMPLETE', requiredForStatus: 'PROVISIONAL' }),
-      item({ label: 'Create contract', key: 'create_contract', state: 'PENDING', requiredForStatus: 'CONFIRMED' }),
-      item({ label: 'Send contract', key: 'send_contract', state: 'BLOCKED', requiredForStatus: 'CONFIRMED' }),
+      item({ label: 'Add venue', key: 'add_venue', requiredForStatus: 'READY' }),
+      item({ label: 'Bring spare strings', key: null, requiredForStatus: 'READY' }),
     ],
   },
   play: async ({ canvas }) => {
+    await expect(canvas.getByText('Confirmed')).toBeVisible();
+    await expect(canvas.getByText('0/2')).toBeVisible();
+    // Structural goal → wand "Set up"; a custom goal with no shortcut → "Mark complete".
+    await expect(canvas.getByText('Add venue')).toBeVisible();
+    await expect(canvas.getByRole('button', { name: 'Set up' })).toBeVisible();
+    await expect(canvas.getByRole('button', { name: 'Mark complete' })).toBeVisible();
+  },
+};
+
+// A left-behind goal sits in its collapsed past bracket — visible (not vanished) and reachable by
+// expanding it. This answers "where did the deposit reminder go?" (#604 acceptance test). The
+// CONFIRMED-gated quote is worked in the Provisional bracket — past for a CONFIRMED booking.
+export const PastStageCollapsed: Story = {
+  args: {
+    bookingStatus: 'CONFIRMED',
+    items: [
+      item({ label: 'Send quote', key: 'send_quote', shortcutType: 'send_email', shortcutTemplateType: 'quote', requiredForStatus: 'CONFIRMED' }),
+      item({ label: 'Add venue', key: 'add_venue', requiredForStatus: 'READY' }),
+    ],
+  },
+  play: async ({ canvas }) => {
+    // Past bracket present (header + count) but collapsed — its goal isn't shown yet.
+    await expect(canvas.getByText('Provisional')).toBeVisible();
+    await expect(canvas.queryByText('Send quote')).toBeNull();
+    // Expanding the past bracket reveals the left-behind goal.
+    await userEvent.click(canvas.getByText('Provisional'));
     await expect(canvas.getByText('Send quote')).toBeVisible();
-    await expect(canvas.getByText('Create contract')).toBeVisible();
   },
 };
 
 export const WithFailedItem: Story = {
   args: {
-    bookingStatus: 'PROVISIONAL',
+    bookingStatus: 'CONFIRMED',
     items: [
-      item({ label: 'Send confirmation', key: 'send_quote', state: 'FAILED', shortcutType: 'send_email', shortcutTemplateType: 'quote', requiredForStatus: 'PROVISIONAL' }),
-      item({ label: 'Create contract', state: 'PENDING', requiredForStatus: 'CONFIRMED' }),
+      item({ label: 'Send confirmation', key: 'send_quote', state: 'FAILED', shortcutType: 'send_email', shortcutTemplateType: 'quote', requiredForStatus: 'READY' }),
     ],
   },
   play: async ({ canvas }) => {
@@ -110,38 +119,50 @@ export const AllComplete: Story = {
     items: [
       item({ label: 'Send quote', state: 'COMPLETE' }),
       item({ label: 'Create contract', state: 'COMPLETE' }),
-      item({ label: 'Sign contract', state: 'COMPLETE' }),
     ],
   },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Send quote')).toBeVisible();
+    // Two complete, none skipped → the Anytime section reads 2/2.
+    await expect(canvas.getByText('2/2')).toBeVisible();
   },
 };
 
-export const ShowAllToggle: Story = {
+export const AddItemInSection: Story = {
   args: {
-    items: [
-      item({ label: 'Send quote', requiredForStatus: 'PROVISIONAL' }),
-      item({ label: 'Create contract', requiredForStatus: 'CONFIRMED' }),
-      item({ label: 'Send contract', requiredForStatus: 'CONFIRMED' }),
-      item({ label: 'Issue balance invoice', requiredForStatus: 'READY' }),
-      item({ label: 'Send thank you', key: 'send_thank_you', requiredForStatus: 'COMPLETE' }),
-    ],
-    bookingStatus: 'PROVISIONAL',
+    bookingStatus: 'CONFIRMED',
+    items: [item({ label: 'Add venue', key: 'add_venue', requiredForStatus: 'READY' })],
   },
   play: async ({ canvas }) => {
-    await expect(canvas.getByText('Show all')).toBeVisible();
-    await userEvent.click(canvas.getByText('Show all'));
-    await expect(canvas.getByText('Show fewer')).toBeVisible();
-    await expect(canvas.getByText('Issue balance invoice')).toBeVisible();
+    // Each open section has its own "Add item" affordance; clicking reveals the inline form.
+    await userEvent.click(canvas.getAllByText('Add item')[0]);
+    await expect(canvas.getByPlaceholderText('Item label')).toBeVisible();
   },
 };
 
-export const AddItemForm: Story = {
-  args: { items: pendingItems },
+// A multi-step goal (ADR-0057 / #611) renders as the two-tier GoalRow inside the section: the
+// goal label plus its active step. Atomic goals around it keep the single-line row.
+const contractGoal: ChecklistItem = item({
+  label: 'Get the contract signed',
+  key: 'get_contract_signed',
+  requiredForStatus: 'CONFIRMED',
+  steps: [
+    { id: 's1', key: 'create_contract', label: 'Draft the contract', order: 1, kind: 'MILESTONE', completeMode: 'ACTION', state: 'COMPLETE', completedBy: 'USER', completedAt: null, autoCompleteRule: null },
+    { id: 's2', key: 'send_contract', label: 'Send it to the client', order: 2, kind: 'MILESTONE', completeMode: 'ACTION', state: 'PENDING', completedBy: 'USER', completedAt: null, autoCompleteRule: null, shortcutType: 'send_email', shortcutTemplateType: 'contract_cover' },
+    { id: 's3', key: 'contract_signed', label: 'Client signs the contract', order: 3, kind: 'MILESTONE', completeMode: 'AWAITED', state: 'PENDING', completedBy: 'CUSTOMER', completedAt: null, autoCompleteRule: null },
+  ],
+});
+
+export const WithMultiStepGoal: Story = {
+  args: {
+    // Booking PROVISIONAL → the CONFIRMED-gated contract sits in the open "Provisional" bracket.
+    bookingStatus: 'PROVISIONAL',
+    items: [contractGoal, item({ label: 'Add venue', key: 'add_venue', requiredForStatus: 'CONFIRMED' })],
+  },
   play: async ({ canvas }) => {
-    await userEvent.click(canvas.getByText('Add item'));
-    const body = within(document.body);
-    await expect(body.getByPlaceholderText('Item label')).toBeVisible();
+    await expect(canvas.getByText('Get the contract signed')).toBeVisible();
+    // The active step is shown as a CTA; the atomic goal keeps its single-line row alongside it.
+    await expect(canvas.getByRole('button', { name: /Send it to the client/ })).toBeVisible();
+    await expect(canvas.getByText('Add venue')).toBeVisible();
   },
 };

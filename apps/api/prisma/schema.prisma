@@ -219,8 +219,44 @@ model BookingChecklistItem {
   // Null = a concern-less custom item that lives only on the Checklist card.
   concern          String?
 
+  // ADR-0057: BookingChecklistItem is the GOAL. A multi-step (system) goal owns
+  // its child steps; an atomic goal has none and keeps its own autoCompleteRule.
+  // No column is added to this table — `steps` is a virtual relation field.
+  steps            BookingChecklistStep[]
+
   @@index([userId])
   @@index([bookingId])
+}
+
+// ADR-0057: a Step is the system-sequenced child of a multi-step Goal. v1 only
+// ever creates `kind = MILESTONE` steps; the other literals exist for the model.
+// State/kind/completeMode/completedBy are String fields to match the Goal's
+// existing convention (no new Prisma enum — implementer's call per ADR-0057).
+model BookingChecklistStep {
+  id        String   @id @default(uuid())
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  bookingId String
+
+  goalId String
+  goal   BookingChecklistItem @relation(fields: [goalId], references: [id], onDelete: Cascade)
+
+  key              String?
+  label            String
+  order            Int
+  kind             String    @default("MILESTONE") // MILESTONE | PRECONDITION | FOLLOWUP
+  completeMode     String    @default("ACTION")    // ACTION | AWAITED
+  state            String    @default("PENDING")   // PENDING | COMPLETE | FAILED
+  completedBy      String    @default("USER")      // USER | CUSTOMER | BAND_MEMBER
+  completedAt      DateTime?
+  autoCompleteRule Json?
+  dueDateRule      Json?
+
+  @@index([userId])
+  @@index([bookingId])
+  @@index([goalId])
 }
 
 model Contract {

@@ -1,5 +1,52 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
+// ADR-0057: a step of a multi-step goal. The active step (first non-terminal by order)
+// and the completed-step fold are derived on the client — never stored.
+export class BookingChecklistStepResponseDto {
+  @ApiProperty()
+  id: string;
+
+  @ApiPropertyOptional({ nullable: true })
+  key: string | null;
+
+  @ApiProperty()
+  label: string;
+
+  @ApiProperty()
+  order: number;
+
+  @ApiProperty({ enum: ['MILESTONE', 'PRECONDITION', 'FOLLOWUP'] })
+  kind: string;
+
+  @ApiProperty({ enum: ['ACTION', 'AWAITED'] })
+  completeMode: string;
+
+  @ApiProperty({ enum: ['PENDING', 'COMPLETE', 'FAILED'] })
+  state: string;
+
+  @ApiProperty({ enum: ['USER', 'CUSTOMER', 'BAND_MEMBER'] })
+  completedBy: string;
+
+  @ApiPropertyOptional({ nullable: true })
+  completedAt: string | null;
+
+  @ApiPropertyOptional({ nullable: true, type: Object })
+  autoCompleteRule: Record<string, unknown> | null;
+
+  // ADR-0057 / #611: a multi-step goal carries no goal-level rule, so its action lives on the
+  // active step. Derived from the step's autoCompleteRule with the same `deriveShortcut` the
+  // goal uses, so the client routes the active step exactly like an atomic item (one code path,
+  // no duplicated derivation). Absent for AWAITED steps the musician never acts on.
+  @ApiPropertyOptional({
+    description:
+      'Derived from autoCompleteRule: send_email | create_contract | create_deposit_invoice | create_balance_invoice | mark_contract_signed | mark_deposit_received',
+  })
+  shortcutType?: string;
+
+  @ApiPropertyOptional({ description: 'Template type for send_email shortcuts' })
+  shortcutTemplateType?: string;
+}
+
 export class BookingChecklistItemResponseDto {
   @ApiProperty()
   id: string;
@@ -22,14 +69,14 @@ export class BookingChecklistItemResponseDto {
   @ApiProperty({ enum: ['USER', 'CUSTOMER', 'BAND_MEMBER'] })
   completedBy: string;
 
-  @ApiProperty({ enum: ['PENDING', 'BLOCKED', 'COMPLETE', 'FAILED', 'SKIPPED'] })
+  // ADR-0057 / #609: BLOCKED retires from the surfaced contract. The active step is derived
+  // (first non-terminal), intra-goal order is intrinsic and inter-goal order is soft status —
+  // nothing the evaluator emits is ever BLOCKED. (Legacy DB rows are normalised on next evaluate.)
+  @ApiProperty({ enum: ['PENDING', 'COMPLETE', 'FAILED', 'SKIPPED'] })
   state: string;
 
   @ApiProperty()
   order: number;
-
-  @ApiProperty({ type: [String] })
-  dependsOn: string[];
 
   @ApiPropertyOptional({ nullable: true, type: Object })
   autoCompleteRule: Record<string, unknown> | null;
@@ -61,4 +108,11 @@ export class BookingChecklistItemResponseDto {
 
   @ApiPropertyOptional({ description: 'Template type for send_email shortcuts' })
   shortcutTemplateType?: string;
+
+  @ApiPropertyOptional({
+    type: [BookingChecklistStepResponseDto],
+    description:
+      'Ordered steps of a multi-step goal (ADR-0057). Empty/absent for an atomic goal. The goal state is the roll-up of these steps.',
+  })
+  steps?: BookingChecklistStepResponseDto[];
 }

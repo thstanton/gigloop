@@ -10,6 +10,12 @@ type MockPrisma = {
     updateMany: jest.Mock;
     update: jest.Mock;
     create: jest.Mock;
+    createMany: jest.Mock;
+  };
+  bookingChecklistStep: {
+    findFirst: jest.Mock;
+    update: jest.Mock;
+    updateMany: jest.Mock;
   };
   $transaction: jest.Mock;
 };
@@ -24,6 +30,12 @@ function makePrisma(): MockPrisma {
       updateMany: jest.fn(),
       update: jest.fn(),
       create: jest.fn(),
+      createMany: jest.fn(),
+    },
+    bookingChecklistStep: {
+      findFirst: jest.fn(),
+      update: jest.fn(),
+      updateMany: jest.fn(),
     },
     $transaction: jest.fn(),
   };
@@ -227,6 +239,49 @@ describe('ChecklistRepository — findActionItems', () => {
     });
   });
 
+  describe('multi-step goal active-step surfacing (ADR-0057)', () => {
+    // A contract goal: created + sent, due within window, on a CONFIRMED booking.
+    const contractGoal = (steps: Array<{ key: string; state: string; completedBy: string; order: number }>) => ({
+      id: 'g-contract',
+      key: 'get_contract_signed',
+      label: 'Get the contract signed',
+      state: 'PENDING',
+      dueDate: new Date('2025-01-08T00:00:00.000Z'),
+      requiredForStatus: 'CONFIRMED',
+      order: 0,
+      steps,
+    });
+
+    it('omits the goal while its active step awaits the client (CUSTOMER signing)', async () => {
+      const goal = contractGoal([
+        { key: 'create_contract', state: 'COMPLETE', completedBy: 'USER', order: 1 },
+        { key: 'send_contract', state: 'COMPLETE', completedBy: 'USER', order: 2 },
+        { key: 'contract_signed', state: 'PENDING', completedBy: 'CUSTOMER', order: 3 },
+      ]);
+      prisma.booking.findMany.mockResolvedValue([makeBooking({ status: 'CONFIRMED', checklistItems: [goal] })]);
+
+      const result = await repo.findActionItems('u1', TODAY, REMINDER_LEAD_DAYS);
+
+      expect(result).toHaveLength(0);
+    });
+
+    it('surfaces the active step (relabelled) while it is the musician’s to act on', async () => {
+      const goal = contractGoal([
+        { key: 'create_contract', state: 'COMPLETE', completedBy: 'USER', order: 1 },
+        { key: 'send_contract', state: 'PENDING', completedBy: 'USER', order: 2 },
+        { key: 'contract_signed', state: 'PENDING', completedBy: 'CUSTOMER', order: 3 },
+      ]);
+      // The step's own label rides through so the dashboard shows the concrete next action.
+      goal.steps[1] = { ...goal.steps[1], label: 'Send it to the client' } as never;
+      prisma.booking.findMany.mockResolvedValue([makeBooking({ status: 'CONFIRMED', checklistItems: [goal] })]);
+
+      const result = await repo.findActionItems('u1', TODAY, REMINDER_LEAD_DAYS);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].item).toMatchObject({ key: 'send_contract', label: 'Send it to the client' });
+    });
+  });
+
   it('includes booking metadata alongside the item', async () => {
     const item = makeItem({ dueDate: new Date('2025-01-08T00:00:00.000Z') });
     const booking = makeBooking({
@@ -319,16 +374,132 @@ describe('ChecklistRepository — seedReminderItem (Module 4)', () => {
     expect(createArg.data).toMatchObject({ key: 'confirm_quote', order: 1, bookingId: 'b1', userId: 'u1' });
   });
 
-  it('seeds a dependent item as BLOCKED and computes its due date from the rule', async () => {
+  it('seeds a goal PENDING (BLOCKED retired, ADR-0057) and computes its due date from the rule', async () => {
     prisma.bookingChecklistItem.findFirst.mockResolvedValue(null);
     prisma.bookingChecklistItem.findMany.mockResolvedValue([]);
     prisma.bookingChecklistItem.create.mockResolvedValue({ id: 'new' });
 
-    // song_requests dependsOn music_form_invite, dueDateRule bookingDate -14.
-    await repo.seedReminderItem('u1', 'b1', 'song_requests', BOOKING_DATE, CREATED_AT);
+    // send_thank_you dependsOn play_the_gig, dueDateRule bookingDate +7. Inter-goal order is now
+    // soft status — the dependency never hard-blocks, so the seed starts PENDING, not BLOCKED.
+    await repo.seedReminderItem('u1', 'b1', 'send_thank_you', BOOKING_DATE, CREATED_AT);
 
     const createArg = prisma.bookingChecklistItem.create.mock.calls[0][0];
-    expect(createArg.data.state).toBe('BLOCKED');
-    expect(createArg.data.dueDate).toEqual(new Date('2025-05-18T19:00:00.000Z')); // -14 days
+    expect(createArg.data.state).toBe('PENDING');
+    expect(createArg.data.dueDate).toEqual(new Date('2025-06-08T19:00:00.000Z')); // +7 days
+  });
+
+  it('on-demand seeds a multi-step goal WITH its canonical steps (toggle-on from the per-concern control, #609)', async () => {
+    prisma.bookingChecklistItem.findFirst.mockResolvedValue(null);
+    prisma.bookingChecklistItem.findMany.mockResolvedValue([]);
+    prisma.bookingChecklistItem.create.mockResolvedValue({ id: 'new', key: 'get_contract_signed' });
+
+    // Turning the "Get the contract signed" goal on (RemindMeAbout) seeds the goal AND its steps —
+    // the backend owns step structure, so the goal is never seeded as a bare stepless row.
+    await repo.seedReminderItem('u1', 'b1', 'get_contract_signed', BOOKING_DATE, CREATED_AT);
+
+    const createArg = prisma.bookingChecklistItem.create.mock.calls[0][0];
+    expect(createArg.data).toMatchObject({ key: 'get_contract_signed', state: 'PENDING' });
+    const stepKeys = createArg.data.steps.create.map((s: { key: string }) => s.key);
+    expect(stepKeys).toEqual(['create_contract', 'send_contract', 'contract_signed']);
+  });
+});
+
+describe('ChecklistRepository — resetItemByKey (void un-stick, ADR-0057 / #608)', () => {
+  let repo: ChecklistRepository;
+  let prisma: MockPrisma;
+
+  beforeEach(() => {
+    prisma = makePrisma();
+    repo = new ChecklistRepository(prisma as unknown as PrismaService);
+    prisma.$transaction.mockImplementation((ops: unknown[]) => Promise.resolve(ops));
+  });
+
+  it('un-sticks a flat goal-level key (un-migrated booking)', async () => {
+    prisma.bookingChecklistStep.findFirst.mockResolvedValue(null);
+
+    await repo.resetItemByKey('b1', 'create_balance_invoice');
+
+    expect(prisma.bookingChecklistItem.updateMany).toHaveBeenCalledWith({
+      where: { bookingId: 'b1', key: 'create_balance_invoice', state: 'COMPLETE' },
+      data: { state: 'PENDING', completedAt: null },
+    });
+    // No step → no transaction.
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('un-sticks a step + its parent goal so evaluate() can re-roll-up (migrated booking)', async () => {
+    // A migrated booking carries create_deposit_invoice as a COMPLETE step of get_deposit_paid.
+    prisma.bookingChecklistStep.findFirst.mockResolvedValue({ id: 'step-1', goalId: 'goal-1' });
+
+    await repo.resetItemByKey('b1', 'create_deposit_invoice');
+
+    expect(prisma.bookingChecklistStep.findFirst).toHaveBeenCalledWith({
+      where: { key: 'create_deposit_invoice', state: 'COMPLETE', goal: { bookingId: 'b1' } },
+      select: { id: true, goalId: true },
+    });
+    // The step reset and the goal reset land together in one transaction.
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(prisma.bookingChecklistStep.update).toHaveBeenCalledWith({
+      where: { id: 'step-1' },
+      data: { state: 'PENDING', completedAt: null },
+    });
+    // Only a COMPLETE goal is un-stuck (a SKIPPED opt-out stays skipped).
+    expect(prisma.bookingChecklistItem.updateMany).toHaveBeenCalledWith({
+      where: { id: 'goal-1', state: 'COMPLETE' },
+      data: { state: 'PENDING', completedAt: null },
+    });
+  });
+});
+
+describe('ChecklistRepository — seedChecklistItems (goal⊃step seeding, ADR-0057)', () => {
+  let repo: ChecklistRepository;
+  let prisma: MockPrisma;
+  const BOOKING_DATE = new Date('2025-06-01T19:00:00.000Z');
+  const CREATED_AT = new Date('2025-01-01T00:00:00.000Z');
+
+  beforeEach(() => {
+    prisma = makePrisma();
+    repo = new ChecklistRepository(prisma as unknown as PrismaService);
+  });
+
+  it('materialises the contract goal with its canonical create→send→signed steps', async () => {
+    prisma.bookingChecklistItem.create.mockResolvedValue({ id: 'g' });
+
+    await repo.seedChecklistItems(
+      'u1',
+      'b1',
+      [{ key: 'get_contract_signed', label: 'Get the contract signed', completedBy: 'USER', requiredForStatus: 'CONFIRMED', autoCompleteRule: null, dependsOn: [], dueDateRule: { basis: 'bookingDate', offsetDays: -60 } }],
+      BOOKING_DATE,
+      CREATED_AT,
+    );
+
+    const createArg = prisma.bookingChecklistItem.create.mock.calls[0][0];
+    expect(createArg.data).toMatchObject({ key: 'get_contract_signed', state: 'PENDING', bookingId: 'b1', userId: 'u1' });
+    const stepKeys = createArg.data.steps.create.map((s: { key: string }) => s.key);
+    expect(stepKeys).toEqual(['create_contract', 'send_contract', 'contract_signed']);
+    const signed = createArg.data.steps.create.find((s: { key: string }) => s.key === 'contract_signed');
+    expect(signed).toMatchObject({ completeMode: 'AWAITED', completedBy: 'CUSTOMER', state: 'PENDING', order: 3 });
+    // Backend owns step structure: steps come from canonical defaults, not the payload.
+    expect(prisma.bookingChecklistItem.createMany).not.toHaveBeenCalled();
+  });
+
+  it('batches stepless goals via createMany while a stepped goal keeps template order', async () => {
+    prisma.bookingChecklistItem.create.mockResolvedValue({ id: 'g' });
+
+    await repo.seedChecklistItems(
+      'u1',
+      'b1',
+      [
+        { key: 'send_quote', label: 'Send quote', completedBy: 'USER', requiredForStatus: 'PROVISIONAL', autoCompleteRule: { type: 'communicationSent', templateTypes: ['quote'] }, dependsOn: [] },
+        { key: 'get_contract_signed', label: 'Get the contract signed', completedBy: 'USER', requiredForStatus: 'CONFIRMED', autoCompleteRule: null, dependsOn: [] },
+      ],
+      BOOKING_DATE,
+      CREATED_AT,
+    );
+
+    const batched = prisma.bookingChecklistItem.createMany.mock.calls[0][0].data;
+    expect(batched).toEqual([expect.objectContaining({ key: 'send_quote', order: 1 })]);
+    const createdGoal = prisma.bookingChecklistItem.create.mock.calls[0][0].data;
+    expect(createdGoal).toMatchObject({ key: 'get_contract_signed', order: 2 });
   });
 });

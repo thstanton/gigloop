@@ -40,11 +40,10 @@ export class ChecklistItemInput {
   @IsIn(['USER', 'CUSTOMER', 'BAND_MEMBER'])
   completedBy?: 'USER' | 'CUSTOMER' | 'BAND_MEMBER';
 
-  @ApiPropertyOptional({ type: [String] })
-  @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  dependsOn?: string[];
+  // ADR-0057 / #609: `dependsOn` retires from the create contract. Intra-goal order is the
+  // backend-owned `step.order`; inter-goal order is soft status. The create form chooses goals
+  // by key only — the backend materialises a goal's canonical steps (it never trusts the client
+  // for step structure). The static catalog still carries `dependsOn` for the soft after-clause.
 
   @ApiPropertyOptional({ nullable: true })
   @IsOptional()

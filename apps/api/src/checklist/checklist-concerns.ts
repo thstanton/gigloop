@@ -19,20 +19,22 @@ const KEY_TO_CONCERN: Record<string, ReminderConcern> = {
   // Venue / Itinerary / Music
   add_venue: 'venue',
   build_itinerary: 'itinerary',
-  song_requests: 'music',
+  // ADR-0057 / #608: song requests are now one multi-step *goal* (invite → response). Its
+  // outcome is musical, so the goal lives in 'music' (the invite step's old 'people' home
+  // retires with the fold).
+  gather_song_requests: 'music',
   // People — the sends
   send_quote: 'people',
-  send_contract: 'people',
-  music_form_invite: 'people',
   send_thank_you: 'people',
-  send_balance_invoice: 'people',
   // Overview — deal spine + the gig
   confirm_quote: 'overview',
-  create_deposit_invoice: 'overview',
-  create_contract: 'overview',
-  contract_signed: 'overview',
-  deposit_received: 'overview',
-  create_balance_invoice: 'overview',
+  // ADR-0057 / #607–#608: the contract, deposit and balance are each one multi-step *goal*.
+  // Their create/send/signed/received steps are not independently toggleable reminders — the
+  // goal is the unit. (The picker listing goals as the toggle unit is #609; here we just keep
+  // the system-key authority pointing at the real goal key.)
+  get_contract_signed: 'overview',
+  get_deposit_paid: 'overview',
+  invoice_the_balance: 'overview',
   play_the_gig: 'overview',
 };
 

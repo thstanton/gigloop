@@ -60,11 +60,10 @@ describe('Contract flow (integration)', () => {
         date: FUTURE_DATE,
         customerId,
         checklistItems: CHECKLIST_DEFAULTS.map(
-          ({ key, label, completedBy, dependsOn, autoCompleteRule, requiredForStatus, dueDateRule }) => ({
+          ({ key, label, completedBy, autoCompleteRule, requiredForStatus, dueDateRule }) => ({
             key,
             label,
             completedBy,
-            dependsOn,
             autoCompleteRule,
             requiredForStatus,
             dueDateRule,
@@ -105,8 +104,12 @@ describe('Contract flow (integration)', () => {
     });
   }
 
-  function getChecklistItem(bookingId: string, key: string) {
-    return prisma.bookingChecklistItem.findFirst({ where: { bookingId, key } });
+  // Resolve a key to its goal (BookingChecklistItem) or step (BookingChecklistStep) row —
+  // ADR-0057 turned contract_signed into a step of get_contract_signed.
+  async function getChecklistItem(bookingId: string, key: string) {
+    const goal = await prisma.bookingChecklistItem.findFirst({ where: { bookingId, key } });
+    if (goal) return goal;
+    return prisma.bookingChecklistStep.findFirst({ where: { bookingId, key } });
   }
 
   // ── happy paths ────────────────────────────────────────────────────────────

@@ -13,6 +13,12 @@
 // of the queries), but it is included for completeness.
 const STAGE_ORDER = ['ENQUIRY', 'PROVISIONAL', 'CONFIRMED', 'READY', 'COMPLETE', 'CANCELLED'];
 
+// ADR-0057: the surfaced unit is a *Goal*. The three-rule filter keys only on
+// `dueDate` and `requiredForStatus` — both goal-level fields — so it is unchanged
+// by the goal⊃step model. For a multi-step goal the surfaced action is its active
+// step (the first non-terminal step — see `activeStep` in checklist-rollup.ts);
+// for an atomic goal the goal is itself the unit. CUSTOMER-omission (passive
+// client waits never nag) is applied upstream in `findActionItems`, not here.
 export interface SurfaceableItem {
   dueDate: Date | null;
   requiredForStatus: string | null;
