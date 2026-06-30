@@ -34,6 +34,16 @@ const BOOKING_FIELD_SHORTCUT: Readonly<Record<string, string>> = {
   depositReceivedAt: 'mark_deposit_received',
 };
 
+// The booking fields a checklist auto-complete rule binds to: changing any of them must re-run the
+// evaluator so the dependent goal/step auto-completes. Add a field here when a new rule binds to it.
+const RULE_BOUND_FIELDS = ['status', 'venueId', 'depositReceivedAt'] as const satisfies ReadonlyArray<
+  keyof UpdateBookingDto
+>;
+
+function touchesRuleBoundField(dto: UpdateBookingDto): boolean {
+  return RULE_BOUND_FIELDS.some((field) => dto[field] !== undefined);
+}
+
 function resolveContractTemplate(items: Array<{ key: string | null }>): string {
   // A booking expects a deposit when it carries the deposit deliverable. Detect both shapes
   // (ADR-0057): the migrated multi-step goal (`get_deposit_paid`) or, on an un-migrated booking,
@@ -282,11 +292,9 @@ export class BookingsService {
     if (dto.date !== undefined) {
       await this.checklistRepo.recomputeChecklistDueDates(id, updated.date, updated.createdAt);
     }
-    // Re-evaluate auto-complete rules when a field a rule binds to changes. venueId drives
-    // the add_venue structural item (PRD #511 Module A/D); depositReceivedAt drives the
-    // get_deposit_paid goal's `deposit_received` step (ADR-0057 / #608) — the mark-deposit-
-    // received action PATCHes the field, and the step must auto-complete without a manual tick.
-    if (dto.status !== undefined || dto.venueId !== undefined || dto.depositReceivedAt !== undefined) {
+    // Re-evaluate auto-complete rules when a field a rule binds to changes (status drives stage
+    // gates, venueId the add_venue item, depositReceivedAt the deposit_received step — ADR-0057).
+    if (touchesRuleBoundField(dto)) {
       await this.evaluator.evaluate(id).catch(() => {});
     }
     return updated;
