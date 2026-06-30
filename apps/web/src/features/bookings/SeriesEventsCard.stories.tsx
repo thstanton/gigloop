@@ -18,7 +18,6 @@ const makeBooking = (overrides: Partial<BookingListItem>): BookingListItem => ({
   date: '2030-07-15T19:00:00Z',
   title: 'Grand Hotel Summer Ball',
   fee: '1500.00',
-  notes: null,
   customerId: customer.id,
   customer,
   venueId: venue.id,

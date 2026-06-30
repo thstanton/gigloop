@@ -38,7 +38,23 @@ const bookingIncludes = {
   contracts: CONTRACT_INCLUDE,
 } as const;
 
-const listIncludes = {
+// The booking list is the highest-frequency, unpaginated endpoint, so it uses a top-level
+// `select` to return only the scalars the list renders (#588). Deliberately omitted: the
+// `logistics` JSON, `notes`, and `portalToken` (the last also a mild data-exposure smell) —
+// none are read by the list UI and all live on BookingDetail instead.
+const listSelect = {
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  status: true,
+  eventType: true,
+  date: true,
+  title: true,
+  fee: true,
+  customerId: true,
+  venueId: true,
+  bookingAgentId: true,
+  seriesId: true,
   customer: { select: { id: true, name: true, email: true } },
   venue: { select: { id: true, name: true } },
   bookingAgent: { select: { id: true, name: true } },
@@ -53,7 +69,7 @@ export class BookingsRepository {
   findAll(userId: string, statuses: BookingStatus[] = [], q?: string, eventType?: string, from?: string, to?: string) {
     return this.prisma.booking.findMany({
       where: buildBookingSearchWhere(userId, q, statuses, eventType, from, to),
-      include: listIncludes,
+      select: listSelect,
       orderBy: { date: 'asc' },
     });
   }
