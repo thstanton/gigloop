@@ -92,17 +92,25 @@ describe('ChecklistEvaluator (integration)', () => {
     return prisma.bookingChecklistStep.findFirst({ where: { bookingId, key } });
   }
 
+  // ADR-0057: a key may now be a goal (BookingChecklistItem) OR a step (BookingChecklistStep) —
+  // complete whichever it is so the setup actually advances the booking.
   async function forceComplete(bookingId: string, keys: string[]) {
-    await prisma.bookingChecklistItem.updateMany({
-      where: { bookingId, key: { in: keys } },
-      data: { state: 'COMPLETE', completedAt: new Date() },
-    });
+    await Promise.all([
+      prisma.bookingChecklistItem.updateMany({
+        where: { bookingId, key: { in: keys } },
+        data: { state: 'COMPLETE', completedAt: new Date() },
+      }),
+      prisma.bookingChecklistStep.updateMany({
+        where: { bookingId, key: { in: keys } },
+        data: { state: 'COMPLETE', completedAt: new Date() },
+      }),
+    ]);
   }
 
   // ── Auto-complete cascades ────────────────────────────────────────────────
 
   describe('Auto-complete cascades', () => {
-    it('send_quote comm SENT → send_quote COMPLETE + confirm_quote unblocked (same evaluate pass)', async () => {
+    it('send_quote comm SENT → send_quote step COMPLETE, quote_accepted still PENDING (#616)', async () => {
       const bookingId = await createBooking();
 
       const res = await request(app.getHttpServer())
@@ -116,19 +124,22 @@ describe('ChecklistEvaluator (integration)', () => {
         });
       expect(res.status).toBe(204);
 
-      const [sendQuote, confirmQuote] = await Promise.all([
+      // ADR-0057 / #616: the quote is one goal (get_the_quote_accepted). Sending the quote comm
+      // completes the send_quote step; the AWAITED quote_accepted step (no system signal) stays
+      // PENDING until the musician marks the goal complete.
+      const [sendQuote, quoteAccepted] = await Promise.all([
         getItem(bookingId, 'send_quote'),
-        getItem(bookingId, 'confirm_quote'),
+        getItem(bookingId, 'quote_accepted'),
       ]);
       expect(sendQuote?.state).toBe('COMPLETE');
-      expect(confirmQuote?.state).toBe('PENDING'); // atomic goal, actionable throughout (ADR-0057)
+      expect(quoteAccepted?.state).toBe('PENDING');
 
       await prisma.booking.delete({ where: { id: bookingId } });
     });
 
     it('contract created via API → create_contract COMPLETE', async () => {
       const bookingId = await createBooking();
-      await forceComplete(bookingId, ['send_quote', 'confirm_quote']);
+      await forceComplete(bookingId, ['send_quote', 'quote_accepted']);
 
       const res = await request(app.getHttpServer())
         .post(`/api/bookings/${bookingId}/contracts`)
@@ -143,7 +154,7 @@ describe('ChecklistEvaluator (integration)', () => {
 
     it('contract signed via portal → contract_signed COMPLETE', async () => {
       const bookingId = await createBooking();
-      await forceComplete(bookingId, ['send_quote', 'confirm_quote']);
+      await forceComplete(bookingId, ['send_quote', 'quote_accepted']);
 
       const contractRes = await request(app.getHttpServer())
         .post(`/api/bookings/${bookingId}/contracts`)
@@ -227,7 +238,7 @@ describe('ChecklistEvaluator (integration)', () => {
       const keys = checklist.map((i) => i.key);
       expect(keys).toContain('custom_a');
       expect(keys).toContain('custom_b');
-      expect(keys).not.toContain('send_quote');
+      expect(keys).not.toContain('get_the_quote_accepted');
 
       await prisma.booking.delete({ where: { id: bookingId } });
     });

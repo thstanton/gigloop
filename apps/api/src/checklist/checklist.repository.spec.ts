@@ -357,21 +357,21 @@ describe('ChecklistRepository — seedReminderItem (Module 4)', () => {
 
   it('inserts in template position and shifts the tail by +1', async () => {
     prisma.bookingChecklistItem.findFirst.mockResolvedValue(null);
-    // A booking that only has a later-template item (create_balance_invoice, order 1).
+    // A booking that only has a later-template goal (invoice_the_balance, order 1).
     prisma.bookingChecklistItem.findMany.mockResolvedValue([
-      { key: 'create_balance_invoice', order: 1 },
+      { key: 'invoice_the_balance', order: 1 },
     ]);
-    prisma.bookingChecklistItem.create.mockResolvedValue({ id: 'new', key: 'confirm_quote', order: 1 });
+    prisma.bookingChecklistItem.create.mockResolvedValue({ id: 'new', key: 'add_venue', order: 1 });
 
-    await repo.seedReminderItem('u1', 'b1', 'confirm_quote', BOOKING_DATE, CREATED_AT);
+    await repo.seedReminderItem('u1', 'b1', 'add_venue', BOOKING_DATE, CREATED_AT);
 
-    // confirm_quote precedes create_balance_invoice → inserted at order 1, tail shifted.
+    // add_venue precedes invoice_the_balance in the template → inserted at order 1, tail shifted.
     expect(prisma.bookingChecklistItem.updateMany).toHaveBeenCalledWith({
       where: { bookingId: 'b1', order: { gte: 1 } },
       data: { order: { increment: 1 } },
     });
     const createArg = prisma.bookingChecklistItem.create.mock.calls[0][0];
-    expect(createArg.data).toMatchObject({ key: 'confirm_quote', order: 1, bookingId: 'b1', userId: 'u1' });
+    expect(createArg.data).toMatchObject({ key: 'add_venue', order: 1, bookingId: 'b1', userId: 'u1' });
   });
 
   it('seeds a goal PENDING (BLOCKED retired, ADR-0057) and computes its due date from the rule', async () => {
@@ -400,7 +400,7 @@ describe('ChecklistRepository — seedReminderItem (Module 4)', () => {
     const createArg = prisma.bookingChecklistItem.create.mock.calls[0][0];
     expect(createArg.data).toMatchObject({ key: 'get_contract_signed', state: 'PENDING' });
     const stepKeys = createArg.data.steps.create.map((s: { key: string }) => s.key);
-    expect(stepKeys).toEqual(['create_contract', 'send_contract', 'contract_signed']);
+    expect(stepKeys).toEqual(['set_fee_contract', 'add_email_contract', 'create_contract', 'send_contract', 'contract_signed']);
   });
 });
 
@@ -476,9 +476,10 @@ describe('ChecklistRepository — seedChecklistItems (goal⊃step seeding, ADR-0
     const createArg = prisma.bookingChecklistItem.create.mock.calls[0][0];
     expect(createArg.data).toMatchObject({ key: 'get_contract_signed', state: 'PENDING', bookingId: 'b1', userId: 'u1' });
     const stepKeys = createArg.data.steps.create.map((s: { key: string }) => s.key);
-    expect(stepKeys).toEqual(['create_contract', 'send_contract', 'contract_signed']);
+    expect(stepKeys).toEqual(['set_fee_contract', 'add_email_contract', 'create_contract', 'send_contract', 'contract_signed']);
     const signed = createArg.data.steps.create.find((s: { key: string }) => s.key === 'contract_signed');
-    expect(signed).toMatchObject({ completeMode: 'AWAITED', completedBy: 'CUSTOMER', state: 'PENDING', order: 3 });
+    // order 5: two preconditions (#618) precede create → send → signed.
+    expect(signed).toMatchObject({ completeMode: 'AWAITED', completedBy: 'CUSTOMER', state: 'PENDING', order: 5 });
     // Backend owns step structure: steps come from canonical defaults, not the payload.
     expect(prisma.bookingChecklistItem.createMany).not.toHaveBeenCalled();
   });

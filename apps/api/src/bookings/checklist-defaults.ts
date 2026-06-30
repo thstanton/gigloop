@@ -45,33 +45,70 @@ export interface ChecklistDefaultItem {
 
 export const CHECKLIST_DEFAULTS: ChecklistDefaultItem[] = [
   {
-    key: 'send_quote',
-    label: 'Send quote',
+    // ADR-0057 / #616: the quote deliverable as one multi-step goal — send the quote → the
+    // client accepts it. Mirrors the contract goal: the goal carries no rule (its state rolls
+    // up from its steps), `completedBy: USER` so it passes the findActionItems USER filter
+    // (surfacing then refines to the active step), and a goal-level dueDate of bookingCreation+2
+    // (the send deadline, the quote's binding deadline). `quote_accepted` is AWAITED with no
+    // system signal (a quote acceptance has no portal event), so it completes by the musician
+    // marking the goal done — the locked precedent for a USER-awaited step with no rule. It is
+    // USER-completedBy, so per the chase-the-money policy the goal keeps surfacing (chase the
+    // sale) until the booking advances past PROVISIONAL.
+    key: 'get_the_quote_accepted',
+    label: 'Get the quote accepted',
     completedBy: 'USER',
     dependsOn: [],
-    autoCompleteRule: { type: 'communicationSent', templateTypes: ['quote'] },
-    requiredForStatus: 'PROVISIONAL',
-    dueDateRule: { basis: 'bookingCreation', offsetDays: 2 },
-  },
-  {
-    key: 'confirm_quote',
-    label: 'Quote confirmed',
-    completedBy: 'USER',
-    dependsOn: ['send_quote'],
     autoCompleteRule: null,
     requiredForStatus: 'PROVISIONAL',
-    dueDateRule: null,
+    dueDateRule: { basis: 'bookingCreation', offsetDays: 2 },
+    steps: [
+      // PRECONDITIONS (#618), ordered before the first send — surfaced one at a time, each folds the
+      // moment its predicate holds (same predicate across goals ⇒ all co-resolve once satisfied).
+      {
+        key: 'set_fee_quote',
+        label: 'Set the booking fee',
+        kind: 'PRECONDITION',
+        completeMode: 'ACTION',
+        completedBy: 'USER',
+        autoCompleteRule: { type: 'bookingField', field: 'fee', operator: 'notNull' },
+      },
+      {
+        key: 'add_email_quote',
+        label: "Add the client's email",
+        kind: 'PRECONDITION',
+        completeMode: 'ACTION',
+        completedBy: 'USER',
+        autoCompleteRule: { type: 'customerEmail' },
+      },
+      {
+        key: 'send_quote',
+        label: 'Send the quote',
+        kind: 'MILESTONE',
+        completeMode: 'ACTION',
+        completedBy: 'USER',
+        autoCompleteRule: { type: 'communicationSent', templateTypes: ['quote'] },
+        dueDateRule: { basis: 'bookingCreation', offsetDays: 2 },
+      },
+      {
+        key: 'quote_accepted',
+        label: 'Client accepts the quote',
+        kind: 'MILESTONE',
+        completeMode: 'AWAITED',
+        completedBy: 'USER',
+        autoCompleteRule: null,
+      },
+    ],
   },
   {
-    // ADR-0057 / #608: the deposit billing deliverable as one multi-step goal — issue the
-    // invoice → send it to the client → the deposit lands. Mirrors the contract goal: the
-    // goal carries no rule (state rolls up from its steps), `completedBy: USER` so it passes
-    // the findActionItems USER filter (surfacing then refines to the active step), and a
-    // goal-level dueDate of -30 (the received deadline — the latest the cluster dates against,
-    // so the goal keeps surfacing through the awaited deposit). The draft → issue hop is owned
-    // by the invoice sheet (canonical entity state, ADR-0057 dec.11 + the #585 fix); the
-    // checklist's `create_deposit_invoice` step is the *issue* milestone (its `invoiceExists`
-    // rule excludes DRAFT), so a created-but-unissued draft leaves it surfaced — the #585 fix.
+    // ADR-0057 / #608 / #617: the deposit billing deliverable as one multi-step goal — create the
+    // invoice → issue it → send it to the client → the deposit lands. Mirrors the contract goal:
+    // the goal carries no rule (state rolls up from its steps), `completedBy: USER` so it passes
+    // the findActionItems USER filter (surfacing then refines to the active step), and a goal-level
+    // dueDate of -30 (the received deadline — the latest the cluster dates against, so the goal
+    // keeps surfacing through the awaited deposit). #617 splits create from issue: a saved draft
+    // completes `create_deposit_invoice` (includeDraft) and surfaces `issue_deposit_invoice` as the
+    // active step (the #585 fix made explicit); the draft → issue hop itself is owned by the
+    // invoice sheet (ADR-0056 / dec.11), which the checklist shadows as two distinct steps.
     key: 'get_deposit_paid',
     label: 'Get the deposit paid',
     completedBy: 'USER',
@@ -80,8 +117,39 @@ export const CHECKLIST_DEFAULTS: ChecklistDefaultItem[] = [
     requiredForStatus: 'CONFIRMED',
     dueDateRule: { basis: 'bookingDate', offsetDays: -30 },
     steps: [
+      // PRECONDITIONS (#618), ordered before the first action.
       {
+        key: 'set_fee_deposit',
+        label: 'Set the booking fee',
+        kind: 'PRECONDITION',
+        completeMode: 'ACTION',
+        completedBy: 'USER',
+        autoCompleteRule: { type: 'bookingField', field: 'fee', operator: 'notNull' },
+      },
+      {
+        key: 'add_email_deposit',
+        label: "Add the client's email",
+        kind: 'PRECONDITION',
+        completeMode: 'ACTION',
+        completedBy: 'USER',
+        autoCompleteRule: { type: 'customerEmail' },
+      },
+      {
+        // ADR-0057 / #617: the create milestone — satisfied by a draft-or-beyond invoice
+        // (includeDraft), so saving a draft advances the goal and surfaces "Issue" as what's left
+        // rather than leaving the musician dangling. The draft → issue hop is owned by the invoice
+        // sheet (ADR-0056 / dec.11); the checklist shadows both as distinct steps.
         key: 'create_deposit_invoice',
+        label: 'Create deposit invoice',
+        kind: 'MILESTONE',
+        completeMode: 'ACTION',
+        completedBy: 'USER',
+        autoCompleteRule: { type: 'invoiceExists', isDeposit: true, includeDraft: true },
+      },
+      {
+        // The issue milestone — invoiceExists WITHOUT includeDraft, so a DRAFT does not satisfy it
+        // (the #585 fix: a created-but-unissued draft keeps "Issue the invoice" surfaced).
+        key: 'issue_deposit_invoice',
         label: 'Issue deposit invoice',
         kind: 'MILESTONE',
         completeMode: 'ACTION',
@@ -132,6 +200,23 @@ export const CHECKLIST_DEFAULTS: ChecklistDefaultItem[] = [
     requiredForStatus: 'CONFIRMED',
     dueDateRule: { basis: 'bookingDate', offsetDays: -60 },
     steps: [
+      // PRECONDITIONS (#618), ordered before drafting/sending.
+      {
+        key: 'set_fee_contract',
+        label: 'Set the booking fee',
+        kind: 'PRECONDITION',
+        completeMode: 'ACTION',
+        completedBy: 'USER',
+        autoCompleteRule: { type: 'bookingField', field: 'fee', operator: 'notNull' },
+      },
+      {
+        key: 'add_email_contract',
+        label: "Add the client's email",
+        kind: 'PRECONDITION',
+        completeMode: 'ACTION',
+        completedBy: 'USER',
+        autoCompleteRule: { type: 'customerEmail' },
+      },
       {
         key: 'create_contract',
         label: 'Draft the contract',
@@ -187,21 +272,51 @@ export const CHECKLIST_DEFAULTS: ChecklistDefaultItem[] = [
     dueDateRule: null,
   },
   {
-    // ADR-0057 / #608: the balance billing deliverable as one multi-step goal — issue the
-    // invoice → send it. No received step (the balance is settled around the gig, never tracked
-    // as a checklist milestone in the flat model either). Goal carries no rule (rolls up), dates
-    // against -14. The `create_balance_invoice` step is the *issue* milestone (invoiceExists
-    // excludes DRAFT); the draft → issue hop is the invoice sheet's (ADR-0057 dec.11).
-    key: 'invoice_the_balance',
-    label: 'Invoice the balance',
+    // ADR-0057 / #608 / #617: the balance billing deliverable as one multi-step goal, now
+    // outcome-framed as "Get the balance paid" (symmetry with get_deposit_paid): create → issue →
+    // send → balance received. Goal carries no rule (rolls up), dates against -14 (the send
+    // deadline). #617 splits create from issue (the #585 fix, mirrors the deposit) and adds a
+    // USER-awaited `balance_received` step. There is no `balanceReceivedAt` field yet (out of
+    // scope — the analytics cash-received lens), so `balance_received` has no rule and is resolved
+    // by the musician marking the goal complete; being USER-awaited it keeps surfacing (chase the
+    // money) until paid.
+    key: 'get_the_balance_paid',
+    label: 'Get the balance paid',
     completedBy: 'USER',
     dependsOn: [],
     autoCompleteRule: null,
     requiredForStatus: 'READY',
     dueDateRule: { basis: 'bookingDate', offsetDays: -14 },
     steps: [
+      // PRECONDITIONS (#618), ordered before the first action.
       {
+        key: 'set_fee_balance',
+        label: 'Set the booking fee',
+        kind: 'PRECONDITION',
+        completeMode: 'ACTION',
+        completedBy: 'USER',
+        autoCompleteRule: { type: 'bookingField', field: 'fee', operator: 'notNull' },
+      },
+      {
+        key: 'add_email_balance',
+        label: "Add the client's email",
+        kind: 'PRECONDITION',
+        completeMode: 'ACTION',
+        completedBy: 'USER',
+        autoCompleteRule: { type: 'customerEmail' },
+      },
+      {
+        // Create milestone — a draft-or-beyond invoice (includeDraft).
         key: 'create_balance_invoice',
+        label: 'Create balance invoice',
+        kind: 'MILESTONE',
+        completeMode: 'ACTION',
+        completedBy: 'USER',
+        autoCompleteRule: { type: 'invoiceExists', isDeposit: false, includeDraft: true },
+      },
+      {
+        // Issue milestone — a non-DRAFT invoice (the #585 fix).
+        key: 'issue_balance_invoice',
         label: 'Issue balance invoice',
         kind: 'MILESTONE',
         completeMode: 'ACTION',
@@ -218,6 +333,16 @@ export const CHECKLIST_DEFAULTS: ChecklistDefaultItem[] = [
         completedBy: 'USER',
         autoCompleteRule: { type: 'communicationSent', templateTypes: ['balance_invoice_cover'] },
         dueDateRule: { basis: 'bookingDate', offsetDays: -14 },
+      },
+      {
+        // AWAITED, USER-completedBy, no rule (no balanceReceivedAt field yet) — resolved by the
+        // musician marking the goal complete. Keeps surfacing until then (chase the money).
+        key: 'balance_received',
+        label: 'Balance received',
+        kind: 'MILESTONE',
+        completeMode: 'AWAITED',
+        completedBy: 'USER',
+        autoCompleteRule: null,
       },
     ],
   },
@@ -236,6 +361,16 @@ export const CHECKLIST_DEFAULTS: ChecklistDefaultItem[] = [
     requiredForStatus: 'READY',
     dueDateRule: { basis: 'bookingDate', offsetDays: -30 },
     steps: [
+      // PRECONDITION (#618): emailing the music-form invite needs the client's email. No fee
+      // precondition — the music form is not part of the deal/billing spine.
+      {
+        key: 'add_email_music',
+        label: "Add the client's email",
+        kind: 'PRECONDITION',
+        completeMode: 'ACTION',
+        completedBy: 'USER',
+        autoCompleteRule: { type: 'customerEmail' },
+      },
       {
         key: 'music_form_invite',
         label: 'Send music form invite',

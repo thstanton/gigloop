@@ -117,6 +117,9 @@ export class ChecklistRepository {
           status: true,
           venueId: true,
           customerId: true,
+          // #618 precondition inputs: the booking's fee and its customer's email.
+          fee: true,
+          customer: { select: { email: true } },
           depositReceivedAt: true,
           logistics: true,
           _count: { select: { sets: true } },
@@ -128,10 +131,11 @@ export class ChecklistRepository {
             orderBy: { createdAt: 'asc' },
           },
           invoices: {
-            // Only ISSUED, SENT, and PAID invoices satisfy the invoiceExists checklist rule.
-            // DRAFT (scratchpad) and VOID are excluded.
-            where: { status: { notIn: ['VOID', 'DRAFT'] } },
-            select: { isDeposit: true },
+            // ADR-0057 / #617: DRAFT is now projected in (with its status) so the *create* step's
+            // invoiceExists rule (includeDraft) can recognise a saved draft; the *issue* step's
+            // rule still requires a non-DRAFT status (the #585 fix). VOID never counts as created.
+            where: { status: { not: 'VOID' } },
+            select: { isDeposit: true, status: true },
           },
           contracts: {
             where: { status: { not: 'VOID' } },
@@ -143,7 +147,15 @@ export class ChecklistRepository {
         },
       }),
     ]);
-    const booking = raw ? { ...raw, setsCount: raw._count.sets } : null;
+    const booking = raw
+      ? {
+          ...raw,
+          setsCount: raw._count.sets,
+          // Flatten to the BookingContext shape the rules read (#618).
+          fee: raw.fee != null ? String(raw.fee) : null,
+          customerEmail: raw.customer?.email ?? null,
+        }
+      : null;
     return { items, booking };
   }
 

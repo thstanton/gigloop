@@ -32,11 +32,12 @@ const VALID_STATUSES = new Set<string>(Object.values(BookingStatus));
 const BOOKING_FIELD_SHORTCUT: Readonly<Record<string, string>> = {
   activeContract: 'create_contract',
   depositReceivedAt: 'mark_deposit_received',
+  fee: 'set_fee', // #618 fee precondition → routes to the booking's Overview
 };
 
 // The booking fields a checklist auto-complete rule binds to: changing any of them must re-run the
 // evaluator so the dependent goal/step auto-completes. Add a field here when a new rule binds to it.
-const RULE_BOUND_FIELDS = ['status', 'venueId', 'depositReceivedAt'] as const satisfies ReadonlyArray<
+const RULE_BOUND_FIELDS = ['status', 'venueId', 'depositReceivedAt', 'fee'] as const satisfies ReadonlyArray<
   keyof UpdateBookingDto
 >;
 
@@ -50,6 +51,15 @@ function resolveContractTemplate(items: Array<{ key: string | null }>): string {
   // the flat `deposit_received` item.
   const hasDeposit = items.some((i) => i.key === 'get_deposit_paid' || i.key === 'deposit_received');
   return hasDeposit ? 'contract_and_deposit_cover' : 'contract_cover';
+}
+
+// The shortcut for an invoiceExists step (ADR-0057 / #617). The create step (includeDraft) routes
+// to "Create"; the issue step routes to "Issue" (which opens the saved draft on the invoice sheet
+// to issue it). Kept out of deriveShortcut so its switch stays flat.
+function invoiceShortcutType(rule: Record<string, unknown>): string {
+  const noun = rule['isDeposit'] === true ? 'deposit' : 'balance';
+  const verb = rule['includeDraft'] === true ? 'create' : 'issue';
+  return `${verb}_${noun}_invoice`;
 }
 
 export function deriveShortcut(
@@ -68,14 +78,14 @@ export function deriveShortcut(
         shortcutTemplateType: isContractEmail ? resolveContractTemplate(items) : templateTypes[0],
       };
     }
-    case 'invoiceExists': {
-      const isDeposit = rule['isDeposit'] as boolean | undefined;
-      return { shortcutType: isDeposit ? 'create_deposit_invoice' : 'create_balance_invoice' };
-    }
+    case 'invoiceExists':
+      return { shortcutType: invoiceShortcutType(rule) };
     case 'bookingField':
       return { shortcutType: BOOKING_FIELD_SHORTCUT[rule['field'] as string] };
     case 'contractSigned':
       return { shortcutType: 'mark_contract_signed' };
+    case 'customerEmail':
+      return { shortcutType: 'add_email' }; // #618 → routes to the booking's People
     default:
       return {};
   }

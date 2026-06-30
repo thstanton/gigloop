@@ -118,6 +118,127 @@ export const AwaitingClient: Story = {
   },
 };
 
+// ── Quote goal (#616): send → accept, mirroring the contract but USER-awaited at the end ──────
+
+function quoteGoal(steps: ChecklistStep[]): ChecklistItem {
+  return {
+    ...contractGoal(steps),
+    id: 'g-quote',
+    key: 'get_the_quote_accepted',
+    label: 'Get the quote accepted',
+    requiredForStatus: 'PROVISIONAL',
+  };
+}
+
+const sendQuote = step({
+  id: 's-send-quote',
+  label: 'Send the quote',
+  order: 1,
+  shortcutType: 'send_email',
+  shortcutTemplateType: 'quote',
+});
+const quoteAccepted = step({
+  id: 's-quote-accepted',
+  label: 'Client accepts the quote',
+  order: 2,
+  completeMode: 'AWAITED',
+  completedBy: 'USER', // chase the sale — the musician marks it, no client portal signal
+});
+
+// Send is the active ACTION step — the wand-led CTA routes to compose with the quote template.
+export const QuoteActiveSend: Story = {
+  args: { item: quoteGoal([sendQuote, quoteAccepted]), handlers: handlers() },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('button', { name: /Send the quote/ })).toBeVisible();
+    await expect(canvas.getByText('1/2')).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: /Send the quote/ }));
+    await expect(args.handlers.onOpenCompose).toHaveBeenCalledWith('quote');
+  },
+};
+
+// Sent; now awaiting acceptance. Because the awaited step is USER-completedBy (not the client),
+// it shows as a plain muted wait with NO "Waiting on …" party, and the musician resolves it via
+// the goal's "Mark complete" — the precedent for a USER-awaited step with no system signal.
+export const QuoteAwaitingAcceptance: Story = {
+  args: {
+    item: quoteGoal([{ ...sendQuote, state: 'COMPLETE' }, quoteAccepted]),
+    handlers: handlers(),
+    onSetState: fn(),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText('Client accepts the quote')).toBeVisible();
+    // USER-awaited ⇒ no "Waiting on the client" suffix (that is only for CUSTOMER/BAND waits).
+    await expect(canvas.queryByText(/Waiting on/)).toBeNull();
+    await expect(canvas.getByText('2/2')).toBeVisible();
+    // Resolved by marking the goal complete (no system signal for a quote acceptance).
+    await userEvent.click(canvas.getByRole('button', { name: 'More actions' }), { pointerEventsCheck: 0 });
+    await userEvent.click(await within(document.body).findByText('Mark complete'), { pointerEventsCheck: 0 });
+    await expect(args.onSetState).toHaveBeenCalledWith('g-quote', 'COMPLETE');
+  },
+};
+
+// ── Precondition steps (#618): block a goal until the fee/email is set; CTA deep-links ────────
+
+const setFeeQuote = step({ id: 's-set-fee', label: 'Set the booking fee', order: 1, kind: 'PRECONDITION', shortcutType: 'set_fee' });
+const addEmailQuote = step({ id: 's-add-email', label: "Add the client's email", order: 2, kind: 'PRECONDITION', shortcutType: 'add_email' });
+
+// An unsatisfied precondition leads the goal as the active step; its CTA deep-links to the booking
+// (the fee on Overview). Preconditions aren't milestones, so no x/y progress count is shown.
+export const PreconditionActive: Story = {
+  args: {
+    item: quoteGoal([setFeeQuote, addEmailQuote, sendQuote, quoteAccepted]),
+    handlers: handlers(),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('button', { name: /Set the booking fee/ })).toBeVisible();
+    await expect(canvas.queryByText('1/2')).toBeNull(); // preconditions excluded from the ring count
+    await userEvent.click(canvas.getByRole('button', { name: /Set the booking fee/ }));
+    await expect(args.handlers.onDeepLink).toHaveBeenCalledWith('overview');
+  },
+};
+
+// ── Invoice goals (#617): create → issue → send → received, create/issue distinct CTAs ────────
+
+function depositGoal(steps: ChecklistStep[]): ChecklistItem {
+  return { ...contractGoal(steps), id: 'g-deposit', key: 'get_deposit_paid', label: 'Get the deposit paid' };
+}
+
+const createDeposit = step({ id: 's-create-dep', label: 'Create deposit invoice', order: 1, shortcutType: 'create_deposit_invoice' });
+const issueDeposit = step({ id: 's-issue-dep', label: 'Issue deposit invoice', order: 2, shortcutType: 'issue_deposit_invoice' });
+const sendDeposit = step({ id: 's-send-dep', label: 'Send deposit invoice', order: 3, shortcutType: 'send_email', shortcutTemplateType: 'deposit_invoice_cover' });
+const depositReceived = step({ id: 's-dep-recv', label: 'Deposit received', order: 4, completeMode: 'AWAITED', completedBy: 'USER' });
+
+// No invoice yet — "Create" is the active step (opens the invoice sheet to draft).
+export const DepositCreateActive: Story = {
+  args: { item: depositGoal([createDeposit, issueDeposit, sendDeposit, depositReceived]), handlers: handlers() },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('button', { name: /Create deposit invoice/ })).toBeVisible();
+    await expect(canvas.getByText('1/4')).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: /Create deposit invoice/ }));
+    await expect(args.handlers.onChecklistAction).toHaveBeenCalledWith('create_deposit_invoice');
+  },
+};
+
+// A saved draft completes Create; "Issue the invoice" becomes the active step (the #585 fix). The
+// issue CTA reuses the create-invoice handler — it opens the saved draft on the sheet to issue it.
+export const DepositIssueActive: Story = {
+  args: {
+    item: depositGoal([{ ...createDeposit, state: 'COMPLETE' }, issueDeposit, sendDeposit, depositReceived]),
+    handlers: handlers(),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('button', { name: /Issue deposit invoice/ })).toBeVisible();
+    await expect(canvas.getByText('2/4')).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: /Issue deposit invoice/ }));
+    await expect(args.handlers.onChecklistAction).toHaveBeenCalledWith('create_deposit_invoice');
+  },
+};
+
 // ── Atomic goals (no steps), unified into the same row in #610 ──────────────────────────────
 
 function atomicGoal(overrides: Partial<ChecklistItem>): ChecklistItem {

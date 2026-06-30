@@ -61,7 +61,7 @@ describe('add_venue checklist default (Module D)', () => {
       const keys = filterItemsByStartingStatus(defaults, 'CONFIRMED').map((i) => i.key);
       expect(keys).not.toContain('add_venue');
       // other defaults still seed — only the disabled one drops out
-      expect(keys).toContain('invoice_the_balance');
+      expect(keys).toContain('get_the_balance_paid');
     });
   });
 });
@@ -115,34 +115,34 @@ describe('build_itinerary checklist default (Module D / #523)', () => {
         { key: 'invoice_the_balance', order: 1 },
         { key: 'gather_song_requests', order: 2 },
       ];
-      // confirm_quote is earlier in the template than both — it should go first.
-      expect(computeReminderInsertOrder('confirm_quote', existing)).toBe(1);
+      // get_the_quote_accepted is earlier in the template than both — it should go first.
+      expect(computeReminderInsertOrder('get_the_quote_accepted', existing)).toBe(1);
     });
 
     it('places a mid-template key just after its template predecessor (not appended)', () => {
       const existing = [
-        { key: 'send_quote', order: 1 }, // template idx 0
-        { key: 'play_the_gig', order: 2 }, // template idx 12
+        { key: 'get_the_quote_accepted', order: 1 }, // template idx 0
+        { key: 'play_the_gig', order: 2 }, // a later template item
       ];
-      // get_contract_signed (a mid-template key) follows send_quote, precedes play_the_gig.
+      // get_contract_signed (a mid-template key) follows the quote goal, precedes play_the_gig.
       const order = computeReminderInsertOrder('get_contract_signed', existing);
-      expect(order).toBe(2); // after send_quote(1); caller shifts play_the_gig to 3
+      expect(order).toBe(2); // after the quote goal(1); caller shifts play_the_gig to 3
       expect(order).toBeLessThan(3); // strictly before the later item — not appended
     });
 
     it('ignores custom (keyless) items when finding the preceding position', () => {
       const existing = [
-        { key: 'send_quote', order: 1 },
+        { key: 'get_the_quote_accepted', order: 1 },
         { key: null, order: 2 }, // a custom item — no template index
       ];
-      // confirm_quote (idx 1) follows send_quote; the custom item does not count.
-      expect(computeReminderInsertOrder('confirm_quote', existing)).toBe(2);
+      // get_deposit_paid follows the quote goal; the custom item does not count.
+      expect(computeReminderInsertOrder('get_deposit_paid', existing)).toBe(2);
     });
 
     it('appends a last-template key after all preceding items', () => {
       const existing = [
-        { key: 'send_quote', order: 1 },
-        { key: 'confirm_quote', order: 2 },
+        { key: 'get_the_quote_accepted', order: 1 },
+        { key: 'get_deposit_paid', order: 2 },
       ];
       // send_thank_you is the final template item.
       expect(computeReminderInsertOrder('send_thank_you', existing)).toBe(3);
@@ -150,10 +150,10 @@ describe('build_itinerary checklist default (Module D / #523)', () => {
   });
 });
 
-describe('invoice_the_balance goal (ADR-0057 / #608, folds #586)', () => {
+describe('get_the_balance_paid goal (ADR-0057 / #608 / #617, folds #586)', () => {
   const balanceGoal = () => {
-    const item = CHECKLIST_DEFAULTS.find((d) => d.key === 'invoice_the_balance');
-    if (!item) throw new Error('invoice_the_balance default missing');
+    const item = CHECKLIST_DEFAULTS.find((d) => d.key === 'get_the_balance_paid');
+    if (!item) throw new Error('get_the_balance_paid default missing');
     return item;
   };
 
@@ -166,17 +166,27 @@ describe('invoice_the_balance goal (ADR-0057 / #608, folds #586)', () => {
     expect(goal.dueDateRule).not.toBeNull();
   });
 
-  it('owns the issue → send milestone spine (step keys = the unique flat keys)', () => {
+  it('owns create → issue → send → received; create includes drafts, issue excludes them (#617)', () => {
     const steps = balanceGoal().steps ?? [];
-    expect(steps.map((s) => s.key)).toEqual(['create_balance_invoice', 'send_balance_invoice']);
-    // Both are musician ACTIONs; the issue step's rule excludes DRAFT (invoiceExists), the send
-    // step auto-completes on the balance_invoice_cover email.
-    expect(steps.map((s) => s.completeMode)).toEqual(['ACTION', 'ACTION']);
-    expect(steps[0].autoCompleteRule).toEqual({ type: 'invoiceExists', isDeposit: false });
-    expect(steps[1].autoCompleteRule).toEqual({
+    const milestones = steps.filter((s) => s.kind === 'MILESTONE');
+    expect(milestones.map((s) => s.key)).toEqual([
+      'create_balance_invoice',
+      'issue_balance_invoice',
+      'send_balance_invoice',
+      'balance_received',
+    ]);
+    // create/issue/send are musician ACTIONs; balance_received awaits payment (USER records it).
+    expect(milestones.map((s) => s.completeMode)).toEqual(['ACTION', 'ACTION', 'ACTION', 'AWAITED']);
+    const byKey = (k: string) => steps.find((s) => s.key === k)!;
+    expect(byKey('create_balance_invoice').autoCompleteRule).toEqual({ type: 'invoiceExists', isDeposit: false, includeDraft: true });
+    expect(byKey('issue_balance_invoice').autoCompleteRule).toEqual({ type: 'invoiceExists', isDeposit: false });
+    expect(byKey('send_balance_invoice').autoCompleteRule).toEqual({
       type: 'communicationSent',
       templateTypes: ['balance_invoice_cover'],
     });
+    // balance_received is USER-awaited with no rule (no balanceReceivedAt field yet) — resolved by
+    // marking the goal complete, and keeps surfacing (chase the money).
+    expect(byKey('balance_received')).toMatchObject({ completedBy: 'USER', autoCompleteRule: null });
   });
 
   it('is enabled by default (a seeded item, just disablable)', () => {
@@ -188,22 +198,22 @@ describe('invoice_the_balance goal (ADR-0057 / #608, folds #586)', () => {
       filterItemsByStartingStatus(CHECKLIST_DEFAULTS, status).map((i) => i.key);
 
     it.each(['ENQUIRY', 'PROVISIONAL', 'CONFIRMED'])(
-      'includes invoice_the_balance for a booking starting at %s',
+      'includes get_the_balance_paid for a booking starting at %s',
       (status) => {
-        expect(keysFor(status)).toContain('invoice_the_balance');
+        expect(keysFor(status)).toContain('get_the_balance_paid');
       },
     );
 
     it.each(['READY', 'COMPLETE'])(
-      'excludes invoice_the_balance for a booking starting at %s (a READY item)',
+      'excludes get_the_balance_paid for a booking starting at %s (a READY item)',
       (status) => {
-        expect(keysFor(status)).not.toContain('invoice_the_balance');
+        expect(keysFor(status)).not.toContain('get_the_balance_paid');
       },
     );
   });
 });
 
-describe('get_deposit_paid goal (ADR-0057 / #608, fixes #585)', () => {
+describe('get_deposit_paid goal (ADR-0057 / #608 / #617, fixes #585)', () => {
   const depositGoal = () => {
     const item = CHECKLIST_DEFAULTS.find((d) => d.key === 'get_deposit_paid');
     if (!item) throw new Error('get_deposit_paid default missing');
@@ -218,24 +228,27 @@ describe('get_deposit_paid goal (ADR-0057 / #608, fixes #585)', () => {
     expect(goal.dueDateRule).not.toBeNull();
   });
 
-  it('owns issue → send → received; received is AWAITED (the #585 silent-draft fix)', () => {
+  it('owns create → issue → send → received; create includes drafts, issue excludes them (#617)', () => {
     const steps = depositGoal().steps ?? [];
-    expect(steps.map((s) => s.key)).toEqual([
+    const milestones = steps.filter((s) => s.kind === 'MILESTONE');
+    expect(milestones.map((s) => s.key)).toEqual([
       'create_deposit_invoice',
+      'issue_deposit_invoice',
       'send_deposit_invoice',
       'deposit_received',
     ]);
-    // create (issue, invoiceExists excludes DRAFT) and send are ACTIONs; deposit_received awaits
-    // the external payment.
-    expect(steps.map((s) => s.completeMode)).toEqual(['ACTION', 'ACTION', 'AWAITED']);
-    expect(steps[0].autoCompleteRule).toEqual({ type: 'invoiceExists', isDeposit: true });
-    expect(steps[1].autoCompleteRule).toEqual({
+    // create/issue/send are ACTIONs; deposit_received awaits the external payment.
+    expect(milestones.map((s) => s.completeMode)).toEqual(['ACTION', 'ACTION', 'ACTION', 'AWAITED']);
+    const byKey = (k: string) => steps.find((s) => s.key === k)!;
+    // create includes drafts (a saved draft advances the goal); issue excludes them (the #585 fix).
+    expect(byKey('create_deposit_invoice').autoCompleteRule).toEqual({ type: 'invoiceExists', isDeposit: true, includeDraft: true });
+    expect(byKey('issue_deposit_invoice').autoCompleteRule).toEqual({ type: 'invoiceExists', isDeposit: true });
+    expect(byKey('send_deposit_invoice').autoCompleteRule).toEqual({
       type: 'communicationSent',
       templateTypes: ['deposit_invoice_cover', 'contract_and_deposit_cover'],
     });
-    // deposit_received stays USER (the musician records it), so it still surfaces to the musician,
-    // unlike a CUSTOMER-awaited step.
-    expect(steps[2].completedBy).toBe('USER');
+    // deposit_received stays USER (the musician records it), so it still surfaces to the musician.
+    expect(byKey('deposit_received').completedBy).toBe('USER');
   });
 });
 
@@ -251,10 +264,49 @@ describe('gather_song_requests goal (ADR-0057 / #608)', () => {
     expect(goal.requiredForStatus).toBe('READY');
     expect(goal.autoCompleteRule).toBeNull();
     const steps = goal.steps ?? [];
-    expect(steps.map((s) => s.key)).toEqual(['music_form_invite', 'song_requests']);
-    expect(steps[0].completeMode).toBe('ACTION');
-    expect(steps[1].completeMode).toBe('AWAITED');
-    expect(steps[1].completedBy).toBe('CUSTOMER');
-    expect(steps[1].autoCompleteRule).toEqual({ type: 'musicFormResponse' });
+    const milestones = steps.filter((s) => s.kind === 'MILESTONE');
+    expect(milestones.map((s) => s.key)).toEqual(['music_form_invite', 'song_requests']);
+    expect(milestones[0].completeMode).toBe('ACTION');
+    expect(milestones[1].completeMode).toBe('AWAITED');
+    expect(milestones[1].completedBy).toBe('CUSTOMER');
+    expect(milestones[1].autoCompleteRule).toEqual({ type: 'musicFormResponse' });
+  });
+});
+
+describe('precondition steps (ADR-0057 / #618)', () => {
+  const goal = (key: string) => {
+    const item = CHECKLIST_DEFAULTS.find((d) => d.key === key);
+    if (!item) throw new Error(`${key} default missing`);
+    return item;
+  };
+  const stepKeys = (key: string) => (goal(key).steps ?? []).map((s) => s.key);
+
+  it('puts "Set the booking fee" first on every deal-spine goal (whole spine, not just billing)', () => {
+    for (const key of ['get_the_quote_accepted', 'get_contract_signed', 'get_deposit_paid', 'get_the_balance_paid']) {
+      const first = (goal(key).steps ?? [])[0];
+      expect(first).toMatchObject({
+        kind: 'PRECONDITION',
+        completeMode: 'ACTION',
+        completedBy: 'USER',
+        autoCompleteRule: { type: 'bookingField', field: 'fee', operator: 'notNull' },
+      });
+      expect(first.key).toMatch(/^set_fee_/);
+    }
+  });
+
+  it('puts "Add the client\'s email" on every emailing goal, before its first send', () => {
+    // Every emailing goal carries an add_email precondition; the music goal has email but NO fee.
+    for (const key of ['get_the_quote_accepted', 'get_contract_signed', 'get_deposit_paid', 'get_the_balance_paid', 'gather_song_requests']) {
+      const email = (goal(key).steps ?? []).find((s) => s.key.startsWith('add_email_'));
+      expect(email).toMatchObject({ kind: 'PRECONDITION', autoCompleteRule: { type: 'customerEmail' } });
+    }
+    expect(stepKeys('gather_song_requests')).not.toContainEqual(expect.stringMatching(/^set_fee_/));
+  });
+
+  it('uses goal-unique precondition keys (the #608 flat-registry collision rule)', () => {
+    const allPreconditionKeys = CHECKLIST_DEFAULTS.flatMap((d) =>
+      (d.steps ?? []).filter((s) => s.kind === 'PRECONDITION').map((s) => s.key),
+    );
+    expect(new Set(allPreconditionKeys).size).toBe(allPreconditionKeys.length); // no duplicates
   });
 });

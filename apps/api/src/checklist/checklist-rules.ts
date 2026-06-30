@@ -10,9 +10,17 @@ import { isConcernComplete, CompletenessConcern } from '../bookings/booking-comp
 export type AutoCompleteRule =
   | { type: 'bookingField'; field: string; operator: 'notNull' }
   | { type: 'communicationSent'; templateTypes: string[] }
-  | { type: 'invoiceExists'; isDeposit: boolean }
+  // `includeDraft` (ADR-0057 / #617): the *create* milestone is satisfied by a draft-or-beyond
+  // invoice (a saved scratchpad advances the goal); the *issue* milestone leaves it falsy so a
+  // DRAFT does NOT satisfy it (the #585 fix — an unissued draft keeps "Issue" surfaced). VOID is
+  // excluded upstream in the context projection either way.
+  | { type: 'invoiceExists'; isDeposit: boolean; includeDraft?: boolean }
   | { type: 'musicFormResponse' }
   | { type: 'contractSigned' }
+  // PRECONDITION predicate (ADR-0057 / #618): the booking's customer has an email address — the
+  // prerequisite for any emailing goal. `bookingField fee notNull` covers the other precondition
+  // (the booking has a fee), reusing the existing rule.
+  | { type: 'customerEmail' }
   | { type: 'completeness'; concern: CompletenessConcern };
 
 /** The booking facts a rule reads. Mirrors the repository's context projection. */
@@ -20,11 +28,13 @@ export interface BookingContext {
   status: string;
   venueId: string | null;
   customerId: string | null;
+  customerEmail: string | null;
+  fee: string | null;
   depositReceivedAt: Date | null;
   setsCount: number;
   logistics: unknown;
   communications: Array<{ status: string; template: { builtInType: string | null } | null }>;
-  invoices: Array<{ isDeposit: boolean }>;
+  invoices: Array<{ isDeposit: boolean; status: string }>;
   contracts: Array<{ status: string }>;
   musicFormResponse: { id: string } | null;
 }
@@ -46,26 +56,41 @@ export type InputKey =
   | 'musicFormResponse'
   | 'venueId'
   | 'customerId'
+  | 'customerEmail'
+  | 'fee'
   | 'setsCount'
   | 'logistics';
+
+// `bookingField` predicates, keyed by field — a lookup keeps evaluateRule's switch flat. Each maps
+// a booking-context field to "is it set?": `activeContract` reads the contracts relation,
+// `depositReceivedAt`/`fee` (the #618 fee precondition) read their own columns.
+const BOOKING_FIELD_PREDICATE: Record<string, (ctx: BookingContext) => boolean> = {
+  depositReceivedAt: (ctx) => ctx.depositReceivedAt !== null,
+  activeContract: (ctx) => ctx.contracts.length > 0,
+  fee: (ctx) => ctx.fee !== null,
+};
 
 /** True when the rule's success condition holds for the given booking facts. */
 export function evaluateRule(rule: AutoCompleteRule, ctx: BookingContext): boolean {
   switch (rule.type) {
     case 'bookingField':
-      if (rule.field === 'depositReceivedAt') return ctx.depositReceivedAt !== null;
-      if (rule.field === 'activeContract') return ctx.contracts.length > 0;
-      return false;
+      return BOOKING_FIELD_PREDICATE[rule.field]?.(ctx) ?? false;
     case 'communicationSent':
       return ctx.communications.some(
         (c) => c.status === 'SENT' && rule.templateTypes.includes(c.template?.builtInType ?? ''),
       );
     case 'invoiceExists':
-      return ctx.invoices.some((i) => i.isDeposit === rule.isDeposit);
+      // The create step (includeDraft) accepts any non-VOID invoice (drafts are projected in);
+      // the issue step (default) requires a non-DRAFT invoice — the #585 fix preserved.
+      return ctx.invoices.some(
+        (i) => i.isDeposit === rule.isDeposit && (rule.includeDraft === true || i.status !== 'DRAFT'),
+      );
     case 'musicFormResponse':
       return ctx.musicFormResponse !== null;
     case 'contractSigned':
       return ctx.contracts.some((c) => c.status === 'SIGNED');
+    case 'customerEmail':
+      return ctx.customerEmail != null && ctx.customerEmail.trim() !== '';
     // Structural items (Module D) bind their done-state to a completeness predicate
     // (Module A), so "is this concern done?" lives in exactly one place.
     case 'completeness':
@@ -96,11 +121,24 @@ export function evaluateRuleState(rule: AutoCompleteRule, ctx: BookingContext): 
   return 'PENDING';
 }
 
+// The inverted-index inputs each `bookingField` / `completeness` variant reads — lookups keep
+// inputsForRule's switch flat. A bookingField not listed reads the contracts relation
+// (`activeContract`).
+const BOOKING_FIELD_INPUTS: Record<string, InputKey> = {
+  depositReceivedAt: 'depositReceivedAt',
+  fee: 'fee',
+};
+const COMPLETENESS_INPUTS: Record<CompletenessConcern, InputKey[]> = {
+  venue: ['venueId'],
+  people: ['customerId'],
+  itinerary: ['setsCount', 'logistics'],
+};
+
 /** The booking-context fields this rule reads — its entry in the inverted index. */
 export function inputsForRule(rule: AutoCompleteRule): InputKey[] {
   switch (rule.type) {
     case 'bookingField':
-      return rule.field === 'depositReceivedAt' ? ['depositReceivedAt'] : ['contracts'];
+      return [BOOKING_FIELD_INPUTS[rule.field] ?? 'contracts'];
     case 'communicationSent':
       return ['communications'];
     case 'invoiceExists':
@@ -109,9 +147,9 @@ export function inputsForRule(rule: AutoCompleteRule): InputKey[] {
       return ['musicFormResponse'];
     case 'contractSigned':
       return ['contracts'];
+    case 'customerEmail':
+      return ['customerEmail'];
     case 'completeness':
-      if (rule.concern === 'venue') return ['venueId'];
-      if (rule.concern === 'people') return ['customerId'];
-      return ['setsCount', 'logistics']; // itinerary
+      return COMPLETENESS_INPUTS[rule.concern];
   }
 }
