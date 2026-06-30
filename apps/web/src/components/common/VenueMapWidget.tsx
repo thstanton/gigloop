@@ -72,6 +72,79 @@ function loadMaps(): Promise<void> {
   return mapsPromise;
 }
 
+// ─── Travel-time status (pure, unit-tested) ──────────────────────────────────
+// The four mutually-exclusive states the travel-time slot can be in. 'known' carries the
+// pre-formatted "~N min · D km driving" label so the render stays a dumb lookup, and the
+// refresh button derives its visibility from the kind (it's hidden for 'loading' and
+// 'add-home-address' — refreshing can't help while loading or with no base location).
+export type TravelTimeStatus =
+  | { kind: 'loading' }
+  | { kind: 'known'; label: string }
+  | { kind: 'add-home-address' }
+  | { kind: 'unavailable' };
+
+export function resolveTravelTimeStatus(input: {
+  isLoadingTravelTime: boolean;
+  travelTime: { minutes: number; distanceMetres: number } | null | undefined;
+  homeAddressMissing: boolean;
+}): TravelTimeStatus {
+  if (input.isLoadingTravelTime) return { kind: 'loading' };
+  if (input.travelTime) {
+    const distanceKm = (input.travelTime.distanceMetres / 1000).toFixed(1);
+    return { kind: 'known', label: `~${input.travelTime.minutes} min · ${distanceKm} km driving` };
+  }
+  if (input.homeAddressMissing) return { kind: 'add-home-address' };
+  return { kind: 'unavailable' };
+}
+
+export function travelTimeRefreshVisible(status: TravelTimeStatus): boolean {
+  return status.kind === 'known' || status.kind === 'unavailable';
+}
+
+function TravelTimeStatusText({ status }: { status: TravelTimeStatus }): ReactNode {
+  switch (status.kind) {
+    case 'loading':
+      return <RefreshCw size={14} className="animate-spin text-muted-foreground" />;
+    case 'known':
+      return <span className="text-sm text-foreground">{status.label}</span>;
+    case 'add-home-address':
+      return <InlineHint actionLabel="Add your home address to see travel time" href="/admin/settings" />;
+    case 'unavailable':
+      return <span className="text-sm text-muted-foreground">Travel time unavailable</span>;
+  }
+}
+
+// ─── Map content status (pure, unit-tested) ──────────────────────────────────
+export type MapStatus = 'no-coords' | 'failed' | 'map';
+
+export function resolveMapStatus(input: { hasCoords: boolean; mapFailed: boolean }): MapStatus {
+  if (!input.hasCoords) return 'no-coords';
+  if (input.mapFailed) return 'failed';
+  return 'map';
+}
+
+function MapContent({ status, mapDivRef }: { status: MapStatus; mapDivRef: React.RefObject<HTMLDivElement> }): ReactNode {
+  switch (status) {
+    case 'no-coords':
+      return (
+        <EmptyState
+          icon={<MapPin size={24} />}
+          heading="No map yet"
+          description="Add a full address to see the venue on a map."
+          className="h-full py-4"
+        />
+      );
+    case 'failed':
+      return (
+        <div className="h-full flex items-center justify-center text-sm text-muted-foreground p-4 text-center">
+          Map unavailable
+        </div>
+      );
+    case 'map':
+      return <div ref={mapDivRef} className="h-full w-full" />;
+  }
+}
+
 export function VenueMapWidget({
   venue,
   showHeader = true,
@@ -94,8 +167,6 @@ export function VenueMapWidget({
   const mapsSearchUrl = formattedAddress
     ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(formattedAddress)}`
     : null;
-
-  const distanceKm = travelTime ? (travelTime.distanceMetres / 1000).toFixed(1) : null;
 
   const hasVenueDetails = !!(venue.parkingInfo || venue.accessInfo || venue.equipmentAvailable);
 
@@ -130,42 +201,8 @@ export function VenueMapWidget({
     };
   }, [hasCoords, venue.latitude, venue.longitude]);
 
-  // The home-address prompt replaces both the status text and the (useless)
-  // refresh button: refreshing can't compute travel time without a base location.
-  const showHomeAddressHint = !isLoadingTravelTime && !travelTime && homeAddressMissing;
-
-  let travelTimeStatus: ReactNode;
-  if (isLoadingTravelTime) {
-    travelTimeStatus = <RefreshCw size={14} className="animate-spin text-muted-foreground" />;
-  } else if (travelTime) {
-    travelTimeStatus = <span className="text-sm text-foreground">~{travelTime.minutes} min · {distanceKm} km driving</span>;
-  } else if (showHomeAddressHint) {
-    travelTimeStatus = (
-      <InlineHint actionLabel="Add your home address to see travel time" href="/admin/settings" />
-    );
-  } else {
-    travelTimeStatus = <span className="text-sm text-muted-foreground">Travel time unavailable</span>;
-  }
-
-  let mapContent: ReactNode;
-  if (!hasCoords) {
-    mapContent = (
-      <EmptyState
-        icon={<MapPin size={24} />}
-        heading="No map yet"
-        description="Add a full address to see the venue on a map."
-        className="h-full py-4"
-      />
-    );
-  } else if (mapFailed) {
-    mapContent = (
-      <div className="h-full flex items-center justify-center text-sm text-muted-foreground p-4 text-center">
-        Map unavailable
-      </div>
-    );
-  } else {
-    mapContent = <div ref={mapDivRef} className="h-full w-full" />;
-  }
+  const travelStatus = resolveTravelTimeStatus({ isLoadingTravelTime, travelTime, homeAddressMissing });
+  const mapStatus = resolveMapStatus({ hasCoords, mapFailed });
 
   return (
     <Card title={cardTitle} action={cardAction}>
@@ -213,8 +250,8 @@ export function VenueMapWidget({
               </a>
               {onRefreshTravelTime !== undefined && (
                 <div className="flex items-center gap-2 pt-1">
-                  {travelTimeStatus}
-                  {!isLoadingTravelTime && !showHomeAddressHint && (
+                  <TravelTimeStatusText status={travelStatus} />
+                  {travelTimeRefreshVisible(travelStatus) && (
                     <IconButton label="Refresh travel time" onClick={onRefreshTravelTime}>
                       <RefreshCw size={14} />
                     </IconButton>
@@ -261,7 +298,7 @@ export function VenueMapWidget({
         </div>
 
         <div className={`md:w-64 h-48 rounded-md overflow-hidden flex-shrink-0 ${hasCoords ? 'bg-muted' : 'bg-surface border border-border'}`}>
-          {mapContent}
+          <MapContent status={mapStatus} mapDivRef={mapDivRef} />
         </div>
       </div>
     </Card>

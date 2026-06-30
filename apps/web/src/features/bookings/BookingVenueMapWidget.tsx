@@ -12,6 +12,21 @@ interface BookingVenueMapWidgetProps {
   contactHref: string;
 }
 
+// Prefer a freshly-fetched travel time; otherwise fall back to the value snapshotted on the
+// venue contact. Returns null when neither is available. Pure so it can be unit-tested.
+export function resolveBookingTravelTime(
+  travelTimeData: { minutes: number; distanceMetres: number } | null | undefined,
+  venue: { travelTimeMinutes: number | null; travelDistanceMetres: number | null },
+): { minutes: number; distanceMetres: number } | null {
+  if (travelTimeData) {
+    return { minutes: travelTimeData.minutes, distanceMetres: travelTimeData.distanceMetres };
+  }
+  if (venue.travelTimeMinutes != null && venue.travelDistanceMetres != null) {
+    return { minutes: venue.travelTimeMinutes, distanceMetres: venue.travelDistanceMetres };
+  }
+  return null;
+}
+
 export function BookingVenueMapWidget({ bookingId, contactHref }: BookingVenueMapWidgetProps) {
   const [, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
@@ -35,13 +50,7 @@ export function BookingVenueMapWidget({ bookingId, contactHref }: BookingVenueMa
   if (!booking?.venue) return null;
 
   const venue = booking.venue;
-
-  let travelTime: { minutes: number; distanceMetres: number } | null = null;
-  if (travelTimeData) {
-    travelTime = { minutes: travelTimeData.minutes, distanceMetres: travelTimeData.distanceMetres };
-  } else if (venue.travelTimeMinutes != null && venue.travelDistanceMetres != null) {
-    travelTime = { minutes: venue.travelTimeMinutes, distanceMetres: venue.travelDistanceMetres };
-  }
+  const travelTime = resolveBookingTravelTime(travelTimeData, venue);
 
   return (
     <VenueMapWidget
