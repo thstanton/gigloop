@@ -77,13 +77,13 @@ function autoCompleteHintFor(rule: Record<string, unknown> | null): string | nul
 // (#557/#558). Keyed by the prereq's key (not the dependent's). Every key that appears in any
 // default's `dependsOn` must have an entry — guarded by a test so a new dependency can't silently
 // drop its clause.
+// ADR-0057 / #607–#608: the contract, deposit, balance and song-request deliverables are now
+// multi-step goals — their old flat steps (create_contract, send_contract, create_balance_invoice,
+// music_form_invite, …) are intrinsically ordered within their goal and no longer appear in any
+// goal's `dependsOn`, so their prerequisite phrases retire. What remains is the cross-goal deal
+// spine: confirm_quote ← send_quote and send_thank_you ← play_the_gig.
 export const PREREQUISITE_PHRASES: Record<string, string> = {
   send_quote: 'send the quote',
-  confirm_quote: 'confirm the quote',
-  create_contract: 'create the contract',
-  send_contract: 'send the contract',
-  create_balance_invoice: 'create the balance invoice',
-  music_form_invite: 'send the music form invite',
   play_the_gig: 'play the gig',
 };
 

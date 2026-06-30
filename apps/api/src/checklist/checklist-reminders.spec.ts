@@ -42,8 +42,10 @@ describe('selectApplicableReminders', () => {
         status: 'READY',
         disabledKeys: new Set(),
       });
-      // music_form_invite (READY) and send_thank_you (COMPLETE stage) are current/future.
-      expect(keys(out)).toEqual(expect.arrayContaining(['music_form_invite', 'send_thank_you']));
+      // ADR-0057 / #608: music_form_invite and send_balance_invoice are now *steps* of the
+      // gather_song_requests / invoice_the_balance goals, so People holds only the standalone
+      // sends. send_thank_you (COMPLETE stage) is the future People reminder on a READY booking.
+      expect(keys(out)).toEqual(['send_thank_you']);
     });
 
     it('includes all People sends on an ENQUIRY booking, in template order', () => {
@@ -52,12 +54,7 @@ describe('selectApplicableReminders', () => {
         status: 'ENQUIRY',
         disabledKeys: new Set(),
       });
-      expect(keys(out)).toEqual([
-        'send_quote',
-        'send_balance_invoice',
-        'music_form_invite',
-        'send_thank_you',
-      ]);
+      expect(keys(out)).toEqual(['send_quote', 'send_thank_you']);
     });
 
     it('shows the future Overview deal spine on an ENQUIRY booking, in template order', () => {
@@ -66,26 +63,27 @@ describe('selectApplicableReminders', () => {
         status: 'ENQUIRY',
         disabledKeys: new Set(),
       });
+      // ADR-0057 / #607–#608: the contract, deposit and balance are each one multi-step goal.
       expect(keys(out)).toEqual([
         'confirm_quote',
-        'create_deposit_invoice',
+        'get_deposit_paid',
         'get_contract_signed',
-        'deposit_received',
-        'create_balance_invoice',
+        'invoice_the_balance',
         'play_the_gig',
       ]);
     });
 
     it('drops past-stage Overview reminders on a READY booking, keeping the current and future stages', () => {
-      // confirm_quote (PROVISIONAL) and the CONFIRMED-stage spine are passed by a READY booking;
-      // create_balance_invoice (READY, current) and play_the_gig (COMPLETE, future) remain.
+      // confirm_quote (PROVISIONAL) and the CONFIRMED-stage goals (get_deposit_paid,
+      // get_contract_signed) are passed by a READY booking; invoice_the_balance (READY, current)
+      // and play_the_gig (COMPLETE, future) remain.
       const out = selectApplicableReminders('overview', {
         items: [],
         status: 'READY',
         disabledKeys: new Set(),
       });
       expect(find(out, 'confirm_quote')).toBeUndefined();
-      expect(keys(out)).toEqual(['create_balance_invoice', 'play_the_gig']);
+      expect(keys(out)).toEqual(['invoice_the_balance', 'play_the_gig']);
     });
   });
 
@@ -94,9 +92,9 @@ describe('selectApplicableReminders', () => {
       const out = selectApplicableReminders('people', {
         items: [],
         status: 'ENQUIRY',
-        disabledKeys: new Set(['send_balance_invoice']),
+        disabledKeys: new Set(['send_thank_you']),
       });
-      expect(find(out, 'send_balance_invoice')).toBeUndefined();
+      expect(find(out, 'send_thank_you')).toBeUndefined();
       expect(find(out, 'send_quote')).toBeDefined();
     });
   });
@@ -208,58 +206,58 @@ describe('selectApplicableReminders', () => {
   describe('auto-complete hint (#567)', () => {
     const ctx = { items: [], status: 'ENQUIRY', disabledKeys: new Set<string>() };
 
-    it('surfaces the condition for the client-committed milestones', () => {
-      expect(find(selectApplicableReminders('music', ctx), 'song_requests')?.autoCompleteHint).toBe(
-        'when the client sends their requests',
-      );
-      // The contract is now a multi-step goal with no own rule (ADR-0057) → no goal-level hint;
-      // its "when the client signs" condition lives on the contract_signed step, not the reminder.
+    it('gives multi-step goals no goal-level hint (the condition lives on their steps)', () => {
+      // ADR-0057 / #607–#608: the client-committed milestones (contract signs, song requests
+      // arrive, deposit lands) are now *steps*; the goal carries no own rule, so no goal-level
+      // hint. The step-level condition is surfaced by the goal⊃step row UI (#609/#611).
+      expect(find(selectApplicableReminders('music', ctx), 'gather_song_requests')?.autoCompleteHint).toBeNull();
       expect(find(selectApplicableReminders('overview', ctx), 'get_contract_signed')?.autoCompleteHint).toBeNull();
+      expect(find(selectApplicableReminders('overview', ctx), 'get_deposit_paid')?.autoCompleteHint).toBeNull();
     });
 
-    it('leaves the self-evident Send/Create items without a hint', () => {
+    it('leaves the self-evident Send items without a hint', () => {
       const people = selectApplicableReminders('people', ctx);
       expect(find(people, 'send_quote')?.autoCompleteHint).toBeNull();
-      expect(find(people, 'send_balance_invoice')?.autoCompleteHint).toBeNull();
-      expect(find(selectApplicableReminders('overview', ctx), 'create_deposit_invoice')?.autoCompleteHint).toBeNull();
+      expect(find(people, 'send_thank_you')?.autoCompleteHint).toBeNull();
     });
   });
 
   describe('dependency clause — after (#557/#558)', () => {
-    // song_requests (music concern) depends on music_form_invite (people); drive the invite's state.
-    const songRequestsAfter = (inviteState?: string) => {
-      const items = inviteState
-        ? [item({ id: 'mfi', key: 'music_form_invite', state: inviteState })]
-        : [];
-      const out = selectApplicableReminders('music', { items, status: 'READY', disabledKeys: new Set() });
-      return find(out, 'song_requests')?.after;
+    // confirm_quote (overview) depends on send_quote (people); drive the quote send's state. The
+    // intra-goal deps (e.g. song_requests → music_form_invite) retired with the goal⊃step fold
+    // (ADR-0057: steps are intrinsically ordered); this cross-goal dep is what remains.
+    const confirmQuoteAfter = (quoteState?: string) => {
+      const items = quoteState ? [item({ id: 'sq', key: 'send_quote', state: quoteState })] : [];
+      const out = selectApplicableReminders('overview', { items, status: 'ENQUIRY', disabledKeys: new Set() });
+      return find(out, 'confirm_quote')?.after;
     };
 
-    it.each(['PENDING', 'BLOCKED', 'FAILED'])(
+    it.each(['PENDING', 'FAILED'])(
       'shows the clause while the prerequisite is outstanding (%s)',
       (state) => {
-        expect(songRequestsAfter(state)).toBe('send the music form invite');
+        expect(confirmQuoteAfter(state)).toBe('send the quote');
       },
     );
 
     it.each(['COMPLETE', 'SKIPPED'])('hides the clause once the prerequisite is %s', (state) => {
-      expect(songRequestsAfter(state)).toBeNull();
+      expect(confirmQuoteAfter(state)).toBeNull();
     });
 
     it('hides the clause when the prerequisite is absent (never seeded)', () => {
-      expect(songRequestsAfter()).toBeNull();
+      expect(confirmQuoteAfter()).toBeNull();
     });
 
-    it('stacks with the auto-complete hint on a client-committed reminder', () => {
-      // song_requests (music) gated by an outstanding music_form_invite → both fields populated.
+    it('a multi-step goal carries no after-clause (its ordering is intrinsic to its steps)', () => {
+      // gather_song_requests has dependsOn: [] — the invite→response order is intrinsic step
+      // order now, not a dependency clause, and the goal carries no goal-level hint either.
       const out = selectApplicableReminders('music', {
-        items: [item({ id: 'mfi', key: 'music_form_invite', state: 'PENDING' })],
+        items: [item({ id: 'sq', key: 'send_quote', state: 'PENDING' })],
         status: 'READY',
         disabledKeys: new Set(),
       });
-      const sr = find(out, 'song_requests');
-      expect(sr?.after).toBe('send the music form invite');
-      expect(sr?.autoCompleteHint).toBe('when the client sends their requests');
+      const goal = find(out, 'gather_song_requests');
+      expect(goal?.after).toBeNull();
+      expect(goal?.autoCompleteHint).toBeNull();
     });
 
     it('every prerequisite key referenced in a dependsOn has an action phrase (no silent drop)', () => {
@@ -277,7 +275,7 @@ describe('previewApplicableReminders (pre-creation, #560)', () => {
   it('offers every in-scope system key, each tagged with its concern', () => {
     const out = previewApplicableReminders({ status: 'PROVISIONAL', disabledKeys: new Set() });
     // A PROVISIONAL-starting booking still has every CONFIRMED+ reminder ahead of it.
-    expect(pfind(out, 'music_form_invite')?.concern).toBe('people');
+    expect(pfind(out, 'gather_song_requests')?.concern).toBe('music');
     expect(pfind(out, 'get_contract_signed')?.concern).toBe('overview');
     expect(pfind(out, 'add_venue')?.concern).toBe('venue');
     expect(pfind(out, 'play_the_gig')?.concern).toBe('overview');
@@ -304,12 +302,13 @@ describe('previewApplicableReminders (pre-creation, #560)', () => {
   });
 
   it('surfaces cross-concern prerequisites with their phrases', () => {
-    // song_requests (music) depends on music_form_invite (people) — the clause must survive the
+    // confirm_quote (overview) depends on send_quote (people) — the clause must survive the
     // concern boundary, with the prereq key + phrase for the frontend to gate by selection.
-    const out = previewApplicableReminders({ status: 'PROVISIONAL', disabledKeys: new Set() });
-    expect(pfind(out, 'song_requests')?.prerequisites).toContainEqual({
-      key: 'music_form_invite',
-      phrase: 'send the music form invite',
+    // (The old song_requests → music_form_invite dep retired with the goal⊃step fold.)
+    const out = previewApplicableReminders({ status: 'ENQUIRY', disabledKeys: new Set() });
+    expect(pfind(out, 'confirm_quote')?.prerequisites).toContainEqual({
+      key: 'send_quote',
+      phrase: 'send the quote',
     });
   });
 
@@ -323,9 +322,12 @@ describe('previewApplicableReminders (pre-creation, #560)', () => {
     }
   });
 
-  it('carries the auto-complete hint for client-committed milestones', () => {
+  it('gives multi-step goals no goal-level hint in the preview either', () => {
+    // ADR-0057 / #607–#608: client-committed conditions live on steps, not the goal — so the
+    // preview row for a multi-step goal carries no goal-level hint, like the live selector.
     const out = previewApplicableReminders({ status: 'ENQUIRY', disabledKeys: new Set() });
-    expect(pfind(out, 'song_requests')?.autoCompleteHint).toBe('when the client sends their requests');
+    expect(pfind(out, 'gather_song_requests')?.autoCompleteHint).toBeNull();
+    expect(pfind(out, 'get_contract_signed')?.autoCompleteHint).toBeNull();
     expect(pfind(out, 'send_quote')?.autoCompleteHint).toBeNull();
   });
 });

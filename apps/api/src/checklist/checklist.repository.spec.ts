@@ -12,6 +12,11 @@ type MockPrisma = {
     create: jest.Mock;
     createMany: jest.Mock;
   };
+  bookingChecklistStep: {
+    findFirst: jest.Mock;
+    update: jest.Mock;
+    updateMany: jest.Mock;
+  };
   $transaction: jest.Mock;
 };
 
@@ -26,6 +31,11 @@ function makePrisma(): MockPrisma {
       update: jest.fn(),
       create: jest.fn(),
       createMany: jest.fn(),
+    },
+    bookingChecklistStep: {
+      findFirst: jest.fn(),
+      update: jest.fn(),
+      updateMany: jest.fn(),
     },
     $transaction: jest.fn(),
   };
@@ -369,12 +379,60 @@ describe('ChecklistRepository — seedReminderItem (Module 4)', () => {
     prisma.bookingChecklistItem.findMany.mockResolvedValue([]);
     prisma.bookingChecklistItem.create.mockResolvedValue({ id: 'new' });
 
-    // song_requests dependsOn music_form_invite, dueDateRule bookingDate -14.
-    await repo.seedReminderItem('u1', 'b1', 'song_requests', BOOKING_DATE, CREATED_AT);
+    // send_thank_you dependsOn play_the_gig, dueDateRule bookingDate +7. (The old song_requests
+    // dependent retired with the goal⊃step fold — its invite→response order is intrinsic now.)
+    await repo.seedReminderItem('u1', 'b1', 'send_thank_you', BOOKING_DATE, CREATED_AT);
 
     const createArg = prisma.bookingChecklistItem.create.mock.calls[0][0];
     expect(createArg.data.state).toBe('BLOCKED');
-    expect(createArg.data.dueDate).toEqual(new Date('2025-05-18T19:00:00.000Z')); // -14 days
+    expect(createArg.data.dueDate).toEqual(new Date('2025-06-08T19:00:00.000Z')); // +7 days
+  });
+});
+
+describe('ChecklistRepository — resetItemByKey (void un-stick, ADR-0057 / #608)', () => {
+  let repo: ChecklistRepository;
+  let prisma: MockPrisma;
+
+  beforeEach(() => {
+    prisma = makePrisma();
+    repo = new ChecklistRepository(prisma as unknown as PrismaService);
+    prisma.$transaction.mockImplementation((ops: unknown[]) => Promise.resolve(ops));
+  });
+
+  it('un-sticks a flat goal-level key (un-migrated booking)', async () => {
+    prisma.bookingChecklistStep.findFirst.mockResolvedValue(null);
+
+    await repo.resetItemByKey('b1', 'create_balance_invoice');
+
+    expect(prisma.bookingChecklistItem.updateMany).toHaveBeenCalledWith({
+      where: { bookingId: 'b1', key: 'create_balance_invoice', state: 'COMPLETE' },
+      data: { state: 'PENDING', completedAt: null },
+    });
+    // No step → no transaction.
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('un-sticks a step + its parent goal so evaluate() can re-roll-up (migrated booking)', async () => {
+    // A migrated booking carries create_deposit_invoice as a COMPLETE step of get_deposit_paid.
+    prisma.bookingChecklistStep.findFirst.mockResolvedValue({ id: 'step-1', goalId: 'goal-1' });
+
+    await repo.resetItemByKey('b1', 'create_deposit_invoice');
+
+    expect(prisma.bookingChecklistStep.findFirst).toHaveBeenCalledWith({
+      where: { key: 'create_deposit_invoice', state: 'COMPLETE', goal: { bookingId: 'b1' } },
+      select: { id: true, goalId: true },
+    });
+    // The step reset and the goal reset land together in one transaction.
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(prisma.bookingChecklistStep.update).toHaveBeenCalledWith({
+      where: { id: 'step-1' },
+      data: { state: 'PENDING', completedAt: null },
+    });
+    // Only a COMPLETE goal is un-stuck (a SKIPPED opt-out stays skipped).
+    expect(prisma.bookingChecklistItem.updateMany).toHaveBeenCalledWith({
+      where: { id: 'goal-1', state: 'COMPLETE' },
+      data: { state: 'PENDING', completedAt: null },
+    });
   });
 });
 

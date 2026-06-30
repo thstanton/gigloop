@@ -35,9 +35,11 @@ const BOOKING_FIELD_SHORTCUT: Readonly<Record<string, string>> = {
 };
 
 function resolveContractTemplate(items: Array<{ key: string | null }>): string {
-  return items.some((i) => i.key === 'deposit_received')
-    ? 'contract_and_deposit_cover'
-    : 'contract_cover';
+  // A booking expects a deposit when it carries the deposit deliverable. Detect both shapes
+  // (ADR-0057): the migrated multi-step goal (`get_deposit_paid`) or, on an un-migrated booking,
+  // the flat `deposit_received` item.
+  const hasDeposit = items.some((i) => i.key === 'get_deposit_paid' || i.key === 'deposit_received');
+  return hasDeposit ? 'contract_and_deposit_cover' : 'contract_cover';
 }
 
 export function deriveShortcut(
@@ -281,9 +283,10 @@ export class BookingsService {
       await this.checklistRepo.recomputeChecklistDueDates(id, updated.date, updated.createdAt);
     }
     // Re-evaluate auto-complete rules when a field a rule binds to changes. venueId drives
-    // the add_venue structural item (PRD #511 Module A/D): setting it must auto-complete the
-    // item without the musician ticking it.
-    if (dto.status !== undefined || dto.venueId !== undefined) {
+    // the add_venue structural item (PRD #511 Module A/D); depositReceivedAt drives the
+    // get_deposit_paid goal's `deposit_received` step (ADR-0057 / #608) — the mark-deposit-
+    // received action PATCHes the field, and the step must auto-complete without a manual tick.
+    if (dto.status !== undefined || dto.venueId !== undefined || dto.depositReceivedAt !== undefined) {
       await this.evaluator.evaluate(id).catch(() => {});
     }
     return updated;

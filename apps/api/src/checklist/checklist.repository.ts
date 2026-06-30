@@ -147,11 +147,34 @@ export class ChecklistRepository {
     return { items, booking };
   }
 
-  resetItemByKey(bookingId: string, key: string) {
-    return this.prisma.bookingChecklistItem.updateMany({
+  // Un-stick a COMPLETE checklist key so the next evaluate() can recompute it (used when an
+  // invoice is voided — the create-invoice key must drop back to PENDING). Handles both shapes
+  // (ADR-0057): an un-migrated booking carries the key as a flat *goal*; a migrated one carries
+  // it as a *step* of a multi-step goal. In the step case the parent goal is reset too — a
+  // multi-step goal's state is a roll-up, and evaluate() skips terminal (COMPLETE) goals, so the
+  // goal must be non-terminal for the roll-up to recompute from the now-PENDING step.
+  async resetItemByKey(bookingId: string, key: string) {
+    await this.prisma.bookingChecklistItem.updateMany({
       where: { bookingId, key, state: 'COMPLETE' },
       data: { state: 'PENDING', completedAt: null },
     });
+    const step = await this.prisma.bookingChecklistStep.findFirst({
+      where: { key, state: 'COMPLETE', goal: { bookingId } },
+      select: { id: true, goalId: true },
+    });
+    if (!step) return;
+    await this.prisma.$transaction([
+      this.prisma.bookingChecklistStep.update({
+        where: { id: step.id },
+        data: { state: 'PENDING', completedAt: null },
+      }),
+      // Only a COMPLETE goal needs un-sticking; a SKIPPED goal (the musician opted out) stays
+      // skipped, and a PENDING one is already recomputable.
+      this.prisma.bookingChecklistItem.updateMany({
+        where: { id: step.goalId, state: 'COMPLETE' },
+        data: { state: 'PENDING', completedAt: null },
+      }),
+    ]);
   }
 
   // Persist goal-row and step-row state changes from one evaluation pass in a SINGLE

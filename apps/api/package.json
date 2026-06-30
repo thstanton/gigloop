@@ -11,7 +11,8 @@
     "test:integration": "jest --config jest.integration.json --runInBand",
     "seed": "ts-node -r tsconfig-paths/register prisma/seed.ts",
     "seed:checklists": "ts-node -r tsconfig-paths/register src/scripts/seed-checklists.ts",
-    "migrate:contract-goals": "ts-node -r tsconfig-paths/register src/scripts/migrate-contract-goals.ts"
+    "migrate:contract-goals": "ts-node -r tsconfig-paths/register src/scripts/migrate-contract-goals.ts",
+    "migrate:cluster-goals": "ts-node -r tsconfig-paths/register src/scripts/migrate-cluster-goals.ts"
   },
   "prisma": {
     "seed": "ts-node -r tsconfig-paths/register prisma/seed.ts"
