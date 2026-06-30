@@ -58,11 +58,10 @@ describe('ChecklistEvaluator (integration)', () => {
 
   function allDefaultItems() {
     return CHECKLIST_DEFAULTS.map(
-      ({ key, label, completedBy, dependsOn, autoCompleteRule, requiredForStatus, dueDateRule }) => ({
+      ({ key, label, completedBy, autoCompleteRule, requiredForStatus, dueDateRule }) => ({
         key,
         label,
         completedBy,
-        dependsOn,
         autoCompleteRule,
         requiredForStatus,
         dueDateRule,
@@ -84,8 +83,13 @@ describe('ChecklistEvaluator (integration)', () => {
     return res.body.id as string;
   }
 
-  function getItem(bookingId: string, key: string) {
-    return prisma.bookingChecklistItem.findFirst({ where: { bookingId, key } });
+  // Resolve a key to its row whether it is a goal (BookingChecklistItem) or a step
+  // (BookingChecklistStep) — ADR-0057 turned several flat keys (create_contract,
+  // deposit_received, …) into steps of a goal. Both rows carry `state`.
+  async function getItem(bookingId: string, key: string) {
+    const goal = await prisma.bookingChecklistItem.findFirst({ where: { bookingId, key } });
+    if (goal) return goal;
+    return prisma.bookingChecklistStep.findFirst({ where: { bookingId, key } });
   }
 
   async function forceComplete(bookingId: string, keys: string[]) {
@@ -169,16 +173,17 @@ describe('ChecklistEvaluator (integration)', () => {
       await prisma.booking.delete({ where: { id: bookingId } });
     });
 
-    it('booking advanced to READY → contract_signed SKIPPED', async () => {
+    it('booking advanced to READY → get_contract_signed SKIPPED', async () => {
       const bookingId = await createBooking();
 
-      // contract_signed is an awaited goal; SKIP_RULES fire when status reaches READY
+      // The contract goal is gated for CONFIRMED; advancing past it to READY skips the whole
+      // goal (ADR-0057: SKIP retargets to the goal key — steps themselves never skip).
       const res = await request(app.getHttpServer())
         .patch(`/api/bookings/${bookingId}`)
         .send({ status: 'READY' });
       expect(res.status).toBe(200);
 
-      const item = await getItem(bookingId, 'contract_signed');
+      const item = await getItem(bookingId, 'get_contract_signed');
       expect(item?.state).toBe('SKIPPED');
 
       await prisma.booking.delete({ where: { id: bookingId } });
@@ -200,7 +205,6 @@ describe('ChecklistEvaluator (integration)', () => {
               key: 'custom_a',
               label: 'Custom step A',
               completedBy: 'USER',
-              dependsOn: [],
               autoCompleteRule: null,
               requiredForStatus: null,
               dueDateRule: null,
@@ -209,7 +213,6 @@ describe('ChecklistEvaluator (integration)', () => {
               key: 'custom_b',
               label: 'Custom step B',
               completedBy: 'USER',
-              dependsOn: [],
               autoCompleteRule: null,
               requiredForStatus: null,
               dueDateRule: null,
@@ -236,7 +239,6 @@ describe('ChecklistEvaluator (integration)', () => {
             key: 'no_rule',
             label: 'No rule item',
             completedBy: 'USER',
-            dependsOn: [],
             autoCompleteRule: null,
             requiredForStatus: null,
             dueDateRule: null,
@@ -262,7 +264,6 @@ describe('ChecklistEvaluator (integration)', () => {
             key: 'step_a',
             label: 'Step A',
             completedBy: 'USER',
-            dependsOn: [],
             autoCompleteRule: null,
             requiredForStatus: null,
             dueDateRule: null,
@@ -271,7 +272,6 @@ describe('ChecklistEvaluator (integration)', () => {
             key: 'step_b',
             label: 'Step B',
             completedBy: 'USER',
-            dependsOn: ['step_a'],
             autoCompleteRule: null,
             requiredForStatus: null,
             dueDateRule: null,
@@ -342,27 +342,27 @@ describe('ChecklistEvaluator (integration)', () => {
       await prisma.booking.delete({ where: { id: bookingId } });
     });
 
-    it('deposit_received: un-mark clears depositReceivedAt on booking', async () => {
+    it('recording the deposit on the booking auto-completes the deposit_received step (sticky)', async () => {
+      // ADR-0057: the deposit_received step is AWAITED and not user-PATCHable — the deposit fact is
+      // recorded on the booking (here directly; in the app via the invoice mark-paid / booking
+      // action), and the evaluator auto-completes the step. Completion is sticky (Story 23): later
+      // clearing the booking field clears the field but does not un-complete the step.
       const bookingId = await createBooking();
-      // Unblock deposit_received by completing its dependency
-      await forceComplete(bookingId, ['send_contract']);
-
-      const item = await getItem(bookingId, 'deposit_received');
 
       await request(app.getHttpServer())
-        .patch(`/api/bookings/${bookingId}/checklist/${item!.id}`)
-        .send({ state: 'COMPLETE' });
-      const afterComplete = await prisma.booking.findUnique({ where: { id: bookingId } });
-      expect(afterComplete?.depositReceivedAt).not.toBeNull();
+        .patch(`/api/bookings/${bookingId}`)
+        .send({ depositReceivedAt: FUTURE_DATE });
+      const afterSet = await prisma.booking.findUnique({ where: { id: bookingId } });
+      expect(afterSet?.depositReceivedAt).not.toBeNull();
+      expect((await getItem(bookingId, 'deposit_received'))?.state).toBe('COMPLETE');
 
       await request(app.getHttpServer())
-        .patch(`/api/bookings/${bookingId}/checklist/${item!.id}`)
-        .send({ state: 'PENDING' });
-      const afterUnmark = await prisma.booking.findUnique({ where: { id: bookingId } });
-      expect(afterUnmark?.depositReceivedAt).toBeNull();
-
-      const itemAfter = await getItem(bookingId, 'deposit_received');
-      expect(itemAfter?.state).toBe('PENDING');
+        .patch(`/api/bookings/${bookingId}`)
+        .send({ depositReceivedAt: null });
+      const afterClear = await prisma.booking.findUnique({ where: { id: bookingId } });
+      expect(afterClear?.depositReceivedAt).toBeNull();
+      // Sticky: the already-completed step stays COMPLETE.
+      expect((await getItem(bookingId, 'deposit_received'))?.state).toBe('COMPLETE');
 
       await prisma.booking.delete({ where: { id: bookingId } });
     });

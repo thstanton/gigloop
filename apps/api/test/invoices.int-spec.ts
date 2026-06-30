@@ -58,11 +58,10 @@ describe('Invoice flow (integration)', () => {
         date: FUTURE_DATE,
         customerId,
         checklistItems: CHECKLIST_DEFAULTS.map(
-          ({ key, label, completedBy, dependsOn, autoCompleteRule, requiredForStatus, dueDateRule }) => ({
+          ({ key, label, completedBy, autoCompleteRule, requiredForStatus, dueDateRule }) => ({
             key,
             label,
             completedBy,
-            dependsOn,
             autoCompleteRule,
             requiredForStatus,
             dueDateRule,
@@ -108,8 +107,12 @@ describe('Invoice flow (integration)', () => {
     expect(res.status).toBe(201);
   }
 
-  function getChecklistItem(bookingId: string, key: string) {
-    return prisma.bookingChecklistItem.findFirst({ where: { bookingId, key } });
+  // Resolve a key to its goal (BookingChecklistItem) or step (BookingChecklistStep) row — ADR-0057
+  // turned create_deposit_invoice / create_balance_invoice / deposit_received into steps of a goal.
+  async function getChecklistItem(bookingId: string, key: string) {
+    const goal = await prisma.bookingChecklistItem.findFirst({ where: { bookingId, key } });
+    if (goal) return goal;
+    return prisma.bookingChecklistStep.findFirst({ where: { bookingId, key } });
   }
 
   // ── happy paths ────────────────────────────────────────────────────────────
