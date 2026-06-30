@@ -662,17 +662,25 @@ describe('ChecklistEvaluatorService', () => {
     it('produces the same updates as a full sweep when all inputs are flagged changed', async () => {
       const booking = makeBooking({ invoices: [{ isDeposit: true }], venueId: 'v1', contracts: [{ status: 'SIGNED' }] });
 
-      repo.findItemsWithContext.mockResolvedValue({ items: fixture(), booking });
-      await service.evaluate('b1');
-      const fullSweep = repo.applyStateUpdates.mock.calls[0][0];
+      // Freeze the clock: each COMPLETE update stamps `completedAt: new Date()`, so the two
+      // independent evaluations below would otherwise capture different timestamps and the deep
+      // equality flakes whenever they straddle a millisecond.
+      jest.useFakeTimers().setSystemTime(new Date('2026-06-30T12:00:00.000Z'));
+      try {
+        repo.findItemsWithContext.mockResolvedValue({ items: fixture(), booking });
+        await service.evaluate('b1');
+        const fullSweep = repo.applyStateUpdates.mock.calls[0][0];
 
-      repo.applyStateUpdates.mockClear();
-      repo.findItemsWithContext.mockResolvedValue({ items: fixture(), booking });
-      await service.evaluateForEvent('b1', [...ALL_INPUTS]);
-      const targeted = repo.applyStateUpdates.mock.calls[0][0];
+        repo.applyStateUpdates.mockClear();
+        repo.findItemsWithContext.mockResolvedValue({ items: fixture(), booking });
+        await service.evaluateForEvent('b1', [...ALL_INPUTS]);
+        const targeted = repo.applyStateUpdates.mock.calls[0][0];
 
-      const byId = (us: Array<{ id: string }>) => [...us].sort((a, b) => a.id.localeCompare(b.id));
-      expect(byId(targeted)).toEqual(byId(fullSweep));
+        const byId = (us: Array<{ id: string }>) => [...us].sort((a, b) => a.id.localeCompare(b.id));
+        expect(byId(targeted)).toEqual(byId(fullSweep));
+      } finally {
+        jest.useRealTimers();
+      }
     });
 
     it('re-evaluates only the goals whose inputs changed', async () => {
