@@ -2,6 +2,7 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import { ContactsRepository } from './contacts.repository';
 import { CreateContactDto } from './dto/create-contact.dto';
 import { UpdateContactDto } from './dto/update-contact.dto';
+import { ChecklistEvaluatorService } from '../checklist/checklist-evaluator.service';
 
 const TRAVEL_TIME_CLEAR = {
   travelTimeMinutes: null,
@@ -17,7 +18,10 @@ const CONTACT_ADDRESS_FIELDS = new Set([
 
 @Injectable()
 export class ContactsService {
-  constructor(private repo: ContactsRepository) {}
+  constructor(
+    private repo: ContactsRepository,
+    private evaluator: ChecklistEvaluatorService,
+  ) {}
 
   findAll(userId: string) {
     return this.repo.findAll(userId);
@@ -37,7 +41,16 @@ export class ContactsService {
     await this.findOne(userId, id);
     const hasAddressChange = Object.keys(dto).some((k) => CONTACT_ADDRESS_FIELDS.has(k));
     const data = hasAddressChange ? { ...dto, ...TRAVEL_TIME_CLEAR } : dto;
-    return this.repo.update(id, data);
+    const updated = await this.repo.update(id, data);
+
+    // #618: the email precondition reads this contact's email. When it changes, re-evaluate the
+    // checklists of the bookings this contact is the customer of, so the precondition resolves (or
+    // re-opens) — the same cross-module re-eval the invoices/communications services do.
+    if (dto.email !== undefined) {
+      const bookingIds = await this.repo.findCustomerBookingIds(userId, id);
+      await Promise.all(bookingIds.map((bookingId) => this.evaluator.evaluate(bookingId).catch(() => {})));
+    }
+    return updated;
   }
 
   async delete(userId: string, id: string) {

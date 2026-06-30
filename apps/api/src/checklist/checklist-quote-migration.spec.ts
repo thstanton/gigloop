@@ -35,7 +35,7 @@ describe('planQuoteMigration — quote cluster (get_the_quote_accepted, ADR-0057
       autoCompleteRule: null,
       order: 1, // lowest order of the cluster
     });
-    expect(stepKeys(plan.steps)).toEqual(['send_quote', 'quote_accepted']);
+    expect(stepKeys(plan.steps)).toEqual(['set_fee_quote', 'add_email_quote', 'send_quote', 'quote_accepted']);
     // Both old flat rows are deleted — confirm_quote is not orphaned by the rename.
     expect([...plan.deleteIds].sort((a, b) => a.localeCompare(b))).toEqual(['cq', 'sq']);
   });
@@ -71,7 +71,7 @@ describe('planQuoteMigration — quote cluster (get_the_quote_accepted, ADR-0057
   it('handles a partial cluster (only send_quote present) — quote_accepted seeds PENDING', () => {
     const items = [flat({ key: 'send_quote', state: 'COMPLETE', completedAt: new Date('2026-01-01') })];
     const plan = planQuoteMigration(items)!;
-    expect(stepKeys(plan.steps)).toEqual(['send_quote', 'quote_accepted']);
+    expect(stepKeys(plan.steps)).toEqual(['set_fee_quote', 'add_email_quote', 'send_quote', 'quote_accepted']);
     expect(plan.steps.find((s) => s.key === 'quote_accepted')!.state).toBe('PENDING');
     expect(plan.goal.state).toBe('PENDING');
     expect(plan.deleteIds).toEqual(['id-send_quote']);

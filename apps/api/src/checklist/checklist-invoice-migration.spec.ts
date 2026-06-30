@@ -20,6 +20,8 @@ describe('planInvoiceGoalMigration — deposit (get_deposit_paid, ADR-0057 / #61
     ];
     const plan = planInvoiceGoalMigration('get_deposit_paid', 'PENDING', existing)!;
     expect(stepKeys(plan.steps)).toEqual([
+      'set_fee_deposit',
+      'add_email_deposit',
       'create_deposit_invoice',
       'issue_deposit_invoice',
       'send_deposit_invoice',
@@ -57,8 +59,10 @@ describe('planInvoiceGoalMigration — deposit (get_deposit_paid, ADR-0057 / #61
     expect(plan.goalCompletedAt).toEqual(new Date('2026-02-01'));
   });
 
-  it('is idempotent — a goal already in the 4-step shape is a no-op', () => {
+  it('is idempotent — a goal already in the canonical shape is a no-op', () => {
     const existing = [
+      st({ key: 'set_fee_deposit' }),
+      st({ key: 'add_email_deposit' }),
       st({ key: 'create_deposit_invoice' }),
       st({ key: 'issue_deposit_invoice' }),
       st({ key: 'send_deposit_invoice' }),
@@ -78,6 +82,8 @@ describe('planInvoiceGoalMigration — balance (invoice_the_balance → get_the_
     expect(plan.newGoalKey).toBe('get_the_balance_paid');
     expect(plan.newGoalLabel).toBe('Get the balance paid');
     expect(stepKeys(plan.steps)).toEqual([
+      'set_fee_balance',
+      'add_email_balance',
       'create_balance_invoice',
       'issue_balance_invoice',
       'send_balance_invoice',

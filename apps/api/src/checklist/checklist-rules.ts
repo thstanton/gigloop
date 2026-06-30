@@ -17,6 +17,10 @@ export type AutoCompleteRule =
   | { type: 'invoiceExists'; isDeposit: boolean; includeDraft?: boolean }
   | { type: 'musicFormResponse' }
   | { type: 'contractSigned' }
+  // PRECONDITION predicate (ADR-0057 / #618): the booking's customer has an email address — the
+  // prerequisite for any emailing goal. `bookingField fee notNull` covers the other precondition
+  // (the booking has a fee), reusing the existing rule.
+  | { type: 'customerEmail' }
   | { type: 'completeness'; concern: CompletenessConcern };
 
 /** The booking facts a rule reads. Mirrors the repository's context projection. */
@@ -24,6 +28,8 @@ export interface BookingContext {
   status: string;
   venueId: string | null;
   customerId: string | null;
+  customerEmail: string | null;
+  fee: string | null;
   depositReceivedAt: Date | null;
   setsCount: number;
   logistics: unknown;
@@ -50,6 +56,8 @@ export type InputKey =
   | 'musicFormResponse'
   | 'venueId'
   | 'customerId'
+  | 'customerEmail'
+  | 'fee'
   | 'setsCount'
   | 'logistics';
 
@@ -59,6 +67,7 @@ export function evaluateRule(rule: AutoCompleteRule, ctx: BookingContext): boole
     case 'bookingField':
       if (rule.field === 'depositReceivedAt') return ctx.depositReceivedAt !== null;
       if (rule.field === 'activeContract') return ctx.contracts.length > 0;
+      if (rule.field === 'fee') return ctx.fee !== null; // #618 fee precondition
       return false;
     case 'communicationSent':
       return ctx.communications.some(
@@ -74,6 +83,8 @@ export function evaluateRule(rule: AutoCompleteRule, ctx: BookingContext): boole
       return ctx.musicFormResponse !== null;
     case 'contractSigned':
       return ctx.contracts.some((c) => c.status === 'SIGNED');
+    case 'customerEmail':
+      return ctx.customerEmail != null && ctx.customerEmail.trim() !== '';
     // Structural items (Module D) bind their done-state to a completeness predicate
     // (Module A), so "is this concern done?" lives in exactly one place.
     case 'completeness':
@@ -108,7 +119,9 @@ export function evaluateRuleState(rule: AutoCompleteRule, ctx: BookingContext): 
 export function inputsForRule(rule: AutoCompleteRule): InputKey[] {
   switch (rule.type) {
     case 'bookingField':
-      return rule.field === 'depositReceivedAt' ? ['depositReceivedAt'] : ['contracts'];
+      if (rule.field === 'depositReceivedAt') return ['depositReceivedAt'];
+      if (rule.field === 'fee') return ['fee'];
+      return ['contracts'];
     case 'communicationSent':
       return ['communications'];
     case 'invoiceExists':
@@ -117,6 +130,8 @@ export function inputsForRule(rule: AutoCompleteRule): InputKey[] {
       return ['musicFormResponse'];
     case 'contractSigned':
       return ['contracts'];
+    case 'customerEmail':
+      return ['customerEmail'];
     case 'completeness':
       if (rule.concern === 'venue') return ['venueId'];
       if (rule.concern === 'people') return ['customerId'];

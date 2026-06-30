@@ -168,23 +168,25 @@ describe('get_the_balance_paid goal (ADR-0057 / #608 / #617, folds #586)', () =>
 
   it('owns create → issue → send → received; create includes drafts, issue excludes them (#617)', () => {
     const steps = balanceGoal().steps ?? [];
-    expect(steps.map((s) => s.key)).toEqual([
+    const milestones = steps.filter((s) => s.kind === 'MILESTONE');
+    expect(milestones.map((s) => s.key)).toEqual([
       'create_balance_invoice',
       'issue_balance_invoice',
       'send_balance_invoice',
       'balance_received',
     ]);
     // create/issue/send are musician ACTIONs; balance_received awaits payment (USER records it).
-    expect(steps.map((s) => s.completeMode)).toEqual(['ACTION', 'ACTION', 'ACTION', 'AWAITED']);
-    expect(steps[0].autoCompleteRule).toEqual({ type: 'invoiceExists', isDeposit: false, includeDraft: true });
-    expect(steps[1].autoCompleteRule).toEqual({ type: 'invoiceExists', isDeposit: false });
-    expect(steps[2].autoCompleteRule).toEqual({
+    expect(milestones.map((s) => s.completeMode)).toEqual(['ACTION', 'ACTION', 'ACTION', 'AWAITED']);
+    const byKey = (k: string) => steps.find((s) => s.key === k)!;
+    expect(byKey('create_balance_invoice').autoCompleteRule).toEqual({ type: 'invoiceExists', isDeposit: false, includeDraft: true });
+    expect(byKey('issue_balance_invoice').autoCompleteRule).toEqual({ type: 'invoiceExists', isDeposit: false });
+    expect(byKey('send_balance_invoice').autoCompleteRule).toEqual({
       type: 'communicationSent',
       templateTypes: ['balance_invoice_cover'],
     });
     // balance_received is USER-awaited with no rule (no balanceReceivedAt field yet) — resolved by
     // marking the goal complete, and keeps surfacing (chase the money).
-    expect(steps[3]).toMatchObject({ completedBy: 'USER', autoCompleteRule: null });
+    expect(byKey('balance_received')).toMatchObject({ completedBy: 'USER', autoCompleteRule: null });
   });
 
   it('is enabled by default (a seeded item, just disablable)', () => {
@@ -228,24 +230,25 @@ describe('get_deposit_paid goal (ADR-0057 / #608 / #617, fixes #585)', () => {
 
   it('owns create → issue → send → received; create includes drafts, issue excludes them (#617)', () => {
     const steps = depositGoal().steps ?? [];
-    expect(steps.map((s) => s.key)).toEqual([
+    const milestones = steps.filter((s) => s.kind === 'MILESTONE');
+    expect(milestones.map((s) => s.key)).toEqual([
       'create_deposit_invoice',
       'issue_deposit_invoice',
       'send_deposit_invoice',
       'deposit_received',
     ]);
     // create/issue/send are ACTIONs; deposit_received awaits the external payment.
-    expect(steps.map((s) => s.completeMode)).toEqual(['ACTION', 'ACTION', 'ACTION', 'AWAITED']);
+    expect(milestones.map((s) => s.completeMode)).toEqual(['ACTION', 'ACTION', 'ACTION', 'AWAITED']);
+    const byKey = (k: string) => steps.find((s) => s.key === k)!;
     // create includes drafts (a saved draft advances the goal); issue excludes them (the #585 fix).
-    expect(steps[0].autoCompleteRule).toEqual({ type: 'invoiceExists', isDeposit: true, includeDraft: true });
-    expect(steps[1].autoCompleteRule).toEqual({ type: 'invoiceExists', isDeposit: true });
-    expect(steps[2].autoCompleteRule).toEqual({
+    expect(byKey('create_deposit_invoice').autoCompleteRule).toEqual({ type: 'invoiceExists', isDeposit: true, includeDraft: true });
+    expect(byKey('issue_deposit_invoice').autoCompleteRule).toEqual({ type: 'invoiceExists', isDeposit: true });
+    expect(byKey('send_deposit_invoice').autoCompleteRule).toEqual({
       type: 'communicationSent',
       templateTypes: ['deposit_invoice_cover', 'contract_and_deposit_cover'],
     });
-    // deposit_received stays USER (the musician records it), so it still surfaces to the musician,
-    // unlike a CUSTOMER-awaited step.
-    expect(steps[3].completedBy).toBe('USER');
+    // deposit_received stays USER (the musician records it), so it still surfaces to the musician.
+    expect(byKey('deposit_received').completedBy).toBe('USER');
   });
 });
 
@@ -261,10 +264,49 @@ describe('gather_song_requests goal (ADR-0057 / #608)', () => {
     expect(goal.requiredForStatus).toBe('READY');
     expect(goal.autoCompleteRule).toBeNull();
     const steps = goal.steps ?? [];
-    expect(steps.map((s) => s.key)).toEqual(['music_form_invite', 'song_requests']);
-    expect(steps[0].completeMode).toBe('ACTION');
-    expect(steps[1].completeMode).toBe('AWAITED');
-    expect(steps[1].completedBy).toBe('CUSTOMER');
-    expect(steps[1].autoCompleteRule).toEqual({ type: 'musicFormResponse' });
+    const milestones = steps.filter((s) => s.kind === 'MILESTONE');
+    expect(milestones.map((s) => s.key)).toEqual(['music_form_invite', 'song_requests']);
+    expect(milestones[0].completeMode).toBe('ACTION');
+    expect(milestones[1].completeMode).toBe('AWAITED');
+    expect(milestones[1].completedBy).toBe('CUSTOMER');
+    expect(milestones[1].autoCompleteRule).toEqual({ type: 'musicFormResponse' });
+  });
+});
+
+describe('precondition steps (ADR-0057 / #618)', () => {
+  const goal = (key: string) => {
+    const item = CHECKLIST_DEFAULTS.find((d) => d.key === key);
+    if (!item) throw new Error(`${key} default missing`);
+    return item;
+  };
+  const stepKeys = (key: string) => (goal(key).steps ?? []).map((s) => s.key);
+
+  it('puts "Set the booking fee" first on every deal-spine goal (whole spine, not just billing)', () => {
+    for (const key of ['get_the_quote_accepted', 'get_contract_signed', 'get_deposit_paid', 'get_the_balance_paid']) {
+      const first = (goal(key).steps ?? [])[0];
+      expect(first).toMatchObject({
+        kind: 'PRECONDITION',
+        completeMode: 'ACTION',
+        completedBy: 'USER',
+        autoCompleteRule: { type: 'bookingField', field: 'fee', operator: 'notNull' },
+      });
+      expect(first.key).toMatch(/^set_fee_/);
+    }
+  });
+
+  it('puts "Add the client\'s email" on every emailing goal, before its first send', () => {
+    // Every emailing goal carries an add_email precondition; the music goal has email but NO fee.
+    for (const key of ['get_the_quote_accepted', 'get_contract_signed', 'get_deposit_paid', 'get_the_balance_paid', 'gather_song_requests']) {
+      const email = (goal(key).steps ?? []).find((s) => s.key.startsWith('add_email_'));
+      expect(email).toMatchObject({ kind: 'PRECONDITION', autoCompleteRule: { type: 'customerEmail' } });
+    }
+    expect(stepKeys('gather_song_requests')).not.toContainEqual(expect.stringMatching(/^set_fee_/));
+  });
+
+  it('uses goal-unique precondition keys (the #608 flat-registry collision rule)', () => {
+    const allPreconditionKeys = CHECKLIST_DEFAULTS.flatMap((d) =>
+      (d.steps ?? []).filter((s) => s.kind === 'PRECONDITION').map((s) => s.key),
+    );
+    expect(new Set(allPreconditionKeys).size).toBe(allPreconditionKeys.length); // no duplicates
   });
 });

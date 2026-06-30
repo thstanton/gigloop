@@ -77,6 +77,16 @@ export class ContactsRepository {
     });
   }
 
+  // The IDs of bookings this contact is the CUSTOMER of — the bookings whose checklist email
+  // precondition depends on this contact's email (#618).
+  async findCustomerBookingIds(userId: string, id: string): Promise<string[]> {
+    const bookings = await this.prisma.booking.findMany({
+      where: { userId, customerId: id },
+      select: { id: true },
+    });
+    return bookings.map((b) => b.id);
+  }
+
   delete(id: string) {
     return this.prisma.contact.delete({ where: { id } });
   }

@@ -71,6 +71,14 @@ export function resolveChecklistShortcut(
       onClick: () => h.onChecklistAction(createAction),
     };
   }
+  // PRECONDITION CTAs (#618): route to the booking's Builder section where the prerequisite is
+  // fixed — the fee on Overview, the client's email on People (where the customer is managed).
+  if (shortcutType === 'set_fee') {
+    return { label: retry ?? 'Set the fee', pending: false, onClick: () => h.onDeepLink('overview') };
+  }
+  if (shortcutType === 'add_email') {
+    return { label: retry ?? 'Add email', pending: false, onClick: () => h.onDeepLink('people') };
+  }
   if (shortcutType === 'mark_contract_signed' || shortcutType === 'mark_deposit_received') {
     return {
       label: retry ?? 'Mark done',

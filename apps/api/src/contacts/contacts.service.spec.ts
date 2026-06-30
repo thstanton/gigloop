@@ -1,6 +1,7 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { ContactsService } from './contacts.service';
 import { ContactsRepository } from './contacts.repository';
+import { ChecklistEvaluatorService } from '../checklist/checklist-evaluator.service';
 
 type MockRepo = {
   findAll: jest.Mock;
@@ -8,6 +9,7 @@ type MockRepo = {
   create: jest.Mock;
   update: jest.Mock;
   countBookings: jest.Mock;
+  findCustomerBookingIds: jest.Mock;
   delete: jest.Mock;
 };
 
@@ -18,6 +20,7 @@ function makeRepo(): MockRepo {
     create: jest.fn(),
     update: jest.fn(),
     countBookings: jest.fn(),
+    findCustomerBookingIds: jest.fn().mockResolvedValue([]),
     delete: jest.fn(),
   };
 }
@@ -27,10 +30,15 @@ const contact = { id: 'c1', name: 'Alice', userId: 'u1' };
 describe('ContactsService', () => {
   let service: ContactsService;
   let repo: MockRepo;
+  let evaluator: { evaluate: jest.Mock };
 
   beforeEach(() => {
     repo = makeRepo();
-    service = new ContactsService(repo as unknown as ContactsRepository);
+    evaluator = { evaluate: jest.fn().mockResolvedValue(undefined) };
+    service = new ContactsService(
+      repo as unknown as ContactsRepository,
+      evaluator as unknown as ChecklistEvaluatorService,
+    );
   });
 
   describe('findAll', () => {
@@ -100,6 +108,24 @@ describe('ContactsService', () => {
       repo.update.mockResolvedValue({ ...contact, name: 'Bob' });
       await service.update('u1', 'c1', { name: 'Bob' });
       expect(repo.update).toHaveBeenCalledWith('c1', { name: 'Bob' });
+    });
+
+    it('re-evaluates the customer bookings checklists when the email changes (#618)', async () => {
+      repo.findOne.mockResolvedValue(contact);
+      repo.update.mockResolvedValue({ ...contact, email: 'a@b.com' });
+      repo.findCustomerBookingIds.mockResolvedValue(['b1', 'b2']);
+      await service.update('u1', 'c1', { email: 'a@b.com' });
+      expect(repo.findCustomerBookingIds).toHaveBeenCalledWith('u1', 'c1');
+      expect(evaluator.evaluate).toHaveBeenCalledWith('b1');
+      expect(evaluator.evaluate).toHaveBeenCalledWith('b2');
+    });
+
+    it('does not re-evaluate when the update does not touch the email (#618)', async () => {
+      repo.findOne.mockResolvedValue(contact);
+      repo.update.mockResolvedValue({ ...contact, name: 'Bob' });
+      await service.update('u1', 'c1', { name: 'Bob' });
+      expect(repo.findCustomerBookingIds).not.toHaveBeenCalled();
+      expect(evaluator.evaluate).not.toHaveBeenCalled();
     });
   });
 

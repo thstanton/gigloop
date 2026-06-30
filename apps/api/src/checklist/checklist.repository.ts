@@ -117,6 +117,9 @@ export class ChecklistRepository {
           status: true,
           venueId: true,
           customerId: true,
+          // #618 precondition inputs: the booking's fee and its customer's email.
+          fee: true,
+          customer: { select: { email: true } },
           depositReceivedAt: true,
           logistics: true,
           _count: { select: { sets: true } },
@@ -144,7 +147,15 @@ export class ChecklistRepository {
         },
       }),
     ]);
-    const booking = raw ? { ...raw, setsCount: raw._count.sets } : null;
+    const booking = raw
+      ? {
+          ...raw,
+          setsCount: raw._count.sets,
+          // Flatten to the BookingContext shape the rules read (#618).
+          fee: raw.fee != null ? String(raw.fee) : null,
+          customerEmail: raw.customer?.email ?? null,
+        }
+      : null;
     return { items, booking };
   }
 

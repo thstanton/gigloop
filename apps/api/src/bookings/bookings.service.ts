@@ -32,11 +32,12 @@ const VALID_STATUSES = new Set<string>(Object.values(BookingStatus));
 const BOOKING_FIELD_SHORTCUT: Readonly<Record<string, string>> = {
   activeContract: 'create_contract',
   depositReceivedAt: 'mark_deposit_received',
+  fee: 'set_fee', // #618 fee precondition → routes to the booking's Overview
 };
 
 // The booking fields a checklist auto-complete rule binds to: changing any of them must re-run the
 // evaluator so the dependent goal/step auto-completes. Add a field here when a new rule binds to it.
-const RULE_BOUND_FIELDS = ['status', 'venueId', 'depositReceivedAt'] as const satisfies ReadonlyArray<
+const RULE_BOUND_FIELDS = ['status', 'venueId', 'depositReceivedAt', 'fee'] as const satisfies ReadonlyArray<
   keyof UpdateBookingDto
 >;
 
@@ -83,6 +84,8 @@ export function deriveShortcut(
       return { shortcutType: BOOKING_FIELD_SHORTCUT[rule['field'] as string] };
     case 'contractSigned':
       return { shortcutType: 'mark_contract_signed' };
+    case 'customerEmail':
+      return { shortcutType: 'add_email' }; // #618 → routes to the booking's People
     default:
       return {};
   }

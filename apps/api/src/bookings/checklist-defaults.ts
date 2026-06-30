@@ -62,6 +62,24 @@ export const CHECKLIST_DEFAULTS: ChecklistDefaultItem[] = [
     requiredForStatus: 'PROVISIONAL',
     dueDateRule: { basis: 'bookingCreation', offsetDays: 2 },
     steps: [
+      // PRECONDITIONS (#618), ordered before the first send — surfaced one at a time, each folds the
+      // moment its predicate holds (same predicate across goals ⇒ all co-resolve once satisfied).
+      {
+        key: 'set_fee_quote',
+        label: 'Set the booking fee',
+        kind: 'PRECONDITION',
+        completeMode: 'ACTION',
+        completedBy: 'USER',
+        autoCompleteRule: { type: 'bookingField', field: 'fee', operator: 'notNull' },
+      },
+      {
+        key: 'add_email_quote',
+        label: "Add the client's email",
+        kind: 'PRECONDITION',
+        completeMode: 'ACTION',
+        completedBy: 'USER',
+        autoCompleteRule: { type: 'customerEmail' },
+      },
       {
         key: 'send_quote',
         label: 'Send the quote',
@@ -99,6 +117,23 @@ export const CHECKLIST_DEFAULTS: ChecklistDefaultItem[] = [
     requiredForStatus: 'CONFIRMED',
     dueDateRule: { basis: 'bookingDate', offsetDays: -30 },
     steps: [
+      // PRECONDITIONS (#618), ordered before the first action.
+      {
+        key: 'set_fee_deposit',
+        label: 'Set the booking fee',
+        kind: 'PRECONDITION',
+        completeMode: 'ACTION',
+        completedBy: 'USER',
+        autoCompleteRule: { type: 'bookingField', field: 'fee', operator: 'notNull' },
+      },
+      {
+        key: 'add_email_deposit',
+        label: "Add the client's email",
+        kind: 'PRECONDITION',
+        completeMode: 'ACTION',
+        completedBy: 'USER',
+        autoCompleteRule: { type: 'customerEmail' },
+      },
       {
         // ADR-0057 / #617: the create milestone — satisfied by a draft-or-beyond invoice
         // (includeDraft), so saving a draft advances the goal and surfaces "Issue" as what's left
@@ -165,6 +200,23 @@ export const CHECKLIST_DEFAULTS: ChecklistDefaultItem[] = [
     requiredForStatus: 'CONFIRMED',
     dueDateRule: { basis: 'bookingDate', offsetDays: -60 },
     steps: [
+      // PRECONDITIONS (#618), ordered before drafting/sending.
+      {
+        key: 'set_fee_contract',
+        label: 'Set the booking fee',
+        kind: 'PRECONDITION',
+        completeMode: 'ACTION',
+        completedBy: 'USER',
+        autoCompleteRule: { type: 'bookingField', field: 'fee', operator: 'notNull' },
+      },
+      {
+        key: 'add_email_contract',
+        label: "Add the client's email",
+        kind: 'PRECONDITION',
+        completeMode: 'ACTION',
+        completedBy: 'USER',
+        autoCompleteRule: { type: 'customerEmail' },
+      },
       {
         key: 'create_contract',
         label: 'Draft the contract',
@@ -236,6 +288,23 @@ export const CHECKLIST_DEFAULTS: ChecklistDefaultItem[] = [
     requiredForStatus: 'READY',
     dueDateRule: { basis: 'bookingDate', offsetDays: -14 },
     steps: [
+      // PRECONDITIONS (#618), ordered before the first action.
+      {
+        key: 'set_fee_balance',
+        label: 'Set the booking fee',
+        kind: 'PRECONDITION',
+        completeMode: 'ACTION',
+        completedBy: 'USER',
+        autoCompleteRule: { type: 'bookingField', field: 'fee', operator: 'notNull' },
+      },
+      {
+        key: 'add_email_balance',
+        label: "Add the client's email",
+        kind: 'PRECONDITION',
+        completeMode: 'ACTION',
+        completedBy: 'USER',
+        autoCompleteRule: { type: 'customerEmail' },
+      },
       {
         // Create milestone — a draft-or-beyond invoice (includeDraft).
         key: 'create_balance_invoice',
@@ -292,6 +361,16 @@ export const CHECKLIST_DEFAULTS: ChecklistDefaultItem[] = [
     requiredForStatus: 'READY',
     dueDateRule: { basis: 'bookingDate', offsetDays: -30 },
     steps: [
+      // PRECONDITION (#618): emailing the music-form invite needs the client's email. No fee
+      // precondition — the music form is not part of the deal/billing spine.
+      {
+        key: 'add_email_music',
+        label: "Add the client's email",
+        kind: 'PRECONDITION',
+        completeMode: 'ACTION',
+        completedBy: 'USER',
+        autoCompleteRule: { type: 'customerEmail' },
+      },
       {
         key: 'music_form_invite',
         label: 'Send music form invite',

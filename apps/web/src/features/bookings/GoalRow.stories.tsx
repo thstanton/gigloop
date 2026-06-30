@@ -179,6 +179,27 @@ export const QuoteAwaitingAcceptance: Story = {
   },
 };
 
+// ── Precondition steps (#618): block a goal until the fee/email is set; CTA deep-links ────────
+
+const setFeeQuote = step({ id: 's-set-fee', label: 'Set the booking fee', order: 1, kind: 'PRECONDITION', shortcutType: 'set_fee' });
+const addEmailQuote = step({ id: 's-add-email', label: "Add the client's email", order: 2, kind: 'PRECONDITION', shortcutType: 'add_email' });
+
+// An unsatisfied precondition leads the goal as the active step; its CTA deep-links to the booking
+// (the fee on Overview). Preconditions aren't milestones, so no x/y progress count is shown.
+export const PreconditionActive: Story = {
+  args: {
+    item: quoteGoal([setFeeQuote, addEmailQuote, sendQuote, quoteAccepted]),
+    handlers: handlers(),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('button', { name: /Set the booking fee/ })).toBeVisible();
+    await expect(canvas.queryByText('1/2')).toBeNull(); // preconditions excluded from the ring count
+    await userEvent.click(canvas.getByRole('button', { name: /Set the booking fee/ }));
+    await expect(args.handlers.onDeepLink).toHaveBeenCalledWith('overview');
+  },
+};
+
 // ── Invoice goals (#617): create → issue → send → received, create/issue distinct CTAs ────────
 
 function depositGoal(steps: ChecklistStep[]): ChecklistItem {

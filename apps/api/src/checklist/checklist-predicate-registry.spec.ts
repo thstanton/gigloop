@@ -6,6 +6,8 @@ function makeCtx(overrides: Partial<BookingContext> = {}): BookingContext {
     status: 'ENQUIRY',
     venueId: null,
     customerId: null,
+    customerEmail: null,
+    fee: null,
     depositReceivedAt: null,
     setsCount: 0,
     logistics: null,
@@ -29,10 +31,12 @@ describe('STEP_PREDICATES catalog', () => {
     expect(STEP_PREDICATES.play_the_gig).toBeUndefined();
   });
 
-  it('marks every v1 entry as a MILESTONE', () => {
-    for (const entry of Object.values(STEP_PREDICATES)) {
-      expect(entry.kind).toBe('MILESTONE');
-    }
+  it('registers MILESTONE and PRECONDITION steps; no FOLLOWUP yet (ADR-0057 / #618)', () => {
+    const kinds = new Set(Object.values(STEP_PREDICATES).map((e) => e.kind));
+    expect(kinds).toEqual(new Set(['MILESTONE', 'PRECONDITION']));
+    // The fee/email preconditions register with kind PRECONDITION.
+    expect(STEP_PREDICATES.set_fee_deposit.kind).toBe('PRECONDITION');
+    expect(STEP_PREDICATES.add_email_quote.kind).toBe('PRECONDITION');
   });
 
   it('classifies completeMode by event source, independent of completedBy', () => {
@@ -107,6 +111,23 @@ describe('predicates fire on their declared input and not otherwise', () => {
   it('add_venue completes only when venueId is set', () => {
     expect(STEP_PREDICATES.add_venue.predicate(makeCtx())).toBe('PENDING');
     expect(STEP_PREDICATES.add_venue.predicate(makeCtx({ venueId: 'v1' }))).toBe('COMPLETE');
+  });
+
+  it('the email precondition fires only when the customer has a (non-blank) email (#618)', () => {
+    expect(STEP_PREDICATES.add_email_quote.predicate(makeCtx())).toBe('PENDING');
+    expect(STEP_PREDICATES.add_email_quote.predicate(makeCtx({ customerEmail: '  ' }))).toBe('PENDING');
+    expect(STEP_PREDICATES.add_email_quote.predicate(makeCtx({ customerEmail: 'a@b.com' }))).toBe('COMPLETE');
+    // A change to an undeclared input (fee) does not move it.
+    expect(STEP_PREDICATES.add_email_quote.predicate(makeCtx({ fee: '500' }))).toBe('PENDING');
+    expect(STEP_PREDICATES.add_email_quote.inputs).toEqual(['customerEmail']);
+  });
+
+  it('the fee precondition fires only when the booking has a fee (#618)', () => {
+    expect(STEP_PREDICATES.set_fee_deposit.predicate(makeCtx())).toBe('PENDING');
+    expect(STEP_PREDICATES.set_fee_deposit.predicate(makeCtx({ fee: '500' }))).toBe('COMPLETE');
+    // A change to an undeclared input (customerEmail) does not move it.
+    expect(STEP_PREDICATES.set_fee_deposit.predicate(makeCtx({ customerEmail: 'a@b.com' }))).toBe('PENDING');
+    expect(STEP_PREDICATES.set_fee_deposit.inputs).toEqual(['fee']);
   });
 });
 
