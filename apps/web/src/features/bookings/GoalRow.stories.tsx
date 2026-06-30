@@ -68,7 +68,7 @@ function handlers(): ChecklistShortcutHandlers {
 const meta = {
   component: GoalRow,
   tags: ['ai-generated'],
-  args: { handlers: handlers() },
+  args: { handlers: handlers(), onSetState: fn() },
   parameters: { layout: 'padded' },
 } satisfies Meta<typeof GoalRow>;
 
@@ -115,6 +115,65 @@ export const AwaitingClient: Story = {
     await expect(canvas.getByText(/Waiting on the client/)).toBeVisible();
     await expect(canvas.queryByRole('button', { name: /Client signs the contract/ })).toBeNull();
     await expect(canvas.getByText('3/3')).toBeVisible();
+  },
+};
+
+// ── Atomic goals (no steps), unified into the same row in #610 ──────────────────────────────
+
+function atomicGoal(overrides: Partial<ChecklistItem>): ChecklistItem {
+  return { ...contractGoal([]), key: null, label: 'Bring spare strings', steps: [], ...overrides };
+}
+
+// A custom goal with no shortcut — the musician marks it complete by hand.
+export const AtomicManual: Story = {
+  args: { item: atomicGoal({}), handlers: handlers(), onSetState: fn() },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: 'Mark complete' }));
+    await expect(args.onSetState).toHaveBeenCalledWith('g-contract', 'COMPLETE');
+  },
+};
+
+// A structural goal — its action deep-links into the Builder ("Set up").
+export const AtomicStructural: Story = {
+  args: { item: atomicGoal({ key: 'add_venue', label: 'Add the venue' }), handlers: handlers(), onSetState: fn() },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: 'Set up' }));
+    await expect(args.handlers.onDeepLink).toHaveBeenCalledWith('venue');
+  },
+};
+
+// The overflow menu (RowActions: bottom sheet on mobile, popover on desktop) carries the opt-out
+// levers: Skip sets the goal SKIPPED (reversible via Restore). Drives the desktop popover here.
+export const KebabSkip: Story = {
+  args: { item: atomicGoal({}), handlers: handlers(), onSetState: fn() },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: 'More actions' }), { pointerEventsCheck: 0 });
+    const menu = within(document.body);
+    await userEvent.click(await menu.findByText('Skip'), { pointerEventsCheck: 0 });
+    await expect(args.onSetState).toHaveBeenCalledWith('g-contract', 'SKIPPED');
+  },
+};
+
+// An overdue goal surfaces its due/overdue cue inline on the goal line (right of the label).
+export const Overdue: Story = {
+  args: { item: atomicGoal({ dueDate: '2020-01-01T00:00:00Z' }), handlers: handlers(), onSetState: fn() },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText(/overdue/)).toBeVisible();
+  },
+};
+
+// A skipped goal is dimmed and set aside, its glyph a skip marker; the menu offers Restore.
+export const Skipped: Story = {
+  args: { item: atomicGoal({ state: 'SKIPPED' }), handlers: handlers(), onSetState: fn() },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText('Bring spare strings')).toBeVisible();
+    // No action CTA is offered on a set-aside goal.
+    await expect(canvas.queryByRole('button', { name: 'Mark complete' })).toBeNull();
   },
 };
 

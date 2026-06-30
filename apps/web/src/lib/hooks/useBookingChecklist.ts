@@ -60,7 +60,9 @@ export function useBookingChecklist(
   }, [booking, checklist, checklistLoading, bookingId]);
 
   const toggleItemMutation = useMutation({
-    mutationFn: ({ itemId, state }: { itemId: string; state: 'COMPLETE' | 'PENDING' }) =>
+    // SKIPPED is the musician's reversible opt-out (ADR-0057) — set on a goal via the row kebab,
+    // cleared by setting PENDING. Optimistic flip + server-settled roll-up, same path as a tick.
+    mutationFn: ({ itemId, state }: { itemId: string; state: 'COMPLETE' | 'PENDING' | 'SKIPPED' }) =>
       apiPatch<ChecklistItem[]>(`/bookings/${bookingId}/checklist/${itemId}`, { state }),
     onMutate: async ({ itemId, state }) => {
       await queryClient.cancelQueries({ queryKey: ['bookingChecklist', bookingId] });
@@ -136,7 +138,7 @@ export function useBookingChecklist(
     dismissReadyDialog,
     confirmStatusTransition,
     isConfirmingTransition: statusTransitionMutation.isPending,
-    toggleItem: (itemId: string, state: 'COMPLETE' | 'PENDING') => toggleItemMutation.mutate({ itemId, state }),
+    toggleItem: (itemId: string, state: 'COMPLETE' | 'PENDING' | 'SKIPPED') => toggleItemMutation.mutate({ itemId, state }),
     addItem: (data: { label: string; requiredForStatus: string | null; dueDate: string | null }) => addItemMutation.mutate(data),
     isAddingItem: addItemMutation.isPending,
   };
