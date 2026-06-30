@@ -17,6 +17,18 @@ type ContactUpdateData = UpdateContactDto & {
   travelMode?: string | null;
 };
 
+// The contact detail page lists each related booking as a BookingRef — id/title/date/status/
+// eventType only (#592). Selecting exactly those drops the rest of the Booking row (the
+// `logistics` JSON, notes, portalToken, etc.) from a contact's whole history. `take` is a
+// defensive upper bound against a pathologically long history, not a UX page size: ordered
+// date-desc, it can only ever drop the oldest tail, and 200 is far above any real contact's
+// gig count. If that ever truncates a real list, the fix is a paginated "show all" view.
+const CONTACT_BOOKING_REF = {
+  select: { id: true, title: true, date: true, status: true, eventType: true },
+  orderBy: { date: 'desc' as const },
+  take: 200,
+} as const;
+
 @Injectable()
 export class ContactsRepository {
   constructor(private prisma: PrismaService) {}
@@ -32,9 +44,9 @@ export class ContactsRepository {
     return this.prisma.contact.findFirst({
       where: { id, userId },
       include: {
-        customerBookings: { orderBy: { date: 'desc' } },
-        venueBookings: { orderBy: { date: 'desc' } },
-        bookingAgentBookings: { orderBy: { date: 'desc' } },
+        customerBookings: CONTACT_BOOKING_REF,
+        venueBookings: CONTACT_BOOKING_REF,
+        bookingAgentBookings: CONTACT_BOOKING_REF,
       },
     });
   }

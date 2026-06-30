@@ -84,7 +84,10 @@ export class InvoicesService {
       }
     }
 
-    await this.lifecycle.issueInvoice(
+    // The lifecycle write returns the issued invoice (same `invoiceIncludes` shape as findOne),
+    // so return it directly rather than re-querying (#591). evaluate() only touches checklist
+    // items, never the invoice, so the written entity is already the final response shape.
+    const issued = await this.lifecycle.issueInvoice(
       userId,
       invoice,
       { issueDate, dueDate },
@@ -98,7 +101,7 @@ export class InvoicesService {
         }),
     );
     await this.evaluator.evaluate(bookingId).catch(() => {});
-    return this.findOne(userId, bookingId, id);
+    return issued;
   }
 
   async send(userId: string, bookingId: string, id: string, dto: SendInvoiceDto) {

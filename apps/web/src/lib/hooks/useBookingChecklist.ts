@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiGet, apiPatch, apiPost } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
 import { STATUS_ORDER } from '@/lib/constants';
+import { updateBookingInListCaches } from '@/lib/hooks/useBookings';
 import type { BookingDetail, BookingStatus, ChecklistItem } from '@/types/api';
 
 const CELEBRATORY_TITLES = [
@@ -116,10 +117,12 @@ export function useBookingChecklist(
   }
 
   const statusTransitionMutation = useMutation({
-    mutationFn: (status: BookingStatus) => apiPatch(`/bookings/${bookingId}`, { status }),
-    onSuccess: () => {
+    mutationFn: (status: BookingStatus) => apiPatch<BookingDetail>(`/bookings/${bookingId}`, { status }),
+    onSuccess: (updated) => {
       queryClient.invalidateQueries({ queryKey: ['booking', bookingId] });
-      queryClient.invalidateQueries({ queryKey: ['bookings'] });
+      // Splice the lean row into the cached lists instead of invalidating the whole heavy list
+      // (#590); a status change's bucket move self-corrects on the list's next staleTime-0 refetch.
+      updateBookingInListCaches(queryClient, updated);
       queryClient.invalidateQueries({ queryKey: ['bookingChecklist', bookingId] });
       setReadyDialogStatus(null);
     },

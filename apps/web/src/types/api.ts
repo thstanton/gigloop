@@ -221,7 +221,6 @@ export interface BookingListItem {
   date: string;
   title: string | null;
   fee: string | null; // Decimal serialises as string over JSON
-  notes: string | null;
   customerId: string;
   customer: ContactSummary;
   venueId: string | null;
@@ -357,6 +356,7 @@ export interface BookingDetail extends Omit<BookingListItem, 'customer' | 'venue
   seriesId: string | null;
   series: { id: string; label: string; customerId: string } | null;
   logistics: Record<string, BookingLogisticsEntry> | null;
+  notes: string | null;
 }
 
 export interface CreateSetInput {

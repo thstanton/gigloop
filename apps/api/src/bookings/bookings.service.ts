@@ -134,6 +134,16 @@ export class BookingsService {
     };
   }
 
+  // Multi-tenancy hard rule: every booking mutation confirms the row belongs to this user
+  // before touching it. Backed by a lightweight select (#589) rather than the deep findOne,
+  // since these callsites discard the booking and only need the ownership verdict. The probe
+  // still round-trips the DB, so the Neon cold-start warm-up findOne used to provide is intact
+  // (#612). Callsites that actually read booking fields keep calling findOne.
+  private async assertOwnership(userId: string, id: string): Promise<void> {
+    const owned = await this.repo.findForOwnership(userId, id);
+    if (!owned) throw new NotFoundException('Booking not found');
+  }
+
   private async resolveSeriesId(userId: string, dto: CreateBookingDto): Promise<string | undefined> {
     if (dto.seriesId && dto.newSeries) {
       throw new BadRequestException('Provide either seriesId or newSeries, not both');
@@ -297,7 +307,7 @@ export class BookingsService {
   }
 
   async update(userId: string, id: string, dto: UpdateBookingDto) {
-    await this.findOne(userId, id);
+    await this.assertOwnership(userId, id);
     const updated = await this.repo.update(id, dto);
     if (dto.date !== undefined) {
       await this.checklistRepo.recomputeChecklistDueDates(id, updated.date, updated.createdAt);
@@ -311,12 +321,12 @@ export class BookingsService {
   }
 
   async delete(userId: string, id: string) {
-    await this.findOne(userId, id);
+    await this.assertOwnership(userId, id);
     return this.repo.cancel(id);
   }
 
   async addSet(userId: string, bookingId: string, dto: CreateSetDto) {
-    await this.findOne(userId, bookingId);
+    await this.assertOwnership(userId, bookingId);
     const result = await this.repo.addSet(userId, bookingId, dto);
     // Re-evaluate: the first set satisfies build_itinerary (PRD #511 Story 21). Post-add + best-effort.
     await this.evaluator.evaluate(bookingId).catch(() => {});
@@ -324,7 +334,7 @@ export class BookingsService {
   }
 
   async updateSet(userId: string, bookingId: string, setId: string, dto: UpdateSetDto) {
-    await this.findOne(userId, bookingId);
+    await this.assertOwnership(userId, bookingId);
     const set = await this.repo.findSet(userId, bookingId, setId);
     if (!set) throw new NotFoundException('Set not found');
     // Re-parenting: a non-null target package must belong to this booking (null = ungroup).
@@ -336,31 +346,31 @@ export class BookingsService {
   }
 
   async deleteSet(userId: string, bookingId: string, setId: string) {
-    await this.findOne(userId, bookingId);
+    await this.assertOwnership(userId, bookingId);
     const set = await this.repo.findSet(userId, bookingId, setId);
     if (!set) throw new NotFoundException('Set not found');
     return this.repo.deleteSet(setId);
   }
 
   async getMusicFormConfig(userId: string, bookingId: string) {
-    await this.findOne(userId, bookingId);
+    await this.assertOwnership(userId, bookingId);
     const config = await this.musicFormRepo.findMusicFormConfig(bookingId);
     if (!config) throw new NotFoundException('Music form config not found');
     return config;
   }
 
   async upsertMusicFormConfig(userId: string, bookingId: string, dto: UpsertMusicFormConfigDto) {
-    await this.findOne(userId, bookingId);
+    await this.assertOwnership(userId, bookingId);
     return this.musicFormRepo.upsertMusicFormConfig(userId, bookingId, dto);
   }
 
   async deleteMusicFormConfig(userId: string, bookingId: string) {
-    await this.findOne(userId, bookingId);
+    await this.assertOwnership(userId, bookingId);
     return this.musicFormRepo.deleteMusicFormConfig(bookingId);
   }
 
   async applyPackageTemplate(userId: string, bookingId: string, packageTemplateId: string) {
-    await this.findOne(userId, bookingId);
+    await this.assertOwnership(userId, bookingId);
     const templates = await this.repo.findPackageTemplates(userId, [packageTemplateId]);
     if (!templates.length) throw new NotFoundException('Package template not found');
     const template = templates[0];
@@ -388,7 +398,7 @@ export class BookingsService {
   }
 
   async updatePackage(userId: string, bookingId: string, packageId: string, dto: UpdateBookingPackageDto) {
-    await this.findOne(userId, bookingId);
+    await this.assertOwnership(userId, bookingId);
     const pkg = await this.repo.findBookingPackage(userId, bookingId, packageId);
     if (!pkg) throw new NotFoundException('Applied package not found');
     const booking = await this.repo.updatePackage(bookingId, packageId, dto);
@@ -396,7 +406,7 @@ export class BookingsService {
   }
 
   async removePackage(userId: string, bookingId: string, packageId: string) {
-    await this.findOne(userId, bookingId);
+    await this.assertOwnership(userId, bookingId);
     const pkg = await this.repo.findBookingPackage(userId, bookingId, packageId);
     if (!pkg) throw new NotFoundException('Applied package not found');
     const booking = await this.repo.removePackage(bookingId, packageId, pkg.label);
@@ -427,7 +437,7 @@ export class BookingsService {
   }
 
   async getMusicFormResponse(userId: string, bookingId: string) {
-    await this.findOne(userId, bookingId);
+    await this.assertOwnership(userId, bookingId);
     const response = await this.musicFormRepo.findMusicFormResponse(userId, bookingId);
     if (!response) throw new NotFoundException('Music form response not found');
 
@@ -455,7 +465,7 @@ export class BookingsService {
   }
 
   async createContract(userId: string, bookingId: string) {
-    await this.findOne(userId, bookingId);
+    await this.assertOwnership(userId, bookingId);
 
     const template = await this.contractRepo.findContractTemplate(userId);
     if (!template) throw new NotFoundException('Contract template not found');
@@ -480,7 +490,7 @@ export class BookingsService {
   }
 
   async updateContract(userId: string, bookingId: string, contractId: string, dto: UpdateContractDto) {
-    await this.findOne(userId, bookingId);
+    await this.assertOwnership(userId, bookingId);
     const contract = await this.contractRepo.findContractById(userId, bookingId, contractId);
     if (!contract) throw new NotFoundException('Contract not found');
     const updated = await this.contractRepo.updateContract(contractId, dto);
@@ -495,7 +505,7 @@ export class BookingsService {
   }
 
   async sendContract(userId: string, bookingId: string, contractId: string) {
-    await this.findOne(userId, bookingId);
+    await this.assertOwnership(userId, bookingId);
     const contract = await this.contractRepo.findContractById(userId, bookingId, contractId);
     if (!contract) throw new NotFoundException('Contract not found');
     if (contract.status !== 'DRAFT') throw new BadRequestException('Only DRAFT contracts can be sent');
@@ -512,7 +522,7 @@ export class BookingsService {
   }
 
   async deleteContract(userId: string, bookingId: string, contractId: string) {
-    await this.findOne(userId, bookingId);
+    await this.assertOwnership(userId, bookingId);
     const contract = await this.contractRepo.findContractById(userId, bookingId, contractId);
     if (!contract) throw new NotFoundException('Contract not found');
     if (contract.status !== 'DRAFT') throw new BadRequestException('Only DRAFT contracts can be deleted');
@@ -520,7 +530,7 @@ export class BookingsService {
   }
 
   async voidContract(userId: string, bookingId: string, contractId: string, confirmSignedVoid?: boolean) {
-    await this.findOne(userId, bookingId);
+    await this.assertOwnership(userId, bookingId);
     const contract = await this.contractRepo.findContractById(userId, bookingId, contractId);
     if (!contract) throw new NotFoundException('Contract not found');
     if (contract.status === 'VOID') throw new BadRequestException('Contract is already VOID');
@@ -532,7 +542,7 @@ export class BookingsService {
   }
 
   async getChecklist(userId: string, bookingId: string) {
-    await this.findOne(userId, bookingId);
+    await this.assertOwnership(userId, bookingId);
     const items = await this.repo.findChecklistItems(userId, bookingId);
     return items.map(({ steps, ...item }) => ({
       ...item,
@@ -566,7 +576,7 @@ export class BookingsService {
     itemId: string,
     state: 'COMPLETE' | 'PENDING' | 'SKIPPED',
   ) {
-    await this.findOne(userId, bookingId);
+    await this.assertOwnership(userId, bookingId);
     const item = await this.repo.findChecklistItemById(userId, bookingId, itemId);
     const result = await this.checklistRepo.updateChecklistItemState(userId, bookingId, itemId, state);
     if (result.count === 0) throw new NotFoundException('Checklist item not found');
@@ -593,7 +603,7 @@ export class BookingsService {
     dueDate: string | null,
     concern: string | null = null,
   ) {
-    await this.findOne(userId, bookingId);
+    await this.assertOwnership(userId, bookingId);
     const maxOrder = await this.repo.getMaxChecklistOrder(bookingId);
     const item = await this.repo.createChecklistItem(
       userId,

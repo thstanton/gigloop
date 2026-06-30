@@ -65,14 +65,21 @@ describe('ContactsRepository', () => {
       );
     });
 
-    it('includes all three booking relations', async () => {
+    it('includes all three booking relations as capped BookingRef selects', async () => {
       prisma.contact.findFirst.mockResolvedValue(null);
       await repo.findOne('u1', 'c1');
       const call = prisma.contact.findFirst.mock.calls[0][0];
-      expect(call.include).toMatchObject({
-        customerBookings: expect.anything(),
-        venueBookings: expect.anything(),
-        bookingAgentBookings: expect.anything(),
+      // Each relation selects only the BookingRef fields (no full Booking over-fetch) and is
+      // capped date-desc, rather than dragging the entire booking history in (#592).
+      const expected = {
+        select: { id: true, title: true, date: true, status: true, eventType: true },
+        orderBy: { date: 'desc' },
+        take: 200,
+      };
+      expect(call.include).toEqual({
+        customerBookings: expected,
+        venueBookings: expected,
+        bookingAgentBookings: expected,
       });
     });
 

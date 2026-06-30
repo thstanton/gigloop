@@ -24,12 +24,12 @@ export class InvoiceLifecycleService {
    * The `assignAndMarkIssued` callback is owner-specific — booking and series invoices
    * differ in how they look up a voided number for reuse.
    */
-  async issueInvoice(
+  async issueInvoice<T extends AssignedInvoice>(
     userId: string,
     invoice: InvoiceForRules & { id: string; bookingId: string | null },
     params: { issueDate: Date; dueDate: Date | null },
-    assignAndMarkIssued: (id: string, issueDate: Date, dueDate: Date | null) => Promise<AssignedInvoice>,
-  ): Promise<void> {
+    assignAndMarkIssued: (id: string, issueDate: Date, dueDate: Date | null) => Promise<T>,
+  ): Promise<T> {
     if (!isIssuable(invoice)) {
       throw new BadRequestException('Only draft invoices can be issued');
     }
@@ -40,6 +40,10 @@ export class InvoiceLifecycleService {
       issued,
       invoice.bookingId ?? undefined,
     );
+    // Return the written entity so callers don't re-fetch it (#591). T is the callback's actual
+    // return type — the booking/series assign methods both hydrate `invoiceIncludes`, so the full
+    // invoice flows back; the PDF generator above only reads the leaner AssignedInvoice subset.
+    return issued;
   }
 
   /**
