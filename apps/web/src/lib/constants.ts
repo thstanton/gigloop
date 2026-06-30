@@ -69,6 +69,13 @@ export const CHECKLIST_STAGE_ORDER: Array<BookingStatus | null> = [
   'COMPLETE',
 ];
 
+// System checklist goals that only apply when the musician's song-request form is enabled.
+// Gated in the Settings configurator (locked off when the form is disabled). Kept as a single
+// key reference — not a duplicate of the backend goal catalogue (the #615 single-source rule):
+// the catalogue carries no music-gating flag, so the one gated goal is named here. If a second
+// gated goal ever appears, prefer surfacing the flag on the defaults contract (a #620 concern).
+export const MUSIC_FORM_GATED_CHECKLIST_KEYS: readonly string[] = ['gather_song_requests'];
+
 export function statusGte(current: BookingStatus, threshold: BookingStatus): boolean {
   return STATUS_ORDER.indexOf(current) >= STATUS_ORDER.indexOf(threshold);
 }

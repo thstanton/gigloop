@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -13,8 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ChevronRight, ImageIcon, Pencil, Plus, Trash2, Upload } from 'lucide-react';
 import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
-import type { PublicProfile, UserProfile, UpdatePublicProfileInput, UpdateUserProfileInput, UserPreferences, DueDateRule, ChecklistDefaultItem, InvoiceNumberFormat, PaddingWidth, ReminderConcern } from '@/types/api';
-import { REMINDER_CONCERN_LABELS, REMINDER_CONCERN_ORDER } from '@/lib/constants';
+import type { PublicProfile, UserProfile, UpdatePublicProfileInput, UpdateUserProfileInput, UserPreferences, DueDateRule, ChecklistDefaultItem, InvoiceNumberFormat, PaddingWidth, ReminderConcern, BookingStatus } from '@/types/api';
+import { REMINDER_CONCERN_LABELS, REMINDER_CONCERN_ORDER, CHECKLIST_STAGE_ORDER, BOOKING_STATUS_LABELS, MUSIC_FORM_GATED_CHECKLIST_KEYS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 import { Card } from '@/components/common/Card';
 import { PageSection } from '@/components/common/PageSection';
@@ -808,56 +808,14 @@ function NotificationsSection({ profile }: { profile: UserProfile }) {
 
 // ─── Booking settings section ─────────────────────────────────────────────────
 
-const CHECKLIST_STAGE_GROUPS: Array<{
-  stage: 'PROVISIONAL' | 'CONFIRMED' | 'READY' | 'COMPLETE';
-  label: string;
-  items: Array<{
-    key: string;
-    label: string;
-    completedBy: 'USER' | 'CUSTOMER';
-    defaultDueDateRule: DueDateRule | null;
-    musicFormGated?: boolean;
-  }>;
-}> = [
-  {
-    stage: 'PROVISIONAL',
-    label: 'Provisional',
-    items: [
-      { key: 'send_quote', label: 'Send quote', completedBy: 'USER', defaultDueDateRule: { basis: 'bookingCreation', offsetDays: 2 } },
-      { key: 'confirm_quote', label: 'Quote confirmed', completedBy: 'USER', defaultDueDateRule: null },
-    ],
-  },
-  {
-    // ADR-0057 / #609: the user toggles and dates GOALS, not their internal steps. The deposit,
-    // contract, balance and song-request deliverables are multi-step goals — the system sequences
-    // create → send → received beneath each. The goal's own dueDate is the user-configurable one
-    // (the cluster's binding deadline); step-level dates are system-owned.
-    stage: 'CONFIRMED',
-    label: 'Confirmed',
-    items: [
-      { key: 'get_deposit_paid', label: 'Get the deposit paid', completedBy: 'USER', defaultDueDateRule: { basis: 'bookingDate', offsetDays: -30 } },
-      { key: 'get_contract_signed', label: 'Get the contract signed', completedBy: 'USER', defaultDueDateRule: { basis: 'bookingDate', offsetDays: -60 } },
-    ],
-  },
-  {
-    stage: 'READY',
-    label: 'Ready',
-    items: [
-      { key: 'invoice_the_balance', label: 'Invoice the balance', completedBy: 'USER', defaultDueDateRule: { basis: 'bookingDate', offsetDays: -14 } },
-      { key: 'gather_song_requests', label: 'Gather song requests', completedBy: 'USER', defaultDueDateRule: { basis: 'bookingDate', offsetDays: -30 }, musicFormGated: true },
-    ],
-  },
-  {
-    stage: 'COMPLETE',
-    label: 'Complete',
-    items: [
-      { key: 'play_the_gig', label: 'Play the gig', completedBy: 'USER', defaultDueDateRule: { basis: 'bookingDate', offsetDays: 0 } },
-      { key: 'send_thank_you', label: 'Send thank you', completedBy: 'USER', defaultDueDateRule: { basis: 'bookingDate', offsetDays: 7 } },
-    ],
-  },
-];
-
-const ALL_SYSTEM_KEYS = CHECKLIST_STAGE_GROUPS.flatMap((g) => g.items.map((i) => i.key));
+// The configurator's lifecycle stages, in canonical order — system goals are grouped under these
+// by `requiredForStatus`. The goal *list itself* is no longer hardcoded here (#615): it is derived
+// from the fetched backend defaults (`/me` preferences.checklistDefaults) so it can never drift
+// from the catalogue. Enquiry is rendered as the opening marker separately; system goals start at
+// Provisional, so the displayed stages are the lifecycle order minus null/Enquiry.
+const SETTINGS_STAGES = CHECKLIST_STAGE_ORDER.filter(
+  (s): s is BookingStatus => s !== null && s !== 'ENQUIRY',
+);
 
 function formatDueDateRule(rule: DueDateRule | null): string {
   if (!rule) return 'No due date';
@@ -908,7 +866,32 @@ function ConcernSelect({
 function BookingSettingsSection({ profile }: { profile: UserProfile }) {
   const queryClient = useQueryClient();
   const prefs = profile.preferences as UserPreferences | undefined;
-  const savedDefaults = prefs?.checklistDefaults ?? [];
+  const savedDefaults = useMemo(() => prefs?.checklistDefaults ?? [], [prefs]);
+
+  // System goals are sourced from the fetched backend defaults — never a hardcoded duplicate
+  // (#615, ADR-0057). Every system goal (key != null) carries its effective label, stage,
+  // completedBy, enabled and dueDateRule from the catalogue/overrides the backend already merged,
+  // so a goal added, renamed or re-staged in the catalogue appears here with no hand-sync, and
+  // ALL_SYSTEM_KEYS always matches the backend's system keys (no stale-key save regression).
+  const systemGoals = useMemo(
+    () => savedDefaults.filter((d): d is ChecklistDefaultItem & { key: string } => d.key != null),
+    [savedDefaults],
+  );
+  const ALL_SYSTEM_KEYS = useMemo(() => systemGoals.map((g) => g.key), [systemGoals]);
+  const stageGroups = useMemo(() => {
+    const byStage = new Map<string, Array<ChecklistDefaultItem & { key: string }>>();
+    for (const goal of systemGoals) {
+      const stage = goal.requiredForStatus;
+      if (!stage) continue;
+      if (!byStage.has(stage)) byStage.set(stage, []);
+      byStage.get(stage)!.push(goal);
+    }
+    return SETTINGS_STAGES.map((stage) => ({
+      stage,
+      label: BOOKING_STATUS_LABELS[stage],
+      items: byStage.get(stage) ?? [],
+    }));
+  }, [systemGoals]);
 
   // ── General subsection state ──
   const [generalSaved, setGeneralSaved] = useState(false);
@@ -943,31 +926,27 @@ function BookingSettingsSection({ profile }: { profile: UserProfile }) {
   // ── Checklist subsection state ──
   const [checklistSaved, setChecklistSaved] = useState(false);
 
-  // System item overrides: key → { enabled, dueDateRule }
+  // System item overrides: key → { enabled, dueDateRule }. The fetched defaults already carry the
+  // effective (catalogue-default merged with any saved override) enabled/dueDateRule per goal.
   const initialOverrides: Record<string, { enabled: boolean; dueDateRule: DueDateRule | null }> = {};
-  for (const group of CHECKLIST_STAGE_GROUPS) {
-    for (const item of group.items) {
-      const saved = savedDefaults.find((d) => d.key === item.key);
-      initialOverrides[item.key] = {
-        enabled: saved?.enabled !== false,
-        dueDateRule: saved?.dueDateRule !== undefined ? saved.dueDateRule : item.defaultDueDateRule,
-      };
-    }
+  for (const goal of systemGoals) {
+    initialOverrides[goal.key] = {
+      enabled: goal.enabled !== false,
+      dueDateRule: goal.dueDateRule ?? null,
+    };
   }
   const [overrides, setOverrides] = useState(initialOverrides);
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editBasis, setEditBasis] = useState<'bookingDate' | 'bookingCreation'>('bookingDate');
   const [editOffset, setEditOffset] = useState(0); // signed: negative = before
 
-  // Custom items
-  const initialCustom: ChecklistDefaultItem[] = savedDefaults.filter(
-    (d) => !ALL_SYSTEM_KEYS.includes(d.key as string),
-  );
+  // Custom items are the user's own global-template goals (no catalogue key).
+  const initialCustom: ChecklistDefaultItem[] = savedDefaults.filter((d) => d.key == null);
   const [customItems, setCustomItems] = useState<ChecklistDefaultItem[]>(initialCustom);
   useEffect(() => {
     const prefs = profile.preferences as UserPreferences | undefined;
     const defaults = prefs?.checklistDefaults ?? [];
-    setCustomItems(defaults.filter((d) => !ALL_SYSTEM_KEYS.includes(d.key as string)));
+    setCustomItems(defaults.filter((d) => d.key == null));
   }, [profile]);
   const [newItem, setNewItem] = useState<CustomItemForm>({
     label: '',
@@ -1268,13 +1247,13 @@ function BookingSettingsSection({ profile }: { profile: UserProfile }) {
           )}
 
           {/* Stage groups: items first, then stage milestone divider below */}
-          {CHECKLIST_STAGE_GROUPS.map(({ stage, label: stageLabel, items }) => {
+          {stageGroups.map(({ stage, label: stageLabel, items }) => {
             const stageCustom = customByStage.get(stage) ?? [];
             return (
               <div key={stage}>
                 <div className="space-y-2 mb-3">
                   {items.map((item) => {
-                    const isGated = item.musicFormGated && !songFormEnabled;
+                    const isGated = MUSIC_FORM_GATED_CHECKLIST_KEYS.includes(item.key) && !songFormEnabled;
                     const itemEnabled = overrides[item.key]?.enabled ?? true;
                     const effective = isGated ? false : itemEnabled;
                     return (
