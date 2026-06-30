@@ -81,7 +81,7 @@ describe('InvoicesService', () => {
       markSent: jest.fn().mockResolvedValue({ ...draftInvoice, status: 'SENT', invoiceNumber: 'INV-2026-001' }),
       markPaid: jest.fn().mockResolvedValue({ ...draftInvoice, status: 'PAID' }),
       voidInvoice: jest.fn().mockResolvedValue({ ...draftInvoice, status: 'VOID', invoiceNumber: 'INV-2026-001' }),
-      issueInvoice: jest.fn().mockResolvedValue(undefined),
+      issueInvoice: jest.fn().mockResolvedValue(issuedInvoice),
     };
     const mockEvaluator = { evaluate: jest.fn().mockResolvedValue(undefined) } as unknown as import('../checklist/checklist-evaluator.service').ChecklistEvaluatorService;
     mockChecklistRepo = { resetItemByKey: jest.fn().mockResolvedValue({ count: 0 }) };
@@ -240,9 +240,9 @@ describe('InvoicesService', () => {
 
   describe('issue', () => {
     beforeEach(() => {
-      repo.findOne
-        .mockResolvedValueOnce(draftInvoice)
-        .mockResolvedValueOnce(issuedInvoice);
+      // issue() now loads the draft once for ownership/validation and returns the lifecycle
+      // write's result — it no longer re-fetches (#591).
+      repo.findOne.mockResolvedValue(draftInvoice);
       repo.assignAndMarkIssued.mockResolvedValue(issuedInvoice);
     });
 
@@ -306,9 +306,11 @@ describe('InvoicesService', () => {
       });
     });
 
-    it('returns the re-fetched issued invoice', async () => {
+    it('returns the issued invoice from the lifecycle write without re-fetching', async () => {
       const result = await service.issue('u1', 'b1', 'i1', {});
       expect(result).toBe(issuedInvoice);
+      // Only the initial ownership/validation load — no second findOne re-fetch (#591).
+      expect(repo.findOne).toHaveBeenCalledTimes(1);
     });
   });
 
