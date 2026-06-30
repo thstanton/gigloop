@@ -173,6 +173,17 @@ describe('BookingsRepository', () => {
     });
   });
 
+  describe('findForOwnership', () => {
+    it('scopes by id and userId and selects only id + userId (no relation hydration)', async () => {
+      prisma.booking.findFirst.mockResolvedValue(null);
+      await repo.findForOwnership('u1', 'b1');
+      const call = prisma.booking.findFirst.mock.calls[0][0];
+      expect(call.where).toEqual({ id: 'b1', userId: 'u1' });
+      expect(call.select).toEqual({ id: true, userId: true });
+      expect(call.include).toBeUndefined();
+    });
+  });
+
   describe('create', () => {
     const baseDto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', checklistItems: [] };
 

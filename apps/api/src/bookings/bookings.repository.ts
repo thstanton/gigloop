@@ -81,6 +81,17 @@ export class BookingsRepository {
     });
   }
 
+  // Lightweight tenancy probe (#589): the smallest query that confirms a booking belongs
+  // to this user, with no relation hydration. It still issues a real DB round-trip, so the
+  // Neon scale-to-zero compute warm-up the deep findOne incidentally provided is preserved
+  // (#612) — only the over-fetched columns/joins are dropped.
+  findForOwnership(userId: string, id: string) {
+    return this.prisma.booking.findFirst({
+      where: { id, userId },
+      select: { id: true, userId: true },
+    });
+  }
+
   // Loads everything Copy Event clones (#507): the full booking-owned Packages + their
   // PerformanceSets, the music form config (not the response), and the checklist. SKIPPED
   // items are dropped — they mirror the original gig's "not needed here" decision, and the

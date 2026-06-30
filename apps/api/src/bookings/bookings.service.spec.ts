@@ -19,6 +19,7 @@ const TX = { __tx: true } as const;
 type MockRepo = {
   findAll: jest.Mock;
   findOne: jest.Mock;
+  findForOwnership: jest.Mock;
   findOneForClone: jest.Mock;
   cloneBookingCore: jest.Mock;
   create: jest.Mock;
@@ -79,6 +80,7 @@ function makeRepo(): MockRepo {
   return {
     findAll: jest.fn(),
     findOne: jest.fn(),
+    findForOwnership: jest.fn().mockResolvedValue({ id: 'b1', userId: 'u1' }),
     findOneForClone: jest.fn(),
     cloneBookingCore: jest.fn(),
     create: jest.fn(),
@@ -594,7 +596,7 @@ describe('BookingsService', () => {
     });
 
     it('throws NotFoundException without calling update when booking is not found', async () => {
-      repo.findOne.mockResolvedValue(null);
+      repo.findForOwnership.mockResolvedValue(null);
       await expect(service.update('u1', 'missing', {})).rejects.toThrow(NotFoundException);
       expect(repo.update).not.toHaveBeenCalled();
     });
@@ -656,7 +658,7 @@ describe('BookingsService', () => {
     });
 
     it('throws NotFoundException without cancelling when booking is not found', async () => {
-      repo.findOne.mockResolvedValue(null);
+      repo.findForOwnership.mockResolvedValue(null);
       await expect(service.delete('u1', 'missing')).rejects.toThrow(NotFoundException);
       expect(repo.cancel).not.toHaveBeenCalled();
     });
@@ -731,7 +733,7 @@ describe('BookingsService', () => {
     });
 
     it('throws NotFoundException when booking is not found', async () => {
-      repo.findOne.mockResolvedValue(null);
+      repo.findForOwnership.mockResolvedValue(null);
       await expect(service.applyPackageTemplate('u1', 'missing', 'f1')).rejects.toThrow(NotFoundException);
     });
   });
@@ -788,7 +790,7 @@ describe('BookingsService', () => {
     });
 
     it('throws NotFoundException without adding when booking is not found', async () => {
-      repo.findOne.mockResolvedValue(null);
+      repo.findForOwnership.mockResolvedValue(null);
       await expect(service.addSet('u1', 'missing', { order: 1, duration: 60 })).rejects.toThrow(NotFoundException);
       expect(repo.addSet).not.toHaveBeenCalled();
     });
@@ -813,7 +815,7 @@ describe('BookingsService', () => {
     });
 
     it('throws NotFoundException when the booking is not found', async () => {
-      repo.findOne.mockResolvedValue(null);
+      repo.findForOwnership.mockResolvedValue(null);
       await expect(service.updateSet('u1', 'missing', 's1', {})).rejects.toThrow(NotFoundException);
       expect(repo.updateSet).not.toHaveBeenCalled();
     });
@@ -874,7 +876,7 @@ describe('BookingsService', () => {
     });
 
     it('throws NotFoundException when the booking is not found', async () => {
-      repo.findOne.mockResolvedValue(null);
+      repo.findForOwnership.mockResolvedValue(null);
       await expect(service.deleteSet('u1', 'missing', 's1')).rejects.toThrow(NotFoundException);
       expect(repo.deleteSet).not.toHaveBeenCalled();
     });
@@ -904,7 +906,7 @@ describe('BookingsService', () => {
     });
 
     it('throws NotFoundException when booking is not found', async () => {
-      repo.findOne.mockResolvedValue(null);
+      repo.findForOwnership.mockResolvedValue(null);
       await expect(service.getMusicFormConfig('u1', 'missing')).rejects.toThrow(NotFoundException);
       expect(musicFormRepo.findMusicFormConfig).not.toHaveBeenCalled();
     });
@@ -923,7 +925,7 @@ describe('BookingsService', () => {
     });
 
     it('throws NotFoundException when booking is not found', async () => {
-      repo.findOne.mockResolvedValue(null);
+      repo.findForOwnership.mockResolvedValue(null);
       await expect(service.upsertMusicFormConfig('u1', 'missing', dto)).rejects.toThrow(NotFoundException);
       expect(musicFormRepo.upsertMusicFormConfig).not.toHaveBeenCalled();
     });
@@ -957,7 +959,7 @@ describe('BookingsService', () => {
     });
 
     it('throws NotFoundException when booking does not exist', async () => {
-      repo.findOne.mockResolvedValue(null);
+      repo.findForOwnership.mockResolvedValue(null);
       await expect(service.getChecklist('u1', 'missing')).rejects.toThrow(NotFoundException);
       expect(repo.findChecklistItems).not.toHaveBeenCalled();
     });
@@ -1079,7 +1081,7 @@ describe('BookingsService', () => {
     });
 
     it('throws NotFoundException when the booking does not exist', async () => {
-      repo.findOne.mockResolvedValue(null);
+      repo.findForOwnership.mockResolvedValue(null);
       await expect(service.createContract('u1', 'missing')).rejects.toThrow(NotFoundException);
       expect(contractRepo.findContractTemplate).not.toHaveBeenCalled();
       expect(contractRepo.createContractRecord).not.toHaveBeenCalled();
