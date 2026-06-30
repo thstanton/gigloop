@@ -128,10 +128,11 @@ export class ChecklistRepository {
             orderBy: { createdAt: 'asc' },
           },
           invoices: {
-            // Only ISSUED, SENT, and PAID invoices satisfy the invoiceExists checklist rule.
-            // DRAFT (scratchpad) and VOID are excluded.
-            where: { status: { notIn: ['VOID', 'DRAFT'] } },
-            select: { isDeposit: true },
+            // ADR-0057 / #617: DRAFT is now projected in (with its status) so the *create* step's
+            // invoiceExists rule (includeDraft) can recognise a saved draft; the *issue* step's
+            // rule still requires a non-DRAFT status (the #585 fix). VOID never counts as created.
+            where: { status: { not: 'VOID' } },
+            select: { isDeposit: true, status: true },
           },
           contracts: {
             where: { status: { not: 'VOID' } },

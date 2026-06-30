@@ -58,6 +58,19 @@ export function resolveChecklistShortcut(
       onClick: () => h.onChecklistAction(shortcutType as ChecklistAction),
     };
   }
+  // ADR-0057 / #617: the issue step routes through the SAME create-invoice handler — it opens the
+  // saved draft on the invoice sheet so the musician issues it there (the sheet owns create→issue).
+  // Only the label differs ("Issue" vs "Create").
+  if (shortcutType === 'issue_deposit_invoice' || shortcutType === 'issue_balance_invoice') {
+    const createAction: ChecklistAction =
+      shortcutType === 'issue_deposit_invoice' ? 'create_deposit_invoice' : 'create_balance_invoice';
+    return {
+      label: retry ?? 'Issue',
+      pendingLabel: 'Issuing…',
+      pending: h.isActionPending,
+      onClick: () => h.onChecklistAction(createAction),
+    };
+  }
   if (shortcutType === 'mark_contract_signed' || shortcutType === 'mark_deposit_received') {
     return {
       label: retry ?? 'Mark done',

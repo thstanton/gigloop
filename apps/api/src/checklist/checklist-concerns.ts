@@ -35,7 +35,7 @@ const KEY_TO_CONCERN: Record<string, ReminderConcern> = {
   // the system-key authority pointing at the real goal key.)
   get_contract_signed: 'overview',
   get_deposit_paid: 'overview',
-  invoice_the_balance: 'overview',
+  get_the_balance_paid: 'overview',
   play_the_gig: 'overview',
 };
 

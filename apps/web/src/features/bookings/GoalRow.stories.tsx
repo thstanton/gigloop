@@ -179,6 +179,45 @@ export const QuoteAwaitingAcceptance: Story = {
   },
 };
 
+// ── Invoice goals (#617): create → issue → send → received, create/issue distinct CTAs ────────
+
+function depositGoal(steps: ChecklistStep[]): ChecklistItem {
+  return { ...contractGoal(steps), id: 'g-deposit', key: 'get_deposit_paid', label: 'Get the deposit paid' };
+}
+
+const createDeposit = step({ id: 's-create-dep', label: 'Create deposit invoice', order: 1, shortcutType: 'create_deposit_invoice' });
+const issueDeposit = step({ id: 's-issue-dep', label: 'Issue deposit invoice', order: 2, shortcutType: 'issue_deposit_invoice' });
+const sendDeposit = step({ id: 's-send-dep', label: 'Send deposit invoice', order: 3, shortcutType: 'send_email', shortcutTemplateType: 'deposit_invoice_cover' });
+const depositReceived = step({ id: 's-dep-recv', label: 'Deposit received', order: 4, completeMode: 'AWAITED', completedBy: 'USER' });
+
+// No invoice yet — "Create" is the active step (opens the invoice sheet to draft).
+export const DepositCreateActive: Story = {
+  args: { item: depositGoal([createDeposit, issueDeposit, sendDeposit, depositReceived]), handlers: handlers() },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('button', { name: /Create deposit invoice/ })).toBeVisible();
+    await expect(canvas.getByText('1/4')).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: /Create deposit invoice/ }));
+    await expect(args.handlers.onChecklistAction).toHaveBeenCalledWith('create_deposit_invoice');
+  },
+};
+
+// A saved draft completes Create; "Issue the invoice" becomes the active step (the #585 fix). The
+// issue CTA reuses the create-invoice handler — it opens the saved draft on the sheet to issue it.
+export const DepositIssueActive: Story = {
+  args: {
+    item: depositGoal([{ ...createDeposit, state: 'COMPLETE' }, issueDeposit, sendDeposit, depositReceived]),
+    handlers: handlers(),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('button', { name: /Issue deposit invoice/ })).toBeVisible();
+    await expect(canvas.getByText('2/4')).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: /Issue deposit invoice/ }));
+    await expect(args.handlers.onChecklistAction).toHaveBeenCalledWith('create_deposit_invoice');
+  },
+};
+
 // ── Atomic goals (no steps), unified into the same row in #610 ──────────────────────────────
 
 function atomicGoal(overrides: Partial<ChecklistItem>): ChecklistItem {

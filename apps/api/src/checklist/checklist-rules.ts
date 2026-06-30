@@ -10,7 +10,11 @@ import { isConcernComplete, CompletenessConcern } from '../bookings/booking-comp
 export type AutoCompleteRule =
   | { type: 'bookingField'; field: string; operator: 'notNull' }
   | { type: 'communicationSent'; templateTypes: string[] }
-  | { type: 'invoiceExists'; isDeposit: boolean }
+  // `includeDraft` (ADR-0057 / #617): the *create* milestone is satisfied by a draft-or-beyond
+  // invoice (a saved scratchpad advances the goal); the *issue* milestone leaves it falsy so a
+  // DRAFT does NOT satisfy it (the #585 fix — an unissued draft keeps "Issue" surfaced). VOID is
+  // excluded upstream in the context projection either way.
+  | { type: 'invoiceExists'; isDeposit: boolean; includeDraft?: boolean }
   | { type: 'musicFormResponse' }
   | { type: 'contractSigned' }
   | { type: 'completeness'; concern: CompletenessConcern };
@@ -24,7 +28,7 @@ export interface BookingContext {
   setsCount: number;
   logistics: unknown;
   communications: Array<{ status: string; template: { builtInType: string | null } | null }>;
-  invoices: Array<{ isDeposit: boolean }>;
+  invoices: Array<{ isDeposit: boolean; status: string }>;
   contracts: Array<{ status: string }>;
   musicFormResponse: { id: string } | null;
 }
@@ -61,7 +65,11 @@ export function evaluateRule(rule: AutoCompleteRule, ctx: BookingContext): boole
         (c) => c.status === 'SENT' && rule.templateTypes.includes(c.template?.builtInType ?? ''),
       );
     case 'invoiceExists':
-      return ctx.invoices.some((i) => i.isDeposit === rule.isDeposit);
+      // The create step (includeDraft) accepts any non-VOID invoice (drafts are projected in);
+      // the issue step (default) requires a non-DRAFT invoice — the #585 fix preserved.
+      return ctx.invoices.some(
+        (i) => i.isDeposit === rule.isDeposit && (rule.includeDraft === true || i.status !== 'DRAFT'),
+      );
     case 'musicFormResponse':
       return ctx.musicFormResponse !== null;
     case 'contractSigned':

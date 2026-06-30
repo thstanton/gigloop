@@ -50,7 +50,7 @@ describe('checklist concern map', () => {
         'get_the_quote_accepted',
         'get_deposit_paid',
         'get_contract_signed',
-        'invoice_the_balance',
+        'get_the_balance_paid',
         'play_the_gig',
       ].sort(alpha),
     );

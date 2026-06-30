@@ -73,14 +73,14 @@ describe('selectApplicableReminders', () => {
         'get_the_quote_accepted',
         'get_deposit_paid',
         'get_contract_signed',
-        'invoice_the_balance',
+        'get_the_balance_paid',
         'play_the_gig',
       ]);
     });
 
     it('drops past-stage Overview reminders on a READY booking, keeping the current and future stages', () => {
       // get_the_quote_accepted (PROVISIONAL) and the CONFIRMED-stage goals (get_deposit_paid,
-      // get_contract_signed) are passed by a READY booking; invoice_the_balance (READY, current)
+      // get_contract_signed) are passed by a READY booking; get_the_balance_paid (READY, current)
       // and play_the_gig (COMPLETE, future) remain.
       const out = selectApplicableReminders('overview', {
         items: [],
@@ -88,7 +88,7 @@ describe('selectApplicableReminders', () => {
         disabledKeys: new Set(),
       });
       expect(find(out, 'get_the_quote_accepted')).toBeUndefined();
-      expect(keys(out)).toEqual(['invoice_the_balance', 'play_the_gig']);
+      expect(keys(out)).toEqual(['get_the_balance_paid', 'play_the_gig']);
     });
   });
 

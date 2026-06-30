@@ -52,6 +52,15 @@ function resolveContractTemplate(items: Array<{ key: string | null }>): string {
   return hasDeposit ? 'contract_and_deposit_cover' : 'contract_cover';
 }
 
+// The shortcut for an invoiceExists step (ADR-0057 / #617). The create step (includeDraft) routes
+// to "Create"; the issue step routes to "Issue" (which opens the saved draft on the invoice sheet
+// to issue it). Kept out of deriveShortcut so its switch stays flat.
+function invoiceShortcutType(rule: Record<string, unknown>): string {
+  const noun = rule['isDeposit'] === true ? 'deposit' : 'balance';
+  const verb = rule['includeDraft'] === true ? 'create' : 'issue';
+  return `${verb}_${noun}_invoice`;
+}
+
 export function deriveShortcut(
   rule: Record<string, unknown> | null,
   items: Array<{ key: string | null }>,
@@ -68,10 +77,8 @@ export function deriveShortcut(
         shortcutTemplateType: isContractEmail ? resolveContractTemplate(items) : templateTypes[0],
       };
     }
-    case 'invoiceExists': {
-      const isDeposit = rule['isDeposit'] as boolean | undefined;
-      return { shortcutType: isDeposit ? 'create_deposit_invoice' : 'create_balance_invoice' };
-    }
+    case 'invoiceExists':
+      return { shortcutType: invoiceShortcutType(rule) };
     case 'bookingField':
       return { shortcutType: BOOKING_FIELD_SHORTCUT[rule['field'] as string] };
     case 'contractSigned':

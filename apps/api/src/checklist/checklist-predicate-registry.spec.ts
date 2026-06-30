@@ -22,6 +22,7 @@ describe('STEP_PREDICATES catalog', () => {
     // Auto-completing keys present:
     expect(STEP_PREDICATES.send_quote).toBeDefined();
     expect(STEP_PREDICATES.create_deposit_invoice).toBeDefined();
+    expect(STEP_PREDICATES.issue_deposit_invoice).toBeDefined(); // #617: the new issue milestone
     expect(STEP_PREDICATES.contract_signed).toBeDefined();
     // Manual keys (no autoCompleteRule) absent:
     expect(STEP_PREDICATES.confirm_quote).toBeUndefined();
@@ -42,12 +43,14 @@ describe('STEP_PREDICATES catalog', () => {
     // ACTION — the musician acts now:
     expect(STEP_PREDICATES.send_quote.completeMode).toBe('ACTION');
     expect(STEP_PREDICATES.create_deposit_invoice.completeMode).toBe('ACTION');
+    expect(STEP_PREDICATES.issue_deposit_invoice.completeMode).toBe('ACTION');
     expect(STEP_PREDICATES.add_venue.completeMode).toBe('ACTION');
   });
 
   it('declares the exact inputs each predicate reads', () => {
     expect(STEP_PREDICATES.send_quote.inputs).toEqual(['communications']);
     expect(STEP_PREDICATES.create_deposit_invoice.inputs).toEqual(['invoices']);
+    expect(STEP_PREDICATES.issue_deposit_invoice.inputs).toEqual(['invoices']);
     expect(STEP_PREDICATES.deposit_received.inputs).toEqual(['depositReceivedAt']);
     expect(STEP_PREDICATES.create_contract.inputs).toEqual(['contracts']); // bookingField activeContract
     expect(STEP_PREDICATES.contract_signed.inputs).toEqual(['contracts']);
@@ -78,9 +81,17 @@ describe('predicates fire on their declared input and not otherwise', () => {
     ).toBe('FAILED');
   });
 
-  it('create_deposit_invoice completes only on a deposit invoice', () => {
-    expect(STEP_PREDICATES.create_deposit_invoice.predicate(makeCtx({ invoices: [{ isDeposit: false }] }))).toBe('PENDING');
-    expect(STEP_PREDICATES.create_deposit_invoice.predicate(makeCtx({ invoices: [{ isDeposit: true }] }))).toBe('COMPLETE');
+  it('create_deposit_invoice (includeDraft) completes on a draft-or-beyond deposit invoice', () => {
+    expect(STEP_PREDICATES.create_deposit_invoice.predicate(makeCtx({ invoices: [{ isDeposit: false, status: 'ISSUED' }] }))).toBe('PENDING');
+    // #617: a saved DRAFT advances the create step.
+    expect(STEP_PREDICATES.create_deposit_invoice.predicate(makeCtx({ invoices: [{ isDeposit: true, status: 'DRAFT' }] }))).toBe('COMPLETE');
+    expect(STEP_PREDICATES.create_deposit_invoice.predicate(makeCtx({ invoices: [{ isDeposit: true, status: 'ISSUED' }] }))).toBe('COMPLETE');
+  });
+
+  it('issue_deposit_invoice excludes a DRAFT (the #585 fix) but fires on a non-draft deposit', () => {
+    // A created-but-unissued draft must keep "Issue the invoice" surfaced.
+    expect(STEP_PREDICATES.issue_deposit_invoice.predicate(makeCtx({ invoices: [{ isDeposit: true, status: 'DRAFT' }] }))).toBe('PENDING');
+    expect(STEP_PREDICATES.issue_deposit_invoice.predicate(makeCtx({ invoices: [{ isDeposit: true, status: 'ISSUED' }] }))).toBe('COMPLETE');
   });
 
   it('deposit_received completes only when depositReceivedAt is set', () => {
@@ -103,7 +114,9 @@ describe('affectedKeys (inverted index)', () => {
   it('maps an input to exactly the keys that observe it', () => {
     const invoiceKeys = affectedKeys(['invoices']);
     expect(invoiceKeys.has('create_deposit_invoice')).toBe(true);
+    expect(invoiceKeys.has('issue_deposit_invoice')).toBe(true);
     expect(invoiceKeys.has('create_balance_invoice')).toBe(true);
+    expect(invoiceKeys.has('issue_balance_invoice')).toBe(true);
     expect(invoiceKeys.has('add_venue')).toBe(false);
   });
 
