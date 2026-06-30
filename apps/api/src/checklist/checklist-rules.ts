@@ -61,14 +61,20 @@ export type InputKey =
   | 'setsCount'
   | 'logistics';
 
+// `bookingField` predicates, keyed by field — a lookup keeps evaluateRule's switch flat. Each maps
+// a booking-context field to "is it set?": `activeContract` reads the contracts relation,
+// `depositReceivedAt`/`fee` (the #618 fee precondition) read their own columns.
+const BOOKING_FIELD_PREDICATE: Record<string, (ctx: BookingContext) => boolean> = {
+  depositReceivedAt: (ctx) => ctx.depositReceivedAt !== null,
+  activeContract: (ctx) => ctx.contracts.length > 0,
+  fee: (ctx) => ctx.fee !== null,
+};
+
 /** True when the rule's success condition holds for the given booking facts. */
 export function evaluateRule(rule: AutoCompleteRule, ctx: BookingContext): boolean {
   switch (rule.type) {
     case 'bookingField':
-      if (rule.field === 'depositReceivedAt') return ctx.depositReceivedAt !== null;
-      if (rule.field === 'activeContract') return ctx.contracts.length > 0;
-      if (rule.field === 'fee') return ctx.fee !== null; // #618 fee precondition
-      return false;
+      return BOOKING_FIELD_PREDICATE[rule.field]?.(ctx) ?? false;
     case 'communicationSent':
       return ctx.communications.some(
         (c) => c.status === 'SENT' && rule.templateTypes.includes(c.template?.builtInType ?? ''),
@@ -115,13 +121,24 @@ export function evaluateRuleState(rule: AutoCompleteRule, ctx: BookingContext): 
   return 'PENDING';
 }
 
+// The inverted-index inputs each `bookingField` / `completeness` variant reads — lookups keep
+// inputsForRule's switch flat. A bookingField not listed reads the contracts relation
+// (`activeContract`).
+const BOOKING_FIELD_INPUTS: Record<string, InputKey> = {
+  depositReceivedAt: 'depositReceivedAt',
+  fee: 'fee',
+};
+const COMPLETENESS_INPUTS: Record<CompletenessConcern, InputKey[]> = {
+  venue: ['venueId'],
+  people: ['customerId'],
+  itinerary: ['setsCount', 'logistics'],
+};
+
 /** The booking-context fields this rule reads — its entry in the inverted index. */
 export function inputsForRule(rule: AutoCompleteRule): InputKey[] {
   switch (rule.type) {
     case 'bookingField':
-      if (rule.field === 'depositReceivedAt') return ['depositReceivedAt'];
-      if (rule.field === 'fee') return ['fee'];
-      return ['contracts'];
+      return [BOOKING_FIELD_INPUTS[rule.field] ?? 'contracts'];
     case 'communicationSent':
       return ['communications'];
     case 'invoiceExists':
@@ -133,8 +150,6 @@ export function inputsForRule(rule: AutoCompleteRule): InputKey[] {
     case 'customerEmail':
       return ['customerEmail'];
     case 'completeness':
-      if (rule.concern === 'venue') return ['venueId'];
-      if (rule.concern === 'people') return ['customerId'];
-      return ['setsCount', 'logistics']; // itinerary
+      return COMPLETENESS_INPUTS[rule.concern];
   }
 }
