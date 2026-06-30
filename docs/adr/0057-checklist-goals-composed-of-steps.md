@@ -1,6 +1,6 @@
 # ADR-0057 — The checklist is Goals composed of Steps (goal ⊃ step model)
 
-**Status:** accepted — supersedes parts of ADR-0052 (per-concern reminders); amends ADR-0016 (stored checklist model). Grilled from the decision record in `docs/597-checklist-questlines-grill.md` (#597).
+**Status:** accepted — supersedes parts of ADR-0052 (per-concern reminders); amends ADR-0016 (stored checklist model). Grilled from the decision record in `docs/597-checklist-questlines-grill.md` (#597). **Amended 2026-06-30** (defaults-audit grill, PRD #613) — see [Amendment (2026-06-30)](#amendment-2026-06-30--defaults-audit-prd-613).
 
 ## Context
 
@@ -102,8 +102,38 @@ BookingChecklistStep   // NEW — children of a multi-step goal
 
 ### v1 line
 
-- **Core (earns the schema change):** the goal ⊃ step structure; the collapse/expand checklist redesign that retires `BLOCKED` + "Show all"; the `completeMode` mark; goals as the toggle unit in the per-concern control. v1 core ships **MILESTONE steps only** and stays purely event-driven (like today).
-- **Increments on top:** precondition steps (share completeness predicates with the tips-widget / inline-hint system — don't fork the "is email set?" logic); time-based follow-up steps (need the scheduled cron + `completeMode`); the goal-level progress ring; a generic cross-concern continuation renderer.
+- **Core (earns the schema change):** the goal ⊃ step structure; the collapse/expand checklist redesign that retires `BLOCKED` + "Show all"; the `completeMode` mark; goals as the toggle unit in the per-concern control. v1 core ships **MILESTONE steps only** and stays purely event-driven (like today). _(Shipped in #603.)_
+- **Increments on top:** precondition steps (share completeness predicates with the tips-widget / inline-hint system — don't fork the "is email set?" logic) _(pulled forward — see the [2026-06-30 amendment](#amendment-2026-06-30--defaults-audit-prd-613))_; time-based follow-up steps (need the scheduled cron + `completeMode`); the goal-level progress ring; a generic cross-concern continuation renderer.
+
+## Amendment (2026-06-30) — defaults-audit (PRD #613)
+
+The original ADR shipped its v1 core in #603 as a faithful flat→goal port — every Goal and Step replicated the old flat behaviour, leaving the new model's headroom unused. The 2026-06-30 defaults-audit grill (PRD #613) decided the enhancement pass. It adds **no new goals**; it enriches the existing ones. Three of its decisions are model-level and reverse or pull forward choices recorded above, so they are captured here before the build slices land on them.
+
+### 1. Invoice goals move from 3 steps to 4 — reverses the #608 3-step decision
+
+The build-time decision in #608 modelled the deposit/balance invoice goals as **three** steps. This amendment makes them **four**: `create` → `issue` → `send` → `received`.
+
+- `create` completes when a **draft-or-beyond** invoice exists; `issue` keeps the **DRAFT-excluding** rule (the #585 fix); `send` completes on the cover email; `received` is an AWAITED step.
+- **Why reverse:** collapsing create+issue into one coarse step leaves a musician who has saved a draft dangling — the active step reads "Issue the invoice" with no acknowledgement the draft already exists, and the draft/issue boundary (the #585 hazard) stays implicit. Four steps let the checklist **narrate the next milestone honestly** (a saved draft advances the goal and surfaces "Issue" as what's left), which is the proactive-next-milestone direction this model is heading toward.
+- **The orchestration boundary is unchanged.** The "within-concern continuation (create → issue) is driven by the domain sheet via canonical entity state" rule (see [Orchestration boundary](#orchestration-boundary)) still holds. The invoice sheet still owns the create→issue hop; the checklist now *shadows* both as two distinct steps rather than one. No new cross-concern action ownership is introduced.
+
+### 2. PRECONDITION is activated now — not deferred
+
+The v1 line above scoped v1 to **MILESTONE steps only** and listed precondition steps as a later increment. This amendment **activates PRECONDITION now**. The original deferral conflated it with FOLLOWUP; they have different needs:
+
+- **PRECONDITION is event-driven** (auto-resolves when its predicate is true) and flows through the **existing kind-agnostic roll-up and active-step derivation** unchanged — a PENDING precondition ordered first simply becomes the derived active step, and folds away when satisfied. No evaluator surgery, no cron.
+- **FOLLOWUP remains deferred** — it is the only kind that genuinely needs the scheduled (cron) evaluation path, which is still unbuilt.
+
+So the catalogue ships **MILESTONE and PRECONDITION**; FOLLOWUP stays parked. Preconditions reuse the existing completeness predicates (e.g. `bookingField fee notNull`, the customer-email check) — they do not fork the "is X set?" logic.
+
+### 3. `completedBy` policy — "chase the money, go quiet on client-admin"
+
+A single rule governs whether an **AWAITED** step keeps surfacing on the cross-booking surfaces (Dashboard Actions + DigestNotification):
+
+- **USER-awaited surfaces** — `deposit_received`, `quote_accepted`, `balance_received`. Money and live sales are actively chased: the musician is the one who must act (record the payment, mark the sale won), so these keep prompting until resolved.
+- **CUSTOMER-awaited is omitted** — `contract_signed`, `song_requests`. The musician has done their bit and the portal auto-resolves these; nagging the client is pushy, so they stay quiet.
+
+This is not new surfacing machinery — it is the existing USER-surfaces / CUSTOMER-omitted rule (see [Surfacing](#surfacing)) stated as an explicit data-driven policy now that AWAITED steps with `completedBy: USER` exist. The policy lives in the step's `completedBy`, not in branching logic. It is recorded as a one-line note in the CONTEXT [[Step]] entry.
 
 ## Supersedes / amends
 
