@@ -16,7 +16,6 @@ function item(overrides: Partial<ChecklistItem> & { label: string }): ChecklistI
     completedBy: 'USER',
     state: 'PENDING',
     order: 0,
-    dependsOn: [],
     autoCompleteRule: null,
     requiredForStatus: null,
     completedAt: null,
@@ -82,7 +81,7 @@ export const MixedStates: Story = {
     items: [
       item({ label: 'Send quote', key: 'send_quote', state: 'COMPLETE', requiredForStatus: 'PROVISIONAL' }),
       item({ label: 'Create contract', key: 'create_contract', state: 'PENDING', requiredForStatus: 'CONFIRMED' }),
-      item({ label: 'Send contract', key: 'send_contract', state: 'BLOCKED', requiredForStatus: 'CONFIRMED' }),
+      item({ label: 'Send contract', key: 'send_contract', state: 'PENDING', requiredForStatus: 'CONFIRMED' }),
     ],
   },
   play: async ({ canvas }) => {

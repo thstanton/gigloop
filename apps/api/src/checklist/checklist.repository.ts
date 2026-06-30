@@ -238,7 +238,6 @@ export class ChecklistRepository {
   private buildGoalData(
     item: ChecklistItemSeed,
     order: number,
-    hasSteps: boolean,
     userId: string,
     bookingId: string,
     bookingDate: Date,
@@ -253,9 +252,10 @@ export class ChecklistRepository {
       key: item.key ?? null,
       label: item.label,
       completedBy: item.completedBy ?? 'USER',
-      // A multi-step goal starts PENDING (all steps PENDING → rollUp = PENDING). An atomic
-      // goal keeps the dependsOn-driven BLOCKED seed, normalised by create-time evaluate().
-      state: !hasSteps && dependsOn.length > 0 ? 'BLOCKED' : 'PENDING',
+      // ADR-0057 / #609: every goal seeds PENDING — BLOCKED retires. A multi-step goal rolls up
+      // from PENDING steps; an atomic goal never hard-blocks (inter-goal order is soft status).
+      // The create-time evaluate() then auto-completes any goal whose rule is already satisfied.
+      state: 'PENDING',
       order,
       dependsOn,
       ...(autoCompleteRule !== null
@@ -288,7 +288,7 @@ export class ChecklistRepository {
       if (steps.length > 0) {
         await client.bookingChecklistItem.create({
           data: {
-            ...this.buildGoalData(item, idx + 1, true, userId, bookingId, bookingDate, bookingCreatedAt),
+            ...this.buildGoalData(item, idx + 1, userId, bookingId, bookingDate, bookingCreatedAt),
             steps: {
               create: steps.map((s, sIdx) => this.buildStepData(s, sIdx + 1, userId, bookingId)),
             },
@@ -296,7 +296,7 @@ export class ChecklistRepository {
         });
       } else {
         steplessData.push(
-          this.buildGoalData(item, idx + 1, false, userId, bookingId, bookingDate, bookingCreatedAt),
+          this.buildGoalData(item, idx + 1, userId, bookingId, bookingDate, bookingCreatedAt),
         );
       }
     }
@@ -350,7 +350,8 @@ export class ChecklistRepository {
           key: def.key,
           label: def.label,
           completedBy: def.completedBy ?? 'USER',
-          state: steps.length === 0 && dependsOn.length > 0 ? 'BLOCKED' : 'PENDING',
+          // ADR-0057 / #609: BLOCKED retires — an on-demand-seeded goal always starts PENDING.
+          state: 'PENDING',
           order: insertOrder,
           dependsOn,
           ...(autoCompleteRule !== null

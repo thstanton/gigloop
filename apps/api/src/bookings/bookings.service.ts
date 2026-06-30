@@ -232,8 +232,8 @@ export class BookingsService {
     const newDate = new Date(dto.date);
 
     // Map source items to seeds: completion + computed due dates are dropped so
-    // seedChecklistItems resets state to PENDING/BLOCKED and recomputes due dates against
-    // the new booking — a copied COMPLETE item on a brand-new booking would be a bug.
+    // seedChecklistItems resets every goal to PENDING (ADR-0057: BLOCKED retired) and recomputes
+    // due dates against the new booking — a copied COMPLETE item on a brand-new booking would be a bug.
     const checklistSeeds: ChecklistItemSeed[] = source.checklistItems.map((item) => ({
       key: item.key,
       label: item.label,

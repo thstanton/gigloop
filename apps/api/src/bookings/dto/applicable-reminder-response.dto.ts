@@ -22,7 +22,8 @@ export class ApplicableReminderResponseDto {
 
   @ApiPropertyOptional({
     nullable: true,
-    enum: ['PENDING', 'BLOCKED', 'COMPLETE', 'FAILED', 'SKIPPED'],
+    // ADR-0057 / #609: BLOCKED retired — a goal is never blocked.
+    enum: ['PENDING', 'COMPLETE', 'FAILED', 'SKIPPED'],
     description: 'Lifecycle state of the existing item, or null when not yet seeded.',
   })
   state: string | null;

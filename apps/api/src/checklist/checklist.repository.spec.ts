@@ -374,18 +374,33 @@ describe('ChecklistRepository — seedReminderItem (Module 4)', () => {
     expect(createArg.data).toMatchObject({ key: 'confirm_quote', order: 1, bookingId: 'b1', userId: 'u1' });
   });
 
-  it('seeds a dependent item as BLOCKED and computes its due date from the rule', async () => {
+  it('seeds a goal PENDING (BLOCKED retired, ADR-0057) and computes its due date from the rule', async () => {
     prisma.bookingChecklistItem.findFirst.mockResolvedValue(null);
     prisma.bookingChecklistItem.findMany.mockResolvedValue([]);
     prisma.bookingChecklistItem.create.mockResolvedValue({ id: 'new' });
 
-    // send_thank_you dependsOn play_the_gig, dueDateRule bookingDate +7. (The old song_requests
-    // dependent retired with the goal⊃step fold — its invite→response order is intrinsic now.)
+    // send_thank_you dependsOn play_the_gig, dueDateRule bookingDate +7. Inter-goal order is now
+    // soft status — the dependency never hard-blocks, so the seed starts PENDING, not BLOCKED.
     await repo.seedReminderItem('u1', 'b1', 'send_thank_you', BOOKING_DATE, CREATED_AT);
 
     const createArg = prisma.bookingChecklistItem.create.mock.calls[0][0];
-    expect(createArg.data.state).toBe('BLOCKED');
+    expect(createArg.data.state).toBe('PENDING');
     expect(createArg.data.dueDate).toEqual(new Date('2025-06-08T19:00:00.000Z')); // +7 days
+  });
+
+  it('on-demand seeds a multi-step goal WITH its canonical steps (toggle-on from the per-concern control, #609)', async () => {
+    prisma.bookingChecklistItem.findFirst.mockResolvedValue(null);
+    prisma.bookingChecklistItem.findMany.mockResolvedValue([]);
+    prisma.bookingChecklistItem.create.mockResolvedValue({ id: 'new', key: 'get_contract_signed' });
+
+    // Turning the "Get the contract signed" goal on (RemindMeAbout) seeds the goal AND its steps —
+    // the backend owns step structure, so the goal is never seeded as a bare stepless row.
+    await repo.seedReminderItem('u1', 'b1', 'get_contract_signed', BOOKING_DATE, CREATED_AT);
+
+    const createArg = prisma.bookingChecklistItem.create.mock.calls[0][0];
+    expect(createArg.data).toMatchObject({ key: 'get_contract_signed', state: 'PENDING' });
+    const stepKeys = createArg.data.steps.create.map((s: { key: string }) => s.key);
+    expect(stepKeys).toEqual(['create_contract', 'send_contract', 'contract_signed']);
   });
 });
 

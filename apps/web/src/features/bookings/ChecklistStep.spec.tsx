@@ -14,7 +14,6 @@ const preview: ReminderPreview[] = [
 
 const def = (over: Partial<ChecklistDefaultItem> & { key: string | null; label: string }): ChecklistDefaultItem => ({
   completedBy: 'USER',
-  dependsOn: [],
   autoCompleteRule: null,
   requiredForStatus: null,
   dueDateRule: null,
@@ -27,7 +26,7 @@ const def = (over: Partial<ChecklistDefaultItem> & { key: string | null; label: 
 const checklistDefaults: ChecklistDefaultItem[] = [
   def({ key: 'send_quote', label: 'Send the quote', requiredForStatus: 'PROVISIONAL' }),
   def({ key: 'create_contract', label: 'Create the contract', requiredForStatus: 'CONFIRMED' }),
-  def({ key: 'send_contract', label: 'Send the contract', requiredForStatus: 'CONFIRMED', dependsOn: ['create_contract'] }),
+  def({ key: 'send_contract', label: 'Send the contract', requiredForStatus: 'CONFIRMED' }),
   def({ key: 'play_the_gig', label: 'Play the gig', requiredForStatus: 'COMPLETE' }),
   def({ key: null, label: 'Book parking', concern: 'venue', requiredForStatus: null }),
   def({ key: null, label: 'Charge the camera', concern: null, requiredForStatus: null }),

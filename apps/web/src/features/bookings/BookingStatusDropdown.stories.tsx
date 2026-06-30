@@ -15,7 +15,6 @@ function item(overrides: Partial<ChecklistItem> & { label: string }): ChecklistI
     completedBy: 'USER',
     state: 'PENDING',
     order: 0,
-    dependsOn: [],
     autoCompleteRule: null,
     requiredForStatus: null,
     completedAt: null,

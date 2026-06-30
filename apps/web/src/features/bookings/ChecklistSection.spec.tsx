@@ -32,7 +32,6 @@ function item(partial: Partial<ChecklistItem> & { id: string; key: string | null
     completedBy: 'USER',
     state: partial.state ?? 'PENDING',
     order: partial.order ?? 0,
-    dependsOn: [],
     autoCompleteRule: null,
     requiredForStatus: partial.requiredForStatus ?? null,
     completedAt: null,

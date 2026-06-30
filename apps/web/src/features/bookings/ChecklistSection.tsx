@@ -8,7 +8,6 @@ import {
   ChevronDown,
   ChevronUp,
   Circle,
-  Lock,
   Plus,
   Sparkles,
 } from 'lucide-react';
@@ -96,9 +95,6 @@ function ChecklistItemIcon({ state, isPlayTheGig, itemId, onToggle }: Readonly<C
       </button>
     );
   }
-  if (state === 'BLOCKED') {
-    return <Lock size={16} className="flex-shrink-0 text-muted" />;
-  }
   return (
     <button
       onClick={() => onToggle(itemId, 'COMPLETE')}
@@ -161,7 +157,6 @@ function labelClass(isDone: boolean, isFailed: boolean): string {
 function ChecklistItemRow({ item, isActionPending, onToggle, onOpenCompose, onChecklistAction, onMarkDone, onDeepLink }: Readonly<ChecklistItemRowProps>) {
   const isDone = item.state === 'COMPLETE';
   const isFailed = item.state === 'FAILED';
-  const isBlocked = item.state === 'BLOCKED';
   const isPlayTheGig = item.key === 'play_the_gig';
   const due = dueDateDisplay(item.dueDate);
 
@@ -173,17 +168,17 @@ function ChecklistItemRow({ item, isActionPending, onToggle, onOpenCompose, onCh
   }
 
   return (
-    <div className={cn('flex items-center justify-between gap-2.5 py-1.5', isBlocked && 'opacity-40')}>
+    <div className="flex items-center justify-between gap-2.5 py-1.5">
       <div className="flex items-center gap-2.5 min-w-0">
         <ChecklistItemIcon state={item.state} isPlayTheGig={isPlayTheGig} itemId={item.id} onToggle={handleToggle} />
         <div className="min-w-0">
           <span className={cn('text-sm', labelClass(isDone, isFailed))}>
             {item.label}
           </span>
-          {due && !isDone && !isBlocked && <p className={cn('text-xs', due.className)}>{due.text}</p>}
+          {due && !isDone && <p className={cn('text-xs', due.className)}>{due.text}</p>}
         </div>
       </div>
-      {!isDone && !isBlocked && (
+      {!isDone && (
         <div className="flex items-center gap-2 flex-shrink-0">
           <ChecklistItemShortcuts
             shortcutType={item.shortcutType}
@@ -299,7 +294,9 @@ export default function ChecklistSection({
     );
   }
 
-  const baseList = items.filter((i) => i.state !== 'BLOCKED' || showAllChecklist);
+  // ADR-0057 / #609: BLOCKED retired — no item is ever blocked, so nothing is hidden by state.
+  // "Show all" now governs only the lifecycle-stage filter below.
+  const baseList = items;
   if (baseList.length === 0 && !showAddItem) return null;
 
   const bookingIdx = STAGE_LIST.indexOf(bookingStatus as typeof STAGE_LIST[number]);

@@ -33,7 +33,6 @@ const { CANNED_ITEMS } = vi.hoisted(() => ({
       key: 'send_quote',
       label: 'Send the quote',
       completedBy: 'USER',
-      dependsOn: [],
       autoCompleteRule: null,
       requiredForStatus: 'PROVISIONAL',
       dueDateRule: null,

@@ -14,34 +14,6 @@ const CELEBRATORY_TITLES = [
 
 const TRANSITION_STATUSES = ['PROVISIONAL', 'CONFIRMED', 'READY', 'COMPLETE'] as const;
 
-// A dependency stops blocking once it is COMPLETE or SKIPPED (or absent). Mirrors the
-// server's isDepSatisfied (checklist-evaluator.service.ts).
-function isDepSatisfied(depKey: string, stateByKey: Map<string, ChecklistItem['state']>): boolean {
-  const s = stateByKey.get(depKey);
-  return s === undefined || s === 'COMPLETE' || s === 'SKIPPED';
-}
-
-/**
- * Optimistic, structural dependency propagation: after a toggle flips one item, recompute
- * each non-terminal item's BLOCKED↔PENDING state so dependents unblock instantly without a
- * refetch. We only touch the BLOCKED↔PENDING axis — never COMPLETE/SKIPPED/FAILED (terminal;
- * the server's computeUpdates skips them too) and never auto-complete a ruled item (rule
- * evaluation needs booking context only the server has). The server response then settles any
- * rule-driven COMPLETE in the same round-trip. A single pass suffices: an item going
- * BLOCKED→PENDING does not itself satisfy a dependency, so it cannot cascade further.
- */
-export function propagateBlocking(items: ChecklistItem[]): ChecklistItem[] {
-  const stateByKey = new Map<string, ChecklistItem['state']>();
-  for (const it of items) if (it.key) stateByKey.set(it.key, it.state);
-  return items.map((it) => {
-    if (it.state === 'COMPLETE' || it.state === 'SKIPPED' || it.state === 'FAILED') return it;
-    if (it.dependsOn.length === 0) return it;
-    const blocked = it.dependsOn.some((dep) => !isDepSatisfied(dep, stateByKey));
-    const next: ChecklistItem['state'] = blocked ? 'BLOCKED' : 'PENDING';
-    return next === it.state ? it : { ...it, state: next };
-  });
-}
-
 function isChecklistCompleteFor(checklist: ChecklistItem[], status: BookingStatus): boolean {
   const items = checklist.filter((i) => i.requiredForStatus === status);
   return items.length > 0 && items.every((i) => i.state === 'COMPLETE');
@@ -96,9 +68,9 @@ export function useBookingChecklist(
       const seq = ++toggleSeq.current;
       queryClient.setQueryData<ChecklistItem[]>(['bookingChecklist', bookingId], (old) => {
         if (!old) return [];
-        const toggled = old.map((item) => (item.id === itemId ? { ...item, state } : item));
-        // Propagate the unblock/block to dependents so the cascade feels instant.
-        return propagateBlocking(toggled);
+        // ADR-0057 / #609: BLOCKED retired — no dependency propagation. The toggled item flips
+        // optimistically; the server response settles any rule-driven roll-up in the same round-trip.
+        return old.map((item) => (item.id === itemId ? { ...item, state } : item));
       });
       return { previous, seq };
     },

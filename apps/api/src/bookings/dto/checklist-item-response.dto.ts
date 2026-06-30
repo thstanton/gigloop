@@ -56,14 +56,14 @@ export class BookingChecklistItemResponseDto {
   @ApiProperty({ enum: ['USER', 'CUSTOMER', 'BAND_MEMBER'] })
   completedBy: string;
 
-  @ApiProperty({ enum: ['PENDING', 'BLOCKED', 'COMPLETE', 'FAILED', 'SKIPPED'] })
+  // ADR-0057 / #609: BLOCKED retires from the surfaced contract. The active step is derived
+  // (first non-terminal), intra-goal order is intrinsic and inter-goal order is soft status —
+  // nothing the evaluator emits is ever BLOCKED. (Legacy DB rows are normalised on next evaluate.)
+  @ApiProperty({ enum: ['PENDING', 'COMPLETE', 'FAILED', 'SKIPPED'] })
   state: string;
 
   @ApiProperty()
   order: number;
-
-  @ApiProperty({ type: [String] })
-  dependsOn: string[];
 
   @ApiPropertyOptional({ nullable: true, type: Object })
   autoCompleteRule: Record<string, unknown> | null;

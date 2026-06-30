@@ -21,8 +21,8 @@ import type { ApplicableReminder, BookingStatus } from '@/types/api';
 //
 // Design (prototype verdict, #556): a "Remind me about" list. Each row names the booking status
 // the work is done *during* — coaching the lifecycle vocabulary — in that status's colour while
-// on, dimmed while off. Lifecycle state (COMPLETE/BLOCKED/FAILED) is deliberately NOT shown:
-// that is the checklist's job; this control is on/off only.
+// on, dimmed while off. Lifecycle state (COMPLETE/FAILED) is deliberately NOT shown: that is the
+// checklist's job; this control is on/off only. Rows are Goals, never their steps (ADR-0057 #609).
 
 type RequiredStatus = ApplicableReminder['requiredForStatus'];
 

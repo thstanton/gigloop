@@ -35,7 +35,7 @@ export interface ApplicableReminder {
   on: boolean;
   source: 'system' | 'custom';
   // Lifecycle state of the existing item, or null when not yet seeded. Lets the
-  // control show COMPLETE/BLOCKED/FAILED *within* the "on" state.
+  // control show COMPLETE/FAILED *within* the "on" state (BLOCKED retired, ADR-0057).
   state: string | null;
   requiredForStatus: string | null;
   // The auto-complete *condition* (the "when …" tail) for reminders whose resolution isn't obvious

@@ -244,7 +244,9 @@ export interface Contract {
   signedAt: string | null;
 }
 
-export type ChecklistItemState = 'PENDING' | 'BLOCKED' | 'COMPLETE' | 'FAILED' | 'SKIPPED';
+// ADR-0057 / #609: BLOCKED retires. The active step is derived (first non-terminal), intra-goal
+// order is intrinsic and inter-goal order is soft status — nothing produces BLOCKED any more.
+export type ChecklistItemState = 'PENDING' | 'COMPLETE' | 'FAILED' | 'SKIPPED';
 
 // A step's state never includes SKIPPED (the opt-out lives on the goal) — ADR-0057.
 export type ChecklistStepState = 'PENDING' | 'COMPLETE' | 'FAILED';
@@ -277,7 +279,6 @@ export interface ChecklistItem {
   completedBy: 'USER' | 'CUSTOMER' | 'BAND_MEMBER';
   state: ChecklistItemState;
   order: number;
-  dependsOn: string[];
   autoCompleteRule: Record<string, unknown> | null;
   requiredForStatus: 'PROVISIONAL' | 'CONFIRMED' | 'READY' | 'COMPLETE' | null;
   completedAt: string | null;
@@ -663,7 +664,8 @@ export interface ChecklistDefaultItem {
   key: string | null;
   label: string;
   completedBy: 'USER' | 'CUSTOMER' | 'BAND_MEMBER';
-  dependsOn: string[];
+  // ADR-0057 / #609: `dependsOn` retired from the frontend contract. The create form chooses goals
+  // by key; the backend owns step structure and the soft after-clause reads the server catalog.
   autoCompleteRule: Record<string, unknown> | null;
   requiredForStatus: 'PROVISIONAL' | 'CONFIRMED' | 'READY' | 'COMPLETE' | null;
   dueDateRule: DueDateRule | null;
