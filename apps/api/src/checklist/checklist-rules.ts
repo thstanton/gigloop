@@ -16,6 +16,9 @@ export type AutoCompleteRule =
   // excluded upstream in the context projection either way.
   | { type: 'invoiceExists'; isDeposit: boolean; includeDraft?: boolean }
   | { type: 'musicFormResponse' }
+  // #533 / #630: the musician has *published* the music form (MusicFormConfig.publishedAt set).
+  // Auto-completes the `set_up_and_publish` step; reverts to PENDING on un-publish (publishedAt null).
+  | { type: 'musicFormPublished' }
   | { type: 'contractSigned' }
   // PRECONDITION predicate (ADR-0057 / #618): the booking's customer has an email address — the
   // prerequisite for any emailing goal. `bookingField fee notNull` covers the other precondition
@@ -37,6 +40,8 @@ export interface BookingContext {
   invoices: Array<{ isDeposit: boolean; status: string }>;
   contracts: Array<{ status: string }>;
   musicFormResponse: { id: string } | null;
+  // #533 / #630: whether the booking's music form is published (config exists AND publishedAt set).
+  musicFormPublished: boolean;
 }
 
 /** The terminal/non-terminal outcome a single rule (or step) evaluates to. */
@@ -54,6 +59,7 @@ export type InputKey =
   | 'contracts'
   | 'depositReceivedAt'
   | 'musicFormResponse'
+  | 'musicFormPublished'
   | 'venueId'
   | 'customerId'
   | 'customerEmail'
@@ -87,6 +93,8 @@ export function evaluateRule(rule: AutoCompleteRule, ctx: BookingContext): boole
       );
     case 'musicFormResponse':
       return ctx.musicFormResponse !== null;
+    case 'musicFormPublished':
+      return ctx.musicFormPublished;
     case 'contractSigned':
       return ctx.contracts.some((c) => c.status === 'SIGNED');
     case 'customerEmail':
@@ -145,6 +153,8 @@ export function inputsForRule(rule: AutoCompleteRule): InputKey[] {
       return ['invoices'];
     case 'musicFormResponse':
       return ['musicFormResponse'];
+    case 'musicFormPublished':
+      return ['musicFormPublished'];
     case 'contractSigned':
       return ['contracts'];
     case 'customerEmail':

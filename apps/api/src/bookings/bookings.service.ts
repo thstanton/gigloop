@@ -87,6 +87,8 @@ export function deriveShortcut(
       return { shortcutType: 'mark_contract_signed' };
     case 'customerEmail':
       return { shortcutType: 'add_email' }; // #618 → routes to the booking's People
+    case 'musicFormPublished':
+      return { shortcutType: 'set_up_and_publish_music' }; // #533/#630 → opens the music form editor
     default:
       return {};
   }

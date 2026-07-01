@@ -361,7 +361,20 @@ export const CHECKLIST_DEFAULTS: ChecklistDefaultItem[] = [
     requiredForStatus: 'READY',
     dueDateRule: { basis: 'bookingDate', offsetDays: -30 },
     steps: [
-      // PRECONDITION (#618): emailing the music-form invite needs the client's email. No fee
+      // #533 / #630: set up and publish the form first — this makes it client-visible and mirrors
+      // the invoice create → issue → send shape. Ordered before `add_email_music` because
+      // publishing needs no client email (only *sending the invite* does), so the precondition
+      // gates the invite, not the whole goal. Auto-completes on publish; reverts on un-publish.
+      {
+        key: 'set_up_and_publish',
+        label: 'Set up and publish the music form',
+        kind: 'MILESTONE',
+        completeMode: 'ACTION',
+        completedBy: 'USER',
+        autoCompleteRule: { type: 'musicFormPublished' },
+      },
+      // PRECONDITION (#618): emailing the music-form invite needs the client's email. Ordered
+      // immediately before the invite (after publish) so it gates the send, not publication. No fee
       // precondition — the music form is not part of the deal/billing spine.
       {
         key: 'add_email_music',

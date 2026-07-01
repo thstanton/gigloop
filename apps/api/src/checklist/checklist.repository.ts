@@ -144,6 +144,8 @@ export class ChecklistRepository {
             select: { status: true },
           },
           musicFormResponse: { select: { id: true } },
+          // #533 / #630: publication drives the set_up_and_publish step's musicFormPublished rule.
+          musicFormConfig: { select: { publishedAt: true } },
         },
       }),
     ]);
@@ -154,6 +156,7 @@ export class ChecklistRepository {
           // Flatten to the BookingContext shape the rules read (#618).
           fee: raw.fee != null ? String(raw.fee) : null,
           customerEmail: raw.customer?.email ?? null,
+          musicFormPublished: raw.musicFormConfig?.publishedAt != null,
         }
       : null;
     return { items, booking };

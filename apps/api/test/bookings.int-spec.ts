@@ -548,12 +548,17 @@ describe('Booking lifecycle (integration)', () => {
       await prisma.booking.delete({ where: { id: bookingId } });
     });
 
+    const publishStep = () =>
+      prisma.bookingChecklistStep.findFirst({ where: { bookingId, key: 'set_up_and_publish' } });
+
     it('a turned-on form starts as a draft (hidden until published)', async () => {
       const res = await request(app.getHttpServer()).get(`/api/bookings/${bookingId}`);
       expect(res.body.portalVisibility.musicForm).toEqual({ visible: false, reason: 'until_published' });
+      // #630: the gather_song_requests goal carries the set_up_and_publish step, PENDING while draft.
+      expect((await publishStep())?.state).toBe('PENDING');
     });
 
-    it('publishing sets publishedAt and makes the form visible', async () => {
+    it('publishing sets publishedAt, makes the form visible, and completes the publish step (#630)', async () => {
       const publish = await request(app.getHttpServer())
         .post(`/api/bookings/${bookingId}/music-form-config/publish`)
         .send({ keyMoments: [], enabledGenres: ['Pop', 'Jazz'] });
@@ -564,9 +569,11 @@ describe('Booking lifecycle (integration)', () => {
 
       const res = await request(app.getHttpServer()).get(`/api/bookings/${bookingId}`);
       expect(res.body.portalVisibility.musicForm).toEqual({ visible: true });
+      // #630: the set_up_and_publish step auto-completes on the musicFormPublished rule.
+      expect((await publishStep())?.state).toBe('COMPLETE');
     });
 
-    it('un-publishing returns it to draft (hidden) without deleting it', async () => {
+    it('un-publishing returns it to draft, hides it, and reverts the publish step (#630)', async () => {
       const unpublish = await request(app.getHttpServer())
         .post(`/api/bookings/${bookingId}/music-form-config/unpublish`)
         .send({});
@@ -577,6 +584,8 @@ describe('Booking lifecycle (integration)', () => {
 
       const res = await request(app.getHttpServer()).get(`/api/bookings/${bookingId}`);
       expect(res.body.portalVisibility.musicForm).toEqual({ visible: false, reason: 'until_published' });
+      // #630: un-publishing reverts the step to PENDING (reversible).
+      expect((await publishStep())?.state).toBe('PENDING');
     });
   });
 });

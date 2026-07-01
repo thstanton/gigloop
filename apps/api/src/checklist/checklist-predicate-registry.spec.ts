@@ -15,6 +15,7 @@ function makeCtx(overrides: Partial<BookingContext> = {}): BookingContext {
     invoices: [],
     contracts: [],
     musicFormResponse: null,
+    musicFormPublished: false,
     ...overrides,
   };
 }
@@ -26,6 +27,7 @@ describe('STEP_PREDICATES catalog', () => {
     expect(STEP_PREDICATES.create_deposit_invoice).toBeDefined();
     expect(STEP_PREDICATES.issue_deposit_invoice).toBeDefined(); // #617: the new issue milestone
     expect(STEP_PREDICATES.contract_signed).toBeDefined();
+    expect(STEP_PREDICATES.set_up_and_publish).toBeDefined(); // #533/#630: the music publish milestone
     // Manual keys (no autoCompleteRule) absent:
     expect(STEP_PREDICATES.confirm_quote).toBeUndefined();
     expect(STEP_PREDICATES.play_the_gig).toBeUndefined();
@@ -49,6 +51,12 @@ describe('STEP_PREDICATES catalog', () => {
     expect(STEP_PREDICATES.create_deposit_invoice.completeMode).toBe('ACTION');
     expect(STEP_PREDICATES.issue_deposit_invoice.completeMode).toBe('ACTION');
     expect(STEP_PREDICATES.add_venue.completeMode).toBe('ACTION');
+    expect(STEP_PREDICATES.set_up_and_publish.completeMode).toBe('ACTION'); // #533/#630: musician publishes now
+  });
+
+  it('registers set_up_and_publish as a MILESTONE reading musicFormPublished (#533/#630)', () => {
+    expect(STEP_PREDICATES.set_up_and_publish.kind).toBe('MILESTONE');
+    expect(STEP_PREDICATES.set_up_and_publish.inputs).toEqual(['musicFormPublished']);
   });
 
   it('declares the exact inputs each predicate reads', () => {
@@ -96,6 +104,15 @@ describe('predicates fire on their declared input and not otherwise', () => {
     // A created-but-unissued draft must keep "Issue the invoice" surfaced.
     expect(STEP_PREDICATES.issue_deposit_invoice.predicate(makeCtx({ invoices: [{ isDeposit: true, status: 'DRAFT' }] }))).toBe('PENDING');
     expect(STEP_PREDICATES.issue_deposit_invoice.predicate(makeCtx({ invoices: [{ isDeposit: true, status: 'ISSUED' }] }))).toBe('COMPLETE');
+  });
+
+  it('set_up_and_publish completes only when the music form is published, and reverts otherwise (#533/#630)', () => {
+    // Draft (on but not published) → still PENDING; un-publishing reverts it here too.
+    expect(STEP_PREDICATES.set_up_and_publish.predicate(makeCtx({ musicFormPublished: false }))).toBe('PENDING');
+    // An undeclared input (venueId) does not move it.
+    expect(STEP_PREDICATES.set_up_and_publish.predicate(makeCtx({ venueId: 'v1' }))).toBe('PENDING');
+    // Its declared input does.
+    expect(STEP_PREDICATES.set_up_and_publish.predicate(makeCtx({ musicFormPublished: true }))).toBe('COMPLETE');
   });
 
   it('deposit_received completes only when depositReceivedAt is set', () => {
