@@ -27,6 +27,14 @@ const bookingFixture = {
   id: 'b1', fee: '2000.00', sets: [], packages: [],
 };
 
+// The backing INVOICE document carries the backend portal-visibility verdict; the invoice row
+// reads it (ADR-0054). SENT/PAID invoices are visible on the portal; a DRAFT has no document.
+const invoiceDoc = (invoiceId: string, visible: boolean) => ({
+  id: `doc-${invoiceId}`, createdAt: '2030-04-01T10:00:00Z', type: 'INVOICE',
+  url: `https://example.com/${invoiceId}.pdf`, invoiceId, contractStatus: null, name: null,
+  portalVisibility: visible ? { visible: true } : { visible: false, reason: 'until_sent' },
+});
+
 const baseHandlers = [
   http.get('/api/bookings/b1', () => HttpResponse.json(bookingFixture)),
   http.get('/api/bookings/b1/documents', () => HttpResponse.json([])),
@@ -63,11 +71,20 @@ export const DepositDraftOnly: Story = {
 
 export const DepositSentBalanceDraft: Story = {
   parameters: {
-    msw: { handlers: [...baseHandlers, http.get('/api/bookings/b1/invoices', () => HttpResponse.json([depositSent, balanceDraft]))] },
+    msw: {
+      handlers: [
+        http.get('/api/bookings/b1', () => HttpResponse.json(bookingFixture)),
+        http.get('/api/bookings/b1/documents', () => HttpResponse.json([invoiceDoc('inv2', true)])),
+        http.get('/api/bookings/b1/invoices', () => HttpResponse.json([depositSent, balanceDraft])),
+      ],
+    },
   },
   play: async ({ canvas }) => {
     await expect(canvas.findAllByText('Balance')).resolves.toSatisfy((els: HTMLElement[]) => els.length > 0);
     await expect(canvas.findByText('Sent')).resolves.toBeVisible();
+    // The sent invoice is live on the portal; the draft balance is not yet.
+    await expect(canvas.findByText('Visible on Client Portal')).resolves.toBeVisible();
+    await expect(canvas.findByText('Not visible until sent')).resolves.toBeVisible();
   },
 };
 

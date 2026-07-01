@@ -76,6 +76,10 @@ describe('isPortalVisibleDocument', () => {
   it('always shows non-contract, non-invoice documents (e.g. song lists)', () => {
     expect(isPortalVisibleDocument({ type: 'SONG_LIST' }, activeContractId)).toBe(true);
   });
+
+  it('never shows UPLOAD documents — they are private musician paperwork (#579)', () => {
+    expect(isPortalVisibleDocument({ type: 'UPLOAD' }, activeContractId)).toBe(false);
+  });
 });
 
 describe('PortalService.signContract (integration)', () => {
@@ -219,5 +223,158 @@ describe('PortalService.submitMusicForm (integration)', () => {
     expect(Buffer.isBuffer(buffer)).toBe(true);
     expect(buffer.length).toBeGreaterThan(0);
     expect(buffer.slice(0, 4).toString()).toBe('%PDF');
+  });
+});
+
+// #579: the portal token stays valid on a cancelled booking, so the signing endpoints themselves —
+// not just the CTA — must refuse. Guards the real leak: a stale tab / direct POST signing a
+// cancelled gig's contract.
+describe('PortalService contract-signing guards on a cancelled booking (#579)', () => {
+  function makeService(bookingOver: Record<string, unknown>) {
+    const booking = {
+      id: bookingId,
+      userId,
+      status: 'CANCELLED',
+      customer: { name: 'Test Client' },
+      contracts: [{ id: contractId, status: 'SENT', content: { type: 'doc', content: [] } }],
+      ...bookingOver,
+    };
+    return new PortalService(
+      { findBookingByToken: jest.fn().mockResolvedValue(booking) } as unknown as import('./portal.repository').PortalRepository,
+      { findByUserId: jest.fn() } as unknown as import('../user-profile/public-profile.repository').PublicProfileRepository,
+      {} as unknown as import('../songs/songs.repository').SongsRepository,
+      {} as unknown as import('../invoices/invoices.repository').InvoicesRepository,
+      { send: jest.fn() } as unknown as import('../mail/mail.service').MailService,
+      {} as unknown as DocumentsService,
+      {} as unknown as StorageService,
+      {} as unknown as import('../checklist/checklist-evaluator.service').ChecklistEvaluatorService,
+      { markContractSigned: jest.fn() } as unknown as import('../bookings/contract.repository').ContractRepository,
+      {} as unknown as import('../bookings/music-form-config.repository').MusicFormConfigRepository,
+    );
+  }
+
+  it('getContractContent rejects a SENT contract on a cancelled booking', async () => {
+    await expect(makeService({}).getContractContent(token)).rejects.toThrow('Contract not found');
+  });
+
+  it.each(['SENT', 'SIGNED'])('signContract rejects a %s contract on a cancelled booking', async (status) => {
+    const service = makeService({ contracts: [{ id: contractId, status, content: { type: 'doc', content: [] } }] });
+    await expect(service.signContract(token, 'sig', { ip: '127.0.0.1' } as Request)).rejects.toThrow(
+      'Contract not found',
+    );
+  });
+});
+
+// Regression net for the ADR-0054 refactor (#578): getBookingData's contract + music-form
+// visibility outputs must not change when the derivation is routed through the authority.
+describe('PortalService.getBookingData (visibility outputs)', () => {
+  function makeBookingData(over: Record<string, unknown> = {}) {
+    return {
+      id: bookingId,
+      userId,
+      date: new Date('2026-08-15'),
+      fee: 1000,
+      title: 'Wedding',
+      status: 'PROVISIONAL',
+      customer: { name: 'Test Client', greetingName: null },
+      venue: { name: 'Test Venue' },
+      sets: [],
+      packages: [],
+      invoices: [],
+      contracts: [],
+      documents: [],
+      musicFormConfig: null,
+      musicFormResponse: null,
+      ...over,
+    };
+  }
+
+  function makeService(bookingOver: Record<string, unknown> = {}) {
+    return new PortalService(
+      { findBookingByToken: jest.fn().mockResolvedValue(makeBookingData(bookingOver)) } as unknown as import('./portal.repository').PortalRepository,
+      { findByUserId: jest.fn().mockResolvedValue(publicProfile) } as unknown as import('../user-profile/public-profile.repository').PublicProfileRepository,
+      {} as unknown as import('../songs/songs.repository').SongsRepository,
+      {} as unknown as import('../invoices/invoices.repository').InvoicesRepository,
+      {} as unknown as import('../mail/mail.service').MailService,
+      {} as unknown as DocumentsService,
+      { getPublicUrl: jest.fn().mockReturnValue('https://example.com/doc.pdf') } as unknown as StorageService,
+      {} as unknown as import('../checklist/checklist-evaluator.service').ChecklistEvaluatorService,
+      {} as unknown as import('../bookings/contract.repository').ContractRepository,
+      {} as unknown as import('../bookings/music-form-config.repository').MusicFormConfigRepository,
+    );
+  }
+
+  it.each([
+    ['DRAFT', null],
+    ['SENT', 'SENT'],
+    ['SIGNED', 'SIGNED'],
+    ['VOID', null],
+  ])('exposes contractStatus for a %s contract as %s', async (status, expected) => {
+    const service = makeService({ contracts: [{ id: contractId, status }] });
+    const result = await service.getBookingData(token);
+    expect(result.contractStatus).toBe(expected);
+  });
+
+  it('exposes contractStatus null when there is no contract', async () => {
+    const service = makeService({ contracts: [] });
+    const result = await service.getBookingData(token);
+    expect(result.contractStatus).toBeNull();
+  });
+
+  it('sets hasMusicForm true when a music form config exists, false otherwise', async () => {
+    const on = await makeService({ musicFormConfig: { id: 'mfc1' } }).getBookingData(token);
+    const off = await makeService({ musicFormConfig: null }).getBookingData(token);
+    expect(on.hasMusicForm).toBe(true);
+    expect(off.hasMusicForm).toBe(false);
+  });
+
+  // #579 leak fixes: UPLOAD documents are never client-visible, and a cancelled booking hides the
+  // whole contract concern (status, signed download, contract doc row) while keeping other docs.
+  function doc(over: Record<string, unknown>) {
+    return { id: 'd', storageKey: 'k', createdAt: new Date('2026-07-01'), ...over };
+  }
+  const contractDoc = doc({ id: 'dc', type: 'CONTRACT', contractId: 'c1' });
+  const invoiceDoc = doc({
+    id: 'di',
+    type: 'INVOICE',
+    invoice: { status: 'SENT', invoiceNumber: 'INV-1', isDeposit: false },
+  });
+  const uploadDoc = doc({ id: 'du', type: 'UPLOAD' });
+
+  it('excludes UPLOAD documents from the portal, keeping other visible documents (#579)', async () => {
+    const service = makeService({ documents: [uploadDoc, invoiceDoc] });
+    const result = await service.getBookingData(token);
+    const types = result.documents.map((d) => d.type);
+    expect(types).toEqual(['INVOICE']);
+  });
+
+  it.each(['SENT', 'SIGNED'])(
+    'hides the whole contract concern on a cancelled booking with a %s contract (#579)',
+    async (contractStatus) => {
+      const service = makeService({
+        status: 'CANCELLED',
+        contracts: [{ id: 'c1', status: contractStatus }],
+        documents: [contractDoc, invoiceDoc],
+      });
+      const result = await service.getBookingData(token);
+
+      expect(result.contractStatus).toBeNull();
+      expect(result.signedContractUrl).toBeNull();
+      // Contract doc row is dropped; the unrelated invoice document is untouched.
+      expect(result.documents.map((d) => d.type)).toEqual(['INVOICE']);
+    },
+  );
+
+  it('keeps the contract concern visible on a non-cancelled booking with a SENT contract', async () => {
+    const service = makeService({
+      status: 'PROVISIONAL',
+      contracts: [{ id: 'c1', status: 'SENT' }],
+      documents: [contractDoc, invoiceDoc],
+    });
+    const result = await service.getBookingData(token);
+
+    expect(result.contractStatus).toBe('SENT');
+    expect(result.signedContractUrl).not.toBeNull();
+    expect(result.documents.map((d) => d.type)).toEqual(['CONTRACT', 'INVOICE']);
   });
 });

@@ -316,6 +316,25 @@ describe('BookingsService', () => {
       const result = await service.findOne('u1', 'b1');
       expect(result.status).toBe(BookingStatus.CANCELLED);
     });
+
+    // ADR-0054 / #579: the admin indicator reads the same authority as the portal. A cancelled
+    // booking hides the whole contract concern ("Not visible — cancelled") while the music-form
+    // concern is unchanged by cancellation — proving buildPortalVisibility feeds booking.status
+    // through, not just that the authority works in isolation.
+    it('maps a cancelled booking to a cancelled contract verdict, music form unchanged', async () => {
+      repo.findOne.mockResolvedValue({
+        ...booking,
+        status: BookingStatus.CANCELLED,
+        contracts: [
+          { id: 'c1', status: 'SENT', createdAt: new Date(), updatedAt: new Date(), content: null, signedAt: null },
+        ],
+        musicFormConfig: { id: 'mfc1' },
+        musicFormResponse: null,
+      });
+      const result = await service.findOne('u1', 'b1');
+      expect(result.portalVisibility.contract).toEqual({ visible: false, reason: 'cancelled' });
+      expect(result.portalVisibility.musicForm).toEqual({ visible: true });
+    });
   });
 
   describe('create', () => {

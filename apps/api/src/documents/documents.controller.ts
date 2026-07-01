@@ -45,6 +45,7 @@ export class DocumentsController {
       invoiceId: d.invoiceId ?? null,
       contractStatus: d.type === 'CONTRACT' ? (d.contract?.status ?? null) : null,
       name: d.name ?? null,
+      portalVisibility: d.portalVisibility,
     }));
   }
 
@@ -91,6 +92,8 @@ export class DocumentsController {
       invoiceId: null,
       contractStatus: null,
       name: doc.name ?? null,
+      // A freshly uploaded document is always UPLOAD — private paperwork, never client-visible.
+      portalVisibility: { visible: false, reason: 'not_shared' },
     };
   }
 

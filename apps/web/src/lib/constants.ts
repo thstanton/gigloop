@@ -3,7 +3,7 @@ import {
   GlassWater, Utensils, Moon, Briefcase, Music2, Sparkles, Radio, Headphones,
   Volume2, Users, Clock, Shirt, Sofa, type LucideIcon,
 } from 'lucide-react';
-import type { BookingStatus, EventType, ReminderConcern, SongGenre } from '@/types/api';
+import type { BookingStatus, EventType, PortalVisibilityReason, ReminderConcern, SongGenre } from '@/types/api';
 
 export type ContactPrimaryRole = 'CUSTOMER' | 'VENUE' | 'BOOKING_AGENT';
 
@@ -199,4 +199,14 @@ export const REMINDER_CONCERN_LABELS: Record<ReminderConcern, string> = {
   venue: 'Venue',
   itinerary: 'Itinerary',
   music: 'Music',
+};
+
+// The muted "Not visible …" hint copy for each portal-visibility ReasonCode (ADR-0054). The API
+// returns the stable ReasonCode; this is the only place the English lives. The visible state needs
+// no map — it is always "Visible on Client Portal".
+export const PORTAL_VISIBILITY_REASON_COPY: Record<PortalVisibilityReason, string> = {
+  until_sent: 'Not visible until sent',
+  voided:     'Not visible — voided',
+  not_shared: 'Not visible to client',
+  cancelled:  'Not visible — cancelled',
 };

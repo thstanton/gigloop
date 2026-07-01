@@ -1,6 +1,7 @@
 import { Download, Eye, FileText, Pencil, Plus, Send } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { GhostButton } from '@/components/common/GhostButton';
+import { PortalVisibility } from '@/components/common/PortalVisibility';
 import { RowActions } from '@/components/common/RowActions';
 import type { RowAction } from '@/components/common/RowActions';
 import { cn } from '@/lib/utils';
@@ -128,6 +129,8 @@ export default function ContractCard({
   const status = contract?.status ?? null;
   const isVoid = status === 'VOID';
   const isEmpty = !contract;
+  // ADR-0054: the contract concern's portal-visibility verdict (null when there is no contract yet).
+  const portalVisibility = booking.portalVisibility.contract;
   const contractDoc = documents.find((d) => d.type === 'CONTRACT' && d.contractStatus !== 'VOID');
   const contractDate = contract ? getContractDate(contract, status) : null;
 
@@ -158,6 +161,11 @@ export default function ContractCard({
                 {CONTRACT_PILL_LABELS[status ?? ''] ?? status}
               </span>
             </div>
+            {portalVisibility && (
+              <div className="mt-1.5">
+                <PortalVisibility {...portalVisibility} />
+              </div>
+            )}
           </div>
           {actions && (
             <div className="flex items-center gap-2 flex-shrink-0">

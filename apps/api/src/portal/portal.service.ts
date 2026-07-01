@@ -9,6 +9,12 @@ import { MailService } from '../mail/mail.service';
 import { DocumentsService } from '../documents/documents.service';
 import { StorageService } from '../storage/storage.service';
 import { ChecklistEvaluatorService } from '../checklist/checklist-evaluator.service';
+import {
+  resolveContractVisibility,
+  resolveMusicFormVisibility,
+  resolveDocumentVisibility,
+  type ContractStatus,
+} from './portal-visibility';
 import type { Request } from 'express';
 import type { SubmitMusicFormDto } from './dto/submit-music-form.dto';
 
@@ -77,24 +83,19 @@ function labelDocument(doc: {
   return doc.invoice?.isDeposit ? `Deposit invoice${num}` : `Invoice${num}`;
 }
 
-// An invoice PDF is stored as a Document at issue time, but the client should only see it once
-// it has actually been delivered (SENT) or settled (PAID) — never an ISSUED-but-unsent invoice
-// they were never shown, nor a VOID one that has been superseded.
-const PORTAL_VISIBLE_INVOICE_STATUSES = new Set(['SENT', 'PAID']);
-
 /**
- * Decide whether a stored Document should appear on the client portal (ADR-0031: portal
- * visibility is driven by source truth). CONTRACT documents are limited to the active contract
- * so superseded re-sends drop off; INVOICE documents are gated on their invoice's delivery
- * status; everything else (e.g. SONG_LIST) is always shown.
+ * Whether a stored Document should appear on the client portal — the boolean projection of the
+ * shared per-document authority (`resolveDocumentVisibility`, #580), so the portal filter and the
+ * admin per-row indicator can never disagree (ADR-0054). UPLOADs are never client-visible;
+ * CONTRACT is limited to the active contract (superseded copies drop off); INVOICE is gated on
+ * delivery status; a cancelled booking hides the contract concern entirely (#579).
  */
 export function isPortalVisibleDocument(
   doc: { type: string; contractId?: string | null; invoice?: { status: string } | null },
   activeContractId: string | null,
+  bookingCancelled = false,
 ): boolean {
-  if (doc.type === 'CONTRACT') return doc.contractId === activeContractId;
-  if (doc.type === 'INVOICE') return !!doc.invoice && PORTAL_VISIBLE_INVOICE_STATUSES.has(doc.invoice.status);
-  return true;
+  return resolveDocumentVisibility(doc, activeContractId, bookingCancelled).visible;
 }
 
 function groupBy<T>(items: T[], key: (item: T) => string): Map<string, T[]> {
@@ -184,13 +185,25 @@ export class PortalService {
 
     const sentDepositInvoice = booking.invoices[0] ?? null;
     const activeContract = booking.contracts?.[0] ?? null;
+    // Route the portal's own contract visibility through the shared authority (ADR-0054) — the
+    // signing CTA / signed-download are shown only when the authority says the contract is visible
+    // (SENT/SIGNED). `contractStatus` still carries the concrete status the renderer needs.
+    // Cancelling a booking hides the whole contract concern (#579, outermost gate).
+    const bookingCancelled = booking.status === 'CANCELLED';
+    const contractVerdict = resolveContractVisibility(
+      (activeContract?.status ?? null) as ContractStatus | null,
+      bookingCancelled,
+    );
     const contractStatus =
-      activeContract?.status === 'SENT' || activeContract?.status === 'SIGNED'
-        ? activeContract.status
-        : null;
+      contractVerdict?.visible && activeContract ? (activeContract.status as 'SENT' | 'SIGNED') : null;
 
     const activeContractId = activeContract?.id ?? null;
-    const portalDocs = booking.documents.filter((doc) => isPortalVisibleDocument(doc, activeContractId));
+    // On a cancelled booking the contract concern is hidden entirely (#579): passing
+    // `bookingCancelled` drops the CONTRACT document rows, which also nulls `signedContractUrl`
+    // below — so the signed-contract download disappears alongside the CTA.
+    const portalDocs = booking.documents.filter((doc) =>
+      isPortalVisibleDocument(doc, activeContractId, bookingCancelled),
+    );
     const signedContractDoc = portalDocs.find((d) => d.type === 'CONTRACT') ?? null;
     const documents = portalDocs.map((doc) => ({
       id: doc.id,
@@ -209,7 +222,7 @@ export class PortalService {
       publicProfile: buildPortalPublicProfile(publicProfile),
       signedContractUrl,
       documents,
-      hasMusicForm: !!booking.musicFormConfig,
+      hasMusicForm: resolveMusicFormVisibility(!!booking.musicFormConfig)?.visible ?? false,
       hasMusicFormResponse: !!booking.musicFormResponse,
       contractStatus,
       depositInvoiceDueDate: sentDepositInvoice?.dueDate?.toISOString() ?? null,
@@ -219,6 +232,10 @@ export class PortalService {
   async getContractContent(token: string) {
     const booking = await this.repo.findBookingByToken(token);
     if (!booking) throw new NotFoundException('Booking not found');
+
+    // The contract concern is fully hidden on a cancelled booking (#579): the token stays valid, so
+    // guard the content endpoint itself — not just the CTA — against a stale tab or direct request.
+    if (booking.status === 'CANCELLED') throw new NotFoundException('Contract not found');
 
     const contract = booking.contracts?.[0] ?? null;
     if (contract?.status === 'SIGNED') throw new BadRequestException('already_signed');
@@ -230,6 +247,10 @@ export class PortalService {
   async signContract(token: string, signatureBase64: string, req: Request) {
     const booking = await this.repo.findBookingByToken(token);
     if (!booking) throw new NotFoundException('Booking not found');
+
+    // Closing the real leak: cancelling a booking does not void its contract and the portal token
+    // stays valid, so a stale tab or direct POST could otherwise sign a cancelled gig (#579).
+    if (booking.status === 'CANCELLED') throw new NotFoundException('Contract not found');
 
     const contract = booking.contracts?.[0] ?? null;
     this.validateContractForSigning(contract);

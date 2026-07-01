@@ -357,6 +357,25 @@ export interface BookingDetail extends Omit<BookingListItem, 'customer' | 'venue
   series: { id: string; label: string; customerId: string } | null;
   logistics: Record<string, BookingLogisticsEntry> | null;
   notes: string | null;
+  // Per-concern portal-visibility verdicts, computed by the single backend authority (ADR-0054).
+  // A null verdict means the concern is not a live portal concern (no contract yet / music form off).
+  portalVisibility: BookingPortalVisibility;
+}
+
+// Portal-visibility verdict (ADR-0054). The API returns a stable ReasonCode, never English —
+// the reason → copy map lives frontend-side in lib/constants.ts. The full union is defined now;
+// slice 1 (#578) only emits `until_sent`/`voided` (contract) — `not_shared`/`cancelled` arrive
+// with the leak fixes (#579).
+export type PortalVisibilityReason = 'until_sent' | 'voided' | 'not_shared' | 'cancelled';
+
+export interface PortalVisibilityVerdict {
+  visible: boolean;
+  reason?: PortalVisibilityReason;
+}
+
+export interface BookingPortalVisibility {
+  contract: PortalVisibilityVerdict | null;
+  musicForm: PortalVisibilityVerdict | null;
 }
 
 export interface CreateSetInput {
@@ -584,6 +603,8 @@ export interface Document {
   invoiceId: string | null;
   contractStatus: string | null;
   name: string | null;
+  // Per-document portal-visibility verdict (ADR-0054 / #580) — drives the per-row indicator.
+  portalVisibility: PortalVisibilityVerdict;
 }
 
 // ─────────────────────────────────────────

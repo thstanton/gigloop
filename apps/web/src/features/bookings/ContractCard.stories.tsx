@@ -28,6 +28,7 @@ const baseBooking: BookingDetail = {
   portalToken: 'tok_abc',
   hasMusicFormConfig: false,
   hasMusicFormResponse: false,
+  portalVisibility: { contract: null, musicForm: null },
   seriesId: null,
   series: null,
   logistics: null,
@@ -41,6 +42,7 @@ const contractDoc: Document = {
   invoiceId: null,
   contractStatus: 'SIGNED',
   name: null,
+  portalVisibility: { visible: true },
 };
 
 const noop = () => {};
@@ -86,12 +88,14 @@ export const Draft: Story = {
         content: {},
         signedAt: null,
       },
+      portalVisibility: { contract: { visible: false, reason: 'until_sent' }, musicForm: null },
     },
   },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Draft')).toBeVisible();
     await expect(canvas.getByLabelText('Actions')).toBeVisible();
     await expect(canvas.getByLabelText('Send')).toBeVisible();
+    await expect(canvas.getByText('Not visible until sent')).toBeVisible();
   },
 };
 
@@ -107,11 +111,13 @@ export const Sent: Story = {
         content: {},
         signedAt: null,
       },
+      portalVisibility: { contract: { visible: true }, musicForm: null },
     },
   },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Sent')).toBeVisible();
     await expect(canvas.getByLabelText('Preview')).toBeVisible();
+    await expect(canvas.getByText('Visible on Client Portal')).toBeVisible();
   },
 };
 

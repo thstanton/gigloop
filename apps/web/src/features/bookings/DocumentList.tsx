@@ -4,6 +4,7 @@ import { apiDelete } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
 import { RowActions } from '@/components/common/RowActions';
 import type { RowAction } from '@/components/common/RowActions';
+import { PortalVisibility } from '@/components/common/PortalVisibility';
 import type { Document, Invoice } from '@/types/api';
 
 function getDocumentLabel(doc: Document, invoice: Invoice | undefined): string {
@@ -89,6 +90,10 @@ export function DocumentList({ bookingId, documents, invoices }: Props) {
               {invoice?.invoiceNumber && (
                 <span className="text-xs text-muted">{invoice.invoiceNumber}</span>
               )}
+              {/* Each document row is gated independently (ADR-0054): its own portal-visibility verdict. */}
+              <span className="mt-0.5">
+                <PortalVisibility {...doc.portalVisibility} />
+              </span>
             </div>
             <span className="text-muted ml-auto text-xs shrink-0">
               {new Date(doc.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}

@@ -14,6 +14,7 @@ import { decrypt } from '../common/crypto';
 import { buildDocumentTitle, buildPdfHeader, buildPdfFooter } from './pdf-shared';
 import type { EmailContext } from '../mail/mail.service';
 import { substituteTiptapVariables } from '../mail/tiptap-portal';
+import { resolveDocumentVisibility, type PortalVisibilityVerdict } from '../portal/portal-visibility';
 
 // Resolve pdfmake relative to this file so font paths work correctly
 // regardless of where the process was started from.
@@ -68,7 +69,14 @@ async function fetchAsDataUrl(url: string): Promise<string> {
   return `data:${contentType};base64,${buffer.toString('base64')}`;
 }
 
-export type DocumentWithUrl = Document & { url: string; contract?: { status: string } | null };
+export type DocumentWithUrl = Document & {
+  url: string;
+  contract?: { status: string } | null;
+  invoice?: { status: string } | null;
+};
+
+// A document in the admin list, carrying its per-row portal-visibility verdict (ADR-0054 / #580).
+export type DocumentListItem = DocumentWithUrl & { portalVisibility: PortalVisibilityVerdict };
 
 // Minimal shape needed to build PDF data from an already-fetched invoice.
 // Accepts Prisma Decimal for amount (hence the any — Number() handles it).
@@ -296,9 +304,18 @@ export class DocumentsService {
     return { ...doc, url: this.storage.getPublicUrl(key) };
   }
 
-  async findByBooking(userId: string, bookingId: string): Promise<DocumentWithUrl[]> {
-    const docs = await this.repo.findByBooking(userId, bookingId);
-    return docs.map((d) => ({ ...d, url: this.storage.getPublicUrl(d.storageKey) }));
+  async findByBooking(userId: string, bookingId: string): Promise<DocumentListItem[]> {
+    const [docs, ctx] = await Promise.all([
+      this.repo.findByBooking(userId, bookingId),
+      this.repo.findBookingVisibilityContext(userId, bookingId),
+    ]);
+    const activeContractId = ctx?.contracts[0]?.id ?? null;
+    const bookingCancelled = ctx?.status === 'CANCELLED';
+    return docs.map((d) => ({
+      ...d,
+      url: this.storage.getPublicUrl(d.storageKey),
+      portalVisibility: resolveDocumentVisibility(d, activeContractId, bookingCancelled),
+    }));
   }
 
   async findByInvoice(userId: string, invoiceId: string): Promise<DocumentWithUrl | null> {

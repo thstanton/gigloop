@@ -1,5 +1,16 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
+export class PortalVisibilityDto {
+  @ApiProperty({ description: 'Whether the client can currently see this document on the portal' })
+  visible!: boolean;
+
+  @ApiPropertyOptional({
+    enum: ['until_sent', 'voided', 'not_shared', 'cancelled'],
+    description: 'When hidden, the portal gate holding it back; absent when visible',
+  })
+  reason?: string;
+}
+
 export class DocumentResponseDto {
   @ApiProperty() id!: string;
   @ApiProperty() createdAt!: string;
@@ -10,4 +21,6 @@ export class DocumentResponseDto {
   contractStatus?: string | null;
   @ApiPropertyOptional({ description: 'User-provided name for UPLOAD documents; null for system-generated' })
   name?: string | null;
+  @ApiProperty({ type: PortalVisibilityDto, description: 'Per-document portal-visibility verdict (ADR-0054)' })
+  portalVisibility!: PortalVisibilityDto;
 }
