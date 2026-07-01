@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { CommunicationsService } from './communications.service';
 import { CommunicationsRepository } from './communications.repository';
 import { MailService } from '../mail/mail.service';
@@ -7,6 +7,8 @@ type MockRepo = {
   findAll: jest.Mock;
   findOne: jest.Mock;
   findBookingById: jest.Mock;
+  findTemplate: jest.Mock;
+  findMusicFormConfig: jest.Mock;
   create: jest.Mock;
   createPending: jest.Mock;
   markSent: jest.Mock;
@@ -18,6 +20,9 @@ function makeRepo(): MockRepo {
     findAll: jest.fn(),
     findOne: jest.fn(),
     findBookingById: jest.fn(),
+    // Default: a non-music template, so the #631 invite gate is a no-op unless a test overrides it.
+    findTemplate: jest.fn().mockResolvedValue({ id: 'tmpl1', builtInType: 'quote' }),
+    findMusicFormConfig: jest.fn().mockResolvedValue(null),
     create: jest.fn(),
     createPending: jest.fn(),
     markSent: jest.fn(),
@@ -162,6 +167,42 @@ describe('CommunicationsService', () => {
       await service.sendEmail({ ...options, documentId: 'doc1' });
       const [calledUserId] = repo.createPending.mock.calls[0];
       expect(calledUserId).toBe('u1');
+    });
+
+    // #533 / #631: the music-form invite is gated on the form being published.
+    describe('music-form invite gate', () => {
+      const inviteOptions = { ...options, templateId: 'tmpl-invite' };
+
+      beforeEach(() => {
+        repo.findTemplate.mockResolvedValue({ id: 'tmpl-invite', builtInType: 'music_form_invite' });
+      });
+
+      it('rejects (409) and never sends when the form is a draft (unpublished)', async () => {
+        repo.findMusicFormConfig.mockResolvedValue({ publishedAt: null });
+        await expect(service.sendEmail(inviteOptions)).rejects.toThrow(ConflictException);
+        expect(repo.createPending).not.toHaveBeenCalled();
+        expect(mockMail.send).not.toHaveBeenCalled();
+      });
+
+      it('rejects when the form is off (no config)', async () => {
+        repo.findMusicFormConfig.mockResolvedValue(null);
+        await expect(service.sendEmail(inviteOptions)).rejects.toThrow(ConflictException);
+        expect(mockMail.send).not.toHaveBeenCalled();
+      });
+
+      it('allows the invite once the form is published', async () => {
+        repo.findMusicFormConfig.mockResolvedValue({ publishedAt: new Date() });
+        await service.sendEmail(inviteOptions);
+        expect(repo.createPending).toHaveBeenCalled();
+        expect(mockMail.send).toHaveBeenCalled();
+      });
+
+      it('does not gate other templates (never checks the music form)', async () => {
+        repo.findTemplate.mockResolvedValue({ id: 'tmpl1', builtInType: 'quote' });
+        await service.sendEmail({ ...options, templateId: 'tmpl1' });
+        expect(repo.findMusicFormConfig).not.toHaveBeenCalled();
+        expect(mockMail.send).toHaveBeenCalled();
+      });
     });
   });
 });

@@ -55,10 +55,13 @@ function TemplatePicker({
   templates,
   value,
   onChange,
+  musicFormPublished,
 }: {
   templates: Template[];
   value: string;
   onChange: (id: string) => void;
+  // #533 / #631: the music-form invite cannot be sent until the form is published.
+  musicFormPublished: boolean;
 }) {
   return (
     <div>
@@ -68,11 +71,15 @@ function TemplatePicker({
           <SelectValue placeholder="Select a template" />
         </SelectTrigger>
         <SelectContent>
-          {templates.map((t) => (
-            <SelectItem key={t.id} value={t.id}>
-              {t.builtInType ? TEMPLATE_DISPLAY[t.builtInType].name : t.name}
-            </SelectItem>
-          ))}
+          {templates.map((t) => {
+            const blockedMusicInvite = t.builtInType === 'music_form_invite' && !musicFormPublished;
+            const label = t.builtInType ? TEMPLATE_DISPLAY[t.builtInType].name : t.name;
+            return (
+              <SelectItem key={t.id} value={t.id} disabled={blockedMusicInvite}>
+                {blockedMusicInvite ? `${label} — publish the form first` : label}
+              </SelectItem>
+            );
+          })}
         </SelectContent>
       </Select>
     </div>
@@ -205,6 +212,7 @@ function ComposeEmailSheetBody(props: Props) {
           templates={vm.emailTemplates}
           value={vm.selectedTemplateId}
           onChange={vm.setSelectedTemplateId}
+          musicFormPublished={booking.portalVisibility.musicForm?.visible ?? false}
         />
         <AttachmentIndicator state={vm.attachmentState} />
         {vm.showDateFields && (

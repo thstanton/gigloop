@@ -534,6 +534,7 @@ describe('Booking lifecycle (integration)', () => {
   // tracks it (hidden `until_published` while draft, visible once published).
   describe('Music form publish → un-publish (reversible)', () => {
     let bookingId: string;
+    let inviteTemplateId: string;
 
     beforeAll(async () => {
       const res = await createBooking();
@@ -542,10 +543,16 @@ describe('Booking lifecycle (integration)', () => {
       await request(app.getHttpServer())
         .put(`/api/bookings/${bookingId}/music-form-config`)
         .send({ keyMoments: [], enabledGenres: ['Pop'] });
+      // #631: a music-form-invite template, to exercise the send gate.
+      const tmpl = await prisma.template.create({
+        data: { userId: TEST_USER_ID, name: 'Music form invite', content: {}, builtInType: 'music_form_invite' },
+      });
+      inviteTemplateId = tmpl.id;
     });
 
     afterAll(async () => {
       await prisma.booking.delete({ where: { id: bookingId } });
+      await prisma.template.delete({ where: { id: inviteTemplateId } });
     });
 
     const publishStep = () =>
@@ -556,6 +563,19 @@ describe('Booking lifecycle (integration)', () => {
       expect(res.body.portalVisibility.musicForm).toEqual({ visible: false, reason: 'until_published' });
       // #630: the gather_song_requests goal carries the set_up_and_publish step, PENDING while draft.
       expect((await publishStep())?.state).toBe('PENDING');
+    });
+
+    it('rejects a music_form_invite send while the form is a draft (#631 leak gate)', async () => {
+      const res = await request(app.getHttpServer())
+        .post(`/api/bookings/${bookingId}/communications/send`)
+        .send({
+          to: 'client@example.com',
+          contactId: customerId,
+          subject: 'Your music form',
+          body: '<p>Please choose your songs.</p>',
+          templateId: inviteTemplateId,
+        });
+      expect(res.status).toBe(409);
     });
 
     it('publishing sets publishedAt, makes the form visible, and completes the publish step (#630)', async () => {
