@@ -1,6 +1,7 @@
 import {
   resolveContractVisibility,
   resolveMusicFormVisibility,
+  resolveUploadDocumentVisibility,
   type ContractStatus,
   type PortalVisibilityVerdict,
 } from './portal-visibility';
@@ -18,6 +19,36 @@ describe('portal-visibility authority (ADR-0054)', () => {
     it.each(cases)('maps contract status %s to the expected verdict', (status, expected) => {
       expect(resolveContractVisibility(status)).toEqual(expected);
     });
+
+    it.each(cases)('is unchanged for %s when the booking is not cancelled', (status, expected) => {
+      expect(resolveContractVisibility(status, false)).toEqual(expected);
+    });
+
+    describe('cancelled booking is the outermost gate (#579)', () => {
+      it.each<ContractStatus>(['DRAFT', 'SENT', 'SIGNED', 'VOID'])(
+        'hides the %s contract on a cancelled booking',
+        (status) => {
+          expect(resolveContractVisibility(status, true)).toEqual({ visible: false, reason: 'cancelled' });
+        },
+      );
+
+      it('still returns null (no concern) when a cancelled booking has no contract', () => {
+        expect(resolveContractVisibility(null, true)).toBeNull();
+      });
+    });
+  });
+
+  describe('resolveUploadDocumentVisibility (#579)', () => {
+    it('marks UPLOAD documents as never shared with the client', () => {
+      expect(resolveUploadDocumentVisibility('UPLOAD')).toEqual({ visible: false, reason: 'not_shared' });
+    });
+
+    it.each(['CONTRACT', 'INVOICE', 'SONG_LIST'])(
+      'defers %s to the stateful gate (returns null)',
+      (type) => {
+        expect(resolveUploadDocumentVisibility(type)).toBeNull();
+      },
+    );
   });
 
   describe('resolveMusicFormVisibility', () => {
