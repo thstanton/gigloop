@@ -26,6 +26,7 @@ import {
   ReminderPreview,
 } from '../checklist/checklist-reminders';
 import { ReminderConcern } from '../checklist/checklist-concerns';
+import { resolveContractVisibility, resolveMusicFormVisibility, type ContractStatus } from '../portal/portal-visibility';
 
 const VALID_STATUSES = new Set<string>(Object.values(BookingStatus));
 
@@ -131,6 +132,18 @@ export class BookingsService {
       hasMusicFormConfig: !!musicFormConfig,
       hasMusicFormResponse: !!musicFormResponse,
       activeContract: this.normaliseContract(contracts?.[0] ?? null),
+      portalVisibility: this.buildPortalVisibility(contracts?.[0]?.status, !!musicFormConfig),
+    };
+  }
+
+  // The per-concern portal-visibility map for the admin indicator (ADR-0054 / #578), computed by
+  // the same authority the portal renderer reads — so the indicator can never disagree with the
+  // portal. A null verdict means the concern is not a live portal concern (no contract yet /
+  // music form off), and the frontend renders no indicator.
+  private buildPortalVisibility(contractStatus: string | null | undefined, hasMusicFormConfig: boolean) {
+    return {
+      contract: resolveContractVisibility((contractStatus ?? null) as ContractStatus | null),
+      musicForm: resolveMusicFormVisibility(hasMusicFormConfig),
     };
   }
 
@@ -421,6 +434,7 @@ export class BookingsService {
       hasMusicFormConfig: !!musicFormConfig,
       hasMusicFormResponse: !!musicFormResponse,
       activeContract: this.normaliseContract(contracts?.[0] ?? null),
+      portalVisibility: this.buildPortalVisibility(contracts?.[0]?.status, !!musicFormConfig),
     };
   }
 

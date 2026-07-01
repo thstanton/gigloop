@@ -20,6 +20,7 @@ const baseBooking: BookingDetail = {
   ],
   activeContract: null, depositReceivedAt: null, portalToken: 'tok_abc',
   hasMusicFormConfig: false, hasMusicFormResponse: false,
+  portalVisibility: { contract: null, musicForm: null },
   seriesId: null, series: null,
   logistics: null,
 };
@@ -77,12 +78,19 @@ export const OnButNotSetUp: Story = {
 
 export const ConfiguredNoResponse: Story = {
   args: {
-    booking: { ...baseBooking, hasMusicFormConfig: true, hasMusicFormResponse: false },
+    booking: {
+      ...baseBooking,
+      hasMusicFormConfig: true,
+      hasMusicFormResponse: false,
+      portalVisibility: { contract: null, musicForm: { visible: true } },
+    },
     config,
   },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('First dance')).toBeVisible();
     await expect(canvas.getByText('Genres')).toBeVisible();
+    // Music form on → the portal-visibility badge is shown (ADR-0054).
+    await expect(canvas.getByText('Visible on Client Portal')).toBeVisible();
   },
 };
 

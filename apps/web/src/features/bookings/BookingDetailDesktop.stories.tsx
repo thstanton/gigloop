@@ -84,6 +84,7 @@ const mockBooking: BookingDetail = {
   portalToken: 'portal-token-123',
   hasMusicFormConfig: false,
   hasMusicFormResponse: false,
+  portalVisibility: { contract: null, musicForm: null },
   logistics: null,
   activeContract: null,
 };

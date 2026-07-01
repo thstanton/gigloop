@@ -9,6 +9,7 @@ import { MailService } from '../mail/mail.service';
 import { DocumentsService } from '../documents/documents.service';
 import { StorageService } from '../storage/storage.service';
 import { ChecklistEvaluatorService } from '../checklist/checklist-evaluator.service';
+import { resolveContractVisibility, resolveMusicFormVisibility, type ContractStatus } from './portal-visibility';
 import type { Request } from 'express';
 import type { SubmitMusicFormDto } from './dto/submit-music-form.dto';
 
@@ -184,10 +185,12 @@ export class PortalService {
 
     const sentDepositInvoice = booking.invoices[0] ?? null;
     const activeContract = booking.contracts?.[0] ?? null;
+    // Route the portal's own contract visibility through the shared authority (ADR-0054) — the
+    // signing CTA / signed-download are shown only when the authority says the contract is visible
+    // (SENT/SIGNED). `contractStatus` still carries the concrete status the renderer needs.
+    const contractVerdict = resolveContractVisibility((activeContract?.status ?? null) as ContractStatus | null);
     const contractStatus =
-      activeContract?.status === 'SENT' || activeContract?.status === 'SIGNED'
-        ? activeContract.status
-        : null;
+      contractVerdict?.visible && activeContract ? (activeContract.status as 'SENT' | 'SIGNED') : null;
 
     const activeContractId = activeContract?.id ?? null;
     const portalDocs = booking.documents.filter((doc) => isPortalVisibleDocument(doc, activeContractId));
@@ -209,7 +212,7 @@ export class PortalService {
       publicProfile: buildPortalPublicProfile(publicProfile),
       signedContractUrl,
       documents,
-      hasMusicForm: !!booking.musicFormConfig,
+      hasMusicForm: resolveMusicFormVisibility(!!booking.musicFormConfig)?.visible ?? false,
       hasMusicFormResponse: !!booking.musicFormResponse,
       contractStatus,
       depositInvoiceDueDate: sentDepositInvoice?.dueDate?.toISOString() ?? null,

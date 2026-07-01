@@ -221,3 +221,67 @@ describe('PortalService.submitMusicForm (integration)', () => {
     expect(buffer.slice(0, 4).toString()).toBe('%PDF');
   });
 });
+
+// Regression net for the ADR-0054 refactor (#578): getBookingData's contract + music-form
+// visibility outputs must not change when the derivation is routed through the authority.
+describe('PortalService.getBookingData (visibility outputs)', () => {
+  function makeBookingData(over: Record<string, unknown> = {}) {
+    return {
+      id: bookingId,
+      userId,
+      date: new Date('2026-08-15'),
+      fee: 1000,
+      title: 'Wedding',
+      status: 'PROVISIONAL',
+      customer: { name: 'Test Client', greetingName: null },
+      venue: { name: 'Test Venue' },
+      sets: [],
+      packages: [],
+      invoices: [],
+      contracts: [],
+      documents: [],
+      musicFormConfig: null,
+      musicFormResponse: null,
+      ...over,
+    };
+  }
+
+  function makeService(bookingOver: Record<string, unknown> = {}) {
+    return new PortalService(
+      { findBookingByToken: jest.fn().mockResolvedValue(makeBookingData(bookingOver)) } as unknown as import('./portal.repository').PortalRepository,
+      { findByUserId: jest.fn().mockResolvedValue(publicProfile) } as unknown as import('../user-profile/public-profile.repository').PublicProfileRepository,
+      {} as unknown as import('../songs/songs.repository').SongsRepository,
+      {} as unknown as import('../invoices/invoices.repository').InvoicesRepository,
+      {} as unknown as import('../mail/mail.service').MailService,
+      {} as unknown as DocumentsService,
+      { getPublicUrl: jest.fn().mockReturnValue('https://example.com/doc.pdf') } as unknown as StorageService,
+      {} as unknown as import('../checklist/checklist-evaluator.service').ChecklistEvaluatorService,
+      {} as unknown as import('../bookings/contract.repository').ContractRepository,
+      {} as unknown as import('../bookings/music-form-config.repository').MusicFormConfigRepository,
+    );
+  }
+
+  it.each([
+    ['DRAFT', null],
+    ['SENT', 'SENT'],
+    ['SIGNED', 'SIGNED'],
+    ['VOID', null],
+  ])('exposes contractStatus for a %s contract as %s', async (status, expected) => {
+    const service = makeService({ contracts: [{ id: contractId, status }] });
+    const result = await service.getBookingData(token);
+    expect(result.contractStatus).toBe(expected);
+  });
+
+  it('exposes contractStatus null when there is no contract', async () => {
+    const service = makeService({ contracts: [] });
+    const result = await service.getBookingData(token);
+    expect(result.contractStatus).toBeNull();
+  });
+
+  it('sets hasMusicForm true when a music form config exists, false otherwise', async () => {
+    const on = await makeService({ musicFormConfig: { id: 'mfc1' } }).getBookingData(token);
+    const off = await makeService({ musicFormConfig: null }).getBookingData(token);
+    expect(on.hasMusicForm).toBe(true);
+    expect(off.hasMusicForm).toBe(false);
+  });
+});

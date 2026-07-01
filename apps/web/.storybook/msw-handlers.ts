@@ -230,6 +230,7 @@ const baseDetail = {
   hasMusicFormConfig: false, hasMusicFormResponse: false,
   seriesId: null, series: null,
   logistics: null,
+  portalVisibility: { contract: null, musicForm: null },
 };
 
 const sentContract = {

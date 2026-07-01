@@ -4,6 +4,7 @@ import { ClipboardList, Download, Music2, Pencil, StickyNote } from 'lucide-reac
 import { Card } from '@/components/common/Card';
 import { GhostButton } from '@/components/common/GhostButton';
 import { EmptyState } from '@/components/common/EmptyState';
+import { PortalVisibility } from '@/components/common/PortalVisibility';
 import { SubLabel } from '@/components/common/SubLabel';
 import {
   Sheet,
@@ -199,6 +200,10 @@ export default function MusicFormSection({
         }
       >
         <div className="space-y-4">
+          {/* ADR-0054: the music form is a live portal concern whenever it is on (this branch). */}
+          {booking.portalVisibility.musicForm && (
+            <PortalVisibility {...booking.portalVisibility.musicForm} />
+          )}
           {sectionMap.size === 0 && config.enabledGenres.length === 0 && (
             <p className="text-sm text-muted">
               On, but not set up yet — add special requests and genres with Edit.
