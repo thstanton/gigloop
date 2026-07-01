@@ -42,6 +42,7 @@ const contractDoc: Document = {
   invoiceId: null,
   contractStatus: 'SIGNED',
   name: null,
+  portalVisibility: { visible: true },
 };
 
 const noop = () => {};

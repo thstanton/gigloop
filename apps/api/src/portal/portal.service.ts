@@ -12,7 +12,7 @@ import { ChecklistEvaluatorService } from '../checklist/checklist-evaluator.serv
 import {
   resolveContractVisibility,
   resolveMusicFormVisibility,
-  resolveUploadDocumentVisibility,
+  resolveDocumentVisibility,
   type ContractStatus,
 } from './portal-visibility';
 import type { Request } from 'express';
@@ -83,27 +83,19 @@ function labelDocument(doc: {
   return doc.invoice?.isDeposit ? `Deposit invoice${num}` : `Invoice${num}`;
 }
 
-// An invoice PDF is stored as a Document at issue time, but the client should only see it once
-// it has actually been delivered (SENT) or settled (PAID) — never an ISSUED-but-unsent invoice
-// they were never shown, nor a VOID one that has been superseded.
-const PORTAL_VISIBLE_INVOICE_STATUSES = new Set(['SENT', 'PAID']);
-
 /**
- * Decide whether a stored Document should appear on the client portal (ADR-0031: portal
- * visibility is driven by source truth). UPLOAD documents are private musician paperwork and are
- * never client-visible (#579, via the shared authority); CONTRACT documents are limited to the
- * active contract so superseded re-sends drop off; INVOICE documents are gated on their invoice's
- * delivery status; everything else (e.g. SONG_LIST) is always shown.
+ * Whether a stored Document should appear on the client portal — the boolean projection of the
+ * shared per-document authority (`resolveDocumentVisibility`, #580), so the portal filter and the
+ * admin per-row indicator can never disagree (ADR-0054). UPLOADs are never client-visible;
+ * CONTRACT is limited to the active contract (superseded copies drop off); INVOICE is gated on
+ * delivery status; a cancelled booking hides the contract concern entirely (#579).
  */
 export function isPortalVisibleDocument(
   doc: { type: string; contractId?: string | null; invoice?: { status: string } | null },
   activeContractId: string | null,
+  bookingCancelled = false,
 ): boolean {
-  const typeGate = resolveUploadDocumentVisibility(doc.type);
-  if (typeGate) return typeGate.visible;
-  if (doc.type === 'CONTRACT') return doc.contractId === activeContractId;
-  if (doc.type === 'INVOICE') return !!doc.invoice && PORTAL_VISIBLE_INVOICE_STATUSES.has(doc.invoice.status);
-  return true;
+  return resolveDocumentVisibility(doc, activeContractId, bookingCancelled).visible;
 }
 
 function groupBy<T>(items: T[], key: (item: T) => string): Map<string, T[]> {
@@ -206,10 +198,11 @@ export class PortalService {
       contractVerdict?.visible && activeContract ? (activeContract.status as 'SENT' | 'SIGNED') : null;
 
     const activeContractId = activeContract?.id ?? null;
-    // On a cancelled booking drop the CONTRACT document rows too, which also nulls
-    // `signedContractUrl` below — so the signed-contract download disappears alongside the CTA.
-    const portalDocs = booking.documents.filter(
-      (doc) => !(bookingCancelled && doc.type === 'CONTRACT') && isPortalVisibleDocument(doc, activeContractId),
+    // On a cancelled booking the contract concern is hidden entirely (#579): passing
+    // `bookingCancelled` drops the CONTRACT document rows, which also nulls `signedContractUrl`
+    // below — so the signed-contract download disappears alongside the CTA.
+    const portalDocs = booking.documents.filter((doc) =>
+      isPortalVisibleDocument(doc, activeContractId, bookingCancelled),
     );
     const signedContractDoc = portalDocs.find((d) => d.type === 'CONTRACT') ?? null;
     const documents = portalDocs.map((doc) => ({

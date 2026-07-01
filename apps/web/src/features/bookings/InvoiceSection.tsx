@@ -257,11 +257,16 @@ export default function InvoiceSection({ bookingId }: Readonly<InvoiceSectionPro
   return (
     <Card title="Invoices" action={action}>
       <div>
-        {invoices.map((inv) => (
+        {invoices.map((inv) => {
+          const invoiceDoc = documents.find((d) => d.type === 'INVOICE' && d.invoiceId === inv.id);
+          return (
           <InvoiceRow
             key={inv.id}
             invoice={inv}
-            pdfUrl={documents.find((d) => d.type === 'INVOICE' && d.invoiceId === inv.id)?.url ?? null}
+            pdfUrl={invoiceDoc?.url ?? null}
+            // The verdict comes from the backing INVOICE document (backend authority, ADR-0054).
+            // A DRAFT has no PDF/document yet, so it is simply not on the portal until sent.
+            portalVisibility={invoiceDoc?.portalVisibility ?? { visible: false, reason: 'until_sent' }}
             isDeletePending={actions.isDeletingInvoice}
             isVoidPending={invoiceActions.voidingInvoiceId === inv.id}
             isIssuePending={invoiceActions.issuingInvoiceId === inv.id}
@@ -282,7 +287,8 @@ export default function InvoiceSection({ bookingId }: Readonly<InvoiceSectionPro
             onMarkPaid={(inv) => invoiceActions.markPaid(inv.id)}
             onVoid={(inv) => invoiceActions.voidInvoice(inv.id)}
           />
-        ))}
+          );
+        })}
       </div>
     </Card>
   );

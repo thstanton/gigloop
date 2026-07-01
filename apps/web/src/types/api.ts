@@ -603,6 +603,8 @@ export interface Document {
   invoiceId: string | null;
   contractStatus: string | null;
   name: string | null;
+  // Per-document portal-visibility verdict (ADR-0054 / #580) — drives the per-row indicator.
+  portalVisibility: PortalVisibilityVerdict;
 }
 
 // ─────────────────────────────────────────

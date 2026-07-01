@@ -8,7 +8,7 @@
 // bookings modules.
 //
 // Slice 1 (#578) seeds the contract and music-form concerns. The booking-CANCELLED gate and the
-// UPLOAD rule land in #579 (below); per-document verdicts in #580.
+// UPLOAD rule landed in #579; the per-document verdict (`resolveDocumentVisibility`) in #580.
 
 export type PortalVisibilityReason = 'until_sent' | 'voided' | 'not_shared' | 'cancelled';
 
@@ -47,16 +47,57 @@ export function resolveContractVisibility(
   }
 }
 
+export interface PortalDocumentInput {
+  type: string;
+  // The signed-contract PDF references the contract it was signed from; null on the (unsigned)
+  // contract PDF. Compared against the booking's active contract to detect superseded copies.
+  contractId?: string | null;
+  invoice?: { status: string } | null;
+}
+
+// A stored invoice PDF is only client-facing once the invoice has been delivered (SENT) or settled
+// (PAID) — never an ISSUED-but-unsent copy the client was never shown, nor a VOID one superseded.
+const PORTAL_VISIBLE_INVOICE_STATUSES = new Set(['SENT', 'PAID']);
+
+function resolveInvoiceDocumentVisibility(status: string | null | undefined): PortalVisibilityVerdict {
+  if (status && PORTAL_VISIBLE_INVOICE_STATUSES.has(status)) return { visible: true };
+  if (status === 'VOID') return { visible: false, reason: 'voided' };
+  // ISSUED (stored at issue time but not yet emailed) — and, defensively, DRAFT / missing.
+  return { visible: false, reason: 'until_sent' };
+}
+
 /**
- * Type-level portal gate for a stored Document (#579). Owns only the UPLOAD rule here: musician
- * uploads (an agent contract, a venue rider) are private paperwork, never shown to the client
- * (`not_shared`). CONTRACT and INVOICE documents carry a further *stateful* gate (active-contract
- * id, invoice delivery status) that still lives in portal.service's `isPortalVisibleDocument`; the
- * full per-document authority verdict lands in #580. Returns null when the type is not gated at
- * this level (i.e. defer to the stateful rules).
+ * Per-document portal visibility (#580) — the single authority for whether a stored Document is
+ * client-visible and, if not, why. Each row in the admin documents list carries its own verdict,
+ * and the portal renderer reads `.visible` from the same function (via `isPortalVisibleDocument`),
+ * so the two cannot disagree (ADR-0054).
+ *
+ * - UPLOAD → never shared (`not_shared`): private musician paperwork.
+ * - CONTRACT → the signed PDF of the active contract is visible; a superseded copy reuses `voided`
+ *   (its contract is VOID). A cancelled booking hides the contract concern entirely (`cancelled`,
+ *   outermost — #579).
+ * - INVOICE → gated on the backing invoice's delivery status (SENT/PAID visible; ISSUED unsent →
+ *   `until_sent`; VOID → `voided`).
+ * - everything else (SONG_LIST) → visible.
  */
-export function resolveUploadDocumentVisibility(docType: string): PortalVisibilityVerdict | null {
-  return docType === 'UPLOAD' ? { visible: false, reason: 'not_shared' } : null;
+export function resolveDocumentVisibility(
+  doc: PortalDocumentInput,
+  activeContractId: string | null,
+  bookingCancelled = false,
+): PortalVisibilityVerdict {
+  switch (doc.type) {
+    case 'UPLOAD':
+      return { visible: false, reason: 'not_shared' };
+    case 'CONTRACT':
+      if (bookingCancelled) return { visible: false, reason: 'cancelled' };
+      return doc.contractId === activeContractId
+        ? { visible: true }
+        : { visible: false, reason: 'voided' };
+    case 'INVOICE':
+      return resolveInvoiceDocumentVisibility(doc.invoice?.status);
+    default:
+      return { visible: true };
+  }
 }
 
 /**

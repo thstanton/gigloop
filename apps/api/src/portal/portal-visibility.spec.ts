@@ -1,7 +1,7 @@
 import {
   resolveContractVisibility,
   resolveMusicFormVisibility,
-  resolveUploadDocumentVisibility,
+  resolveDocumentVisibility,
   type ContractStatus,
   type PortalVisibilityVerdict,
 } from './portal-visibility';
@@ -38,17 +38,74 @@ describe('portal-visibility authority (ADR-0054)', () => {
     });
   });
 
-  describe('resolveUploadDocumentVisibility (#579)', () => {
+  describe('resolveDocumentVisibility (#580)', () => {
+    const activeContractId = 'c-active';
+
     it('marks UPLOAD documents as never shared with the client', () => {
-      expect(resolveUploadDocumentVisibility('UPLOAD')).toEqual({ visible: false, reason: 'not_shared' });
+      expect(resolveDocumentVisibility({ type: 'UPLOAD' }, activeContractId)).toEqual({
+        visible: false,
+        reason: 'not_shared',
+      });
     });
 
-    it.each(['CONTRACT', 'INVOICE', 'SONG_LIST'])(
-      'defers %s to the stateful gate (returns null)',
-      (type) => {
-        expect(resolveUploadDocumentVisibility(type)).toBeNull();
-      },
-    );
+    it('always shows SONG_LIST documents', () => {
+      expect(resolveDocumentVisibility({ type: 'SONG_LIST' }, activeContractId)).toEqual({ visible: true });
+    });
+
+    describe('CONTRACT documents', () => {
+      it('shows the signed PDF of the active contract', () => {
+        expect(
+          resolveDocumentVisibility({ type: 'CONTRACT', contractId: activeContractId }, activeContractId),
+        ).toEqual({ visible: true });
+      });
+
+      it('hides a superseded contract PDF as voided (its contract is VOID)', () => {
+        expect(resolveDocumentVisibility({ type: 'CONTRACT', contractId: 'c-old' }, activeContractId)).toEqual({
+          visible: false,
+          reason: 'voided',
+        });
+      });
+
+      it('hides a contract PDF with no contract link (unsigned copy) as voided', () => {
+        expect(resolveDocumentVisibility({ type: 'CONTRACT', contractId: null }, activeContractId)).toEqual({
+          visible: false,
+          reason: 'voided',
+        });
+      });
+
+      it('hides any contract PDF as cancelled on a cancelled booking (outermost gate)', () => {
+        expect(
+          resolveDocumentVisibility({ type: 'CONTRACT', contractId: activeContractId }, activeContractId, true),
+        ).toEqual({ visible: false, reason: 'cancelled' });
+      });
+    });
+
+    describe('INVOICE documents', () => {
+      const invoiceCases: Array<[string, PortalVisibilityVerdict]> = [
+        ['SENT', { visible: true }],
+        ['PAID', { visible: true }],
+        ['ISSUED', { visible: false, reason: 'until_sent' }],
+        ['VOID', { visible: false, reason: 'voided' }],
+        ['DRAFT', { visible: false, reason: 'until_sent' }],
+      ];
+
+      it.each(invoiceCases)('maps a %s invoice document to the expected verdict', (status, expected) => {
+        expect(resolveDocumentVisibility({ type: 'INVOICE', invoice: { status } }, activeContractId)).toEqual(expected);
+      });
+
+      it('hides an invoice document whose invoice link has been cleared', () => {
+        expect(resolveDocumentVisibility({ type: 'INVOICE', invoice: null }, activeContractId)).toEqual({
+          visible: false,
+          reason: 'until_sent',
+        });
+      });
+
+      it('leaves a SENT invoice visible even on a cancelled booking (cancellation-fee stays payable)', () => {
+        expect(
+          resolveDocumentVisibility({ type: 'INVOICE', invoice: { status: 'SENT' } }, activeContractId, true),
+        ).toEqual({ visible: true });
+      });
+    });
   });
 
   describe('resolveMusicFormVisibility', () => {

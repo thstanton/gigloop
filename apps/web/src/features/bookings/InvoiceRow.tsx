@@ -2,9 +2,10 @@ import { CheckCircle2, Download, Eye, Send } from 'lucide-react';
 import InvoiceStatusPill from '@/components/common/InvoiceStatusPill';
 import { RowActions } from '@/components/common/RowActions';
 import type { RowAction } from '@/components/common/RowActions';
+import { PortalVisibility } from '@/components/common/PortalVisibility';
 import { cn } from '@/lib/utils';
 import { formatDate, formatCurrency } from '@/lib/formatters';
-import type { Invoice } from '@/types/api';
+import type { Invoice, PortalVisibilityVerdict } from '@/types/api';
 
 function invoiceLineTotal(invoice: Invoice): number {
   return invoice.lineItems.reduce((sum, item) => sum + Number.parseFloat(item.amount), 0);
@@ -98,6 +99,10 @@ function getInvoiceActions(
 export interface InvoiceRowProps {
   invoice: Invoice;
   pdfUrl: string | null;
+  // Per-invoice portal-visibility verdict (ADR-0054), sourced from the invoice's backing document
+  // so the badge here, on the document row, and on the portal all agree. Omitted for series
+  // invoices, which are not shown on a single booking's portal.
+  portalVisibility?: PortalVisibilityVerdict;
   isDeletePending: boolean;
   isVoidPending: boolean;
   isIssuePending: boolean;
@@ -113,7 +118,7 @@ export interface InvoiceRowProps {
   onVoid: (invoice: Invoice) => void;
 }
 
-export default function InvoiceRow({ invoice, pdfUrl, isDeletePending, isVoidPending, isIssuePending, isMarkSentPending, isMarkPaidPending, onEdit, onPreview, onIssue, onDelete, onSend, onMarkSent, onMarkPaid, onVoid }: InvoiceRowProps) {
+export default function InvoiceRow({ invoice, pdfUrl, portalVisibility, isDeletePending, isVoidPending, isIssuePending, isMarkSentPending, isMarkPaidPending, onEdit, onPreview, onIssue, onDelete, onSend, onMarkSent, onMarkPaid, onVoid }: InvoiceRowProps) {
   // Overdue only applies to SENT invoices — an ISSUED invoice past its due date is not overdue
   const overdue = invoice.status === 'SENT' && !!invoice.dueDate && new Date(invoice.dueDate) < new Date();
   const isVoid = invoice.status === 'VOID';
@@ -147,6 +152,11 @@ export default function InvoiceRow({ invoice, pdfUrl, isDeletePending, isVoidPen
             <InvoiceStatusPill status={invoice.status} isOverdue={overdue} />
           )}
         </div>
+        {portalVisibility && (
+          <div className="mt-1.5">
+            <PortalVisibility {...portalVisibility} />
+          </div>
+        )}
       </div>
       <div className="flex items-center gap-2 flex-shrink-0">
         <span className={cn('text-sm font-medium tabular-nums', isVoid ? 'text-muted' : 'text-foreground')}>

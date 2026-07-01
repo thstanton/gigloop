@@ -19,8 +19,24 @@ export class DocumentsRepository {
   findByBooking(userId: string, bookingId: string) {
     return this.prisma.document.findMany({
       where: { userId, bookingId },
-      include: { contract: { select: { status: true } } },
+      include: {
+        contract: { select: { status: true } },
+        invoice: { select: { status: true } },
+      },
       orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  // The context the per-document portal-visibility authority needs beyond the document itself
+  // (ADR-0054 / #580): the booking's active contract (most-recent, matching CONTRACT_INCLUDE) to
+  // spot superseded signed-contract PDFs, and its status to apply the cancelled gate.
+  findBookingVisibilityContext(userId: string, bookingId: string) {
+    return this.prisma.booking.findFirst({
+      where: { id: bookingId, userId },
+      select: {
+        status: true,
+        contracts: { orderBy: { createdAt: 'desc' }, take: 1, select: { id: true } },
+      },
     });
   }
 

@@ -12,6 +12,7 @@ const contractDoc = {
   url: 'https://example.com/contract.pdf',
   invoiceId: null,
   contractStatus: 'SIGNED',
+  portalVisibility: { visible: true },
 };
 
 const voidContractDoc = {
@@ -21,6 +22,7 @@ const voidContractDoc = {
   url: 'https://example.com/contract-void.pdf',
   invoiceId: null,
   contractStatus: 'VOID',
+  portalVisibility: { visible: false, reason: 'voided' },
 };
 
 const depositInvoice = {
@@ -45,6 +47,7 @@ const invoiceDoc = {
   invoiceId: 'inv1',
   contractStatus: null,
   name: null,
+  portalVisibility: { visible: true },
 };
 
 const uploadDoc = {
@@ -55,6 +58,7 @@ const uploadDoc = {
   invoiceId: null,
   contractStatus: null,
   name: 'O2 Academy Contract',
+  portalVisibility: { visible: false, reason: 'not_shared' },
 };
 
 const meta = {
@@ -81,6 +85,9 @@ export const WithDocuments: Story = {
     await expect(canvas.findByText('Contract')).resolves.toBeVisible();
     await expect(canvas.findByText('Deposit invoice')).resolves.toBeVisible();
     await expect(canvas.findByText('INV-2030-001')).resolves.toBeVisible();
+    // Each row carries its own portal-visibility indicator (ADR-0054 / #580).
+    const visibleBadges = await canvas.findAllByText('Visible on Client Portal');
+    await expect(visibleBadges).toHaveLength(2);
   },
 };
 
@@ -123,6 +130,8 @@ export const WithUploadDocument: Story = {
   },
   play: async ({ canvas }) => {
     await expect(canvas.findByText('O2 Academy Contract')).resolves.toBeVisible();
+    // The UPLOAD row reads the private-paperwork hint, never a visible badge.
+    await expect(canvas.findByText('Not visible to client')).resolves.toBeVisible();
   },
 };
 
