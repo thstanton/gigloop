@@ -10,7 +10,12 @@
 // Slice 1 (#578) seeds the contract and music-form concerns. The booking-CANCELLED gate and the
 // UPLOAD rule landed in #579; the per-document verdict (`resolveDocumentVisibility`) in #580.
 
-export type PortalVisibilityReason = 'until_sent' | 'voided' | 'not_shared' | 'cancelled';
+export type PortalVisibilityReason =
+  | 'until_sent'
+  | 'until_published'
+  | 'voided'
+  | 'not_shared'
+  | 'cancelled';
 
 export interface PortalVisibilityVerdict {
   visible: boolean;
@@ -101,10 +106,16 @@ export function resolveDocumentVisibility(
 }
 
 /**
- * Music-form-concern visibility. Presence of the config is the on/off truth (ADR-0046): on → the
- * form is live on the portal the instant it is turned on (#533 has no draft period yet); off →
- * null, i.e. not a portal concern, so no indicator.
+ * Music-form-concern visibility (#533 draft → published). Presence of the config is the on/off
+ * truth (ADR-0046); publication is a second, reversible gate that mirrors invoices/contracts:
+ * off (no config) → null, not a portal concern, no indicator; on-but-draft → hidden with
+ * `until_published`; published → visible. Turning the form on creates a draft; the client sees it
+ * only once the musician publishes.
  */
-export function resolveMusicFormVisibility(hasConfig: boolean): PortalVisibilityVerdict | null {
-  return hasConfig ? { visible: true } : null;
+export function resolveMusicFormVisibility(
+  hasConfig: boolean,
+  isPublished = false,
+): PortalVisibilityVerdict | null {
+  if (!hasConfig) return null;
+  return isPublished ? { visible: true } : { visible: false, reason: 'until_published' };
 }

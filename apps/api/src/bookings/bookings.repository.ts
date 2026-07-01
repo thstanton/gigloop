@@ -33,7 +33,7 @@ const bookingIncludes = {
   packages: {
     orderBy: { order: 'asc' as const },
   },
-  musicFormConfig: { select: { id: true } },
+  musicFormConfig: { select: { id: true, publishedAt: true } },
   musicFormResponse: { select: { id: true } },
   contracts: CONTRACT_INCLUDE,
 } as const;
@@ -334,7 +334,7 @@ export class BookingsRepository {
         communications: {
           select: { status: true, template: { select: { builtInType: true } } },
         },
-        musicFormConfig: { select: { id: true } },
+        musicFormConfig: { select: { id: true, publishedAt: true } },
         musicFormResponse: { select: { id: true } },
         contracts: {
           where: { status: { not: 'VOID' } },

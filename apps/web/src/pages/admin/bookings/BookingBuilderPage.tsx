@@ -503,6 +503,27 @@ export default function BookingBuilderPage() {
     onError: () => toast({ title: 'Failed to save music form. Please try again.', variant: 'destructive' }),
   });
 
+  const musicPublish = useMutation({
+    mutationFn: (payload: { keyMoments: KeyMoment[]; enabledGenres: string[] }) =>
+      apiPost<MusicFormConfig>(`/bookings/${id}/music-form-config/publish`, payload),
+    onSuccess: (data) => {
+      queryClient.setQueryData(['booking-music-form-config', id!], data);
+      queryClient.invalidateQueries({ queryKey: ['booking-music-form-config', id!] });
+      queryClient.invalidateQueries({ queryKey: ['booking', id!] });
+    },
+    onError: () => toast({ title: 'Failed to publish music form. Please try again.', variant: 'destructive' }),
+  });
+
+  const musicUnpublish = useMutation({
+    mutationFn: () => apiPost<MusicFormConfig>(`/bookings/${id}/music-form-config/unpublish`, {}),
+    onSuccess: (data) => {
+      queryClient.setQueryData(['booking-music-form-config', id!], data);
+      queryClient.invalidateQueries({ queryKey: ['booking-music-form-config', id!] });
+      queryClient.invalidateQueries({ queryKey: ['booking', id!] });
+    },
+    onError: () => toast({ title: 'Failed to un-publish music form. Please try again.', variant: 'destructive' }),
+  });
+
   const musicTurnOn = useMutation({
     mutationFn: () =>
       apiPut<MusicFormConfig>(`/bookings/${id}/music-form-config`, { keyMoments: [], enabledGenres: DEFAULT_ENABLED_GENRES }),
@@ -795,6 +816,11 @@ export default function BookingBuilderPage() {
                 onSave={(payload) => musicSave.mutate(payload)}
                 onTurnOn={() => musicTurnOn.mutate()}
                 onTurnOff={() => musicTurnOff.mutate()}
+                isPublished={musicConfig?.publishedAt != null}
+                onPublish={(payload) => musicPublish.mutate(payload)}
+                onUnpublish={() => musicUnpublish.mutate()}
+                isPublishing={musicPublish.isPending}
+                isUnpublishing={musicUnpublish.isPending}
                 isSaving={musicSave.isPending}
                 saved={musicSave.isSuccess}
                 saveError={musicSave.isError ? 'Failed to save music form. Please try again.' : null}

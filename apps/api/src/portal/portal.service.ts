@@ -222,7 +222,11 @@ export class PortalService {
       publicProfile: buildPortalPublicProfile(publicProfile),
       signedContractUrl,
       documents,
-      hasMusicForm: resolveMusicFormVisibility(!!booking.musicFormConfig)?.visible ?? false,
+      hasMusicForm:
+        resolveMusicFormVisibility(
+          !!booking.musicFormConfig,
+          booking.musicFormConfig?.publishedAt != null,
+        )?.visible ?? false,
       hasMusicFormResponse: !!booking.musicFormResponse,
       contractStatus,
       depositInvoiceDueDate: sentDepositInvoice?.dueDate?.toISOString() ?? null,
@@ -283,10 +287,22 @@ export class PortalService {
     await this.sendSigningNotification(booking, publicProfile, signedAt);
   }
 
+  // #533: single gate for client access to the music form — reads the shared authority so the
+  // portal endpoints, the `hasMusicForm` link, and the admin indicator can never disagree.
+  private isMusicFormClientVisible(
+    config: { publishedAt?: Date | null } | null | undefined,
+  ): boolean {
+    return resolveMusicFormVisibility(!!config, config?.publishedAt != null)?.visible ?? false;
+  }
+
   async getMusicFormData(token: string) {
     const data = await this.repo.findMusicFormDataByToken(token);
     if (!data) throw new NotFoundException('Booking not found');
-    if (!data.musicFormConfig) throw new NotFoundException('Music form not found');
+    // #533: a draft (unpublished) form is inaccessible to the client — indistinguishable from
+    // "not found" so a token holder cannot fetch it directly. Gate via the shared authority.
+    if (!this.isMusicFormClientVisible(data.musicFormConfig)) {
+      throw new NotFoundException('Music form not found');
+    }
 
     const config = data.musicFormConfig as { keyMoments: unknown; enabledGenres: string[] };
     const [songs, allSongs] = await Promise.all([
@@ -314,7 +330,11 @@ export class PortalService {
   async submitMusicForm(token: string, dto: SubmitMusicFormDto) {
     const data = await this.repo.findMusicFormDataByToken(token);
     if (!data) throw new NotFoundException('Booking not found');
-    if (!data.musicFormConfig) throw new NotFoundException('Music form not found');
+    // #533: submissions are gated on publication too (not just the read) — a token holder cannot
+    // POST to a draft form.
+    if (!this.isMusicFormClientVisible(data.musicFormConfig)) {
+      throw new NotFoundException('Music form not found');
+    }
 
     await this.assertSongIdsOwned(data.userId, dto);
 

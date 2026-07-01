@@ -260,6 +260,26 @@ export class BookingsController {
     return this.service.upsertMusicFormConfig(req.userId, id, dto);
   }
 
+  @ApiOperation({
+    summary: 'Publish the music form (save the latest config and make it visible on the client portal)',
+  })
+  @ApiResponse({ status: 201, description: 'Config saved and published' })
+  @Post(':id/music-form-config/publish')
+  publishMusicFormConfig(
+    @Req() req: AuthedRequest,
+    @Param('id') id: string,
+    @Body() dto: UpsertMusicFormConfigDto,
+  ) {
+    return this.service.publishMusicFormConfig(req.userId, id, dto);
+  }
+
+  @ApiOperation({ summary: 'Un-publish the music form (return it to draft; hidden from the client)' })
+  @ApiResponse({ status: 201, description: 'Config un-published (back to draft)' })
+  @Post(':id/music-form-config/unpublish')
+  unpublishMusicFormConfig(@Req() req: AuthedRequest, @Param('id') id: string) {
+    return this.service.unpublishMusicFormConfig(req.userId, id);
+  }
+
   @ApiOperation({ summary: 'Remove the music form config for a booking' })
   @ApiResponse({ status: 200, description: 'Config deleted' })
   @Delete(':id/music-form-config')

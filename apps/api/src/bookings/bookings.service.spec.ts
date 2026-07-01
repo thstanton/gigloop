@@ -328,12 +328,23 @@ describe('BookingsService', () => {
         contracts: [
           { id: 'c1', status: 'SENT', createdAt: new Date(), updatedAt: new Date(), content: null, signedAt: null },
         ],
-        musicFormConfig: { id: 'mfc1' },
+        musicFormConfig: { id: 'mfc1', publishedAt: new Date() },
         musicFormResponse: null,
       });
       const result = await service.findOne('u1', 'b1');
       expect(result.portalVisibility.contract).toEqual({ visible: false, reason: 'cancelled' });
+      // #533: cancellation gates the contract concern only — a published music form stays visible.
       expect(result.portalVisibility.musicForm).toEqual({ visible: true });
+    });
+
+    it('maps an on-but-unpublished (draft) music form to the until_published verdict (#533)', async () => {
+      repo.findOne.mockResolvedValue({
+        ...booking,
+        musicFormConfig: { id: 'mfc1', publishedAt: null },
+        musicFormResponse: null,
+      });
+      const result = await service.findOne('u1', 'b1');
+      expect(result.portalVisibility.musicForm).toEqual({ visible: false, reason: 'until_published' });
     });
   });
 

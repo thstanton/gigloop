@@ -8,6 +8,7 @@ const emptyConfig: MusicFormConfig = {
   bookingId: 'b1',
   keyMoments: [],
   enabledGenres: ['CONTEMPORARY', 'CLASSICAL', 'JAZZ', 'FILM_TV_MUSICALS'],
+  publishedAt: null, // #533: turned-on but not yet published → draft
   createdAt: '2026-06-01T00:00:00Z',
   updatedAt: '2026-06-01T00:00:00Z',
 };
@@ -19,6 +20,11 @@ const configuredConfig: MusicFormConfig = {
     { label: 'First dance', section: 'Reception' },
     { label: 'Last song', section: 'Other' },
   ],
+};
+
+const publishedConfig: MusicFormConfig = {
+  ...emptyConfig,
+  publishedAt: '2026-06-02T00:00:00Z',
 };
 
 const packages = [
@@ -36,6 +42,11 @@ const meta = {
     onSave: fn(),
     onTurnOn: fn(),
     onTurnOff: fn(),
+    isPublished: false,
+    onPublish: fn(),
+    onUnpublish: fn(),
+    isPublishing: false,
+    isUnpublishing: false,
     isSaving: false,
     saved: false,
     saveError: null,
@@ -82,7 +93,7 @@ export const HappyPath: Story = {
     // Toggle a genre off (Contemporary is seeded on) to register a change either way.
     await userEvent.click(canvas.getByRole('button', { name: /^jazz$/i }));
 
-    const save = canvas.getByRole('button', { name: /^save$/i });
+    const save = canvas.getByRole('button', { name: /^save draft$/i });
     await expect(save).toBeEnabled();
     await userEvent.click(save);
 
@@ -95,10 +106,12 @@ export const HappyPath: Story = {
 };
 
 export const SaveDisabledUntilChange: Story = {
-  name: 'Save is disabled when nothing has changed',
+  name: 'Save draft is disabled when nothing has changed — but Publish stays enabled',
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByRole('button', { name: /^save$/i })).toBeDisabled();
+    await expect(canvas.getByRole('button', { name: /^save draft$/i })).toBeDisabled();
+    // #533 story 20: publishing unchanged defaults is allowed, so Publish is never gated on edits.
+    await expect(canvas.getByRole('button', { name: /^publish$/i })).toBeEnabled();
   },
 };
 
@@ -128,6 +141,33 @@ export const ErrorState: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByText(/failed to save music form/i)).toBeVisible();
+  },
+};
+
+export const DraftShowsSaveDraftAndPublish: Story = {
+  name: '#533 draft: shows Save draft + Publish; Publish carries the current edits',
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('button', { name: /^save draft$/i })).toBeVisible();
+    // A draft has no un-publish action.
+    await expect(canvas.queryByRole('button', { name: /un-publish/i })).toBeNull();
+    await userEvent.click(canvas.getByRole('button', { name: /^publish$/i }));
+    await expect(args.onPublish).toHaveBeenCalledWith(
+      expect.objectContaining({ enabledGenres: expect.arrayContaining(['CONTEMPORARY']) }),
+    );
+  },
+};
+
+export const PublishedShowsSaveAndUnpublish: Story = {
+  name: '#533 published: shows Save + Un-publish (no Publish/Save draft)',
+  args: { config: publishedConfig, isPublished: true },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('button', { name: /^save$/i })).toBeVisible();
+    await expect(canvas.queryByRole('button', { name: /^publish$/i })).toBeNull();
+    await expect(canvas.queryByRole('button', { name: /save draft/i })).toBeNull();
+    await userEvent.click(canvas.getByRole('button', { name: /un-publish/i }));
+    await expect(args.onUnpublish).toHaveBeenCalled();
   },
 };
 

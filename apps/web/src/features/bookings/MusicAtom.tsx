@@ -29,6 +29,13 @@ export interface MusicAtomProps {
   onSave: (payload: MusicAtomSavePayload) => void;
   onTurnOn: () => void;
   onTurnOff: () => void;
+  // #533 draft → published. `isPublished` splits the on state; publish/un-publish emit intent (the
+  // host owns the mutation). Publish carries the current edits so it saves-and-publishes atomically.
+  isPublished: boolean;
+  onPublish: (payload: MusicAtomSavePayload) => void;
+  onUnpublish: () => void;
+  isPublishing: boolean;
+  isUnpublishing: boolean;
   // Tier-1 save state injected by the host.
   isSaving: boolean;
   saved: boolean;
@@ -47,6 +54,11 @@ export function MusicAtom({
   onSave,
   onTurnOn,
   onTurnOff,
+  isPublished,
+  onPublish,
+  onUnpublish,
+  isPublishing,
+  isUnpublishing,
   isSaving,
   saved,
   saveError,
@@ -103,6 +115,9 @@ export function MusicAtom({
 
   const hasChanges = on && config != null && serialize({ keyMoments: localKeyMoments, enabledGenres: localGenres }) !== serialize(config);
 
+  let saveLabel = isPublished ? 'Save' : 'Save draft';
+  if (isSaving) saveLabel = 'Saving…';
+
   function toggleGenre(genre: string) {
     setLocalGenres((prev) =>
       prev.includes(genre) ? prev.filter((g) => g !== genre) : [...prev, genre],
@@ -121,13 +136,23 @@ export function MusicAtom({
     setLocalKeyMoments((prev) => prev.filter((_, j) => j !== index));
   }
 
-  function handleSave() {
-    onSave({
+  function buildPayload(): MusicAtomSavePayload {
+    return {
       keyMoments: localKeyMoments
         .filter((km) => km.label.trim())
         .map((km) => ({ label: km.label.trim(), section: km.section })),
       enabledGenres: localGenres,
-    });
+    };
+  }
+
+  function handleSave() {
+    onSave(buildPayload());
+  }
+
+  // Publish carries the current edits so the musician needn't Save first (publish = save + make
+  // client-visible, atomic — mirrors issuing an invoice). Allowed even with unchanged defaults.
+  function handlePublish() {
+    onPublish(buildPayload());
   }
 
   // The Switch stays visually ON until an off is confirmed — so a cancelled turn-off can't flip it.
@@ -194,12 +219,27 @@ export function MusicAtom({
           />
         </div>
 
-        {/* Tier-1 save (only meaningful when on). */}
+        {/* Tier-1 save + #533 publish (only meaningful when on). Draft: [Save draft] + [Publish].
+            Published: [Save] (edits go live immediately) + [Un-publish]. */}
         {on && (
           <div className="flex items-center gap-3 pt-1 flex-wrap">
-            <Button size="sm" onClick={handleSave} disabled={isSaving || !hasChanges}>
-              {isSaving ? 'Saving…' : 'Save'}
+            <Button
+              size="sm"
+              variant={isPublished ? 'default' : 'outline'}
+              onClick={handleSave}
+              disabled={isSaving || !hasChanges}
+            >
+              {saveLabel}
             </Button>
+            {isPublished ? (
+              <Button size="sm" variant="outline" onClick={onUnpublish} disabled={isUnpublishing}>
+                {isUnpublishing ? 'Un-publishing…' : 'Un-publish'}
+              </Button>
+            ) : (
+              <Button size="sm" onClick={handlePublish} disabled={isPublishing}>
+                {isPublishing ? 'Publishing…' : 'Publish'}
+              </Button>
+            )}
             {saved && !isSaving && <span className="text-xs text-muted">Saved</span>}
             {saveError && <p className="text-sm text-status-cancelled">{saveError}</p>}
           </div>

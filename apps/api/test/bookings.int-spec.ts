@@ -529,4 +529,54 @@ describe('Booking lifecycle (integration)', () => {
       await prisma.contact.delete({ where: { id: otherContact.id } });
     });
   });
+
+  // #533: music form draft → published is soft and reversible; the admin portal-visibility verdict
+  // tracks it (hidden `until_published` while draft, visible once published).
+  describe('Music form publish → un-publish (reversible)', () => {
+    let bookingId: string;
+
+    beforeAll(async () => {
+      const res = await createBooking();
+      bookingId = res.body.id as string;
+      // Turn the form on — it starts as a draft (publishedAt null).
+      await request(app.getHttpServer())
+        .put(`/api/bookings/${bookingId}/music-form-config`)
+        .send({ keyMoments: [], enabledGenres: ['Pop'] });
+    });
+
+    afterAll(async () => {
+      await prisma.booking.delete({ where: { id: bookingId } });
+    });
+
+    it('a turned-on form starts as a draft (hidden until published)', async () => {
+      const res = await request(app.getHttpServer()).get(`/api/bookings/${bookingId}`);
+      expect(res.body.portalVisibility.musicForm).toEqual({ visible: false, reason: 'until_published' });
+    });
+
+    it('publishing sets publishedAt and makes the form visible', async () => {
+      const publish = await request(app.getHttpServer())
+        .post(`/api/bookings/${bookingId}/music-form-config/publish`)
+        .send({ keyMoments: [], enabledGenres: ['Pop', 'Jazz'] });
+      expect(publish.status).toBe(201);
+      expect(publish.body.publishedAt).toBeTruthy();
+      // Publish also persists the latest config (saved-and-published, atomic).
+      expect(publish.body.enabledGenres).toEqual(['Pop', 'Jazz']);
+
+      const res = await request(app.getHttpServer()).get(`/api/bookings/${bookingId}`);
+      expect(res.body.portalVisibility.musicForm).toEqual({ visible: true });
+    });
+
+    it('un-publishing returns it to draft (hidden) without deleting it', async () => {
+      const unpublish = await request(app.getHttpServer())
+        .post(`/api/bookings/${bookingId}/music-form-config/unpublish`)
+        .send({});
+      expect(unpublish.status).toBe(201);
+      expect(unpublish.body.publishedAt).toBeNull();
+      // Config survives (genres retained) — un-publish is not a delete.
+      expect(unpublish.body.enabledGenres).toEqual(['Pop', 'Jazz']);
+
+      const res = await request(app.getHttpServer()).get(`/api/bookings/${bookingId}`);
+      expect(res.body.portalVisibility.musicForm).toEqual({ visible: false, reason: 'until_published' });
+    });
+  });
 });

@@ -108,13 +108,22 @@ describe('portal-visibility authority (ADR-0054)', () => {
     });
   });
 
-  describe('resolveMusicFormVisibility', () => {
-    it('is visible when the config exists (form on)', () => {
-      expect(resolveMusicFormVisibility(true)).toEqual({ visible: true });
+  describe('resolveMusicFormVisibility (#533 draft → published)', () => {
+    it('is null (no concern) when the config is absent (form off)', () => {
+      expect(resolveMusicFormVisibility(false, false)).toBeNull();
+      expect(resolveMusicFormVisibility(false, true)).toBeNull();
     });
 
-    it('is null (no concern) when the config is absent (form off)', () => {
-      expect(resolveMusicFormVisibility(false)).toBeNull();
+    it('is hidden with reason not_published when the form is a draft (on, not published)', () => {
+      expect(resolveMusicFormVisibility(true, false)).toEqual({ visible: false, reason: 'until_published' });
+    });
+
+    it('is visible once the form is published', () => {
+      expect(resolveMusicFormVisibility(true, true)).toEqual({ visible: true });
+    });
+
+    it('defaults isPublished to false (a config without a publish is a draft)', () => {
+      expect(resolveMusicFormVisibility(true)).toEqual({ visible: false, reason: 'until_published' });
     });
   });
 });

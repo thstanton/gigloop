@@ -6,7 +6,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
-import { apiDelete, apiGet, apiPut } from '@/lib/api';
+import { apiDelete, apiGet, apiPost, apiPut } from '@/lib/api';
 import { DEFAULT_ENABLED_GENRES } from '@/lib/constants';
 import { toast } from '@/lib/hooks/use-toast';
 import { MusicAtom, type MusicAtomSavePayload } from './MusicAtom';
@@ -56,6 +56,33 @@ export function MusicQuickTweakSheet({
     },
     onError: () =>
       toast({ title: 'Failed to save music form. Please try again.', variant: 'destructive' }),
+  });
+
+  // #533: publish = save the current config AND make it client-visible (atomic). Unlike Save, it
+  // keeps the sheet open so the musician sees it flip to the published state (slice #632 will chain
+  // this into opening the send-invite sheet).
+  const publishMutation = useMutation({
+    mutationFn: (payload: MusicAtomSavePayload) =>
+      apiPost<MusicFormConfig>(`/bookings/${bookingId}/music-form-config/publish`, payload),
+    onSuccess: (data) => {
+      queryClient.setQueryData(['booking-music-form-config', bookingId], data);
+      queryClient.invalidateQueries({ queryKey: ['booking-music-form-config', bookingId] });
+      queryClient.invalidateQueries({ queryKey: ['booking', bookingId] });
+    },
+    onError: () =>
+      toast({ title: 'Failed to publish music form. Please try again.', variant: 'destructive' }),
+  });
+
+  const unpublishMutation = useMutation({
+    mutationFn: () =>
+      apiPost<MusicFormConfig>(`/bookings/${bookingId}/music-form-config/unpublish`, {}),
+    onSuccess: (data) => {
+      queryClient.setQueryData(['booking-music-form-config', bookingId], data);
+      queryClient.invalidateQueries({ queryKey: ['booking-music-form-config', bookingId] });
+      queryClient.invalidateQueries({ queryKey: ['booking', bookingId] });
+    },
+    onError: () =>
+      toast({ title: 'Failed to un-publish music form. Please try again.', variant: 'destructive' }),
   });
 
   const turnOnMutation = useMutation({
@@ -110,6 +137,11 @@ export function MusicQuickTweakSheet({
             onSave={(payload) => saveMutation.mutate(payload)}
             onTurnOn={() => turnOnMutation.mutate()}
             onTurnOff={() => turnOffMutation.mutate()}
+            isPublished={config?.publishedAt != null}
+            onPublish={(payload) => publishMutation.mutate(payload)}
+            onUnpublish={() => unpublishMutation.mutate()}
+            isPublishing={publishMutation.isPending}
+            isUnpublishing={unpublishMutation.isPending}
             isSaving={saveMutation.isPending}
             saved={false}
             saveError={null}

@@ -32,6 +32,26 @@ export class MusicFormConfigRepository {
     });
   }
 
+  // #533: publish = persist the latest config AND mark it client-visible in one atomic upsert, so
+  // the "Publish" button saves and publishes together (mirrors issuing an invoice). Idempotent-ish:
+  // re-publishing refreshes publishedAt, which is fine for a soft, reversible gate.
+  publishMusicFormConfig(userId: string, bookingId: string, dto: UpsertMusicFormConfigDto) {
+    const keyMoments = dto.keyMoments as unknown as Prisma.InputJsonValue;
+    return this.prisma.musicFormConfig.upsert({
+      where: { bookingId },
+      create: { userId, bookingId, keyMoments, enabledGenres: dto.enabledGenres, publishedAt: new Date() },
+      update: { keyMoments, enabledGenres: dto.enabledGenres, publishedAt: new Date() },
+    });
+  }
+
+  // #533: un-publish returns the form to draft (hidden) without deleting it. Soft and reversible.
+  unpublishMusicFormConfig(bookingId: string) {
+    return this.prisma.musicFormConfig.update({
+      where: { bookingId },
+      data: { publishedAt: null },
+    });
+  }
+
   deleteMusicFormConfig(bookingId: string) {
     return this.prisma.musicFormConfig.delete({ where: { bookingId } });
   }
