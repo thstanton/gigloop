@@ -141,6 +141,7 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
             onAddItem={(data) => addItem(data)}
             isAddingItem={isAddingItem}
             hideHeader
+            clientName={booking.customer?.greetingName || booking.customer?.name || null}
           />
         ) : null
       }

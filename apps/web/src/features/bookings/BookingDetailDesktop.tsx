@@ -133,6 +133,7 @@ export function BookingDetailDesktop({ bookingId }: BookingDetailDesktopProps) {
             onToggle={(itemId, state) => toggleItem(itemId, state)}
             onAddItem={(data) => addItem(data)}
             isAddingItem={isAddingItem}
+            clientName={booking.customer?.greetingName || booking.customer?.name || null}
           />
         )}
 
