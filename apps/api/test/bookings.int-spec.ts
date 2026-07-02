@@ -529,4 +529,83 @@ describe('Booking lifecycle (integration)', () => {
       await prisma.contact.delete({ where: { id: otherContact.id } });
     });
   });
+
+  // #533: music form draft → published is soft and reversible; the admin portal-visibility verdict
+  // tracks it (hidden `until_published` while draft, visible once published).
+  describe('Music form publish → un-publish (reversible)', () => {
+    let bookingId: string;
+    let inviteTemplateId: string;
+
+    beforeAll(async () => {
+      const res = await createBooking();
+      bookingId = res.body.id as string;
+      // Turn the form on — it starts as a draft (publishedAt null).
+      await request(app.getHttpServer())
+        .put(`/api/bookings/${bookingId}/music-form-config`)
+        .send({ keyMoments: [], enabledGenres: ['Pop'] });
+      // #631: a music-form-invite template, to exercise the send gate.
+      const tmpl = await prisma.template.create({
+        data: { userId: TEST_USER_ID, name: 'Music form invite', content: {}, builtInType: 'music_form_invite' },
+      });
+      inviteTemplateId = tmpl.id;
+    });
+
+    afterAll(async () => {
+      await prisma.booking.delete({ where: { id: bookingId } });
+      await prisma.template.delete({ where: { id: inviteTemplateId } });
+    });
+
+    const publishStep = () =>
+      prisma.bookingChecklistStep.findFirst({ where: { bookingId, key: 'set_up_and_publish' } });
+
+    it('a turned-on form starts as a draft (hidden until published)', async () => {
+      const res = await request(app.getHttpServer()).get(`/api/bookings/${bookingId}`);
+      expect(res.body.portalVisibility.musicForm).toEqual({ visible: false, reason: 'until_published' });
+      // #630: the gather_song_requests goal carries the set_up_and_publish step, PENDING while draft.
+      expect((await publishStep())?.state).toBe('PENDING');
+    });
+
+    it('rejects a music_form_invite send while the form is a draft (#631 leak gate)', async () => {
+      const res = await request(app.getHttpServer())
+        .post(`/api/bookings/${bookingId}/communications/send`)
+        .send({
+          to: 'client@example.com',
+          contactId: customerId,
+          subject: 'Your music form',
+          body: '<p>Please choose your songs.</p>',
+          templateId: inviteTemplateId,
+        });
+      expect(res.status).toBe(409);
+    });
+
+    it('publishing sets publishedAt, makes the form visible, and completes the publish step (#630)', async () => {
+      const publish = await request(app.getHttpServer())
+        .post(`/api/bookings/${bookingId}/music-form-config/publish`)
+        .send({ keyMoments: [], enabledGenres: ['Pop', 'Jazz'] });
+      expect(publish.status).toBe(201);
+      expect(publish.body.publishedAt).toBeTruthy();
+      // Publish also persists the latest config (saved-and-published, atomic).
+      expect(publish.body.enabledGenres).toEqual(['Pop', 'Jazz']);
+
+      const res = await request(app.getHttpServer()).get(`/api/bookings/${bookingId}`);
+      expect(res.body.portalVisibility.musicForm).toEqual({ visible: true });
+      // #630: the set_up_and_publish step auto-completes on the musicFormPublished rule.
+      expect((await publishStep())?.state).toBe('COMPLETE');
+    });
+
+    it('un-publishing returns it to draft, hides it, and reverts the publish step (#630)', async () => {
+      const unpublish = await request(app.getHttpServer())
+        .post(`/api/bookings/${bookingId}/music-form-config/unpublish`)
+        .send({});
+      expect(unpublish.status).toBe(201);
+      expect(unpublish.body.publishedAt).toBeNull();
+      // Config survives (genres retained) — un-publish is not a delete.
+      expect(unpublish.body.enabledGenres).toEqual(['Pop', 'Jazz']);
+
+      const res = await request(app.getHttpServer()).get(`/api/bookings/${bookingId}`);
+      expect(res.body.portalVisibility.musicForm).toEqual({ visible: false, reason: 'until_published' });
+      // #630: un-publishing reverts the step to PENDING (reversible).
+      expect((await publishStep())?.state).toBe('PENDING');
+    });
+  });
 });

@@ -205,8 +205,9 @@ export const REMINDER_CONCERN_LABELS: Record<ReminderConcern, string> = {
 // returns the stable ReasonCode; this is the only place the English lives. The visible state needs
 // no map — it is always "Visible on Client Portal".
 export const PORTAL_VISIBILITY_REASON_COPY: Record<PortalVisibilityReason, string> = {
-  until_sent: 'Not visible until sent',
-  voided:     'Not visible — voided',
-  not_shared: 'Not visible to client',
-  cancelled:  'Not visible — cancelled',
+  until_sent:      'Not visible until sent',
+  until_published: 'Not visible until published',
+  voided:          'Not visible — voided',
+  not_shared:      'Not visible to client',
+  cancelled:       'Not visible — cancelled',
 };

@@ -197,10 +197,14 @@ interface SendGateOpts {
   sending: boolean;
   showDateFields: boolean;
   formIssueDate: string;
+  // #533/#631: the selected template is the music-form invite but the form is not published — the
+  // API would 409, so the Send button is blocked (not just the dropdown item) with an inline reason.
+  musicInviteBlocked?: boolean;
 }
 
 /** Whether the Send button is enabled. */
 export function canSendEmail(opts: SendGateOpts): boolean {
+  if (opts.musicInviteBlocked) return false;
   const ready = opts.hasEmail && opts.hasTemplate && opts.hasSubject && !opts.rendering && !opts.sending;
   return ready && datesReady(opts.showDateFields, opts.formIssueDate);
 }

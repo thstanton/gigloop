@@ -32,6 +32,7 @@ const config: MusicFormConfig = {
     { label: 'Bridal walk-in', section: 'Wedding Package' },
   ],
   enabledGenres: ['JAZZ', 'CLASSICAL'],
+  publishedAt: null,
   createdAt: '2030-04-02T10:00:00Z', updatedAt: '2030-04-02T10:00:00Z',
 };
 

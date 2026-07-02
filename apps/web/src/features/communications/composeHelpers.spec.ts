@@ -484,6 +484,11 @@ describe('canSendEmail', () => {
     expect(canSendEmail({ ...ready, sending: true })).toBe(false);
   });
 
+  it('is false when the music-form invite is selected but the form is not published (#631)', () => {
+    // All other preconditions met — the publish gate alone blocks Send.
+    expect(canSendEmail({ ...ready, musicInviteBlocked: true })).toBe(false);
+  });
+
   it('requires an issue date when date fields are shown', () => {
     expect(canSendEmail({ ...ready, showDateFields: true, formIssueDate: '' })).toBe(false);
     expect(canSendEmail({ ...ready, showDateFields: true, formIssueDate: '2030-01-01' })).toBe(true);

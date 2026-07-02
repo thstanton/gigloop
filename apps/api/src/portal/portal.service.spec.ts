@@ -163,7 +163,8 @@ describe('PortalService.submitMusicForm (integration)', () => {
   const bookingData = {
     id: bookingId,
     userId,
-    musicFormConfig: { keyMoments: [], enabledGenres: ['Pop'] },
+    // #533: a submittable form must be published — the gate rejects a draft.
+    musicFormConfig: { keyMoments: [], enabledGenres: ['Pop'], publishedAt: new Date() },
     musicFormResponse: null,
   };
 
@@ -321,10 +322,18 @@ describe('PortalService.getBookingData (visibility outputs)', () => {
     expect(result.contractStatus).toBeNull();
   });
 
-  it('sets hasMusicForm true when a music form config exists, false otherwise', async () => {
-    const on = await makeService({ musicFormConfig: { id: 'mfc1' } }).getBookingData(token);
+  // #533: hasMusicForm gates on *published*, not mere config existence. A draft (unpublished) form
+  // reads false — the client sees no link.
+  it('sets hasMusicForm true only when the music form config is published', async () => {
+    const published = await makeService({
+      musicFormConfig: { id: 'mfc1', publishedAt: new Date() },
+    }).getBookingData(token);
+    const draft = await makeService({
+      musicFormConfig: { id: 'mfc1', publishedAt: null },
+    }).getBookingData(token);
     const off = await makeService({ musicFormConfig: null }).getBookingData(token);
-    expect(on.hasMusicForm).toBe(true);
+    expect(published.hasMusicForm).toBe(true);
+    expect(draft.hasMusicForm).toBe(false);
     expect(off.hasMusicForm).toBe(false);
   });
 

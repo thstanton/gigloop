@@ -1,6 +1,8 @@
+import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, waitFor, within } from 'storybook/test';
+import { expect, userEvent, waitFor, within } from 'storybook/test';
 import { http, HttpResponse } from 'msw';
+import { MemoryRouter } from 'react-router-dom';
 import ComposeEmailSheet from './ComposeEmailSheet';
 import type { BookingDetail, Invoice } from '@/types/api';
 
@@ -25,8 +27,22 @@ const booking: BookingDetail = {
   venueId: null, venue: null, bookingAgentId: null, bookingAgent: null,
   sets: [], packages: [], activeContract: null, depositReceivedAt: null,
   portalToken: 'tok1', hasMusicFormConfig: false, hasMusicFormResponse: false,
+  portalVisibility: { contract: null, musicForm: null },
   seriesId: null, series: null, logistics: null,
 } as unknown as BookingDetail;
+
+// A booking whose music form is a DRAFT (on, not yet published) — the music-form invite is blocked.
+const draftMusicBooking = {
+  ...booking,
+  hasMusicFormConfig: true,
+  portalVisibility: { contract: null, musicForm: { visible: false, reason: 'until_published' } },
+} as unknown as BookingDetail;
+
+const musicInviteTemplate = {
+  id: 'tpl-music', name: 'Music form invite', builtInType: 'music_form_invite',
+  content: { type: 'doc', content: [] },
+  createdAt: '2030-01-01T00:00:00Z', updatedAt: '2030-01-01T00:00:00Z',
+};
 
 function makeInvoice(overrides: object): Invoice {
   return {
@@ -71,6 +87,7 @@ const confirmationRenderResult = {
 const meta = {
   component: ComposeEmailSheet,
   tags: ['ai-generated'],
+  decorators: [(Story) => React.createElement(MemoryRouter, {}, React.createElement(Story))],
   args: {
     bookingId: 'b1',
     booking,
@@ -128,6 +145,63 @@ export const AttachmentWarning: Story = {
     await waitFor(async () => {
       await expect(canvas.findByText('No deposit invoice to attach')).resolves.toBeVisible();
     });
+  },
+};
+
+// #533 / #631: while the music form is a draft, the music-form-invite template is disabled in the
+// picker (you can't email an invite for a form the client can't see).
+export const MusicInviteBlockedWhileDraft: Story = {
+  args: {
+    booking: draftMusicBooking,
+    invoices: [],
+    initialTemplateType: 'confirmation',
+  },
+  parameters: {
+    msw: {
+      handlers: [
+        http.get('/api/templates', () => HttpResponse.json([confirmationTemplate, musicInviteTemplate])),
+        http.get('/api/bookings/b1/communications/render', () => HttpResponse.json(confirmationRenderResult)),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement.ownerDocument.body);
+    await waitFor(async () => {
+      await expect(canvas.findByText('Template')).resolves.toBeVisible();
+    });
+    // Open the template picker and find the music-invite option.
+    await userEvent.click(canvas.getByRole('combobox'));
+    const option = await canvas.findByText(/Music form invitation — publish the form first/i);
+    const optionEl = option.closest('[role="option"]');
+    expect(optionEl).toHaveAttribute('aria-disabled', 'true');
+  },
+};
+
+// #631 backstop: if the invite template is already selected (e.g. pre-selected by a checklist
+// shortcut) while the form is a draft, Send is disabled and the reason is explained — the disabled
+// dropdown item alone doesn't cover an already-selected template.
+export const MusicInviteSelectedButBlocked: Story = {
+  args: {
+    booking: draftMusicBooking,
+    invoices: [],
+    initialTemplateType: 'music_form_invite',
+  },
+  parameters: {
+    msw: {
+      handlers: [
+        http.get('/api/templates', () => HttpResponse.json([musicInviteTemplate])),
+        http.get('/api/bookings/b1/communications/render', () =>
+          HttpResponse.json({ subject: 'Your music form', body: '<p>Choose your songs.</p>', missingVariables: [] }),
+        ),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement.ownerDocument.body);
+    await waitFor(async () => {
+      await expect(canvas.findByText(/isn't published yet/i)).resolves.toBeVisible();
+    });
+    await expect(canvas.getByRole('button', { name: /^send$/i })).toBeDisabled();
   },
 };
 

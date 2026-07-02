@@ -36,6 +36,8 @@ describe('Portal music form (integration)', () => {
             userId: TEST_USER_ID,
             enabledGenres: ['Pop', 'Jazz'],
             keyMoments: [{ label: 'First Dance', section: 'ceremony' }],
+            // #533: the form must be published to be reachable via the portal token.
+            publishedAt: new Date(),
           },
         },
       },
@@ -116,6 +118,73 @@ describe('Portal music form (integration)', () => {
       .post('/api/booking/unknown-token-xyz/music')
       .send({ selectedSongIds: [], specialRequests: [], notes: '' });
 
+    expect(res.status).toBe(404);
+  });
+});
+
+// #533: a DRAFT (unpublished) form must be unreachable via the portal token — both the read and the
+// submit are gated, so a token holder cannot fetch or submit it. Indistinguishable from "not found".
+describe('Portal music form draft gate (#533, integration)', () => {
+  let app: INestApplication;
+  let bookingId: string;
+  const DRAFT_TOKEN = `test-portal-draft-token-${Date.now()}`;
+
+  beforeAll(async () => {
+    app = await createTestApp();
+
+    const contact = await prisma.contact.create({
+      data: { userId: TEST_USER_ID, name: 'Draft Form Customer' },
+    });
+    await prisma.publicProfile.upsert({
+      where: { userId: TEST_USER_ID },
+      create: { userId: TEST_USER_ID, businessName: 'Test Band' },
+      update: {},
+    });
+
+    const booking = await prisma.booking.create({
+      data: {
+        userId: TEST_USER_ID,
+        customerId: contact.id,
+        eventType: 'WEDDING',
+        date: new Date(FUTURE_DATE),
+        portalToken: DRAFT_TOKEN,
+        musicFormConfig: {
+          create: {
+            userId: TEST_USER_ID,
+            enabledGenres: ['Pop'],
+            keyMoments: [],
+            // Draft: on, but not published.
+            publishedAt: null,
+          },
+        },
+      },
+    });
+    bookingId = booking.id;
+  });
+
+  afterAll(async () => {
+    await prisma.musicFormConfig.deleteMany({ where: { bookingId } });
+    await prisma.booking.deleteMany({ where: { userId: TEST_USER_ID } });
+    await prisma.contact.deleteMany({ where: { userId: TEST_USER_ID } });
+    await prisma.publicProfile.deleteMany({ where: { userId: TEST_USER_ID } });
+    await app.close();
+  });
+
+  it('does not expose a draft form on the main portal payload (hasMusicForm false)', async () => {
+    const res = await request(app.getHttpServer()).get(`/api/booking/${DRAFT_TOKEN}`);
+    expect(res.status).toBe(200);
+    expect(res.body.hasMusicForm).toBe(false);
+  });
+
+  it('returns 404 when reading a draft form via token', async () => {
+    const res = await request(app.getHttpServer()).get(`/api/booking/${DRAFT_TOKEN}/music`);
+    expect(res.status).toBe(404);
+  });
+
+  it('returns 404 when submitting to a draft form via token', async () => {
+    const res = await request(app.getHttpServer())
+      .post(`/api/booking/${DRAFT_TOKEN}/music`)
+      .send({ selectedSongIds: [], specialRequests: [], notes: '' });
     expect(res.status).toBe(404);
   });
 });

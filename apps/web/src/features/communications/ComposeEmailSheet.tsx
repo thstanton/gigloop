@@ -1,5 +1,5 @@
 import { EditorContent, type Editor } from '@tiptap/react';
-import { AlertTriangle, Paperclip } from 'lucide-react';
+import { AlertTriangle, EyeOff, Paperclip } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { DatePicker } from '@/components/ui/date-picker';
+import { InlineHint } from '@/components/common/InlineHint';
 import { TEMPLATE_DISPLAY } from '@/features/templates/templateMeta';
 import { formatMissingVariables, type AttachmentState } from './composeHelpers';
 import { useComposeEmail } from './useComposeEmail';
@@ -55,10 +56,13 @@ function TemplatePicker({
   templates,
   value,
   onChange,
+  musicFormPublished,
 }: {
   templates: Template[];
   value: string;
   onChange: (id: string) => void;
+  // #533 / #631: the music-form invite cannot be sent until the form is published.
+  musicFormPublished: boolean;
 }) {
   return (
     <div>
@@ -68,11 +72,15 @@ function TemplatePicker({
           <SelectValue placeholder="Select a template" />
         </SelectTrigger>
         <SelectContent>
-          {templates.map((t) => (
-            <SelectItem key={t.id} value={t.id}>
-              {t.builtInType ? TEMPLATE_DISPLAY[t.builtInType].name : t.name}
-            </SelectItem>
-          ))}
+          {templates.map((t) => {
+            const blockedMusicInvite = t.builtInType === 'music_form_invite' && !musicFormPublished;
+            const label = t.builtInType ? TEMPLATE_DISPLAY[t.builtInType].name : t.name;
+            return (
+              <SelectItem key={t.id} value={t.id} disabled={blockedMusicInvite}>
+                {blockedMusicInvite ? `${label} — publish the form first` : label}
+              </SelectItem>
+            );
+          })}
         </SelectContent>
       </Select>
     </div>
@@ -190,7 +198,7 @@ function BodyField({ rendering, editor }: { rendering: boolean; editor: Editor |
 // ─── Body ─────────────────────────────────────────────────────────────────────
 
 function ComposeEmailSheetBody(props: Props) {
-  const { booking, onOpenChange } = props;
+  const { bookingId, booking, onOpenChange } = props;
   const vm = useComposeEmail(props);
 
   return (
@@ -205,6 +213,7 @@ function ComposeEmailSheetBody(props: Props) {
           templates={vm.emailTemplates}
           value={vm.selectedTemplateId}
           onChange={vm.setSelectedTemplateId}
+          musicFormPublished={booking.portalVisibility.musicForm?.visible ?? false}
         />
         <AttachmentIndicator state={vm.attachmentState} />
         {vm.showDateFields && (
@@ -220,6 +229,15 @@ function ComposeEmailSheetBody(props: Props) {
           <SubjectField rendering={vm.rendering} subject={vm.subject} onChange={vm.setSubject} />
         )}
         {vm.selectedTemplateId && <BodyField rendering={vm.rendering} editor={vm.editor} />}
+        {vm.musicInviteBlocked && (
+          <InlineHint
+            icon={<EyeOff size={14} />}
+            actionLabel="Publish the form"
+            href={`/admin/bookings/${bookingId}?sheet=musicTweak`}
+          >
+            This music form isn't published yet, so the client can't see it.
+          </InlineHint>
+        )}
         {vm.sendError && <p className="text-sm text-status-cancelled">{vm.sendError}</p>}
       </div>
 

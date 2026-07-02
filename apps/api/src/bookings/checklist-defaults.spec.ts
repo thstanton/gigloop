@@ -259,17 +259,29 @@ describe('gather_song_requests goal (ADR-0057 / #608)', () => {
     return item;
   };
 
-  it('owns invite → response; response is CUSTOMER/AWAITED (a passive client wait)', () => {
+  it('owns publish → invite → response; response is CUSTOMER/AWAITED (a passive client wait)', () => {
     const goal = songGoal();
     expect(goal.requiredForStatus).toBe('READY');
     expect(goal.autoCompleteRule).toBeNull();
     const steps = goal.steps ?? [];
+    // #533/#630: publish is the first milestone (mirrors invoice create→issue→send).
     const milestones = steps.filter((s) => s.kind === 'MILESTONE');
-    expect(milestones.map((s) => s.key)).toEqual(['music_form_invite', 'song_requests']);
+    expect(milestones.map((s) => s.key)).toEqual(['set_up_and_publish', 'music_form_invite', 'song_requests']);
     expect(milestones[0].completeMode).toBe('ACTION');
-    expect(milestones[1].completeMode).toBe('AWAITED');
-    expect(milestones[1].completedBy).toBe('CUSTOMER');
-    expect(milestones[1].autoCompleteRule).toEqual({ type: 'musicFormResponse' });
+    expect(milestones[0].completedBy).toBe('USER');
+    expect(milestones[0].autoCompleteRule).toEqual({ type: 'musicFormPublished' });
+    expect(milestones[1].completeMode).toBe('ACTION');
+    expect(milestones[2].completeMode).toBe('AWAITED');
+    expect(milestones[2].completedBy).toBe('CUSTOMER');
+    expect(milestones[2].autoCompleteRule).toEqual({ type: 'musicFormResponse' });
+  });
+
+  it('orders publish before the add-email precondition, so publishing is not gated on the email (#533/#630)', () => {
+    const keys = (songGoal().steps ?? []).map((s) => s.key);
+    expect(keys).toEqual(['set_up_and_publish', 'add_email_music', 'music_form_invite', 'song_requests']);
+    // The email precondition sits immediately before the invite it gates — not before publish.
+    expect(keys.indexOf('set_up_and_publish')).toBeLessThan(keys.indexOf('add_email_music'));
+    expect(keys.indexOf('add_email_music')).toBeLessThan(keys.indexOf('music_form_invite'));
   });
 });
 

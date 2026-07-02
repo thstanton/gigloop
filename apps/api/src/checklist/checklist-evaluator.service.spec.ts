@@ -27,6 +27,7 @@ function makeBooking(overrides: Record<string, unknown> = {}) {
     invoices: [],
     contracts: [],
     musicFormResponse: null,
+    musicFormPublished: false,
     ...overrides,
   };
 }

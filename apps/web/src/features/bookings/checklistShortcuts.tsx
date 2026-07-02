@@ -81,6 +81,11 @@ export function resolveChecklistShortcut(
   if (precondition) {
     return { label: retry ?? precondition.label, pending: false, onClick: () => h.onDeepLink(precondition.section) };
   }
+  // #533 / #630: the set_up_and_publish step deep-links to the Builder's Music section, where the
+  // Save draft / Publish controls live (same deep-link pattern as the structural/precondition rows).
+  if (shortcutType === 'set_up_and_publish_music') {
+    return { label: retry ?? 'Set up & publish', pending: false, onClick: () => h.onDeepLink('music') };
+  }
   if (MARK_DONE_KEYS.has(shortcutType)) {
     return {
       label: retry ?? 'Mark done',

@@ -30,7 +30,7 @@ export class PortalRepository {
           },
           orderBy: { createdAt: 'asc' },
         },
-        musicFormConfig: { select: { id: true } },
+        musicFormConfig: { select: { id: true, publishedAt: true } },
         musicFormResponse: { select: { id: true } },
         communications: {
           select: {
@@ -50,7 +50,7 @@ export class PortalRepository {
         id: true,
         userId: true,
         musicFormConfig: {
-          select: { keyMoments: true, enabledGenres: true },
+          select: { keyMoments: true, enabledGenres: true, publishedAt: true },
         },
         musicFormResponse: {
           select: {

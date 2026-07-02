@@ -87,6 +87,8 @@ export function deriveShortcut(
       return { shortcutType: 'mark_contract_signed' };
     case 'customerEmail':
       return { shortcutType: 'add_email' }; // #618 → routes to the booking's People
+    case 'musicFormPublished':
+      return { shortcutType: 'set_up_and_publish_music' }; // #533/#630 → opens the music form editor
     default:
       return {};
   }
@@ -132,7 +134,12 @@ export class BookingsService {
       hasMusicFormConfig: !!musicFormConfig,
       hasMusicFormResponse: !!musicFormResponse,
       activeContract: this.normaliseContract(contracts?.[0] ?? null),
-      portalVisibility: this.buildPortalVisibility(contracts?.[0]?.status, !!musicFormConfig, booking.status),
+      portalVisibility: this.buildPortalVisibility(
+        contracts?.[0]?.status,
+        !!musicFormConfig,
+        booking.status,
+        musicFormConfig?.publishedAt != null,
+      ),
     };
   }
 
@@ -145,13 +152,14 @@ export class BookingsService {
     contractStatus: string | null | undefined,
     hasMusicFormConfig: boolean,
     bookingStatus: string,
+    musicFormPublished: boolean,
   ) {
     return {
       contract: resolveContractVisibility(
         (contractStatus ?? null) as ContractStatus | null,
         bookingStatus === 'CANCELLED',
       ),
-      musicForm: resolveMusicFormVisibility(hasMusicFormConfig),
+      musicForm: resolveMusicFormVisibility(hasMusicFormConfig, musicFormPublished),
     };
   }
 
@@ -390,6 +398,27 @@ export class BookingsService {
     return this.musicFormRepo.deleteMusicFormConfig(bookingId);
   }
 
+  // #533: publish the music form (save latest config + make it client-visible). Re-evaluates the
+  // checklist so the `set_up_and_publish` step (slice #630) auto-completes; best-effort like the
+  // other music-form mutations.
+  async publishMusicFormConfig(userId: string, bookingId: string, dto: UpsertMusicFormConfigDto) {
+    await this.assertOwnership(userId, bookingId);
+    const config = await this.musicFormRepo.publishMusicFormConfig(userId, bookingId, dto);
+    await this.evaluator.evaluate(bookingId).catch(() => {});
+    return config;
+  }
+
+  // #533: un-publish (back to draft/hidden), reversible. The set_up_and_publish step is sticky once
+  // COMPLETE, so evaluate() alone won't reopen it — un-stick it first (same reset the invoice-void
+  // flow uses), then re-evaluate against the now-false musicFormPublished fact → PENDING.
+  async unpublishMusicFormConfig(userId: string, bookingId: string) {
+    await this.assertOwnership(userId, bookingId);
+    const config = await this.musicFormRepo.unpublishMusicFormConfig(bookingId);
+    await this.checklistRepo.resetItemByKey(bookingId, 'set_up_and_publish');
+    await this.evaluator.evaluate(bookingId).catch(() => {});
+    return config;
+  }
+
   async applyPackageTemplate(userId: string, bookingId: string, packageTemplateId: string) {
     await this.assertOwnership(userId, bookingId);
     const templates = await this.repo.findPackageTemplates(userId, [packageTemplateId]);
@@ -442,7 +471,12 @@ export class BookingsService {
       hasMusicFormConfig: !!musicFormConfig,
       hasMusicFormResponse: !!musicFormResponse,
       activeContract: this.normaliseContract(contracts?.[0] ?? null),
-      portalVisibility: this.buildPortalVisibility(contracts?.[0]?.status, !!musicFormConfig, booking.status),
+      portalVisibility: this.buildPortalVisibility(
+        contracts?.[0]?.status,
+        !!musicFormConfig,
+        booking.status,
+        musicFormConfig?.publishedAt != null,
+      ),
     };
   }
 

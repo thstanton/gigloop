@@ -14,9 +14,18 @@ const baseConfig: MusicFormConfig = {
   bookingId: 'b1',
   keyMoments: [{ label: 'First dance', section: 'Other' }],
   enabledGenres: ['CONTEMPORARY'],
+  publishedAt: null,
   createdAt: '2026-06-01T00:00:00Z',
   updatedAt: '2026-06-01T00:00:00Z',
 };
+
+const publishProps = {
+  isPublished: false,
+  onPublish: vi.fn(),
+  onUnpublish: vi.fn(),
+  isPublishing: false,
+  isUnpublishing: false,
+} as const;
 
 function renderAtom(config: MusicFormConfig, overrides: Partial<MusicAtomProps> = {}) {
   const props: MusicAtomProps = {
@@ -26,6 +35,7 @@ function renderAtom(config: MusicFormConfig, overrides: Partial<MusicAtomProps> 
     onSave: vi.fn(),
     onTurnOn: vi.fn(),
     onTurnOff: vi.fn(),
+    ...publishProps,
     isSaving: false,
     saved: false,
     saveError: null,
@@ -54,6 +64,11 @@ describe('MusicAtom — Gap D config re-sync', () => {
         onSave={vi.fn()}
         onTurnOn={vi.fn()}
         onTurnOff={vi.fn()}
+        isPublished={false}
+        onPublish={vi.fn()}
+        onUnpublish={vi.fn()}
+        isPublishing={false}
+        isUnpublishing={false}
         isSaving={false}
         saved={false}
         saveError={null}
@@ -89,6 +104,11 @@ describe('MusicAtom — Gap D config re-sync', () => {
         onSave={vi.fn()}
         onTurnOn={vi.fn()}
         onTurnOff={vi.fn()}
+        isPublished={false}
+        onPublish={vi.fn()}
+        onUnpublish={vi.fn()}
+        isPublishing={false}
+        isUnpublishing={false}
         isSaving={false}
         saved={false}
         saveError={null}

@@ -196,6 +196,8 @@ export interface MusicFormConfig {
   bookingId: string;
   keyMoments: KeyMoment[];
   enabledGenres: string[];
+  /** #533: null = draft (private); an ISO timestamp = published (client-visible on the portal). */
+  publishedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -366,7 +368,12 @@ export interface BookingDetail extends Omit<BookingListItem, 'customer' | 'venue
 // the reason → copy map lives frontend-side in lib/constants.ts. The full union is defined now;
 // slice 1 (#578) only emits `until_sent`/`voided` (contract) — `not_shared`/`cancelled` arrive
 // with the leak fixes (#579).
-export type PortalVisibilityReason = 'until_sent' | 'voided' | 'not_shared' | 'cancelled';
+export type PortalVisibilityReason =
+  | 'until_sent'
+  | 'until_published'
+  | 'voided'
+  | 'not_shared'
+  | 'cancelled';
 
 export interface PortalVisibilityVerdict {
   visible: boolean;

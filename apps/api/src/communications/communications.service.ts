@@ -1,8 +1,14 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { CommunicationsRepository } from './communications.repository';
 import { MailService } from '../mail/mail.service';
 import { CreateCommunicationDto } from './dto/create-communication.dto';
 import { ChecklistEvaluatorService } from '../checklist/checklist-evaluator.service';
+import { resolveMusicFormVisibility } from '../portal/portal-visibility';
+
+// #533 / #631: the music-form invite may only be emailed once the form is published — you can no
+// more invite a client to an unpublished form than Send an un-Issued invoice. Publication is the
+// prerequisite; the gate uses the same authority the portal + admin indicator read.
+const MUSIC_FORM_INVITE_TEMPLATE = 'music_form_invite';
 
 export interface SendEmailOptions {
   userId: string;
@@ -47,12 +53,32 @@ export class CommunicationsService {
     return this.repo.findTemplate(userId, templateId);
   }
 
+  // #533 / #631: reject a music-form-invite send when the form is not published (a real 4xx, so a
+  // direct/stale POST can't email an invite for a hidden form — the render gate and the action gate
+  // must agree, same leak-class as the cancelled-contract fix). No-op for every other template.
+  private async assertMusicInviteAllowed(
+    userId: string,
+    bookingId: string,
+    templateId: string | undefined,
+  ): Promise<void> {
+    if (!templateId) return;
+    const template = await this.repo.findTemplate(userId, templateId);
+    if (template?.builtInType !== MUSIC_FORM_INVITE_TEMPLATE) return;
+    const config = await this.repo.findMusicFormConfig(userId, bookingId);
+    const visible =
+      resolveMusicFormVisibility(!!config, config?.publishedAt != null)?.visible ?? false;
+    if (!visible) {
+      throw new ConflictException('Publish the music form before sending its invite.');
+    }
+  }
+
   async sendEmail(options: SendEmailOptions): Promise<void> {
     const { userId, bookingId, contactId, to, subject, body, templateId, attachments, documentId } = options;
     if (!bookingId) {
       await this.mail.send({ to, subject, body, attachments });
       return;
     }
+    await this.assertMusicInviteAllowed(userId, bookingId, templateId);
     const communication = await this.repo.createPending(userId, bookingId, contactId, subject, body, templateId, documentId);
     try {
       await this.mail.send({ to, subject, body, attachments });

@@ -529,6 +529,10 @@ model MusicFormConfig {
   enabledGenres String[]
   keyMoments    Json     @default("[]")
 
+  // #533: draft → published. Null = draft (private to the musician); set = published (client-visible
+  // on the Portal). A turned-on form is draft by default; publishing is soft and reversible.
+  publishedAt DateTime?
+
   bookingId String  @unique
   booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 

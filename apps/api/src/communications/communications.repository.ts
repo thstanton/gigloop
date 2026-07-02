@@ -42,6 +42,14 @@ export class CommunicationsRepository {
     });
   }
 
+  // #533 / #631: the booking's music form publish state — the invite send is gated on it.
+  findMusicFormConfig(userId: string, bookingId: string) {
+    return this.prisma.musicFormConfig.findFirst({
+      where: { bookingId, userId },
+      select: { publishedAt: true },
+    });
+  }
+
   create(userId: string, bookingId: string, dto: CreateCommunicationDto) {
     return this.prisma.communication.create({
       data: {
