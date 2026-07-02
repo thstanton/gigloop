@@ -408,10 +408,13 @@ export class BookingsService {
     return config;
   }
 
-  // #533: un-publish (back to draft/hidden), reversible. Re-evaluates so the publish step reverts.
+  // #533: un-publish (back to draft/hidden), reversible. The set_up_and_publish step is sticky once
+  // COMPLETE, so evaluate() alone won't reopen it — un-stick it first (same reset the invoice-void
+  // flow uses), then re-evaluate against the now-false musicFormPublished fact → PENDING.
   async unpublishMusicFormConfig(userId: string, bookingId: string) {
     await this.assertOwnership(userId, bookingId);
     const config = await this.musicFormRepo.unpublishMusicFormConfig(bookingId);
+    await this.checklistRepo.resetItemByKey(bookingId, 'set_up_and_publish');
     await this.evaluator.evaluate(bookingId).catch(() => {});
     return config;
   }

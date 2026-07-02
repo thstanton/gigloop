@@ -59,6 +59,8 @@ type MockContractRepo = {
 type MockMusicFormRepo = {
   findMusicFormConfig: jest.Mock;
   upsertMusicFormConfig: jest.Mock;
+  publishMusicFormConfig: jest.Mock;
+  unpublishMusicFormConfig: jest.Mock;
   deleteMusicFormConfig: jest.Mock;
   findMusicFormResponse: jest.Mock;
   findSongsByIds: jest.Mock;
@@ -74,6 +76,7 @@ type MockChecklistRepo = {
   updateChecklistItemState: jest.Mock;
   findItemByKey: jest.Mock;
   seedReminderItem: jest.Mock;
+  resetItemByKey: jest.Mock;
 };
 
 function makeRepo(): MockRepo {
@@ -135,6 +138,7 @@ function makeChecklistRepo(): MockChecklistRepo {
     updateChecklistItemState: jest.fn().mockResolvedValue({ count: 1 }),
     findItemByKey: jest.fn().mockResolvedValue(null),
     seedReminderItem: jest.fn().mockResolvedValue({ id: 'seeded' }),
+    resetItemByKey: jest.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -155,6 +159,8 @@ function makeMusicFormRepo(): MockMusicFormRepo {
   return {
     findMusicFormConfig: jest.fn(),
     upsertMusicFormConfig: jest.fn(),
+    publishMusicFormConfig: jest.fn(),
+    unpublishMusicFormConfig: jest.fn(),
     deleteMusicFormConfig: jest.fn(),
     findMusicFormResponse: jest.fn(),
     findSongsByIds: jest.fn(),
@@ -958,6 +964,33 @@ describe('BookingsService', () => {
       repo.findForOwnership.mockResolvedValue(null);
       await expect(service.upsertMusicFormConfig('u1', 'missing', dto)).rejects.toThrow(NotFoundException);
       expect(musicFormRepo.upsertMusicFormConfig).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('publishMusicFormConfig / unpublishMusicFormConfig (#533/#630)', () => {
+    const dto = { keyMoments: [], enabledGenres: ['CONTEMPORARY'] };
+
+    it('publishes (save + publish) and re-evaluates the checklist', async () => {
+      repo.findForOwnership.mockResolvedValue({ id: 'b1' });
+      const config = { id: 'mfc1', bookingId: 'b1', publishedAt: new Date(), ...dto };
+      musicFormRepo.publishMusicFormConfig.mockResolvedValue(config);
+      const result = await service.publishMusicFormConfig('u1', 'b1', dto);
+      expect(musicFormRepo.publishMusicFormConfig).toHaveBeenCalledWith('u1', 'b1', dto);
+      expect(evaluator.evaluate).toHaveBeenCalledWith('b1');
+      expect(result).toBe(config);
+    });
+
+    it('un-publishes, un-sticks the set_up_and_publish step, then re-evaluates', async () => {
+      repo.findForOwnership.mockResolvedValue({ id: 'b1' });
+      const config = { id: 'mfc1', bookingId: 'b1', publishedAt: null };
+      musicFormRepo.unpublishMusicFormConfig.mockResolvedValue(config);
+      const result = await service.unpublishMusicFormConfig('u1', 'b1');
+      expect(musicFormRepo.unpublishMusicFormConfig).toHaveBeenCalledWith('b1');
+      // The step is sticky once COMPLETE — it must be explicitly reset before the re-evaluate, or
+      // evaluate() would keep it COMPLETE and the form would read "still published" on the checklist.
+      expect(checklistRepo.resetItemByKey).toHaveBeenCalledWith('b1', 'set_up_and_publish');
+      expect(evaluator.evaluate).toHaveBeenCalledWith('b1');
+      expect(result).toBe(config);
     });
   });
 
