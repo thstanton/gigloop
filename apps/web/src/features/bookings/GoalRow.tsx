@@ -46,10 +46,11 @@ function milestoneProgress(item: ChecklistItem): { done: number; total: number }
   return { done: spine.filter((s) => s.state === 'COMPLETE').length, total: spine.length };
 }
 
-// Personalised waiting text by who the step awaits. Naming the specific person (#604 open
-// question) is deferred — a generic party keeps the row free of booking-context plumbing.
-function awaitingParty(step: ChecklistStep): string | null {
-  if (step.completedBy === 'CUSTOMER') return 'the client';
+// Personalised waiting text by who the step awaits (#634). A CUSTOMER step names the client by
+// their greeting name when known, falling back to "the client". BAND_MEMBER stays generic — no
+// band-member name is plumbed yet (that half of #604 remains deferred).
+function awaitingParty(step: ChecklistStep, clientName: string | null): string | null {
+  if (step.completedBy === 'CUSTOMER') return clientName ?? 'the client';
   if (step.completedBy === 'BAND_MEMBER') return 'the band';
   return null;
 }
@@ -165,11 +166,13 @@ function ActiveStepLine({
   position,
   total,
   handlers,
+  clientName,
 }: {
   step: ChecklistStep;
   position: number;
   total: number;
   handlers: ChecklistShortcutHandlers;
+  clientName: string | null;
 }) {
   const resolved =
     step.completeMode === 'ACTION'
@@ -178,7 +181,7 @@ function ActiveStepLine({
           handlers,
         )
       : null;
-  const party = awaitingParty(step);
+  const party = awaitingParty(step, clientName);
 
   return (
     <div className="mt-1 flex items-center gap-2">
@@ -279,9 +282,11 @@ export interface GoalRowProps {
   item: ChecklistItem;
   handlers: ChecklistShortcutHandlers;
   onSetState: (itemId: string, state: SettableGoalState) => void;
+  // #634: the booking's client name (greeting name → full name → null) for "Waiting on …" text.
+  clientName: string | null;
 }
 
-export function GoalRow({ item, handlers, onSetState }: Readonly<GoalRowProps>) {
+export function GoalRow({ item, handlers, onSetState, clientName }: Readonly<GoalRowProps>) {
   const [expanded, setExpanded] = useState(false);
   const multi = isMultiStep(item);
   const active = activeStep(item);
@@ -310,7 +315,7 @@ export function GoalRow({ item, handlers, onSetState }: Readonly<GoalRowProps>) 
       </div>
 
       <div className="ml-[1.8rem]">
-        {multi && active && <ActiveStepLine step={active} position={position} total={milestones.length} handlers={handlers} />}
+        {multi && active && <ActiveStepLine step={active} position={position} total={milestones.length} handlers={handlers} clientName={clientName} />}
 
         {!multi && !isResolved && <AtomicActionLine item={item} handlers={handlers} onSetState={setState} />}
 

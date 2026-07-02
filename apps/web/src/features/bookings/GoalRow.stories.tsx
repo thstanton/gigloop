@@ -68,7 +68,7 @@ function handlers(): ChecklistShortcutHandlers {
 const meta = {
   component: GoalRow,
   tags: ['ai-generated'],
-  args: { handlers: handlers(), onSetState: fn() },
+  args: { handlers: handlers(), onSetState: fn(), clientName: 'Jamie' },
   parameters: { layout: 'padded' },
 } satisfies Meta<typeof GoalRow>;
 
@@ -111,10 +111,29 @@ export const AwaitingClient: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    // An AWAITED active step shows as a muted wait — no CTA button for it.
-    await expect(canvas.getByText(/Waiting on the client/)).toBeVisible();
+    // An AWAITED active step shows as a muted wait — no CTA button for it. #634: the client is
+    // named by their greeting name (meta clientName = 'Jamie').
+    await expect(canvas.getByText(/Waiting on Jamie/)).toBeVisible();
     await expect(canvas.queryByRole('button', { name: /Client signs the contract/ })).toBeNull();
     await expect(canvas.getByText('3/3')).toBeVisible();
+  },
+};
+
+// #634: with no client name resolvable (no greeting name and no full name), the wait falls back to
+// the generic "the client".
+export const AwaitingClientNoName: Story = {
+  args: {
+    item: contractGoal([
+      { ...draft, state: 'COMPLETE' },
+      { ...send, state: 'COMPLETE' },
+      signed,
+    ]),
+    handlers: handlers(),
+    clientName: null,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText(/Waiting on the client/)).toBeVisible();
   },
 };
 

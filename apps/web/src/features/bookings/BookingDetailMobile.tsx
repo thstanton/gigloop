@@ -11,7 +11,7 @@ import { useBookingDocuments } from '@/lib/hooks/useBookingDocuments';
 import { useSeriesBookings } from '@/lib/hooks/useSeriesBookings';
 import { useConfigureMusicForm } from '@/lib/hooks/useConfigureMusicForm';
 import BookingDetailTabs from '@/features/bookings/BookingDetailTabs';
-import ChecklistSection from '@/features/bookings/ChecklistSection';
+import ChecklistSection, { clientDisplayName } from '@/features/bookings/ChecklistSection';
 import ItineraryCard from '@/features/bookings/ItineraryCard';
 import DetailsCard from '@/features/bookings/DetailsCard';
 import { BookingVenueMapWidget } from '@/features/bookings/BookingVenueMapWidget';
@@ -141,6 +141,7 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
             onAddItem={(data) => addItem(data)}
             isAddingItem={isAddingItem}
             hideHeader
+            clientName={clientDisplayName(booking.customer)}
           />
         ) : null
       }

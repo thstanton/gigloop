@@ -166,6 +166,7 @@ interface StatusSectionProps {
   onCancelAdd: () => void;
   onAddItem: (data: { label: string; requiredForStatus: string | null; dueDate: string | null }) => void;
   isAddingItem: boolean;
+  clientName: string | null;
 }
 
 function StatusSection({
@@ -179,6 +180,7 @@ function StatusSection({
   onCancelAdd,
   onAddItem,
   isAddingItem,
+  clientName,
 }: StatusSectionProps) {
   const isCurrent = section.relation === 'current';
   return (
@@ -202,7 +204,7 @@ function StatusSection({
       {isOpen && (
         <div className="pb-2">
           {section.goals.map((item) => (
-            <GoalRow key={item.id} item={item} handlers={handlers} onSetState={onSetState} />
+            <GoalRow key={item.id} item={item} handlers={handlers} onSetState={onSetState} clientName={clientName} />
           ))}
 
           {isAdding ? (
@@ -223,6 +225,15 @@ function StatusSection({
   );
 }
 
+// #634: the client's display name for checklist "Waiting on …" text — greeting name, else full
+// name, else null (the row then falls back to "the client"). Shared by the detail-page hosts so the
+// resolution lives in one place, not inline in each large host component.
+export function clientDisplayName(
+  customer: { greetingName?: string | null; name?: string | null } | null | undefined,
+): string | null {
+  return customer?.greetingName || customer?.name || null;
+}
+
 export interface ChecklistSectionProps {
   bookingId: string;
   items: ChecklistItem[];
@@ -232,6 +243,8 @@ export interface ChecklistSectionProps {
   onAddItem: (data: { label: string; requiredForStatus: string | null; dueDate: string | null }) => void;
   isAddingItem?: boolean;
   hideHeader?: boolean;
+  // #634: the booking's client name (greeting name → full name → null) for "Waiting on …" text.
+  clientName?: string | null;
 }
 
 export default function ChecklistSection({
@@ -243,6 +256,7 @@ export default function ChecklistSection({
   onAddItem,
   isAddingItem = false,
   hideHeader = false,
+  clientName = null,
 }: ChecklistSectionProps) {
   const { handleChecklistAction, handleMarkDone, isActionPending } = useChecklistActions(bookingId);
   const [, setSearchParams] = useSearchParams();
@@ -303,6 +317,7 @@ export default function ChecklistSection({
             setAddingKey(null);
           }}
           isAddingItem={isAddingItem}
+          clientName={clientName}
         />
       ))}
     </section>
