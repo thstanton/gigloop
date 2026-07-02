@@ -228,6 +228,12 @@ function ComposeEmailSheetBody(props: Props) {
           <SubjectField rendering={vm.rendering} subject={vm.subject} onChange={vm.setSubject} />
         )}
         {vm.selectedTemplateId && <BodyField rendering={vm.rendering} editor={vm.editor} />}
+        {vm.musicInviteBlocked && (
+          <p className="text-sm text-status-cancelled">
+            This music form isn't published yet, so the client can't see it. Publish the form before
+            sending the invite.
+          </p>
+        )}
         {vm.sendError && <p className="text-sm text-status-cancelled">{vm.sendError}</p>}
       </div>
 

@@ -55,6 +55,7 @@ export interface ComposeEmailViewModel {
   setSubject: (value: string) => void;
   editor: Editor | null;
   sendError: string | null;
+  musicInviteBlocked: boolean;
   canSend: boolean;
   sending: boolean;
   send: () => void;
@@ -125,6 +126,11 @@ export function useComposeEmail({
 
   const selectedTemplate = emailTemplates.find((t) => t.id === selectedTemplateId) ?? null;
   const selectedType = selectedTemplate?.builtInType ?? null;
+  // #533/#631: block the send (not just the dropdown item) when the invite template is selected but
+  // the form is not published — the API would 409. Covers a template pre-selected by a checklist
+  // shortcut, or the form being un-published after the sheet opened.
+  const musicInviteBlocked =
+    selectedType === 'music_form_invite' && !(booking.portalVisibility.musicForm?.visible ?? false);
   const invoiceId = getInvoiceIdForTemplate(selectedType, invoices);
   const invoiceForSend = invoices.find((i) => i.id === invoiceId);
   const attachmentState = getAttachmentState(selectedType, invoices);
@@ -206,8 +212,14 @@ export function useComposeEmail({
       onOpenChange(false);
       toast({ title: 'Email sent' });
     },
-    onError: () => {
-      setSendError('Failed to send email. Check your internet connection and try again.');
+    onError: (err) => {
+      // #631: the API rejects a music-form invite for an unpublished form with 409 — surface the
+      // reason instead of the generic connectivity message.
+      setSendError(
+        err instanceof Response && err.status === 409
+          ? 'Publish the music form before you can send its invite.'
+          : 'Failed to send email. Check your internet connection and try again.',
+      );
     },
   });
 
@@ -230,6 +242,7 @@ export function useComposeEmail({
     setSubject,
     editor,
     sendError,
+    musicInviteBlocked,
     canSend: canSendEmail({
       hasEmail: !noEmail,
       hasTemplate: !!selectedTemplateId,
@@ -238,6 +251,7 @@ export function useComposeEmail({
       sending: sendMutation.isPending,
       showDateFields,
       formIssueDate,
+      musicInviteBlocked,
     }),
     sending: sendMutation.isPending,
     send: () => sendMutation.mutate(),

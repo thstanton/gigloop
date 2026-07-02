@@ -174,6 +174,34 @@ export const MusicInviteBlockedWhileDraft: Story = {
   },
 };
 
+// #631 backstop: if the invite template is already selected (e.g. pre-selected by a checklist
+// shortcut) while the form is a draft, Send is disabled and the reason is explained — the disabled
+// dropdown item alone doesn't cover an already-selected template.
+export const MusicInviteSelectedButBlocked: Story = {
+  args: {
+    booking: draftMusicBooking,
+    invoices: [],
+    initialTemplateType: 'music_form_invite',
+  },
+  parameters: {
+    msw: {
+      handlers: [
+        http.get('/api/templates', () => HttpResponse.json([musicInviteTemplate])),
+        http.get('/api/bookings/b1/communications/render', () =>
+          HttpResponse.json({ subject: 'Your music form', body: '<p>Choose your songs.</p>', missingVariables: [] }),
+        ),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement.ownerDocument.body);
+    await waitFor(async () => {
+      await expect(canvas.findByText(/isn't published yet/i)).resolves.toBeVisible();
+    });
+    await expect(canvas.getByRole('button', { name: /^send$/i })).toBeDisabled();
+  },
+};
+
 // Absent: non-invoice template → no attachment bar at all
 export const NoAttachment: Story = {
   args: {
