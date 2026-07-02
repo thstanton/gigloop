@@ -1,5 +1,5 @@
 import { EditorContent, type Editor } from '@tiptap/react';
-import { AlertTriangle, Paperclip } from 'lucide-react';
+import { AlertTriangle, EyeOff, Paperclip } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { DatePicker } from '@/components/ui/date-picker';
+import { InlineHint } from '@/components/common/InlineHint';
 import { TEMPLATE_DISPLAY } from '@/features/templates/templateMeta';
 import { formatMissingVariables, type AttachmentState } from './composeHelpers';
 import { useComposeEmail } from './useComposeEmail';
@@ -197,7 +198,7 @@ function BodyField({ rendering, editor }: { rendering: boolean; editor: Editor |
 // ─── Body ─────────────────────────────────────────────────────────────────────
 
 function ComposeEmailSheetBody(props: Props) {
-  const { booking, onOpenChange } = props;
+  const { bookingId, booking, onOpenChange } = props;
   const vm = useComposeEmail(props);
 
   return (
@@ -229,10 +230,13 @@ function ComposeEmailSheetBody(props: Props) {
         )}
         {vm.selectedTemplateId && <BodyField rendering={vm.rendering} editor={vm.editor} />}
         {vm.musicInviteBlocked && (
-          <p className="text-sm text-status-cancelled">
-            This music form isn't published yet, so the client can't see it. Publish the form before
-            sending the invite.
-          </p>
+          <InlineHint
+            icon={<EyeOff size={14} />}
+            actionLabel="Publish the form"
+            href={`/admin/bookings/${bookingId}?sheet=musicTweak`}
+          >
+            This music form isn't published yet, so the client can't see it.
+          </InlineHint>
         )}
         {vm.sendError && <p className="text-sm text-status-cancelled">{vm.sendError}</p>}
       </div>

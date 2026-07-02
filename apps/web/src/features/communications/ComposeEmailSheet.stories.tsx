@@ -1,6 +1,8 @@
+import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, waitFor, within } from 'storybook/test';
 import { http, HttpResponse } from 'msw';
+import { MemoryRouter } from 'react-router-dom';
 import ComposeEmailSheet from './ComposeEmailSheet';
 import type { BookingDetail, Invoice } from '@/types/api';
 
@@ -85,6 +87,7 @@ const confirmationRenderResult = {
 const meta = {
   component: ComposeEmailSheet,
   tags: ['ai-generated'],
+  decorators: [(Story) => React.createElement(MemoryRouter, {}, React.createElement(Story))],
   args: {
     bookingId: 'b1',
     booking,
