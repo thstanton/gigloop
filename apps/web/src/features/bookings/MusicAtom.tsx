@@ -47,6 +47,63 @@ export interface MusicAtomProps {
 const serialize = (c: { keyMoments: KeyMoment[]; enabledGenres: string[] }) =>
   JSON.stringify({ keyMoments: c.keyMoments, enabledGenres: c.enabledGenres });
 
+// #533 Tier-1 footer: Save + the publish action, split by publish state — Draft shows
+// [Save draft] + [Publish], Published shows [Save] (edits go live immediately) + [Un-publish].
+// Extracted so the state-dependent buttons don't inflate MusicAtom's own complexity.
+interface MusicAtomFooterProps {
+  isPublished: boolean;
+  hasChanges: boolean;
+  isSaving: boolean;
+  isPublishing: boolean;
+  isUnpublishing: boolean;
+  saved: boolean;
+  saveError: string | null;
+  onSave: () => void;
+  onPublish: () => void;
+  onUnpublish: () => void;
+}
+
+function MusicAtomFooter({
+  isPublished,
+  hasChanges,
+  isSaving,
+  isPublishing,
+  isUnpublishing,
+  saved,
+  saveError,
+  onSave,
+  onPublish,
+  onUnpublish,
+}: Readonly<MusicAtomFooterProps>) {
+  let saveLabel = isPublished ? 'Save' : 'Save draft';
+  if (isSaving) saveLabel = 'Saving…';
+  const showSaved = saved && !isSaving;
+
+  return (
+    <div className="flex items-center gap-3 pt-1 flex-wrap">
+      <Button
+        size="sm"
+        variant={isPublished ? 'default' : 'outline'}
+        onClick={onSave}
+        disabled={isSaving || !hasChanges}
+      >
+        {saveLabel}
+      </Button>
+      {isPublished ? (
+        <Button size="sm" variant="outline" onClick={onUnpublish} disabled={isUnpublishing}>
+          {isUnpublishing ? 'Un-publishing…' : 'Un-publish'}
+        </Button>
+      ) : (
+        <Button size="sm" onClick={onPublish} disabled={isPublishing}>
+          {isPublishing ? 'Publishing…' : 'Publish'}
+        </Button>
+      )}
+      {showSaved && <span className="text-xs text-muted">Saved</span>}
+      {saveError && <p className="text-sm text-status-cancelled">{saveError}</p>}
+    </div>
+  );
+}
+
 export function MusicAtom({
   hasMusicFormConfig,
   config,
@@ -114,9 +171,6 @@ export function MusicAtom({
   const hasRequests = localKeyMoments.some((km) => km.label.trim());
 
   const hasChanges = on && config != null && serialize({ keyMoments: localKeyMoments, enabledGenres: localGenres }) !== serialize(config);
-
-  let saveLabel = isPublished ? 'Save' : 'Save draft';
-  if (isSaving) saveLabel = 'Saving…';
 
   function toggleGenre(genre: string) {
     setLocalGenres((prev) =>
@@ -219,30 +273,20 @@ export function MusicAtom({
           />
         </div>
 
-        {/* Tier-1 save + #533 publish (only meaningful when on). Draft: [Save draft] + [Publish].
-            Published: [Save] (edits go live immediately) + [Un-publish]. */}
+        {/* Tier-1 save + #533 publish (only meaningful when on). */}
         {on && (
-          <div className="flex items-center gap-3 pt-1 flex-wrap">
-            <Button
-              size="sm"
-              variant={isPublished ? 'default' : 'outline'}
-              onClick={handleSave}
-              disabled={isSaving || !hasChanges}
-            >
-              {saveLabel}
-            </Button>
-            {isPublished ? (
-              <Button size="sm" variant="outline" onClick={onUnpublish} disabled={isUnpublishing}>
-                {isUnpublishing ? 'Un-publishing…' : 'Un-publish'}
-              </Button>
-            ) : (
-              <Button size="sm" onClick={handlePublish} disabled={isPublishing}>
-                {isPublishing ? 'Publishing…' : 'Publish'}
-              </Button>
-            )}
-            {saved && !isSaving && <span className="text-xs text-muted">Saved</span>}
-            {saveError && <p className="text-sm text-status-cancelled">{saveError}</p>}
-          </div>
+          <MusicAtomFooter
+            isPublished={isPublished}
+            hasChanges={hasChanges}
+            isSaving={isSaving}
+            isPublishing={isPublishing}
+            isUnpublishing={isUnpublishing}
+            saved={saved}
+            saveError={saveError}
+            onSave={handleSave}
+            onPublish={handlePublish}
+            onUnpublish={onUnpublish}
+          />
         )}
       </div>
     </div>
