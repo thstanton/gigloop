@@ -14,7 +14,7 @@ import SeriesInvoiceCard from '@/features/bookings/SeriesInvoiceCard';
 import { SeriesEventsCard } from '@/features/bookings/SeriesEventsCard';
 import ContractCard from '@/features/bookings/ContractCard';
 import InvoiceSection from '@/features/bookings/InvoiceSection';
-import ChecklistSection from '@/features/bookings/ChecklistSection';
+import ChecklistSection, { clientDisplayName } from '@/features/bookings/ChecklistSection';
 import PersonCard from '@/features/bookings/PersonCard';
 import InlineNotes from '@/features/bookings/InlineNotes';
 import CommunicationsSection from '@/features/bookings/CommunicationsSection';
@@ -133,7 +133,7 @@ export function BookingDetailDesktop({ bookingId }: BookingDetailDesktopProps) {
             onToggle={(itemId, state) => toggleItem(itemId, state)}
             onAddItem={(data) => addItem(data)}
             isAddingItem={isAddingItem}
-            clientName={booking.customer?.greetingName || booking.customer?.name || null}
+            clientName={clientDisplayName(booking.customer)}
           />
         )}
 

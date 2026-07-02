@@ -225,6 +225,15 @@ function StatusSection({
   );
 }
 
+// #634: the client's display name for checklist "Waiting on …" text — greeting name, else full
+// name, else null (the row then falls back to "the client"). Shared by the detail-page hosts so the
+// resolution lives in one place, not inline in each large host component.
+export function clientDisplayName(
+  customer: { greetingName?: string | null; name?: string | null } | null | undefined,
+): string | null {
+  return customer?.greetingName || customer?.name || null;
+}
+
 export interface ChecklistSectionProps {
   bookingId: string;
   items: ChecklistItem[];
