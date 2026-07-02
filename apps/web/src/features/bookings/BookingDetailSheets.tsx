@@ -181,6 +181,8 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
         packages={booking.packages}
         open={sheet === 'musicTweak'}
         onOpenChange={(open) => { if (!open) setSearchParams({}); }}
+        // #632: publishing chains into the send-invite compose sheet (mirrors invoice issue → send).
+        onPublished={() => setSearchParams({ sheet: 'compose', templateType: 'music_form_invite' })}
       />
       <InvoiceSheet
         bookingId={bookingId}

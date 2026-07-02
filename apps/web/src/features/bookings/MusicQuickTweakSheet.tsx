@@ -28,6 +28,9 @@ interface Props {
   packages: BookingPackageSummary[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  // #632: called after a successful publish so the container can chain into the send-invite sheet
+  // (mirrors the invoice issue → send sheet hop). Optional — hosts without a compose sheet omit it.
+  onPublished?: () => void;
 }
 
 export function MusicQuickTweakSheet({
@@ -36,6 +39,7 @@ export function MusicQuickTweakSheet({
   packages,
   open,
   onOpenChange,
+  onPublished,
 }: Props) {
   const { isLoaded } = useAuth();
   const queryClient = useQueryClient();
@@ -58,16 +62,23 @@ export function MusicQuickTweakSheet({
       toast({ title: 'Failed to save music form. Please try again.', variant: 'destructive' }),
   });
 
-  // #533: publish = save the current config AND make it client-visible (atomic). Unlike Save, it
-  // keeps the sheet open so the musician sees it flip to the published state (slice #632 will chain
-  // this into opening the send-invite sheet).
+  // #533/#632: publish = save the current config AND make it client-visible (atomic). On success it
+  // chains into the send-invite sheet (invoice issue → send pattern) via onPublished. The booking
+  // cache is optimistically marked visible so the compose sheet's #631 gate already sees it
+  // published (no flash of the disabled invite template).
   const publishMutation = useMutation({
     mutationFn: (payload: MusicAtomSavePayload) =>
       apiPost<MusicFormConfig>(`/bookings/${bookingId}/music-form-config/publish`, payload),
     onSuccess: (data) => {
       queryClient.setQueryData(['booking-music-form-config', bookingId], data);
+      queryClient.setQueryData<BookingDetail>(['booking', bookingId], (old) =>
+        old
+          ? { ...old, portalVisibility: { ...old.portalVisibility, musicForm: { visible: true } } }
+          : old,
+      );
       queryClient.invalidateQueries({ queryKey: ['booking-music-form-config', bookingId] });
       queryClient.invalidateQueries({ queryKey: ['booking', bookingId] });
+      onPublished?.();
     },
     onError: () =>
       toast({ title: 'Failed to publish music form. Please try again.', variant: 'destructive' }),
