@@ -7,7 +7,11 @@ import {
 } from '../src/bookings/checklist-defaults';
 
 const prisma = new PrismaClient();
-const USER_ID = 'user_3E0gEsNgpVB2KnlKfWD6vFw6G7d';
+// Defaults to Tim's own Clerk dev user id for local seeding. The smoke-test
+// environment sets SEED_USER_ID to its own Clerk-dev user id (ADR-0044 §7) —
+// the AuthGuard scopes every query to userId, so seeded rows are invisible
+// to a signed-in user whose id doesn't match.
+const USER_ID = process.env.SEED_USER_ID || 'user_3E0gEsNgpVB2KnlKfWD6vFw6G7d';
 
 // Simplified evaluator for seed — replicates core state machine without NestJS DI
 function seedChecklistStates(
@@ -120,9 +124,10 @@ async function main() {
   await prisma.invoice.deleteMany({ where: { userId: USER_ID } });
   await prisma.bookingChecklistItem.deleteMany({ where: { userId: USER_ID } });
   await prisma.performanceSet.deleteMany({ where: { userId: USER_ID } });
-  await prisma.bookingPackage.deleteMany({ where: { userId: USER_ID } });
-  await prisma.booking.deleteMany({ where: { userId: USER_ID } });
   await prisma.package.deleteMany({ where: { userId: USER_ID } });
+  await prisma.booking.deleteMany({ where: { userId: USER_ID } });
+  await prisma.bookingSeries.deleteMany({ where: { userId: USER_ID } });
+  await prisma.packageTemplate.deleteMany({ where: { userId: USER_ID } });
   await prisma.contact.deleteMany({ where: { userId: USER_ID } });
   await prisma.song.deleteMany({ where: { userId: USER_ID } });
   await prisma.template.deleteMany({ where: { userId: USER_ID } });
@@ -173,7 +178,10 @@ async function main() {
 
   console.log('Seeding contacts...');
 
-  const [emma, sophie, charlotte, meridian, harrington, barnsleyHouse, theNed, stMarys, cellarSociety] =
+  // emma, sophie, charlotte, meridian and harrington all have associated Bookings below,
+  // so contacts.service blocks their deletion (409) — the delete-blocked fixture.
+  // kensingtonRoofGardens has none — the deletable fixture.
+  const [emma, sophie, charlotte, meridian, harrington, barnsleyHouse, theNed, stMarys, cellarSociety, kensingtonRoofGardens] =
     await Promise.all([
       // Customers
       prisma.contact.create({
@@ -286,6 +294,20 @@ async function main() {
           website: 'https://cellarsociety.co.uk',
           commissionArrangement: '10% of fee, invoiced monthly. Contact: Marcus Webb.',
           notes: 'Reliable agency, primarily corporate and private events in London.',
+        },
+      }),
+      // Venue with no Bookings — deletable
+      prisma.contact.create({
+        data: {
+          userId: USER_ID,
+          name: 'Kensington Roof Gardens',
+          email: 'events@kensingtonroofgardens.com',
+          phone: '020 7937 7994',
+          addressLine1: '99 Kensington High Street',
+          city: 'London',
+          postcode: 'W8 5SA',
+          country: 'GB',
+          notes: 'Enquired about availability, no booking confirmed yet.',
         },
       }),
     ]);
@@ -442,8 +464,11 @@ async function main() {
     }),
   ]);
 
-  console.log('Seeding performance formats...');
+  console.log('Seeding package templates...');
 
+  // Package catalogue (PackageTemplate + slots) — post-ADR-0050, a booking gets its own
+  // booking-scoped Package rows (label + icon snapshotted from the template) rather than
+  // referencing the template directly. Mirrors PackagesService's SYSTEM_DEFAULTS.
   const DEFAULT_GENRES = ['CONTEMPORARY', 'CLASSICAL', 'JAZZ', 'FILM_TV_MUSICALS'];
   const formatDefs = [
     { label: 'Wedding Ceremony',  category: 'WEDDING',    icon: 'heart',       keyMoments: ['Processional', 'Signing of the Register (Song 1)', 'Signing of the Register (Song 2)', 'Signing of the Register (Song 3)', 'Recessional'], defaultGenreSelection: DEFAULT_GENRES, slots: [{ label: 'Ceremony', duration: 30, order: 1 }] },
@@ -455,24 +480,36 @@ async function main() {
     { label: 'Solo Piano',        category: null,          icon: 'music-2',     keyMoments: [], defaultGenreSelection: DEFAULT_GENRES, slots: [{ label: 'Solo Piano', duration: 60, order: 1 }] },
   ];
 
-  for (const fmt of formatDefs) {
-    await prisma.package.create({
+  for (const def of formatDefs) {
+    await prisma.packageTemplate.create({
       data: {
         userId: USER_ID,
-        label: fmt.label,
-        category: fmt.category ?? undefined,
-        icon: fmt.icon,
-        keyMoments: fmt.keyMoments,
-        defaultGenreSelection: fmt.defaultGenreSelection,
+        label: def.label,
+        category: def.category ?? undefined,
+        icon: def.icon,
+        keyMoments: def.keyMoments,
+        defaultGenreSelection: def.defaultGenreSelection,
         isSystemDefault: true,
-        slots: { create: fmt.slots.map((s) => ({ ...s, userId: USER_ID })) },
-        notes: null,
+        slots: { create: def.slots.map((s) => ({ ...s, userId: USER_ID })) },
       },
     });
   }
 
-  const allFormats = await prisma.package.findMany({ where: { userId: USER_ID } });
-  const fmt = Object.fromEntries(allFormats.map((f) => [f.label, f.id]));
+  const templateIcons = Object.fromEntries(formatDefs.map((f) => [f.label, f.icon]));
+
+  // Creates this booking's own Package rows (snapshotted from the named templates, in
+  // order) and returns a label → id map for wiring up PerformanceSets.
+  async function seedBookingPackages(bookingId: string, labels: string[]): Promise<Record<string, string>> {
+    const map: Record<string, string> = {};
+    for (let i = 0; i < labels.length; i++) {
+      const label = labels[i];
+      const pkg = await prisma.package.create({
+        data: { userId: USER_ID, bookingId, order: i + 1, label, icon: templateIcons[label] },
+      });
+      map[label] = pkg.id;
+    }
+    return map;
+  }
 
   console.log('Seeding bookings...');
 
@@ -488,10 +525,27 @@ async function main() {
       notes: 'Outdoor ceremony if weather permits. Will confirm venue by end of month.',
     },
   });
+
+  // DRAFT deposit invoice — drafted while waiting on the client to confirm, not yet issued
+  await prisma.invoice.create({
+    data: {
+      userId: USER_ID,
+      bookingId: booking1.id,
+      billToContactId: sophie.id,
+      status: 'DRAFT',
+      isDeposit: true,
+      issueDate: new Date('2026-06-01'),
+      dueDate: new Date('2026-06-15'),
+      lineItems: {
+        create: [{ userId: USER_ID, description: 'Deposit — Wedding performance (25%)', amount: 450, order: 1 }],
+      },
+    },
+  });
+
   await seedChecklist(booking1.id, booking1.date, booking1.createdAt, {
     startingStatus: 'PROVISIONAL',
     bookingStatus: 'PROVISIONAL',
-    hasDepositInvoice: false,
+    hasDepositInvoice: true,
     hasBalanceInvoice: false,
     hasContract: false,
     contractSigned: false,
@@ -516,18 +570,12 @@ async function main() {
     },
   });
 
+  const booking2Packages = await seedBookingPackages(booking2.id, ['Wedding Ceremony', 'Drinks Reception', 'Wedding Breakfast']);
   await prisma.performanceSet.createMany({
     data: [
-      { userId: USER_ID, bookingId: booking2.id, order: 1, duration: 45, startTime: '13:00', label: 'Ceremony',         packageId: fmt['Wedding Ceremony'] },
-      { userId: USER_ID, bookingId: booking2.id, order: 2, duration: 90, startTime: '14:00', label: 'Drinks Reception', packageId: fmt['Drinks Reception'] },
-      { userId: USER_ID, bookingId: booking2.id, order: 3, duration: 60, startTime: '19:00', label: 'Dinner',           packageId: fmt['Wedding Breakfast'] },
-    ],
-  });
-  await prisma.bookingPackage.createMany({
-    data: [
-      { userId: USER_ID, bookingId: booking2.id, packageId: fmt['Wedding Ceremony'],  order: 1 },
-      { userId: USER_ID, bookingId: booking2.id, packageId: fmt['Drinks Reception'],  order: 2 },
-      { userId: USER_ID, bookingId: booking2.id, packageId: fmt['Wedding Breakfast'], order: 3 },
+      { userId: USER_ID, bookingId: booking2.id, order: 1, duration: 45, startTime: '13:00', label: 'Ceremony',         packageId: booking2Packages['Wedding Ceremony'] },
+      { userId: USER_ID, bookingId: booking2.id, order: 2, duration: 90, startTime: '14:00', label: 'Drinks Reception', packageId: booking2Packages['Drinks Reception'] },
+      { userId: USER_ID, bookingId: booking2.id, order: 3, duration: 60, startTime: '19:00', label: 'Dinner',           packageId: booking2Packages['Wedding Breakfast'] },
     ],
   });
 
@@ -543,6 +591,31 @@ async function main() {
       lineItems: {
         create: [{ userId: USER_ID, description: 'Deposit — Wedding performance (25%)', amount: 550, order: 1 }],
       },
+    },
+  });
+
+  // Booking2 is the dedicated portal-walkthrough fixture (ADR-0044 §7 critical-path
+  // checklist): an unsigned-but-SENT contract to sign and a published music form to
+  // fill in are both live, actionable concerns at /booking/:token.
+  await prisma.contract.create({
+    data: {
+      userId: USER_ID,
+      bookingId: booking2.id,
+      status: 'SENT',
+      content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Contract for Emma & James.' }] }] },
+    },
+  });
+
+  await prisma.musicFormConfig.create({
+    data: {
+      userId: USER_ID,
+      bookingId: booking2.id,
+      enabledGenres: ['CONTEMPORARY', 'CLASSICAL'],
+      keyMoments: [
+        { label: 'Processional', section: 'Ceremony' },
+        { label: 'First Dance', section: 'Evening Reception' },
+      ],
+      publishedAt: new Date('2026-05-10'),
     },
   });
 
@@ -564,7 +637,7 @@ async function main() {
     bookingStatus: 'CONFIRMED',
     hasDepositInvoice: true,
     hasBalanceInvoice: false,
-    hasContract: false,
+    hasContract: true,
     contractSigned: false,
     depositReceived: false,
     hasMusicFormResponse: false,
@@ -587,15 +660,11 @@ async function main() {
     },
   });
 
+  const booking3Packages = await seedBookingPackages(booking3.id, ['Wedding Ceremony']);
   await prisma.performanceSet.createMany({
     data: [
-      { userId: USER_ID, bookingId: booking3.id, order: 1, duration: 30, startTime: '11:30', label: 'Pre-ceremony', packageId: fmt['Wedding Ceremony'] },
-      { userId: USER_ID, bookingId: booking3.id, order: 2, duration: 25, startTime: '12:00', label: 'Ceremony',     packageId: fmt['Wedding Ceremony'] },
-    ],
-  });
-  await prisma.bookingPackage.createMany({
-    data: [
-      { userId: USER_ID, bookingId: booking3.id, packageId: fmt['Wedding Ceremony'], order: 1 },
+      { userId: USER_ID, bookingId: booking3.id, order: 1, duration: 30, startTime: '11:30', label: 'Pre-ceremony', packageId: booking3Packages['Wedding Ceremony'] },
+      { userId: USER_ID, bookingId: booking3.id, order: 2, duration: 25, startTime: '12:00', label: 'Ceremony',     packageId: booking3Packages['Wedding Ceremony'] },
     ],
   });
 
@@ -620,6 +689,22 @@ async function main() {
       dueDate: new Date('2026-04-29'),
       lineItems: {
         create: [{ userId: USER_ID, description: 'Deposit — Wedding ceremony performance (25%)', amount: 375, order: 1 }],
+      },
+    },
+  });
+
+  // ISSUED balance invoice — stored/numbered but not yet emailed to the client
+  await prisma.invoice.create({
+    data: {
+      userId: USER_ID,
+      bookingId: booking3.id,
+      billToContactId: charlotte.id,
+      status: 'ISSUED',
+      isDeposit: false,
+      issueDate: new Date('2026-06-05'),
+      dueDate: new Date('2026-06-19'),
+      lineItems: {
+        create: [{ userId: USER_ID, description: 'Balance — Wedding ceremony performance', amount: 1125, order: 1 }],
       },
     },
   });
@@ -656,7 +741,7 @@ async function main() {
     startingStatus: 'CONFIRMED',
     bookingStatus: 'CONFIRMED',
     hasDepositInvoice: true,
-    hasBalanceInvoice: false,
+    hasBalanceInvoice: true,
     hasContract: true,
     contractSigned: true,
     depositReceived: true,
@@ -680,15 +765,11 @@ async function main() {
     },
   });
 
+  const booking4Packages = await seedBookingPackages(booking4.id, ['Corporate Dinner']);
   await prisma.performanceSet.createMany({
     data: [
-      { userId: USER_ID, bookingId: booking4.id, order: 1, duration: 60, startTime: '19:30', label: 'Drinks', packageId: fmt['Corporate Dinner'] },
-      { userId: USER_ID, bookingId: booking4.id, order: 2, duration: 90, startTime: '21:00', label: 'Dinner', packageId: fmt['Corporate Dinner'] },
-    ],
-  });
-  await prisma.bookingPackage.createMany({
-    data: [
-      { userId: USER_ID, bookingId: booking4.id, packageId: fmt['Corporate Dinner'], order: 1 },
+      { userId: USER_ID, bookingId: booking4.id, order: 1, duration: 60, startTime: '19:30', label: 'Drinks', packageId: booking4Packages['Corporate Dinner'] },
+      { userId: USER_ID, bookingId: booking4.id, order: 2, duration: 90, startTime: '21:00', label: 'Dinner', packageId: booking4Packages['Corporate Dinner'] },
     ],
   });
 
@@ -775,17 +856,12 @@ async function main() {
     },
   });
 
+  const booking5Packages = await seedBookingPackages(booking5.id, ['Wedding Ceremony', 'Drinks Reception']);
   await prisma.performanceSet.createMany({
     data: [
-      { userId: USER_ID, bookingId: booking5.id, order: 1, duration: 30, startTime: '12:30', label: 'Pre-ceremony',    packageId: fmt['Wedding Ceremony'] },
-      { userId: USER_ID, bookingId: booking5.id, order: 2, duration: 30, startTime: '13:00', label: 'Ceremony',        packageId: fmt['Wedding Ceremony'] },
-      { userId: USER_ID, bookingId: booking5.id, order: 3, duration: 75, startTime: '14:30', label: 'Drinks Reception', packageId: fmt['Drinks Reception'] },
-    ],
-  });
-  await prisma.bookingPackage.createMany({
-    data: [
-      { userId: USER_ID, bookingId: booking5.id, packageId: fmt['Wedding Ceremony'], order: 1 },
-      { userId: USER_ID, bookingId: booking5.id, packageId: fmt['Drinks Reception'], order: 2 },
+      { userId: USER_ID, bookingId: booking5.id, order: 1, duration: 30, startTime: '12:30', label: 'Pre-ceremony',    packageId: booking5Packages['Wedding Ceremony'] },
+      { userId: USER_ID, bookingId: booking5.id, order: 2, duration: 30, startTime: '13:00', label: 'Ceremony',        packageId: booking5Packages['Wedding Ceremony'] },
+      { userId: USER_ID, bookingId: booking5.id, order: 3, duration: 75, startTime: '14:30', label: 'Drinks Reception', packageId: booking5Packages['Drinks Reception'] },
     ],
   });
 
@@ -868,10 +944,75 @@ async function main() {
     },
   });
 
+  console.log('Seeding a BookingSeries...');
+
+  // 7 & 8. A recurring corporate client — quarterly socials sharing one series
+  const meridianSeries = await prisma.bookingSeries.create({
+    data: {
+      userId: USER_ID,
+      label: 'Meridian Financial — Quarterly Team Socials',
+      customerId: meridian.id,
+    },
+  });
+
+  const booking7 = await prisma.booking.create({
+    data: {
+      userId: USER_ID,
+      status: 'CONFIRMED',
+      eventType: 'CORPORATE',
+      title: 'Meridian Autumn Social 2026',
+      date: new Date('2026-10-09T19:00:00'),
+      fee: 1200,
+      customerId: meridian.id,
+      venueId: theNed.id,
+      seriesId: meridianSeries.id,
+      depositReceivedAt: new Date('2026-06-01'),
+    },
+  });
+  await seedChecklist(booking7.id, booking7.date, booking7.createdAt, {
+    startingStatus: 'CONFIRMED',
+    bookingStatus: 'CONFIRMED',
+    hasDepositInvoice: false,
+    hasBalanceInvoice: false,
+    hasContract: false,
+    contractSigned: false,
+    depositReceived: true,
+    hasMusicFormResponse: false,
+    commBuiltInTypes: [],
+  });
+
+  const booking8 = await prisma.booking.create({
+    data: {
+      userId: USER_ID,
+      status: 'PROVISIONAL',
+      eventType: 'CORPORATE',
+      title: 'Meridian Winter Social 2027',
+      date: new Date('2027-01-15T19:00:00'),
+      fee: 1200,
+      customerId: meridian.id,
+      venueId: theNed.id,
+      seriesId: meridianSeries.id,
+    },
+  });
+  await seedChecklist(booking8.id, booking8.date, booking8.createdAt, {
+    startingStatus: 'PROVISIONAL',
+    bookingStatus: 'PROVISIONAL',
+    hasDepositInvoice: false,
+    hasBalanceInvoice: false,
+    hasContract: false,
+    contractSigned: false,
+    depositReceived: false,
+    hasMusicFormResponse: false,
+    commBuiltInTypes: [],
+  });
+
   console.log('\n✓ Seed complete');
-  console.log('  Contacts: 9');
+  console.log(`  Contacts: 10 (including deletable venue ${kensingtonRoofGardens.name})`);
   console.log('  Songs: 33');
   console.log('  Templates: 7 built-in');
+  console.log('  BookingSeries: 1 (Meridian quarterly socials, 2 bookings)');
+  console.log('  Portal walkthrough: booking2 (Emma & James) — unsigned contract + published music form');
+  console.log('  Invoice states covered: DRAFT, ISSUED, SENT, PAID');
   console.log('  Bookings: 6 (Provisional, Confirmed ×2, Invoiced, Completed, Cancelled)');
 }
 
