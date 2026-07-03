@@ -173,6 +173,7 @@ async function main() {
       invoiceSequenceYear: 2026,
       digestEmailEnabled: true,
       songRequestFormEnabled: true,
+      onboardingCompletedAt: new Date(),
     },
   });
 
