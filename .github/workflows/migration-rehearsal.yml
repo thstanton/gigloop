@@ -1,0 +1,78 @@
+name: Migration Rehearsal
+
+# On-demand only (ADR-0044 §2/§8, PRD #436, issue #440). Validates pending
+# migrations against a clone of REAL prod data before a release ever touches
+# prod: create an ephemeral Neon branch off prod, apply migrations, report
+# apply result + duration, always delete the branch. Scope is deliberately
+# narrow — this catches apply-failure, excessive lock duration, and
+# app-won't-boot, NOT semantically-destructive migrations (those are covered
+# by expand/contract discipline + the named-branch rollback in the
+# tag-release workflow, slice #442).
+on:
+  workflow_dispatch:
+
+jobs:
+  rehearse:
+    name: Rehearse migration against prod clone
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.1.3'
+      - uses: actions/cache@v4
+        id: cache
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lockb') }}
+      - run: bun install --frozen-lockfile
+        if: steps.cache.outputs.cache-hit != 'true'
+
+      - name: Create ephemeral Neon branch off prod
+        id: neon
+        uses: neondatabase/create-branch-action@v6
+        with:
+          api_key: ${{ secrets.NEON_API_KEY }}
+          project_id: ${{ vars.NEON_PROD_PROJECT_ID }}
+          branch_name: rehearsal-${{ github.run_id }}
+
+      - name: Run migrations and time the apply
+        id: migrate
+        continue-on-error: true
+        run: |
+          cd apps/api
+          START=$(date +%s)
+          if bunx prisma migrate deploy; then
+            echo "status=success" >> "$GITHUB_OUTPUT"
+          else
+            echo "status=failure" >> "$GITHUB_OUTPUT"
+          fi
+          echo "duration=$(( $(date +%s) - START ))" >> "$GITHUB_OUTPUT"
+        env:
+          DATABASE_URL: ${{ steps.neon.outputs.db_url }}
+          DIRECT_URL: ${{ steps.neon.outputs.db_url }}
+
+      - name: Report result
+        if: always()
+        run: |
+          {
+            echo "## Migration Rehearsal"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Branch | \`rehearsal-${{ github.run_id }}\` (deleted after this run) |"
+            echo "| Apply result | ${{ steps.migrate.outputs.status == 'success' && '✅ applied cleanly' || '❌ failed' }} |"
+            echo "| Apply duration | ${{ steps.migrate.outputs.duration }}s (total \`prisma migrate deploy\` wall time — a proxy for lock time, not per-statement lock instrumentation) |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Delete ephemeral Neon branch
+        if: always()
+        uses: neondatabase/delete-branch-action@v3
+        with:
+          api_key: ${{ secrets.NEON_API_KEY }}
+          project_id: ${{ vars.NEON_PROD_PROJECT_ID }}
+          branch: ${{ steps.neon.outputs.branch_id }}
+
+      - name: Fail the job if the migration didn't apply cleanly
+        if: steps.migrate.outputs.status != 'success'
+        run: exit 1
