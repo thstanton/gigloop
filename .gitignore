@@ -3,6 +3,7 @@ dist
 storybook-static
 .env
 .env.local
+.env.smoke-test
 .agents/
 .claude/*
 !.claude/skills/
