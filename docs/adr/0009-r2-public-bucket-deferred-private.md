@@ -1,7 +1,7 @@
 # ADR-0009: R2 bucket is public for MVP; presigned GETs deferred to P2
 
 ## Status
-Accepted
+Superseded by [ADR-0059](0059-private-document-access.md) — documents moved to a private bucket served via access-controlled redirect endpoints; the public bucket now holds only assets (logos/photos).
 
 ## Context
 GigMan stores files in Cloudflare R2: musician logo, musician photo, contract PDFs, and invoice PDFs. Portal clients are unauthenticated (Clerk is bypassed for `/booking/:token` routes), so any file that a portal client needs to access cannot be fetched via a Clerk-gated API endpoint without extra indirection.
