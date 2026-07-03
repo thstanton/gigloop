@@ -1,7 +1,10 @@
 import type { PortalData, PortalContractData, PortalMusicFormData, SubmitMusicFormInput } from '../types/api';
+import { resolveApiBaseUrl } from './apiBaseUrl';
+
+const API_BASE_URL = resolveApiBaseUrl(import.meta.env.VITE_API_BASE_URL);
 
 async function portalFetch(path: string, init?: RequestInit): Promise<Response> {
-  return fetch(`/api${path}`, {
+  return fetch(`${API_BASE_URL}${path}`, {
     ...init,
     headers: {
       'Content-Type': 'application/json',

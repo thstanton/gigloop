@@ -9,7 +9,10 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { formatDate } from '@/lib/formatters';
+import { resolveApiBaseUrl } from '@/lib/apiBaseUrl';
 import type { Communication } from '@/types/api';
+
+const API_BASE_URL = resolveApiBaseUrl(import.meta.env.VITE_API_BASE_URL);
 
 function emailDoc(body: string) {
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
@@ -56,7 +59,7 @@ function getStatusPrefix(isFailed: boolean, isPending: boolean): string {
 
 function AttachmentLink({ comm }: Readonly<{ comm: Communication }>) {
   if (!comm.document?.invoiceId) return null;
-  const pdfUrl = `/api/bookings/${comm.bookingId}/invoices/${comm.document.invoiceId}/preview.pdf`;
+  const pdfUrl = `${API_BASE_URL}/bookings/${comm.bookingId}/invoices/${comm.document.invoiceId}/preview.pdf`;
   return (
     <a
       href={pdfUrl}
