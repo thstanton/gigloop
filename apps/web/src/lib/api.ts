@@ -1,3 +1,5 @@
+import { resolveApiBaseUrl } from './apiBaseUrl';
+
 // Clerk sets window.Clerk when ClerkProvider initialises. Loaders use this
 // to attach auth tokens without requiring React hooks.
 declare global {
@@ -6,13 +8,15 @@ declare global {
   }
 }
 
+const API_BASE_URL = resolveApiBaseUrl(import.meta.env.VITE_API_BASE_URL);
+
 async function getToken(): Promise<string | null> {
   return window.Clerk?.session?.getToken() ?? null;
 }
 
 async function authedFetch(path: string, init?: RequestInit): Promise<Response> {
   const token = await getToken();
-  return fetch(`/api${path}`, {
+  return fetch(`${API_BASE_URL}${path}`, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
@@ -71,7 +75,7 @@ export async function apiDelete(path: string): Promise<void> {
 
 export async function apiPostFormData<T>(path: string, formData: FormData): Promise<T> {
   const token = await getToken();
-  const res = await fetch(`/api${path}`, {
+  const res = await fetch(`${API_BASE_URL}${path}`, {
     method: 'POST',
     body: formData,
     headers: token ? { Authorization: `Bearer ${token}` } : {},
