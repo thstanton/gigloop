@@ -179,6 +179,30 @@ Protect `main` with:
 - Require status checks: `Lint`, `Test`, `Build`
 - Do not require approvals (solo project)
 
+## Environments, Release & Migrations
+
+The full rationale is **ADR-0044** (`docs/adr/0044-preprod-and-release-process.md`). The operational rules a session must know:
+
+### Promotion — merge ≠ prod
+- **A merge to `main` deploys to preprod (the smoke-test env), NOT prod.** Preprod is prod-shaped but runs on **synthetic data** (its own Clerk dev instance, R2 bucket `gigloop-preprod`, sunk email, seeded Neon DB). Never assume merging ships to real users.
+- **Prod deploys ONLY when a human pushes a `v*` git tag**, which triggers the release workflow (`.github/workflows/release.yml`): snapshot a durable `pre-release-<tag>` Neon branch → `migrate deploy` → deploy API (Railway) → deploy web (Vercel). Branch auto-deploy is disabled on both prod services, so the tag is the only path to prod.
+- Tagging is a **deliberate human action** — I never cut a release tag myself. Merging a PR is where my responsibility ends.
+
+### Release ritual (human-run before tagging)
+- Run the **critical-path smoke-test checklist** (`docs/smoke-test-checklist.md`) on preprod before tagging.
+- For a release carrying **schema changes**, run the on-demand **migration-rehearsal** workflow (`.github/workflows/migration-rehearsal.yml`) first — it clones prod to an ephemeral Neon branch, applies the migration, and reports apply-clean + lock time.
+
+### Migration discipline (expand/contract)
+- The deployed app and the DB do not cut over atomically — during a deploy window the running app must tolerate **both** the old and new schema.
+- **Additive changes ship in one step:** a new nullable column, a new table, a new index.
+- **Destructive / narrowing changes MUST use expand/contract:** dropping a column, renaming, narrowing a type, adding `NOT NULL`/unique to existing data → add the new shape → deploy → backfill → drop the old shape only in a *later* release. Never drop-and-recreate in one migration against real data.
+- Still confirm before running any migration (see Session Behaviour). The rollback target for a bad prod migration is the `pre-release-<tag>` Neon branch, not PITR (6h window is too short).
+
+### Feature flags — dark-launch, don't branch
+- A multi-week feature does **not** get a long-lived branch (ADR-0025 forbids it). It merges to `main` continuously behind a **feature flag** and ships dark.
+- Flags are **environment variables, default-off** — helpers in `apps/web/src/lib/featureFlags.ts` and `apps/api/src/common/featureFlags.ts` (`isEnabled('FLAG')`). On in preprod, off in prod; go-live is an env change + redeploy, not a code change. No flags table, no per-user targeting.
+- Capture every new per-environment variable in `apps/api/.env.example`.
+
 ## Package Discipline
 - Do not install new packages without asking first
 - Do not add packages to solve problems that can be solved with what's already installed
