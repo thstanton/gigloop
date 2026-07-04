@@ -174,14 +174,22 @@ function ActiveStepLine({
   handlers: ChecklistShortcutHandlers;
   clientName: string | null;
 }) {
-  const resolved =
-    step.completeMode === 'ACTION'
-      ? resolveChecklistShortcut(
-          { shortcutType: step.shortcutType, shortcutTemplateType: step.shortcutTemplateType, isFailed: step.state === 'FAILED' },
-          handlers,
-        )
-      : null;
+  // An AWAITED step is a passive external wait only when someone *other than the musician* must act
+  // (a CUSTOMER portal signature, a band-member reply) — those never get a CTA. A USER-awaited step
+  // is a fact the musician records, so it still gets its action: "Mark as paid" on the deposit /
+  // balance received steps (#653), which route through the same shortcut map as an ACTION step.
+  const isExternalWait = step.completeMode === 'AWAITED' && step.completedBy !== 'USER';
+  const resolved = isExternalWait
+    ? null
+    : resolveChecklistShortcut(
+        { shortcutType: step.shortcutType, shortcutTemplateType: step.shortcutTemplateType, isFailed: step.state === 'FAILED' },
+        handlers,
+      );
   const party = awaitingParty(step, clientName);
+  // An ACTION step's own label reads as the action ("Create deposit invoice"); an AWAITED step's is
+  // an outcome noun ("Deposit received") that reads wrong on a button, so it takes the shortcut's
+  // action label ("Mark as paid") instead.
+  const actionLabel = resolved && step.completeMode === 'AWAITED' ? resolved.label : step.label;
 
   return (
     <div className="mt-1 flex items-center gap-2">
@@ -192,7 +200,7 @@ function ActiveStepLine({
           className="flex min-w-0 items-center gap-1.5 text-left text-sm text-primary hover:underline disabled:cursor-not-allowed disabled:opacity-50"
         >
           <WandSparkles size={14} className="flex-shrink-0" />
-          <span className="truncate">{resolved.pending ? (resolved.pendingLabel ?? step.label) : step.label}</span>
+          <span className="truncate">{resolved.pending ? (resolved.pendingLabel ?? actionLabel) : actionLabel}</span>
         </button>
       ) : (
         <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted">

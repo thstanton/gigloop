@@ -258,6 +258,31 @@ export const DepositIssueActive: Story = {
   },
 };
 
+// Create + issue + send done; the deposit is awaited. Though AWAITED, the step is USER-completedBy
+// (the musician records the payment), so it still gets an action CTA — "Mark as paid" (#653), which
+// marks the sent invoice paid via onMarkDone. The button reads "Mark as paid", not the step's
+// outcome label ("Deposit received").
+export const DepositReceivedMarkPaid: Story = {
+  args: {
+    item: depositGoal([
+      { ...createDeposit, state: 'COMPLETE' },
+      { ...issueDeposit, state: 'COMPLETE' },
+      { ...sendDeposit, state: 'COMPLETE' },
+      { ...depositReceived, shortcutType: 'mark_deposit_received' },
+    ]),
+    handlers: handlers(),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    // The awaited-but-USER step surfaces as a wand CTA labelled by the action, not the outcome.
+    await expect(canvas.getByRole('button', { name: 'Mark as paid' })).toBeVisible();
+    await expect(canvas.queryByText(/Waiting on/)).toBeNull();
+    await expect(canvas.getByText('4/4')).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: 'Mark as paid' }));
+    await expect(args.handlers.onMarkDone).toHaveBeenCalledWith('mark_deposit_received');
+  },
+};
+
 // ── Atomic goals (no steps), unified into the same row in #610 ──────────────────────────────
 
 function atomicGoal(overrides: Partial<ChecklistItem>): ChecklistItem {

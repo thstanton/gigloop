@@ -47,7 +47,12 @@ const PRECONDITION_DEEP_LINK: Record<string, { label: string; section: string }>
   add_email: { label: 'Add email', section: 'people' },
 };
 
-const MARK_DONE_KEYS = new Set<string>(['mark_contract_signed', 'mark_deposit_received']);
+// "Mark done" shortcuts — the musician records a fact the app has no signal for. The label differs
+// by what is being recorded: a payment reads "Mark as paid" (#653), a signature "Mark done".
+const MARK_DONE_LABEL: Readonly<Record<string, string>> = {
+  mark_contract_signed: 'Mark done',
+  mark_deposit_received: 'Mark as paid',
+};
 
 // Resolve a shortcutType (+ item key, for structural deep-links) to a labelled click handler.
 // Returns null when there is no known action — the caller decides the fallback (atomic rows fall
@@ -86,9 +91,10 @@ export function resolveChecklistShortcut(
   if (shortcutType === 'set_up_and_publish_music') {
     return { label: retry ?? 'Set up & publish', pending: false, onClick: () => h.onDeepLink('music') };
   }
-  if (MARK_DONE_KEYS.has(shortcutType)) {
+  const markDoneLabel = MARK_DONE_LABEL[shortcutType];
+  if (markDoneLabel) {
     return {
-      label: retry ?? 'Mark done',
+      label: retry ?? markDoneLabel,
       pendingLabel: 'Marking…',
       pending: h.isActionPending,
       onClick: () => h.onMarkDone(shortcutType as MarkDoneKey),
