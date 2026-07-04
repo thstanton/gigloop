@@ -5,10 +5,11 @@
 // Unlike the #616 quote collapse (flat items → a new goal), this operates on goals that are ALREADY
 // multi-step: it rebuilds a goal's steps to the canonical catalogue shape, carrying each existing
 // step's state/completedAt by key and inserting the new steps. Because invoices/communications are
-// canonical, the post-migration evaluate() reconstructs every step that HAS a rule from live facts
-// — so the planner only hand-carries state for the new no-signal step (`balance_received`, which
-// has no rule): on an already-complete balance goal it is set COMPLETE so a settled balance never
-// re-nags (Story 21). A monotonic back-fill (a later COMPLETE implies its predecessors) is the
+// canonical, the post-migration evaluate() reconstructs every step whose rule keys off durable state
+// from live facts — so the planner only hand-carries state for `balance_received`, whose completion
+// the sweep cannot reconstruct (its #653 `invoicePaid` rule needs a PAID invoice a cash-settled
+// balance never had): on an already-complete balance goal it is set COMPLETE so a settled balance
+// never re-nags (Story 21). A monotonic back-fill (a later COMPLETE implies its predecessors) is the
 // belt-and-suspenders for an invoice voided after issue.
 //
 // PURE planner — no DB access — unit-tested on fixtures. The apply step (transaction + per-goal
@@ -51,6 +52,16 @@ function toStepState(s: string): StepState {
   return 'PENDING';
 }
 
+// A newly-inserted terminal step whose completion the post-migration evaluate() sweep cannot
+// reconstruct from durable booking state: a no-rule step, or the balance's `invoicePaid` step
+// (#653) — a cash-settled balance has no PAID invoice for evaluate() to key off. On an
+// already-complete goal such a step must inherit the goal's completion so a settled balance never
+// re-nags (Story 21). deposit_received is excluded: its depositReceivedAt column is durable, so the
+// sweep re-completes it.
+function inheritsGoalCompletion(rule: Record<string, unknown> | null | undefined): boolean {
+  return rule == null || rule.type === 'invoicePaid';
+}
+
 /**
  * Reshape one invoice goal's steps to the canonical 4-step spine of `canonicalGoalKey`. Returns
  * null when the goal is already in canonical shape (every canonical step key present) — idempotent.
@@ -83,9 +94,10 @@ export function planInvoiceGoalMigration(
     if (old) {
       state = toStepState(old.state);
       completedAt = state === 'COMPLETE' ? old.completedAt : null;
-    } else if (sDef.autoCompleteRule == null && oldGoalState === 'COMPLETE') {
-      // A NEW no-signal terminal step (balance_received) on an already-complete goal carries the
-      // goal's completion — a settled balance must not re-nag (Story 21). No completedAt source.
+    } else if (inheritsGoalCompletion(sDef.autoCompleteRule) && oldGoalState === 'COMPLETE') {
+      // A NEW terminal step whose completion the post-migration evaluate() sweep cannot reconstruct
+      // from durable booking state (balance_received) inherits the already-complete goal's
+      // completion — a settled balance must not re-nag (Story 21). No completedAt source.
       state = 'COMPLETE';
       completedAt = null;
     } else {

@@ -184,9 +184,13 @@ describe('get_the_balance_paid goal (ADR-0057 / #608 / #617, folds #586)', () =>
       type: 'communicationSent',
       templateTypes: ['balance_invoice_cover'],
     });
-    // balance_received is USER-awaited with no rule (no balanceReceivedAt field yet) — resolved by
-    // marking the goal complete, and keeps surfacing (chase the money).
-    expect(byKey('balance_received')).toMatchObject({ completedBy: 'USER', autoCompleteRule: null });
+    // balance_received is USER-awaited; it completes when the balance invoice is PAID (#653 —
+    // there is no balanceReceivedAt field, so it reads invoice status), and keeps surfacing
+    // (chase the money) until then.
+    expect(byKey('balance_received')).toMatchObject({
+      completedBy: 'USER',
+      autoCompleteRule: { type: 'invoicePaid', isDeposit: false },
+    });
   });
 
   it('is enabled by default (a seeded item, just disablable)', () => {

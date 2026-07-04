@@ -96,9 +96,15 @@ export function useChecklistActions(bookingId: string) {
     openCreateInvoice({ isDeposit, amount });
   }
 
-  function handleMarkDone(key: 'mark_contract_signed' | 'mark_deposit_received') {
+  function handleMarkDone(key: 'mark_contract_signed' | 'mark_deposit_received' | 'mark_balance_received') {
     if (key === 'mark_contract_signed') {
       if (booking?.activeContract) actions.markContractSigned(booking.activeContract.id);
+    } else if (key === 'mark_balance_received') {
+      // #653: mark the sent balance invoice paid; the invoicePaid rule then completes the step. No
+      // balanceReceivedAt field exists, so there is no fallback — spine ordering guarantees a sent
+      // balance invoice by this step, and the goal's ⋯ "Mark complete" remains the escape hatch.
+      const sentBalance = invoices.find((inv) => !inv.isDeposit && inv.status === 'SENT');
+      if (sentBalance) invoiceActions.markPaid(sentBalance.id);
     } else {
       const sentDeposit = invoices.find((inv) => inv.isDeposit && inv.status === 'SENT');
       if (sentDeposit) invoiceActions.markPaid(sentDeposit.id);

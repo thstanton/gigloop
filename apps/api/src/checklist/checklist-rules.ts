@@ -15,6 +15,12 @@ export type AutoCompleteRule =
   // DRAFT does NOT satisfy it (the #585 fix — an unissued draft keeps "Issue" surfaced). VOID is
   // excluded upstream in the context projection either way.
   | { type: 'invoiceExists'; isDeposit: boolean; includeDraft?: boolean }
+  // #653: the invoice has been PAID. The balance has no received-field like the deposit's
+  // `depositReceivedAt` column, so `balance_received` reads the live invoice status directly (VOID
+  // is excluded from the context projection). A COMPLETE step is sticky (checklist-evaluator), so
+  // this does not by itself re-open on void; voiding a paid invoice re-opens the billing goal via
+  // the create-step reset (invoices.service.voidInvoice) — identical for deposit and balance.
+  | { type: 'invoicePaid'; isDeposit: boolean }
   | { type: 'musicFormResponse' }
   // #533 / #630: the musician has *published* the music form (MusicFormConfig.publishedAt set).
   // Auto-completes the `set_up_and_publish` step; reverts to PENDING on un-publish (publishedAt null).
@@ -91,6 +97,8 @@ export function evaluateRule(rule: AutoCompleteRule, ctx: BookingContext): boole
       return ctx.invoices.some(
         (i) => i.isDeposit === rule.isDeposit && (rule.includeDraft === true || i.status !== 'DRAFT'),
       );
+    case 'invoicePaid':
+      return ctx.invoices.some((i) => i.isDeposit === rule.isDeposit && i.status === 'PAID');
     case 'musicFormResponse':
       return ctx.musicFormResponse !== null;
     case 'musicFormPublished':
@@ -150,6 +158,7 @@ export function inputsForRule(rule: AutoCompleteRule): InputKey[] {
     case 'communicationSent':
       return ['communications'];
     case 'invoiceExists':
+    case 'invoicePaid':
       return ['invoices'];
     case 'musicFormResponse':
       return ['musicFormResponse'];

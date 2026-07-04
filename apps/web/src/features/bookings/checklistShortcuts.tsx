@@ -4,7 +4,7 @@
 // click handler — the active step routes to the owning sheet exactly like an atomic item does.
 
 export type ChecklistAction = 'create_deposit_invoice' | 'create_balance_invoice' | 'create_contract';
-export type MarkDoneKey = 'mark_contract_signed' | 'mark_deposit_received';
+export type MarkDoneKey = 'mark_contract_signed' | 'mark_deposit_received' | 'mark_balance_received';
 
 export interface ChecklistShortcutHandlers {
   onOpenCompose: (templateType?: string) => void;
@@ -52,6 +52,7 @@ const PRECONDITION_DEEP_LINK: Record<string, { label: string; section: string }>
 const MARK_DONE_LABEL: Readonly<Record<string, string>> = {
   mark_contract_signed: 'Mark done',
   mark_deposit_received: 'Mark as paid',
+  mark_balance_received: 'Mark as paid',
 };
 
 // Resolve a shortcutType (+ item key, for structural deep-links) to a labelled click handler.

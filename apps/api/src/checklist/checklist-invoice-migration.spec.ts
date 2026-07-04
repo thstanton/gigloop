@@ -92,8 +92,9 @@ describe('planInvoiceGoalMigration — balance (invoice_the_balance → get_the_
   });
 
   it('carries an already-COMPLETE balance goal onto balance_received — no re-nag (Story 21)', () => {
-    // Old balance goal ended at "send" and was COMPLETE. The new no-rule balance_received step must
-    // inherit that completion (there is no balanceReceivedAt for evaluate() to key off).
+    // Old balance goal ended at "send" and was COMPLETE. The new balance_received step must inherit
+    // that completion: its #653 invoicePaid rule needs a PAID invoice a cash-settled balance never
+    // had, so the evaluate() sweep cannot reconstruct it (Story 21 — no re-nag).
     const existing = [
       st({ key: 'create_balance_invoice', state: 'COMPLETE', completedAt: new Date('2026-03-01') }),
       st({ key: 'send_balance_invoice', state: 'COMPLETE', completedAt: new Date('2026-03-02') }),
