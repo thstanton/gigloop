@@ -1,7 +1,7 @@
 import { INestApplication } from '@nestjs/common';
 import * as request from 'supertest';
 import { createTestApp, mockStorageService } from './test-app.factory';
-import { prisma } from './test-prisma';
+import { PrismaService } from '../src/prisma/prisma.service';
 import { TEST_USER_ID } from './test-auth.guard';
 import { CHECKLIST_DEFAULTS } from '../src/bookings/checklist-defaults';
 import { buildInvoiceNumber } from '../src/invoices/invoices.repository';
@@ -11,10 +11,12 @@ const FUTURE_DATE = '2027-09-15T14:00:00.000Z';
 
 describe('Invoice flow (integration)', () => {
   let app: INestApplication;
+  let prisma: PrismaService;
   let customerId: string;
 
   beforeAll(async () => {
     app = await createTestApp();
+    prisma = app.get(PrismaService);
 
     const contact = await prisma.contact.create({
       data: { userId: TEST_USER_ID, name: 'Invoice Test Customer' },
