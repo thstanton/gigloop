@@ -14,7 +14,7 @@ import {
 import { cn } from '@/lib/utils';
 import { RowActions, type RowAction } from '@/components/common/RowActions';
 import type { ChecklistItem, ChecklistItemState, ChecklistStep } from '@/types/api';
-import { resolveChecklistShortcut, type ChecklistShortcutHandlers } from './checklistShortcuts';
+import { resolveChecklistShortcut, type ChecklistShortcutHandlers, type ResolvedShortcut } from './checklistShortcuts';
 
 // GoalRow renders one checklist goal (ADR-0057) to the #604-locked "action-led row" design —
 // atomic and multi-step alike, unified (#610).
@@ -159,6 +159,25 @@ function goalMenuActions(state: ChecklistItemState, onSetState: (s: SettableGoal
   ];
 }
 
+// Resolve an active step to its CTA plus the label the button should show, or null when the step is
+// a passive wait. An AWAITED step is a passive external wait only when a non-USER party must act (a
+// CUSTOMER signature, a band-member reply); a USER-awaited step is a fact the musician records, so
+// it still resolves its action — "Mark as paid" on the received steps (#653). The button reads the
+// shortcut's action label for an AWAITED step (its own label is an outcome noun like "Deposit
+// received") and the step's own label for an ACTION step.
+function resolveStepAction(
+  step: ChecklistStep,
+  handlers: ChecklistShortcutHandlers,
+): { resolved: ResolvedShortcut; label: string } | null {
+  if (step.completeMode === 'AWAITED' && step.completedBy !== 'USER') return null;
+  const resolved = resolveChecklistShortcut(
+    { shortcutType: step.shortcutType, shortcutTemplateType: step.shortcutTemplateType, isFailed: step.state === 'FAILED' },
+    handlers,
+  );
+  if (!resolved) return null;
+  return { resolved, label: step.completeMode === 'AWAITED' ? resolved.label : step.label };
+}
+
 // The active-step line of a multi-step goal: a wand-led CTA (label IS the action) for an ACTION
 // step, or a muted, non-actionable waiting line for an AWAITED step. Ends with the step position.
 function ActiveStepLine({
@@ -174,33 +193,19 @@ function ActiveStepLine({
   handlers: ChecklistShortcutHandlers;
   clientName: string | null;
 }) {
-  // An AWAITED step is a passive external wait only when someone *other than the musician* must act
-  // (a CUSTOMER portal signature, a band-member reply) — those never get a CTA. A USER-awaited step
-  // is a fact the musician records, so it still gets its action: "Mark as paid" on the deposit /
-  // balance received steps (#653), which route through the same shortcut map as an ACTION step.
-  const isExternalWait = step.completeMode === 'AWAITED' && step.completedBy !== 'USER';
-  const resolved = isExternalWait
-    ? null
-    : resolveChecklistShortcut(
-        { shortcutType: step.shortcutType, shortcutTemplateType: step.shortcutTemplateType, isFailed: step.state === 'FAILED' },
-        handlers,
-      );
+  const action = resolveStepAction(step, handlers);
   const party = awaitingParty(step, clientName);
-  // An ACTION step's own label reads as the action ("Create deposit invoice"); an AWAITED step's is
-  // an outcome noun ("Deposit received") that reads wrong on a button, so it takes the shortcut's
-  // action label ("Mark as paid") instead.
-  const actionLabel = resolved && step.completeMode === 'AWAITED' ? resolved.label : step.label;
 
   return (
     <div className="mt-1 flex items-center gap-2">
-      {resolved ? (
+      {action ? (
         <button
-          onClick={resolved.onClick}
-          disabled={resolved.pending}
+          onClick={action.resolved.onClick}
+          disabled={action.resolved.pending}
           className="flex min-w-0 items-center gap-1.5 text-left text-sm text-primary hover:underline disabled:cursor-not-allowed disabled:opacity-50"
         >
           <WandSparkles size={14} className="flex-shrink-0" />
-          <span className="truncate">{resolved.pending ? (resolved.pendingLabel ?? actionLabel) : actionLabel}</span>
+          <span className="truncate">{action.resolved.pending ? (action.resolved.pendingLabel ?? action.label) : action.label}</span>
         </button>
       ) : (
         <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted">

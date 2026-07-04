@@ -96,19 +96,25 @@ export function useChecklistActions(bookingId: string) {
     openCreateInvoice({ isDeposit, amount });
   }
 
+  // Mark the sent invoice of the given type paid — the received steps' "Mark as paid" action (#653).
+  // Returns false when there is no sent invoice to mark, so the caller can pick a fallback.
+  function markSentInvoicePaid(isDeposit: boolean): boolean {
+    const sent = invoices.find((inv) => inv.isDeposit === isDeposit && inv.status === 'SENT');
+    if (!sent) return false;
+    invoiceActions.markPaid(sent.id);
+    return true;
+  }
+
   function handleMarkDone(key: 'mark_contract_signed' | 'mark_deposit_received' | 'mark_balance_received') {
     if (key === 'mark_contract_signed') {
       if (booking?.activeContract) actions.markContractSigned(booking.activeContract.id);
     } else if (key === 'mark_balance_received') {
-      // #653: mark the sent balance invoice paid; the invoicePaid rule then completes the step. No
-      // balanceReceivedAt field exists, so there is no fallback — spine ordering guarantees a sent
+      // No balanceReceivedAt field, so there is no fallback — spine ordering guarantees a sent
       // balance invoice by this step, and the goal's ⋯ "Mark complete" remains the escape hatch.
-      const sentBalance = invoices.find((inv) => !inv.isDeposit && inv.status === 'SENT');
-      if (sentBalance) invoiceActions.markPaid(sentBalance.id);
-    } else {
-      const sentDeposit = invoices.find((inv) => inv.isDeposit && inv.status === 'SENT');
-      if (sentDeposit) invoiceActions.markPaid(sentDeposit.id);
-      else actions.markDepositReceived();
+      markSentInvoicePaid(false);
+    } else if (!markSentInvoicePaid(true)) {
+      // Deposit paid outside an invoice (e.g. cash): record it on the booking directly.
+      actions.markDepositReceived();
     }
   }
 
