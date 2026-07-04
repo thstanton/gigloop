@@ -1,0 +1,115 @@
+name: Release
+
+# Tag-triggered production release (ADR-0044 §4, PRD #436, issue #442).
+# Prod deploys ONLY on a `v*` tag push — merges to `main` never deploy prod.
+# This is the first pipeline that touches real prod data: HITL for the
+# first releases (a human watches the run, not just merges the PR).
+#
+# Fixed, data-protecting step order: snapshot -> migrate -> deploy API ->
+# deploy web. Deliberately NO `continue-on-error` anywhere in this job — a
+# failed step must halt the run before deploying code against an
+# un/partly-migrated prod database. Contrast with migration-rehearsal.yml,
+# which uses continue-on-error because it always deletes its branch
+# regardless of outcome; this workflow's Neon branch is the opposite of
+# that — a durable rollback target that must survive the run, so there is
+# no delete step here.
+#
+# Prerequisites this workflow depends on but does not itself configure
+# (tracked as issue #442 follow-up, must be done before the first real tag):
+#   - Railway prod environment: branch auto-deploy disabled
+#   - Vercel prod project: branch auto-deploy disabled for `main`
+#   - Repo secrets: PROD_DATABASE_URL, RAILWAY_PROD_TOKEN, VERCEL_TOKEN,
+#     VERCEL_ORG_ID, VERCEL_PROJECT_ID
+#     PROD_DATABASE_URL MUST be the DIRECT (non-pooled) Neon string — host
+#     WITHOUT `-pooler`, no `pgbouncer=true` — with `connect_timeout=15`.
+#     `prisma migrate deploy` (below) takes a session-level advisory lock that
+#     transaction-mode pooling breaks, and it is the first step to touch the
+#     prod compute, which scale-to-zeros pre-launch (#612) — a cold resume
+#     exceeds Prisma's 5s default, so a generous connect_timeout is required.
+#     The schema's datasource reads `directUrl` (= DIRECT_URL) for migrations.
+#   - Repo variables: RAILWAY_PROD_PROJECT_ID, RAILWAY_PROD_ENVIRONMENT,
+#     RAILWAY_PROD_SERVICE
+#     (NEON_API_KEY secret + NEON_PROD_PROJECT_ID variable already exist,
+#     reused from migration-rehearsal.yml)
+on:
+  push:
+    tags:
+      - 'v*'
+
+# A second tag pushed mid-release must not race this one against prod.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Release ${{ github.ref_name }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.1.3'
+      - uses: actions/cache@v4
+        id: cache
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lockb') }}
+      - run: bun install --frozen-lockfile
+        if: steps.cache.outputs.cache-hit != 'true'
+
+      - name: Snapshot prod — create durable pre-release Neon branch
+        id: neon
+        uses: neondatabase/create-branch-action@v6
+        with:
+          api_key: ${{ secrets.NEON_API_KEY }}
+          project_id: ${{ vars.NEON_PROD_PROJECT_ID }}
+          branch_name: pre-release-${{ github.ref_name }}
+          # No delete-branch-action step for this branch: it is the
+          # rollback target (ADR-0044 §6), not an ephemeral scratch branch.
+
+      - name: Generate Prisma client
+        run: cd apps/api && bunx prisma generate
+        env:
+          DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.PROD_DATABASE_URL }}
+
+      - name: Migrate prod database
+        # Consumes DIRECT_URL (schema datasource `directUrl`). PROD_DATABASE_URL
+        # must be the direct/non-pooled string — see header note on the secret.
+        run: cd apps/api && bunx prisma migrate deploy
+        env:
+          DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.PROD_DATABASE_URL }}
+
+      - name: Deploy API to Railway (prod)
+        run: |
+          bunx @railway/cli@latest up \
+            --service "${{ vars.RAILWAY_PROD_SERVICE }}" \
+            --project "${{ vars.RAILWAY_PROD_PROJECT_ID }}" \
+            --environment "${{ vars.RAILWAY_PROD_ENVIRONMENT }}" \
+            -m "release ${{ github.ref_name }}"
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_PROD_TOKEN }}
+
+      - name: Deploy web to Vercel (prod)
+        run: |
+          bunx vercel@latest pull --yes --environment=production --token="${{ secrets.VERCEL_TOKEN }}"
+          bunx vercel@latest build --prod --token="${{ secrets.VERCEL_TOKEN }}"
+          bunx vercel@latest deploy --prebuilt --prod --token="${{ secrets.VERCEL_TOKEN }}"
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Release summary
+        if: always()
+        run: |
+          {
+            echo "## Release ${{ github.ref_name }}"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Pre-release Neon branch | \`pre-release-${{ github.ref_name }}\` (kept — rollback target, ADR-0044 §6) |"
+            echo "| Job result | ${{ job.status }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
