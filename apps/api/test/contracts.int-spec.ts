@@ -1,7 +1,7 @@
 import { INestApplication } from '@nestjs/common';
 import * as request from 'supertest';
 import { createTestApp, mockStorageService } from './test-app.factory';
-import { prisma } from './test-prisma';
+import { PrismaService } from '../src/prisma/prisma.service';
 import { TEST_USER_ID } from './test-auth.guard';
 import { CHECKLIST_DEFAULTS } from '../src/bookings/checklist-defaults';
 
@@ -11,10 +11,12 @@ const SIGNATURE_PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAY
 
 describe('Contract flow (integration)', () => {
   let app: INestApplication;
+  let prisma: PrismaService;
   let customerId: string;
 
   beforeAll(async () => {
     app = await createTestApp();
+    prisma = app.get(PrismaService);
 
     const contact = await prisma.contact.create({
       data: { userId: TEST_USER_ID, name: 'Contract Test Customer' },

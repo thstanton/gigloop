@@ -1,7 +1,7 @@
 import { INestApplication } from '@nestjs/common';
 import * as request from 'supertest';
 import { createTestApp } from './test-app.factory';
-import { prisma } from './test-prisma';
+import { PrismaService } from '../src/prisma/prisma.service';
 import { TEST_USER_ID } from './test-auth.guard';
 
 const FUTURE_DATE = '2027-09-15T14:00:00.000Z';
@@ -9,10 +9,12 @@ const PORTAL_TOKEN = `test-portal-token-${Date.now()}`;
 
 describe('Portal music form (integration)', () => {
   let app: INestApplication;
+  let prisma: PrismaService;
   let bookingId: string;
 
   beforeAll(async () => {
     app = await createTestApp();
+    prisma = app.get(PrismaService);
 
     const contact = await prisma.contact.create({
       data: { userId: TEST_USER_ID, name: 'Portal Test Customer' },
@@ -126,11 +128,13 @@ describe('Portal music form (integration)', () => {
 // submit are gated, so a token holder cannot fetch or submit it. Indistinguishable from "not found".
 describe('Portal music form draft gate (#533, integration)', () => {
   let app: INestApplication;
+  let prisma: PrismaService;
   let bookingId: string;
   const DRAFT_TOKEN = `test-portal-draft-token-${Date.now()}`;
 
   beforeAll(async () => {
     app = await createTestApp();
+    prisma = app.get(PrismaService);
 
     const contact = await prisma.contact.create({
       data: { userId: TEST_USER_ID, name: 'Draft Form Customer' },
@@ -191,11 +195,13 @@ describe('Portal music form draft gate (#533, integration)', () => {
 
 describe('Portal document visibility (integration)', () => {
   let app: INestApplication;
+  let prisma: PrismaService;
   let bookingId: string;
   const DOCS_TOKEN = `test-portal-docs-token-${Date.now()}`;
 
   beforeAll(async () => {
     app = await createTestApp();
+    prisma = app.get(PrismaService);
 
     const contact = await prisma.contact.create({
       data: { userId: TEST_USER_ID, name: 'Docs Portal Customer' },
