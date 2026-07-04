@@ -13,6 +13,18 @@ describe('deriveShortcut', () => {
     ).toEqual({ shortcutType: 'send_email', shortcutTemplateType: 'quote' });
   });
 
+  it('maps a balance invoicePaid rule to the mark_balance_received shortcut (#653)', () => {
+    expect(deriveShortcut({ type: 'invoicePaid', isDeposit: false }, [])).toEqual({
+      shortcutType: 'mark_balance_received',
+    });
+  });
+
+  it('maps a deposit invoicePaid rule to the mark_deposit_received shortcut (#653)', () => {
+    expect(deriveShortcut({ type: 'invoicePaid', isDeposit: true }, [])).toEqual({
+      shortcutType: 'mark_deposit_received',
+    });
+  });
+
   it('returns no shortcut for a null rule', () => {
     expect(deriveShortcut(null, [])).toEqual({});
   });

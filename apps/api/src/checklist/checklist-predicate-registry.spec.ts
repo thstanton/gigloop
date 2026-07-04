@@ -46,6 +46,7 @@ describe('STEP_PREDICATES catalog', () => {
     expect(STEP_PREDICATES.contract_signed.completeMode).toBe('AWAITED');
     expect(STEP_PREDICATES.song_requests.completeMode).toBe('AWAITED');
     expect(STEP_PREDICATES.deposit_received.completeMode).toBe('AWAITED'); // USER records, but awaited
+    expect(STEP_PREDICATES.balance_received.completeMode).toBe('AWAITED'); // #653: awaits payment
     // ACTION — the musician acts now:
     expect(STEP_PREDICATES.send_quote.completeMode).toBe('ACTION');
     expect(STEP_PREDICATES.create_deposit_invoice.completeMode).toBe('ACTION');
@@ -120,6 +121,16 @@ describe('predicates fire on their declared input and not otherwise', () => {
     expect(STEP_PREDICATES.deposit_received.predicate(makeCtx({ depositReceivedAt: new Date() }))).toBe('COMPLETE');
   });
 
+  it('balance_received completes only on a PAID balance invoice, reading invoice status (#653)', () => {
+    expect(STEP_PREDICATES.balance_received.inputs).toEqual(['invoices']);
+    expect(STEP_PREDICATES.balance_received.predicate(makeCtx())).toBe('PENDING');
+    // A SENT (unpaid) balance invoice does not complete it; a PAID deposit invoice is the wrong one.
+    expect(STEP_PREDICATES.balance_received.predicate(makeCtx({ invoices: [{ isDeposit: false, status: 'SENT' }] }))).toBe('PENDING');
+    expect(STEP_PREDICATES.balance_received.predicate(makeCtx({ invoices: [{ isDeposit: true, status: 'PAID' }] }))).toBe('PENDING');
+    // A PAID balance invoice completes it.
+    expect(STEP_PREDICATES.balance_received.predicate(makeCtx({ invoices: [{ isDeposit: false, status: 'PAID' }] }))).toBe('COMPLETE');
+  });
+
   it('contract_signed completes only on a SIGNED contract, not a DRAFT one', () => {
     expect(STEP_PREDICATES.contract_signed.predicate(makeCtx({ contracts: [{ status: 'DRAFT' }] }))).toBe('PENDING');
     expect(STEP_PREDICATES.contract_signed.predicate(makeCtx({ contracts: [{ status: 'SIGNED' }] }))).toBe('COMPLETE');
@@ -155,6 +166,7 @@ describe('affectedKeys (inverted index)', () => {
     expect(invoiceKeys.has('issue_deposit_invoice')).toBe(true);
     expect(invoiceKeys.has('create_balance_invoice')).toBe(true);
     expect(invoiceKeys.has('issue_balance_invoice')).toBe(true);
+    expect(invoiceKeys.has('balance_received')).toBe(true); // #653: invoicePaid reads invoices
     expect(invoiceKeys.has('add_venue')).toBe(false);
   });
 

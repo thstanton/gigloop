@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { useChecklistActions } from './useChecklistActions';
-import { apiGet } from '@/lib/api';
+import { apiGet, apiPost } from '@/lib/api';
 import type { Invoice } from '@/types/api';
 
 const setSearchParams = vi.fn();
@@ -95,6 +95,38 @@ describe('useChecklistActions — draft-aware invoice shortcut (ADR-0056)', () =
     expect(setSearchParams).not.toHaveBeenCalled();
     expect(toast).toHaveBeenCalledWith(
       expect.objectContaining({ variant: 'destructive' }),
+    );
+  });
+});
+
+describe('useChecklistActions — handleMarkDone marks the invoice paid (#653)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    authState.isLoaded = true;
+    authState.isSignedIn = true;
+    (apiPost as ReturnType<typeof vi.fn>).mockResolvedValue({});
+  });
+
+  it('mark_balance_received marks the SENT balance invoice paid (not the draft)', async () => {
+    const { result } = setup([
+      invoice({ id: 'sb1', isDeposit: false, status: 'SENT' }),
+      invoice({ id: 'db1', isDeposit: false, status: 'DRAFT' }),
+    ]);
+
+    act(() => result.current.handleMarkDone('mark_balance_received'));
+
+    await waitFor(() =>
+      expect(apiPost).toHaveBeenCalledWith('/bookings/b1/invoices/sb1/mark-paid', {}),
+    );
+  });
+
+  it('mark_deposit_received marks the SENT deposit invoice paid', async () => {
+    const { result } = setup([invoice({ id: 'sd1', isDeposit: true, status: 'SENT' })]);
+
+    act(() => result.current.handleMarkDone('mark_deposit_received'));
+
+    await waitFor(() =>
+      expect(apiPost).toHaveBeenCalledWith('/bookings/b1/invoices/sd1/mark-paid', {}),
     );
   });
 });

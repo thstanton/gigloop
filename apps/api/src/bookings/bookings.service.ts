@@ -81,6 +81,11 @@ export function deriveShortcut(
     }
     case 'invoiceExists':
       return { shortcutType: invoiceShortcutType(rule) };
+    case 'invoicePaid':
+      // #653: the received step's "Mark as paid" action. Balance reads the invoice status (it has
+      // no received-field); deposit keeps its bookingField rule, so this branch is balance in
+      // practice, but handle both for symmetry.
+      return { shortcutType: rule['isDeposit'] === true ? 'mark_deposit_received' : 'mark_balance_received' };
     case 'bookingField':
       return { shortcutType: BOOKING_FIELD_SHORTCUT[rule['field'] as string] };
     case 'contractSigned':

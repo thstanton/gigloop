@@ -276,10 +276,10 @@ export const CHECKLIST_DEFAULTS: ChecklistDefaultItem[] = [
     // outcome-framed as "Get the balance paid" (symmetry with get_deposit_paid): create → issue →
     // send → balance received. Goal carries no rule (rolls up), dates against -14 (the send
     // deadline). #617 splits create from issue (the #585 fix, mirrors the deposit) and adds a
-    // USER-awaited `balance_received` step. There is no `balanceReceivedAt` field yet (out of
-    // scope — the analytics cash-received lens), so `balance_received` has no rule and is resolved
-    // by the musician marking the goal complete; being USER-awaited it keeps surfacing (chase the
-    // money) until paid.
+    // USER-awaited `balance_received` step. There is no `balanceReceivedAt` field (out of scope —
+    // the analytics cash-received lens), so `balance_received` reads the balance invoice's PAID
+    // status directly (#653 `invoicePaid`); being USER-awaited it keeps surfacing (chase the money)
+    // until paid, and its "Mark as paid" action marks the sent balance invoice paid.
     key: 'get_the_balance_paid',
     label: 'Get the balance paid',
     completedBy: 'USER',
@@ -335,14 +335,14 @@ export const CHECKLIST_DEFAULTS: ChecklistDefaultItem[] = [
         dueDateRule: { basis: 'bookingDate', offsetDays: -14 },
       },
       {
-        // AWAITED, USER-completedBy, no rule (no balanceReceivedAt field yet) — resolved by the
-        // musician marking the goal complete. Keeps surfacing until then (chase the money).
+        // AWAITED, USER-completedBy — the musician records the payment. Auto-completes when the
+        // balance invoice is PAID (#653); its "Mark as paid" CTA marks the sent balance invoice paid.
         key: 'balance_received',
         label: 'Balance received',
         kind: 'MILESTONE',
         completeMode: 'AWAITED',
         completedBy: 'USER',
-        autoCompleteRule: null,
+        autoCompleteRule: { type: 'invoicePaid', isDeposit: false },
       },
     ],
   },
