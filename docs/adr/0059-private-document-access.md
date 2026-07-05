@@ -43,3 +43,25 @@ The zero-migration timing is deliberate: prod was wiped, so there are no existin
 - `StorageService` must address two buckets (a private-documents target alongside the public-assets one) and gains a presigned-GET method. Callers that today build a public document URL switch to emitting the app route.
 - The portal API contract changes shape: `signedContractUrl` and `documents[].url` become access-controlled app routes rather than public R2 URLs (CONTEXT.md amended).
 - **Assets are the residual public surface.** Logos/photos stay guessable-by-URL; accepted, because they are the musician's own outward-facing branding, not customer PII.
+
+## Amendment (2026-07-05) — per-environment bucket topology & credential isolation
+
+The "two buckets" decision above is per **sensitivity class**. Realising it across environments (#652) settled two further points not spelled out in the original decision.
+
+**Buckets are named by sensitivity class, in every environment.** The public asset bucket was renamed `gigman` → `gigloop-public` (per env). The `-public` suffix is a deliberate **safety signal**, not cosmetics: a bucket whose name says public is world-readable and must never hold sensitive data. It is the visible complement to the private `*-documents` bucket — the two-class split made legible in the name itself, so a mis-targeted upload is obvious at the infra layer.
+
+The full topology is **one public + one documents bucket per environment**, each reached by its **own** R2 API token:
+
+| Env | Public assets | Private documents | Token scope |
+|---|---|---|---|
+| local (dev) | `gigloop-dev-public` | `gigloop-dev-documents` | dev token — **only** the two `gigloop-dev-*` buckets |
+| preprod | `gigloop-preprod-public` | `gigloop-preprod-documents` | preprod token |
+| prod | `gigloop-public` | `gigloop-documents` | prod token |
+
+**Local dev never holds prod (or preprod) credentials.** Local previously used the prod token + prod bucket — tolerable while everything was public and synthetic, but an unacceptable boundary the moment prod carries real customer documents: prod-documents read/write creds must not sit on a dev laptop, which is the exact exposure this ADR closes. The local `dev` DB is branched off prod (CoW), so its rows may reference prod object keys — but local must *not* be able to resolve prod's private documents. Pointing local at its own dev buckets with a dev-scoped token is therefore the correct security posture, not a limitation.
+
+Dedicated dev buckets were chosen over a shared-bucket key prefix (e.g. `dev/…` inside the preprod bucket): R2 has no real folders, so a prefix gives **no credential isolation** (local would still hold the shared bucket's token) and would require env-scoped keys in application code. A separate bucket + separate token is the R2-idiomatic isolation and needs no code — buckets resolve entirely from env.
+
+**Rename safety.** The rename/re-topology was done pre-launch while all DBs (prod, preprod, dev) were empty. This matters because `logoUrl`/`photo` are persisted as **full public URLs** (not keys), so the public host is baked into DB rows and already-sent email `<img>` tags; with no rows and no sent mail, there was nothing to rewrite or break. R2 has no in-place rename, so each swap was create-new bucket → repoint `R2_BUCKET_NAME` + `R2_PUBLIC_URL` → delete old, and old buckets are deleted only *after* a deploy makes the new vars live (env changes are staged on Railway until the next deploy).
+
+`R2_DOCUMENTS_BUCKET_NAME` is captured in every environment now but is deliberately **not** in `StorageService`'s required-vars check until the consuming slice ships — it must be present (and live) in each env *before* that slice deploys, or the app fails its startup check.
