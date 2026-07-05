@@ -38,6 +38,7 @@ bun --filter @gigloop/api run test -- --testPathPattern=<file>  # run single tes
 - **Portal routes:** `/booking/:token` validates the booking's `portalToken` — these routes bypass Clerk auth entirely.
 - **Communication templates:** Stored as Tiptap JSON; rendered to HTML with variable substitution at send time.
 - **Contact deletion:** Blocked at API level if the contact has associated Bookings; return a clear error (409 response).
+- **Secrets never enter the session.** Never fetch or print a live credential — DB connection string, API key, token, password — into the conversation. This includes tool-call arguments and tool *results*: calling something like Neon's `get_connection_string` surfaces the password in the transcript just as pasting it does. A connection string **is** a secret (it embeds the role password), and on Neon a role/password is shared across every branch of a project by inheritance, so one leaked string = project-wide exposure. To wire a secret into a gitignored config (`.env`, `e2e/.env`), have the **human** copy it from the source console — do not route the value through the assistant. Non-secret operations (creating a Neon branch, which returns only an id) are fine. *(This rule exists because a `neondb_owner` connection string was once pasted into a session, forcing a password rotation — see issue #675.)*
 
 ## Architecture Notes
 
