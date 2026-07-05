@@ -4,6 +4,8 @@ import { RowActions } from '@/components/common/RowActions';
 import type { RowAction } from '@/components/common/RowActions';
 import { PortalVisibility } from '@/components/common/PortalVisibility';
 import { cn } from '@/lib/utils';
+import { openDocument } from '@/lib/api';
+import { toast } from '@/lib/hooks/use-toast';
 import { formatDate, formatCurrency } from '@/lib/formatters';
 import type { Invoice, PortalVisibilityVerdict } from '@/types/api';
 
@@ -49,7 +51,7 @@ function getInvoiceActions(
       { label: 'Mark as sent', onClick: () => onMarkSent(invoice), isPending: isMarkSentPending },
     ];
     if (pdfUrl) {
-      acts.push({ label: 'Download', icon: <Download size={14} />, onClick: () => window.open(pdfUrl, '_blank', 'noopener,noreferrer') });
+      acts.push({ label: 'Download', icon: <Download size={14} />, onClick: () => openDocument(pdfUrl, () => toast({ title: 'Failed to open invoice', variant: 'destructive' })) });
     }
     acts.push({
       label: 'Void',
@@ -66,7 +68,7 @@ function getInvoiceActions(
       { label: 'Mark as paid', icon: <CheckCircle2 size={14} />, onClick: () => onMarkPaid(invoice), isPending: isMarkPaidPending },
     ];
     if (pdfUrl) {
-      acts.push({ label: 'Download', icon: <Download size={14} />, onClick: () => window.open(pdfUrl, '_blank', 'noopener,noreferrer') });
+      acts.push({ label: 'Download', icon: <Download size={14} />, onClick: () => openDocument(pdfUrl, () => toast({ title: 'Failed to open invoice', variant: 'destructive' })) });
     }
     acts.push({
       label: 'Void',
@@ -81,7 +83,7 @@ function getInvoiceActions(
   if (invoice.status === 'PAID') {
     const acts: RowAction[] = [];
     if (pdfUrl) {
-      acts.push({ label: 'Download', icon: <Download size={14} />, onClick: () => window.open(pdfUrl, '_blank', 'noopener,noreferrer') });
+      acts.push({ label: 'Download', icon: <Download size={14} />, onClick: () => openDocument(pdfUrl, () => toast({ title: 'Failed to open invoice', variant: 'destructive' })) });
     }
     acts.push({
       label: 'Void',

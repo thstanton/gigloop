@@ -1,4 +1,4 @@
-import { Controller, Get, Post, HttpCode, Param, Body, Req } from '@nestjs/common';
+import { Controller, Get, Post, HttpCode, Param, Body, Req, Redirect } from '@nestjs/common';
 import { ApiTags, ApiResponse } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { Public } from '../auth/public.decorator';
@@ -55,5 +55,28 @@ export class PortalController {
     @Body() dto: SubmitMusicFormDto,
   ) {
     return this.service.submitMusicForm(token, dto);
+  }
+
+  // Access-controlled document download (ADR-0059, #655). The portalToken in the
+  // path is the auth, so a top-level navigation is sufficient and we 302 to the
+  // resolved storage URL. Only serves a doc that belongs to this booking and
+  // passes the portal-visibility rules; otherwise 404.
+  @Get('documents/:id')
+  @Redirect()
+  @ApiResponse({ status: 302, description: 'Redirect to the document storage URL' })
+  @ApiResponse({ status: 404, description: 'Document not found or not visible to this portal' })
+  async downloadDocument(@Param('token') token: string, @Param('id') id: string) {
+    const url = await this.service.resolvePortalDocumentUrl(token, id);
+    return { url, statusCode: 302 };
+  }
+
+  // Signed-contract variant — resolves the booking's signed contract without its id.
+  @Get('signed-contract')
+  @Redirect()
+  @ApiResponse({ status: 302, description: 'Redirect to the signed contract storage URL' })
+  @ApiResponse({ status: 404, description: 'Signed contract not found or not visible' })
+  async downloadSignedContract(@Param('token') token: string) {
+    const url = await this.service.resolvePortalSignedContractUrl(token);
+    return { url, statusCode: 302 };
   }
 }

@@ -15,7 +15,14 @@ export class DocumentResponseDto {
   @ApiProperty() id!: string;
   @ApiProperty() createdAt!: string;
   @ApiProperty({ enum: ['INVOICE', 'CONTRACT', 'SONG_LIST', 'UPLOAD'] }) type!: string;
-  @ApiProperty() url!: string;
+  @ApiProperty({
+    description:
+      'Access-controlled app route (e.g. /documents/:id/download), NOT a public ' +
+      'R2 URL. The client fetches it with auth to resolve the real storage URL ' +
+      '(ADR-0059).',
+    example: '/documents/d1/download',
+  })
+  url!: string;
   @ApiPropertyOptional() invoiceId?: string | null;
   @ApiPropertyOptional({ description: 'Status of the associated contract; null for non-CONTRACT documents' })
   contractStatus?: string | null;

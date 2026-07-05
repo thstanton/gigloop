@@ -1,6 +1,6 @@
 import { Trash2, FileText, Download, FolderOpen } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiDelete } from '@/lib/api';
+import { apiDelete, openDocument } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
 import { RowActions } from '@/components/common/RowActions';
 import type { RowAction } from '@/components/common/RowActions';
@@ -14,17 +14,6 @@ function getDocumentLabel(doc: Document, invoice: Invoice | undefined): string {
     return invoice?.status === 'VOID' ? `${base} [VOID]` : base;
   }
   return doc.contractStatus === 'VOID' ? 'Contract [VOID]' : 'Contract';
-}
-
-async function downloadDocument(url: string, label: string) {
-  const filename = `${label.toLowerCase().replace(' ', '-')}.pdf`;
-  const res = await fetch(url);
-  const blob = await res.blob();
-  const a = window.document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(a.href);
 }
 
 interface Props {
@@ -67,7 +56,7 @@ export function DocumentList({ bookingId, documents, invoices }: Props) {
           {
             label: 'Download',
             icon: <Download size={16} />,
-            onClick: () => downloadDocument(doc.url, label),
+            onClick: () => openDocument(doc.url, () => toast({ title: 'Failed to open document', variant: 'destructive' })),
           },
         ];
 

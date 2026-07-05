@@ -13,7 +13,8 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { GENRE_LABELS } from '@/lib/constants';
-import { apiGet } from '@/lib/api';
+import { apiGet, openDocument } from '@/lib/api';
+import { toast } from '@/lib/hooks/use-toast';
 import FormatIcon from './FormatIcon';
 import type { BookingDetail, Document, MusicFormConfig, MusicFormResponse, MusicFormResponseSong } from '@/types/api';
 
@@ -106,15 +107,14 @@ function SongRequestsSheetBody({ response, songListDoc }: Readonly<SongRequestsS
       )}
       {isEmpty && <p className="text-sm text-muted">No selections made.</p>}
       {songListDoc && (
-        <a
-          href={songListDoc.url}
-          target="_blank"
-          rel="noopener noreferrer"
+        <button
+          type="button"
+          onClick={() => openDocument(songListDoc.url, () => toast({ title: 'Failed to open song list', variant: 'destructive' }))}
           className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-foreground transition-colors"
         >
           <Download size={14} />
           Download PDF
-        </a>
+        </button>
       )}
     </div>
   );

@@ -606,6 +606,9 @@ export interface Document {
   id: string;
   createdAt: string;
   type: DocumentType;
+  // Access-controlled app route (e.g. /documents/:id/download), NOT a public URL.
+  // Open via openDocument() from lib/api — it fetches this with auth to resolve
+  // the real storage URL, then navigates (ADR-0059 / #654).
   url: string;
   invoiceId: string | null;
   contractStatus: string | null;
@@ -877,6 +880,9 @@ export interface PortalDocument {
   id: string;
   type: 'CONTRACT' | 'INVOICE' | 'SONG_LIST';
   label: string;
+  // Access-controlled app route (/api/booking/:token/documents/:id), NOT a public
+  // URL. Usable directly as an <a href> — the portalToken in the path is the auth
+  // and the endpoint 302s to storage after re-checking visibility (ADR-0059 / #655).
   url: string;
   createdAt: string;
 }
@@ -904,6 +910,8 @@ export interface MusicFormResponse {
 export interface PortalData {
   booking: PortalBooking;
   publicProfile: PortalPublicProfile;
+  // Access-controlled app route (/api/booking/:token/signed-contract), NOT a public
+  // URL — same contract as PortalDocument.url (ADR-0059 / #655).
   signedContractUrl: string | null;
   documents: PortalDocument[];
   hasMusicForm: boolean;

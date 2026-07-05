@@ -5,6 +5,8 @@ import { PortalVisibility } from '@/components/common/PortalVisibility';
 import { RowActions } from '@/components/common/RowActions';
 import type { RowAction } from '@/components/common/RowActions';
 import { cn } from '@/lib/utils';
+import { openDocument } from '@/lib/api';
+import { toast } from '@/lib/hooks/use-toast';
 import { formatDate } from '@/lib/formatters';
 import type { BookingDetail, Contract, ContractStatus, Document } from '@/types/api';
 
@@ -79,7 +81,7 @@ function getContractActions(
       actions.push({
         label: 'Download',
         icon: <Download size={16} />,
-        onClick: () => window.open(contractDoc.url, '_blank', 'noopener,noreferrer'),
+        onClick: () => openDocument(contractDoc.url, () => toast({ title: 'Failed to open contract', variant: 'destructive' })),
       });
     }
     actions.push({
