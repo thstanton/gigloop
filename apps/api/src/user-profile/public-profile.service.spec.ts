@@ -11,8 +11,7 @@ function makeRepo(): MockRepo {
 
 const mockStorage = {
   getPresignedUploadUrl: jest.fn(),
-  putObject: jest.fn(),
-  deleteObject: jest.fn(),
+  deleteAsset: jest.fn(),
   getPublicUrl: jest.fn((key: string) => `https://cdn.example.com/${key}`),
 } as unknown as StorageService;
 

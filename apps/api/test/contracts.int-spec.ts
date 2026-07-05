@@ -49,7 +49,7 @@ describe('Contract flow (integration)', () => {
   });
 
   beforeEach(() => {
-    mockStorageService.putObject.mockClear();
+    mockStorageService.putDocument.mockClear();
   });
 
   // ── helpers ───────────────────────────────────────────────────────────────
@@ -158,8 +158,8 @@ describe('Contract flow (integration)', () => {
       expect(docs).toHaveLength(1);
       expect(docs[0].contractId).toBe(contract.id);
 
-      // StorageService.putObject called once (signed contract PDF)
-      expect(mockStorageService.putObject).toHaveBeenCalledTimes(1);
+      // StorageService.putDocument called once (signed contract PDF → private bucket)
+      expect(mockStorageService.putDocument).toHaveBeenCalledTimes(1);
 
       await prisma.booking.delete({ where: { id: bookingId } });
     });

@@ -47,7 +47,7 @@ describe('Invoice flow (integration)', () => {
   });
 
   beforeEach(() => {
-    mockStorageService.putObject.mockClear();
+    mockStorageService.putDocument.mockClear();
   });
 
   // ── helpers ───────────────────────────────────────────────────────────────
@@ -157,14 +157,14 @@ describe('Invoice flow (integration)', () => {
   });
 
   describe('Send invoice', () => {
-    it('putObject called, Document record created, invoice number assigned, email sent', async () => {
+    it('putDocument called, Document record created, invoice number assigned, email sent', async () => {
       const bookingId = await createBooking();
       const invoiceId = await createInvoice(bookingId, true);
 
       await sendInvoice(bookingId, invoiceId);
 
       // PDF stored
-      expect(mockStorageService.putObject).toHaveBeenCalledTimes(1);
+      expect(mockStorageService.putDocument).toHaveBeenCalledTimes(1);
 
       // Document record created
       const doc = await prisma.document.findFirst({ where: { invoiceId } });

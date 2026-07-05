@@ -98,6 +98,19 @@ export function isPortalVisibleDocument(
   return resolveDocumentVisibility(doc, activeContractId, bookingCancelled).visible;
 }
 
+// Access-controlled portal download routes (ADR-0059, #655). Emitted into the
+// portal payload and consumed as bare <a href> values, so they carry the full
+// path including the global `api` prefix and rely on the frontend's /api rewrite
+// (vercel.json) / vite dev proxy to reach the API. The portalToken in the path
+// is the auth, so a top-level navigation is sufficient and the endpoint 302s.
+function portalDocumentRoute(token: string, documentId: string): string {
+  return `/api/booking/${token}/documents/${documentId}`;
+}
+
+function portalSignedContractRoute(token: string): string {
+  return `/api/booking/${token}/signed-contract`;
+}
+
 function groupBy<T>(items: T[], key: (item: T) => string): Map<string, T[]> {
   const map = new Map<string, T[]>();
   for (const item of items) {
@@ -209,12 +222,17 @@ export class PortalService {
       id: doc.id,
       type: doc.type as 'CONTRACT' | 'INVOICE' | 'SONG_LIST',
       label: labelDocument(doc),
-      url: this.storage.getPublicUrl(doc.storageKey),
+      // Access-controlled app route, not a public R2 URL (ADR-0059, #655). The
+      // portalToken is in the path, so a plain <a href> navigation carries all the
+      // auth needed; the endpoint 302s to storage after re-checking visibility.
+      // The `/api` prefix is deliberate — the browser hits the frontend origin,
+      // whose vercel.json rewrite (and the vite dev proxy) forwards /api/* to the API.
+      url: portalDocumentRoute(token, doc.id),
       createdAt: doc.createdAt.toISOString(),
     }));
 
     const signedContractUrl = signedContractDoc
-      ? this.storage.getPublicUrl(signedContractDoc.storageKey)
+      ? portalSignedContractRoute(token)
       : null;
 
     return {
@@ -231,6 +249,41 @@ export class PortalService {
       contractStatus,
       depositInvoiceDueDate: sentDepositInvoice?.dueDate?.toISOString() ?? null,
     };
+  }
+
+  // Resolve a portal document to a short-TTL presigned GET against the private
+  // documents bucket (ADR-0059, #656). Access is gated exactly as the portal
+  // payload is: the doc must belong to this token's booking AND pass the shared
+  // visibility authority — so a doc the portal would hide (e.g. an ISSUED-but-
+  // unsent invoice, or a cancelled booking's contract) is never served. The
+  // signature is minted only after that check passes.
+  async resolvePortalDocumentUrl(token: string, documentId: string): Promise<string> {
+    const booking = await this.repo.findBookingByToken(token);
+    if (!booking) throw new NotFoundException('Document not found');
+
+    const activeContractId = booking.contracts?.[0]?.id ?? null;
+    const bookingCancelled = booking.status === 'CANCELLED';
+    const doc = booking.documents.find((d) => d.id === documentId);
+    if (!doc || !isPortalVisibleDocument(doc, activeContractId, bookingCancelled)) {
+      throw new NotFoundException('Document not found');
+    }
+    return this.storage.getPresignedDownloadUrl(doc.storageKey);
+  }
+
+  // Variant of the above that resolves the booking's signed contract without the
+  // caller needing its document id (feeds `signedContractUrl`). Mirrors the
+  // `portalDocs.find(d => d.type === 'CONTRACT')` resolution in getBookingData.
+  async resolvePortalSignedContractUrl(token: string): Promise<string> {
+    const booking = await this.repo.findBookingByToken(token);
+    if (!booking) throw new NotFoundException('Signed contract not found');
+
+    const activeContractId = booking.contracts?.[0]?.id ?? null;
+    const bookingCancelled = booking.status === 'CANCELLED';
+    const doc = booking.documents.find(
+      (d) => d.type === 'CONTRACT' && isPortalVisibleDocument(d, activeContractId, bookingCancelled),
+    );
+    if (!doc) throw new NotFoundException('Signed contract not found');
+    return this.storage.getPresignedDownloadUrl(doc.storageKey);
   }
 
   async getContractContent(token: string) {

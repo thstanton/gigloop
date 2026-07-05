@@ -60,7 +60,7 @@ function makeSharedSetup() {
 
   const putObjectMock = jest.fn().mockResolvedValue(undefined);
   const mockStorage = {
-    putObject: putObjectMock,
+    putDocument: putObjectMock,
     getPublicUrl: jest.fn().mockReturnValue('https://example.com/doc.pdf'),
   } as unknown as StorageService;
 
