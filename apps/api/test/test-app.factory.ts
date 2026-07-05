@@ -14,11 +14,15 @@ import { TestAuthGuard } from './test-auth.guard';
 class TestAuthModule {}
 
 export const mockStorageService = {
+  // Assets (public bucket)
   getPresignedUploadUrl: jest.fn().mockResolvedValue('https://mock-storage.test/presigned'),
-  putObject: jest.fn().mockResolvedValue(undefined),
-  deleteObject: jest.fn().mockResolvedValue(undefined),
   getPublicUrl: jest.fn().mockReturnValue('https://mock-storage.test/file'),
-  getObject: jest.fn().mockResolvedValue(Buffer.from('%PDF-mock')),
+  deleteAsset: jest.fn().mockResolvedValue(undefined),
+  // Documents (private bucket) — ADR-0059 / #656
+  putDocument: jest.fn().mockResolvedValue(undefined),
+  deleteDocument: jest.fn().mockResolvedValue(undefined),
+  getDocument: jest.fn().mockResolvedValue(Buffer.from('%PDF-mock')),
+  getPresignedDownloadUrl: jest.fn().mockResolvedValue('https://mock-storage.test/presigned-get'),
 };
 
 const mockEmailContext = {
