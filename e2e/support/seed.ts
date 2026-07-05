@@ -1,4 +1,4 @@
-import { BookingStatus, InvoiceStatus } from '@prisma/client';
+import { BookingStatus, InvoiceStatus, type Contact } from '@prisma/client';
 import { prisma, E2E_TEST_USER_ID } from './prisma';
 
 // Deletes everything owned by the test user, in child→parent order. Booking is
@@ -35,6 +35,21 @@ export async function seedBaselineProfile(userId: string = E2E_TEST_USER_ID): Pr
       businessName: 'E2E Test Band',
       displayName: 'E2E Test Band',
       email: 'band@e2e.test',
+    },
+  });
+}
+
+// A plain customer contact, arranged directly in the DB for the create-booking
+// journey (ADR-0048 §7, slice 2): the booking itself is built through the UI, so
+// the only fixture the spec needs is a contact to select. `primaryRole` seeds it
+// as a customer so the picker surfaces it under the Customer role.
+export async function seedContact(userId: string = E2E_TEST_USER_ID): Promise<Contact> {
+  return prisma.contact.create({
+    data: {
+      userId,
+      name: 'E2E Create Customer',
+      email: 'create-customer@e2e.test',
+      primaryRole: 'CUSTOMER',
     },
   });
 }

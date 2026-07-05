@@ -15,6 +15,7 @@ ralph.log
 logs/
 ralph.current
 .playwright-cli/
+.playwright-mcp/
 
 # Generated build artifacts (compiled config + TS incremental caches)
 *.tsbuildinfo
