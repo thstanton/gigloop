@@ -51,6 +51,13 @@ The DTO update and smoke story are Haiku candidates — flag them as such in the
 
 At implementation time: when a Haiku-candidate task is reached, spawn a Haiku subagent via the Agent tool with `model: "haiku"`, passing the target file path, an existing file to use as a pattern, and the exact change required. Log the spawn so the human can observe success/failure and build intuition for future calibration.
 
+### 7. Journey-annotated (does this slice change a user journey?)
+End-to-end coverage is **not** a per-slice tier — it is the curated real-stack Playwright suite (**ADR-0048**). So at planning time, ask of each slice: **does it change a money-path user journey?** (booking lifecycle, contract signing via the portal, invoice issue → send → paid, contact management, onboarding). If yes, the issue records a deliberate decision on two independent questions:
+- **A new/updated curated spec?** — if the slice alters a flow the suite covers (or should), name the spec to add or update as an explicit task. If it doesn't warrant one, say so — silence is not a decision.
+- **A CLI walkthrough now?** — for new-development breakage the suite doesn't yet guard (the ADR-0048 motivating case), the issue may direct a one-off `bun run test:e2e -- --ui` walkthrough before commit. This is separate from adding to the permanent suite.
+
+Most slices touch no journey and record "no journey change." Like the reuse and story passes, this is a planning-time judgement (ADR-0030) captured where the human can catch a gap.
+
 ## Branch & PR shape (set at planning time)
 
 - **One feature = one branch = one PR.** Sub-issues are commits on that branch (`Closes #N` in the commit body; all closed in the PR description). **Never** split a dependent feature into sibling branches — that is the squash-merge conflict footgun (see ADR-0025).
@@ -65,5 +72,6 @@ Before coding starts, the human should be able to see, in the issues:
 - [ ] Dependencies are mapped on the tracking issue
 - [ ] UI sub-issues name the components to reuse
 - [ ] UI sub-issues include a story task, sequenced before the build
+- [ ] Journey-touching sub-issues record the curated-spec / CLI-walkthrough decision (ADR-0048)
 - [ ] Each sub-issue has a model recommendation; Haiku candidates are flagged inline
 - [ ] One branch / one PR for the whole feature (or an explicit sequential split)
