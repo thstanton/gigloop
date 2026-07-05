@@ -99,6 +99,25 @@ export class DocumentsService {
     private storage: StorageService,
   ) {}
 
+  // Documents (unlike public assets) are no longer handed out as bare public R2
+  // URLs. The `url` field is an access-controlled app route; the admin frontend
+  // fetches it with the Clerk JWT, and the endpoint resolves the real storage
+  // URL only after an ownership check (ADR-0059, #654). API-relative — the web
+  // client prepends its API base and attaches auth.
+  private documentDownloadRoute(id: string): string {
+    return `/documents/${id}/download`;
+  }
+
+  // Resolve the caller's own document to a fetchable storage URL. Ownership is
+  // enforced in-query by repo.findById(id, userId); another user's id → 404.
+  // Still points at the current (public) storage — the private-bucket presigned
+  // GET is a later slice (#656).
+  async resolveDownloadTarget(userId: string, id: string): Promise<{ url: string }> {
+    const doc = await this.repo.findById(id, userId);
+    if (!doc) throw new NotFoundException('Document not found');
+    return { url: this.storage.getPublicUrl(doc.storageKey) };
+  }
+
   private formatAddress(profile: { addressLine1: string | null; addressLine2: string | null; city: string | null; postcode: string | null } | null): string | null {
     if (!profile) return null;
     return [profile.addressLine1, profile.addressLine2, profile.city, profile.postcode].filter(Boolean).join('\n') || null;
@@ -289,7 +308,7 @@ export class DocumentsService {
     const key = `contracts/${userId}/${bookingId}.pdf`;
     await this.storage.putObject(key, buffer, 'application/pdf');
     const doc = await this.repo.create(userId, bookingId, 'CONTRACT', key);
-    return { ...doc, url: this.storage.getPublicUrl(key) };
+    return { ...doc, url: this.documentDownloadRoute(doc.id) };
   }
 
   async storeSignedContractPdf(
@@ -301,7 +320,7 @@ export class DocumentsService {
     const key = `contracts/${userId}/${bookingId}/${contractId}-signed.pdf`;
     await this.storage.putObject(key, buffer, 'application/pdf');
     const doc = await this.repo.create(userId, bookingId, 'CONTRACT', key, undefined, contractId);
-    return { ...doc, url: this.storage.getPublicUrl(key) };
+    return { ...doc, url: this.documentDownloadRoute(doc.id) };
   }
 
   async findByBooking(userId: string, bookingId: string): Promise<DocumentListItem[]> {
@@ -313,7 +332,7 @@ export class DocumentsService {
     const bookingCancelled = ctx?.status === 'CANCELLED';
     return docs.map((d) => ({
       ...d,
-      url: this.storage.getPublicUrl(d.storageKey),
+      url: this.documentDownloadRoute(d.id),
       portalVisibility: resolveDocumentVisibility(d, activeContractId, bookingCancelled),
     }));
   }
@@ -321,13 +340,13 @@ export class DocumentsService {
   async findByInvoice(userId: string, invoiceId: string): Promise<DocumentWithUrl | null> {
     const doc = await this.repo.findByInvoice(userId, invoiceId);
     if (!doc) return null;
-    return { ...doc, url: this.storage.getPublicUrl(doc.storageKey) };
+    return { ...doc, url: this.documentDownloadRoute(doc.id) };
   }
 
   async findContractForBooking(userId: string, bookingId: string): Promise<DocumentWithUrl | null> {
     const doc = await this.repo.findContractForBooking(userId, bookingId);
     if (!doc) return null;
-    return { ...doc, url: this.storage.getPublicUrl(doc.storageKey) };
+    return { ...doc, url: this.documentDownloadRoute(doc.id) };
   }
 
   async uploadDocument(
@@ -340,7 +359,7 @@ export class DocumentsService {
     const key = `uploads/${userId}/${bookingId}/${documentId}.pdf`;
     await this.storage.putObject(key, buffer, 'application/pdf');
     const doc = await this.repo.create(userId, bookingId, 'UPLOAD', key, undefined, undefined, name);
-    return { ...doc, url: this.storage.getPublicUrl(key) };
+    return { ...doc, url: this.documentDownloadRoute(doc.id) };
   }
 
   async deleteDocument(userId: string, id: string): Promise<void> {
@@ -366,7 +385,7 @@ export class DocumentsService {
     const existing = await this.repo.findSongListForBooking(userId, bookingId);
     if (existing) await this.repo.delete(existing.id);
 
-    await this.repo.create(userId, bookingId, 'SONG_LIST', key);
-    return { buffer, url: this.storage.getPublicUrl(key) };
+    const doc = await this.repo.create(userId, bookingId, 'SONG_LIST', key);
+    return { buffer, url: this.documentDownloadRoute(doc.id) };
   }
 }

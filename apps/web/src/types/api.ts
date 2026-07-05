@@ -606,6 +606,9 @@ export interface Document {
   id: string;
   createdAt: string;
   type: DocumentType;
+  // Access-controlled app route (e.g. /documents/:id/download), NOT a public URL.
+  // Open via openDocument() from lib/api — it fetches this with auth to resolve
+  // the real storage URL, then navigates (ADR-0059 / #654).
   url: string;
   invoiceId: string | null;
   contractStatus: string | null;

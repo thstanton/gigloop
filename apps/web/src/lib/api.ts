@@ -38,6 +38,25 @@ export async function apiGetBlob(path: string): Promise<Blob> {
   return res.blob();
 }
 
+// Open an access-controlled document (ADR-0059, #654). A document's `url` is now
+// an app route, not a public URL — we fetch it WITH the Clerk JWT to resolve the
+// real storage URL, then navigate the browser to it. A blank tab is opened
+// synchronously first so the navigation survives the async resolve without
+// tripping the popup blocker (mirrors the invoice-preview flow). `onError` lets
+// the caller surface a toast on failure.
+export function openDocument(appRoute: string, onError?: () => void): void {
+  const win = window.open('', '_blank');
+  apiGet<{ url: string }>(appRoute)
+    .then(({ url }) => {
+      if (win) win.location.href = url;
+      else window.open(url, '_blank', 'noopener,noreferrer');
+    })
+    .catch(() => {
+      win?.close();
+      onError?.();
+    });
+}
+
 export async function apiGetNullable<T>(path: string): Promise<T | null> {
   const res = await authedFetch(path);
   if (res.status === 404) return null;
