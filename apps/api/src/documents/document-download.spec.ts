@@ -16,21 +16,22 @@ describe('DocumentsService — access-controlled document downloads (#654)', () 
       findBookingVisibilityContext: over.findBookingVisibilityContext ?? jest.fn().mockResolvedValue(null),
     } as unknown as DocumentsRepository;
     const storage = {
-      getPublicUrl: jest.fn((key: string) => `https://pub.example.com/${key}`),
+      getPresignedDownloadUrl: jest.fn((key: string) => Promise.resolve(`https://docs.example/${key}?sig=abc`)),
     } as unknown as StorageService;
     return { service: new DocumentsService({} as unknown as PrismaService, repo, storage), repo, storage };
   }
 
   describe('resolveDownloadTarget', () => {
-    it("resolves the caller's own document to a storage URL", async () => {
+    it("resolves the caller's own document to a presigned URL", async () => {
       const findById = jest.fn().mockResolvedValue({ id: 'd1', userId, storageKey: 'uploads/u1/b1/d1.pdf' });
       const { service, storage } = makeService({ findById });
 
       const result = await service.resolveDownloadTarget(userId, 'd1');
 
       expect(findById).toHaveBeenCalledWith('d1', userId);
-      expect(storage.getPublicUrl).toHaveBeenCalledWith('uploads/u1/b1/d1.pdf');
-      expect(result).toEqual({ url: 'https://pub.example.com/uploads/u1/b1/d1.pdf' });
+      // Presign is minted (private bucket) only after the ownership check passes.
+      expect(storage.getPresignedDownloadUrl).toHaveBeenCalledWith('uploads/u1/b1/d1.pdf');
+      expect(result).toEqual({ url: 'https://docs.example/uploads/u1/b1/d1.pdf?sig=abc' });
     });
 
     it("404s for another user's document (repo scopes by userId → null)", async () => {
@@ -40,7 +41,8 @@ describe('DocumentsService — access-controlled document downloads (#654)', () 
 
       await expect(service.resolveDownloadTarget(userId, 'someone-elses-doc')).rejects.toBeInstanceOf(NotFoundException);
       expect(findById).toHaveBeenCalledWith('someone-elses-doc', userId);
-      expect(storage.getPublicUrl).not.toHaveBeenCalled();
+      // No signature minted for a doc the caller doesn't own.
+      expect(storage.getPresignedDownloadUrl).not.toHaveBeenCalled();
     });
   });
 
@@ -54,8 +56,8 @@ describe('DocumentsService — access-controlled document downloads (#654)', () 
       const [doc] = await service.findByBooking(userId, 'b1');
 
       expect(doc.url).toBe('/documents/d1/download');
-      // The list must never hand out a bare public storage URL.
-      expect(storage.getPublicUrl).not.toHaveBeenCalled();
+      // The list must never mint a storage URL — only the app route.
+      expect(storage.getPresignedDownloadUrl).not.toHaveBeenCalled();
     });
   });
 });

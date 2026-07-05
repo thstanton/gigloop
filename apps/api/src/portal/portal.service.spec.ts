@@ -35,7 +35,7 @@ function makeDocumentsService(putObjectMock: jest.Mock) {
   } as unknown as PrismaService;
 
   const mockStorage = {
-    putObject: putObjectMock,
+    putDocument: putObjectMock,
     getPublicUrl: jest.fn().mockReturnValue('https://example.com/doc.pdf'),
   } as unknown as StorageService;
 

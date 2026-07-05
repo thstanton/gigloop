@@ -27,7 +27,7 @@ describe('PortalService — access-controlled portal downloads (#655)', () => {
   function makeService(booking: unknown) {
     const repo = { findBookingByToken: jest.fn().mockResolvedValue(booking) } as unknown as PortalRepository;
     const storage = {
-      getPublicUrl: jest.fn((key: string) => `https://storage.example/${key}`),
+      getPresignedDownloadUrl: jest.fn((key: string) => Promise.resolve(`https://storage.example/${key}?sig=abc`)),
     } as unknown as StorageService;
     const svc = new PortalService(
       repo, unused, unused, unused, unused, unused, storage, unused, unused, unused,
@@ -50,14 +50,14 @@ describe('PortalService — access-controlled portal downloads (#655)', () => {
 
       const url = await svc.resolvePortalDocumentUrl(token, 'song');
 
-      expect(url).toBe('https://storage.example/song-lists/x.pdf');
-      expect(storage.getPublicUrl).toHaveBeenCalledWith('song-lists/x.pdf');
+      expect(url).toBe('https://storage.example/song-lists/x.pdf?sig=abc');
+      expect(storage.getPresignedDownloadUrl).toHaveBeenCalledWith('song-lists/x.pdf');
     });
 
     it('404s for an invalid token (no booking) without touching storage', async () => {
       const { svc, storage } = makeService(null);
       await expect(svc.resolvePortalDocumentUrl('bad-token', 'song')).rejects.toBeInstanceOf(NotFoundException);
-      expect(storage.getPublicUrl).not.toHaveBeenCalled();
+      expect(storage.getPresignedDownloadUrl).not.toHaveBeenCalled();
     });
 
     it('404s for a document that is not on this booking', async () => {
@@ -70,7 +70,7 @@ describe('PortalService — access-controlled portal downloads (#655)', () => {
         booking({ documents: [doc({ id: 'inv', type: 'INVOICE', invoice: { status: 'ISSUED' } })] }),
       );
       await expect(svc.resolvePortalDocumentUrl(token, 'inv')).rejects.toBeInstanceOf(NotFoundException);
-      expect(storage.getPublicUrl).not.toHaveBeenCalled();
+      expect(storage.getPresignedDownloadUrl).not.toHaveBeenCalled();
     });
 
     it('404s for a hidden doc: a cancelled booking’s contract', async () => {
@@ -88,7 +88,7 @@ describe('PortalService — access-controlled portal downloads (#655)', () => {
       const { svc } = makeService(
         booking({ documents: [doc({ id: 'inv', type: 'INVOICE', invoice: { status: 'SENT' }, storageKey: 'inv/1.pdf' })] }),
       );
-      await expect(svc.resolvePortalDocumentUrl(token, 'inv')).resolves.toBe('https://storage.example/inv/1.pdf');
+      await expect(svc.resolvePortalDocumentUrl(token, 'inv')).resolves.toBe('https://storage.example/inv/1.pdf?sig=abc');
     });
   });
 
@@ -100,7 +100,7 @@ describe('PortalService — access-controlled portal downloads (#655)', () => {
           documents: [doc({ id: 'con', type: 'CONTRACT', contractId: 'c1', storageKey: 'contracts/signed.pdf' })],
         }),
       );
-      await expect(svc.resolvePortalSignedContractUrl(token)).resolves.toBe('https://storage.example/contracts/signed.pdf');
+      await expect(svc.resolvePortalSignedContractUrl(token)).resolves.toBe('https://storage.example/contracts/signed.pdf?sig=abc');
     });
 
     it('404s when there is no visible contract', async () => {

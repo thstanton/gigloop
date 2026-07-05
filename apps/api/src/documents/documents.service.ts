@@ -108,14 +108,14 @@ export class DocumentsService {
     return `/documents/${id}/download`;
   }
 
-  // Resolve the caller's own document to a fetchable storage URL. Ownership is
-  // enforced in-query by repo.findById(id, userId); another user's id → 404.
-  // Still points at the current (public) storage — the private-bucket presigned
-  // GET is a later slice (#656).
+  // Resolve the caller's own document to a fetchable URL. Ownership is enforced
+  // in-query by repo.findById(id, userId); another user's id → 404. The URL is a
+  // short-TTL presigned GET against the private documents bucket, minted only
+  // after the ownership check passes (ADR-0059, #656).
   async resolveDownloadTarget(userId: string, id: string): Promise<{ url: string }> {
     const doc = await this.repo.findById(id, userId);
     if (!doc) throw new NotFoundException('Document not found');
-    return { url: this.storage.getPublicUrl(doc.storageKey) };
+    return { url: await this.storage.getPresignedDownloadUrl(doc.storageKey) };
   }
 
   private formatAddress(profile: { addressLine1: string | null; addressLine2: string | null; city: string | null; postcode: string | null } | null): string | null {
@@ -217,7 +217,7 @@ export class DocumentsService {
     const key = bookingId
       ? `invoices/${userId}/${bookingId}/${invoiceId}.pdf`
       : `invoices/${userId}/series/${invoiceId}.pdf`;
-    await this.storage.putObject(key, buffer, 'application/pdf');
+    await this.storage.putDocument(key, buffer, 'application/pdf');
     // Replace any existing document record (idempotent on retry)
     const existing = await this.repo.findByInvoice(userId, invoiceId);
     if (existing) await this.repo.delete(existing.id);
@@ -234,7 +234,7 @@ export class DocumentsService {
   async getStoredInvoicePdfBuffer(userId: string, invoiceId: string): Promise<{ buffer: Buffer; documentId: string } | null> {
     const doc = await this.repo.findByInvoice(userId, invoiceId);
     if (!doc) return null;
-    const buffer = await this.storage.getObject(doc.storageKey);
+    const buffer = await this.storage.getDocument(doc.storageKey);
     return { buffer, documentId: doc.id };
   }
 
@@ -306,7 +306,7 @@ export class DocumentsService {
     buffer: Buffer,
   ): Promise<DocumentWithUrl> {
     const key = `contracts/${userId}/${bookingId}.pdf`;
-    await this.storage.putObject(key, buffer, 'application/pdf');
+    await this.storage.putDocument(key, buffer, 'application/pdf');
     const doc = await this.repo.create(userId, bookingId, 'CONTRACT', key);
     return { ...doc, url: this.documentDownloadRoute(doc.id) };
   }
@@ -318,7 +318,7 @@ export class DocumentsService {
     buffer: Buffer,
   ): Promise<DocumentWithUrl> {
     const key = `contracts/${userId}/${bookingId}/${contractId}-signed.pdf`;
-    await this.storage.putObject(key, buffer, 'application/pdf');
+    await this.storage.putDocument(key, buffer, 'application/pdf');
     const doc = await this.repo.create(userId, bookingId, 'CONTRACT', key, undefined, contractId);
     return { ...doc, url: this.documentDownloadRoute(doc.id) };
   }
@@ -357,7 +357,7 @@ export class DocumentsService {
   ): Promise<DocumentWithUrl> {
     const documentId = randomUUID();
     const key = `uploads/${userId}/${bookingId}/${documentId}.pdf`;
-    await this.storage.putObject(key, buffer, 'application/pdf');
+    await this.storage.putDocument(key, buffer, 'application/pdf');
     const doc = await this.repo.create(userId, bookingId, 'UPLOAD', key, undefined, undefined, name);
     return { ...doc, url: this.documentDownloadRoute(doc.id) };
   }
@@ -366,7 +366,7 @@ export class DocumentsService {
     const doc = await this.repo.findById(id, userId);
     if (!doc) throw new NotFoundException('Document not found');
     if (doc.type !== 'UPLOAD') throw new ForbiddenException('System-generated documents cannot be deleted');
-    await this.storage.deleteObject(doc.storageKey);
+    await this.storage.deleteDocument(doc.storageKey);
     await this.repo.delete(id);
   }
 
@@ -379,7 +379,7 @@ export class DocumentsService {
     const buffer: Buffer = await (pdfmake.createPdf(docDef).getBuffer() as Promise<Buffer>);
 
     const key = `song-lists/${userId}/${bookingId}.pdf`;
-    await this.storage.putObject(key, buffer, 'application/pdf');
+    await this.storage.putDocument(key, buffer, 'application/pdf');
 
     // Replace any existing SONG_LIST document
     const existing = await this.repo.findSongListForBooking(userId, bookingId);

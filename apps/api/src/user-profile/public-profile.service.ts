@@ -37,12 +37,12 @@ export class PublicProfileService {
   }
 
   async deleteLogo(userId: string): Promise<void> {
-    await this.storage.deleteObject(`logos/${userId}`);
+    await this.storage.deleteAsset(`logos/${userId}`);
     await this.repo.updateByUserId(userId, { logoUrl: null });
   }
 
   async deletePhoto(userId: string): Promise<void> {
-    await this.storage.deleteObject(`photos/${userId}`);
+    await this.storage.deleteAsset(`photos/${userId}`);
     await this.repo.updateByUserId(userId, { photo: null });
   }
 }

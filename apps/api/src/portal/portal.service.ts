@@ -251,11 +251,12 @@ export class PortalService {
     };
   }
 
-  // Resolve a portal document to its current storage URL (ADR-0059, #655). Access
-  // is gated exactly as the portal payload is: the doc must belong to this token's
-  // booking AND pass the shared visibility authority — so a doc the portal would
-  // hide (e.g. an ISSUED-but-unsent invoice, or a cancelled booking's contract) is
-  // never served. Still the public storage URL; the presigned-GET cutover is #656.
+  // Resolve a portal document to a short-TTL presigned GET against the private
+  // documents bucket (ADR-0059, #656). Access is gated exactly as the portal
+  // payload is: the doc must belong to this token's booking AND pass the shared
+  // visibility authority — so a doc the portal would hide (e.g. an ISSUED-but-
+  // unsent invoice, or a cancelled booking's contract) is never served. The
+  // signature is minted only after that check passes.
   async resolvePortalDocumentUrl(token: string, documentId: string): Promise<string> {
     const booking = await this.repo.findBookingByToken(token);
     if (!booking) throw new NotFoundException('Document not found');
@@ -266,7 +267,7 @@ export class PortalService {
     if (!doc || !isPortalVisibleDocument(doc, activeContractId, bookingCancelled)) {
       throw new NotFoundException('Document not found');
     }
-    return this.storage.getPublicUrl(doc.storageKey);
+    return this.storage.getPresignedDownloadUrl(doc.storageKey);
   }
 
   // Variant of the above that resolves the booking's signed contract without the
@@ -282,7 +283,7 @@ export class PortalService {
       (d) => d.type === 'CONTRACT' && isPortalVisibleDocument(d, activeContractId, bookingCancelled),
     );
     if (!doc) throw new NotFoundException('Signed contract not found');
-    return this.storage.getPublicUrl(doc.storageKey);
+    return this.storage.getPresignedDownloadUrl(doc.storageKey);
   }
 
   async getContractContent(token: string) {
