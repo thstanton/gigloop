@@ -45,10 +45,21 @@ function buildSetsSchedule(sets: SetRow[]): string {
 
 @Injectable()
 export class MailService {
-  private resend: Resend;
+  private _resend?: Resend;
 
-  constructor(private prisma: PrismaService) {
-    this.resend = new Resend(process.env.RESEND_API_KEY);
+  constructor(private prisma: PrismaService) {}
+
+  // Constructed lazily on first use, not in the constructor: the `resend` SDK
+  // throws from its own constructor when the API key is missing, and the
+  // E2E_TEST_MODE sink (SinkMailService) extends this class and calls super().
+  // Eager init therefore crashed the test-mode API at boot (no RESEND_API_KEY).
+  // The sink overrides send/sendBatch — the only callers — so it never triggers
+  // this getter and boots cleanly.
+  private get resend(): Resend {
+    if (!this._resend) {
+      this._resend = new Resend(process.env.RESEND_API_KEY);
+    }
+    return this._resend;
   }
 
   private async buildInvoiceContext(
