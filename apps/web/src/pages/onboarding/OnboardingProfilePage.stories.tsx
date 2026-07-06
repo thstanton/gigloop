@@ -15,7 +15,12 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
   play: async ({ canvas }) => {
-    await expect((await canvas.findAllByText('Set up your profile'))[0]).toBeVisible();
+    await expect((await canvas.findAllByText('Set up your business'))[0]).toBeVisible();
     await expect((await canvas.findAllByPlaceholderText(/Smith String Quartet/i))[0]).toBeVisible();
+    // New in #660: purpose-helper text + the optional business-address field.
+    await expect((await canvas.findAllByText('Your business address'))[0]).toBeVisible();
+    await expect(
+      (await canvas.findAllByText(/used to estimate travel time to venues/i))[0],
+    ).toBeVisible();
   },
 };
