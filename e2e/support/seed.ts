@@ -54,6 +54,43 @@ export async function seedContact(userId: string = E2E_TEST_USER_ID): Promise<Co
   });
 }
 
+export interface ContactWithBooking {
+  contactId: string;
+  bookingId: string;
+}
+
+// Per-test fixture (ADR-0048 §5/§7, slice 4): a contact with one associated
+// booking (as its customer), arranged directly in the DB. Exercises the CLAUDE.md
+// hard rule — a contact with bookings cannot be deleted. The UI is preventive
+// (disabled Delete button + "cannot be deleted" message), so the spec asserts the
+// block is surfaced there; the API-level 409 (ConflictException) is covered by the
+// contacts.service unit spec.
+export async function seedContactWithBooking(
+  userId: string = E2E_TEST_USER_ID,
+): Promise<ContactWithBooking> {
+  const contact = await prisma.contact.create({
+    data: {
+      userId,
+      name: 'E2E Undeletable Contact',
+      email: 'undeletable@e2e.test',
+      primaryRole: 'CUSTOMER',
+    },
+  });
+
+  const booking = await prisma.booking.create({
+    data: {
+      userId,
+      status: BookingStatus.PROVISIONAL,
+      eventType: 'Wedding',
+      title: 'E2E Delete-Block Booking',
+      date: new Date('2099-10-01T18:00:00.000Z'),
+      customerId: contact.id,
+    },
+  });
+
+  return { contactId: contact.id, bookingId: booking.id };
+}
+
 export interface BookingWithSentContract {
   bookingId: string;
   contractId: string;
