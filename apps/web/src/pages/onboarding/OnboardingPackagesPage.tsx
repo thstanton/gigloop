@@ -10,7 +10,10 @@ import { PACKAGE_CATEGORY_LABELS, PACKAGE_ICON_MAP } from '@/lib/constants';
 import { PageHeader } from '@/components/common/PageHeader';
 import { PageSection } from '@/components/common/PageSection';
 import { toast } from '@/lib/hooks/use-toast';
+import { stepNav } from '@/features/onboarding/steps';
 import type { PackageTemplate } from '@/types/api';
+
+const PATH = '/onboarding/packages';
 
 function PackageIcon({ icon }: { icon: string }) {
   const Icon = PACKAGE_ICON_MAP[icon] ?? Music;
@@ -21,6 +24,7 @@ export default function OnboardingPackagesPage() {
   const navigate = useNavigate();
   const { isLoaded } = useAuth();
   const queryClient = useQueryClient();
+  const { prev, next } = stepNav(PATH);
 
   const { data: packages = [], isLoading } = useQuery({
     queryKey: ['packages'],
@@ -47,7 +51,7 @@ export default function OnboardingPackagesPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['packages'] });
-      navigate('/onboarding/checklist');
+      if (next) navigate(next);
     },
     onError: () => {
       toast({ title: 'Failed to save. Please try again.', variant: 'destructive' });
@@ -64,7 +68,7 @@ export default function OnboardingPackagesPage() {
   function handleNext() {
     const hasChanges = packages.some((p) => overrides.get(p.id) !== p.enabled);
     if (hasChanges) saveChanges();
-    else navigate('/onboarding/checklist');
+    else if (next) navigate(next);
   }
 
   return (
@@ -115,15 +119,19 @@ export default function OnboardingPackagesPage() {
       )}
 
       <div className="flex flex-col sm:flex-row items-start gap-3 pt-2">
-        <Button variant="outline" onClick={() => navigate('/onboarding/songs')}>
-          Back
-        </Button>
+        {prev && (
+          <Button variant="outline" onClick={() => navigate(prev)}>
+            Back
+          </Button>
+        )}
         <Button onClick={handleNext} disabled={isPending}>
           {isPending ? 'Saving…' : 'Next'}
         </Button>
-        <Button variant="ghost" onClick={() => navigate('/onboarding/checklist')}>
-          Skip for now
-        </Button>
+        {next && (
+          <Button variant="ghost" onClick={() => navigate(next)}>
+            Skip for now — customise in Settings
+          </Button>
+        )}
       </div>
     </div>
   );

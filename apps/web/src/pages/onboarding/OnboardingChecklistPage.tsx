@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, useEffect } from 'react';
-import { apiPatch, apiPost } from '@/lib/api';
+import { apiPatch } from '@/lib/api';
 import { CHECKLIST_STAGE_ORDER, BOOKING_STATUS_LABELS } from '@/lib/constants';
 import { useMe } from '@/lib/hooks/useMe';
 import { toast } from '@/lib/hooks/use-toast';
@@ -9,11 +9,15 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { PageHeader } from '@/components/common/PageHeader';
 import { PageSection } from '@/components/common/PageSection';
+import { stepNav } from '@/features/onboarding/steps';
 import type { ChecklistDefaultItem, BookingStatus } from '@/types/api';
+
+const PATH = '/onboarding/checklist';
 
 export default function OnboardingChecklistPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { prev, next } = stepNav(PATH);
 
   const { data: profile, isLoading } = useMe();
 
@@ -27,30 +31,27 @@ export default function OnboardingChecklistPage() {
     }
   }, [defaults.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const { mutate: finish, isPending } = useMutation({
-    mutationFn: async (skipPatch: boolean) => {
-      if (!skipPatch) {
-        const systemOverrides = defaults
-          .filter((d) => d.key)
-          .filter((d) => (overrides.get(d.key!) ?? true) !== (d.enabled !== false))
-          .map((d) => ({
-            key: d.key!,
-            enabled: overrides.get(d.key!) ?? true,
-          }));
-        if (systemOverrides.length > 0) {
-          await apiPatch('/me/preferences/checklist-defaults', {
-            systemItemOverrides: systemOverrides,
-          });
-        }
+  const { mutate: save, isPending } = useMutation({
+    mutationFn: async () => {
+      const systemOverrides = defaults
+        .filter((d) => d.key)
+        .filter((d) => (overrides.get(d.key!) ?? true) !== (d.enabled !== false))
+        .map((d) => ({
+          key: d.key!,
+          enabled: overrides.get(d.key!) ?? true,
+        }));
+      if (systemOverrides.length > 0) {
+        await apiPatch('/me/preferences/checklist-defaults', {
+          systemItemOverrides: systemOverrides,
+        });
       }
-      await apiPost('/me/onboarding/complete', {});
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['me'] });
-      navigate('/admin', { replace: true });
+      if (next) navigate(next);
     },
     onError: () => {
-      toast({ title: 'Failed to finish setup. Please try again.', variant: 'destructive' });
+      toast({ title: 'Failed to save. Please try again.', variant: 'destructive' });
     },
   });
 
@@ -110,15 +111,19 @@ export default function OnboardingChecklistPage() {
       )}
 
       <div className="flex flex-col sm:flex-row items-start gap-3 pt-2">
-        <Button variant="outline" onClick={() => navigate('/onboarding/packages')}>
-          Back
+        {prev && (
+          <Button variant="outline" onClick={() => navigate(prev)}>
+            Back
+          </Button>
+        )}
+        <Button onClick={() => save()} disabled={isPending}>
+          {isPending ? 'Saving…' : 'Next'}
         </Button>
-        <Button onClick={() => finish(false)} disabled={isPending}>
-          {isPending ? 'Finishing…' : 'Finish'}
-        </Button>
-        <Button variant="ghost" onClick={() => finish(true)} disabled={isPending}>
-          Skip for now
-        </Button>
+        {next && (
+          <Button variant="ghost" onClick={() => navigate(next)} disabled={isPending}>
+            Skip for now — customise in Settings
+          </Button>
+        )}
       </div>
     </div>
   );

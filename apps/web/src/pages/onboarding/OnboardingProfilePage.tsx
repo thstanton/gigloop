@@ -10,7 +10,10 @@ import { PageHeader } from '@/components/common/PageHeader';
 import { FormField } from '@/components/common/FormField';
 import { Input } from '@/components/ui/input';
 import { toast } from '@/lib/hooks/use-toast';
+import { stepNav } from '@/features/onboarding/steps';
 import type { PublicProfile } from '@/types/api';
+
+const PATH = '/onboarding/profile';
 
 const schema = z.object({
   businessName: z.string().min(1, 'Business name is required'),
@@ -25,6 +28,7 @@ export default function OnboardingProfilePage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user } = useUser();
+  const { next } = stepNav(PATH);
 
   const {
     register,
@@ -51,7 +55,7 @@ export default function OnboardingProfilePage() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['public-profile'] });
-      navigate('/onboarding/songs');
+      if (next) navigate(next);
     },
     onError: () => {
       toast({ title: 'Failed to save. Please try again.', variant: 'destructive' });

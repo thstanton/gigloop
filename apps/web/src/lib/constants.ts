@@ -211,3 +211,22 @@ export const PORTAL_VISIBILITY_REASON_COPY: Record<PortalVisibilityReason, strin
   not_shared:      'Not visible to client',
   cancelled:       'Not visible — cancelled',
 };
+
+// Onboarding wizard steps (PRD #478 — 5-step guided activation). The single source of
+// truth for the wizard order, progress-indicator labels, and each step's route. Step
+// pages derive their prev/next targets from this order via stepNav() (features/onboarding/steps),
+// so the sequence can never drift between the indicator and the pages. Step 1 is required;
+// steps 2–5 are skippable. The `label` is the short pill caption; the full step title lives
+// on each page's PageHeader.
+export interface OnboardingStep {
+  path: string;
+  label: string;
+}
+
+export const ONBOARDING_STEPS: OnboardingStep[] = [
+  { path: '/onboarding/profile',   label: 'Business' },
+  { path: '/onboarding/checklist', label: 'Bookings' },
+  { path: '/onboarding/packages',  label: 'Packages' },
+  { path: '/onboarding/portal',    label: 'Portal' },
+  { path: '/onboarding/songs',     label: 'Songs' },
+];

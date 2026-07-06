@@ -1,16 +1,21 @@
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@clerk/react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { apiGet, apiPost } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/common/PageHeader';
 import { toast } from '@/lib/hooks/use-toast';
+import { stepNav } from '@/features/onboarding/steps';
 import type { CatalogueGroup } from '@/types/api';
+
+const PATH = '/onboarding/songs';
 
 export default function OnboardingSongsPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { isLoaded } = useAuth();
+  const { prev } = stepNav(PATH);
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const { data: catalogue = [], isLoading } = useQuery({
@@ -19,11 +24,19 @@ export default function OnboardingSongsPage() {
     enabled: isLoaded,
   });
 
-  const { mutate: seed, isPending } = useMutation({
-    mutationFn: (ids: string[]) => apiPost('/songs/seed', { ids }),
-    onSuccess: () => navigate('/onboarding/packages'),
+  // Songs is the final onboarding step, so it owns completion: seed any chosen songs,
+  // then stamp onboardingCompletedAt and land in the app.
+  const { mutate: finish, isPending } = useMutation({
+    mutationFn: async (ids: string[]) => {
+      if (ids.length > 0) await apiPost('/songs/seed', { ids });
+      await apiPost('/me/onboarding/complete', {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['me'] });
+      navigate('/admin', { replace: true });
+    },
     onError: () => {
-      toast({ title: 'Failed to add songs. Please try again.', variant: 'destructive' });
+      toast({ title: 'Failed to finish setup. Please try again.', variant: 'destructive' });
     },
   });
 
@@ -46,9 +59,8 @@ export default function OnboardingSongsPage() {
     });
   }
 
-  function handleNext() {
-    if (selected.size > 0) seed(Array.from(selected));
-    else navigate('/onboarding/packages');
+  function handleFinish() {
+    finish(Array.from(selected));
   }
 
   return (
@@ -110,14 +122,16 @@ export default function OnboardingSongsPage() {
       )}
 
       <div className="flex flex-col sm:flex-row items-start gap-3 pt-2">
-        <Button variant="outline" onClick={() => navigate('/onboarding/profile')}>
-          Back
+        {prev && (
+          <Button variant="outline" onClick={() => navigate(prev)}>
+            Back
+          </Button>
+        )}
+        <Button onClick={handleFinish} disabled={isPending}>
+          {isPending ? 'Finishing…' : 'Finish'}
         </Button>
-        <Button onClick={handleNext} disabled={isPending}>
-          {isPending ? 'Saving…' : 'Next'}
-        </Button>
-        <Button variant="ghost" onClick={() => navigate('/onboarding/packages')}>
-          Skip for now
+        <Button variant="ghost" onClick={() => finish([])} disabled={isPending}>
+          Skip for now — customise in Settings
         </Button>
       </div>
     </div>
