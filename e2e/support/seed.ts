@@ -54,6 +54,75 @@ export async function seedContact(userId: string = E2E_TEST_USER_ID): Promise<Co
   });
 }
 
+export interface BookingWithSentContract {
+  bookingId: string;
+  contractId: string;
+  customerId: string;
+  portalToken: string;
+}
+
+// Per-test fixture (ADR-0048 §5/§7, slice 3): a booking with a contract in SENT
+// status, arranged directly in the DB, for the unauthenticated portal signing
+// flow. The booking's `portalToken` (auto-generated) is the only auth the
+// `/booking/:token` routes need — they bypass Clerk entirely. `content` is a
+// minimal Tiptap doc: it renders in the portal contract view (Tiptap) and feeds
+// the signed-contract PDF (renderTiptapToPdfmake → fake storage in test mode).
+// The account's PublicProfile (email) is seeded once per run by
+// seedBaselineProfile — the signing notification email (→ sink) needs it.
+export async function seedBookingWithSentContract(
+  userId: string = E2E_TEST_USER_ID,
+): Promise<BookingWithSentContract> {
+  const customer = await prisma.contact.create({
+    data: { userId, name: 'E2E Portal Customer', email: 'portal-customer@e2e.test' },
+  });
+
+  const booking = await prisma.booking.create({
+    data: {
+      userId,
+      status: BookingStatus.PROVISIONAL,
+      eventType: 'Wedding',
+      title: 'E2E Contract-Sign Booking',
+      date: new Date('2099-09-01T18:00:00.000Z'),
+      customerId: customer.id,
+    },
+  });
+
+  const contract = await prisma.contract.create({
+    data: {
+      userId,
+      bookingId: booking.id,
+      status: 'SENT',
+      content: {
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [
+              {
+                type: 'text',
+                text: 'This agreement confirms the booking between the performer and the client for the event described.',
+              },
+            ],
+          },
+          {
+            type: 'paragraph',
+            content: [
+              { type: 'text', text: 'The performer agrees to provide musical services as discussed.' },
+            ],
+          },
+        ],
+      },
+    },
+  });
+
+  return {
+    bookingId: booking.id,
+    contractId: contract.id,
+    customerId: customer.id,
+    portalToken: booking.portalToken,
+  };
+}
+
 export interface ConfirmedBookingWithDraftInvoice {
   bookingId: string;
   invoiceId: string;
