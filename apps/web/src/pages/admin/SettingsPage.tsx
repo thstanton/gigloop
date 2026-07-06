@@ -376,10 +376,19 @@ function PublicProfileSection({ profile }: { profile: PublicProfile }) {
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <FormField label="Business name" required error={errors.businessName?.message}>
+        <FormField
+          label="Business name"
+          hint="Your act or brand — shown to clients on your portal, invoices, and emails."
+          required
+          error={errors.businessName?.message}
+        >
           <Input {...register('businessName')} />
         </FormField>
-        <FormField label="Display name" error={errors.displayName?.message}>
+        <FormField
+          label="Your name"
+          hint="The personal name that signs your emails and contracts. Falls back to your business name if blank."
+          error={errors.displayName?.message}
+        >
           <Input {...register('displayName')} placeholder="e.g. John Smith" />
         </FormField>
       </div>

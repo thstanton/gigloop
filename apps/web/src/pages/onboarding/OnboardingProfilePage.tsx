@@ -67,11 +67,20 @@ export default function OnboardingProfilePage() {
       />
 
       <form onSubmit={handleSubmit((data) => mutate(data))} className="flex flex-col gap-4">
-        <FormField label="Business name" error={errors.businessName?.message} required>
+        <FormField
+          label="Business name"
+          hint="Your act or brand — shown to clients on your portal, invoices, and emails."
+          error={errors.businessName?.message}
+          required
+        >
           <Input {...register('businessName')} placeholder="e.g. Smith String Quartet" />
         </FormField>
 
-        <FormField label="Display name" error={errors.displayName?.message}>
+        <FormField
+          label="Your name"
+          hint="The personal name that signs your emails and contracts. Falls back to your business name if blank."
+          error={errors.displayName?.message}
+        >
           <Input {...register('displayName')} placeholder="e.g. James Smith" />
         </FormField>
 
