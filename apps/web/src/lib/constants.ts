@@ -113,6 +113,33 @@ export const CREATABLE_BOOKING_STATUSES: BookingStatus[] = [
   'COMPLETE',
 ];
 
+// Per-status accent background class (the lifecycle colour tokens shared by BookingStatusPill and
+// StatusCoachingField's `accent`). Used as a small status marker where a full pill would be too
+// heavy — e.g. the onboarding "How GigLoop runs your bookings" stage headers (#661).
+export const STATUS_ACCENT_BG: Record<BookingStatus, string> = {
+  ENQUIRY:     'bg-status-enquiry',
+  PROVISIONAL: 'bg-status-provisional',
+  CONFIRMED:   'bg-status-confirmed',
+  READY:       'bg-status-ready',
+  COMPLETE:    'bg-status-complete',
+  CANCELLED:   'bg-status-cancelled',
+};
+
+// Plain-English overview of what each default checklist goal's journey includes (distilled from
+// its steps), shown in the onboarding "How GigLoop runs your bookings" orientation step (#661).
+// Keyed by the goal's catalogue key. A goal with no entry here simply shows no summary line.
+export const GOAL_SUMMARIES: Record<string, string> = {
+  get_the_quote_accepted: 'Set your fee and email the quote — GigLoop nudges you to chase the client until they say yes.',
+  get_deposit_paid:       'Create, issue and send the deposit invoice, then GigLoop tracks the payment landing.',
+  get_contract_signed:    'Draft the contract and send it over — the client signs it online.',
+  add_venue:              'Pop in the venue once it’s booked so travel and logistics are ready.',
+  build_itinerary:        'Set out your sets and running order for the day.',
+  get_the_balance_paid:   'Send the balance invoice as the gig nears, then GigLoop tracks it paid.',
+  gather_song_requests:   'Publish your music form and invite the client — they add requests when ready.',
+  play_the_gig:           'The big day — mark it played when you’re done.',
+  send_thank_you:         'A week after, GigLoop reminds you to send a thank-you.',
+};
+
 export const PACKAGE_CATEGORY_LABELS: Record<string, string> = {
   WEDDING:   'Wedding',
   CORPORATE: 'Corporate',
