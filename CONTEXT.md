@@ -286,7 +286,7 @@ An entry in a musician's repertoire library. Every Song has a `userId` — songs
 A string value categorising Songs: `CONTEMPORARY | CLASSICAL | JAZZ | FILM_TV_MUSICALS | BOLLYWOOD | CHRISTMAS`. Stored as a plain string (not a Prisma enum) — new genres can be added without a DB migration. Validated in application code against a constants list. Managed at the system level — musicians cannot add custom genres for MVP.
 
 ### BookingChecklistItem
-> **Superseded by the goal ⊃ step model ([[Goal]] / [[Step]], ADR-0057) — accepted, not yet implemented in code.** This entry describes the *current* flat model still live in the codebase. Under ADR-0057 this table evolves into the [[Goal]] (the user-facing row) and gains a new `BookingChecklistStep` child table; `dependsOn` and `BLOCKED` retire. Retained here until the model lands.
+> **Superseded by the goal ⊃ step model ([[Goal]] / [[Step]], ADR-0057) — implemented and live (shipped in #619, 2026-06-30).** This entry describes the *former* flat model and is retained as historical reference. The flat table became the [[Goal]] (the user-facing row) and gained a `BookingChecklistStep` child table; `dependsOn` and `BLOCKED` were retired.
 
 A stored action item on a [[Booking]], representing something that needs to happen to progress or complete the booking. Together the items form the booking's checklist — a project management-style task list that surfaces the right action at the right time. See ADR-0016.
 
@@ -338,7 +338,7 @@ Items in the FAILED state: (1) the warning triangle is clickable — clicking it
 **Checklist seeding rule:** items belonging to stages before the booking's creation status are not seeded. Stage order for seeding purposes: `Enquiry → Provisional → Confirmed → Ready → Complete`. A booking created at PROVISIONAL skips ENQUIRY-stage items (`send_quote`, `confirm_quote`). A booking created at CONFIRMED skips ENQUIRY and PROVISIONAL items — the checklist starts at READY prep. This means `dependsOn` chains are never broken by missing items: all seeded items have their dependencies also seeded.
 
 ### Goal
-> **Accepted in ADR-0057; not yet implemented** — the code still runs the flat [[BookingChecklistItem]] model until this lands. This and [[Step]] are the canonical *model* terms going forward.
+> **Implemented in ADR-0057 (shipped in #619, 2026-06-30).** This model has replaced the former flat [[BookingChecklistItem]] model in code. This and [[Step]] are the canonical *model* terms.
 
 The user-facing unit of a [[Booking]]'s checklist: one outcome the musician wants reached (e.g. *get the contract signed*, *send the invoice to the client*). Goals are what the musician chooses, toggles and sees — the per-concern "Remind me about" control lists **Goals, never their [[Step]]s**. A goal is **owned by the musician** (it is their outcome), lives in exactly **one lifecycle status** (`requiredForStatus`), and carries exactly **one [[concern]]** — the section of the "Remind me about" control where it is toggled. Its [[Step]]s are **not** concern-tagged: a step's "where" is implicit in which domain sheet owns its action, so a single goal can thread work across several concerns (e.g. *Get the deposit paid* = invoice-create → invoice-issue → comms-send → payment-receipt, three concerns) while still being toggled in one place. A goal whose work spans concerns files under **Overview** (the deal/billing spine).
 
