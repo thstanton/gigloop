@@ -110,11 +110,11 @@ export default function BookingDetailPage() {
 
       <BookingOverviewStrip bookingId={id!} />
 
-      <div className="md:hidden">
+      <div className="md:hidden" data-testid="booking-detail-mobile">
         <BookingDetailMobile bookingId={id!} />
       </div>
 
-      <div className="hidden md:block">
+      <div className="hidden md:block" data-testid="booking-detail-desktop">
         <BookingDetailDesktop bookingId={id!} />
       </div>
 
