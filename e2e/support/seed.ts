@@ -1,5 +1,13 @@
-import { BookingStatus, InvoiceStatus, type Contact } from '@prisma/client';
+import { BookingStatus, InvoiceStatus, Prisma, type Contact } from '@prisma/client';
 import { prisma, E2E_TEST_USER_ID } from './prisma';
+// The REAL default checklist (keys, steps, auto-complete rules) the app seeds at
+// booking-create — a pure, import-only module. Seeding from it (rather than a
+// hand-rolled checklist) keeps slice 5's auto-complete assertion honest: it
+// guards the actual rules, and drifts loudly if they change.
+import {
+  CHECKLIST_DEFAULTS,
+  filterItemsByStartingStatus,
+} from '../../apps/api/src/bookings/checklist-defaults';
 
 // Deletes everything owned by the test user, in child→parent order. Booking is
 // the cascade root for invoices/line-items/documents/communications/etc., so
@@ -52,6 +60,77 @@ export async function seedContact(userId: string = E2E_TEST_USER_ID): Promise<Co
       primaryRole: 'CUSTOMER',
     },
   });
+}
+
+export interface LifecycleBooking {
+  bookingId: string;
+  customerId: string;
+}
+
+// Per-test fixture (ADR-0048 §5/§7, slice 5): a booking at a starting stage with
+// the REAL default checklist seeded for that stage (goals + their canonical
+// steps, all PENDING) — mirroring what the app persists at create, but via direct
+// Prisma writes. Deliberately seeded with NO fee, so the `set_fee_*` steps stay
+// PENDING and auto-complete (rule: `fee notNull`) the moment the fee is set
+// through the UI — the spec's auto-complete assertion. The customer carries an
+// email (the `add_email_*` steps' fact).
+export async function seedBookingForLifecycle(
+  userId: string = E2E_TEST_USER_ID,
+  startingStatus: BookingStatus = BookingStatus.PROVISIONAL,
+): Promise<LifecycleBooking> {
+  const customer = await prisma.contact.create({
+    data: { userId, name: 'E2E Lifecycle Customer', email: 'lifecycle-customer@e2e.test' },
+  });
+
+  const booking = await prisma.booking.create({
+    data: {
+      userId,
+      status: startingStatus,
+      eventType: 'Wedding',
+      title: 'E2E Lifecycle Booking',
+      date: new Date('2099-11-01T18:00:00.000Z'),
+      customerId: customer.id,
+    },
+  });
+
+  // Goals gating a stage strictly after the starting stage (same filter the app
+  // uses). Each goal owns its ordered steps; both seed PENDING — the create-time
+  // evaluate the app runs is replaced here by the first UI action re-evaluating.
+  const goals = filterItemsByStartingStatus(CHECKLIST_DEFAULTS, startingStatus);
+  for (let i = 0; i < goals.length; i++) {
+    const g = goals[i];
+    await prisma.bookingChecklistItem.create({
+      data: {
+        userId,
+        bookingId: booking.id,
+        key: g.key,
+        label: g.label,
+        completedBy: g.completedBy,
+        state: 'PENDING',
+        order: i,
+        dependsOn: g.dependsOn,
+        requiredForStatus: g.requiredForStatus,
+        autoCompleteRule: (g.autoCompleteRule ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+        concern: g.concern ?? undefined,
+        steps: {
+          create: (g.steps ?? []).map((s, si) => ({
+            userId,
+            bookingId: booking.id,
+            key: s.key,
+            label: s.label,
+            order: si,
+            kind: s.kind,
+            completeMode: s.completeMode,
+            completedBy: s.completedBy,
+            state: 'PENDING',
+            autoCompleteRule: (s.autoCompleteRule ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+          })),
+        },
+      },
+    });
+  }
+
+  return { bookingId: booking.id, customerId: customer.id };
 }
 
 export interface ContactWithBooking {

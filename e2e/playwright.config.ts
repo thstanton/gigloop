@@ -52,6 +52,20 @@ export default defineConfig({
         storageState: STORAGE_STATE,
       },
     },
+    {
+      // The 768px desktop variant (ADR-0048 §10, slice 5) — booking-detail's
+      // desktop DOM genuinely diverges (sidebar, inline non-tabbed checklist), so
+      // only the lifecycle spec re-runs here; every other spec stays 375px-only.
+      // 768px is the `md` breakpoint where the desktop layout takes over.
+      name: 'desktop-chromium',
+      testMatch: /booking-lifecycle\.spec\.ts/,
+      dependencies: ['setup'],
+      use: {
+        browserName: 'chromium',
+        viewport: { width: 768, height: 1024 },
+        storageState: STORAGE_STATE,
+      },
+    },
   ],
   webServer: bootLocalStack
     ? [
