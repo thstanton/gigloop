@@ -61,11 +61,35 @@ for (const font of requiredFonts) {
   }
 }
 
+// SSRF guard. Musician logo/photo assets are only ever served from our own R2 public bucket,
+// but logoUrl is a user-settable profile field. Without this allowlist a user could set it to an
+// internal / link-local / cloud-metadata URL and make the server issue that request while
+// embedding the "logo" into a generated PDF. Compare origins so path tricks can't slip through.
+export function assertOwnAssetUrl(url: string): void {
+  const base = process.env.R2_PUBLIC_URL;
+  if (!base) throw new Error('R2_PUBLIC_URL is not configured');
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error(`Refusing to fetch asset from an invalid URL`);
+  }
+  if (parsed.origin !== new URL(base).origin) {
+    throw new Error(`Refusing to fetch asset from non-allowlisted host: ${parsed.origin}`);
+  }
+}
+
 async function fetchAsDataUrl(url: string): Promise<string> {
-  const res = await fetch(url);
+  assertOwnAssetUrl(url);
+  // redirect: 'error' — the origin allowlist only vets the initial URL, so refuse to follow a
+  // 3xx that could hop to an internal host. R2 public-object GETs return 200 directly.
+  const res = await fetch(url, { redirect: 'error' });
   if (!res.ok) throw new Error(`Failed to fetch image: ${res.status} ${url}`);
-  const buffer = Buffer.from(await res.arrayBuffer());
   const contentType = res.headers.get('content-type') ?? 'image/png';
+  if (!contentType.startsWith('image/')) {
+    throw new Error(`Refusing to embed non-image asset (content-type: ${contentType})`);
+  }
+  const buffer = Buffer.from(await res.arrayBuffer());
   return `data:${contentType};base64,${buffer.toString('base64')}`;
 }
 
