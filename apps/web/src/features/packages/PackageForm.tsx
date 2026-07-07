@@ -59,16 +59,34 @@ const CATEGORY_OPTIONS = [
   ...Object.entries(PACKAGE_CATEGORY_LABELS).map(([v, l]) => ({ value: v, label: l })),
 ];
 
+// Optional per-field helper text. Default undefined → no helper text renders, so the admin drawer
+// (which passes no hints) is unchanged; onboarding passes purpose-helper copy under each field.
+export interface PackageFormHints {
+  label?: string;
+  category?: string;
+  notes?: string;
+  keyMoments?: string;
+  defaultGenreSelection?: string;
+  slots?: string;
+}
+
+function FieldHint({ text }: { text?: string }) {
+  if (!text) return null;
+  return <p className="-mt-0.5 mb-1.5 text-xs text-muted">{text}</p>;
+}
+
 // ─── Tag input ────────────────────────────────────────────────────────────────
 
 function TagInput({
   label,
   tags,
   onChange,
+  hint,
 }: {
   label: string;
   tags: string[];
   onChange: (tags: string[]) => void;
+  hint?: string;
 }) {
   const [input, setInput] = useState('');
 
@@ -83,6 +101,7 @@ function TagInput({
   return (
     <div>
       <label className="block text-sm font-medium text-foreground mb-1">{label}</label>
+      <FieldHint text={hint} />
       <div className="flex flex-wrap gap-1.5 mb-2">
         {tags.map((t) => (
           <span
@@ -118,9 +137,11 @@ function TagInput({
 function SlotEditor({
   slots,
   onChange,
+  hint,
 }: {
   slots: SlotDraft[];
   onChange: (slots: SlotDraft[]) => void;
+  hint?: string;
 }) {
   function move(index: number, dir: -1 | 1) {
     const next = [...slots];
@@ -151,6 +172,7 @@ function SlotEditor({
   return (
     <div>
       <label className="block text-sm font-medium text-foreground mb-2">Sets</label>
+      <FieldHint text={hint} />
       <div className="space-y-2">
         {slots.map((slot, i) => (
           <div key={slot.key} className="flex items-center gap-2">
@@ -219,15 +241,18 @@ function SlotEditor({
 export function PackageForm({
   value,
   onChange,
+  hints,
 }: {
   value: PackageFormValues;
   onChange: (patch: Partial<PackageFormValues>) => void;
+  hints?: PackageFormHints;
 }) {
   return (
     <div className="space-y-5">
       {/* Label */}
       <div>
         <label className="block text-sm font-medium text-foreground mb-1">Label</label>
+        <FieldHint text={hints?.label} />
         <input
           type="text"
           value={value.label}
@@ -243,6 +268,7 @@ export function PackageForm({
       {/* Category */}
       <div>
         <label className="block text-sm font-medium text-foreground mb-1">Category</label>
+        <FieldHint text={hints?.category} />
         <select
           value={value.category}
           onChange={(e) => onChange({ category: e.target.value })}
@@ -254,9 +280,13 @@ export function PackageForm({
         </select>
       </div>
 
+      {/* Sets */}
+      <SlotEditor slots={value.slots} onChange={(slots) => onChange({ slots })} hint={hints?.slots} />
+
       {/* Notes */}
       <div>
         <label className="block text-sm font-medium text-foreground mb-1">Notes</label>
+        <FieldHint text={hints?.notes} />
         <textarea
           value={value.notes}
           onChange={(e) => onChange({ notes: e.target.value })}
@@ -268,17 +298,15 @@ export function PackageForm({
 
       {/* Special requests (the keyMoments field — relabelled from "Key moments" for consistency
           with PackageMusicSummary and the live music form; #662) */}
-      <TagInput label="Special requests" tags={value.keyMoments} onChange={(keyMoments) => onChange({ keyMoments })} />
+      <TagInput label="Special requests" tags={value.keyMoments} onChange={(keyMoments) => onChange({ keyMoments })} hint={hints?.keyMoments} />
 
       {/* Genre selection */}
       <TagInput
         label="Default genre selection"
         tags={value.defaultGenreSelection}
         onChange={(defaultGenreSelection) => onChange({ defaultGenreSelection })}
+        hint={hints?.defaultGenreSelection}
       />
-
-      {/* Slots */}
-      <SlotEditor slots={value.slots} onChange={(slots) => onChange({ slots })} />
     </div>
   );
 }

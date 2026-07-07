@@ -45,3 +45,24 @@ export const Editing: Story = {
     await expect(canvas.getByText('First dance')).toBeVisible();
   },
 };
+
+// Optional per-field helper text (onboarding passes these; the admin drawer passes none).
+export const WithHints: Story = {
+  render: () => {
+    const [value, setValue] = useState<PackageFormValues>(emptyPackageFormValues());
+    return (
+      <PackageForm
+        value={value}
+        onChange={(patch) => setValue((v) => ({ ...v, ...patch }))}
+        hints={{
+          label: 'The name your client sees on the quote.',
+          keyMoments: 'Moments the client can request a song for — first dance, cake cutting…',
+        }}
+      />
+    );
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('The name your client sees on the quote.')).toBeVisible();
+    await expect(canvas.getByText(/Moments the client can request a song for/)).toBeVisible();
+  },
+};
