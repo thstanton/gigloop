@@ -13,11 +13,18 @@ type AuthedRequest = Request & { userId: string };
 export class PackagesController {
   constructor(private service: PackagesService) {}
 
-  @ApiOperation({ summary: 'List packages (seeds defaults on first call)' })
+  @ApiOperation({ summary: 'List the user\'s package templates' })
   @ApiResponse({ status: 200, description: 'Array of packages with slots' })
   @Get()
   findAll(@Req() req: AuthedRequest) {
     return this.service.findAll(req.userId);
+  }
+
+  @ApiOperation({ summary: 'Starter package-template catalogue (system defaults, not persisted)' })
+  @ApiResponse({ status: 200, description: 'Array of starter templates to base a new package on' })
+  @Get('catalogue')
+  getCatalogue() {
+    return this.service.getCatalogue();
   }
 
   @ApiOperation({ summary: 'Create a new package' })

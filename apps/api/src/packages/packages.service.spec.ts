@@ -4,10 +4,8 @@ import { PackagesRepository } from './packages.repository';
 import { CreatePackageDto } from './dto/create-package.dto';
 
 type MockRepo = {
-  countByUserId: jest.Mock;
   findAll: jest.Mock;
   findOne: jest.Mock;
-  createMany: jest.Mock;
   create: jest.Mock;
   update: jest.Mock;
   delete: jest.Mock;
@@ -15,10 +13,8 @@ type MockRepo = {
 
 function makeRepo(): MockRepo {
   return {
-    countByUserId: jest.fn(),
     findAll: jest.fn(),
     findOne: jest.fn(),
-    createMany: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
     delete: jest.fn(),
@@ -37,35 +33,35 @@ describe('PackagesService', () => {
   });
 
   describe('findAll', () => {
-    it('seeds 7 defaults and returns them on first call', async () => {
-      repo.countByUserId.mockResolvedValue(0);
-      repo.createMany.mockResolvedValue([]);
+    it('returns packages straight from the repository (#663 — no auto-seed)', async () => {
       repo.findAll.mockResolvedValue([pkg]);
 
       const result = await service.findAll('u1');
 
-      expect(repo.createMany).toHaveBeenCalledWith('u1', expect.arrayContaining([
-        expect.objectContaining({ label: 'Wedding Ceremony' }),
-      ]));
-      expect(repo.createMany.mock.calls[0][1]).toHaveLength(7);
       expect(result).toEqual([pkg]);
     });
 
-    it('skips seeding when packages already exist', async () => {
-      repo.countByUserId.mockResolvedValue(7);
-      repo.findAll.mockResolvedValue([pkg]);
-
-      await service.findAll('u1');
-
-      expect(repo.createMany).not.toHaveBeenCalled();
-    });
-
-    it('returns packages from repository', async () => {
-      repo.countByUserId.mockResolvedValue(3);
-      repo.findAll.mockResolvedValue([pkg]);
+    it('returns an empty library for a new user (nothing seeded)', async () => {
+      repo.findAll.mockResolvedValue([]);
 
       const result = await service.findAll('u1');
-      expect(result).toEqual([pkg]);
+
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe('getCatalogue', () => {
+    it('returns the 7 system-default starters without touching the repository', () => {
+      const catalogue = service.getCatalogue();
+
+      expect(catalogue).toHaveLength(7);
+      expect(catalogue).toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: 'wedding-ceremony', label: 'Wedding Ceremony' })]),
+      );
+      // Purely in-memory — no persistence, and category normalises undefined → null.
+      expect(repo.findAll).not.toHaveBeenCalled();
+      const background = catalogue.find((c) => c.label === 'Background Music');
+      expect(background?.category).toBeNull();
     });
   });
 

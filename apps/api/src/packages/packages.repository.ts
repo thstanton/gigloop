@@ -9,10 +9,6 @@ const SLOTS_INCLUDE = { slots: { orderBy: { order: 'asc' as const } } };
 export class PackagesRepository {
   constructor(private prisma: PrismaService) {}
 
-  countByUserId(userId: string) {
-    return this.prisma.packageTemplate.count({ where: { userId } });
-  }
-
   findAll(userId: string) {
     return this.prisma.packageTemplate.findMany({
       where: { userId },
@@ -89,34 +85,5 @@ export class PackagesRepository {
 
   delete(id: string) {
     return this.prisma.packageTemplate.delete({ where: { id } });
-  }
-
-  createMany(
-    userId: string,
-    packages: Array<{
-      label: string;
-      category?: string;
-      icon: string;
-      keyMoments: string[];
-      defaultGenreSelection: string[];
-      notes?: string;
-      isSystemDefault?: boolean;
-      slots: Array<{ label?: string; duration: number; order: number }>;
-    }>,
-  ) {
-    return this.prisma.$transaction(
-      packages.map(({ slots, ...pkg }) =>
-        this.prisma.packageTemplate.create({
-          data: {
-            userId,
-            ...pkg,
-            slots: {
-              create: slots.map((s) => ({ ...s, userId })),
-            },
-          },
-          include: SLOTS_INCLUDE,
-        }),
-      ),
-    );
   }
 }

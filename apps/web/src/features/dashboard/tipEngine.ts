@@ -9,7 +9,9 @@
 export interface TipSnapshot {
   hasHomeAddress: boolean;
   hasLogo: boolean;
-  onlyDefaultPackages: boolean;
+  // True when the musician has no package template of their own — an empty library (packages are no
+  // longer auto-seeded, #663) or a legacy library still holding only system defaults.
+  noCustomPackage: boolean;
 }
 
 /** What the widget needs to render a tip. */
@@ -44,8 +46,8 @@ export const TIP_POOL: Tip[] = [
   },
   {
     id: 'packages-still-default',
-    condition: (s) => s.onlyDefaultPackages,
-    text: 'Tailor your packages to match what you actually offer',
+    condition: (s) => s.noCustomPackage,
+    text: 'Set up a package template for the type of gig you do most',
     href: '/admin/packages',
   },
 ];

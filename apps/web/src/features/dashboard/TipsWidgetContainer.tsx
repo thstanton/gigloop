@@ -16,8 +16,8 @@ function buildSnapshot(
   return {
     hasHomeAddress: !!(me?.latitude && me?.longitude),
     hasLogo: !!publicProfile?.logoUrl,
-    // Still on the seeded defaults: at least one package, all system-supplied.
-    onlyDefaultPackages: !!packages && packages.length > 0 && packages.every((p) => p.isSystemDefault),
+    // No template of their own — an empty library (no auto-seed, #663) or only system defaults.
+    noCustomPackage: !!packages && packages.every((p) => p.isSystemDefault),
   };
 }
 

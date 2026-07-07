@@ -567,6 +567,25 @@ export interface PackageTemplate {
   slots: PackageTemplateSlot[];
 }
 
+// A starter template from GET /packages/catalogue — the system defaults, served read-only (never
+// auto-added to the library). Onboarding Step 3 bases a new template on one of these. No id/timestamps
+// because it isn't persisted; slots have no ids.
+export interface PackageCatalogueSlot {
+  label: string;
+  duration: number;
+  order: number;
+}
+
+export interface PackageCatalogueItem {
+  id: string;
+  label: string;
+  category: string | null;
+  icon: string;
+  keyMoments: string[];
+  defaultGenreSelection: string[];
+  slots: PackageCatalogueSlot[];
+}
+
 export interface SlotInput {
   id?: string;
   label?: string;
