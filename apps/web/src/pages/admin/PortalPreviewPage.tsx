@@ -9,19 +9,13 @@ import { Button } from '@/components/ui/button';
 import CustomiseSheet, { type Overrides } from '@/features/portal/CustomiseSheet';
 import {
   PortalPreviewBody,
+  PreviewPageTabs,
   profileToOverrides,
   type PreviewPage,
 } from '@/features/portal/PortalPreviewBody';
 import type { PublicProfile, UpdatePublicProfileInput } from '@/types/api';
-import { cn } from '@/lib/utils';
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
-
-const PAGE_TABS: { value: PreviewPage; label: string }[] = [
-  { value: 'booking', label: 'Booking' },
-  { value: 'contract', label: 'Contract' },
-  { value: 'music', label: 'Music form' },
-];
 
 export default function PortalPreviewPage() {
   const { isLoaded, isSignedIn } = useAuth();
@@ -92,24 +86,7 @@ export default function PortalPreviewPage() {
           Settings
         </Link>
 
-        {/* Page tabs */}
-        <div className="flex gap-0.5 bg-accent rounded-md p-0.5">
-          {PAGE_TABS.map((tab) => (
-            <button
-              key={tab.value}
-              type="button"
-              onClick={() => setPreviewPage(tab.value)}
-              className={cn(
-                'px-3 py-1 text-xs font-medium rounded transition-colors',
-                previewPage === tab.value
-                  ? 'bg-background text-foreground shadow-sm'
-                  : 'text-muted hover:text-foreground',
-              )}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+        <PreviewPageTabs value={previewPage} onChange={setPreviewPage} />
 
         <div className="flex items-center gap-2 flex-shrink-0">
           <Button variant="outline" size="sm" onClick={() => setSheetOpen(true)}>

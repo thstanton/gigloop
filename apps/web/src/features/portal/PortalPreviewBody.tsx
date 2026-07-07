@@ -11,6 +11,7 @@ import {
 import { SignatureSection } from '@/pages/portal/PortalContractPage';
 import { type Overrides } from '@/features/portal/CustomiseSheet';
 import { usePortalTheme } from '@/features/portal/usePortalTheme';
+import { cn } from '@/lib/utils';
 import type { PublicProfile, PortalPublicProfile, ClientPortalConfig } from '@/types/api';
 
 // ─── Mock data ────────────────────────────────────────────────────────────────
@@ -392,6 +393,41 @@ function PreviewMusicView({
 // ─── Embeddable preview body ──────────────────────────────────────────────────
 
 export type PreviewPage = 'booking' | 'contract' | 'music';
+
+const PAGE_TABS: { value: PreviewPage; label: string }[] = [
+  { value: 'booking', label: 'Booking' },
+  { value: 'contract', label: 'Contract' },
+  { value: 'music', label: 'Music form' },
+];
+
+/** Pill tab strip for switching which portal page the preview shows. */
+export function PreviewPageTabs({
+  value,
+  onChange,
+}: {
+  value: PreviewPage;
+  onChange: (page: PreviewPage) => void;
+}) {
+  return (
+    <div className="inline-flex gap-0.5 bg-accent rounded-md p-0.5">
+      {PAGE_TABS.map((tab) => (
+        <button
+          key={tab.value}
+          type="button"
+          onClick={() => onChange(tab.value)}
+          className={cn(
+            'px-3 py-1 text-xs font-medium rounded transition-colors',
+            value === tab.value
+              ? 'bg-background text-foreground shadow-sm'
+              : 'text-muted hover:text-foreground',
+          )}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 /**
  * The client-portal preview renderer, decoupled from the admin page chrome

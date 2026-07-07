@@ -3,7 +3,7 @@ import {
   GlassWater, Utensils, Moon, Briefcase, Music2, Sparkles, Radio, Headphones,
   Volume2, Users, Clock, Shirt, Sofa, type LucideIcon,
 } from 'lucide-react';
-import type { BookingStatus, EventType, PortalVisibilityReason, ReminderConcern, SongGenre } from '@/types/api';
+import type { BookingStatus, EventType, PortalTheme, PortalVisibilityReason, ReminderConcern, SongGenre } from '@/types/api';
 
 export type ContactPrimaryRole = 'CUSTOMER' | 'VENUE' | 'BOOKING_AGENT';
 
@@ -238,6 +238,15 @@ export const PORTAL_VISIBILITY_REASON_COPY: Record<PortalVisibilityReason, strin
   not_shared:      'Not visible to client',
   cancelled:       'Not visible — cancelled',
 };
+
+// Portal theme choices, in display order. Consumed by the shared branding controls
+// (features/portal/BrandingControls) and anywhere a theme needs labelling.
+export const PORTAL_THEME_OPTIONS: { value: PortalTheme; label: string; description: string }[] = [
+  { value: 'LIGHT_MODERN',   label: 'Light Modern',   description: 'Clean, sans-serif' },
+  { value: 'LIGHT_ROMANTIC', label: 'Light Romantic', description: 'Soft, script font' },
+  { value: 'BOLD_MODERN',    label: 'Bold Modern',    description: 'Dark, contemporary' },
+  { value: 'BOLD_ROMANTIC',  label: 'Bold Romantic',  description: 'Dark, elegant script' },
+];
 
 // Onboarding wizard steps (PRD #478 — 5-step guided activation). The single source of
 // truth for the wizard order, progress-indicator labels, and each step's route. Step
