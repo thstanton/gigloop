@@ -5,6 +5,29 @@ Accepted (2026-06-17). Implementation — including the schema rename and migrat
 work; the **fee role is explicitly out of scope** and parked for P2 (see North Star → Quote
 Calculator).
 
+**Amended:** 2026-07-07 — package libraries are no longer seeded from the system defaults; the defaults
+became a read-only starter catalogue. See "Amendment (2026-07-07)" below and #663.
+
+## Amendment (2026-07-07): libraries start empty; defaults are a read-only catalogue
+
+The original decision assumed the system-default Package Templates were **seeded into each user's
+library** on first access (a lazy copy in `PackagesService.findAll`), and the onboarding rework (#478)
+planned to keep "seeding the full default set in the background." During the #663 build the owner
+reversed this in favour of a **customisation-first** stance:
+
+- **A new musician's package library starts empty.** The lazy auto-seed is removed.
+- **The system defaults become a read-only starter catalogue** — `GET /packages/catalogue`, served from
+  the `SYSTEM_DEFAULTS` constant, never persisted. Onboarding Step 3 (and, in future, the admin Packages
+  page) lets the musician base **one** real template on a starter and save it via `POST /packages`.
+  Nothing is added to the library until the musician saves it.
+- **`isSystemDefault`** therefore appears `true` only on legacy rows seeded before this change; templates
+  the musician creates are `false`. The dashboard tips widget reads it (as "no custom package") to nudge
+  a musician who has no template of their own.
+
+Nothing else in this ADR changes: the Template↔Package distinction, provenance-severing, and the
+copy-on-apply mechanic are unchanged. Legacy libraries seeded before this change keep their rows — **no
+backfill** (confirmed a non-issue pre-launch: no real user data).
+
 ## Context
 
 A `Package` historically served **double duty**: it was both a reusable per-user **library template**
