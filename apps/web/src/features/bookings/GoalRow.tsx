@@ -86,7 +86,7 @@ function StepGlyph({ step, size = 13 }: { step: ChecklistStep; size?: number }) 
 
 // Progress ring — leading goal glyph, fills clockwise by milestone completeness (Things-style),
 // in status-confirmed green (a sanctioned palette exception, #604), resolving into the done check.
-function ProgressRing({ done, total, size = 17 }: { done: number; total: number; size?: number }) {
+export function ProgressRing({ done, total, size = 17 }: { done: number; total: number; size?: number }) {
   const stroke = 2;
   const r = (size - stroke) / 2;
   const circumference = 2 * Math.PI * r;

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { IconPicker } from '@/components/common/IconPicker';
 import { PACKAGE_CATEGORY_LABELS } from '@/lib/constants';
-import type { PackageTemplate, SlotInput } from '@/types/api';
+import type { PackageCatalogueItem, PackageTemplate, SlotInput } from '@/types/api';
 
 // ─── Form value shape + conversions ──────────────────────────────────────────
 // PackageForm is presentational and fully controlled: the container owns the value and
@@ -33,6 +33,19 @@ export function packageToFormValues(pkg: PackageTemplate): PackageFormValues {
     keyMoments: pkg.keyMoments ?? [],
     defaultGenreSelection: pkg.defaultGenreSelection ?? [],
     slots: pkg.slots.map((s) => ({ ...s, label: s.label ?? undefined, key: s.id })),
+  };
+}
+
+// Seeds the form from a read-only catalogue starter (no ids yet — drafts get fresh keys).
+export function catalogueToFormValues(item: PackageCatalogueItem): PackageFormValues {
+  return {
+    label: item.label,
+    icon: item.icon,
+    category: item.category ?? '',
+    notes: '',
+    keyMoments: item.keyMoments,
+    defaultGenreSelection: item.defaultGenreSelection,
+    slots: item.slots.map((s) => ({ label: s.label, duration: s.duration, order: s.order, key: crypto.randomUUID() })),
   };
 }
 

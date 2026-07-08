@@ -25,6 +25,52 @@ import {
 
 type DrawerMode = { type: 'create' } | { type: 'edit'; pkg: PackageTemplate };
 
+// The edit-only delete footer: owns the confirm step, its error, and the delete mutation.
+function DeletePackageSection({ pkgId, onDeleted }: { pkgId: string; onDeleted: () => void }) {
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const deletePkg = useMutation({
+    mutationFn: () => apiDelete(`/packages/${pkgId}`),
+    onSuccess: onDeleted,
+    onError: (err: Error) => {
+      setDeleteError(err.message || 'This package is used by existing bookings and cannot be deleted');
+      setConfirmDelete(false);
+    },
+  });
+
+  return (
+    <>
+      {deleteError && (
+        <p className="text-sm text-status-cancelled">{deleteError}</p>
+      )}
+      {confirmDelete ? (
+        <div className="flex gap-2">
+          <Button
+            variant="destructive"
+            onClick={() => deletePkg.mutate()}
+            disabled={deletePkg.isPending}
+            className="flex-1"
+          >
+            {deletePkg.isPending ? 'Deleting…' : 'Confirm delete'}
+          </Button>
+          <Button variant="outline" onClick={() => setConfirmDelete(false)} className="flex-1">
+            Cancel
+          </Button>
+        </div>
+      ) : (
+        <Button
+          variant="ghost"
+          onClick={() => setConfirmDelete(true)}
+          className="w-full text-status-cancelled hover:text-status-cancelled"
+        >
+          Delete package
+        </Button>
+      )}
+    </>
+  );
+}
+
 function PackageDrawer({
   mode,
   open,
@@ -38,19 +84,14 @@ function PackageDrawer({
   const isEdit = mode.type === 'edit';
   const existing = isEdit ? mode.pkg : null;
 
-  const [form, setForm] = useState<PackageFormValues>(
-    existing ? packageToFormValues(existing) : emptyPackageFormValues(),
-  );
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const initialForm = () => (existing ? packageToFormValues(existing) : emptyPackageFormValues());
+  const [form, setForm] = useState<PackageFormValues>(initialForm);
 
   // Reset when the drawer opens (or switches mode).
   const [lastMode, setLastMode] = useState<DrawerMode | null>(null);
   if (open && mode !== lastMode) {
     setLastMode(mode);
-    setForm(existing ? packageToFormValues(existing) : emptyPackageFormValues());
-    setDeleteError(null);
-    setConfirmDelete(false);
+    setForm(initialForm());
   }
 
   const save = useMutation({
@@ -64,18 +105,6 @@ function PackageDrawer({
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['packages'] });
       onClose();
-    },
-  });
-
-  const deletePkg = useMutation({
-    mutationFn: () => apiDelete(`/packages/${existing!.id}`),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['packages'] });
-      onClose();
-    },
-    onError: (err: Error) => {
-      setDeleteError(err.message || 'This package is used by existing bookings and cannot be deleted');
-      setConfirmDelete(false);
     },
   });
 
@@ -110,35 +139,15 @@ function PackageDrawer({
             {save.isPending ? 'Saving…' : 'Save changes'}
           </Button>
 
-          {isEdit && (
-            <>
-              {deleteError && (
-                <p className="text-sm text-status-cancelled">{deleteError}</p>
-              )}
-              {confirmDelete ? (
-                <div className="flex gap-2">
-                  <Button
-                    variant="destructive"
-                    onClick={() => deletePkg.mutate()}
-                    disabled={deletePkg.isPending}
-                    className="flex-1"
-                  >
-                    {deletePkg.isPending ? 'Deleting…' : 'Confirm delete'}
-                  </Button>
-                  <Button variant="outline" onClick={() => setConfirmDelete(false)} className="flex-1">
-                    Cancel
-                  </Button>
-                </div>
-              ) : (
-                <Button
-                  variant="ghost"
-                  onClick={() => setConfirmDelete(true)}
-                  className="w-full text-status-cancelled hover:text-status-cancelled"
-                >
-                  Delete package
-                </Button>
-              )}
-            </>
+          {existing && (
+            <DeletePackageSection
+              key={existing.id}
+              pkgId={existing.id}
+              onDeleted={() => {
+                qc.invalidateQueries({ queryKey: ['packages'] });
+                onClose();
+              }}
+            />
           )}
         </div>
       </SheetContent>

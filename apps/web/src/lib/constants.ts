@@ -80,6 +80,18 @@ export function statusGte(current: BookingStatus, threshold: BookingStatus): boo
   return STATUS_ORDER.indexOf(current) >= STATUS_ORDER.indexOf(threshold);
 }
 
+// The five forward lifecycle stages, in order — STATUS_ORDER minus the CANCELLED off-ramp.
+// COMPLETE is terminal: no goals are worked on during it.
+export const FORWARD_STATUSES: BookingStatus[] = STATUS_ORDER.filter((s) => s !== 'CANCELLED');
+
+// A goal is worked on — and reminded about — during the stage BEFORE its requiredForStatus
+// (e.g. a goal required FOR Confirmed is chased while still Provisional). Derived from the
+// forward order so it cannot drift if a stage is ever added.
+export function statusBefore(status: BookingStatus): BookingStatus | null {
+  const i = FORWARD_STATUSES.indexOf(status);
+  return i > 0 ? FORWARD_STATUSES[i - 1] : null;
+}
+
 export const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
   ENQUIRY:     'Enquiry',
   PROVISIONAL: 'Provisional',

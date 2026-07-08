@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Bell, Mail, LayoutDashboard, ListChecks, CheckCircle2, Circle, WandSparkles } from 'lucide-react';
 import { apiPatch } from '@/lib/api';
 import {
@@ -8,6 +8,8 @@ import {
   STATUS_DESCRIPTIONS,
   STATUS_ACCENT_BG,
   GOAL_SUMMARIES,
+  FORWARD_STATUSES,
+  statusBefore,
 } from '@/lib/constants';
 import { useMe } from '@/lib/hooks/useMe';
 import { toast } from '@/lib/hooks/use-toast';
@@ -15,52 +17,27 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { PageHeader } from '@/components/common/PageHeader';
+import { ProgressRing } from '@/features/bookings/GoalRow';
 import { stepNav } from '@/features/onboarding/steps';
 import type { ChecklistDefaultItem, BookingStatus } from '@/types/api';
 
 const PATH = '/onboarding/checklist';
 
-// The five forward lifecycle stages, in order (COMPLETE is terminal — no goals are worked on
-// during it, so its card is an endpoint).
-type Stage = Extract<BookingStatus, 'ENQUIRY' | 'PROVISIONAL' | 'CONFIRMED' | 'READY' | 'COMPLETE'>;
-const STAGES: Stage[] = ['ENQUIRY', 'PROVISIONAL', 'CONFIRMED', 'READY', 'COMPLETE'];
-
-// A goal is worked on — and reminded about — during the stage BEFORE its requiredForStatus
-// (e.g. "Get the contract signed" is required FOR Confirmed, so it's chased while still
-// Provisional). Grouping by this places each reminder in the stage it actually fires in.
-const REMINDED_AT: Record<'PROVISIONAL' | 'CONFIRMED' | 'READY' | 'COMPLETE', Stage> = {
-  PROVISIONAL: 'ENQUIRY',
-  CONFIRMED: 'PROVISIONAL',
-  READY: 'CONFIRMED',
-  COMPLETE: 'READY',
-};
-
-function remindedAtStage(item: ChecklistDefaultItem): Stage | null {
-  return item.requiredForStatus ? REMINDED_AT[item.requiredForStatus] : null;
+// Grouping by the stage a goal is reminded in (the stage before its requiredForStatus)
+// places each reminder in the stage it actually fires in.
+function remindedAtStage(item: ChecklistDefaultItem): BookingStatus | null {
+  return item.requiredForStatus ? statusBefore(item.requiredForStatus) : null;
 }
 
 // A representative snapshot of a live booking checklist, recreating GoalRow's visual language
 // (status glyph → label → due chip → indented wand-led active step) so the musician can see where
 // these reminders land. Static and illustrative — not the user's real data.
-function MiniRing({ frac = 0.4, size = 14 }: { frac?: number; size?: number }) {
-  const stroke = 2;
-  const r = (size - stroke) / 2;
-  const c = 2 * Math.PI * r;
-  return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90 shrink-0" aria-hidden>
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth={stroke} stroke="currentColor" className="text-border" />
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth={stroke} strokeLinecap="round" stroke="currentColor"
-        className="text-status-confirmed" strokeDasharray={c} strokeDashoffset={c * (1 - frac)} />
-    </svg>
-  );
-}
-
 function MockGoal({ variant, label, step, due }: { variant: 'done' | 'active' | 'pending'; label: string; step?: string; due?: string }) {
   return (
     <div className={cn(variant === 'done' && 'opacity-60')}>
       <div className="flex items-center gap-2">
         {variant === 'done' && <CheckCircle2 size={14} className="shrink-0 text-status-confirmed" />}
-        {variant === 'active' && <MiniRing />}
+        {variant === 'active' && <ProgressRing done={2} total={5} size={14} />}
         {variant === 'pending' && <Circle size={14} className="shrink-0 text-border" />}
         <span className={cn('min-w-0 flex-1 truncate font-medium', variant === 'done' ? 'text-muted' : 'text-foreground')}>{label}</span>
         {due && <span className="shrink-0 text-[10px] text-amber-600">{due}</span>}
@@ -128,6 +105,57 @@ function ReminderCallout({ digestOn, onDigestChange }: { digestOn: boolean; onDi
   );
 }
 
+// One lifecycle-stage card: accent header + the goals reminded in that stage as toggle rows.
+function StageCard({
+  stage,
+  goals,
+  enabledFor,
+  onToggle,
+}: {
+  stage: BookingStatus;
+  goals: ChecklistDefaultItem[];
+  enabledFor: (g: ChecklistDefaultItem) => boolean;
+  onToggle: (key: string, val: boolean) => void;
+}) {
+  return (
+    <div className="rounded-xl border border-border overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-border bg-muted/30">
+        <p className="text-sm text-foreground/70">
+          <span className="inline-flex items-center gap-2 align-baseline mr-1">
+            <span className={cn('w-[3px] h-3 rounded-full', STATUS_ACCENT_BG[stage])} aria-hidden />
+            <span className="font-semibold text-foreground">{BOOKING_STATUS_LABELS[stage]} ·</span>
+          </span>
+          {STATUS_DESCRIPTIONS[stage]}
+        </p>
+      </div>
+      {goals.length ? (
+        <div className="divide-y divide-border">
+          {goals.map((g) => {
+            const key = g.key ?? g.label;
+            const checked = enabledFor(g);
+            const summary = g.key ? GOAL_SUMMARIES[g.key] : undefined;
+            return (
+              <div key={key} className="flex items-start justify-between gap-3 px-4 py-3">
+                <div>
+                  <p className="text-base text-foreground">{g.label}</p>
+                  {summary && <p className="text-sm text-muted mt-0.5">{summary}</p>}
+                </div>
+                <Switch
+                  checked={checked}
+                  onCheckedChange={(val) => onToggle(key, val)}
+                  aria-label={`${g.label}: ${checked ? 'enabled' : 'disabled'}`}
+                />
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="px-4 py-3 text-sm text-muted">Nothing to track here — the booking's done.</p>
+      )}
+    </div>
+  );
+}
+
 export default function OnboardingChecklistPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -138,31 +166,29 @@ export default function OnboardingChecklistPage() {
   const defaults = (profile?.preferences?.checklistDefaults ?? []) as ChecklistDefaultItem[];
   const initialDigest = profile?.digestEmailEnabled ?? true;
 
+  // Both pieces of local state are deltas over the server values — no sync effects needed,
+  // and a background ['me'] refetch can't wipe unsaved toggles.
   const [overrides, setOverrides] = useState<Map<string, boolean>>(new Map());
-  const [digestOn, setDigestOn] = useState(initialDigest);
+  const [digestOverride, setDigestOverride] = useState<boolean | null>(null);
 
-  useEffect(() => {
-    if (defaults.length > 0) {
-      setOverrides(new Map(defaults.map((d) => [d.key ?? d.label, d.enabled !== false])));
-    }
-  }, [defaults.length]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    setDigestOn(initialDigest);
-  }, [initialDigest]);
+  const enabledFor = (g: ChecklistDefaultItem) =>
+    overrides.get(g.key ?? g.label) ?? g.enabled !== false;
+  const digestOn = digestOverride ?? initialDigest;
 
   const { mutate: save, isPending } = useMutation({
     mutationFn: async () => {
       const systemOverrides = defaults
-        .filter((d) => d.key)
-        .filter((d) => (overrides.get(d.key!) ?? true) !== (d.enabled !== false))
-        .map((d) => ({ key: d.key!, enabled: overrides.get(d.key!) ?? true }));
+        .filter((d) => d.key && overrides.has(d.key))
+        .filter((d) => overrides.get(d.key!) !== (d.enabled !== false))
+        .map((d) => ({ key: d.key!, enabled: overrides.get(d.key!)! }));
+      const requests: Promise<unknown>[] = [];
       if (systemOverrides.length > 0) {
-        await apiPatch('/me/preferences/checklist-defaults', { systemItemOverrides: systemOverrides });
+        requests.push(apiPatch('/me/preferences/checklist-defaults', { systemItemOverrides: systemOverrides }));
       }
       if (digestOn !== initialDigest) {
-        await apiPatch('/me', { digestEmailEnabled: digestOn });
+        requests.push(apiPatch('/me', { digestEmailEnabled: digestOn }));
       }
+      await Promise.all(requests);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['me'] });
@@ -189,7 +215,7 @@ export default function OnboardingChecklistPage() {
         </div>
       ) : (
         <>
-          <ReminderCallout digestOn={digestOn} onDigestChange={setDigestOn} />
+          <ReminderCallout digestOn={digestOn} onDigestChange={setDigestOverride} />
 
           <p className="text-sm text-muted">
             Every booking gets this checklist — GigLoop builds it for you. Switch off any reminders you don't
@@ -197,46 +223,15 @@ export default function OnboardingChecklistPage() {
           </p>
 
           <div className="flex flex-col gap-4">
-            {STAGES.map((stage) => {
-              const goals = defaults.filter((d) => remindedAtStage(d) === stage);
-              return (
-                <div key={stage} className="rounded-xl border border-border overflow-hidden">
-                  <div className="px-4 py-2.5 border-b border-border bg-muted/30">
-                    <p className="text-sm text-foreground/70">
-                      <span className="inline-flex items-center gap-2 align-baseline mr-1">
-                        <span className={cn('w-[3px] h-3 rounded-full', STATUS_ACCENT_BG[stage])} aria-hidden />
-                        <span className="font-semibold text-foreground">{BOOKING_STATUS_LABELS[stage]} ·</span>
-                      </span>
-                      {STATUS_DESCRIPTIONS[stage]}
-                    </p>
-                  </div>
-                  {goals.length ? (
-                    <div className="divide-y divide-border">
-                      {goals.map((g) => {
-                        const key = g.key ?? g.label;
-                        const checked = overrides.get(key) ?? true;
-                        const summary = g.key ? GOAL_SUMMARIES[g.key] : undefined;
-                        return (
-                          <div key={key} className="flex items-start justify-between gap-3 px-4 py-3">
-                            <div>
-                              <p className="text-base text-foreground">{g.label}</p>
-                              {summary && <p className="text-sm text-muted mt-0.5">{summary}</p>}
-                            </div>
-                            <Switch
-                              checked={checked}
-                              onCheckedChange={(val) => setOverrides((prevMap) => new Map(prevMap).set(key, val))}
-                              aria-label={`${g.label}: ${checked ? 'enabled' : 'disabled'}`}
-                            />
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <p className="px-4 py-3 text-sm text-muted">Nothing to track here — the booking's done.</p>
-                  )}
-                </div>
-              );
-            })}
+            {FORWARD_STATUSES.map((stage) => (
+              <StageCard
+                key={stage}
+                stage={stage}
+                goals={defaults.filter((d) => remindedAtStage(d) === stage)}
+                enabledFor={enabledFor}
+                onToggle={(key, val) => setOverrides((prevMap) => new Map(prevMap).set(key, val))}
+              />
+            ))}
           </div>
         </>
       )}

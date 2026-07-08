@@ -1,13 +1,15 @@
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@clerk/react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Check, Boxes, Music, Sparkles } from 'lucide-react';
 import { apiGet, apiPost } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
 import { Button } from '@/components/ui/button';
+import { TogglePill } from '@/components/ui/toggle-pill';
 import { PageHeader } from '@/components/common/PageHeader';
 import { PageSection } from '@/components/common/PageSection';
+import { SubLabel } from '@/components/common/SubLabel';
 import {
   GENRE_LABELS,
   PACKAGE_ICON_MAP,
@@ -16,6 +18,7 @@ import {
 } from '@/lib/constants';
 import {
   PackageForm,
+  catalogueToFormValues,
   packageFormToPayload,
   type PackageFormValues,
   type PackageFormHints,
@@ -32,18 +35,6 @@ const FORM_HINTS: PackageFormHints = {
   keyMoments: 'Moments the client can request a song for — first dance, cake cutting…',
   defaultGenreSelection: 'Genres the client can choose songs from on their song form.',
 };
-
-function catalogueToFormValues(item: PackageCatalogueItem): PackageFormValues {
-  return {
-    label: item.label,
-    icon: item.icon,
-    category: item.category ?? '',
-    notes: '',
-    keyMoments: item.keyMoments,
-    defaultGenreSelection: item.defaultGenreSelection,
-    slots: item.slots.map((s) => ({ label: s.label, duration: s.duration, order: s.order, key: crypto.randomUUID() })),
-  };
-}
 
 // A compact, static template card for the callout — illustrates what a package template is: its sets
 // plus a minimal "Sets up the music form with" section.
@@ -103,6 +94,38 @@ function groupByCategory(items: PackageCatalogueItem[]): { label: string; items:
   return groups;
 }
 
+// The starter chips, grouped by category — picking one seeds the inline editor.
+function StarterChips({
+  groups,
+  selectedId,
+  onPick,
+}: {
+  groups: { label: string; items: PackageCatalogueItem[] }[];
+  selectedId: string | null;
+  onPick: (item: PackageCatalogueItem) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-3">
+      {groups.map((group) => (
+        <div key={group.label} className="flex flex-col gap-1.5">
+          <SubLabel>{group.label}</SubLabel>
+          <div className="flex flex-wrap gap-2">
+            {group.items.map((item) => {
+              const active = selectedId === item.id;
+              return (
+                <TogglePill key={item.id} active={active} onClick={() => onPick(item)} className="px-4 py-2">
+                  {active && <Check size={14} />}
+                  {item.label}
+                </TogglePill>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function OnboardingPackagesPage() {
   const navigate = useNavigate();
   const { isLoaded } = useAuth();
@@ -132,7 +155,9 @@ export default function OnboardingPackagesPage() {
     onError: () => toast({ title: 'Failed to save your template. Please try again.', variant: 'destructive' }),
   });
 
-  const groups = groupByCategory(catalogue);
+  // Recomputed only when the catalogue loads — the page re-renders per keystroke of the
+  // inline editor, so this shouldn't re-group on every render.
+  const groups = useMemo(() => groupByCategory(catalogue), [catalogue]);
 
   return (
     <div>
@@ -180,33 +205,7 @@ export default function OnboardingPackagesPage() {
           {isLoading ? (
             <div className="h-10 w-full max-w-sm animate-pulse rounded bg-border/40" />
           ) : (
-            <div className="flex flex-col gap-3">
-              {groups.map((group) => (
-                <div key={group.label} className="flex flex-col gap-1.5">
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted">{group.label}</p>
-                  <div className="flex flex-wrap gap-2">
-                    {group.items.map((item) => {
-                      const active = selectedId === item.id;
-                      return (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => pickStarter(item)}
-                          className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-sm transition-colors ${
-                            active
-                              ? 'border-primary bg-primary text-primary-foreground'
-                              : 'border-border bg-background text-foreground hover:border-primary/50'
-                          }`}
-                        >
-                          {active && <Check size={14} />}
-                          {item.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
+            <StarterChips groups={groups} selectedId={selectedId} onPick={pickStarter} />
           )}
         </div>
 
