@@ -48,6 +48,42 @@ describe('PublicProfileService', () => {
     });
   });
 
+  describe('update — asset URL validation (SSRF guard)', () => {
+    // mockStorage.getPublicUrl returns https://cdn.example.com/<key>, so u1's own logo is
+    // https://cdn.example.com/logos/u1 — the only value update() may accept for logoUrl.
+    it('rejects a logoUrl pointing at an arbitrary host', () => {
+      expect(() => service.update('u1', { logoUrl: 'https://169.254.169.254/latest/meta-data/' })).toThrow(
+        BadRequestException,
+      );
+      expect(repo.updateByUserId).not.toHaveBeenCalled();
+    });
+
+    it("rejects a logoUrl for another user's key", () => {
+      expect(() => service.update('u1', { logoUrl: 'https://cdn.example.com/logos/u2' })).toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('rejects a photo pointing at an internal service', () => {
+      expect(() => service.update('u1', { photo: 'https://localhost:3000/admin' })).toThrow(BadRequestException);
+    });
+
+    it("accepts this user's own uploaded logo and photo URLs", async () => {
+      repo.updateByUserId.mockResolvedValue({ userId: 'u1' });
+      await expect(
+        service.update('u1', {
+          logoUrl: 'https://cdn.example.com/logos/u1',
+          photo: 'https://cdn.example.com/photos/u1',
+        }),
+      ).resolves.toBeDefined();
+    });
+
+    it('accepts null to clear the logo', async () => {
+      repo.updateByUserId.mockResolvedValue({ userId: 'u1' });
+      await expect(service.update('u1', { logoUrl: null })).resolves.toBeDefined();
+    });
+  });
+
   describe('findOrCreate', () => {
     it('delegates to repository upsert', async () => {
       const profile = { userId: 'u1', businessName: '' };
