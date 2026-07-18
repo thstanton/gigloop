@@ -117,9 +117,19 @@ describe('CommunicationsService', () => {
     };
 
     beforeEach(() => {
+      repo.findBookingById.mockResolvedValue(booking);
       repo.createPending.mockResolvedValue({ id: 'comm1' });
       repo.markSent.mockResolvedValue({});
       repo.markFailed.mockResolvedValue({});
+    });
+
+    // #681 (M1): the booking-ownership check gates the send. Without it, removing MailService's
+    // hardcoded recipient would make this an authenticated open relay (arbitrary `to` + any bookingId).
+    it('throws NotFoundException and never sends when the booking is not owned by the caller', async () => {
+      repo.findBookingById.mockResolvedValue(null);
+      await expect(service.sendEmail(options)).rejects.toThrow(NotFoundException);
+      expect(mockMail.send).not.toHaveBeenCalled();
+      expect(repo.createPending).not.toHaveBeenCalled();
     });
 
     it('creates a PENDING record before sending', async () => {
