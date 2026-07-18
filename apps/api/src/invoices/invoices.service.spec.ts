@@ -2,7 +2,7 @@ import { BadRequestException, ConflictException, NotFoundException } from '@nest
 import { InvoicesService } from './invoices.service';
 import { InvoicesRepository } from './invoices.repository';
 import type { DocumentsService } from '../documents/documents.service';
-import type { InvoiceLifecycleService } from './invoice-lifecycle.service';
+import type { InvoiceTransitionService } from './invoice-transition.service';
 
 type MockRepo = {
   findBookingCustomerId: jest.Mock;
@@ -65,19 +65,18 @@ const lineItem = { id: 'li1', invoiceId: 'i1', userId: 'u1' };
 describe('InvoicesService', () => {
   let service: InvoicesService;
   let repo: MockRepo;
-  let mockLifecycle: {
+  let mockTransition: {
     send: jest.Mock;
     markSent: jest.Mock;
     markPaid: jest.Mock;
     voidInvoice: jest.Mock;
     issueInvoice: jest.Mock;
   };
-  let mockChecklistRepo: { resetItemByKey: jest.Mock };
   let mockContacts: { assertOwned: jest.Mock };
 
   beforeEach(() => {
     repo = makeRepo();
-    mockLifecycle = {
+    mockTransition = {
       send: jest.fn().mockResolvedValue(undefined),
       markSent: jest.fn().mockResolvedValue({ ...draftInvoice, status: 'SENT', invoiceNumber: 'INV-2026-001' }),
       markPaid: jest.fn().mockResolvedValue({ ...draftInvoice, status: 'PAID' }),
@@ -85,14 +84,12 @@ describe('InvoicesService', () => {
       issueInvoice: jest.fn().mockResolvedValue(issuedInvoice),
     };
     const mockEvaluator = { onBookingChanged: jest.fn().mockResolvedValue(undefined) } as unknown as import('../checklist/checklist-reevaluator.service').ChecklistReevaluator;
-    mockChecklistRepo = { resetItemByKey: jest.fn().mockResolvedValue({ count: 0 }) };
     mockContacts = { assertOwned: jest.fn().mockResolvedValue(undefined) };
     service = new InvoicesService(
       repo as unknown as InvoicesRepository,
-      mockLifecycle as unknown as InvoiceLifecycleService,
+      mockTransition as unknown as InvoiceTransitionService,
       mockDocuments,
       mockEvaluator,
-      mockChecklistRepo as unknown as import('../checklist/checklist.repository').ChecklistRepository,
       mockContacts as unknown as import('../contacts/contacts.service').ContactsService,
     );
   });
@@ -272,74 +269,27 @@ describe('InvoicesService', () => {
   });
 
   describe('issue', () => {
+    // issue() now loads the invoice once for ownership/validation, then hands it to the
+    // transition service — which owns date resolution, number allocation, PDF and re-eval
+    // (ADR-0063). The service is a thin fetch → delegate → return.
     beforeEach(() => {
-      // issue() now loads the draft once for ownership/validation and returns the lifecycle
-      // write's result — it no longer re-fetches (#591).
       repo.findOne.mockResolvedValue(draftInvoice);
-      repo.assignAndMarkIssued.mockResolvedValue(issuedInvoice);
     });
 
     it('throws NotFoundException when invoice is not found', async () => {
       repo.findOne.mockReset();
       repo.findOne.mockResolvedValue(null);
       await expect(service.issue('u1', 'b1', 'missing', {})).rejects.toThrow(NotFoundException);
-      expect(mockLifecycle.issueInvoice).not.toHaveBeenCalled();
+      expect(mockTransition.issueInvoice).not.toHaveBeenCalled();
     });
 
-    it('delegates to lifecycle.issueInvoice', async () => {
-      await service.issue('u1', 'b1', 'i1', {});
-      expect(mockLifecycle.issueInvoice).toHaveBeenCalledWith(
-        'u1',
-        draftInvoice,
-        expect.objectContaining({ issueDate: expect.any(Date) }),
-        expect.any(Function),
-      );
+    it('delegates to transition.issueInvoice with userId, invoice and dto', async () => {
+      const dto = { issueDate: '2026-06-01', dueDate: '2026-06-15' };
+      await service.issue('u1', 'b1', 'i1', dto);
+      expect(mockTransition.issueInvoice).toHaveBeenCalledWith('u1', draftInvoice, dto);
     });
 
-    it('defaults issueDate to today when not provided', async () => {
-      const before = new Date();
-      before.setHours(0, 0, 0, 0);
-      await service.issue('u1', 'b1', 'i1', {});
-      const [, , { issueDate }] = mockLifecycle.issueInvoice.mock.calls[0];
-      expect(issueDate.getTime()).toBeGreaterThanOrEqual(before.getTime());
-    });
-
-    it('computes dueDate from user payment terms when not provided', async () => {
-      repo.getUserPaymentTerms.mockResolvedValue(30);
-      await service.issue('u1', 'b1', 'i1', {});
-      const [, , { issueDate, dueDate }] = mockLifecycle.issueInvoice.mock.calls[0];
-      const expected = new Date(issueDate);
-      expected.setDate(expected.getDate() + 30);
-      expect(dueDate?.toDateString()).toBe(expected.toDateString());
-    });
-
-    it('passes explicit issueDate and dueDate when provided', async () => {
-      await service.issue('u1', 'b1', 'i1', { issueDate: '2026-06-01', dueDate: '2026-06-15' });
-      const [, , { issueDate, dueDate }] = mockLifecycle.issueInvoice.mock.calls[0];
-      expect(issueDate).toEqual(new Date('2026-06-01'));
-      expect(dueDate).toEqual(new Date('2026-06-15'));
-    });
-
-    it('passes an assignAndMarkIssued callback that calls the repository with booking context', async () => {
-      let capturedCallback: ((id: string, issueDate: Date, dueDate: Date | null) => Promise<unknown>) | undefined;
-      mockLifecycle.issueInvoice.mockImplementation(
-        async (_userId: string, _invoice: unknown, _params: unknown, cb: typeof capturedCallback) => {
-          capturedCallback = cb;
-        },
-      );
-
-      await service.issue('u1', 'b1', 'i1', {});
-
-      const issueDate = new Date('2026-06-01');
-      const dueDate = new Date('2026-06-15');
-      await capturedCallback!('i1', issueDate, dueDate);
-
-      expect(repo.assignAndMarkIssued).toHaveBeenCalledWith('u1', {
-        id: 'i1', bookingId: 'b1', isDeposit: false, issueDate, dueDate,
-      });
-    });
-
-    it('returns the issued invoice from the lifecycle write without re-fetching', async () => {
+    it('returns the issued invoice from the transition write without re-fetching', async () => {
       const result = await service.issue('u1', 'b1', 'i1', {});
       expect(result).toBe(issuedInvoice);
       // Only the initial ownership/validation load — no second findOne re-fetch (#591).
@@ -458,12 +408,12 @@ describe('InvoicesService', () => {
     it('throws NotFoundException when invoice is not found', async () => {
       repo.findOne.mockResolvedValue(null);
       await expect(service.send('u1', 'b1', 'missing', dto)).rejects.toThrow(NotFoundException);
-      expect(mockLifecycle.send).not.toHaveBeenCalled();
+      expect(mockTransition.send).not.toHaveBeenCalled();
     });
 
-    it('delegates to lifecycle.send with userId, invoice, and dto', async () => {
+    it('delegates to transition.send with userId, invoice, and dto', async () => {
       await service.send('u1', 'b1', 'i1', dto);
-      expect(mockLifecycle.send).toHaveBeenCalledWith('u1', issuedInvoice, dto);
+      expect(mockTransition.send).toHaveBeenCalledWith('u1', issuedInvoice, dto);
     });
   });
 
@@ -478,112 +428,62 @@ describe('InvoicesService', () => {
     it('throws NotFoundException when invoice is not found', async () => {
       repo.findOne.mockResolvedValue(null);
       await expect(service.markSent('u1', 'b1', 'missing', dto)).rejects.toThrow(NotFoundException);
-      expect(mockLifecycle.markSent).not.toHaveBeenCalled();
+      expect(mockTransition.markSent).not.toHaveBeenCalled();
     });
 
-    it('delegates to lifecycle.markSent', async () => {
+    it('delegates to transition.markSent', async () => {
       await service.markSent('u1', 'b1', 'i1', dto);
-      expect(mockLifecycle.markSent).toHaveBeenCalledWith(issuedInvoice, dto);
+      expect(mockTransition.markSent).toHaveBeenCalledWith(issuedInvoice, dto);
     });
 
-    it('delegates to lifecycle.markSent with empty dto', async () => {
+    it('delegates to transition.markSent with empty dto', async () => {
       await service.markSent('u1', 'b1', 'i1', {});
-      expect(mockLifecycle.markSent).toHaveBeenCalledWith(issuedInvoice, {});
+      expect(mockTransition.markSent).toHaveBeenCalledWith(issuedInvoice, {});
     });
   });
 
   describe('markPaid', () => {
+    // Side-effects (deposit stamp, re-eval) are field-derived inside the transition service —
+    // see invoice-transition.service.spec.ts. Here the service is a thin fetch → delegate.
     const sentInvoice = { id: 'i1', bookingId: 'b1', userId: 'u1', status: 'SENT', isDeposit: false, invoiceNumber: 'INV-2026-001' };
-    const depositSentInvoice = { ...sentInvoice, isDeposit: true };
     const paidInvoice = { ...sentInvoice, status: 'PAID' };
 
     beforeEach(() => {
       repo.findOne.mockResolvedValue(sentInvoice);
-      repo.setBookingDepositReceivedAt.mockResolvedValue({});
-      mockLifecycle.markPaid.mockResolvedValue(paidInvoice);
+      mockTransition.markPaid.mockResolvedValue(paidInvoice);
     });
 
     it('throws NotFoundException when invoice not found', async () => {
       repo.findOne.mockResolvedValue(null);
       await expect(service.markPaid('u1', 'b1', 'missing')).rejects.toThrow(NotFoundException);
+      expect(mockTransition.markPaid).not.toHaveBeenCalled();
     });
 
-    it('delegates to lifecycle.markPaid', async () => {
+    it('delegates to transition.markPaid with the loaded invoice', async () => {
       await service.markPaid('u1', 'b1', 'i1');
-      expect(mockLifecycle.markPaid).toHaveBeenCalledWith(sentInvoice, expect.any(Function));
+      expect(mockTransition.markPaid).toHaveBeenCalledWith(sentInvoice);
     });
 
     it('returns the paid invoice', async () => {
       const result = await service.markPaid('u1', 'b1', 'i1');
       expect(result).toBe(paidInvoice);
     });
-
-    it('updates booking depositReceivedAt for deposit invoices via onCommit callback', async () => {
-      repo.findOne.mockResolvedValue(depositSentInvoice);
-      let capturedOnCommit: (() => Promise<void>) | undefined;
-      mockLifecycle.markPaid.mockImplementation(async (_invoice: unknown, onCommit: typeof capturedOnCommit) => {
-        capturedOnCommit = onCommit;
-        return paidInvoice;
-      });
-
-      await service.markPaid('u1', 'b1', 'i1');
-      await capturedOnCommit!();
-
-      expect(repo.setBookingDepositReceivedAt).toHaveBeenCalledWith('b1');
-    });
-
-    it('does not update depositReceivedAt for balance invoices', async () => {
-      let capturedOnCommit: (() => Promise<void>) | undefined;
-      mockLifecycle.markPaid.mockImplementation(async (_invoice: unknown, onCommit: typeof capturedOnCommit) => {
-        capturedOnCommit = onCommit;
-        return paidInvoice;
-      });
-
-      await service.markPaid('u1', 'b1', 'i1');
-      await capturedOnCommit!();
-
-      expect(repo.setBookingDepositReceivedAt).not.toHaveBeenCalled();
-    });
   });
 
   describe('voidInvoice', () => {
+    // State-guard + checklist-reset + re-eval are field-derived inside the transition service —
+    // see invoice-transition.service.spec.ts. Here the service is a thin fetch → delegate.
     const sentInvoice = { id: 'i1', bookingId: 'b1', userId: 'u1', status: 'SENT', isDeposit: true, invoiceNumber: 'INV-2026-001' };
     const voidedInvoice = { ...sentInvoice, status: 'VOID' };
 
     beforeEach(() => {
       repo.findOne.mockResolvedValue(sentInvoice);
-      mockLifecycle.voidInvoice.mockResolvedValue(voidedInvoice);
-      repo.countActiveByType.mockResolvedValue(0);
+      mockTransition.voidInvoice.mockResolvedValue(voidedInvoice);
     });
 
-    it('throws BadRequestException for a DRAFT invoice', async () => {
-      repo.findOne.mockResolvedValue({ ...sentInvoice, status: 'DRAFT', invoiceNumber: null });
-      mockLifecycle.voidInvoice.mockRejectedValue(new BadRequestException('Draft invoices cannot be voided — delete them instead'));
-      await expect(service.voidInvoice('u1', 'b1', 'i1')).rejects.toThrow(BadRequestException);
-      expect(repo.countActiveByType).not.toHaveBeenCalled();
-    });
-
-    it('throws BadRequestException for an already-VOID invoice', async () => {
-      repo.findOne.mockResolvedValue({ ...sentInvoice, status: 'VOID' });
-      mockLifecycle.voidInvoice.mockRejectedValue(new BadRequestException('Invoice is already VOID'));
-      await expect(service.voidInvoice('u1', 'b1', 'i1')).rejects.toThrow(BadRequestException);
-    });
-
-    it('delegates to lifecycle.voidInvoice', async () => {
+    it('delegates to transition.voidInvoice with the loaded invoice', async () => {
       await service.voidInvoice('u1', 'b1', 'i1');
-      expect(mockLifecycle.voidInvoice).toHaveBeenCalledWith(sentInvoice);
-    });
-
-    it('voids an ISSUED invoice', async () => {
-      repo.findOne.mockResolvedValue({ ...sentInvoice, status: 'ISSUED' });
-      await service.voidInvoice('u1', 'b1', 'i1');
-      expect(mockLifecycle.voidInvoice).toHaveBeenCalledWith(expect.objectContaining({ status: 'ISSUED' }));
-    });
-
-    it('voids a PAID invoice', async () => {
-      repo.findOne.mockResolvedValue({ ...sentInvoice, status: 'PAID' });
-      await service.voidInvoice('u1', 'b1', 'i1');
-      expect(mockLifecycle.voidInvoice).toHaveBeenCalledWith(expect.objectContaining({ status: 'PAID' }));
+      expect(mockTransition.voidInvoice).toHaveBeenCalledWith(sentInvoice);
     });
 
     it('returns the voided invoice', async () => {
@@ -591,28 +491,10 @@ describe('InvoicesService', () => {
       expect(result).toBe(voidedInvoice);
     });
 
-    it('resets the create_deposit_invoice checklist item when no active deposit invoices remain', async () => {
-      repo.countActiveByType.mockResolvedValue(0);
-      await service.voidInvoice('u1', 'b1', 'i1');
-      expect(mockChecklistRepo.resetItemByKey).toHaveBeenCalledWith('b1', 'create_deposit_invoice');
-    });
-
-    it('resets the create_balance_invoice checklist item when no active balance invoices remain', async () => {
-      repo.findOne.mockResolvedValue({ ...sentInvoice, isDeposit: false });
-      repo.countActiveByType.mockResolvedValue(0);
-      await service.voidInvoice('u1', 'b1', 'i1');
-      expect(mockChecklistRepo.resetItemByKey).toHaveBeenCalledWith('b1', 'create_balance_invoice');
-    });
-
-    it('does not reset checklist item when other active invoices of the same type remain', async () => {
-      repo.countActiveByType.mockResolvedValue(1);
-      await service.voidInvoice('u1', 'b1', 'i1');
-      expect(mockChecklistRepo.resetItemByKey).not.toHaveBeenCalled();
-    });
-
     it('throws NotFoundException when invoice does not exist', async () => {
       repo.findOne.mockResolvedValue(null);
       await expect(service.voidInvoice('u1', 'b1', 'missing')).rejects.toThrow(NotFoundException);
+      expect(mockTransition.voidInvoice).not.toHaveBeenCalled();
     });
   });
 });

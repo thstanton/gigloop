@@ -2,7 +2,7 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import { Prisma } from '@prisma/client';
 import { SeriesRepository } from './series.repository';
 import { InvoicesRepository } from '../invoices/invoices.repository';
-import { InvoiceLifecycleService } from '../invoices/invoice-lifecycle.service';
+import { InvoiceTransitionService } from '../invoices/invoice-transition.service';
 import { reconcile } from '../invoices/series-line-reconciler';
 import { isDeletable } from '../invoices/invoice-transition-rules';
 import { SendInvoiceDto } from '../invoices/dto/send-invoice.dto';
@@ -34,7 +34,7 @@ export class SeriesService {
   constructor(
     private repo: SeriesRepository,
     private invoicesRepo: InvoicesRepository,
-    private lifecycle: InvoiceLifecycleService,
+    private transition: InvoiceTransitionService,
   ) {}
 
   findAll(userId: string) {
@@ -70,7 +70,7 @@ export class SeriesService {
   async createInvoice(userId: string, seriesId: string) {
     const series = await this.requireSeries(userId, seriesId);
 
-    const existing = await this.repo.countNonVoidSeriesInvoices(userId, seriesId);
+    const existing = await this.invoicesRepo.countNonVoidSeriesInvoices(userId, seriesId);
     if (existing > 0) throw new ConflictException('A non-VOID invoice already exists for this series');
 
     const bookings = await this.repo.findMemberBookingsForInvoice(userId, seriesId);
@@ -83,12 +83,12 @@ export class SeriesService {
       sourceBookingId: b.id,
     }));
 
-    return this.repo.createSeriesInvoice(userId, seriesId, series.customerId, lineItems);
+    return this.invoicesRepo.createSeriesInvoice(userId, seriesId, series.customerId, lineItems);
   }
 
   async getActiveInvoice(userId: string, seriesId: string) {
     await this.requireSeries(userId, seriesId);
-    return this.repo.findActiveSeriesInvoice(userId, seriesId);
+    return this.invoicesRepo.findActiveSeriesInvoice(userId, seriesId);
   }
 
   async previewInvoiceNumber(userId: string, seriesId: string) {
@@ -97,68 +97,40 @@ export class SeriesService {
   }
 
   async issueInvoice(userId: string, seriesId: string, invoiceId: string, dto: IssueInvoiceDto) {
-    const invoice = await this.repo.findSeriesInvoiceById(userId, seriesId, invoiceId);
+    const invoice = await this.invoicesRepo.findSeriesInvoiceById(userId, seriesId, invoiceId);
     if (!invoice) throw new NotFoundException('Invoice not found');
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const issueDate = dto.issueDate ? new Date(dto.issueDate) : today;
-
-    let dueDate: Date | null = null;
-    if (dto.dueDate) {
-      dueDate = new Date(dto.dueDate);
-    } else {
-      const terms = await this.invoicesRepo.getUserPaymentTerms(userId);
-      if (terms > 0) {
-        dueDate = new Date(issueDate);
-        dueDate.setDate(dueDate.getDate() + terms);
-      }
-    }
-
-    await this.lifecycle.issueInvoice(
-      userId,
-      { ...invoice, bookingId: null },
-      { issueDate, dueDate },
-      (invId, issueDateParam, dueDateParam) =>
-        this.invoicesRepo.assignSeriesAndMarkIssued(userId, {
-          id: invId,
-          seriesId,
-          issueDate: issueDateParam,
-          dueDate: dueDateParam,
-        }),
-    );
-    return this.repo.findSeriesInvoiceById(userId, seriesId, invoiceId);
+    return this.transition.issueInvoice(userId, invoice, dto);
   }
 
   async voidInvoice(userId: string, seriesId: string, invoiceId: string) {
-    const invoice = await this.repo.findSeriesInvoiceById(userId, seriesId, invoiceId);
+    const invoice = await this.invoicesRepo.findSeriesInvoiceById(userId, seriesId, invoiceId);
     if (!invoice) throw new NotFoundException('Invoice not found');
-    return this.lifecycle.voidInvoice(invoice);
+    return this.transition.voidInvoice(invoice);
   }
 
   async deleteInvoice(userId: string, seriesId: string, invoiceId: string) {
-    const invoice = await this.repo.findSeriesInvoiceById(userId, seriesId, invoiceId);
+    const invoice = await this.invoicesRepo.findSeriesInvoiceById(userId, seriesId, invoiceId);
     if (!invoice) throw new NotFoundException('Invoice not found');
     if (!isDeletable(invoice)) throw new BadRequestException('Only DRAFT invoices can be deleted');
     return this.invoicesRepo.delete(invoiceId);
   }
 
   async sendInvoice(userId: string, seriesId: string, invoiceId: string, dto: SendInvoiceDto) {
-    const invoice = await this.repo.findSeriesInvoiceById(userId, seriesId, invoiceId);
+    const invoice = await this.invoicesRepo.findSeriesInvoiceById(userId, seriesId, invoiceId);
     if (!invoice) throw new NotFoundException('Invoice not found');
-    return this.lifecycle.send(userId, { ...invoice, bookingId: null }, dto);
+    return this.transition.send(userId, invoice, dto);
   }
 
   async markSentInvoice(userId: string, seriesId: string, invoiceId: string, dto: MarkSentDto) {
-    const invoice = await this.repo.findSeriesInvoiceById(userId, seriesId, invoiceId);
+    const invoice = await this.invoicesRepo.findSeriesInvoiceById(userId, seriesId, invoiceId);
     if (!invoice) throw new NotFoundException('Invoice not found');
-    return this.lifecycle.markSent(invoice, dto);
+    return this.transition.markSent(invoice, dto);
   }
 
   async markPaidInvoice(userId: string, seriesId: string, invoiceId: string) {
-    const invoice = await this.repo.findSeriesInvoiceById(userId, seriesId, invoiceId);
+    const invoice = await this.invoicesRepo.findSeriesInvoiceById(userId, seriesId, invoiceId);
     if (!invoice) throw new NotFoundException('Invoice not found');
-    return this.lifecycle.markPaid(invoice);
+    return this.transition.markPaid(invoice);
   }
 
   // ─── Series membership guard + sync ───────────────────────────────────────
@@ -168,7 +140,7 @@ export class SeriesService {
    * Call before any membership add or remove to prevent mutating a frozen billing batch.
    */
   async assertMembershipMutable(userId: string, seriesId: string): Promise<void> {
-    const locked = await this.repo.findNonDraftNonVoidSeriesInvoice(userId, seriesId);
+    const locked = await this.invoicesRepo.findNonDraftNonVoidSeriesInvoice(userId, seriesId);
     if (locked) {
       throw new ConflictException(
         'This series has an issued invoice — void the invoice before changing the lineup.',

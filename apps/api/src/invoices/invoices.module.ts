@@ -6,12 +6,12 @@ import { ContactsModule } from '../contacts/contacts.module';
 import { InvoicesController } from './invoices.controller';
 import { InvoicesService } from './invoices.service';
 import { InvoicesRepository } from './invoices.repository';
-import { InvoiceLifecycleService } from './invoice-lifecycle.service';
+import { InvoiceTransitionService } from './invoice-transition.service';
 
 @Module({
   imports: [CommunicationsModule, DocumentsModule, ChecklistModule, ContactsModule],
   controllers: [InvoicesController],
-  providers: [InvoicesService, InvoicesRepository, InvoiceLifecycleService],
-  exports: [InvoicesRepository, InvoiceLifecycleService],
+  providers: [InvoicesService, InvoicesRepository, InvoiceTransitionService],
+  exports: [InvoicesRepository, InvoiceTransitionService],
 })
 export class InvoicesModule {}
