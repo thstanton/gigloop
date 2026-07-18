@@ -6,6 +6,7 @@ import { BUILT_IN_EMAIL_TYPES, TEMPLATE_DEFAULT_SUBJECTS, VARIABLE_FALLBACKS } f
 jest.mock('resend', () => ({
   Resend: jest.fn().mockImplementation(() => ({
     emails: { send: jest.fn().mockResolvedValue({ id: 'email-id' }) },
+    batch: { send: jest.fn().mockResolvedValue({ data: [] }) },
   })),
 }));
 
@@ -459,11 +460,11 @@ describe('MailService', () => {
       body: '<p>Dear Jane,</p>',
     };
 
-    it('calls resend with the provided subject and body', async () => {
+    it('calls resend with the real recipient, subject and body', async () => {
       await service.send(sendOptions);
       const resendInstance = (service as unknown as { resend: { emails: { send: jest.Mock } } }).resend;
       expect(resendInstance.emails.send).toHaveBeenCalledWith(
-        expect.objectContaining({ subject: 'Your invoice', html: '<p>Dear Jane,</p>' }),
+        expect.objectContaining({ to: 'jane@example.com', subject: 'Your invoice', html: '<p>Dear Jane,</p>' }),
       );
     });
 
@@ -480,6 +481,65 @@ describe('MailService', () => {
       expect(resendInstance.emails.send).toHaveBeenCalledWith(
         expect.objectContaining({ attachments: [{ filename: 'inv.pdf', content: content.toString('base64') }] }),
       );
+    });
+  });
+
+  // ─── MAIL_REDIRECT_TO (dev/preprod safety) ──────────────────────────────────────
+
+  describe('MAIL_REDIRECT_TO', () => {
+    const sendOptions = { to: 'jane@example.com', subject: 'Your invoice', body: '<p>Dear Jane,</p>' };
+
+    afterEach(() => {
+      delete process.env.MAIL_REDIRECT_TO;
+    });
+
+    it('redirects a single send to the override address when set', async () => {
+      process.env.MAIL_REDIRECT_TO = 'sink@preprod.test';
+      await service.send(sendOptions);
+      const resendInstance = (service as unknown as { resend: { emails: { send: jest.Mock } } }).resend;
+      expect(resendInstance.emails.send).toHaveBeenCalledWith(
+        expect.objectContaining({ to: 'sink@preprod.test' }),
+      );
+    });
+
+    it('sends to the real recipient when the override is unset', async () => {
+      delete process.env.MAIL_REDIRECT_TO;
+      await service.send(sendOptions);
+      const resendInstance = (service as unknown as { resend: { emails: { send: jest.Mock } } }).resend;
+      expect(resendInstance.emails.send).toHaveBeenCalledWith(
+        expect.objectContaining({ to: 'jane@example.com' }),
+      );
+    });
+
+    it('treats an empty override as unset (sends to the real recipient)', async () => {
+      process.env.MAIL_REDIRECT_TO = '';
+      await service.send(sendOptions);
+      const resendInstance = (service as unknown as { resend: { emails: { send: jest.Mock } } }).resend;
+      expect(resendInstance.emails.send).toHaveBeenCalledWith(
+        expect.objectContaining({ to: 'jane@example.com' }),
+      );
+    });
+
+    it('redirects every recipient in a batch send when set', async () => {
+      process.env.MAIL_REDIRECT_TO = 'sink@preprod.test';
+      await service.sendBatch([
+        { to: 'a@example.com', subject: 'A', body: '<p>A</p>' },
+        { to: 'b@example.com', subject: 'B', body: '<p>B</p>' },
+      ]);
+      const resendInstance = (service as unknown as { resend: { batch: { send: jest.Mock } } }).resend;
+      expect(resendInstance.batch.send).toHaveBeenCalledWith([
+        expect.objectContaining({ to: 'sink@preprod.test', subject: 'A' }),
+        expect.objectContaining({ to: 'sink@preprod.test', subject: 'B' }),
+      ]);
+    });
+
+    it('sends a batch to real recipients when the override is unset', async () => {
+      delete process.env.MAIL_REDIRECT_TO;
+      await service.sendBatch([{ to: 'a@example.com', subject: 'A', body: '<p>A</p>' }]);
+      const resendInstance = (service as unknown as { resend: { batch: { send: jest.Mock } } }).resend;
+      expect(resendInstance.batch.send).toHaveBeenCalledWith([
+        expect.objectContaining({ to: 'a@example.com' }),
+      ]);
     });
   });
 });

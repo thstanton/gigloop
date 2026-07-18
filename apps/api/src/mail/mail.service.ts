@@ -62,6 +62,15 @@ export class MailService {
     return this._resend;
   }
 
+  // #681: single override for every outbound recipient. When MAIL_REDIRECT_TO is set
+  // (dev/preprod), all mail is redirected there so the synthetic-data smoke-test env can
+  // never email a real customer. Unset (prod) → the real recipient. Applied to BOTH send()
+  // and sendBatch() so the two outbound paths never diverge again — sendBatch previously
+  // used the real recipient while send() was hardcoded to a personal address.
+  private resolveRecipient(to: string): string {
+    return process.env.MAIL_REDIRECT_TO || to;
+  }
+
   private async buildInvoiceContext(
     invoiceId: string,
     bookingId: string,
@@ -155,7 +164,7 @@ export class MailService {
     await this.resend.batch.send(
       emails.map(({ subject, body, to }) => ({
         from: process.env.RESEND_FROM ?? 'noreply@gigman.com',
-        to,
+        to: this.resolveRecipient(to),
         subject,
         html: body,
       })),
@@ -163,15 +172,13 @@ export class MailService {
   }
 
   async send(options: MailTransportOptions): Promise<void> {
-    const { subject, body, attachments } = options;
+    const { to, subject, body, attachments } = options;
 
     // Resend SDK v6 never throws — it returns { data, error }. Check explicitly
     // so that rejected requests surface as errors rather than silently succeeding.
     const { error } = await this.resend.emails.send({
       from: process.env.RESEND_FROM ?? 'noreply@gigman.com',
-      // TODO: For testing purposes only send emails to my address. When domain is set up this can be changed.
-      // to,
-      to: 'thstanton@proton.me',
+      to: this.resolveRecipient(to),
       subject,
       html: body,
       attachments: attachments?.map((a) => ({

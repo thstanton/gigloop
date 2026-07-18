@@ -75,9 +75,16 @@ export class CommunicationsService {
   async sendEmail(options: SendEmailOptions): Promise<void> {
     const { userId, bookingId, contactId, to, subject, body, templateId, attachments, documentId } = options;
     if (!bookingId) {
+      // Series-invoice path: no booking to scope to. The invoice is already loaded under
+      // userId upstream (invoices/series service), and `to` is DTO-validated as an email.
       await this.mail.send({ to, subject, body, attachments });
       return;
     }
+    // #681 (M1): verify the booking belongs to the caller before sending. Without this,
+    // removing MailService's hardcoded recipient would turn this into an authenticated open
+    // relay — any caller could POST an arbitrary `to` against any bookingId and have it sent.
+    const booking = await this.repo.findBookingById(userId, bookingId);
+    if (!booking) throw new NotFoundException('Booking not found');
     await this.assertMusicInviteAllowed(userId, bookingId, templateId);
     const communication = await this.repo.createPending(userId, bookingId, contactId, subject, body, templateId, documentId);
     try {
