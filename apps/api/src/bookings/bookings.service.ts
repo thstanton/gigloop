@@ -19,7 +19,7 @@ import { UpsertMusicFormConfigDto } from './dto/upsert-music-form-config.dto';
 import { MailService } from '../mail/mail.service';
 import { substituteTiptapVariables } from '../mail/tiptap-portal';
 import { ChecklistEvaluatorService } from '../checklist/checklist-evaluator.service';
-import { getChecklistDefaults } from './checklist-defaults';
+import { getChecklistDefaults } from '../checklist/checklist-defaults';
 import {
   selectApplicableReminders,
   previewApplicableReminders,

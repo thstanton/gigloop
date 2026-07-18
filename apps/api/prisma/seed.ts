@@ -4,7 +4,7 @@ import {
   filterItemsByStartingStatus,
   computeDueDate,
   type ChecklistDefaultItem,
-} from '../src/bookings/checklist-defaults';
+} from '../src/checklist/checklist-defaults';
 
 const prisma = new PrismaClient();
 // Defaults to Tim's own Clerk dev user id for local seeding. The smoke-test

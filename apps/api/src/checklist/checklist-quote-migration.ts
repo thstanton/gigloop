@@ -14,7 +14,7 @@
 // items with no DB access — so it is unit-tested directly on fixtures. Retained as the reusable
 // booking-row reshape logic (ADR-0060 scope guard); the spent #616 apply driver was deleted after
 // it ran. A future catalogue collapse authors a fresh apply driver over this planner.
-import { CHECKLIST_DEFAULTS } from '../bookings/checklist-defaults';
+import { CHECKLIST_DEFAULTS } from './checklist-defaults';
 import { ChecklistState, StepState, rollUp } from './checklist-rollup';
 
 const GOAL_KEY = 'get_the_quote_accepted';
