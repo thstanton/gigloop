@@ -10,10 +10,7 @@
     "test": "jest",
     "test:integration": "jest --config jest.integration.json --runInBand",
     "seed": "ts-node -r tsconfig-paths/register prisma/seed.ts",
-    "seed:checklists": "ts-node -r tsconfig-paths/register src/scripts/seed-checklists.ts",
-    "migrate:quote-goals": "ts-node -r tsconfig-paths/register src/scripts/migrate-quote-goals.ts",
-    "migrate:invoice-goals": "ts-node -r tsconfig-paths/register src/scripts/migrate-invoice-goals.ts",
-    "migrate:balance-received-rule": "ts-node -r tsconfig-paths/register src/scripts/migrate-balance-received-rule.ts"
+    "seed:checklists": "ts-node -r tsconfig-paths/register src/scripts/seed-checklists.ts"
   },
   "prisma": {
     "seed": "ts-node -r tsconfig-paths/register prisma/seed.ts"

@@ -12,8 +12,9 @@
 // never re-nags (Story 21). A monotonic back-fill (a later COMPLETE implies its predecessors) is the
 // belt-and-suspenders for an invoice voided after issue.
 //
-// PURE planner — no DB access — unit-tested on fixtures. The apply step (transaction + per-goal
-// step rebuild + evaluate() sweep) lives in `scripts/migrate-invoice-goals.ts`.
+// PURE planner — no DB access — unit-tested on fixtures. Retained as the reusable booking-row
+// reshape logic (ADR-0060 scope guard); the spent #617 apply driver was deleted after it ran.
+// A future catalogue collapse authors a fresh apply driver over this planner.
 import { CHECKLIST_DEFAULTS } from '../bookings/checklist-defaults';
 import { ChecklistState, StepState, rollUp } from './checklist-rollup';
 
