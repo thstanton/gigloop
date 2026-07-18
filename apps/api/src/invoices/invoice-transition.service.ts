@@ -183,13 +183,21 @@ export class InvoiceTransitionService {
     }
     const result = await this.invoicesRepo.voidInvoice(invoice.id);
     if (invoice.bookingId) {
-      const remaining = await this.invoicesRepo.countActiveByType(invoice.bookingId, invoice.isDeposit);
-      if (remaining === 0) {
-        const checklistKey = invoice.isDeposit ? 'create_deposit_invoice' : 'create_balance_invoice';
-        await this.checklistRepo.resetItemByKey(invoice.bookingId, checklistKey);
-      }
+      await this.reopenCreateInvoiceItemIfLast(invoice.bookingId, invoice.isDeposit);
       await this.reeval.onBookingChanged(invoice.bookingId);
     }
     return result;
+  }
+
+  /**
+   * After voiding a booking invoice, re-open its create-invoice checklist item if no active
+   * invoice of that type remains — so the musician is prompted to raise a replacement.
+   */
+  private async reopenCreateInvoiceItemIfLast(bookingId: string, isDeposit: boolean): Promise<void> {
+    const remaining = await this.invoicesRepo.countActiveByType(bookingId, isDeposit);
+    if (remaining === 0) {
+      const checklistKey = isDeposit ? 'create_deposit_invoice' : 'create_balance_invoice';
+      await this.checklistRepo.resetItemByKey(bookingId, checklistKey);
+    }
   }
 }
