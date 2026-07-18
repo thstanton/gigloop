@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { invoiceIncludes } from '../invoices/invoices.repository';
 
 const seriesIncludes = {
   customer: { select: { id: true, name: true, email: true } },
@@ -50,23 +49,6 @@ export class SeriesRepository {
     });
   }
 
-  // ─── Invoice methods ───────────────────────────────────────────────────────
-
-  findActiveSeriesInvoice(userId: string, seriesId: string) {
-    return this.prisma.invoice.findFirst({
-      where: { seriesId, userId, status: { not: 'VOID' } },
-      include: invoiceIncludes,
-    });
-  }
-
-  findVoidedSeriesInvoiceWithNumber(userId: string, seriesId: string) {
-    return this.prisma.invoice.findFirst({
-      where: { seriesId, userId, status: 'VOID', invoiceNumber: { not: null } },
-      select: { invoiceNumber: true },
-      orderBy: { updatedAt: 'desc' },
-    });
-  }
-
   findOneMinimal(userId: string, id: string) {
     return this.prisma.bookingSeries.findFirst({
       where: { id, userId },
@@ -88,49 +70,16 @@ export class SeriesRepository {
     });
   }
 
+  // ─── Series-aggregate invoice ops (ADR-0063) ─────────────────────────────────
+  // Membership logic that happens to read/write invoice *lines* — building an invoice from
+  // member bookings and reconciling lines on join/leave. Distinct from Invoice lifecycle CRUD,
+  // which lives in invoices.repository.
+
   findMemberBookingsForInvoice(userId: string, seriesId: string) {
     return this.prisma.booking.findMany({
       where: { seriesId, userId },
       include: { sets: { orderBy: { order: 'asc' } } },
       orderBy: { date: 'asc' },
-    });
-  }
-
-  findSeriesInvoiceById(userId: string, seriesId: string, invoiceId: string) {
-    return this.prisma.invoice.findFirst({
-      where: { id: invoiceId, seriesId, userId },
-      include: invoiceIncludes,
-    });
-  }
-
-  createSeriesInvoice(
-    userId: string,
-    seriesId: string,
-    billToContactId: string,
-    lineItems: Array<{ description: string; amount: number; order: number; sourceBookingId?: string }>,
-  ) {
-    return this.prisma.invoice.create({
-      data: {
-        userId,
-        seriesId,
-        billToContactId,
-        isDeposit: false,
-        lineItems: { create: lineItems.map((item) => ({ userId, ...item })) },
-      },
-      include: invoiceIncludes,
-    });
-  }
-
-  countNonVoidSeriesInvoices(userId: string, seriesId: string) {
-    return this.prisma.invoice.count({
-      where: { seriesId, userId, status: { not: 'VOID' } },
-    });
-  }
-
-  findNonDraftNonVoidSeriesInvoice(userId: string, seriesId: string) {
-    return this.prisma.invoice.findFirst({
-      where: { seriesId, userId, status: { notIn: ['DRAFT', 'VOID'] } },
-      select: { id: true, status: true },
     });
   }
 
@@ -154,13 +103,5 @@ export class SeriesRepository {
 
   removeSeriesInvoiceLine(lineId: string) {
     return this.prisma.invoiceLineItem.delete({ where: { id: lineId } });
-  }
-
-  markSeriesInvoicePaid(invoiceId: string) {
-    return this.prisma.invoice.update({
-      where: { id: invoiceId },
-      data: { status: 'PAID', paidAt: new Date() },
-      include: invoiceIncludes,
-    });
   }
 }

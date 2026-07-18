@@ -4,11 +4,15 @@
  */
 import { InvoicesService } from './invoices.service';
 import { InvoicesRepository } from './invoices.repository';
-import { InvoiceLifecycleService } from './invoice-lifecycle.service';
+import { InvoiceTransitionService } from './invoice-transition.service';
 import { DocumentsService } from '../documents/documents.service';
 import { StorageService } from '../storage/storage.service';
 import { DocumentsRepository } from '../documents/documents.repository';
 import { PrismaService } from '../prisma/prisma.service';
+import type { CommunicationsService } from '../communications/communications.service';
+import type { ChecklistReevaluator } from '../checklist/checklist-reevaluator.service';
+import type { ChecklistRepository } from '../checklist/checklist.repository';
+import type { ContactsService } from '../contacts/contacts.service';
 
 const userId = 'u1';
 const bookingId = 'b1';
@@ -73,6 +77,39 @@ function makeSharedSetup() {
   return { putObjectMock, mockStorage, documents };
 }
 
+/**
+ * Wire a real InvoiceTransitionService (its side-effects are field-derived) into InvoicesService,
+ * sharing the mock repo between both so a stubbed transition write is visible to the service.
+ */
+function buildService(
+  documents: DocumentsService,
+  mockInvoicesRepo: unknown,
+  mockComms: CommunicationsService,
+) {
+  const mockEvaluator = {
+    onBookingChanged: jest.fn().mockResolvedValue(undefined),
+  } as unknown as ChecklistReevaluator;
+  const mockChecklistRepo = {
+    resetItemByKey: jest.fn().mockResolvedValue({ count: 0 }),
+  } as unknown as ChecklistRepository;
+
+  const transition = new InvoiceTransitionService(
+    mockInvoicesRepo as unknown as InvoicesRepository,
+    documents,
+    mockComms,
+    mockEvaluator,
+    mockChecklistRepo,
+  );
+
+  return new InvoicesService(
+    mockInvoicesRepo as unknown as InvoicesRepository,
+    transition,
+    documents,
+    mockEvaluator,
+    { assertOwned: jest.fn().mockResolvedValue(undefined) } as unknown as ContactsService,
+  );
+}
+
 // ─── send integration — DRAFT guard ───────────────────────────────────────────
 // DRAFT invoices must be issued first; sending a DRAFT is now rejected.
 
@@ -81,8 +118,7 @@ describe('InvoicesService.send (integration) — DRAFT guard', () => {
 
   beforeEach(() => {
     const shared = makeSharedSetup();
-
-    const mockComms = { sendEmail: jest.fn() } as unknown as import('../communications/communications.service').CommunicationsService;
+    const mockComms = { sendEmail: jest.fn() } as unknown as CommunicationsService;
 
     const mockInvoicesRepo = {
       findOne: jest.fn().mockResolvedValue(draftInvoice),
@@ -92,23 +128,7 @@ describe('InvoicesService.send (integration) — DRAFT guard', () => {
       getUserPaymentTerms: jest.fn().mockResolvedValue(14),
     };
 
-    const lifecycle = new InvoiceLifecycleService(
-      mockInvoicesRepo as unknown as InvoicesRepository,
-      shared.documents,
-      mockComms,
-    );
-
-    const mockEvaluator = { onBookingChanged: jest.fn().mockResolvedValue(undefined) } as unknown as import('../checklist/checklist-reevaluator.service').ChecklistReevaluator;
-    const mockChecklistRepo = { resetItemByKey: jest.fn() } as unknown as import('../checklist/checklist.repository').ChecklistRepository;
-
-    service = new InvoicesService(
-      mockInvoicesRepo as unknown as InvoicesRepository,
-      lifecycle,
-      shared.documents,
-      mockEvaluator,
-      mockChecklistRepo,
-      { assertOwned: jest.fn().mockResolvedValue(undefined) } as unknown as import('../contacts/contacts.service').ContactsService,
-    );
+    service = buildService(shared.documents, mockInvoicesRepo, mockComms);
   });
 
   it('rejects with BadRequestException — DRAFT must be issued before sending', async () => {
@@ -136,7 +156,7 @@ describe('InvoicesService.send (integration) — ISSUED invoice', () => {
     putObjectMock = shared.putObjectMock;
 
     sendEmailMock = jest.fn().mockResolvedValue(undefined);
-    const mockComms = { sendEmail: sendEmailMock } as unknown as import('../communications/communications.service').CommunicationsService;
+    const mockComms = { sendEmail: sendEmailMock } as unknown as CommunicationsService;
 
     // Stub getStoredInvoicePdfBuffer directly — the ISSUED send path calls this instead
     // of generating a new PDF, so we return a buffer without touching R2.
@@ -151,23 +171,7 @@ describe('InvoicesService.send (integration) — ISSUED invoice', () => {
       getUserPaymentTerms: jest.fn().mockResolvedValue(14),
     };
 
-    const lifecycle = new InvoiceLifecycleService(
-      mockInvoicesRepo as unknown as InvoicesRepository,
-      shared.documents,
-      mockComms,
-    );
-
-    const mockEvaluator = { onBookingChanged: jest.fn().mockResolvedValue(undefined) } as unknown as import('../checklist/checklist-reevaluator.service').ChecklistReevaluator;
-    const mockChecklistRepo = { resetItemByKey: jest.fn() } as unknown as import('../checklist/checklist.repository').ChecklistRepository;
-
-    service = new InvoicesService(
-      mockInvoicesRepo as unknown as InvoicesRepository,
-      lifecycle,
-      shared.documents,
-      mockEvaluator,
-      mockChecklistRepo,
-      { assertOwned: jest.fn().mockResolvedValue(undefined) } as unknown as import('../contacts/contacts.service').ContactsService,
-    );
+    service = buildService(shared.documents, mockInvoicesRepo, mockComms);
   });
 
   it('sends the stored PDF without regenerating (putObject not called)', async () => {
@@ -219,7 +223,7 @@ describe('InvoicesService.markSent (integration) — ISSUED invoice', () => {
     const shared = makeSharedSetup();
     putObjectMock = shared.putObjectMock;
 
-    const mockComms = { sendEmail: jest.fn() } as unknown as import('../communications/communications.service').CommunicationsService;
+    const mockComms = { sendEmail: jest.fn() } as unknown as CommunicationsService;
 
     markSentByIdMock = jest.fn().mockResolvedValue({ ...issuedInvoice, status: 'SENT' });
     const mockInvoicesRepo = {
@@ -230,23 +234,7 @@ describe('InvoicesService.markSent (integration) — ISSUED invoice', () => {
       getUserPaymentTerms: jest.fn().mockResolvedValue(14),
     };
 
-    const lifecycle = new InvoiceLifecycleService(
-      mockInvoicesRepo as unknown as InvoicesRepository,
-      shared.documents,
-      mockComms,
-    );
-
-    const mockEvaluator = { onBookingChanged: jest.fn().mockResolvedValue(undefined) } as unknown as import('../checklist/checklist-reevaluator.service').ChecklistReevaluator;
-    const mockChecklistRepo = { resetItemByKey: jest.fn() } as unknown as import('../checklist/checklist.repository').ChecklistRepository;
-
-    service = new InvoicesService(
-      mockInvoicesRepo as unknown as InvoicesRepository,
-      lifecycle,
-      shared.documents,
-      mockEvaluator,
-      mockChecklistRepo,
-      { assertOwned: jest.fn().mockResolvedValue(undefined) } as unknown as import('../contacts/contacts.service').ContactsService,
-    );
+    service = buildService(shared.documents, mockInvoicesRepo, mockComms);
   });
 
   it('transitions ISSUED to SENT without generating a new PDF', async () => {
@@ -270,7 +258,7 @@ describe('InvoicesService.issue (integration)', () => {
     const shared = makeSharedSetup();
     putObjectMock = shared.putObjectMock;
 
-    const mockComms = { sendEmail: jest.fn() } as unknown as import('../communications/communications.service').CommunicationsService;
+    const mockComms = { sendEmail: jest.fn() } as unknown as CommunicationsService;
 
     const mockInvoicesRepo = {
       findOne: jest
@@ -283,23 +271,7 @@ describe('InvoicesService.issue (integration)', () => {
       getUserPaymentTerms: jest.fn().mockResolvedValue(14),
     };
 
-    const lifecycle = new InvoiceLifecycleService(
-      mockInvoicesRepo as unknown as InvoicesRepository,
-      shared.documents,
-      mockComms,
-    );
-
-    const mockEvaluator = { onBookingChanged: jest.fn().mockResolvedValue(undefined) } as unknown as import('../checklist/checklist-reevaluator.service').ChecklistReevaluator;
-    const mockChecklistRepo = { resetItemByKey: jest.fn() } as unknown as import('../checklist/checklist.repository').ChecklistRepository;
-
-    service = new InvoicesService(
-      mockInvoicesRepo as unknown as InvoicesRepository,
-      lifecycle,
-      shared.documents,
-      mockEvaluator,
-      mockChecklistRepo,
-      { assertOwned: jest.fn().mockResolvedValue(undefined) } as unknown as import('../contacts/contacts.service').ContactsService,
-    );
+    service = buildService(shared.documents, mockInvoicesRepo, mockComms);
   });
 
   it('generates a valid PDF and stores it to storage when issuing a draft invoice', async () => {

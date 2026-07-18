@@ -2,9 +2,8 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import { InvoicesRepository } from './invoices.repository';
 import { DocumentsService } from '../documents/documents.service';
 import { ChecklistReevaluator } from '../checklist/checklist-reevaluator.service';
-import { ChecklistRepository } from '../checklist/checklist.repository';
 import { ContactsService } from '../contacts/contacts.service';
-import { InvoiceLifecycleService } from './invoice-lifecycle.service';
+import { InvoiceTransitionService } from './invoice-transition.service';
 import { isEditable, isDeletable } from './invoice-transition-rules';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
@@ -18,10 +17,9 @@ import { UpdateLineItemDto } from './dto/update-line-item.dto';
 export class InvoicesService {
   constructor(
     private repo: InvoicesRepository,
-    private lifecycle: InvoiceLifecycleService,
+    private transition: InvoiceTransitionService,
     private documents: DocumentsService,
     private reeval: ChecklistReevaluator,
-    private checklistRepo: ChecklistRepository,
     private contacts: ContactsService,
   ) {}
 
@@ -76,45 +74,12 @@ export class InvoicesService {
 
   async issue(userId: string, bookingId: string, id: string, dto: IssueInvoiceDto) {
     const invoice = await this.findOne(userId, bookingId, id);
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const issueDate = dto.issueDate ? new Date(dto.issueDate) : today;
-
-    let dueDate: Date | null = null;
-    if (dto.dueDate) {
-      dueDate = new Date(dto.dueDate);
-    } else {
-      const terms = await this.repo.getUserPaymentTerms(userId);
-      if (terms > 0) {
-        dueDate = new Date(issueDate);
-        dueDate.setDate(dueDate.getDate() + terms);
-      }
-    }
-
-    // The lifecycle write returns the issued invoice (same `invoiceIncludes` shape as findOne),
-    // so return it directly rather than re-querying (#591). evaluate() only touches checklist
-    // items, never the invoice, so the written entity is already the final response shape.
-    const issued = await this.lifecycle.issueInvoice(
-      userId,
-      invoice,
-      { issueDate, dueDate },
-      (invId, issueDateParam, dueDateParam) =>
-        this.repo.assignAndMarkIssued(userId, {
-          id: invId,
-          bookingId,
-          isDeposit: invoice.isDeposit,
-          issueDate: issueDateParam,
-          dueDate: dueDateParam,
-        }),
-    );
-    await this.reeval.onBookingChanged(bookingId);
-    return issued;
+    return this.transition.issueInvoice(userId, invoice, dto);
   }
 
   async send(userId: string, bookingId: string, id: string, dto: SendInvoiceDto) {
     const invoice = await this.findOne(userId, bookingId, id);
-    await this.lifecycle.send(userId, invoice, dto);
+    await this.transition.send(userId, invoice, dto);
   }
 
   previewInvoiceNumber(userId: string, bookingId: string, isDeposit: boolean) {
@@ -137,29 +102,17 @@ export class InvoicesService {
 
   async markSent(userId: string, bookingId: string, id: string, dto: MarkSentDto) {
     const invoice = await this.findOne(userId, bookingId, id);
-    return this.lifecycle.markSent(invoice, dto);
+    return this.transition.markSent(invoice, dto);
   }
 
   async markPaid(userId: string, bookingId: string, id: string) {
     const invoice = await this.findOne(userId, bookingId, id);
-    return this.lifecycle.markPaid(invoice, async () => {
-      if (invoice.isDeposit) {
-        await this.repo.setBookingDepositReceivedAt(bookingId);
-      }
-      await this.reeval.onBookingChanged(bookingId);
-    });
+    return this.transition.markPaid(invoice);
   }
 
   async voidInvoice(userId: string, bookingId: string, id: string) {
     const invoice = await this.findOne(userId, bookingId, id);
-    const result = await this.lifecycle.voidInvoice(invoice);
-    const remaining = await this.repo.countActiveByType(bookingId, invoice.isDeposit);
-    if (remaining === 0) {
-      const checklistKey = invoice.isDeposit ? 'create_deposit_invoice' : 'create_balance_invoice';
-      await this.checklistRepo.resetItemByKey(bookingId, checklistKey);
-    }
-    await this.reeval.onBookingChanged(bookingId);
-    return result;
+    return this.transition.voidInvoice(invoice);
   }
 
   async addLineItem(userId: string, bookingId: string, id: string, dto: CreateLineItemDto) {
