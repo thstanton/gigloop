@@ -23,6 +23,7 @@ import { SendInvoiceDto } from './dto/send-invoice.dto';
 import { MarkSentDto } from './dto/mark-sent.dto';
 import { CreateLineItemDto } from './dto/create-line-item.dto';
 import { UpdateLineItemDto } from './dto/update-line-item.dto';
+import { InvoiceResponseDto, InvoiceLineItemResponseDto } from './dto/invoice-response.dto';
 import type { Request } from 'express';
 
 type AuthedRequest = Request & { userId: string };
@@ -35,6 +36,7 @@ export class InvoicesController {
   constructor(private service: InvoicesService) {}
 
   @ApiOperation({ summary: 'List invoices for a booking' })
+  @ApiResponse({ status: 200, type: [InvoiceResponseDto] })
   @Get()
   findAll(
     @Req() req: AuthedRequest,
@@ -55,6 +57,7 @@ export class InvoicesController {
   }
 
   @ApiOperation({ summary: 'Get an invoice by ID' })
+  @ApiResponse({ status: 200, type: InvoiceResponseDto })
   @Get(':id')
   findOne(
     @Req() req: AuthedRequest,
@@ -65,6 +68,7 @@ export class InvoicesController {
   }
 
   @ApiOperation({ summary: 'Create an invoice for a booking' })
+  @ApiResponse({ status: 201, type: InvoiceResponseDto })
   @Post()
   create(
     @Req() req: AuthedRequest,
@@ -75,6 +79,7 @@ export class InvoicesController {
   }
 
   @ApiOperation({ summary: 'Update an invoice' })
+  @ApiResponse({ status: 200, type: InvoiceResponseDto })
   @Patch(':id')
   update(
     @Req() req: AuthedRequest,
@@ -86,7 +91,7 @@ export class InvoicesController {
   }
 
   @ApiOperation({ summary: 'Issue a draft invoice: assign number, lock line items, store PDF' })
-  @ApiResponse({ status: 200, description: 'Invoice issued (ISSUED status)' })
+  @ApiResponse({ status: 200, description: 'Invoice issued (ISSUED status)', type: InvoiceResponseDto })
   @ApiResponse({ status: 400, description: 'Invoice is not a draft' })
   @Post(':id/issue')
   issue(
@@ -113,7 +118,7 @@ export class InvoicesController {
   }
 
   @ApiOperation({ summary: 'Mark an invoice as sent without emailing' })
-  @ApiResponse({ status: 200, description: 'Invoice marked Sent' })
+  @ApiResponse({ status: 200, description: 'Invoice marked Sent', type: InvoiceResponseDto })
   @ApiResponse({ status: 400, description: 'Invoice is not a draft' })
   @Post(':id/mark-sent')
   markSent(
@@ -126,7 +131,7 @@ export class InvoicesController {
   }
 
   @ApiOperation({ summary: 'Void an invoice (SENT or PAID only; drafts must be deleted)' })
-  @ApiResponse({ status: 200, description: 'Invoice voided' })
+  @ApiResponse({ status: 200, description: 'Invoice voided', type: InvoiceResponseDto })
   @ApiResponse({ status: 400, description: 'Invoice is a draft or already void' })
   @Post(':id/void')
   voidInvoice(
@@ -138,7 +143,7 @@ export class InvoicesController {
   }
 
   @ApiOperation({ summary: 'Mark an invoice as paid' })
-  @ApiResponse({ status: 200, description: 'Invoice marked Paid; depositReceivedAt set if deposit invoice with INVOICE tracking mode' })
+  @ApiResponse({ status: 200, description: 'Invoice marked Paid; depositReceivedAt set if deposit invoice with INVOICE tracking mode', type: InvoiceResponseDto })
   @ApiResponse({ status: 400, description: 'Invoice is not sent' })
   @Post(':id/mark-paid')
   markPaid(
@@ -161,6 +166,7 @@ export class InvoicesController {
   }
 
   @ApiOperation({ summary: 'Add a line item to an invoice' })
+  @ApiResponse({ status: 201, type: InvoiceLineItemResponseDto })
   @Post(':id/line-items')
   addLineItem(
     @Req() req: AuthedRequest,
@@ -172,6 +178,7 @@ export class InvoicesController {
   }
 
   @ApiOperation({ summary: 'Update a line item' })
+  @ApiResponse({ status: 200, type: InvoiceLineItemResponseDto })
   @Patch(':id/line-items/:itemId')
   updateLineItem(
     @Req() req: AuthedRequest,

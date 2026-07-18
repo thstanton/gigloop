@@ -4,6 +4,7 @@ import { SeriesService } from './series.service';
 import { SendInvoiceDto } from '../invoices/dto/send-invoice.dto';
 import { MarkSentDto } from '../invoices/dto/mark-sent.dto';
 import { IssueInvoiceDto } from '../invoices/dto/issue-invoice.dto';
+import { InvoiceResponseDto } from '../invoices/dto/invoice-response.dto';
 import type { Request } from 'express';
 
 type AuthedRequest = Request & { userId: string };
@@ -35,6 +36,7 @@ export class SeriesController {
   }
 
   @ApiOperation({ summary: 'Create a series invoice with auto-generated line items' })
+  @ApiResponse({ status: 201, type: InvoiceResponseDto })
   @Post(':id/invoices')
   createInvoice(@Req() req: AuthedRequest, @Param('id') id: string) {
     return this.service.createInvoice(req.userId, id);
@@ -48,6 +50,8 @@ export class SeriesController {
   }
 
   @ApiOperation({ summary: 'Get the active (non-VOID) series invoice; 404 when none exists' })
+  @ApiResponse({ status: 200, type: InvoiceResponseDto })
+  @ApiResponse({ status: 404, description: 'No active series invoice' })
   @Get(':id/invoices/current')
   async getActiveInvoice(@Req() req: AuthedRequest, @Param('id') id: string) {
     const invoice = await this.service.getActiveInvoice(req.userId, id);
@@ -56,7 +60,7 @@ export class SeriesController {
   }
 
   @ApiOperation({ summary: 'Issue a series draft invoice (assign number, lock line items, store PDF)' })
-  @ApiResponse({ status: 200, description: 'Invoice issued successfully' })
+  @ApiResponse({ status: 200, description: 'Invoice issued successfully', type: InvoiceResponseDto })
   @ApiResponse({ status: 400, description: 'Invoice is not in DRAFT status' })
   @ApiResponse({ status: 404, description: 'Series or invoice not found' })
   @Post(':id/invoices/:invoiceId/issue')
@@ -82,6 +86,7 @@ export class SeriesController {
   }
 
   @ApiOperation({ summary: 'Mark a series invoice as sent without emailing' })
+  @ApiResponse({ status: 201, type: InvoiceResponseDto })
   @Post(':id/invoices/:invoiceId/mark-sent')
   markSentInvoice(
     @Req() req: AuthedRequest,
@@ -93,6 +98,7 @@ export class SeriesController {
   }
 
   @ApiOperation({ summary: 'Mark a series invoice as paid' })
+  @ApiResponse({ status: 200, type: InvoiceResponseDto })
   @Post(':id/invoices/:invoiceId/mark-paid')
   @HttpCode(200)
   markPaidInvoice(
@@ -104,6 +110,7 @@ export class SeriesController {
   }
 
   @ApiOperation({ summary: 'Void a series invoice' })
+  @ApiResponse({ status: 200, type: InvoiceResponseDto })
   @Post(':id/invoices/:invoiceId/void')
   @HttpCode(200)
   voidInvoice(
