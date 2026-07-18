@@ -16,6 +16,10 @@ import {
 export async function resetTestData(userId: string = E2E_TEST_USER_ID): Promise<void> {
   await prisma.booking.deleteMany({ where: { userId } });
   await prisma.template.deleteMany({ where: { userId } });
+  // Library artifacts the musician builds up (no longer auto-seeded, #663). Not linked to a
+  // booking (ADR-0046), so order-independent; packageTemplate slots cascade on delete.
+  await prisma.packageTemplate.deleteMany({ where: { userId } });
+  await prisma.song.deleteMany({ where: { userId } });
   await prisma.contact.deleteMany({ where: { userId } });
   await prisma.publicProfile.deleteMany({ where: { userId } });
   await prisma.userProfile.deleteMany({ where: { userId } });
@@ -45,6 +49,18 @@ export async function seedBaselineProfile(userId: string = E2E_TEST_USER_ID): Pr
       email: 'band@e2e.test',
     },
   });
+}
+
+// The onboarding gate is `UserProfile.onboardingCompletedAt`: the shared baseline is COMPLETED so
+// `AdminLayout` renders the app, but that same non-null value makes `OnboardingLayout` redirect
+// `/onboarding/*` → `/admin`. The onboarding spec flips it to incomplete to reach the wizard, then
+// restores it so later authed specs aren't bounced into onboarding. Baseline guarantees the row exists.
+export async function setOnboardingIncomplete(userId: string = E2E_TEST_USER_ID): Promise<void> {
+  await prisma.userProfile.update({ where: { userId }, data: { onboardingCompletedAt: null } });
+}
+
+export async function restoreOnboardingComplete(userId: string = E2E_TEST_USER_ID): Promise<void> {
+  await prisma.userProfile.update({ where: { userId }, data: { onboardingCompletedAt: new Date() } });
 }
 
 // A plain customer contact, arranged directly in the DB for the create-booking

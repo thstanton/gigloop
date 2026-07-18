@@ -7,6 +7,8 @@
 Amends **ADR-0040 §5** (Playwright dropped as a blanket per-slice verifier tier; see §9 below).
 Does **not** supersede **ADR-0033** (Chromatic remains accepted-but-deferred; it covers a different failure mode — see Alternatives).
 
+**Amended:** 2026-07-18 — onboarding promoted from deferred to a curated flow (slice 6), after the #478 rework turned it into a create-real-artifacts journey. See §7.
+
 ## Context
 
 GigMan has grown to ~40 pages and six multi-step money-path journeys (booking lifecycle, contract signing via the portal, invoice issue → send → paid, contact management, onboarding). The manual cost of clicking through these journeys after every change is now high, and — more sharply — **breakage hides in the gaps the existing tiers don't cover**. The recent invoice-issued rework (ADR-0042) is the motivating case: its Jest unit tests and Storybook `play` functions were green, yet clicking through the issue→send journey by hand surfaced several defects, because nothing exercised the *cross-page flow against the real backend*.
@@ -64,7 +66,7 @@ Built as tracer-bullet vertical slices on one branch → one PR:
 4. **Contact delete blocked** (the 409 hard rule surfaces in the UI).
 5. **Booking lifecycle** — work the checklist from its current stage through to Complete (exercises the checklist state machine, stage gating, auto-complete rules).
 
-Onboarding is deferred (low money-value; partly exercised already as baseline seeding).
+6. **Onboarding flow** (promoted 2026-07-18) — walk the five-step wizard: fill the required business step, configure one Package Template from a catalogue starter (`POST /packages`), add a first song (`POST /songs`), and complete (`POST /me/onboarding/complete` → redirect to `/admin`). The #478 rework turned onboarding from "click through defaults" into a **create-real-artifacts** journey, so it now carries genuine cross-page + FE↔BE contract value (originally deferred as low money-value / partly exercised via baseline seeding). It runs onboarding-**incomplete** via `setOnboardingIncomplete`/`restoreOnboardingComplete` seed helpers (the shared baseline is onboarding-complete, which `OnboardingLayout` treats as a redirect-to-`/admin` signal), and is mobile-only (single-column, no DOM divergence, so it is not added to the `desktop-chromium` project).
 
 ### 8. Layout and local DX
 
