@@ -264,9 +264,9 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
             <SeriesInvoiceCard
               seriesId={booking.series.id}
               seriesLabel={booking.series.label}
-              onEdit={(inv) => openEditInvoice(inv as unknown as Invoice)}
+              onEdit={openEditInvoice}
               onSend={() => openCompose('balance_invoice_cover')}
-              onMarkSent={(inv) => setSearchParams({ sheet: 'markSent', invoiceId: (inv as unknown as Invoice).id })}
+              onMarkSent={(inv) => setSearchParams({ sheet: 'markSent', invoiceId: inv.id })}
             />
           ) : (
             <InvoiceSection bookingId={bookingId} />

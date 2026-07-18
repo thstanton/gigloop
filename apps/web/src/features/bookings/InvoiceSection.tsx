@@ -14,20 +14,22 @@ import { apiGet, apiGetBlob } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
 import { useBookingActions } from '@/lib/hooks/useBookingActions';
 import { useInvoiceActions } from '@/lib/hooks/useInvoiceActions';
-import type { Invoice, Document, SeriesInvoice, BookingDetail, UserProfile } from '@/types/api';
+import { activeInvoiceOf, coverTemplateFor, depositAmount, balanceAmount } from '@/lib/invoiceDerivations';
+import { buildSetsDescription } from '@/lib/bookingSets';
+import type { Invoice, Document, BookingDetail, UserProfile } from '@/types/api';
 
 export interface SeriesInvoiceSectionProps {
   seriesLabel: string;
-  invoice: SeriesInvoice | null | undefined;
+  invoice: Invoice | null | undefined;
   isLoading: boolean;
   onCreateInvoice: () => void;
-  onEdit: (invoice: SeriesInvoice) => void;
-  onIssue: (invoice: SeriesInvoice) => void;
-  onDelete: (invoice: SeriesInvoice) => void;
-  onSend: (invoice: SeriesInvoice) => void;
-  onMarkSent: (invoice: SeriesInvoice) => void;
-  onMarkPaid: (invoice: SeriesInvoice) => void;
-  onVoid: (invoice: SeriesInvoice) => void;
+  onEdit: (invoice: Invoice) => void;
+  onIssue: (invoice: Invoice) => void;
+  onDelete: (invoice: Invoice) => void;
+  onSend: (invoice: Invoice) => void;
+  onMarkSent: (invoice: Invoice) => void;
+  onMarkPaid: (invoice: Invoice) => void;
+  onVoid: (invoice: Invoice) => void;
   isCreatePending?: boolean;
   isIssuePending?: boolean;
   isDeletePending?: boolean;
@@ -91,21 +93,19 @@ export function SeriesInvoiceSection({
     <Card title="Series Invoice">
       {notice}
       <InvoiceRow
-        invoice={invoice as unknown as Invoice}
+        invoice={invoice}
         pdfUrl={null}
-        isDeletePending={isDeletePending}
-        isVoidPending={isVoidPending}
-        isIssuePending={isIssuePending}
-        isMarkSentPending={isMarkSentPending}
-        isMarkPaidPending={isMarkPaidPending}
-        onEdit={() => onEdit(invoice)}
-        onPreview={() => {}}
-        onIssue={() => onIssue(invoice)}
-        onDelete={() => onDelete(invoice)}
-        onSend={() => onSend(invoice)}
-        onMarkSent={() => onMarkSent(invoice)}
-        onMarkPaid={() => onMarkPaid(invoice)}
-        onVoid={() => onVoid(invoice)}
+        pending={{ isDeletePending, isVoidPending, isIssuePending, isMarkSentPending, isMarkPaidPending }}
+        handlers={{
+          onEdit,
+          onPreview: () => {},
+          onIssue,
+          onDelete,
+          onSend,
+          onMarkSent,
+          onMarkPaid,
+          onVoid,
+        }}
       />
     </Card>
   );
@@ -163,23 +163,10 @@ export default function InvoiceSection({ bookingId }: Readonly<InvoiceSectionPro
       });
   }
 
-  function buildSetsDescription(): string {
-    if (!booking?.sets?.length) return '';
-    const formatById = new Map(
-      (booking.packages ?? []).map((f) => [f.id, f.label]),
-    );
-    return booking.sets
-      .map((s) => {
-        const label = s.label ?? (s.packageId ? formatById.get(s.packageId) : null) ?? null;
-        return label ? `${label} (${s.duration} min)` : `${s.duration} min`;
-      })
-      .join(', ');
-  }
-
   function openCreateInvoice(prefill?: { isDeposit: boolean; amount?: number }) {
     const params: Record<string, string> = { sheet: 'invoice', isDeposit: String(prefill?.isDeposit ?? false) };
     if (prefill?.amount != null) params.amount = String(prefill.amount);
-    const desc = buildSetsDescription();
+    const desc = buildSetsDescription(booking);
     if (desc) params.description = desc;
     setSearchParams(params);
   }
@@ -189,8 +176,7 @@ export default function InvoiceSection({ bookingId }: Readonly<InvoiceSectionPro
   }
 
   function openSendInvoice(invoice: Invoice) {
-    const templateType = invoice.isDeposit ? 'deposit_invoice_cover' : 'balance_invoice_cover';
-    setSearchParams({ sheet: 'compose', templateType });
+    setSearchParams({ sheet: 'compose', templateType: coverTemplateFor(invoice) });
   }
 
   function newDepositInvoice() {
@@ -198,7 +184,7 @@ export default function InvoiceSection({ bookingId }: Readonly<InvoiceSectionPro
     const pct = userProfile?.depositPercentage;
     openCreateInvoice({
       isDeposit: true,
-      amount: fee && pct ? Math.round((fee * pct / 100) * 100) / 100 : undefined,
+      amount: fee && pct ? depositAmount(fee, pct) : undefined,
     });
   }
 
@@ -207,12 +193,12 @@ export default function InvoiceSection({ bookingId }: Readonly<InvoiceSectionPro
     const pct = userProfile?.depositPercentage;
     openCreateInvoice({
       isDeposit: false,
-      amount: fee && pct ? Math.round((fee * (1 - pct / 100)) * 100) / 100 : undefined,
+      amount: fee && pct ? balanceAmount(fee, pct) : undefined,
     });
   }
 
-  const hasNonVoidDeposit = invoices.some((inv) => inv.isDeposit && inv.status !== 'VOID');
-  const hasNonVoidBalance = invoices.some((inv) => !inv.isDeposit && inv.status !== 'VOID');
+  const hasNonVoidDeposit = !!activeInvoiceOf(true, invoices);
+  const hasNonVoidBalance = !!activeInvoiceOf(false, invoices);
   const canAddInvoice = !hasNonVoidDeposit || !hasNonVoidBalance;
 
   const action = canAddInvoice ? (
@@ -267,25 +253,29 @@ export default function InvoiceSection({ bookingId }: Readonly<InvoiceSectionPro
             // The verdict comes from the backing INVOICE document (backend authority, ADR-0054).
             // A DRAFT has no PDF/document yet, so it is simply not on the portal until sent.
             portalVisibility={invoiceDoc?.portalVisibility ?? { visible: false, reason: 'until_sent' }}
-            isDeletePending={actions.isDeletingInvoice}
-            isVoidPending={invoiceActions.voidingInvoiceId === inv.id}
-            isIssuePending={invoiceActions.issuingInvoiceId === inv.id}
-            isMarkSentPending={invoiceActions.markingSentId === inv.id}
-            isMarkPaidPending={invoiceActions.markingPaidId === inv.id}
-            onEdit={openEditInvoice}
-            onPreview={openPreviewPdf}
-            onIssue={(inv) => invoiceActions.issue(inv.id)}
-            onDelete={(inv) => actions.deleteInvoice(inv.id)}
-            onSend={openSendInvoice}
-            onMarkSent={(inv) => {
-              if (inv.status === 'ISSUED') {
-                invoiceActions.markSent(inv.id);
-              } else {
-                setSearchParams({ sheet: 'markSent', invoiceId: inv.id });
-              }
+            pending={{
+              isDeletePending: actions.isDeletingInvoice,
+              isVoidPending: invoiceActions.voidingInvoiceId === inv.id,
+              isIssuePending: invoiceActions.issuingInvoiceId === inv.id,
+              isMarkSentPending: invoiceActions.markingSentId === inv.id,
+              isMarkPaidPending: invoiceActions.markingPaidId === inv.id,
             }}
-            onMarkPaid={(inv) => invoiceActions.markPaid(inv.id)}
-            onVoid={(inv) => invoiceActions.voidInvoice(inv.id)}
+            handlers={{
+              onEdit: openEditInvoice,
+              onPreview: openPreviewPdf,
+              onIssue: (i) => invoiceActions.issue(i.id),
+              onDelete: (i) => actions.deleteInvoice(i.id),
+              onSend: openSendInvoice,
+              onMarkSent: (i) => {
+                if (i.status === 'ISSUED') {
+                  invoiceActions.markSent(i.id);
+                } else {
+                  setSearchParams({ sheet: 'markSent', invoiceId: i.id });
+                }
+              },
+              onMarkPaid: (i) => invoiceActions.markPaid(i.id),
+              onVoid: (i) => invoiceActions.voidInvoice(i.id),
+            }}
           />
           );
         })}

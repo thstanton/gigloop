@@ -20,6 +20,7 @@ const baseInvoice: Invoice = {
   dueDate: '2030-05-01',
   paidAt: null,
   bookingId: 'b1',
+  seriesId: null,
   billToContactId: 'c1',
   billToContact: customer,
   lineItems: [lineItem],
@@ -27,25 +28,34 @@ const baseInvoice: Invoice = {
 
 const noop = () => {};
 
+// InvoiceRow is presentational (#687): it takes a handlers object + pending map, not 14 flat props.
+const defaultPending = {
+  isDeletePending: false,
+  isVoidPending: false,
+  isIssuePending: false,
+  isMarkSentPending: false,
+  isMarkPaidPending: false,
+};
+
+const defaultHandlers = {
+  onEdit: noop,
+  onPreview: noop,
+  onIssue: noop,
+  onDelete: noop,
+  onSend: noop,
+  onMarkSent: noop,
+  onMarkPaid: noop,
+  onVoid: noop,
+};
+
 const meta = {
   component: InvoiceRow,
   tags: ['ai-generated'],
   decorators: [(Story) => React.createElement(MemoryRouter, {}, React.createElement(Story))],
   args: {
     pdfUrl: null,
-    isDeletePending: false,
-    isVoidPending: false,
-    isIssuePending: false,
-    isMarkSentPending: false,
-    isMarkPaidPending: false,
-    onEdit: noop,
-    onPreview: noop,
-    onIssue: noop,
-    onDelete: noop,
-    onSend: noop,
-    onMarkSent: noop,
-    onMarkPaid: noop,
-    onVoid: noop,
+    pending: defaultPending,
+    handlers: defaultHandlers,
   },
 } satisfies Meta<typeof InvoiceRow>;
 
@@ -70,10 +80,19 @@ export const BalanceDraft: Story = {
   },
 };
 
+// A series invoice (seriesId set, isDeposit false) labels as "Series invoice", not "Balance" (#687).
+export const SeriesInvoice: Story = {
+  args: { invoice: { ...baseInvoice, status: 'ISSUED', isDeposit: false, seriesId: 'ser1', bookingId: null } },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Series invoice')).toBeVisible();
+    await expect(canvas.queryByText('Balance')).toBeNull();
+  },
+};
+
 export const DraftIssuing: Story = {
   args: {
     invoice: { ...baseInvoice, status: 'DRAFT', isDeposit: true },
-    isIssuePending: true,
+    pending: { ...defaultPending, isIssuePending: true },
   },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Creating…')).toBeVisible();
@@ -83,7 +102,7 @@ export const DraftIssuing: Story = {
 export const IssuedVoiding: Story = {
   args: {
     invoice: { ...baseInvoice, status: 'ISSUED', isDeposit: true },
-    isVoidPending: true,
+    pending: { ...defaultPending, isVoidPending: true },
   },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Voiding…')).toBeVisible();
@@ -93,7 +112,7 @@ export const IssuedVoiding: Story = {
 export const IssuedMarkingSent: Story = {
   args: {
     invoice: { ...baseInvoice, status: 'ISSUED', isDeposit: true },
-    isMarkSentPending: true,
+    pending: { ...defaultPending, isMarkSentPending: true },
   },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Marking sent…')).toBeVisible();
@@ -103,7 +122,7 @@ export const IssuedMarkingSent: Story = {
 export const SentMarkingPaid: Story = {
   args: {
     invoice: { ...baseInvoice, status: 'SENT' },
-    isMarkPaidPending: true,
+    pending: { ...defaultPending, isMarkPaidPending: true },
   },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Marking paid…')).toBeVisible();

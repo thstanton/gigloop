@@ -126,6 +126,7 @@ const mockInvoice = (id: string, status: 'VOID' | 'SENT' | 'PAID', number: strin
   dueDate: '2026-06-16T00:00:00Z',
   paidAt: status === 'PAID' ? '2026-06-10T00:00:00Z' : null,
   bookingId: 'b1',
+  seriesId: null,
   billToContactId: 'c1',
   billToContact: mockContact,
   lineItems: [

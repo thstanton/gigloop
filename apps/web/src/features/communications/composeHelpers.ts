@@ -1,5 +1,6 @@
 import type { BuiltInTemplateType, Invoice, Template } from '@/types/api';
 import { VAR_LABELS, BUILT_IN_EMAIL_TYPES } from '@/features/templates/templateMeta';
+import { activeInvoiceOf } from '@/lib/invoiceDerivations';
 
 const ATTACHMENT_TEMPLATE_TYPES: BuiltInTemplateType[] = [
   'deposit_invoice_cover',
@@ -17,10 +18,10 @@ export function getInvoiceIdForTemplate(
   invoices: Invoice[],
 ): string | undefined {
   if (type === 'deposit_invoice_cover' || type === 'contract_and_deposit_cover') {
-    return invoices.find((i) => i.isDeposit && i.status !== 'VOID')?.id;
+    return activeInvoiceOf(true, invoices)?.id;
   }
   if (type === 'balance_invoice_cover') {
-    return invoices.find((i) => !i.isDeposit && i.status !== 'VOID')?.id;
+    return activeInvoiceOf(false, invoices)?.id;
   }
   return undefined;
 }
