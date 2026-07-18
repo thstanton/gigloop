@@ -9,6 +9,7 @@ storybook-static
 !.claude/skills/
 .claude/skills/*
 !.claude/skills/.gitkeep
+!.claude/skills/uat/
 skills-lock.json
 progress.md
 ralph.log
