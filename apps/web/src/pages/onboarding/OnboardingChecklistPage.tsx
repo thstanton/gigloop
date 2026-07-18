@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { PageHeader } from '@/components/common/PageHeader';
 import { ProgressRing } from '@/features/bookings/GoalRow';
+import { StageCard } from '@/features/checklist/StageCard';
 import { stepNav } from '@/features/onboarding/steps';
 import type { ChecklistDefaultItem, BookingStatus } from '@/types/api';
 
@@ -105,8 +106,9 @@ function ReminderCallout({ digestOn, onDigestChange }: { digestOn: boolean; onDi
   );
 }
 
-// One lifecycle-stage card: accent header + the goals reminded in that stage as toggle rows.
-function StageCard({
+// One lifecycle-stage section: the shared StageCard shell with the goals reminded in that stage as
+// toggle rows (or an empty-state) as its children.
+function StageSection({
   stage,
   goals,
   enabledFor,
@@ -118,16 +120,11 @@ function StageCard({
   onToggle: (key: string, val: boolean) => void;
 }) {
   return (
-    <div className="rounded-xl border border-border overflow-hidden">
-      <div className="px-4 py-2.5 border-b border-border bg-muted/30">
-        <p className="text-sm text-foreground/70">
-          <span className="inline-flex items-center gap-2 align-baseline mr-1">
-            <span className={cn('w-[3px] h-3 rounded-full', STATUS_ACCENT_BG[stage])} aria-hidden />
-            <span className="font-semibold text-foreground">{BOOKING_STATUS_LABELS[stage]} ·</span>
-          </span>
-          {STATUS_DESCRIPTIONS[stage]}
-        </p>
-      </div>
+    <StageCard
+      label={BOOKING_STATUS_LABELS[stage]}
+      description={STATUS_DESCRIPTIONS[stage]}
+      accentClass={STATUS_ACCENT_BG[stage]}
+    >
       {goals.length ? (
         <div className="divide-y divide-border">
           {goals.map((g) => {
@@ -152,7 +149,7 @@ function StageCard({
       ) : (
         <p className="px-4 py-3 text-sm text-muted">Nothing to track here — the booking's done.</p>
       )}
-    </div>
+    </StageCard>
   );
 }
 
@@ -224,7 +221,7 @@ export default function OnboardingChecklistPage() {
 
           <div className="flex flex-col gap-4">
             {FORWARD_STATUSES.map((stage) => (
-              <StageCard
+              <StageSection
                 key={stage}
                 stage={stage}
                 goals={defaults.filter((d) => remindedAtStage(d) === stage)}
