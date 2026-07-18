@@ -2,8 +2,8 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { UserProfileRepository } from './user-profile.repository';
 import { UpdateUserProfileDto } from './dto/update-user-profile.dto';
 import { UpdateChecklistDefaultsDto } from './dto/update-checklist-defaults.dto';
-import { getChecklistDefaults } from '../bookings/checklist-defaults';
-import type { ChecklistDefaultItem } from '../bookings/checklist-defaults';
+import { getChecklistDefaults } from '../checklist/checklist-defaults';
+import type { ChecklistDefaultItem } from '../checklist/checklist-defaults';
 
 @Injectable()
 export class UserProfileService {

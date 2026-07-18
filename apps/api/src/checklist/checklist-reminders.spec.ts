@@ -6,7 +6,7 @@ import {
   ReminderPreview,
   PREREQUISITE_PHRASES,
 } from './checklist-reminders';
-import { CHECKLIST_DEFAULTS } from '../bookings/checklist-defaults';
+import { CHECKLIST_DEFAULTS } from './checklist-defaults';
 
 function item(overrides: Partial<ReminderItemInput> = {}): ReminderItemInput {
   return {

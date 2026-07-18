@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateUserProfileDto } from './dto/update-user-profile.dto';
 import { encrypt, decrypt } from '../common/crypto';
-import type { ChecklistDefaultItem, DueDateRule } from '../bookings/checklist-defaults';
+import type { ChecklistDefaultItem, DueDateRule } from '../checklist/checklist-defaults';
 
 const USER_PROFILE_ADDRESS_FIELDS: ReadonlyArray<keyof UpdateUserProfileDto> = [
   'addressLine1', 'addressLine2', 'city', 'county', 'postcode', 'country',
@@ -71,7 +71,7 @@ export class UserProfileRepository {
 
     // Persist only deltas that differ from the current catalogue default (drops no-op
     // overrides and any retired key). The incoming DTO may carry every key; we sparsify here.
-    const { sparsifySystemOverrides } = await import('../bookings/checklist-defaults');
+    const { sparsifySystemOverrides } = await import('../checklist/checklist-defaults');
     const checklistDefaults = {
       systemItemOverrides: sparsifySystemOverrides(systemItemOverrides),
       customItems,

@@ -7,7 +7,7 @@
  * After seeding, evaluates auto-complete rules so items start in the correct state.
  */
 import { PrismaClient } from '@prisma/client';
-import { CHECKLIST_DEFAULTS, computeDueDate, getChecklistDefaults } from '../bookings/checklist-defaults';
+import { CHECKLIST_DEFAULTS, computeDueDate, getChecklistDefaults } from '../checklist/checklist-defaults';
 import { ChecklistEvaluatorService } from '../checklist/checklist-evaluator.service';
 import { ChecklistRepository } from '../checklist/checklist.repository';
 

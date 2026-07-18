@@ -15,7 +15,7 @@
 // PURE planner — no DB access — unit-tested on fixtures. Retained as the reusable booking-row
 // reshape logic (ADR-0060 scope guard); the spent #617 apply driver was deleted after it ran.
 // A future catalogue collapse authors a fresh apply driver over this planner.
-import { CHECKLIST_DEFAULTS } from '../bookings/checklist-defaults';
+import { CHECKLIST_DEFAULTS } from './checklist-defaults';
 import { ChecklistState, StepState, rollUp } from './checklist-rollup';
 
 /** The subset of an existing step row the planner reads. */

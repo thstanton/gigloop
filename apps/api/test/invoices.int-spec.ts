@@ -3,7 +3,7 @@ import * as request from 'supertest';
 import { createTestApp, mockStorageService } from './test-app.factory';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { TEST_USER_ID } from './test-auth.guard';
-import { CHECKLIST_DEFAULTS } from '../src/bookings/checklist-defaults';
+import { CHECKLIST_DEFAULTS } from '../src/checklist/checklist-defaults';
 import { buildInvoiceNumber } from '../src/invoices/invoices.repository';
 
 const OTHER_USER_ID = 'invoice-other-user';

@@ -1,4 +1,4 @@
-import { CHECKLIST_DEFAULTS } from '../bookings/checklist-defaults';
+import { CHECKLIST_DEFAULTS } from './checklist-defaults';
 import { concernForKey, keysForConcern, ReminderConcern } from './checklist-concerns';
 
 const ALL_CONCERNS: ReminderConcern[] = ['overview', 'people', 'venue', 'itinerary', 'music'];

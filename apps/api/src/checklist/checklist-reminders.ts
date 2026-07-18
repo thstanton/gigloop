@@ -9,7 +9,7 @@
 // output includes system reminders with no booking record yet (discoverable,
 // on-demand seedable) alongside the ones already tracked or opted out.
 
-import { CHECKLIST_DEFAULTS } from '../bookings/checklist-defaults';
+import { CHECKLIST_DEFAULTS } from './checklist-defaults';
 import { concernForKey, keysForConcern, ReminderConcern } from './checklist-concerns';
 import { isPastStage } from './checklist-surfacing';
 import { isDepSatisfied } from './checklist-evaluator.service';
