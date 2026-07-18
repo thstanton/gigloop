@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, type Dispatch, type SetStateAction } from 'react';
 import { ChevronDown, ChevronUp, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { FormField } from '@/components/common/FormField';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { GENRE_LABELS, ALL_GENRES } from '@/lib/constants';
 import type { CatalogueEntry, SongGenre } from '@/types/api';
@@ -16,6 +17,43 @@ export interface NewSong {
 }
 
 const EMPTY: NewSong = { title: '', artist: '', genre: 'CONTEMPORARY' };
+
+/**
+ * Keyboard navigation for the catalogue combobox. Lifted to module scope (out of the component
+ * body) so its branch cluster doesn't dominate AddSongField's complexity. `suggestions` is `[]`
+ * whenever the dropdown is closed, so a non-empty list already implies "open" — no separate guard.
+ */
+function handleTypeaheadKey(
+  e: React.KeyboardEvent<HTMLInputElement>,
+  ctx: {
+    suggestions: CatalogueEntry[];
+    active: number;
+    setActive: Dispatch<SetStateAction<number>>;
+    setOpen: Dispatch<SetStateAction<boolean>>;
+    addCatalogue: (entry: CatalogueEntry) => void;
+  },
+) {
+  const { suggestions, active, setActive, setOpen, addCatalogue } = ctx;
+  if (!suggestions.length) return;
+  switch (e.key) {
+    case 'ArrowDown':
+      e.preventDefault();
+      setActive((i) => Math.min(i + 1, suggestions.length - 1));
+      break;
+    case 'ArrowUp':
+      e.preventDefault();
+      setActive((i) => Math.max(i - 1, 0));
+      break;
+    case 'Enter':
+      e.preventDefault();
+      addCatalogue(suggestions[Math.max(active, 0)]);
+      break;
+    case 'Escape':
+      setOpen(false);
+      setActive(-1);
+      break;
+  }
+}
 
 /**
  * The shared "add a song" control (#667). A full-width catalogue autocomplete is the primary path
@@ -53,13 +91,10 @@ export function AddSongField({
     setManual(EMPTY);
   }
 
-  function onSearchKey(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (!open || !suggestions.length) return;
-    if (e.key === 'ArrowDown') { e.preventDefault(); setActive((i) => Math.min(i + 1, suggestions.length - 1)); }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); setActive((i) => Math.max(i - 1, 0)); }
-    else if (e.key === 'Enter') { e.preventDefault(); addCatalogue(suggestions[active >= 0 ? active : 0]); }
-    else if (e.key === 'Escape') { setOpen(false); setActive(-1); }
-  }
+  const setField =
+    <K extends keyof NewSong>(key: K) =>
+    (value: NewSong[K]) =>
+      setManual((m) => ({ ...m, [key]: value }));
 
   return (
     <div className="space-y-3">
@@ -77,7 +112,7 @@ export function AddSongField({
           onChange={(e) => { setQ(e.target.value); setOpen(true); setActive(-1); }}
           onFocus={() => setOpen(true)}
           onBlur={() => setTimeout(() => setOpen(false), 120)}
-          onKeyDown={onSearchKey}
+          onKeyDown={(e) => handleTypeaheadKey(e, { suggestions, active, setActive, setOpen, addCatalogue })}
         />
         {suggestions.length > 0 && (
           <ul role="listbox" className="absolute z-50 left-0 right-0 mt-1 bg-background border border-border rounded-md overflow-hidden shadow-md">
@@ -87,7 +122,7 @@ export function AddSongField({
                   type="button"
                   onPointerDown={(ev) => { ev.preventDefault(); addCatalogue(e); }}
                   onMouseEnter={() => setActive(i)}
-                  className={cn('w-full text-left px-3 py-2 transition-colors', i === active ? 'bg-accent' : 'hover:bg-accent')}
+                  className={cn('w-full text-left px-3 py-2 transition-colors hover:bg-accent', i === active && 'bg-accent')}
                 >
                   <span className="block text-sm text-foreground truncate">{e.title}</span>
                   <span className="block text-xs text-muted truncate">
@@ -115,18 +150,16 @@ export function AddSongField({
       {showManual && (
         <div className="space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label>Title</Label>
-              <Input value={manual.title} placeholder="Song title" onChange={(e) => setManual((m) => ({ ...m, title: e.target.value }))} />
-            </div>
-            <div className="space-y-1">
-              <Label>Artist (optional)</Label>
-              <Input value={manual.artist} placeholder="Artist name" onChange={(e) => setManual((m) => ({ ...m, artist: e.target.value }))} />
-            </div>
+            <FormField label="Title">
+              <Input value={manual.title} placeholder="Song title" onChange={(e) => setField('title')(e.target.value)} />
+            </FormField>
+            <FormField label="Artist (optional)">
+              <Input value={manual.artist} placeholder="Artist name" onChange={(e) => setField('artist')(e.target.value)} />
+            </FormField>
           </div>
           <div className="space-y-1 sm:w-1/2">
             <Label>Genre</Label>
-            <Select value={manual.genre} onValueChange={(v) => setManual((m) => ({ ...m, genre: v as SongGenre }))}>
+            <Select value={manual.genre} onValueChange={(v) => setField('genre')(v as SongGenre)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
