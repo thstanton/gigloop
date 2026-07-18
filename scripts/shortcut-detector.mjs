@@ -9,6 +9,30 @@
 const ADDED = /^\+(?!\+\+)/;
 const REMOVED = /^-(?!--)/;
 
+// Bare-id mutation guard (#710 / ADR-0061): a Prisma mutation keyed on the row's own primary
+// key (`id`) with no `userId` in the `where` is a cross-tenant write waiting to happen — safety
+// then rests entirely on a preceding scoped read (convention, not structure). We flag *new* ones
+// in repositories so a future dropped read can't silently reintroduce the gap. Existing methods
+// are grandfathered automatically: the detector only sees the staged diff.
+const REPO_FILE = /\.repository\.ts$/;
+const MUTATION_VERB = /\.(update|updateMany|delete|deleteMany|upsert)\s*\(/;
+const READ_VERB = /\.(findFirst|findUnique|findUniqueOrThrow|findFirstOrThrow|findMany|count|aggregate|groupBy)\s*\(/;
+const SCOPED_SUPPRESS = /scoped-upstream/;
+
+// A `where` selector that references the bare primary key `id` (e.g. `{ id }`, `{ id: setId }`)
+// but not `userId`. `{ bookingId, packageId }`-style child scoping is deliberately NOT matched —
+// that is the legitimate existing pattern (scoped via an already-owned parent), not the target.
+function whereTargetsBareId(code) {
+  const idx = code.indexOf('where:');
+  if (idx === -1) return false;
+  const after = code.slice(idx);
+  const open = after.indexOf('{');
+  if (open === -1) return false;
+  const close = after.indexOf('}', open);
+  const inner = close === -1 ? after.slice(open) : after.slice(open, close + 1);
+  return /[{,]\s*id\s*[:,}]/.test(inner) && !/\buserId\b/.test(inner);
+}
+
 // Files exempt from detection:
 //  - the detector's own source and tests (bootstrap exemption)
 //  - markdown/docs: prose that *names* a forbidden pattern (CLAUDE.md, ADRs, PROMPT.md)
@@ -32,6 +56,11 @@ export function detectViolations(diff) {
   /** @type {Violation[]} */
   let pendingAssertionViolations = [];
 
+  // A mutation verb whose `where` clause is on a later line (the dominant multi-line style).
+  // We look at the next few added lines for its selector. null when not mid-mutation.
+  /** @type {{ budget: number, suppressed: boolean } | null} */
+  let pendingMutation = null;
+
   function flushAssertionViolations() {
     if (assertionsRemoved > assertionsAdded) {
       // Net decrease in assertions — flag the removals as real violations.
@@ -45,6 +74,7 @@ export function detectViolations(diff) {
   for (const line of diff.split('\n')) {
     if (line.startsWith('+++ b/')) {
       flushAssertionViolations();
+      pendingMutation = null;
       currentFile = line.slice(6);
       skipFile = EXEMPT.test(currentFile);
       continue;
@@ -54,6 +84,7 @@ export function detectViolations(diff) {
     // a quality regression. The CI story-presence scan catches accidentally deleted stories.
     if (line === '+++ /dev/null') {
       flushAssertionViolations();
+      pendingMutation = null;
       skipFile = true;
       continue;
     }
@@ -87,6 +118,36 @@ export function detectViolations(diff) {
       }
       if (/\bexpect\s*\(/.test(code)) {
         assertionsAdded++;
+      }
+
+      // Bare-id mutation guard — repositories only (#710).
+      if (REPO_FILE.test(currentFile)) {
+        const suppressed = SCOPED_SUPPRESS.test(code);
+        const hasWhere = /where:/.test(code);
+        if (MUTATION_VERB.test(code)) {
+          if (hasWhere) {
+            // Inline: verb and where on one line (e.g. `.delete({ where: { id } })`).
+            if (whereTargetsBareId(code) && !suppressed) {
+              violations.push({ file: currentFile, text: line, reason: 'bare-id mutation without userId scoping' });
+            }
+            pendingMutation = null;
+          } else {
+            // Multi-line: remember the verb; its `where` comes on a later added line.
+            pendingMutation = { budget: 8, suppressed };
+          }
+        } else if (pendingMutation) {
+          if (READ_VERB.test(code)) {
+            // A read call intervened — the pending mutation's where is not what follows.
+            pendingMutation = null;
+          } else if (hasWhere) {
+            if (whereTargetsBareId(code) && !(suppressed || pendingMutation.suppressed)) {
+              violations.push({ file: currentFile, text: line, reason: 'bare-id mutation without userId scoping' });
+            }
+            pendingMutation = null;
+          } else if (--pendingMutation.budget <= 0) {
+            pendingMutation = null;
+          }
+        }
       }
     }
 
