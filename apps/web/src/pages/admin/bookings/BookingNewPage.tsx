@@ -96,7 +96,7 @@ export default function BookingNewPage() {
 
           <div className="flex gap-3">
             <Button type="submit">
-              Next: Checklist
+              Next: Reminders
             </Button>
             <Button type="button" variant="outline" onClick={() => navigate('/admin/bookings')}>
               Cancel

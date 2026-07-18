@@ -194,7 +194,7 @@ describe('BookingNewPage — orchestration', () => {
     await renderWithLoadedProfile();
 
     await userEvent.click(screen.getByRole('button', { name: 'pick-existing-customer' }));
-    await userEvent.click(screen.getByRole('button', { name: /next: checklist/i }));
+    await userEvent.click(screen.getByRole('button', { name: /next: reminders/i }));
 
     expect(screen.getByTestId('checklist-step')).toBeInTheDocument();
     // The step is previewed for the profile-defaulted starting status.
@@ -214,7 +214,7 @@ describe('BookingNewPage — orchestration', () => {
     await renderWithLoadedProfile();
 
     await userEvent.click(screen.getByRole('button', { name: 'pick-existing-customer' }));
-    await userEvent.click(screen.getByRole('button', { name: /next: checklist/i }));
+    await userEvent.click(screen.getByRole('button', { name: /next: reminders/i }));
     await userEvent.click(screen.getByRole('button', { name: 'do-create' }));
 
     await waitFor(() => expect(screen.getByTestId('created-checkpoint')).toBeInTheDocument());
@@ -254,7 +254,7 @@ describe('BookingNewPage — orchestration', () => {
 
     await renderWithLoadedProfile();
     await userEvent.click(screen.getByRole('button', { name: 'pick-new-customer' }));
-    await userEvent.click(screen.getByRole('button', { name: /next: checklist/i }));
+    await userEvent.click(screen.getByRole('button', { name: /next: reminders/i }));
 
     // First attempt fails — error surfaces, no checkpoint yet.
     await userEvent.click(screen.getByRole('button', { name: 'do-create' }));
