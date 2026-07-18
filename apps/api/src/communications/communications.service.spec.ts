@@ -52,11 +52,18 @@ const booking = { id: 'b1' };
 describe('CommunicationsService', () => {
   let service: CommunicationsService;
   let repo: MockRepo;
+  let mockContacts: { assertOwned: jest.Mock };
 
   beforeEach(() => {
     repo = makeRepo();
     const mockEvaluator = { evaluate: jest.fn().mockResolvedValue(undefined) } as unknown as import('../checklist/checklist-evaluator.service').ChecklistEvaluatorService;
-    service = new CommunicationsService(repo as unknown as CommunicationsRepository, mockMail, mockEvaluator);
+    mockContacts = { assertOwned: jest.fn().mockResolvedValue(undefined) };
+    service = new CommunicationsService(
+      repo as unknown as CommunicationsRepository,
+      mockMail,
+      mockEvaluator,
+      mockContacts as unknown as import('../contacts/contacts.service').ContactsService,
+    );
     (mockMail.send as jest.Mock).mockReset().mockResolvedValue(undefined);
   });
 
@@ -104,6 +111,20 @@ describe('CommunicationsService', () => {
       await expect(service.create('u1', 'missing', dto)).rejects.toThrow(NotFoundException);
       expect(repo.create).not.toHaveBeenCalled();
     });
+
+    it('validates ownership of the contact before logging the communication (#709)', async () => {
+      repo.findBookingById.mockResolvedValue(booking);
+      repo.create.mockResolvedValue(communication);
+      await service.create('u1', 'b1', dto);
+      expect(mockContacts.assertOwned).toHaveBeenCalledWith('u1', ['ct1']);
+    });
+
+    it('rejects and does not create when the contact is not owned (#709)', async () => {
+      repo.findBookingById.mockResolvedValue(booking);
+      mockContacts.assertOwned.mockRejectedValue(new NotFoundException('Contact not found'));
+      await expect(service.create('u1', 'b1', dto)).rejects.toThrow(NotFoundException);
+      expect(repo.create).not.toHaveBeenCalled();
+    });
   });
 
   describe('sendEmail', () => {
@@ -127,6 +148,13 @@ describe('CommunicationsService', () => {
     // hardcoded recipient would make this an authenticated open relay (arbitrary `to` + any bookingId).
     it('throws NotFoundException and never sends when the booking is not owned by the caller', async () => {
       repo.findBookingById.mockResolvedValue(null);
+      await expect(service.sendEmail(options)).rejects.toThrow(NotFoundException);
+      expect(mockMail.send).not.toHaveBeenCalled();
+      expect(repo.createPending).not.toHaveBeenCalled();
+    });
+
+    it('rejects and never sends when the recipient contact is not owned by the caller (#709)', async () => {
+      mockContacts.assertOwned.mockRejectedValue(new NotFoundException('Contact not found'));
       await expect(service.sendEmail(options)).rejects.toThrow(NotFoundException);
       expect(mockMail.send).not.toHaveBeenCalled();
       expect(repo.createPending).not.toHaveBeenCalled();

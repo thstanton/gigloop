@@ -18,5 +18,6 @@ import { pickAdapter } from '../common/test-mode';
     TravelTimeService,
     { provide: DistanceMatrixClient, useClass: pickAdapter(DistanceMatrixClient, FixedDistanceMatrixClient) },
   ],
+  exports: [ContactsService],
 })
 export class ContactsModule {}

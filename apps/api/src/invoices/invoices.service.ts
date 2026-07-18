@@ -3,6 +3,7 @@ import { InvoicesRepository } from './invoices.repository';
 import { DocumentsService } from '../documents/documents.service';
 import { ChecklistEvaluatorService } from '../checklist/checklist-evaluator.service';
 import { ChecklistRepository } from '../checklist/checklist.repository';
+import { ContactsService } from '../contacts/contacts.service';
 import { InvoiceLifecycleService } from './invoice-lifecycle.service';
 import { isEditable, isDeletable } from './invoice-transition-rules';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
@@ -21,6 +22,7 @@ export class InvoicesService {
     private documents: DocumentsService,
     private evaluator: ChecklistEvaluatorService,
     private checklistRepo: ChecklistRepository,
+    private contacts: ContactsService,
   ) {}
 
   findAll(userId: string, bookingId: string) {
@@ -48,6 +50,9 @@ export class InvoicesService {
       throw new ConflictException(`A ${type} invoice already exists for this booking — void it before creating a new one`);
     }
 
+    // FK-ownership (#709): only an explicitly-provided billTo contact is caller-supplied and
+    // needs validating; the `?? booking.customerId` fallback is already owned.
+    await this.contacts.assertOwned(userId, [dto.billToContactId]);
     const billToContactId = dto.billToContactId ?? booking.customerId;
     const result = await this.repo.create(userId, bookingId, billToContactId, dto);
     await this.evaluator.evaluate(bookingId).catch(() => {});
@@ -57,6 +62,9 @@ export class InvoicesService {
   async update(userId: string, bookingId: string, id: string, dto: UpdateInvoiceDto) {
     const invoice = await this.findOne(userId, bookingId, id);
     if (!isEditable(invoice)) throw new BadRequestException('Only draft invoices can be updated');
+    // FK-ownership (#709): a re-pointed billTo contact must belong to the caller — invoiceIncludes
+    // returns billToContact, so a foreign id would otherwise leak on the next read.
+    await this.contacts.assertOwned(userId, [dto.billToContactId]);
     return this.repo.update(id, dto);
   }
 

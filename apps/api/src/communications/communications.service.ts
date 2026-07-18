@@ -3,6 +3,7 @@ import { CommunicationsRepository } from './communications.repository';
 import { MailService } from '../mail/mail.service';
 import { CreateCommunicationDto } from './dto/create-communication.dto';
 import { ChecklistEvaluatorService } from '../checklist/checklist-evaluator.service';
+import { ContactsService } from '../contacts/contacts.service';
 import { resolveMusicFormVisibility } from '../portal/portal-visibility';
 
 // #533 / #631: the music-form invite may only be emailed once the form is published — you can no
@@ -29,6 +30,7 @@ export class CommunicationsService {
     private repo: CommunicationsRepository,
     private mail: MailService,
     private evaluator: ChecklistEvaluatorService,
+    private contacts: ContactsService,
   ) {}
 
   findAll(userId: string, bookingId: string) {
@@ -44,6 +46,8 @@ export class CommunicationsService {
   async create(userId: string, bookingId: string, dto: CreateCommunicationDto) {
     const booking = await this.repo.findBookingById(userId, bookingId);
     if (!booking) throw new NotFoundException('Booking not found');
+    // FK-ownership (#709): the contact the communication is logged against must belong to the caller.
+    await this.contacts.assertOwned(userId, [dto.contactId]);
     const result = await this.repo.create(userId, bookingId, dto);
     await this.evaluator.evaluate(bookingId).catch(() => {});
     return result;
@@ -85,6 +89,8 @@ export class CommunicationsService {
     // relay — any caller could POST an arbitrary `to` against any bookingId and have it sent.
     const booking = await this.repo.findBookingById(userId, bookingId);
     if (!booking) throw new NotFoundException('Booking not found');
+    // FK-ownership (#709): the recipient contact must belong to the caller before we persist and send.
+    await this.contacts.assertOwned(userId, [contactId]);
     await this.assertMusicInviteAllowed(userId, bookingId, templateId);
     const communication = await this.repo.createPending(userId, bookingId, contactId, subject, body, templateId, documentId);
     try {

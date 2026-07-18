@@ -6,6 +6,7 @@ import { ContractRepository } from './contract.repository';
 import { MusicFormConfigRepository } from './music-form-config.repository';
 import { ChecklistRepository, ChecklistItemSeed } from '../checklist/checklist.repository';
 import { SeriesRepository } from '../series/series.repository';
+import { ContactsService } from '../contacts/contacts.service';
 import { SeriesService, MemberBookingForSync } from '../series/series.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
@@ -110,6 +111,7 @@ export class BookingsService {
     private checklistRepo: ChecklistRepository,
     private contractRepo: ContractRepository,
     private musicFormRepo: MusicFormConfigRepository,
+    private contacts: ContactsService,
     // Injected solely to open the atomic-create transaction (bounded exception
     // to the repository-pattern rule — see ADR-0047).
     private prisma: PrismaService,
@@ -244,6 +246,9 @@ export class BookingsService {
 
   async create(userId: string, dto: CreateBookingDto) {
     // Reads (and the optional new-series insert) stay outside the transaction — see ADR-0047.
+    // FK-ownership (#709): the customer/venue/agent must belong to the caller before we attach
+    // them, else a foreign contact could be read back through the owned booking.
+    await this.contacts.assertOwned(userId, [dto.customerId, dto.venueId, dto.bookingAgentId]);
     const resolvedSeriesId = await this.resolveSeriesId(userId, dto);
     if (resolvedSeriesId) {
       await this.seriesService.assertMembershipMutable(userId, resolvedSeriesId);
@@ -342,6 +347,9 @@ export class BookingsService {
 
   async update(userId: string, id: string, dto: UpdateBookingDto) {
     await this.assertOwnership(userId, id);
+    // FK-ownership (#709): validate any contact FK present in the patch. Nullish values (an
+    // omitted field, or venue/agent cleared to null) are skipped by assertOwned.
+    await this.contacts.assertOwned(userId, [dto.customerId, dto.venueId, dto.bookingAgentId]);
     const updated = await this.repo.update(id, dto);
     if (dto.date !== undefined) {
       await this.checklistRepo.recomputeChecklistDueDates(id, updated.date, updated.createdAt);

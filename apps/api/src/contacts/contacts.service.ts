@@ -33,6 +33,17 @@ export class ContactsService {
     return contact;
   }
 
+  // FK-ownership guard (#709 / ADR-0061): reject a write that references a Contact the caller
+  // does not own — closes the cross-tenant read via a foreign customer/venue/agent/billTo FK.
+  // Nullish ids (an omitted or cleared FK) are skipped; the check is one batched query. A
+  // missing or foreign id is a 404, never revealing that the row exists under another tenant.
+  async assertOwned(userId: string, ids: (string | null | undefined)[]): Promise<void> {
+    const wanted = [...new Set(ids.filter((id): id is string => !!id))];
+    if (wanted.length === 0) return;
+    const owned = await this.repo.countOwned(userId, wanted);
+    if (owned !== wanted.length) throw new NotFoundException('Contact not found');
+  }
+
   create(userId: string, dto: CreateContactDto) {
     return this.repo.create(userId, dto);
   }

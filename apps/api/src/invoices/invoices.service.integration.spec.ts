@@ -107,6 +107,7 @@ describe('InvoicesService.send (integration) — DRAFT guard', () => {
       shared.documents,
       mockEvaluator,
       mockChecklistRepo,
+      { assertOwned: jest.fn().mockResolvedValue(undefined) } as unknown as import('../contacts/contacts.service').ContactsService,
     );
   });
 
@@ -165,6 +166,7 @@ describe('InvoicesService.send (integration) — ISSUED invoice', () => {
       shared.documents,
       mockEvaluator,
       mockChecklistRepo,
+      { assertOwned: jest.fn().mockResolvedValue(undefined) } as unknown as import('../contacts/contacts.service').ContactsService,
     );
   });
 
@@ -243,6 +245,7 @@ describe('InvoicesService.markSent (integration) — ISSUED invoice', () => {
       shared.documents,
       mockEvaluator,
       mockChecklistRepo,
+      { assertOwned: jest.fn().mockResolvedValue(undefined) } as unknown as import('../contacts/contacts.service').ContactsService,
     );
   });
 
@@ -295,6 +298,7 @@ describe('InvoicesService.issue (integration)', () => {
       shared.documents,
       mockEvaluator,
       mockChecklistRepo,
+      { assertOwned: jest.fn().mockResolvedValue(undefined) } as unknown as import('../contacts/contacts.service').ContactsService,
     );
   });
 

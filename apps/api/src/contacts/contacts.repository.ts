@@ -51,6 +51,15 @@ export class ContactsRepository {
     });
   }
 
+  // How many of `ids` are Contacts owned by this user — the primitive behind FK-ownership
+  // validation (#709). Callers assert the count equals the distinct id count. One round-trip,
+  // regardless of how many FKs a request references.
+  countOwned(userId: string, ids: string[]): Promise<number> {
+    return this.prisma.contact.count({
+      where: { id: { in: ids }, userId },
+    });
+  }
+
   create(userId: string, data: CreateContactDto) {
     return this.prisma.contact.create({
       data: { userId, ...data },

@@ -6,6 +6,7 @@ import { ChecklistEvaluatorService } from '../checklist/checklist-evaluator.serv
 type MockRepo = {
   findAll: jest.Mock;
   findOne: jest.Mock;
+  countOwned: jest.Mock;
   create: jest.Mock;
   update: jest.Mock;
   countBookings: jest.Mock;
@@ -17,6 +18,7 @@ function makeRepo(): MockRepo {
   return {
     findAll: jest.fn(),
     findOne: jest.fn(),
+    countOwned: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
     countBookings: jest.fn(),
@@ -47,6 +49,30 @@ describe('ContactsService', () => {
       const result = await service.findAll('u1');
       expect(repo.findAll).toHaveBeenCalledWith('u1');
       expect(result).toEqual([contact]);
+    });
+  });
+
+  describe('assertOwned', () => {
+    it('passes silently when every id is owned', async () => {
+      repo.countOwned.mockResolvedValue(2);
+      await expect(service.assertOwned('u1', ['c1', 'c2'])).resolves.toBeUndefined();
+      expect(repo.countOwned).toHaveBeenCalledWith('u1', ['c1', 'c2']);
+    });
+
+    it('throws NotFound when at least one id is not owned', async () => {
+      repo.countOwned.mockResolvedValue(1); // only one of two owned
+      await expect(service.assertOwned('u1', ['c1', 'foreign'])).rejects.toThrow(NotFoundException);
+    });
+
+    it('skips nullish ids and does not query when nothing remains', async () => {
+      await expect(service.assertOwned('u1', [null, undefined])).resolves.toBeUndefined();
+      expect(repo.countOwned).not.toHaveBeenCalled();
+    });
+
+    it('de-duplicates ids so a repeated FK counts once', async () => {
+      repo.countOwned.mockResolvedValue(1);
+      await expect(service.assertOwned('u1', ['c1', 'c1', null])).resolves.toBeUndefined();
+      expect(repo.countOwned).toHaveBeenCalledWith('u1', ['c1']);
     });
   });
 
