@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InvoicesRepository } from './invoices.repository';
 import { DocumentsService } from '../documents/documents.service';
-import { ChecklistEvaluatorService } from '../checklist/checklist-evaluator.service';
+import { ChecklistReevaluator } from '../checklist/checklist-reevaluator.service';
 import { ChecklistRepository } from '../checklist/checklist.repository';
 import { ContactsService } from '../contacts/contacts.service';
 import { InvoiceLifecycleService } from './invoice-lifecycle.service';
@@ -20,7 +20,7 @@ export class InvoicesService {
     private repo: InvoicesRepository,
     private lifecycle: InvoiceLifecycleService,
     private documents: DocumentsService,
-    private evaluator: ChecklistEvaluatorService,
+    private reeval: ChecklistReevaluator,
     private checklistRepo: ChecklistRepository,
     private contacts: ContactsService,
   ) {}
@@ -55,7 +55,7 @@ export class InvoicesService {
     await this.contacts.assertOwned(userId, [dto.billToContactId]);
     const billToContactId = dto.billToContactId ?? booking.customerId;
     const result = await this.repo.create(userId, bookingId, billToContactId, dto);
-    await this.evaluator.evaluate(bookingId).catch(() => {});
+    await this.reeval.onBookingChanged(bookingId);
     return result;
   }
 
@@ -108,7 +108,7 @@ export class InvoicesService {
           dueDate: dueDateParam,
         }),
     );
-    await this.evaluator.evaluate(bookingId).catch(() => {});
+    await this.reeval.onBookingChanged(bookingId);
     return issued;
   }
 
@@ -146,7 +146,7 @@ export class InvoicesService {
       if (invoice.isDeposit) {
         await this.repo.setBookingDepositReceivedAt(bookingId);
       }
-      await this.evaluator.evaluate(bookingId).catch(() => {});
+      await this.reeval.onBookingChanged(bookingId);
     });
   }
 
@@ -158,7 +158,7 @@ export class InvoicesService {
       const checklistKey = invoice.isDeposit ? 'create_deposit_invoice' : 'create_balance_invoice';
       await this.checklistRepo.resetItemByKey(bookingId, checklistKey);
     }
-    await this.evaluator.evaluate(bookingId).catch(() => {});
+    await this.reeval.onBookingChanged(bookingId);
     return result;
   }
 

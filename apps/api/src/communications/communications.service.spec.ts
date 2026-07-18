@@ -56,7 +56,7 @@ describe('CommunicationsService', () => {
 
   beforeEach(() => {
     repo = makeRepo();
-    const mockEvaluator = { evaluate: jest.fn().mockResolvedValue(undefined) } as unknown as import('../checklist/checklist-evaluator.service').ChecklistEvaluatorService;
+    const mockEvaluator = { onBookingChanged: jest.fn().mockResolvedValue(undefined) } as unknown as import('../checklist/checklist-reevaluator.service').ChecklistReevaluator;
     mockContacts = { assertOwned: jest.fn().mockResolvedValue(undefined) };
     service = new CommunicationsService(
       repo as unknown as CommunicationsRepository,

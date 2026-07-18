@@ -84,7 +84,7 @@ describe('InvoicesService', () => {
       voidInvoice: jest.fn().mockResolvedValue({ ...draftInvoice, status: 'VOID', invoiceNumber: 'INV-2026-001' }),
       issueInvoice: jest.fn().mockResolvedValue(issuedInvoice),
     };
-    const mockEvaluator = { evaluate: jest.fn().mockResolvedValue(undefined) } as unknown as import('../checklist/checklist-evaluator.service').ChecklistEvaluatorService;
+    const mockEvaluator = { onBookingChanged: jest.fn().mockResolvedValue(undefined) } as unknown as import('../checklist/checklist-reevaluator.service').ChecklistReevaluator;
     mockChecklistRepo = { resetItemByKey: jest.fn().mockResolvedValue({ count: 0 }) };
     mockContacts = { assertOwned: jest.fn().mockResolvedValue(undefined) };
     service = new InvoicesService(

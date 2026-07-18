@@ -2,7 +2,7 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import { ContactsRepository } from './contacts.repository';
 import { CreateContactDto } from './dto/create-contact.dto';
 import { UpdateContactDto } from './dto/update-contact.dto';
-import { ChecklistEvaluatorService } from '../checklist/checklist-evaluator.service';
+import { ChecklistReevaluator } from '../checklist/checklist-reevaluator.service';
 
 const TRAVEL_TIME_CLEAR = {
   travelTimeMinutes: null,
@@ -20,7 +20,7 @@ const CONTACT_ADDRESS_FIELDS = new Set([
 export class ContactsService {
   constructor(
     private repo: ContactsRepository,
-    private evaluator: ChecklistEvaluatorService,
+    private reeval: ChecklistReevaluator,
   ) {}
 
   findAll(userId: string) {
@@ -59,7 +59,7 @@ export class ContactsService {
     // re-opens) — the same cross-module re-eval the invoices/communications services do.
     if (dto.email !== undefined) {
       const bookingIds = await this.repo.findCustomerBookingIds(userId, id);
-      await Promise.all(bookingIds.map((bookingId) => this.evaluator.evaluate(bookingId).catch(() => {})));
+      await Promise.all(bookingIds.map((bookingId) => this.reeval.onBookingChanged(bookingId)));
     }
     return updated;
   }

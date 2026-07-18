@@ -2,7 +2,7 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import { CommunicationsRepository } from './communications.repository';
 import { MailService } from '../mail/mail.service';
 import { CreateCommunicationDto } from './dto/create-communication.dto';
-import { ChecklistEvaluatorService } from '../checklist/checklist-evaluator.service';
+import { ChecklistReevaluator } from '../checklist/checklist-reevaluator.service';
 import { ContactsService } from '../contacts/contacts.service';
 import { resolveMusicFormVisibility } from '../portal/portal-visibility';
 
@@ -29,7 +29,7 @@ export class CommunicationsService {
   constructor(
     private repo: CommunicationsRepository,
     private mail: MailService,
-    private evaluator: ChecklistEvaluatorService,
+    private reeval: ChecklistReevaluator,
     private contacts: ContactsService,
   ) {}
 
@@ -49,7 +49,7 @@ export class CommunicationsService {
     // FK-ownership (#709): the contact the communication is logged against must belong to the caller.
     await this.contacts.assertOwned(userId, [dto.contactId]);
     const result = await this.repo.create(userId, bookingId, dto);
-    await this.evaluator.evaluate(bookingId).catch(() => {});
+    await this.reeval.onBookingChanged(bookingId);
     return result;
   }
 
@@ -96,10 +96,10 @@ export class CommunicationsService {
     try {
       await this.mail.send({ to, subject, body, attachments });
       await this.repo.markSent(communication.id);
-      await this.evaluator.evaluate(bookingId).catch(() => {});
+      await this.reeval.onBookingChanged(bookingId);
     } catch (err) {
       await this.repo.markFailed(communication.id);
-      await this.evaluator.evaluate(bookingId).catch(() => {});
+      await this.reeval.onBookingChanged(bookingId);
       throw err;
     }
   }

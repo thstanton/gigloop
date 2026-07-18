@@ -9,7 +9,7 @@ import { ChecklistRepository } from '../checklist/checklist.repository';
 import { SeriesRepository } from '../series/series.repository';
 import { SeriesService } from '../series/series.service';
 import { MailService } from '../mail/mail.service';
-import { ChecklistEvaluatorService } from '../checklist/checklist-evaluator.service';
+import { ChecklistReevaluator } from '../checklist/checklist-reevaluator.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { EmailContext } from '../mail/mail.service';
 
@@ -69,7 +69,7 @@ type MockMusicFormRepo = {
 
 type MockSeriesRepo = { findOne: jest.Mock; findOneLight: jest.Mock; findExists: jest.Mock; create: jest.Mock };
 type MockMail = { buildContext: jest.Mock };
-type MockEvaluator = { evaluate: jest.Mock };
+type MockEvaluator = { onBookingChanged: jest.Mock };
 type MockChecklistRepo = {
   findActionItems: jest.Mock;
   seedChecklistItems: jest.Mock;
@@ -116,7 +116,7 @@ function makeMail(): MockMail {
 }
 
 function makeEvaluator(): MockEvaluator {
-  return { evaluate: jest.fn().mockResolvedValue(undefined) };
+  return { onBookingChanged: jest.fn().mockResolvedValue(undefined) };
 }
 
 function makeSeriesRepo(): MockSeriesRepo {
@@ -231,7 +231,7 @@ describe('BookingsService', () => {
       seriesRepo as unknown as SeriesRepository,
       seriesService as unknown as SeriesService,
       mail as unknown as MailService,
-      evaluator as unknown as ChecklistEvaluatorService,
+      evaluator as unknown as ChecklistReevaluator,
       checklistRepo as unknown as ChecklistRepository,
       contractRepo as unknown as ContractRepository,
       musicFormRepo as unknown as MusicFormConfigRepository,
@@ -381,7 +381,7 @@ describe('BookingsService', () => {
       repo.create.mockResolvedValue(createdBooking);
       const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', checklistItems: [] };
       await service.create('u1', dto);
-      expect(evaluator.evaluate).toHaveBeenCalledWith(createdBooking.id);
+      expect(evaluator.onBookingChanged).toHaveBeenCalledWith(createdBooking.id);
     });
 
     it('validates ownership of the customer/venue/agent contacts before creating (#709)', async () => {
@@ -696,7 +696,7 @@ describe('BookingsService', () => {
       repo.findOne.mockResolvedValue(booking);
       repo.update.mockResolvedValue(updated);
       await service.update('u1', 'b1', { venueId: 'venue-1' });
-      expect(evaluator.evaluate).toHaveBeenCalledWith('b1');
+      expect(evaluator.onBookingChanged).toHaveBeenCalledWith('b1');
     });
 
     it('does not re-evaluate when neither status nor venueId change', async () => {
@@ -704,7 +704,7 @@ describe('BookingsService', () => {
       repo.findOne.mockResolvedValue(booking);
       repo.update.mockResolvedValue(updated);
       await service.update('u1', 'b1', { title: 'New title' });
-      expect(evaluator.evaluate).not.toHaveBeenCalled();
+      expect(evaluator.onBookingChanged).not.toHaveBeenCalled();
     });
 
     it('round-trips logistics without modification', async () => {
@@ -755,7 +755,7 @@ describe('BookingsService', () => {
       repo.findPackageTemplates.mockResolvedValue([tmpl]);
       repo.applyPackageTemplate.mockResolvedValue(rawBooking);
       await service.applyPackageTemplate('u1', 'b1', 'f1');
-      expect(evaluator.evaluate).toHaveBeenCalledWith('b1');
+      expect(evaluator.onBookingChanged).toHaveBeenCalledWith('b1');
     });
 
     it('offers the template key moments/genres as a suggestion when the form is on, without forcing them (ADR-0046 / #502)', async () => {
@@ -872,7 +872,7 @@ describe('BookingsService', () => {
       repo.findOne.mockResolvedValue(booking);
       repo.addSet.mockResolvedValue(set);
       await service.addSet('u1', 'b1', { order: 1, duration: 60 });
-      expect(evaluator.evaluate).toHaveBeenCalledWith('b1');
+      expect(evaluator.onBookingChanged).toHaveBeenCalledWith('b1');
     });
   });
 
@@ -1013,7 +1013,7 @@ describe('BookingsService', () => {
       musicFormRepo.publishMusicFormConfig.mockResolvedValue(config);
       const result = await service.publishMusicFormConfig('u1', 'b1', dto);
       expect(musicFormRepo.publishMusicFormConfig).toHaveBeenCalledWith('u1', 'b1', dto);
-      expect(evaluator.evaluate).toHaveBeenCalledWith('b1');
+      expect(evaluator.onBookingChanged).toHaveBeenCalledWith('b1');
       expect(result).toBe(config);
     });
 
@@ -1026,7 +1026,7 @@ describe('BookingsService', () => {
       // The step is sticky once COMPLETE — it must be explicitly reset before the re-evaluate, or
       // evaluate() would keep it COMPLETE and the form would read "still published" on the checklist.
       expect(checklistRepo.resetItemByKey).toHaveBeenCalledWith('b1', 'set_up_and_publish');
-      expect(evaluator.evaluate).toHaveBeenCalledWith('b1');
+      expect(evaluator.onBookingChanged).toHaveBeenCalledWith('b1');
       expect(result).toBe(config);
     });
   });
@@ -1408,7 +1408,7 @@ describe('BookingsService', () => {
       repo.findOne.mockResolvedValue(booking);
       repo.findChecklistItemById.mockResolvedValue({ id: 'i1', key: null });
       checklistRepo.updateChecklistItemState.mockResolvedValue({ count: 1 });
-      evaluator.evaluate.mockImplementation(async () => {
+      evaluator.onBookingChanged.mockImplementation(async () => {
         callOrder.push('evaluate');
       });
       repo.findChecklistItems.mockImplementation(async () => {
@@ -1457,7 +1457,7 @@ describe('BookingsService', () => {
 
       expect(checklistRepo.updateChecklistItemState).toHaveBeenCalledWith('u1', 'b1', 'ci1', 'PENDING');
       expect(checklistRepo.seedReminderItem).not.toHaveBeenCalled();
-      expect(evaluator.evaluate).toHaveBeenCalledWith('b1');
+      expect(evaluator.onBookingChanged).toHaveBeenCalledWith('b1');
     });
 
     it('is a no-op when the reminder already exists and is not skipped', async () => {
@@ -1483,7 +1483,7 @@ describe('BookingsService', () => {
         bookingWithDates.date,
         bookingWithDates.createdAt,
       );
-      expect(evaluator.evaluate).toHaveBeenCalledWith('b1');
+      expect(evaluator.onBookingChanged).toHaveBeenCalledWith('b1');
     });
   });
 

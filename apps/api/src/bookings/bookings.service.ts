@@ -18,7 +18,7 @@ import { UpdateBookingPackageDto } from './dto/update-booking-package.dto';
 import { UpsertMusicFormConfigDto } from './dto/upsert-music-form-config.dto';
 import { MailService } from '../mail/mail.service';
 import { substituteTiptapVariables } from '../mail/tiptap-portal';
-import { ChecklistEvaluatorService } from '../checklist/checklist-evaluator.service';
+import { ChecklistReevaluator } from '../checklist/checklist-reevaluator.service';
 import { getChecklistDefaults } from '../checklist/checklist-defaults';
 import {
   selectApplicableReminders,
@@ -107,7 +107,7 @@ export class BookingsService {
     private seriesRepo: SeriesRepository,
     private seriesService: SeriesService,
     private mail: MailService,
-    private evaluator: ChecklistEvaluatorService,
+    private reeval: ChecklistReevaluator,
     private checklistRepo: ChecklistRepository,
     private contractRepo: ContractRepository,
     private musicFormRepo: MusicFormConfigRepository,
@@ -277,7 +277,7 @@ export class BookingsService {
     // booking created with a venue must not seed add_venue as a PENDING nag (PRD #511
     // Story 20: never nag work already done). Post-commit + best-effort, so it never
     // affects the atomic create unit (ADR-0047).
-    await this.evaluator.evaluate(created.id).catch(() => {});
+    await this.reeval.onBookingChanged(created.id);
 
     return created;
   }
@@ -340,7 +340,7 @@ export class BookingsService {
 
     // A copied booking carries its source's venue, so add_venue must start COMPLETE rather
     // than re-nag work already done (PRD #511 Story 20). Post-commit + best-effort.
-    await this.evaluator.evaluate(copied.id).catch(() => {});
+    await this.reeval.onBookingChanged(copied.id);
 
     return copied;
   }
@@ -357,7 +357,7 @@ export class BookingsService {
     // Re-evaluate auto-complete rules when a field a rule binds to changes (status drives stage
     // gates, venueId the add_venue item, depositReceivedAt the deposit_received step — ADR-0057).
     if (touchesRuleBoundField(dto)) {
-      await this.evaluator.evaluate(id).catch(() => {});
+      await this.reeval.onBookingChanged(id);
     }
     return updated;
   }
@@ -371,7 +371,7 @@ export class BookingsService {
     await this.assertOwnership(userId, bookingId);
     const result = await this.repo.addSet(userId, bookingId, dto);
     // Re-evaluate: the first set satisfies build_itinerary (PRD #511 Story 21). Post-add + best-effort.
-    await this.evaluator.evaluate(bookingId).catch(() => {});
+    await this.reeval.onBookingChanged(bookingId);
     return result;
   }
 
@@ -417,7 +417,7 @@ export class BookingsService {
   async publishMusicFormConfig(userId: string, bookingId: string, dto: UpsertMusicFormConfigDto) {
     await this.assertOwnership(userId, bookingId);
     const config = await this.musicFormRepo.publishMusicFormConfig(userId, bookingId, dto);
-    await this.evaluator.evaluate(bookingId).catch(() => {});
+    await this.reeval.onBookingChanged(bookingId);
     return config;
   }
 
@@ -428,7 +428,7 @@ export class BookingsService {
     await this.assertOwnership(userId, bookingId);
     const config = await this.musicFormRepo.unpublishMusicFormConfig(bookingId);
     await this.checklistRepo.resetItemByKey(bookingId, 'set_up_and_publish');
-    await this.evaluator.evaluate(bookingId).catch(() => {});
+    await this.reeval.onBookingChanged(bookingId);
     return config;
   }
 
@@ -455,7 +455,7 @@ export class BookingsService {
 
     // Re-evaluate: applying a template seeds sets, satisfying build_itinerary
     // (PRD #511 Story 21: never nag work already done). Post-apply + best-effort.
-    await this.evaluator.evaluate(bookingId).catch(() => {});
+    await this.reeval.onBookingChanged(bookingId);
 
     return { booking: mapped, suggestion };
   }
@@ -547,7 +547,7 @@ export class BookingsService {
     if (existing) await this.contractRepo.voidContract(existing.id);
 
     const contract = await this.contractRepo.createContractRecord(userId, bookingId, substituted);
-    await this.evaluator.evaluate(bookingId).catch(() => {});
+    await this.reeval.onBookingChanged(bookingId);
     return {
       id: contract.id,
       createdAt: contract.createdAt.toISOString(),
@@ -579,7 +579,7 @@ export class BookingsService {
     if (!contract) throw new NotFoundException('Contract not found');
     if (contract.status !== 'DRAFT') throw new BadRequestException('Only DRAFT contracts can be sent');
     const updated = await this.contractRepo.markContractSent(contractId);
-    await this.evaluator.evaluate(bookingId).catch(() => {});
+    await this.reeval.onBookingChanged(bookingId);
     return {
       id: updated.id,
       createdAt: updated.createdAt.toISOString(),
@@ -607,7 +607,7 @@ export class BookingsService {
       throw new BadRequestException('Voiding a signed contract requires confirmSignedVoid: true');
     }
     await this.contractRepo.voidContract(contractId);
-    await this.evaluator.evaluate(bookingId).catch(() => {});
+    await this.reeval.onBookingChanged(bookingId);
   }
 
   async getChecklist(userId: string, bookingId: string) {
@@ -658,7 +658,7 @@ export class BookingsService {
         await this.repo.clearDepositReceivedAt(bookingId).catch(() => {});
       }
     }
-    await this.evaluator.evaluate(bookingId).catch(() => {});
+    await this.reeval.onBookingChanged(bookingId);
     // Return the recomputed checklist (post-evaluate) so the client settles the
     // toggle and its dependency cascade in one round-trip — no follow-up refetch.
     return this.getChecklist(userId, bookingId);
@@ -711,7 +711,7 @@ export class BookingsService {
       );
     }
     // Settle dependency/auto-complete state for the (possibly new) item and downstream.
-    await this.evaluator.evaluate(bookingId).catch(() => {});
+    await this.reeval.onBookingChanged(bookingId);
     return { success: true };
   }
 
