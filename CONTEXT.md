@@ -170,7 +170,9 @@ A billing grouping for a set of related [[Booking]]s that are invoiced together 
 
 **New booking pre-population:** when the musician selects an existing series in the booking creation form, venue, booking agent, and checklist items are pre-populated from the earliest member booking in the series (ordered by `createdAt`), and customer from `series.customerId`. All pre-populated values are editable before saving. **Performance packages and the [[MusicFormConfig]] are *not* pre-populated:** a booking-owned [[Package]] is an independent snapshot with no provenance back to a [[Package Template]] (ADR-0046), so a prior member's packages cannot be reconstructed at creation time.
 
-**Invoice section in booking UI:** the Invoice section on any member Booking's detail page shows the series invoice as a variant ("Series Invoice") — creation and edits carry a reminder that changes affect the whole series.
+**Invoice section in booking UI:** the Invoice section on any member Booking's detail page shows the series invoice as a variant labelled **"Series invoice"** (never "Deposit"/"Balance" — the deposit/balance axis is booking-only; see [[Invoice]] → Series invoices) — creation and edits carry a reminder that changes affect the whole series.
+
+**Client models the Invoice as one type (ADR-0063, #687):** the frontend mirrors the single polymorphic Invoice entity (ADR-0029) as **one** `Invoice` type in `apps/web/src/types/api.ts` with nullable `bookingId`/`seriesId`, not two. "Series vs booking" and the "Series invoice" label are *derived* from which owner FK is set — a series invoice is simply an Invoice with `seriesId` set (and `isDeposit` always false), not a separate `SeriesInvoice` type.
 
 ### Template
 A reusable content block stored as Tiptap JSON. Used for email body rendering and contract display on the [[Portal]]. Custom template creation is deferred to P2; MVP exposes only built-in templates.

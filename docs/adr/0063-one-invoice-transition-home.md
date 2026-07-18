@@ -85,7 +85,43 @@ nothing, by construction" from a claim into a regression-locked fact.
   checklist evaluator has no series-awareness). This is a checklist-*modelling* gap, not a
   transition-duplication one; the provisional direction is to **SKIP** those goals for series
   members. This ADR deliberately changes **zero** checklist behaviour.
-- The web app mirrors these invoice derivations (issue #687). API-side consolidation lands first;
-  the web-side follows.
 - `invoices.repository.ts` grows past the ~300-line yellow flag as series CRUD moves in (net less
   code than today — three methods are deleted). Worth a `/simplify` pass at PR.
+
+## Client mirror (#687 and its siblings)
+
+The same one-entity truth was re-examined on the web side and found to be violated there too — in
+three ways that mirror the API's. Grilled 2026-07-18; the client work is sequenced *after* this
+API-side consolidation.
+
+- **The client fabricated a second entity.** `apps/web/src/types/api.ts` declared *two* interfaces —
+  `Invoice` (only `bookingId` + `isDeposit`) and `SeriesInvoice` (only `seriesId`, no `isDeposit`) —
+  each dropping the other's fields. But the API returns the **raw Prisma `Invoice` row** from both
+  endpoint families (no response DTO — see below), so the wire shape is *already one shape* with both
+  FKs nullable and `isDeposit` always present. The split was pure client fiction, and it was the root
+  cause of five `as unknown as Invoice` casts (a cast between two things that are actually one thing).
+  **#687** deletes `SeriesInvoice`: one `Invoice` type with `bookingId: string | null` /
+  `seriesId: string | null`, "series vs booking" derived from which FK is set. The casts vanish
+  because there is no second type to bridge.
+- **A modelling bug fell out of the fiction.** `InvoiceRow` read `invoice.isDeposit` on a cast series
+  invoice, where it is `undefined` → falsy → the row silently rendered a series invoice as **"Balance"**.
+  CONTEXT already specifies the label should be **"Series invoice"** (Invoice → "Invoice section in
+  booking UI"); the code just never matched the doc. #687 makes it match — the *one* intentional
+  behaviour change in an otherwise behaviour-preserving refactor — via a pure `invoiceLabel(invoice)`
+  derivation (`seriesId ⇒ 'Series invoice'`, else `isDeposit ? 'Deposit' : 'Balance'`).
+- **The transition recipe is duplicated across two owners — again.** `useInvoiceActions(bookingId)`
+  (booking, a hook) and `SeriesInvoiceCard` (series, six *inline* `useMutation`s) re-implement the same
+  issue / send / mark-sent / mark-paid / void / delete recipe, differing only in URL prefix
+  (`/bookings/:id` vs `/series/:id`) and invalidation keys. This is the client twin of the "two owner
+  services" finding above. Collapsing it into one **field-derived** `useInvoiceActions(invoice)` that
+  branches on the invoice's own `bookingId`/`seriesId` is the client mirror of this ADR's
+  one-transition-home — deferred to its **own sibling issue** (it depends on #687's unified type and
+  is a substantial merge in its own right), keeping #687 bounded to type-unification + a pure
+  `invoiceDerivations` module + collapsing `InvoiceRow`'s 14-param interface to a handlers object.
+- **The response-DTO gap that *enabled* the fiction.** The `invoices` and `series` modules return raw
+  Prisma entities and carry only prose `@ApiResponse` descriptions — no `InvoiceResponseDto`, in
+  violation of the repo's `@ApiProperty`/typed-`@ApiResponse` rule (other modules — documents,
+  contacts, bookings — do have response DTOs). With no wire contract, nothing contradicted the two
+  half-types. Fixing it (a real `InvoiceResponseDto` with nullable `bookingId`/`seriesId` +
+  `isDeposit`-always) is a distinct API concern, split to its **own sibling issue** rather than folded
+  into this ADR's tight persistence/transition scope.
