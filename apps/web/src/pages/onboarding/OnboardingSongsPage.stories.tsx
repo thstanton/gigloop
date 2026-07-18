@@ -20,6 +20,27 @@ const me = {
   updatedAt: '2024-01-01T00:00:00Z',
 };
 
+// A business name distinct from the component's fallback sample, so the play function
+// proves the quote-email subject is actually personalised rather than coincidentally
+// matching the sample (#695).
+const publicProfileHandler = http.get('/api/me/public', () =>
+  HttpResponse.json({
+    id: 'pp1',
+    createdAt: '2024-01-01T00:00:00Z',
+    updatedAt: '2024-01-01T00:00:00Z',
+    businessName: 'The Aurora Quartet',
+    displayName: 'James',
+    bio: null,
+    email: 'james@auroraquartet.co.uk',
+    phone: null,
+    logoUrl: null,
+    photo: null,
+    website: null,
+    socials: null,
+    clientPortalConfig: { theme: 'LIGHT_MODERN', brandColour: '#000000', heroImage: null, showContactPhoto: false, showContactEmail: true, showContactPhone: true },
+  }),
+);
+
 // Story-level msw.handlers REPLACE the global set (Storybook merges parameters but
 // replaces arrays), so every route the page hits must be declared here.
 const catalogueHandler = http.get('/api/songs/catalogue', () =>
@@ -58,6 +79,7 @@ const meta = {
         }),
         http.delete('/api/songs/:id', () => new HttpResponse(null, { status: 204 })),
         catalogueHandler,
+        publicProfileHandler,
       ],
     },
   },
@@ -73,7 +95,7 @@ export const Default: Story = {
       (await canvas.findAllByText('Communicating with your clients'))[0],
     ).toBeVisible();
     await expect(canvas.getByText('Emails, ready when you are')).toBeVisible();
-    await expect(canvas.getByText('Your quote from Jane Smith Music')).toBeVisible();
+    await expect(await canvas.findByText('Your quote from The Aurora Quartet')).toBeVisible();
     await expect(canvas.getByText('Thank you for having us!')).toBeVisible();
 
     // Song requests: empty repertoire state
@@ -114,6 +136,7 @@ export const RequestsOff: Story = {
       handlers: [
         http.get('/api/me', () => HttpResponse.json({ ...me, songRequestFormEnabled: false })),
         catalogueHandler,
+        publicProfileHandler,
       ],
     },
   },

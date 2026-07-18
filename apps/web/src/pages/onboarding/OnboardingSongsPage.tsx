@@ -21,35 +21,45 @@ import { IconButton } from '@/components/common/IconButton';
 import { AddSongField, type NewSong } from '@/features/repertoire/AddSongField';
 import { stepNav } from '@/features/onboarding/steps';
 import { GENRE_LABELS } from '@/lib/constants';
-import type { CatalogueGroup, Song, SongGenre, UserProfile } from '@/types/api';
+import type { CatalogueGroup, PublicProfile, Song, SongGenre, UserProfile } from '@/types/api';
 
 const PATH = '/onboarding/songs';
 
+// Sample business name shown until the musician's own (entered in step 1) loads.
+const SAMPLE_BUSINESS_NAME = 'Jane Smith Music';
+
 // Orientation copy: the email templates GigLoop ships with. These are templates the
 // musician sends deliberately (customisable in Templates and per-send) — never
-// sent automatically.
-const EMAILS: { icon: LucideIcon; subject: string; purpose: string }[] = [
-  {
-    icon: FileText,
-    subject: 'Your quote from Jane Smith Music',
-    purpose: 'For replying to a new enquiry with your quote',
-  },
-  {
-    icon: FileSignature,
-    subject: 'Your contract is ready to sign',
-    purpose: 'Goes with the contract, carrying its secure signing link',
-  },
-  {
-    icon: Receipt,
-    subject: 'Deposit invoice — The Anderson Wedding',
-    purpose: 'For the deposit and balance invoices',
-  },
-  {
-    icon: Heart,
-    subject: 'Thank you for having us!',
-    purpose: 'For after the event — a good final impression',
-  },
-];
+// sent automatically. The quote subject carries the musician's business name so it
+// doesn't read as a stray sample two steps after they entered it (#695).
+function buildEmails(businessName: string): { key: string; icon: LucideIcon; subject: string; purpose: string }[] {
+  return [
+    {
+      key: 'quote',
+      icon: FileText,
+      subject: `Your quote from ${businessName}`,
+      purpose: 'For replying to a new enquiry with your quote',
+    },
+    {
+      key: 'contract',
+      icon: FileSignature,
+      subject: 'Your contract is ready to sign',
+      purpose: 'Goes with the contract, carrying its secure signing link',
+    },
+    {
+      key: 'invoice',
+      icon: Receipt,
+      subject: 'Deposit invoice — The Anderson Wedding',
+      purpose: 'For the deposit and balance invoices',
+    },
+    {
+      key: 'thank-you',
+      icon: Heart,
+      subject: 'Thank you for having us!',
+      purpose: 'For after the event — a good final impression',
+    },
+  ];
+}
 
 function AddedSongsList({
   songs,
@@ -114,6 +124,15 @@ export default function OnboardingSongsPage() {
   const { isLoaded, isSignedIn } = useAuth();
   const { prev } = stepNav(PATH);
   const { data: profile } = useMe();
+
+  // Same query key as the rest of the app (AppShell, Settings, PortalPreviewPage) so the
+  // business name entered in step 1 is already fresh by the time this step mounts.
+  const { data: publicProfile } = useQuery({
+    queryKey: ['publicProfile'],
+    queryFn: () => apiGet<PublicProfile>('/me/public'),
+    enabled: isLoaded && !!isSignedIn,
+  });
+  const emails = buildEmails(publicProfile?.businessName?.trim() || SAMPLE_BUSINESS_NAME);
 
   // Songs created on this step (adds persist immediately; this is the session's list)
   const [added, setAdded] = useState<Song[]>([]);
@@ -202,8 +221,8 @@ export default function OnboardingSongsPage() {
             </p>
           </div>
           <div className="rounded-lg border border-border divide-y divide-border">
-            {EMAILS.map((e) => (
-              <div key={e.subject} className="flex items-start gap-3 px-4 py-3">
+            {emails.map((e) => (
+              <div key={e.key} className="flex items-start gap-3 px-4 py-3">
                 <e.icon size={18} className="text-primary flex-shrink-0 mt-0.5" />
                 <div className="min-w-0">
                   <p className="text-base text-foreground">{e.subject}</p>
