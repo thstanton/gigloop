@@ -154,3 +154,79 @@ test('diff header lines not flagged', () => {
   ].join('\n');
   assert.deepEqual(detectViolations(raw), []);
 });
+
+// ── Bare-id mutation guard (#710 / ADR-0061) ──────────────────────────────────
+
+const REPO = 'apps/api/src/invoices/invoices.repository.ts';
+
+test('bare-id inline mutation in a repository — violation', () => {
+  const v = detectViolations(diff(['    return this.prisma.invoice.delete({ where: { id } });'], [], REPO));
+  assert.equal(v.length, 1);
+  assert.match(v[0].reason, /bare-id mutation/);
+});
+
+test('bare-id multi-line mutation in a repository — violation', () => {
+  const v = detectViolations(
+    diff(
+      ['    return this.prisma.invoice.update({', '      where: { id },', '      data: dto,', '    });'],
+      [],
+      REPO,
+    ),
+  );
+  assert.equal(v.length, 1);
+  assert.match(v[0].reason, /bare-id mutation/);
+});
+
+test('id with an alias value (where: { id: setId }) — violation', () => {
+  const v = detectViolations(diff(['    return this.prisma.performanceSet.delete({ where: { id: setId } });'], [], REPO));
+  assert.equal(v.length, 1);
+});
+
+test('userId-scoped mutation (extendedWhereUnique) — no violation', () => {
+  const v = detectViolations(diff(['    return this.prisma.invoice.update({ where: { id, userId }, data: dto });'], [], REPO));
+  assert.deepEqual(v, []);
+});
+
+test('userId-scoped multi-line mutation — no violation', () => {
+  const v = detectViolations(
+    diff(
+      ['    return this.prisma.invoice.update({', '      where: { id, userId },', '      data: dto,', '    });'],
+      [],
+      REPO,
+    ),
+  );
+  assert.deepEqual(v, []);
+});
+
+test('child-scoped mutation (where: { bookingId }) — no violation', () => {
+  const v = detectViolations(diff(['    return this.prisma.musicFormConfig.delete({ where: { bookingId } });'], [], REPO));
+  assert.deepEqual(v, []);
+});
+
+test('scoped-upstream suppress comment — no violation', () => {
+  const v = detectViolations(
+    diff(['    return this.prisma.invoice.delete({ where: { id } }); // scoped-upstream: findOne proved ownership'], [], REPO),
+  );
+  assert.deepEqual(v, []);
+});
+
+test('scoped-upstream suppress on a multi-line mutation verb line — no violation', () => {
+  const v = detectViolations(
+    diff(
+      ['    return this.prisma.invoice.update({ // scoped-upstream: proven owned', '      where: { id },', '      data: dto,', '    });'],
+      [],
+      REPO,
+    ),
+  );
+  assert.deepEqual(v, []);
+});
+
+test('bare-id read (findUnique) in a repository — no violation (mutations only)', () => {
+  const v = detectViolations(diff(['    return this.prisma.invoice.findUnique({ where: { id } });'], [], REPO));
+  assert.deepEqual(v, []);
+});
+
+test('bare-id mutation outside a repository file — no violation (repo-scoped rule)', () => {
+  const v = detectViolations(diff(['    return this.prisma.invoice.delete({ where: { id } });'], [], 'apps/api/src/invoices/invoices.service.ts'));
+  assert.deepEqual(v, []);
+});
