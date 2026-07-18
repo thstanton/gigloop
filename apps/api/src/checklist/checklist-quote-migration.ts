@@ -11,9 +11,10 @@
 // state is preserved rather than orphaned (and the stale `confirm_quote` row is deleted).
 //
 // PURE planner — it computes the goal/step tree and the rows to delete from a booking's existing
-// items with no DB access — so it is unit-tested directly on fixtures. The apply step
-// (transaction + per-booking evaluate() sweep) lives in `scripts/migrate-quote-goals.ts`.
-import { CHECKLIST_DEFAULTS, ChecklistDefaultItem } from '../bookings/checklist-defaults';
+// items with no DB access — so it is unit-tested directly on fixtures. Retained as the reusable
+// booking-row reshape logic (ADR-0060 scope guard); the spent #616 apply driver was deleted after
+// it ran. A future catalogue collapse authors a fresh apply driver over this planner.
+import { CHECKLIST_DEFAULTS } from '../bookings/checklist-defaults';
 import { ChecklistState, StepState, rollUp } from './checklist-rollup';
 
 const GOAL_KEY = 'get_the_quote_accepted';
@@ -171,39 +172,7 @@ export function planQuoteMigration(items: FlatChecklistItem[]): QuoteMigrationPl
   return { goal, steps, deleteIds: cluster.map((i) => i.id) };
 }
 
-/**
- * Migrate a user's *saved* checklist template (`preferences.checklistDefaults`): collapse its
- * flat `send_quote`/`confirm_quote` entries into the single `get_the_quote_accepted` goal entry,
- * so a booking seeded from that template carries the multi-step goal rather than dropping the
- * quote deliverable (the old keys are no longer preview keys). Returns null when the template has
- * no old quote cluster keys (already current, or empty so the system falls back to
- * CHECKLIST_DEFAULTS, which is current). Other system items keep the user's overrides and order;
- * custom items are preserved.
- */
-export function planQuoteTemplateMigration(
-  storedDefaults: ChecklistDefaultItem[],
-): ChecklistDefaultItem[] | null {
-  const oldKeys = Object.keys(FLAT_TO_STEP);
-  if (!storedDefaults.some((d) => d.key != null && oldKeys.includes(d.key))) {
-    return null;
-  }
-  const def = CHECKLIST_DEFAULTS.find((d) => d.key === GOAL_KEY);
-  if (!def) {
-    throw new Error(`Canonical ${GOAL_KEY} goal not found in CHECKLIST_DEFAULTS`);
-  }
-
-  const result: ChecklistDefaultItem[] = [];
-  let insertedGoal = false;
-  for (const item of storedDefaults) {
-    if (item.key != null && oldKeys.includes(item.key)) {
-      // Replace the first cluster member with the canonical goal entry; drop the rest.
-      if (!insertedGoal) {
-        result.push(def);
-        insertedGoal = true;
-      }
-      continue;
-    }
-    result.push(item);
-  }
-  return result;
-}
+// The saved-template migration (planQuoteTemplateMigration) was retired by ADR-0060: checklist
+// defaults are now stored as sparse overrides and read-merged against the current catalogue, so a
+// retired key is dropped on read and never needs a template rewrite. The booking-row planner
+// (planQuoteMigration, above) is retained as the reusable reshape pattern for any future collapse.

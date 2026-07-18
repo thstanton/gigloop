@@ -12,9 +12,10 @@
 // never re-nags (Story 21). A monotonic back-fill (a later COMPLETE implies its predecessors) is the
 // belt-and-suspenders for an invoice voided after issue.
 //
-// PURE planner — no DB access — unit-tested on fixtures. The apply step (transaction + per-goal
-// step rebuild + evaluate() sweep) lives in `scripts/migrate-invoice-goals.ts`.
-import { CHECKLIST_DEFAULTS, ChecklistDefaultItem } from '../bookings/checklist-defaults';
+// PURE planner — no DB access — unit-tested on fixtures. Retained as the reusable booking-row
+// reshape logic (ADR-0060 scope guard); the spent #617 apply driver was deleted after it ran.
+// A future catalogue collapse authors a fresh apply driver over this planner.
+import { CHECKLIST_DEFAULTS } from '../bookings/checklist-defaults';
 import { ChecklistState, StepState, rollUp } from './checklist-rollup';
 
 /** The subset of an existing step row the planner reads. */
@@ -138,29 +139,8 @@ export function planInvoiceGoalMigration(
   return { newGoalKey: def.key, newGoalLabel: def.label, goalState, goalCompletedAt, steps };
 }
 
-/**
- * Migrate a user's *saved* checklist template: rename the `invoice_the_balance` entry to the
- * canonical `get_the_balance_paid` goal (carrying the user's enabled/dueDateRule overrides) so new
- * bookings seed the renamed goal. The deposit goal keeps its key, so it needs no template change.
- * Returns null when the template has no `invoice_the_balance` entry.
- */
-export function planInvoiceTemplateMigration(
-  storedDefaults: ChecklistDefaultItem[],
-): ChecklistDefaultItem[] | null {
-  const idx = storedDefaults.findIndex((d) => d.key === 'invoice_the_balance');
-  if (idx === -1) return null;
-  const def = CHECKLIST_DEFAULTS.find((d) => d.key === 'get_the_balance_paid');
-  if (!def) {
-    throw new Error('Canonical get_the_balance_paid goal not found in CHECKLIST_DEFAULTS');
-  }
-  const old = storedDefaults[idx];
-  const renamed: ChecklistDefaultItem = {
-    ...def,
-    ...(old.enabled === false ? { enabled: false } : {}),
-    // Carry the user's dueDateRule override (always present on a stored entry — null or a value).
-    dueDateRule: old.dueDateRule,
-  };
-  const result = [...storedDefaults];
-  result[idx] = renamed;
-  return result;
-}
+// The saved-template migration (planInvoiceTemplateMigration) was retired by ADR-0060: checklist
+// defaults are now stored as sparse overrides and read-merged against the current catalogue, so a
+// renamed key (invoice_the_balance → get_the_balance_paid) is dropped on read and never needs a
+// template rewrite. The booking-row planner (planInvoiceGoalMigration, above) is retained as the
+// reusable reshape pattern for any future collapse.

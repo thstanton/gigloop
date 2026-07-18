@@ -456,17 +456,8 @@ export function computeReminderInsertOrder(
   return precedingOrders.length ? Math.max(...precedingOrders) + 1 : 1;
 }
 
-export function getChecklistDefaults(
-  preferences: Record<string, unknown> | null | undefined,
-): ChecklistDefaultItem[] {
-  const defaults = (preferences as { checklistDefaults?: ChecklistDefaultItem[] } | null)
-    ?.checklistDefaults;
-  if (Array.isArray(defaults) && defaults.length > 0) return defaults;
-  return CHECKLIST_DEFAULTS;
-}
-
-// Stage order for seeding rule: items at stages AT OR BEFORE the booking's starting
-// status are not seeded (they've already happened outside the system).
+// Stage order (ADR-0057). Used both for the seeding-inclusion rule and for read-merge
+// custom-item placement — a custom item files under its own requiredForStatus stage.
 const STAGE_ORDER: Array<ChecklistDefaultItem['requiredForStatus']> = [
   null,
   'PROVISIONAL',
@@ -474,6 +465,135 @@ const STAGE_ORDER: Array<ChecklistDefaultItem['requiredForStatus']> = [
   'READY',
   'COMPLETE',
 ];
+
+// ADR-0060: a musician's stored checklist config is an OVERRIDES object, not a snapshot of
+// the catalogue. The effective template is derived by merging these overrides onto the
+// CURRENT CHECKLIST_DEFAULTS at read time, so catalogue improvements auto-inherit.
+export interface ChecklistSystemOverride {
+  key: string;
+  enabled?: boolean;
+  dueDateRule?: DueDateRule | null;
+}
+
+export interface ChecklistDefaultsOverrides {
+  systemItemOverrides: ChecklistSystemOverride[];
+  customItems: ChecklistDefaultItem[];
+}
+
+// Structural equality for a due-date rule (ADR-0060 §3 — the sparse-delta compare).
+export function dueDateRuleEqual(
+  a: DueDateRule | null | undefined,
+  b: DueDateRule | null | undefined,
+): boolean {
+  const an = a ?? null;
+  const bn = b ?? null;
+  if (an === null || bn === null) return an === bn;
+  return an.basis === bn.basis && an.offsetDays === bn.offsetDays;
+}
+
+// Parse the stored blob defensively (ADR-0060 §7 — clean start): only the new overrides
+// object is honoured. A legacy full-snapshot array or any malformed value is treated as
+// "no overrides" so a stale blob reads as the pure current catalogue and never throws.
+function parseStoredOverrides(stored: unknown): ChecklistDefaultsOverrides | null {
+  if (!stored || typeof stored !== 'object' || Array.isArray(stored)) return null;
+  const s = stored as Record<string, unknown>;
+  return {
+    systemItemOverrides: Array.isArray(s.systemItemOverrides)
+      ? (s.systemItemOverrides as ChecklistSystemOverride[])
+      : [],
+    customItems: Array.isArray(s.customItems) ? (s.customItems as ChecklistDefaultItem[]) : [],
+  };
+}
+
+// Reduce raw system overrides to genuine deltas from the current catalogue (ADR-0060 §3):
+// an override equal to the catalogue default is dropped (so retuned catalogue defaults keep
+// reaching the user), and an override for a key the catalogue no longer has is dropped
+// (symmetric with drop-on-read). This is what the writer persists.
+// The delta for one override against its catalogue default, or null if it matches the default.
+function overrideDelta(
+  def: ChecklistDefaultItem,
+  override: { key: string; enabled?: boolean; dueDateRule?: DueDateRule | null },
+): ChecklistSystemOverride | null {
+  const delta: ChecklistSystemOverride = { key: override.key };
+  let hasDelta = false;
+  if (override.enabled !== undefined && override.enabled !== (def.enabled !== false)) {
+    delta.enabled = override.enabled;
+    hasDelta = true;
+  }
+  if (
+    override.dueDateRule !== undefined &&
+    !dueDateRuleEqual(override.dueDateRule, def.dueDateRule)
+  ) {
+    delta.dueDateRule = override.dueDateRule;
+    hasDelta = true;
+  }
+  return hasDelta ? delta : null;
+}
+
+export function sparsifySystemOverrides(
+  raw: Array<{ key: string; enabled?: boolean; dueDateRule?: DueDateRule | null }>,
+): ChecklistSystemOverride[] {
+  const catalogue = new Map(CHECKLIST_DEFAULTS.map((d) => [d.key, d]));
+  const sparse: ChecklistSystemOverride[] = [];
+  for (const override of raw) {
+    const def = catalogue.get(override.key);
+    if (!def) continue; // retired key — drop
+    const delta = overrideDelta(def, override);
+    if (delta) sparse.push(delta);
+  }
+  return sparse;
+}
+
+// Slot custom items into their requiredForStatus stage (ADR-0060 §5): within each stage the
+// catalogue goals come first (catalogue order), then that stage's custom items (stored order).
+// `order` is derived here, never stored.
+function mergeCustomItemsByStage(
+  systemItems: ChecklistDefaultItem[],
+  customItems: ChecklistDefaultItem[],
+): ChecklistDefaultItem[] {
+  if (customItems.length === 0) return systemItems;
+  const groupByStage = (items: ChecklistDefaultItem[]) => {
+    const map = new Map<ChecklistDefaultItem['requiredForStatus'], ChecklistDefaultItem[]>();
+    for (const item of items) {
+      const stage = item.requiredForStatus ?? null;
+      const bucket = map.get(stage);
+      if (bucket) bucket.push(item);
+      else map.set(stage, [item]);
+    }
+    return map;
+  };
+  const systemsByStage = groupByStage(systemItems);
+  const customsByStage = groupByStage(customItems);
+  const result: ChecklistDefaultItem[] = [];
+  for (const stage of STAGE_ORDER) {
+    result.push(...(systemsByStage.get(stage) ?? []), ...(customsByStage.get(stage) ?? []));
+  }
+  return result;
+}
+
+// ADR-0060: derive the effective checklist template by merging the musician's stored sparse
+// overrides onto the CURRENT catalogue. Iterating the catalogue (not the stored list) is what
+// makes a retired-key override a non-event — it is simply never looked up (drop-on-read).
+export function getChecklistDefaults(
+  preferences: Record<string, unknown> | null | undefined,
+): ChecklistDefaultItem[] {
+  const stored = (preferences as { checklistDefaults?: unknown } | null | undefined)
+    ?.checklistDefaults;
+  const overrides = parseStoredOverrides(stored);
+  if (!overrides) return CHECKLIST_DEFAULTS;
+
+  const overrideMap = new Map(overrides.systemItemOverrides.map((o) => [o.key, o]));
+  const systemItems = CHECKLIST_DEFAULTS.map((item) => {
+    const ov = overrideMap.get(item.key);
+    if (!ov) return item;
+    const merged: ChecklistDefaultItem = { ...item };
+    if (ov.dueDateRule !== undefined) merged.dueDateRule = ov.dueDateRule ?? null;
+    if (ov.enabled !== undefined) merged.enabled = ov.enabled;
+    return merged;
+  });
+
+  return mergeCustomItemsByStage(systemItems, overrides.customItems);
+}
 
 // Map BookingStatus to its checklist stage equivalent
 const BOOKING_STATUS_TO_STAGE: Record<string, ChecklistDefaultItem['requiredForStatus']> = {

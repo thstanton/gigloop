@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateUserProfileDto } from './dto/update-user-profile.dto';
 import { encrypt, decrypt } from '../common/crypto';
-import type { ChecklistDefaultItem } from '../bookings/checklist-defaults';
+import type { ChecklistDefaultItem, DueDateRule } from '../bookings/checklist-defaults';
 
 const USER_PROFILE_ADDRESS_FIELDS: ReadonlyArray<keyof UpdateUserProfileDto> = [
   'addressLine1', 'addressLine2', 'city', 'county', 'postcode', 'country',
@@ -58,53 +58,35 @@ export class UserProfileRepository {
     return this.decryptProfile(profile);
   }
 
+  // ADR-0060: store only the musician's SPARSE overrides against the catalogue, never a
+  // materialised snapshot. The effective template is derived on read (getChecklistDefaults).
   async updateChecklistDefaults(
     userId: string,
-    systemItemOverrides: Array<{ key: string; enabled?: boolean; dueDateRule?: unknown }>,
+    systemItemOverrides: Array<{ key: string; enabled?: boolean; dueDateRule?: DueDateRule | null }>,
     customItems: ChecklistDefaultItem[],
     reminderLeadDays?: number,
   ) {
     const existing = await this.prisma.userProfile.findUnique({ where: { userId } });
     const prefs = (existing?.preferences ?? {}) as Record<string, unknown>;
 
-    // Merge systemItemOverrides into existing checklistDefaults
-    const { CHECKLIST_DEFAULTS } = await import('../bookings/checklist-defaults');
-    const existingDefaults = Array.isArray(prefs.checklistDefaults)
-      ? (prefs.checklistDefaults as ChecklistDefaultItem[])
-      : CHECKLIST_DEFAULTS;
-
-    const overrideMap = new Map(systemItemOverrides.map((o) => [o.key, o]));
-
-    const updatedSystemItems = CHECKLIST_DEFAULTS.map((defaultItem) => {
-      const existingItem = existingDefaults.find((d) => d.key === defaultItem.key) ?? defaultItem;
-      const override = overrideMap.get(defaultItem.key);
-      const merged: ChecklistDefaultItem = {
-        ...existingItem,
-        dueDateRule: override?.dueDateRule !== undefined
-          ? (override.dueDateRule as ChecklistDefaultItem['dueDateRule'])
-          : existingItem.dueDateRule,
-      };
-      if (override?.enabled !== undefined) {
-        merged.enabled = override.enabled === false ? false : undefined;
-      }
-      return merged;
-    });
-
-    const newDefaults = [...updatedSystemItems, ...customItems];
-
-    const newPrefs: Record<string, unknown> = {
-      ...prefs,
-      checklistDefaults: newDefaults,
+    // Persist only deltas that differ from the current catalogue default (drops no-op
+    // overrides and any retired key). The incoming DTO may carry every key; we sparsify here.
+    const { sparsifySystemOverrides } = await import('../bookings/checklist-defaults');
+    const checklistDefaults = {
+      systemItemOverrides: sparsifySystemOverrides(systemItemOverrides),
+      customItems,
     };
+
+    const newPrefs: Record<string, unknown> = { ...prefs, checklistDefaults };
     if (reminderLeadDays !== undefined) {
       newPrefs.reminderLeadDays = reminderLeadDays;
     }
 
     const profile = await this.prisma.userProfile.upsert({
       where: { userId },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma Json column
       update: { preferences: newPrefs as any },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma Json column
       create: { userId, preferences: newPrefs as any },
     });
     return this.decryptProfile(profile);

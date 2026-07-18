@@ -1468,13 +1468,16 @@ describe('BookingsService', () => {
       repo.findChecklistItemsForReminders.mockResolvedValue([]);
       repo.findUserProfile.mockResolvedValue({
         preferences: {
-          checklistDefaults: [{ key: 'send_quote', enabled: false, label: 'Send quote' }],
+          checklistDefaults: {
+            systemItemOverrides: [{ key: 'send_thank_you', enabled: false }],
+            customItems: [],
+          },
         },
       });
 
       const result = await service.getApplicableReminders('u1', 'b1', 'people');
 
-      expect(result.find((r) => r.key === 'send_quote')).toBeUndefined();
+      expect(result.find((r) => r.key === 'send_thank_you')).toBeUndefined();
     });
   });
 
@@ -1499,9 +1502,10 @@ describe('BookingsService', () => {
     it('drops a template-disabled key (master switch parity with the Builder)', async () => {
       repo.findUserProfile.mockResolvedValue({
         preferences: {
-          checklistDefaults: [
-            { key: 'get_the_quote_accepted', enabled: false, label: 'Get the quote accepted' },
-          ],
+          checklistDefaults: {
+            systemItemOverrides: [{ key: 'get_the_quote_accepted', enabled: false }],
+            customItems: [],
+          },
         },
       });
 

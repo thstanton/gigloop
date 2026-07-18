@@ -1,8 +1,6 @@
-import { ChecklistDefaultItem } from '../bookings/checklist-defaults';
 import {
   ExistingStep,
   planInvoiceGoalMigration,
-  planInvoiceTemplateMigration,
 } from './checklist-invoice-migration';
 
 function st(overrides: Partial<ExistingStep> & { key: string }): ExistingStep {
@@ -112,37 +110,5 @@ describe('planInvoiceGoalMigration — balance (invoice_the_balance → get_the_
     const plan = planInvoiceGoalMigration('get_the_balance_paid', 'PENDING', existing)!;
     expect(plan.steps.find((s) => s.key === 'balance_received')!.state).toBe('PENDING');
     expect(plan.goalState).toBe('PENDING');
-  });
-});
-
-describe('planInvoiceTemplateMigration — saved checklist defaults', () => {
-  function tpl(overrides: Omit<Partial<ChecklistDefaultItem>, 'key'> & { key: string | null }): ChecklistDefaultItem {
-    return {
-      key: overrides.key as unknown as string,
-      label: overrides.label ?? 'X',
-      completedBy: overrides.completedBy ?? 'USER',
-      dependsOn: overrides.dependsOn ?? [],
-      autoCompleteRule: overrides.autoCompleteRule ?? null,
-      requiredForStatus: overrides.requiredForStatus ?? 'READY',
-      dueDateRule: overrides.dueDateRule ?? null,
-      ...(overrides.enabled !== undefined ? { enabled: overrides.enabled } : {}),
-    };
-  }
-
-  it('renames the invoice_the_balance entry to get_the_balance_paid, preserving a disable override', () => {
-    const stored = [
-      tpl({ key: 'get_deposit_paid', label: 'Get the deposit paid', requiredForStatus: 'CONFIRMED' }),
-      tpl({ key: 'invoice_the_balance', label: 'Invoice the balance', enabled: false }),
-    ];
-    const next = planInvoiceTemplateMigration(stored)!;
-    expect(next.map((d) => d.key)).toEqual(['get_deposit_paid', 'get_the_balance_paid']);
-    const balance = next.find((d) => d.key === 'get_the_balance_paid')!;
-    expect(balance.label).toBe('Get the balance paid');
-    expect(balance.enabled).toBe(false); // user's disable carried over
-  });
-
-  it('returns null when the template has no invoice_the_balance entry', () => {
-    const stored = [tpl({ key: 'get_the_balance_paid' }), tpl({ key: 'get_deposit_paid' })];
-    expect(planInvoiceTemplateMigration(stored)).toBeNull();
   });
 });
