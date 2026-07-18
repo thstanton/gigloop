@@ -8,184 +8,67 @@ import { Switch } from '@/components/ui/switch';
 import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
 import { PACKAGE_CATEGORY_LABELS, PACKAGE_CATEGORY_ORDER } from '@/lib/constants';
-import type { CreatePackageInput, PackageTemplate, SlotInput, UpdatePackageInput } from '@/types/api';
+import type { CreatePackageInput, PackageTemplate, UpdatePackageInput } from '@/types/api';
 import { Card } from '@/components/common/Card';
 import { EmptyState } from '@/components/common/EmptyState';
-import { IconPicker } from '@/components/common/IconPicker';
 import { PackageIcon } from '@/components/common/PackageIcon';
 import { PackageMusicSummary } from '@/features/packages/PackageMusicSummary';
-
-// ─── Category display ─────────────────────────────────────────────────────────
-
-const CATEGORY_OPTIONS = [
-  { value: '', label: 'Uncategorised' },
-  ...Object.entries(PACKAGE_CATEGORY_LABELS).map(([v, l]) => ({ value: v, label: l })),
-];
-
-// ─── Tag input ────────────────────────────────────────────────────────────────
-
-function TagInput({
-  label,
-  tags,
-  onChange,
-}: {
-  label: string;
-  tags: string[];
-  onChange: (tags: string[]) => void;
-}) {
-  const [input, setInput] = useState('');
-
-  function handleKey(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === 'Enter' && input.trim()) {
-      e.preventDefault();
-      if (!tags.includes(input.trim())) onChange([...tags, input.trim()]);
-      setInput('');
-    }
-  }
-
-  return (
-    <div>
-      <label className="block text-sm font-medium text-foreground mb-1">{label}</label>
-      <div className="flex flex-wrap gap-1.5 mb-2">
-        {tags.map((t) => (
-          <span
-            key={t}
-            className="inline-flex items-center gap-1 bg-surface border border-border rounded px-2 py-0.5 text-sm"
-          >
-            {t}
-            <button
-              type="button"
-              onClick={() => onChange(tags.filter((x) => x !== t))}
-              className="text-muted hover:text-foreground leading-none"
-              aria-label={`Remove ${t}`}
-            >
-              ×
-            </button>
-          </span>
-        ))}
-      </div>
-      <input
-        type="text"
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
-        onKeyDown={handleKey}
-        placeholder="Type and press Enter"
-        className="w-full border border-border rounded px-3 py-2 text-sm bg-background text-foreground placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-primary"
-      />
-    </div>
-  );
-}
-
-// ─── Set list editor ──────────────────────────────────────────────────────────
-
-type SlotDraft = SlotInput & { key: string };
-
-function SlotEditor({
-  slots,
-  onChange,
-}: {
-  slots: SlotDraft[];
-  onChange: (slots: SlotDraft[]) => void;
-}) {
-  function move(index: number, dir: -1 | 1) {
-    const next = [...slots];
-    const target = index + dir;
-    if (target < 0 || target >= next.length) return;
-    [next[index], next[target]] = [next[target], next[index]];
-    onChange(next.map((s, i) => ({ ...s, order: i })));
-  }
-
-  function update(index: number, field: 'label' | 'duration', value: string) {
-    const next = [...slots];
-    if (field === 'duration') {
-      next[index] = { ...next[index], duration: parseInt(value, 10) || 1 };
-    } else {
-      next[index] = { ...next[index], label: value };
-    }
-    onChange(next);
-  }
-
-  function remove(index: number) {
-    onChange(slots.filter((_, i) => i !== index).map((s, i) => ({ ...s, order: i })));
-  }
-
-  function add() {
-    onChange([
-      ...slots,
-      { key: crypto.randomUUID(), duration: 60, order: slots.length },
-    ]);
-  }
-
-  return (
-    <div>
-      <label className="block text-sm font-medium text-foreground mb-2">Sets</label>
-      <div className="space-y-2">
-        {slots.map((slot, i) => (
-          <div key={slot.key} className="flex items-center gap-2">
-            <div className="flex flex-col gap-0.5">
-              <button
-                type="button"
-                onClick={() => move(i, -1)}
-                disabled={i === 0}
-                className="text-muted hover:text-foreground disabled:opacity-30 leading-none text-xs"
-                aria-label="Move up"
-              >
-                ▲
-              </button>
-              <button
-                type="button"
-                onClick={() => move(i, 1)}
-                disabled={i === slots.length - 1}
-                className="text-muted hover:text-foreground disabled:opacity-30 leading-none text-xs"
-                aria-label="Move down"
-              >
-                ▼
-              </button>
-            </div>
-            <input
-              type="text"
-              value={slot.label ?? ''}
-              onChange={(e) => update(i, 'label', e.target.value)}
-              placeholder="Label"
-              className="flex-1 border border-border rounded px-2 py-1.5 text-sm bg-background text-foreground min-w-0"
-            />
-            <input
-              type="number"
-              value={slot.duration}
-              min={1}
-              onChange={(e) => update(i, 'duration', e.target.value)}
-              className="w-16 border border-border rounded px-2 py-1.5 text-sm bg-background text-foreground"
-              aria-label="Duration (min)"
-            />
-            <span className="text-sm text-muted flex-shrink-0">min</span>
-            <button
-              type="button"
-              onClick={() => remove(i)}
-              className="text-muted hover:text-status-cancelled flex-shrink-0"
-              aria-label="Remove set"
-            >
-              ×
-            </button>
-          </div>
-        ))}
-      </div>
-      <button
-        type="button"
-        onClick={add}
-        className="mt-2 text-sm text-primary hover:underline"
-      >
-        + Add set
-      </button>
-    </div>
-  );
-}
+import {
+  PackageForm,
+  emptyPackageFormValues,
+  packageToFormValues,
+  packageFormToPayload,
+  type PackageFormValues,
+} from '@/features/packages/PackageForm';
 
 // ─── Package drawer ───────────────────────────────────────────────────────────
 
 type DrawerMode = { type: 'create' } | { type: 'edit'; pkg: PackageTemplate };
 
-function toSlotDrafts(slots: PackageTemplate['slots']): SlotDraft[] {
-  return slots.map((s) => ({ ...s, label: s.label ?? undefined, key: s.id }));
+// The edit-only delete footer: owns the confirm step, its error, and the delete mutation.
+function DeletePackageSection({ pkgId, onDeleted }: { pkgId: string; onDeleted: () => void }) {
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const deletePkg = useMutation({
+    mutationFn: () => apiDelete(`/packages/${pkgId}`),
+    onSuccess: onDeleted,
+    onError: (err: Error) => {
+      setDeleteError(err.message || 'This package is used by existing bookings and cannot be deleted');
+      setConfirmDelete(false);
+    },
+  });
+
+  return (
+    <>
+      {deleteError && (
+        <p className="text-sm text-status-cancelled">{deleteError}</p>
+      )}
+      {confirmDelete ? (
+        <div className="flex gap-2">
+          <Button
+            variant="destructive"
+            onClick={() => deletePkg.mutate()}
+            disabled={deletePkg.isPending}
+            className="flex-1"
+          >
+            {deletePkg.isPending ? 'Deleting…' : 'Confirm delete'}
+          </Button>
+          <Button variant="outline" onClick={() => setConfirmDelete(false)} className="flex-1">
+            Cancel
+          </Button>
+        </div>
+      ) : (
+        <Button
+          variant="ghost"
+          onClick={() => setConfirmDelete(true)}
+          className="w-full text-status-cancelled hover:text-status-cancelled"
+        >
+          Delete package
+        </Button>
+      )}
+    </>
+  );
 }
 
 function PackageDrawer({
@@ -201,55 +84,19 @@ function PackageDrawer({
   const isEdit = mode.type === 'edit';
   const existing = isEdit ? mode.pkg : null;
 
-  const [label, setLabel] = useState(existing?.label ?? '');
-  const [icon, setIcon] = useState(existing?.icon ?? 'music');
-  const [category, setCategory] = useState(existing?.category ?? '');
-  const [notes, setNotes] = useState(existing?.notes ?? '');
-  const [keyMoments, setKeyMoments] = useState<string[]>(existing?.keyMoments ?? []);
-  const [defaultGenreSelection, setDefaultGenreSelection] = useState<string[]>(
-    existing?.defaultGenreSelection ?? [],
-  );
-  const [slots, setSlots] = useState<SlotDraft[]>(
-    existing ? toSlotDrafts(existing.slots) : [],
-  );
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const initialForm = () => (existing ? packageToFormValues(existing) : emptyPackageFormValues());
+  const [form, setForm] = useState<PackageFormValues>(initialForm);
 
-  function reset(pkg?: PackageTemplate) {
-    setLabel(pkg?.label ?? '');
-    setIcon(pkg?.icon ?? 'music');
-    setCategory(pkg?.category ?? '');
-    setNotes(pkg?.notes ?? '');
-    setKeyMoments(pkg?.keyMoments ?? []);
-    setDefaultGenreSelection(pkg?.defaultGenreSelection ?? []);
-    setSlots(pkg ? toSlotDrafts(pkg.slots) : []);
-    setDeleteError(null);
-    setConfirmDelete(false);
-  }
-
-  // Reset when drawer opens
+  // Reset when the drawer opens (or switches mode).
   const [lastMode, setLastMode] = useState<DrawerMode | null>(null);
   if (open && mode !== lastMode) {
     setLastMode(mode);
-    reset(existing ?? undefined);
+    setForm(initialForm());
   }
 
   const save = useMutation({
     mutationFn: () => {
-      const payload = {
-        label: label.trim(),
-        icon,
-        category: category || undefined,
-        notes: notes.trim() || undefined,
-        keyMoments,
-        defaultGenreSelection,
-        slots: slots.map((s, i) => ({
-          id: s.id,
-          label: s.label?.trim() || undefined,
-          duration: s.duration,
-          order: i,
-        })),
-      };
+      const payload = packageFormToPayload(form);
       if (isEdit) {
         return apiPatch<PackageTemplate>(`/packages/${existing!.id}`, payload as UpdatePackageInput);
       }
@@ -261,25 +108,13 @@ function PackageDrawer({
     },
   });
 
-  const deletePkg = useMutation({
-    mutationFn: () => apiDelete(`/packages/${existing!.id}`),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['packages'] });
-      onClose();
-    },
-    onError: (err: Error) => {
-      setDeleteError(err.message || 'This package is used by existing bookings and cannot be deleted');
-      setConfirmDelete(false);
-    },
-  });
-
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
       <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto flex flex-col gap-0 p-0">
         <SheetHeader className="px-5 pt-5 pb-4 border-b border-border flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
-              <PackageIcon icon={icon} size={16} strokeWidth={1.75} />
+              <PackageIcon icon={form.icon} size={16} strokeWidth={1.75} />
             </div>
             <SheetTitle className="text-base">
               {isEdit ? 'Edit package' : 'New package'}
@@ -287,60 +122,8 @@ function PackageDrawer({
           </div>
         </SheetHeader>
 
-        <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
-          {/* Label */}
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-1">Label</label>
-            <input
-              type="text"
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-              className="w-full border border-border rounded px-3 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-              placeholder="Package name"
-            />
-          </div>
-
-          {/* Icon */}
-          <IconPicker value={icon} onChange={setIcon} />
-
-          {/* Category */}
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-1">Category</label>
-            <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className="w-full border border-border rounded px-3 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-            >
-              {CATEGORY_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Notes */}
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-1">Notes</label>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={2}
-              className="w-full border border-border rounded px-3 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary resize-none"
-              placeholder="Optional notes"
-            />
-          </div>
-
-          {/* Key moments */}
-          <TagInput label="Key moments" tags={keyMoments} onChange={setKeyMoments} />
-
-          {/* Genre selection */}
-          <TagInput
-            label="Default genre selection"
-            tags={defaultGenreSelection}
-            onChange={setDefaultGenreSelection}
-          />
-
-          {/* Slots */}
-          <SlotEditor slots={slots} onChange={setSlots} />
+        <div className="flex-1 overflow-y-auto px-5 py-5">
+          <PackageForm value={form} onChange={(patch) => setForm((f) => ({ ...f, ...patch }))} />
         </div>
 
         {/* Footer */}
@@ -350,41 +133,21 @@ function PackageDrawer({
           )}
           <Button
             onClick={() => save.mutate()}
-            disabled={!label.trim() || save.isPending}
+            disabled={!form.label.trim() || save.isPending}
             className="w-full"
           >
             {save.isPending ? 'Saving…' : 'Save changes'}
           </Button>
 
-          {isEdit && (
-            <>
-              {deleteError && (
-                <p className="text-sm text-status-cancelled">{deleteError}</p>
-              )}
-              {confirmDelete ? (
-                <div className="flex gap-2">
-                  <Button
-                    variant="destructive"
-                    onClick={() => deletePkg.mutate()}
-                    disabled={deletePkg.isPending}
-                    className="flex-1"
-                  >
-                    {deletePkg.isPending ? 'Deleting…' : 'Confirm delete'}
-                  </Button>
-                  <Button variant="outline" onClick={() => setConfirmDelete(false)} className="flex-1">
-                    Cancel
-                  </Button>
-                </div>
-              ) : (
-                <Button
-                  variant="ghost"
-                  onClick={() => setConfirmDelete(true)}
-                  className="w-full text-status-cancelled hover:text-status-cancelled"
-                >
-                  Delete package
-                </Button>
-              )}
-            </>
+          {existing && (
+            <DeletePackageSection
+              key={existing.id}
+              pkgId={existing.id}
+              onDeleted={() => {
+                qc.invalidateQueries({ queryKey: ['packages'] });
+                onClose();
+              }}
+            />
           )}
         </div>
       </SheetContent>

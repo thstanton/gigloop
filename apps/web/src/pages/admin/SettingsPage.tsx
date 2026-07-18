@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -8,9 +8,8 @@ import { Link } from 'react-router-dom';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ChevronRight, ImageIcon, Pencil, Plus, Trash2, Upload } from 'lucide-react';
+import { ChevronRight, Pencil, Plus, Trash2 } from 'lucide-react';
 import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
 import type { PublicProfile, UserProfile, UpdatePublicProfileInput, UpdateUserProfileInput, UserPreferences, DueDateRule, ChecklistDefaultItem, InvoiceNumberFormat, PaddingWidth, ReminderConcern, BookingStatus } from '@/types/api';
@@ -20,6 +19,7 @@ import { Card } from '@/components/common/Card';
 import { PageSection } from '@/components/common/PageSection';
 import { FormField } from '@/components/common/FormField';
 import { AddressAutocomplete } from '@/components/common/AddressAutocomplete';
+import { ImageUploadField } from '@/components/common/ImageUploadField';
 
 // ─── Schemas ─────────────────────────────────────────────────────────────────
 
@@ -159,108 +159,6 @@ function Toggle({
   );
 }
 
-// ─── Image upload field ───────────────────────────────────────────────────────
-
-const MAX_UPLOAD_BYTES = 5 * 1024 * 1024; // 5 MB
-
-function ImageUploadField({
-  label,
-  description,
-  currentUrl,
-  uploading,
-  removing,
-  onFileSelect,
-  onRemove,
-  variant = 'square',
-  maxSizeBytes = MAX_UPLOAD_BYTES,
-}: {
-  label: string;
-  description?: string;
-  currentUrl: string | null;
-  uploading: boolean;
-  removing: boolean;
-  onFileSelect: (file: File) => void;
-  onRemove: () => void;
-  variant?: 'square' | 'landscape';
-  maxSizeBytes?: number;
-}) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  let uploadLabel: string;
-  if (uploading) uploadLabel = 'Uploading…';
-  else if (currentUrl) uploadLabel = 'Change';
-  else uploadLabel = 'Upload';
-
-  return (
-    <div className="space-y-1.5">
-      <Label>{label}</Label>
-      {description && <p className="text-xs text-muted">{description}</p>}
-      <div className="flex items-center gap-3">
-        <div
-          className={cn(
-            'border border-border bg-muted/30 flex items-center justify-center overflow-hidden flex-shrink-0',
-            variant === 'landscape' ? 'w-32 h-12 rounded-md' : 'w-12 h-12 rounded-full',
-          )}
-        >
-          {currentUrl ? (
-            <img
-              src={currentUrl}
-              alt={label}
-              className={cn(
-                variant === 'landscape'
-                  ? 'max-w-full max-h-full object-contain p-1'
-                  : 'w-full h-full object-cover',
-              )}
-            />
-          ) : (
-            <ImageIcon size={18} className="text-muted" />
-          )}
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={uploading || removing}
-            onClick={() => inputRef.current?.click()}
-          >
-            <Upload size={14} className="mr-1.5" />
-            {uploadLabel}
-          </Button>
-          {currentUrl && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={uploading || removing}
-              onClick={onRemove}
-            >
-              <Trash2 size={14} className="mr-1.5" />
-              {removing ? 'Removing…' : 'Remove'}
-            </Button>
-          )}
-        </div>
-        <input
-          ref={inputRef}
-          type="file"
-          accept="image/*"
-          className="sr-only"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (!file) return;
-            if (file.size > maxSizeBytes) {
-              toast({ title: `File too large — maximum size is ${Math.round(maxSizeBytes / 1024 / 1024)} MB`, variant: 'destructive' });
-              e.target.value = '';
-              return;
-            }
-            onFileSelect(file);
-            e.target.value = '';
-          }}
-        />
-      </div>
-    </div>
-  );
-}
-
 // ─── Public profile section ───────────────────────────────────────────────────
 
 function PublicProfileSection({ profile }: { profile: PublicProfile }) {
@@ -376,10 +274,19 @@ function PublicProfileSection({ profile }: { profile: PublicProfile }) {
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <FormField label="Business name" required error={errors.businessName?.message}>
+        <FormField
+          label="Business name"
+          hint="Your act or brand — shown to clients on your portal, invoices, and emails."
+          required
+          error={errors.businessName?.message}
+        >
           <Input {...register('businessName')} />
         </FormField>
-        <FormField label="Display name" error={errors.displayName?.message}>
+        <FormField
+          label="Your name"
+          hint="The personal name that signs your emails and contracts. Falls back to your business name if blank."
+          error={errors.displayName?.message}
+        >
           <Input {...register('displayName')} placeholder="e.g. John Smith" />
         </FormField>
       </div>

@@ -48,6 +48,36 @@ export const WithError: Story = {
   },
 };
 
+export const WithHint: Story = {
+  args: {
+    label: 'Your name',
+    hint: 'The personal name that signs your emails and contracts.',
+    children: <Input placeholder="Jane Smith" />,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const input = canvas.getByRole('textbox', { name: 'Your name' });
+    const hint = canvas.getByText('The personal name that signs your emails and contracts.');
+    await expect(input).toHaveAttribute('aria-describedby', hint.id);
+  },
+};
+
+export const WithHintAndError: Story = {
+  args: {
+    label: 'Your name',
+    hint: 'The personal name that signs your emails and contracts.',
+    error: 'This name is already taken',
+    children: <Input placeholder="Jane Smith" />,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const input = canvas.getByRole('textbox', { name: 'Your name' });
+    const hint = canvas.getByText('The personal name that signs your emails and contracts.');
+    const errorMsg = canvas.getByText('This name is already taken');
+    await expect(input).toHaveAttribute('aria-describedby', `${hint.id} ${errorMsg.id}`);
+  },
+};
+
 export const DisabledInput: Story = {
   args: {
     label: 'Account email',

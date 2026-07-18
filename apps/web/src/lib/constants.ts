@@ -3,7 +3,7 @@ import {
   GlassWater, Utensils, Moon, Briefcase, Music2, Sparkles, Radio, Headphones,
   Volume2, Users, Clock, Shirt, Sofa, type LucideIcon,
 } from 'lucide-react';
-import type { BookingStatus, EventType, PortalVisibilityReason, ReminderConcern, SongGenre } from '@/types/api';
+import type { BookingStatus, EventType, PortalTheme, PortalVisibilityReason, ReminderConcern, SongGenre } from '@/types/api';
 
 export type ContactPrimaryRole = 'CUSTOMER' | 'VENUE' | 'BOOKING_AGENT';
 
@@ -80,6 +80,18 @@ export function statusGte(current: BookingStatus, threshold: BookingStatus): boo
   return STATUS_ORDER.indexOf(current) >= STATUS_ORDER.indexOf(threshold);
 }
 
+// The five forward lifecycle stages, in order — STATUS_ORDER minus the CANCELLED off-ramp.
+// COMPLETE is terminal: no goals are worked on during it.
+export const FORWARD_STATUSES: BookingStatus[] = STATUS_ORDER.filter((s) => s !== 'CANCELLED');
+
+// A goal is worked on — and reminded about — during the stage BEFORE its requiredForStatus
+// (e.g. a goal required FOR Confirmed is chased while still Provisional). Derived from the
+// forward order so it cannot drift if a stage is ever added.
+export function statusBefore(status: BookingStatus): BookingStatus | null {
+  const i = FORWARD_STATUSES.indexOf(status);
+  return i > 0 ? FORWARD_STATUSES[i - 1] : null;
+}
+
 export const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
   ENQUIRY:     'Enquiry',
   PROVISIONAL: 'Provisional',
@@ -112,6 +124,33 @@ export const CREATABLE_BOOKING_STATUSES: BookingStatus[] = [
   'READY',
   'COMPLETE',
 ];
+
+// Per-status accent background class (the lifecycle colour tokens shared by BookingStatusPill and
+// StatusCoachingField's `accent`). Used as a small status marker where a full pill would be too
+// heavy — e.g. the onboarding "How GigLoop runs your bookings" stage headers (#661).
+export const STATUS_ACCENT_BG: Record<BookingStatus, string> = {
+  ENQUIRY:     'bg-status-enquiry',
+  PROVISIONAL: 'bg-status-provisional',
+  CONFIRMED:   'bg-status-confirmed',
+  READY:       'bg-status-ready',
+  COMPLETE:    'bg-status-complete',
+  CANCELLED:   'bg-status-cancelled',
+};
+
+// Plain-English overview of what each default checklist goal's journey includes (distilled from
+// its steps), shown in the onboarding "How GigLoop runs your bookings" orientation step (#661).
+// Keyed by the goal's catalogue key. A goal with no entry here simply shows no summary line.
+export const GOAL_SUMMARIES: Record<string, string> = {
+  get_the_quote_accepted: 'Set your fee and email the quote — GigLoop nudges you to chase the client until they say yes.',
+  get_deposit_paid:       'Create, issue and send the deposit invoice, then GigLoop tracks the payment landing.',
+  get_contract_signed:    'Draft the contract and send it over — the client signs it online.',
+  add_venue:              'Pop in the venue once it’s booked so travel and logistics are ready.',
+  build_itinerary:        'Set out your sets and running order for the day.',
+  get_the_balance_paid:   'Send the balance invoice as the gig nears, then GigLoop tracks it paid.',
+  gather_song_requests:   'Publish your music form and invite the client — they add requests when ready.',
+  play_the_gig:           'The big day — mark it played when you’re done.',
+  send_thank_you:         'A week after, GigLoop reminds you to send a thank-you.',
+};
 
 export const PACKAGE_CATEGORY_LABELS: Record<string, string> = {
   WEDDING:   'Wedding',
@@ -211,3 +250,31 @@ export const PORTAL_VISIBILITY_REASON_COPY: Record<PortalVisibilityReason, strin
   not_shared:      'Not visible to client',
   cancelled:       'Not visible — cancelled',
 };
+
+// Portal theme choices, in display order. Consumed by the shared branding controls
+// (features/portal/BrandingControls) and anywhere a theme needs labelling.
+export const PORTAL_THEME_OPTIONS: { value: PortalTheme; label: string; description: string }[] = [
+  { value: 'LIGHT_MODERN',   label: 'Light Modern',   description: 'Clean, sans-serif' },
+  { value: 'LIGHT_ROMANTIC', label: 'Light Romantic', description: 'Soft, script font' },
+  { value: 'BOLD_MODERN',    label: 'Bold Modern',    description: 'Dark, contemporary' },
+  { value: 'BOLD_ROMANTIC',  label: 'Bold Romantic',  description: 'Dark, elegant script' },
+];
+
+// Onboarding wizard steps (PRD #478 — 5-step guided activation). The single source of
+// truth for the wizard order, progress-indicator labels, and each step's route. Step
+// pages derive their prev/next targets from this order via stepNav() (features/onboarding/steps),
+// so the sequence can never drift between the indicator and the pages. Step 1 is required;
+// steps 2–5 are skippable. The `label` is the short pill caption; the full step title lives
+// on each page's PageHeader.
+export interface OnboardingStep {
+  path: string;
+  label: string;
+}
+
+export const ONBOARDING_STEPS: OnboardingStep[] = [
+  { path: '/onboarding/profile',   label: 'Business' },
+  { path: '/onboarding/checklist', label: 'Bookings' },
+  { path: '/onboarding/packages',  label: 'Packages' },
+  { path: '/onboarding/portal',    label: 'Portal' },
+  { path: '/onboarding/songs',     label: 'Songs' },
+];

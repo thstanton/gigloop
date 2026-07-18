@@ -77,16 +77,33 @@ const SYSTEM_DEFAULTS = [
   },
 ];
 
+function slug(label: string): string {
+  return label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+}
+
 @Injectable()
 export class PackagesService {
   constructor(private repo: PackagesRepository) {}
 
-  async findAll(userId: string) {
-    const count = await this.repo.countByUserId(userId);
-    if (count === 0) {
-      await this.repo.createMany(userId, SYSTEM_DEFAULTS);
-    }
+  // Package libraries are no longer auto-seeded (#663): a new musician's library starts empty and
+  // they build it up deliberately — one template shaped in onboarding, then more from the catalogue.
+  findAll(userId: string) {
     return this.repo.findAll(userId);
+  }
+
+  // The system-default templates as a read-only starter catalogue (not persisted). Onboarding Step 3
+  // and the admin Packages page base a new template on one of these; nothing is added to the library
+  // until the musician saves it.
+  getCatalogue() {
+    return SYSTEM_DEFAULTS.map((t) => ({
+      id: slug(t.label),
+      label: t.label,
+      category: t.category ?? null,
+      icon: t.icon,
+      keyMoments: t.keyMoments,
+      defaultGenreSelection: t.defaultGenreSelection,
+      slots: t.slots.map((s) => ({ label: s.label, duration: s.duration, order: s.order })),
+    }));
   }
 
   create(userId: string, dto: CreatePackageDto) {

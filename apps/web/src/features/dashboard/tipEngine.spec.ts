@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { selectEligibleTips, pickTip, TIP_POOL, type Tip, type TipSnapshot } from './tipEngine';
 
-const allSetUp: TipSnapshot = { hasHomeAddress: true, hasLogo: true, onlyDefaultPackages: false };
-const nothingSetUp: TipSnapshot = { hasHomeAddress: false, hasLogo: false, onlyDefaultPackages: true };
+const allSetUp: TipSnapshot = { hasHomeAddress: true, hasLogo: true, noCustomPackage: false };
+const nothingSetUp: TipSnapshot = { hasHomeAddress: false, hasLogo: false, noCustomPackage: true };
 
 describe('selectEligibleTips', () => {
   it('includes a tip whose precondition is met and which is not dismissed', () => {

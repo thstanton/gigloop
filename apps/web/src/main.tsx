@@ -31,6 +31,7 @@ import OnboardingProfilePage from './pages/onboarding/OnboardingProfilePage';
 import OnboardingSongsPage from './pages/onboarding/OnboardingSongsPage';
 import OnboardingPackagesPage from './pages/onboarding/OnboardingPackagesPage';
 import OnboardingChecklistPage from './pages/onboarding/OnboardingChecklistPage';
+import OnboardingPortalPage from './pages/onboarding/OnboardingPortalPage';
 
 const queryClient = new QueryClient();
 
@@ -93,9 +94,10 @@ const router = createBrowserRouter([
     element: <OnboardingLayout />,
     children: [
       { path: 'profile', element: <OnboardingProfilePage /> },
-      { path: 'songs', element: <OnboardingSongsPage /> },
-      { path: 'packages', element: <OnboardingPackagesPage /> },
       { path: 'checklist', element: <OnboardingChecklistPage /> },
+      { path: 'packages', element: <OnboardingPackagesPage /> },
+      { path: 'portal', element: <OnboardingPortalPage /> },
+      { path: 'songs', element: <OnboardingSongsPage /> },
     ],
   },
   {

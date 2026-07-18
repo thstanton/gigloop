@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import type { UseFormRegister, Control, FieldErrors } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { useAuth } from '@clerk/react';
 import { Plus, Music2 } from 'lucide-react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -16,12 +17,13 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useSongs } from '@/lib/hooks/useSongs';
-import { apiPost, apiPatch, apiDelete } from '@/lib/api';
+import { apiGet, apiPost, apiPatch, apiDelete } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
 import { GENRE_LABELS, ALL_GENRES } from '@/lib/constants';
-import type { Song } from '@/types/api';
+import type { Song, CatalogueGroup } from '@/types/api';
 import { cn } from '@/lib/utils';
 import { EmptyState } from '@/components/common/EmptyState';
+import { AddSongField, type NewSong } from '@/features/repertoire/AddSongField';
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
@@ -132,6 +134,7 @@ function SongFields({
 
 function AddSongRow({ onDone }: { onDone: () => void }) {
   const queryClient = useQueryClient();
+  const { isLoaded } = useAuth();
   const [addedVisible, setAddedVisible] = useState(false);
   const addedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -142,60 +145,48 @@ function AddSongRow({ onDone }: { onDone: () => void }) {
     [],
   );
 
-  const {
-    register,
-    control,
-    handleSubmit,
-    reset,
-    formState: { errors },
-  } = useForm<SongFormValues>({
-    resolver: zodResolver(songSchema),
-    defaultValues: { title: '', artist: '', genre: 'CONTEMPORARY' },
+  // The seed catalogue drives the add-song autocomplete (#667). Fetched here (the container);
+  // AddSongField stays presentational.
+  const { data: catalogue = [] } = useQuery({
+    queryKey: ['songs-catalogue'],
+    queryFn: () => apiGet<CatalogueGroup[]>('/songs/catalogue'),
+    enabled: isLoaded,
   });
+  const catalogueEntries = useMemo(() => catalogue.flatMap((g) => g.songs), [catalogue]);
 
   const mutation = useMutation({
-    mutationFn: (values: SongFormValues) =>
+    mutationFn: (song: NewSong) =>
       apiPost<Song>('/songs', {
-        title: values.title,
-        artist: values.artist || undefined,
-        genre: values.genre,
+        title: song.title,
+        artist: song.artist || undefined,
+        genre: song.genre,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['songs'] });
-      reset({ title: '', artist: '', genre: 'CONTEMPORARY' });
       setAddedVisible(true);
       if (addedTimerRef.current) clearTimeout(addedTimerRef.current);
       addedTimerRef.current = setTimeout(() => setAddedVisible(false), 2000);
     },
+    onError: () => {
+      toast({ title: 'Failed to add song. Please try again.', variant: 'destructive' });
+    },
   });
 
   return (
-    <div className="border-b border-border py-4 bg-surface rounded-md px-3 mb-1">
-      <form
-        onSubmit={handleSubmit((values) => mutation.mutate(values))}
-        className="space-y-4"
-      >
-        <SongFields
-          register={register}
-          control={control}
-          errors={errors}
-          autoFocus
-        />
-        {mutation.isError && (
-          <p className="text-sm text-status-cancelled">Failed to add. Please try again.</p>
+    <div className="border-b border-border py-4 bg-surface rounded-md px-3 mb-1 space-y-3">
+      <AddSongField
+        catalogue={catalogueEntries}
+        onAdd={(song) => mutation.mutate(song)}
+        adding={mutation.isPending}
+      />
+      <div className="flex items-center gap-2">
+        <Button type="button" size="sm" variant="outline" onClick={onDone}>
+          Done
+        </Button>
+        {addedVisible && !mutation.isPending && (
+          <span className="text-xs text-muted">Song added</span>
         )}
-        <div className="flex gap-2">
-          <Button type="submit" size="sm" disabled={mutation.isPending}>
-            {mutation.isPending ? 'Adding…' : 'Add song'}
-          </Button>
-          <Button type="button" size="sm" variant="outline" onClick={onDone}>
-            Done
-          </Button>
-          {addedVisible && !mutation.isPending && (
-            <span className="self-center text-xs text-muted">Song added</span>
-          )}
-        </div>
-      </form>
+      </div>
     </div>
   );
 }

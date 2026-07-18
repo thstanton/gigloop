@@ -180,6 +180,24 @@ const packages = [
   },
 ];
 
+const packageCatalogue = [
+  {
+    id: 'wedding-ceremony', label: 'Wedding Ceremony', category: 'WEDDING', icon: 'heart',
+    keyMoments: ['Processional', 'Recessional'], defaultGenreSelection: ['CLASSICAL'],
+    slots: [{ label: 'Ceremony', duration: 30, order: 1 }],
+  },
+  {
+    id: 'corporate-dinner', label: 'Corporate Dinner', category: 'CORPORATE', icon: 'briefcase',
+    keyMoments: [], defaultGenreSelection: ['JAZZ'],
+    slots: [{ label: 'Drinks', duration: 60, order: 1 }, { label: 'Dinner', duration: 90, order: 2 }],
+  },
+  {
+    id: 'background-music', label: 'Background Music', category: null, icon: 'music',
+    keyMoments: [], defaultGenreSelection: ['CONTEMPORARY'],
+    slots: [{ label: 'Background Music', duration: 60, order: 1 }],
+  },
+];
+
 const templates = [
   {
     id: 't1', createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z',
@@ -485,6 +503,14 @@ export const mswHandlers = {
   ],
   packages: [
     http.get('/api/packages', () => HttpResponse.json(packages)),
+    http.get('/api/packages/catalogue', () => HttpResponse.json(packageCatalogue)),
+    http.post('/api/packages', async ({ request }) => {
+      const body = (await request.json()) as Record<string, unknown>;
+      return HttpResponse.json(
+        { id: 'new-pkg', createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z', isSystemDefault: false, enabled: true, notes: null, ...body },
+        { status: 201 },
+      );
+    }),
   ],
   templates: [
     http.get('/api/templates', () => HttpResponse.json(templates)),
