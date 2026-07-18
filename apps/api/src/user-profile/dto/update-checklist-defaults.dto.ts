@@ -13,15 +13,37 @@ import {
   ValidateNested,
   ValidateIf,
   IsObject,
+  Validate,
+  ValidatorConstraint,
+  type ValidatorConstraintInterface,
+  type ValidationArguments,
 } from 'class-validator';
+
+// #718: a reminder anchored to booking creation cannot fall *before* the record exists — the
+// `bookingCreation` anchor is after-only. `bookingDate` keeps both directions. The editor prevents
+// the invalid combination in the UI; this is the write-path backstop.
+@ValidatorConstraint({ name: 'bookingCreationAfterOnly' })
+export class BookingCreationAfterOnlyConstraint implements ValidatorConstraintInterface {
+  validate(offsetDays: number, args: ValidationArguments): boolean {
+    const rule = args.object as DueDateRuleDto;
+    return !(rule.basis === 'bookingCreation' && typeof offsetDays === 'number' && offsetDays < 0);
+  }
+  defaultMessage(): string {
+    return 'A reminder anchored to booking creation cannot be before it — offsetDays must be ≥ 0 when basis is bookingCreation';
+  }
+}
 
 export class DueDateRuleDto {
   @ApiProperty({ enum: ['bookingDate', 'bookingCreation'] })
   @IsIn(['bookingDate', 'bookingCreation'])
   basis!: 'bookingDate' | 'bookingCreation';
 
-  @ApiProperty()
+  @ApiProperty({
+    description:
+      'Days relative to the basis; negative = before, positive = after. Must be ≥ 0 when basis is bookingCreation (a reminder cannot predate the booking record).',
+  })
   @IsInt()
+  @Validate(BookingCreationAfterOnlyConstraint)
   offsetDays!: number;
 }
 
@@ -60,11 +82,11 @@ export class CustomChecklistItemDto {
   @IsBoolean()
   enabled?: boolean;
 
-  @ApiPropertyOptional({ nullable: true, enum: ['CONFIRMED', 'READY', 'COMPLETE'] })
+  @ApiPropertyOptional({ nullable: true, enum: ['PROVISIONAL', 'CONFIRMED', 'READY', 'COMPLETE'] })
   @IsOptional()
   @ValidateIf((_, v) => v !== null)
-  @IsIn(['CONFIRMED', 'READY', 'COMPLETE'])
-  requiredForStatus?: 'CONFIRMED' | 'READY' | 'COMPLETE' | null;
+  @IsIn(['PROVISIONAL', 'CONFIRMED', 'READY', 'COMPLETE'])
+  requiredForStatus?: 'PROVISIONAL' | 'CONFIRMED' | 'READY' | 'COMPLETE' | null;
 
   @ApiPropertyOptional({ nullable: true, type: DueDateRuleDto })
   @IsOptional()

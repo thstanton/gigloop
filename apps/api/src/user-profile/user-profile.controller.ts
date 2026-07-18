@@ -1,17 +1,40 @@
 import { Body, Controller, Delete, Get, HttpCode, Patch, Post, Req } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiExtraModels, ApiOperation, ApiResponse, ApiTags, getSchemaPath } from '@nestjs/swagger';
 import { UserProfileService } from './user-profile.service';
 import { PublicProfileService } from './public-profile.service';
 import { UpdateUserProfileDto } from './dto/update-user-profile.dto';
 import { UpdatePublicProfileDto } from './dto/update-public-profile.dto';
 import { UpdateChecklistDefaultsDto } from './dto/update-checklist-defaults.dto';
+import {
+  ChecklistDefaultItemResponseDto,
+  ChecklistDefaultStepDto,
+} from './dto/checklist-default-response.dto';
 import { UploadUrlDto } from './dto/upload-url.dto';
 import type { Request } from 'express';
 
 type AuthedRequest = Request & { userId: string };
 
+// The checklist-defaults schema referenced by the getMe / updateChecklistDefaults responses so Scalar
+// advertises the read shape — including the read-only `steps` preview (#620/#718). The endpoints
+// return the whole merged profile; this documents the `preferences.checklistDefaults` array within it.
+const CHECKLIST_DEFAULTS_RESPONSE_SCHEMA = {
+  type: 'object',
+  properties: {
+    preferences: {
+      type: 'object',
+      properties: {
+        checklistDefaults: {
+          type: 'array',
+          items: { $ref: getSchemaPath(ChecklistDefaultItemResponseDto) },
+        },
+      },
+    },
+  },
+} as const;
+
 @ApiTags('User Profile')
 @ApiBearerAuth('clerk-jwt')
+@ApiExtraModels(ChecklistDefaultItemResponseDto, ChecklistDefaultStepDto)
 @Controller('me')
 export class UserProfileController {
   constructor(
@@ -20,6 +43,11 @@ export class UserProfileController {
   ) {}
 
   @ApiOperation({ summary: 'Get the current user profile (creates if not exists)' })
+  @ApiResponse({
+    status: 200,
+    description: 'The user profile, including the merged checklist defaults (with read-only step previews).',
+    schema: CHECKLIST_DEFAULTS_RESPONSE_SCHEMA,
+  })
   @Get()
   getMe(@Req() req: AuthedRequest) {
     return this.userProfileService.findOrCreate(req.userId);
@@ -39,7 +67,11 @@ export class UserProfileController {
   }
 
   @ApiOperation({ summary: 'Update checklist defaults (system item dueDateRules, reminderLeadDays, and custom items)' })
-  @ApiResponse({ status: 200, description: 'Updated user profile' })
+  @ApiResponse({
+    status: 200,
+    description: 'Updated user profile, including the merged checklist defaults (with read-only step previews).',
+    schema: CHECKLIST_DEFAULTS_RESPONSE_SCHEMA,
+  })
   @Patch('preferences/checklist-defaults')
   updateChecklistDefaults(@Req() req: AuthedRequest, @Body() dto: UpdateChecklistDefaultsDto) {
     return this.userProfileService.updateChecklistDefaults(req.userId, dto);

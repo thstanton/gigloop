@@ -714,6 +714,20 @@ export interface DueDateRule {
   offsetDays: number;
 }
 
+// A step of a multi-step system default goal (ADR-0057). Mirrors the API's ChecklistDefaultStep
+// (checklist-defaults.ts) minus the runtime fields (`id`, `order`, `state`, `completedAt`) that only
+// exist on a materialised booking step. Carried on the `/me` defaults so the Settings configurator
+// can preview a goal's steps read-only (#620/#718) without a separate fetch — never written back.
+export interface ChecklistDefaultStep {
+  key: string;
+  label: string;
+  kind: 'MILESTONE' | 'PRECONDITION' | 'FOLLOWUP';
+  completeMode: 'ACTION' | 'AWAITED';
+  completedBy: 'USER' | 'CUSTOMER' | 'BAND_MEMBER';
+  autoCompleteRule: Record<string, unknown> | null;
+  dueDateRule?: DueDateRule | null;
+}
+
 export interface ChecklistDefaultItem {
   key: string | null;
   label: string;
@@ -727,6 +741,10 @@ export interface ChecklistDefaultItem {
   // A custom global-template item carries its user-chosen concern; system defaults
   // resolve theirs from the concern map and leave this unset.
   concern?: string | null;
+  // Ordered steps of a multi-step goal (ADR-0057), present on system defaults for the read-only
+  // Settings preview (#620/#718). Absent for an atomic goal and for custom items. Preview-only —
+  // the save contract never sends steps back.
+  steps?: ChecklistDefaultStep[];
 }
 
 export interface CreateChecklistItemInput {
