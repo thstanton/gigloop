@@ -15,7 +15,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { EVENT_TYPES } from '../../common/constants';
-import type { DueDateRule } from '../checklist-defaults';
+import type { DueDateRule } from '../../checklist/checklist-defaults';
 
 export class NewSeriesInput {
   @ApiProperty({ example: 'Hotel Intercontinental — May 2026' })

@@ -7,7 +7,7 @@ import { prisma, E2E_TEST_USER_ID } from './prisma';
 import {
   CHECKLIST_DEFAULTS,
   filterItemsByStartingStatus,
-} from '../../apps/api/src/bookings/checklist-defaults';
+} from '../../apps/api/src/checklist/checklist-defaults';
 
 // Deletes everything owned by the test user, in child→parent order. Booking is
 // the cascade root for invoices/line-items/documents/communications/etc., so

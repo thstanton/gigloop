@@ -1,4 +1,4 @@
-import { CHECKLIST_DEFAULTS } from '../bookings/checklist-defaults';
+import { CHECKLIST_DEFAULTS } from './checklist-defaults';
 import {
   AutoCompleteRule,
   BookingContext,

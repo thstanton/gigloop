@@ -6,7 +6,7 @@ import {
   ChecklistDefaultStep,
   computeDueDate,
   computeReminderInsertOrder,
-} from '../bookings/checklist-defaults';
+} from './checklist-defaults';
 import { addDays, surfaceActionItems } from './checklist-surfacing';
 import { activeStep } from './checklist-rollup';
 

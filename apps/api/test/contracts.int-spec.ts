@@ -3,7 +3,7 @@ import * as request from 'supertest';
 import { createTestApp, mockStorageService } from './test-app.factory';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { TEST_USER_ID } from './test-auth.guard';
-import { CHECKLIST_DEFAULTS } from '../src/bookings/checklist-defaults';
+import { CHECKLIST_DEFAULTS } from '../src/checklist/checklist-defaults';
 
 const FUTURE_DATE = '2027-09-15T14:00:00.000Z';
 // Minimal 1×1 transparent PNG — smallest valid image pdfmake accepts
