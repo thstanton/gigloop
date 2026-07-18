@@ -8,7 +8,7 @@ import { InvoicesRepository } from '../invoices/invoices.repository';
 import { MailService } from '../mail/mail.service';
 import { DocumentsService } from '../documents/documents.service';
 import { StorageService } from '../storage/storage.service';
-import { ChecklistEvaluatorService } from '../checklist/checklist-evaluator.service';
+import { ChecklistReevaluator } from '../checklist/checklist-reevaluator.service';
 import {
   resolveContractVisibility,
   resolveMusicFormVisibility,
@@ -184,7 +184,7 @@ export class PortalService {
     private mail: MailService,
     private documents: DocumentsService,
     private storage: StorageService,
-    private evaluator: ChecklistEvaluatorService,
+    private reeval: ChecklistReevaluator,
     private contractRepo: ContractRepository,
     private musicFormRepo: MusicFormConfigRepository,
   ) {}
@@ -335,7 +335,7 @@ export class PortalService {
     );
 
     await this.contractRepo.markContractSigned(contract!.id, ip, signatureBase64);
-    await this.evaluator.evaluate(booking.id).catch(() => {});
+    await this.reeval.onBookingChanged(booking.id);
 
     await this.sendSigningNotification(booking, publicProfile, signedAt);
   }
@@ -400,7 +400,7 @@ export class PortalService {
       dto.notes,
     );
 
-    await this.evaluator.evaluate(data.id).catch(() => {});
+    await this.reeval.onBookingChanged(data.id);
 
     this.generateSongListAndNotify(data, dto, submittedAt).catch(() => {});
   }

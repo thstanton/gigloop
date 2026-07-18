@@ -177,12 +177,23 @@ export class ChecklistEvaluatorService {
    * its `changedInputs` to exactly the affected goals via the predicate registry's
    * inverted index, re-evaluating only those instead of the whole checklist.
    *
-   * Built and unit-tested here. Production call sites currently stay on full-sweep
-   * {@link evaluate} — it now persists step updates too, so it is correct for the
-   * multi-step contract goal; the inverted-index path remains available for a later
-   * containment pass without changing observable behaviour. Status/date-driven
-   * re-evaluation must always use {@link evaluate}: the SKIP_RULES path keys on
-   * booking status, which is not an InputKey the index can target.
+   * INTENTIONALLY DORMANT (ADR-0062) — reserved infrastructure, not an accidental
+   * no-caller method. It shipped with the goal⊃step evaluator (#619) *ahead of* its
+   * callers and has never had a production caller: at introduction the two paths were
+   * behaviourally identical, so migrating call sites bought nothing observable, and
+   * the follow-up containment pass was deferred. Every live re-evaluation goes through
+   * full-sweep {@link evaluate}, reached via the {@link ChecklistReevaluator} seam.
+   *
+   * Its correct future activation point is *inside that seam* (decide "targeted where
+   * safe, full-sweep otherwise" in one place), NOT the call sites — pushing
+   * `changedInputs` back onto callers is exactly the coupling the seam removes. Kept
+   * (rather than deleted) because band-member support is expected to make targeted
+   * containment and/or an event bus worthwhile; delete only if that direction is
+   * abandoned.
+   *
+   * Hard constraint if ever wired: status/date-driven re-evaluation must always use
+   * {@link evaluate} — the SKIP_RULES path keys on booking status, which is not an
+   * InputKey the index can target.
    */
   async evaluateForEvent(bookingId: string, changedInputs: InputKey[]): Promise<void> {
     const { items, booking } = await this.repo.findItemsWithContext(bookingId);

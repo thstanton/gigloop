@@ -131,7 +131,7 @@ describe('PortalService.signContract (integration)', () => {
       { buildContext: jest.fn().mockResolvedValue(emailContext), send: jest.fn().mockResolvedValue(undefined) } as unknown as import('../mail/mail.service').MailService,
       documents,
       { getPublicUrl: jest.fn() } as unknown as StorageService,
-      { evaluate: jest.fn().mockResolvedValue(undefined) } as unknown as import('../checklist/checklist-evaluator.service').ChecklistEvaluatorService,
+      { onBookingChanged: jest.fn().mockResolvedValue(undefined) } as unknown as import('../checklist/checklist-reevaluator.service').ChecklistReevaluator,
       { markContractSigned: markContractSignedMock } as unknown as import('../bookings/contract.repository').ContractRepository,
       {} as unknown as import('../bookings/music-form-config.repository').MusicFormConfigRepository,
     );
@@ -199,7 +199,7 @@ describe('PortalService.submitMusicForm (integration)', () => {
       { send: jest.fn().mockResolvedValue(undefined) } as unknown as import('../mail/mail.service').MailService,
       documents,
       { getPublicUrl: jest.fn() } as unknown as StorageService,
-      { evaluate: jest.fn().mockResolvedValue(undefined) } as unknown as import('../checklist/checklist-evaluator.service').ChecklistEvaluatorService,
+      { onBookingChanged: jest.fn().mockResolvedValue(undefined) } as unknown as import('../checklist/checklist-reevaluator.service').ChecklistReevaluator,
       {} as unknown as import('../bookings/contract.repository').ContractRepository,
       {
         upsertMusicFormResponse: jest.fn().mockResolvedValue(undefined),
@@ -248,7 +248,7 @@ describe('PortalService contract-signing guards on a cancelled booking (#579)', 
       { send: jest.fn() } as unknown as import('../mail/mail.service').MailService,
       {} as unknown as DocumentsService,
       {} as unknown as StorageService,
-      {} as unknown as import('../checklist/checklist-evaluator.service').ChecklistEvaluatorService,
+      {} as unknown as import('../checklist/checklist-reevaluator.service').ChecklistReevaluator,
       { markContractSigned: jest.fn() } as unknown as import('../bookings/contract.repository').ContractRepository,
       {} as unknown as import('../bookings/music-form-config.repository').MusicFormConfigRepository,
     );
@@ -299,7 +299,7 @@ describe('PortalService.getBookingData (visibility outputs)', () => {
       {} as unknown as import('../mail/mail.service').MailService,
       {} as unknown as DocumentsService,
       { getPublicUrl: jest.fn().mockReturnValue('https://example.com/doc.pdf') } as unknown as StorageService,
-      {} as unknown as import('../checklist/checklist-evaluator.service').ChecklistEvaluatorService,
+      {} as unknown as import('../checklist/checklist-reevaluator.service').ChecklistReevaluator,
       {} as unknown as import('../bookings/contract.repository').ContractRepository,
       {} as unknown as import('../bookings/music-form-config.repository').MusicFormConfigRepository,
     );

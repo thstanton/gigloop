@@ -98,7 +98,7 @@ describe('InvoicesService.send (integration) — DRAFT guard', () => {
       mockComms,
     );
 
-    const mockEvaluator = { evaluate: jest.fn().mockResolvedValue(undefined) } as unknown as import('../checklist/checklist-evaluator.service').ChecklistEvaluatorService;
+    const mockEvaluator = { onBookingChanged: jest.fn().mockResolvedValue(undefined) } as unknown as import('../checklist/checklist-reevaluator.service').ChecklistReevaluator;
     const mockChecklistRepo = { resetItemByKey: jest.fn() } as unknown as import('../checklist/checklist.repository').ChecklistRepository;
 
     service = new InvoicesService(
@@ -157,7 +157,7 @@ describe('InvoicesService.send (integration) — ISSUED invoice', () => {
       mockComms,
     );
 
-    const mockEvaluator = { evaluate: jest.fn().mockResolvedValue(undefined) } as unknown as import('../checklist/checklist-evaluator.service').ChecklistEvaluatorService;
+    const mockEvaluator = { onBookingChanged: jest.fn().mockResolvedValue(undefined) } as unknown as import('../checklist/checklist-reevaluator.service').ChecklistReevaluator;
     const mockChecklistRepo = { resetItemByKey: jest.fn() } as unknown as import('../checklist/checklist.repository').ChecklistRepository;
 
     service = new InvoicesService(
@@ -236,7 +236,7 @@ describe('InvoicesService.markSent (integration) — ISSUED invoice', () => {
       mockComms,
     );
 
-    const mockEvaluator = { evaluate: jest.fn().mockResolvedValue(undefined) } as unknown as import('../checklist/checklist-evaluator.service').ChecklistEvaluatorService;
+    const mockEvaluator = { onBookingChanged: jest.fn().mockResolvedValue(undefined) } as unknown as import('../checklist/checklist-reevaluator.service').ChecklistReevaluator;
     const mockChecklistRepo = { resetItemByKey: jest.fn() } as unknown as import('../checklist/checklist.repository').ChecklistRepository;
 
     service = new InvoicesService(
@@ -289,7 +289,7 @@ describe('InvoicesService.issue (integration)', () => {
       mockComms,
     );
 
-    const mockEvaluator = { evaluate: jest.fn().mockResolvedValue(undefined) } as unknown as import('../checklist/checklist-evaluator.service').ChecklistEvaluatorService;
+    const mockEvaluator = { onBookingChanged: jest.fn().mockResolvedValue(undefined) } as unknown as import('../checklist/checklist-reevaluator.service').ChecklistReevaluator;
     const mockChecklistRepo = { resetItemByKey: jest.fn() } as unknown as import('../checklist/checklist.repository').ChecklistRepository;
 
     service = new InvoicesService(
