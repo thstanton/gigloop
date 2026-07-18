@@ -5,7 +5,8 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { Search, Check, Music } from 'lucide-react';
 import { getMusicFormData, getPortalData, submitMusicForm } from '../../lib/portalApi';
 import { PortalLayout, getDisplayFontClass } from '../../layouts/PortalLayout';
-import type { PortalSong, PortalSpecialRequest } from '../../types/api';
+import { GENRE_LABELS } from '../../lib/constants';
+import type { PortalSong, PortalSpecialRequest, SongGenre } from '../../types/api';
 
 // ─── Song picker for special requests ─────────────────────────────────────────
 
@@ -101,7 +102,7 @@ function SongAutocomplete({
                 )}
               </span>
               <span className={`text-xs flex-shrink-0 ${isBold ? 'text-white/40' : 'text-[#9ca3af]'}`}>
-                {song.genre}
+                {GENRE_LABELS[song.genre as SongGenre] ?? song.genre}
               </span>
             </button>
           ))}
@@ -287,7 +288,7 @@ export default function PortalMusicPage() {
                   onClick={() => setActiveGenre(g)}
                   className={labelClass(g === currentGenre)}
                 >
-                  {g.charAt(0) + g.slice(1).toLowerCase().replace(/_/g, ' ')}
+                  {GENRE_LABELS[g as SongGenre] ?? g}
                 </button>
               ))}
             </div>

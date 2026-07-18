@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { IconPicker } from '@/components/common/IconPicker';
-import { PACKAGE_CATEGORY_LABELS } from '@/lib/constants';
-import type { PackageCatalogueItem, PackageTemplate, SlotInput } from '@/types/api';
+import { GENRE_LABELS, PACKAGE_CATEGORY_LABELS } from '@/lib/constants';
+import type { PackageCatalogueItem, PackageTemplate, SlotInput, SongGenre } from '@/types/api';
 
 // ─── Form value shape + conversions ──────────────────────────────────────────
 // PackageForm is presentational and fully controlled: the container owns the value and
@@ -95,11 +95,13 @@ function TagInput({
   tags,
   onChange,
   hint,
+  renderTag = (t) => t,
 }: {
   label: string;
   tags: string[];
   onChange: (tags: string[]) => void;
   hint?: string;
+  renderTag?: (tag: string) => string;
 }) {
   const [input, setInput] = useState('');
 
@@ -121,12 +123,12 @@ function TagInput({
             key={t}
             className="inline-flex items-center gap-1 bg-surface border border-border rounded px-2 py-0.5 text-sm"
           >
-            {t}
+            {renderTag(t)}
             <button
               type="button"
               onClick={() => onChange(tags.filter((x) => x !== t))}
               className="text-muted hover:text-foreground leading-none"
-              aria-label={`Remove ${t}`}
+              aria-label={`Remove ${renderTag(t)}`}
             >
               ×
             </button>
@@ -319,6 +321,7 @@ export function PackageForm({
         tags={value.defaultGenreSelection}
         onChange={(defaultGenreSelection) => onChange({ defaultGenreSelection })}
         hint={hints?.defaultGenreSelection}
+        renderTag={(g) => GENRE_LABELS[g as SongGenre] ?? g}
       />
     </div>
   );
