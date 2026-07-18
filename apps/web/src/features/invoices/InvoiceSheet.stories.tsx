@@ -33,6 +33,7 @@ const draftInvoice = {
   dueDate: null,
   paidAt: null,
   bookingId: 'b1',
+  seriesId: null,
   billToContactId: 'c1',
   billToContact: { id: 'c1', name: 'Jane Smith', email: null, phone: null, addressLine1: null, addressLine2: null, city: null, county: null, postcode: null, country: null, latitude: null, longitude: null, placeId: null, travelTimeMinutes: null, travelDistanceMetres: null, travelTimeCalculatedAt: null, travelMode: null, notes: null, greetingName: null, primaryRole: null, parkingInfo: null, accessInfo: null, equipmentAvailable: null, website: null, commissionArrangement: null, createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' },
   lineItems: [{ id: 'li1', description: 'Performance fee', amount: '1500.00', order: 0, sourceBookingId: null, createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' }],

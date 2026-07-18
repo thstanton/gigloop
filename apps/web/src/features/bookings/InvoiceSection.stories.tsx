@@ -13,7 +13,7 @@ const depositDraft: Invoice = {
   id: 'inv1', createdAt: '2030-04-01T10:00:00Z', updatedAt: '2030-04-01T10:00:00Z',
   status: 'DRAFT', isDeposit: true, invoiceNumber: null,
   issueDate: null, dueDate: null, paidAt: null,
-  bookingId: 'b1', billToContactId: 'c1', billToContact: customer,
+  bookingId: 'b1', seriesId: null, billToContactId: 'c1', billToContact: customer,
   lineItems: [{ ...lineItem, amount: '600.00' }],
 };
 

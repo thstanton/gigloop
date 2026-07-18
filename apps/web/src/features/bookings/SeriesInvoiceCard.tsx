@@ -3,14 +3,14 @@ import { toast } from '@/lib/hooks/use-toast';
 import { apiPost, apiPostVoid, apiDelete } from '@/lib/api';
 import { useSeriesInvoice } from '@/lib/hooks/useSeriesInvoice';
 import { SeriesInvoiceSection } from './InvoiceSection';
-import type { SeriesInvoice } from '@/types/api';
+import type { Invoice } from '@/types/api';
 
 interface SeriesInvoiceCardProps {
   seriesId: string;
   seriesLabel: string;
-  onEdit: (invoice: SeriesInvoice) => void;
-  onSend: (invoice: SeriesInvoice) => void;
-  onMarkSent: (invoice: SeriesInvoice) => void;
+  onEdit: (invoice: Invoice) => void;
+  onSend: (invoice: Invoice) => void;
+  onMarkSent: (invoice: Invoice) => void;
 }
 
 export default function SeriesInvoiceCard({ seriesId, seriesLabel, onEdit, onSend, onMarkSent }: SeriesInvoiceCardProps) {
@@ -20,13 +20,13 @@ export default function SeriesInvoiceCard({ seriesId, seriesLabel, onEdit, onSen
   const invalidateSeriesInvoice = () => queryClient.invalidateQueries({ queryKey: ['seriesInvoice', seriesId] });
 
   const createSeriesInvoiceMutation = useMutation({
-    mutationFn: () => apiPost<SeriesInvoice>(`/series/${seriesId}/invoices`, {}),
+    mutationFn: () => apiPost<Invoice>(`/series/${seriesId}/invoices`, {}),
     onSuccess: invalidateSeriesInvoice,
     onError: () => toast({ title: 'Failed to create series invoice', variant: 'destructive' }),
   });
 
   const issueSeriesInvoiceMutation = useMutation({
-    mutationFn: (invoiceId: string) => apiPost<SeriesInvoice>(`/series/${seriesId}/invoices/${invoiceId}/issue`, {}),
+    mutationFn: (invoiceId: string) => apiPost<Invoice>(`/series/${seriesId}/invoices/${invoiceId}/issue`, {}),
     onSuccess: invalidateSeriesInvoice,
     onError: () => toast({ title: 'Failed to issue series invoice', variant: 'destructive' }),
   });
@@ -55,7 +55,7 @@ export default function SeriesInvoiceCard({ seriesId, seriesLabel, onEdit, onSen
     onError: () => toast({ title: 'Failed to mark series invoice as sent', variant: 'destructive' }),
   });
 
-  function handleMarkSent(inv: SeriesInvoice) {
+  function handleMarkSent(inv: Invoice) {
     if (inv.status === 'ISSUED') {
       markSeriesInvoiceSentMutation.mutate(inv.id);
     } else {

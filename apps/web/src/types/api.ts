@@ -144,22 +144,6 @@ export interface BookingSeries {
   invoiceStatus?: string | null;
 }
 
-export interface SeriesInvoice {
-  id: string;
-  createdAt: string;
-  updatedAt: string;
-  status: InvoiceStatus;
-  invoiceNumber: string | null;
-  issueDate: string | null;
-  dueDate: string | null;
-  paidAt: string | null;
-  seriesId: string;
-  billToContactId: string;
-  billToContact: Contact;
-  lineItems: InvoiceLineItem[];
-}
-
-
 // ─────────────────────────────────────────
 // Bookings
 // ─────────────────────────────────────────
@@ -466,11 +450,13 @@ export interface Invoice {
   issueDate: string | null;
   dueDate: string | null;
   paidAt: string | null;
-  bookingId: string;
+  // One polymorphic Invoice entity (ADR-0063): a booking invoice has bookingId set and seriesId null;
+  // a series invoice has seriesId set and bookingId null. Both FKs are nullable on the wire.
+  bookingId: string | null;
+  seriesId: string | null;
   billToContactId: string;
   billToContact: Contact;
   lineItems: InvoiceLineItem[];
-  // isOverdue is derived client-side: status === 'SENT' && dueDate && new Date(dueDate) < new Date()
 }
 
 export interface CreateInvoiceInput {

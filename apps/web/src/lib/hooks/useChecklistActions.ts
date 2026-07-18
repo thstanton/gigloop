@@ -7,6 +7,8 @@ import { useContractActions } from '@/lib/hooks/useContractActions';
 import { useInvoiceActions } from '@/lib/hooks/useInvoiceActions';
 import { apiGet } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
+import { activeInvoiceOf, sentInvoiceOf, depositAmount, balanceAmount } from '@/lib/invoiceDerivations';
+import { buildSetsDescription } from '@/lib/bookingSets';
 import type { BookingDetail, Contract, Invoice, UserProfile } from '@/types/api';
 
 export function useChecklistActions(bookingId: string) {
@@ -37,23 +39,10 @@ export function useChecklistActions(bookingId: string) {
   const contractActions = useContractActions(bookingId);
   const invoiceActions = useInvoiceActions(bookingId);
 
-  function buildSetsDescription(): string {
-    if (!booking?.sets?.length) return '';
-    const formatById = new Map(
-      (booking.packages ?? []).map((f) => [f.id, f.label]),
-    );
-    return booking.sets
-      .map((s) => {
-        const label = s.label ?? (s.packageId ? formatById.get(s.packageId) : null) ?? null;
-        return label ? `${label} (${s.duration} min)` : `${s.duration} min`;
-      })
-      .join(', ');
-  }
-
   function openCreateInvoice(prefill?: { isDeposit: boolean; amount?: number }) {
     const params: Record<string, string> = { sheet: 'invoice', isDeposit: String(prefill?.isDeposit ?? false) };
     if (prefill?.amount != null) params.amount = String(prefill.amount);
-    const desc = buildSetsDescription();
+    const desc = buildSetsDescription(booking);
     if (desc) params.description = desc;
     setSearchParams(params);
   }
@@ -68,7 +57,7 @@ export function useChecklistActions(bookingId: string) {
     }
     const isDeposit = action === 'create_deposit_invoice';
     const invoiceType = isDeposit ? 'deposit' : 'balance';
-    const existing = invoices.find((inv) => inv.isDeposit === isDeposit && inv.status !== 'VOID');
+    const existing = activeInvoiceOf(isDeposit, invoices);
 
     // A draft is the user's to finish — open it so they can issue it. An already-issued invoice
     // is locked, so creating another means voiding the existing one first (ADR-0056).
@@ -90,8 +79,7 @@ export function useChecklistActions(bookingId: string) {
     const pct = userProfile?.depositPercentage;
     let amount: number | undefined;
     if (fee && pct) {
-      const raw = isDeposit ? (fee * pct) / 100 : fee * (1 - pct / 100);
-      amount = Math.round(raw * 100) / 100;
+      amount = isDeposit ? depositAmount(fee, pct) : balanceAmount(fee, pct);
     }
     openCreateInvoice({ isDeposit, amount });
   }
@@ -99,7 +87,7 @@ export function useChecklistActions(bookingId: string) {
   // Mark the sent invoice of the given type paid — the received steps' "Mark as paid" action (#653).
   // Returns false when there is no sent invoice to mark, so the caller can pick a fallback.
   function markSentInvoicePaid(isDeposit: boolean): boolean {
-    const sent = invoices.find((inv) => inv.isDeposit === isDeposit && inv.status === 'SENT');
+    const sent = sentInvoiceOf(isDeposit, invoices);
     if (!sent) return false;
     invoiceActions.markPaid(sent.id);
     return true;
