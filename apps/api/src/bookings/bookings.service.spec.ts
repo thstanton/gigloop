@@ -4,6 +4,7 @@ import { BookingsService } from './bookings.service';
 import { BookingsRepository } from './bookings.repository';
 import { ContractRepository } from './contract.repository';
 import { MusicFormConfigRepository } from './music-form-config.repository';
+import { ContactsService } from '../contacts/contacts.service';
 import { ChecklistRepository } from '../checklist/checklist.repository';
 import { SeriesRepository } from '../series/series.repository';
 import { SeriesService } from '../series/series.service';
@@ -177,6 +178,12 @@ function makePrisma(): MockPrisma {
   };
 }
 
+type MockContacts = { assertOwned: jest.Mock };
+
+function makeContacts(): MockContacts {
+  return { assertOwned: jest.fn().mockResolvedValue(undefined) };
+}
+
 const booking = { id: 'b1', userId: 'u1', status: BookingStatus.CONFIRMED };
 const set = { id: 's1', bookingId: 'b1', userId: 'u1' };
 
@@ -205,6 +212,7 @@ describe('BookingsService', () => {
   let checklistRepo: MockChecklistRepo;
   let contractRepo: MockContractRepo;
   let musicFormRepo: MockMusicFormRepo;
+  let contacts: MockContacts;
   let prisma: MockPrisma;
 
   beforeEach(() => {
@@ -216,6 +224,7 @@ describe('BookingsService', () => {
     checklistRepo = makeChecklistRepo();
     contractRepo = makeContractRepo();
     musicFormRepo = makeMusicFormRepo();
+    contacts = makeContacts();
     prisma = makePrisma();
     service = new BookingsService(
       repo as unknown as BookingsRepository,
@@ -226,6 +235,7 @@ describe('BookingsService', () => {
       checklistRepo as unknown as ChecklistRepository,
       contractRepo as unknown as ContractRepository,
       musicFormRepo as unknown as MusicFormConfigRepository,
+      contacts as unknown as ContactsService,
       prisma as unknown as PrismaService,
     );
   });
@@ -372,6 +382,20 @@ describe('BookingsService', () => {
       const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', checklistItems: [] };
       await service.create('u1', dto);
       expect(evaluator.evaluate).toHaveBeenCalledWith(createdBooking.id);
+    });
+
+    it('validates ownership of the customer/venue/agent contacts before creating (#709)', async () => {
+      repo.create.mockResolvedValue(createdBooking);
+      const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', venueId: 'v1', bookingAgentId: 'a1', checklistItems: [] };
+      await service.create('u1', dto);
+      expect(contacts.assertOwned).toHaveBeenCalledWith('u1', ['c1', 'v1', 'a1']);
+    });
+
+    it('rejects and does not create when a referenced contact is not owned (#709)', async () => {
+      contacts.assertOwned.mockRejectedValue(new NotFoundException('Contact not found'));
+      const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'foreign', checklistItems: [] };
+      await expect(service.create('u1', dto)).rejects.toThrow(NotFoundException);
+      expect(repo.create).not.toHaveBeenCalled();
     });
 
     it('seeds checklist items from dto.checklistItems', async () => {
@@ -634,6 +658,19 @@ describe('BookingsService', () => {
     it('throws NotFoundException without calling update when booking is not found', async () => {
       repo.findForOwnership.mockResolvedValue(null);
       await expect(service.update('u1', 'missing', {})).rejects.toThrow(NotFoundException);
+      expect(repo.update).not.toHaveBeenCalled();
+    });
+
+    it('validates ownership of any contact FK present in the patch (#709)', async () => {
+      repo.findOne.mockResolvedValue(booking);
+      repo.update.mockResolvedValue({ ...booking, date: new Date(), createdAt: new Date() });
+      await service.update('u1', 'b1', { venueId: 'v2', bookingAgentId: 'a2' });
+      expect(contacts.assertOwned).toHaveBeenCalledWith('u1', [undefined, 'v2', 'a2']);
+    });
+
+    it('rejects and does not update when a patched contact FK is not owned (#709)', async () => {
+      contacts.assertOwned.mockRejectedValue(new NotFoundException('Contact not found'));
+      await expect(service.update('u1', 'b1', { customerId: 'foreign' })).rejects.toThrow(NotFoundException);
       expect(repo.update).not.toHaveBeenCalled();
     });
 

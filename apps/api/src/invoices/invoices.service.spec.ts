@@ -73,6 +73,7 @@ describe('InvoicesService', () => {
     issueInvoice: jest.Mock;
   };
   let mockChecklistRepo: { resetItemByKey: jest.Mock };
+  let mockContacts: { assertOwned: jest.Mock };
 
   beforeEach(() => {
     repo = makeRepo();
@@ -85,12 +86,14 @@ describe('InvoicesService', () => {
     };
     const mockEvaluator = { evaluate: jest.fn().mockResolvedValue(undefined) } as unknown as import('../checklist/checklist-evaluator.service').ChecklistEvaluatorService;
     mockChecklistRepo = { resetItemByKey: jest.fn().mockResolvedValue({ count: 0 }) };
+    mockContacts = { assertOwned: jest.fn().mockResolvedValue(undefined) };
     service = new InvoicesService(
       repo as unknown as InvoicesRepository,
       mockLifecycle as unknown as InvoiceLifecycleService,
       mockDocuments,
       mockEvaluator,
       mockChecklistRepo as unknown as import('../checklist/checklist.repository').ChecklistRepository,
+      mockContacts as unknown as import('../contacts/contacts.service').ContactsService,
     );
   });
 
@@ -162,6 +165,22 @@ describe('InvoicesService', () => {
       expect(repo.create).toHaveBeenCalledWith('u1', 'b1', 'c2', { billToContactId: 'c2' });
     });
 
+    it('validates ownership of an explicitly-provided billToContactId (#709)', async () => {
+      await service.create('u1', 'b1', { billToContactId: 'c2' });
+      expect(mockContacts.assertOwned).toHaveBeenCalledWith('u1', ['c2']);
+    });
+
+    it('does not require a contact check when billToContactId is omitted — the fallback is owned (#709)', async () => {
+      await service.create('u1', 'b1', {});
+      expect(mockContacts.assertOwned).toHaveBeenCalledWith('u1', [undefined]);
+    });
+
+    it('rejects and does not create when the billToContactId is not owned (#709)', async () => {
+      mockContacts.assertOwned.mockRejectedValue(new NotFoundException('Contact not found'));
+      await expect(service.create('u1', 'b1', { billToContactId: 'foreign' })).rejects.toThrow(NotFoundException);
+      expect(repo.create).not.toHaveBeenCalled();
+    });
+
     it('throws NotFoundException when booking is not found', async () => {
       repo.findBookingInfo.mockResolvedValue(null);
       await expect(service.create('u1', 'missing', {})).rejects.toThrow(NotFoundException);
@@ -213,6 +232,20 @@ describe('InvoicesService', () => {
     it('throws NotFoundException without calling update when invoice is not found', async () => {
       repo.findOne.mockResolvedValue(null);
       await expect(service.update('u1', 'b1', 'missing', {})).rejects.toThrow(NotFoundException);
+      expect(repo.update).not.toHaveBeenCalled();
+    });
+
+    it('validates ownership of a re-pointed billToContactId (#709)', async () => {
+      repo.findOne.mockResolvedValue(draftInvoice);
+      repo.update.mockResolvedValue(draftInvoice);
+      await service.update('u1', 'b1', 'i1', { billToContactId: 'c2' });
+      expect(mockContacts.assertOwned).toHaveBeenCalledWith('u1', ['c2']);
+    });
+
+    it('rejects and does not update when the re-pointed billToContactId is not owned (#709)', async () => {
+      repo.findOne.mockResolvedValue(draftInvoice);
+      mockContacts.assertOwned.mockRejectedValue(new NotFoundException('Contact not found'));
+      await expect(service.update('u1', 'b1', 'i1', { billToContactId: 'foreign' })).rejects.toThrow(NotFoundException);
       expect(repo.update).not.toHaveBeenCalled();
     });
   });

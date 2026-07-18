@@ -5,6 +5,7 @@ type MockPrisma = {
   contact: {
     findMany: jest.Mock;
     findFirst: jest.Mock;
+    count: jest.Mock;
     create: jest.Mock;
     update: jest.Mock;
     delete: jest.Mock;
@@ -19,6 +20,7 @@ function makePrisma(): MockPrisma {
     contact: {
       findMany: jest.fn(),
       findFirst: jest.fn(),
+      count: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
@@ -36,6 +38,17 @@ describe('ContactsRepository', () => {
   beforeEach(() => {
     prisma = makePrisma();
     repo = new ContactsRepository(prisma as unknown as PrismaService);
+  });
+
+  describe('countOwned', () => {
+    it('counts contacts matching the ids scoped to the user', async () => {
+      prisma.contact.count.mockResolvedValue(2);
+      const result = await repo.countOwned('u1', ['c1', 'c2']);
+      expect(prisma.contact.count).toHaveBeenCalledWith({
+        where: { id: { in: ['c1', 'c2'] }, userId: 'u1' },
+      });
+      expect(result).toBe(2);
+    });
   });
 
   describe('findAll', () => {
