@@ -72,7 +72,7 @@ test.describe('create booking', () => {
     await page.getByRole('option', { name: customer.name }).click();
 
     // --- Step 2 (Reminders), then create ---
-    await page.getByRole('button', { name: 'Next: Checklist' }).click();
+    await page.getByRole('button', { name: 'Next: Reminders' }).click();
     await page.getByRole('button', { name: 'Create booking' }).click();
 
     // --- Created checkpoint → finish → the booking detail ---
