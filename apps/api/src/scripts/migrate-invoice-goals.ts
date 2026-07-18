@@ -1,25 +1,22 @@
 /**
  * One-time, re-runnable data migration (ADR-0057 / #617): reshape every existing booking's deposit
  * and balance goals into the new 4-step spine (create → issue → send → received) and rename the
- * balance goal `invoice_the_balance` → `get_the_balance_paid`. Also renames the balance entry in
- * every user's saved checklist template.
+ * balance goal `invoice_the_balance` → `get_the_balance_paid`.
  *
  * Run: bun run migrate:invoice-goals
  *
- * MUST be run on each environment immediately after the #617 deploy — until it runs, existing
- * bookings keep the old 3-step deposit / 2-step balance shapes, and a saved template still carries
- * the old `invoice_the_balance` key (so a Settings → Checklist save would 400 on the stale key).
+ * The saved-template half was retired by ADR-0060 — checklist defaults are now stored as sparse
+ * overrides and read-merged against the current catalogue, so the renamed key is dropped on read
+ * and never needs a template rewrite. This script now reshapes existing booking rows only.
  *
  * Idempotent — a goal already in canonical shape is skipped (the pure planner returns null). After
  * reshaping, a full-sweep evaluate() reconstructs every rule-backed step from live invoice/comms
  * facts, so each migrated goal lands exactly where the live evaluator would compute it.
  */
 import { PrismaClient } from '@prisma/client';
-import { ChecklistDefaultItem } from '../bookings/checklist-defaults';
 import {
   ExistingStep,
   planInvoiceGoalMigration,
-  planInvoiceTemplateMigration,
 } from '../checklist/checklist-invoice-migration';
 import { ChecklistEvaluatorService } from '../checklist/checklist-evaluator.service';
 import { ChecklistRepository } from '../checklist/checklist.repository';
@@ -29,24 +26,6 @@ const GOAL_KEYS: Record<string, string> = {
   get_deposit_paid: 'get_deposit_paid',
   invoice_the_balance: 'get_the_balance_paid',
 };
-
-async function migrateTemplates(prisma: PrismaClient): Promise<void> {
-  const profiles = await prisma.userProfile.findMany({ select: { userId: true, preferences: true } });
-  let migrated = 0;
-  for (const profile of profiles) {
-    const prefs = (profile.preferences ?? {}) as Record<string, unknown>;
-    const stored = prefs.checklistDefaults;
-    if (!Array.isArray(stored)) continue; // empty → falls back to current CHECKLIST_DEFAULTS
-    const next = planInvoiceTemplateMigration(stored as ChecklistDefaultItem[]);
-    if (!next) continue;
-    await prisma.userProfile.update({
-      where: { userId: profile.userId },
-      data: { preferences: { ...prefs, checklistDefaults: next } as object },
-    });
-    migrated++;
-  }
-  console.log(`Templates migrated: ${migrated}`);
-}
 
 async function main() {
   const prisma = new PrismaClient();
@@ -134,8 +113,6 @@ async function main() {
     console.log(
       `\nGoals migrated: ${migrated}, Unchanged (already done): ${unchanged}, Failed: ${failed}`,
     );
-
-    await migrateTemplates(prisma);
   } finally {
     await prisma.$disconnect();
   }

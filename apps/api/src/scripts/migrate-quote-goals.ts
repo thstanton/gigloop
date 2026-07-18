@@ -1,53 +1,28 @@
 /**
  * One-time, re-runnable data migration (ADR-0057 / #616): collapse each existing booking's two
  * flat quote items (`send_quote` + `confirm_quote`) into the multi-step goal
- * `get_the_quote_accepted` (send → accepted), and collapse the same cluster in every user's saved
- * checklist template so new bookings seed the goal.
+ * `get_the_quote_accepted` (send → accepted).
  *
  * Run: bun run migrate:quote-goals
  *
- * MUST be run on each environment immediately after the #616 deploy: until it runs, a user with a
- * saved checklistDefaults template still carries the old `send_quote`/`confirm_quote` keys, which
- * the catalogue no longer knows — so a Settings → Checklist save would 400 on the stale keys, and
- * existing bookings keep two flat quote items. (Pre-launch the only such user is the owner.)
+ * The saved-template half was retired by ADR-0060 — checklist defaults are now stored as sparse
+ * overrides and read-merged against the current catalogue, so a retired key is dropped on read and
+ * never needs a template rewrite. This script now reshapes existing booking rows only.
  *
  * Idempotent — a booking that already has the goal is skipped (the pure planner returns null).
  * After collapsing, a full-sweep evaluate() re-applies goal-level skips and any auto-complete, so
  * each migrated goal lands in exactly the state the live evaluator would compute.
  */
 import { PrismaClient } from '@prisma/client';
-import { ChecklistDefaultItem } from '../bookings/checklist-defaults';
 import {
   FlatChecklistItem,
   planQuoteMigration,
-  planQuoteTemplateMigration,
 } from '../checklist/checklist-quote-migration';
 import { ChecklistEvaluatorService } from '../checklist/checklist-evaluator.service';
 import { ChecklistRepository } from '../checklist/checklist.repository';
 
-// The old flat quote keys — used only to find candidate bookings/templates.
+// The old flat quote keys — used to find candidate bookings.
 const OLD_QUOTE_KEYS = ['send_quote', 'confirm_quote'];
-
-// Collapse the old flat quote entries in each user's SAVED checklist template
-// (preferences.checklistDefaults) into the canonical goal entry, so new bookings seeded from that
-// template carry the multi-step goal.
-async function migrateTemplates(prisma: PrismaClient): Promise<void> {
-  const profiles = await prisma.userProfile.findMany({ select: { userId: true, preferences: true } });
-  let migrated = 0;
-  for (const profile of profiles) {
-    const prefs = (profile.preferences ?? {}) as Record<string, unknown>;
-    const stored = prefs.checklistDefaults;
-    if (!Array.isArray(stored)) continue; // empty → falls back to current CHECKLIST_DEFAULTS
-    const next = planQuoteTemplateMigration(stored as ChecklistDefaultItem[]);
-    if (!next) continue;
-    await prisma.userProfile.update({
-      where: { userId: profile.userId },
-      data: { preferences: { ...prefs, checklistDefaults: next } as object },
-    });
-    migrated++;
-  }
-  console.log(`Templates migrated: ${migrated}`);
-}
 
 async function main() {
   const prisma = new PrismaClient();
@@ -138,9 +113,6 @@ async function main() {
     console.log(
       `\nBookings migrated: ${migrated}, Unchanged (already done): ${unchanged}, Failed: ${failed}`,
     );
-
-    // Saved checklist templates (so new bookings seed the goal).
-    await migrateTemplates(prisma);
   } finally {
     await prisma.$disconnect();
   }

@@ -11,7 +11,7 @@
 //
 // PURE planner — no DB access — unit-tested on fixtures. The apply step (row update + evaluate()
 // sweep + template update) lives in `scripts/migrate-balance-received-rule.ts`.
-import { CHECKLIST_DEFAULTS, ChecklistDefaultItem } from '../bookings/checklist-defaults';
+import { CHECKLIST_DEFAULTS } from '../bookings/checklist-defaults';
 
 export const BALANCE_GOAL_KEY = 'get_the_balance_paid';
 export const BALANCE_STEP_KEY = 'balance_received';
@@ -33,27 +33,7 @@ export function isBalanceRuleCurrent(rule: unknown): boolean {
   );
 }
 
-/**
- * Patch the `balance_received` step's rule inside a user's *saved* checklist template. Returns the
- * updated array, or null when there is nothing to do — no `get_the_balance_paid` goal, no
- * `balance_received` step, or the rule is already current (idempotent).
- */
-export function planBalanceTemplateMigration(
-  storedDefaults: ChecklistDefaultItem[],
-): ChecklistDefaultItem[] | null {
-  const goalIdx = storedDefaults.findIndex((d) => d.key === BALANCE_GOAL_KEY);
-  if (goalIdx === -1) return null;
-  const goal = storedDefaults[goalIdx];
-  const steps = goal.steps;
-  if (!steps?.length) return null;
-  const stepIdx = steps.findIndex((s) => s.key === BALANCE_STEP_KEY);
-  if (stepIdx === -1) return null;
-  if (isBalanceRuleCurrent(steps[stepIdx].autoCompleteRule)) return null;
-
-  const nextSteps = steps.map((s, i) =>
-    i === stepIdx ? { ...s, autoCompleteRule: canonicalBalanceRule() } : s,
-  );
-  const result = [...storedDefaults];
-  result[goalIdx] = { ...goal, steps: nextSteps };
-  return result;
-}
+// The saved-template migration (planBalanceTemplateMigration) was retired by ADR-0060: checklist
+// defaults are now stored as sparse overrides and read-merged against the current catalogue, so the
+// balance_received step's rule is always taken fresh from the catalogue and never needs a template
+// rewrite. canonicalBalanceRule / isBalanceRuleCurrent remain for the booking-row rule migration.

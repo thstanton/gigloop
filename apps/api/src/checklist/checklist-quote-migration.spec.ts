@@ -1,8 +1,6 @@
-import { ChecklistDefaultItem } from '../bookings/checklist-defaults';
 import {
   FlatChecklistItem,
   planQuoteMigration,
-  planQuoteTemplateMigration,
 } from './checklist-quote-migration';
 
 // A flat checklist item as the migration reads it. Defaults keep the test terse.
@@ -99,51 +97,5 @@ describe('planQuoteMigration — quote cluster (get_the_quote_accepted, ADR-0057
   it('returns null when there is no quote cluster to collapse', () => {
     const items = [flat({ key: 'get_deposit_paid', state: 'PENDING' })];
     expect(planQuoteMigration(items)).toBeNull();
-  });
-});
-
-describe('planQuoteTemplateMigration — saved checklist defaults', () => {
-  function tpl(overrides: Omit<Partial<ChecklistDefaultItem>, 'key'> & { key: string | null }): ChecklistDefaultItem {
-    return {
-      // Custom items carry a null key at runtime (the type declares `string`); mirror that.
-      key: overrides.key as unknown as string,
-      label: overrides.label ?? 'X',
-      completedBy: overrides.completedBy ?? 'USER',
-      dependsOn: overrides.dependsOn ?? [],
-      autoCompleteRule: overrides.autoCompleteRule ?? null,
-      requiredForStatus: overrides.requiredForStatus ?? 'PROVISIONAL',
-      dueDateRule: overrides.dueDateRule ?? null,
-      ...(overrides.concern !== undefined ? { concern: overrides.concern } : {}),
-      ...(overrides.enabled !== undefined ? { enabled: overrides.enabled } : {}),
-    };
-  }
-
-  it('collapses the flat send_quote + confirm_quote template entries into one goal entry', () => {
-    const stored = [
-      tpl({ key: 'send_quote', label: 'Send quote' }),
-      tpl({ key: 'confirm_quote', label: 'Quote confirmed' }),
-      tpl({ key: 'get_deposit_paid', label: 'Get the deposit paid', requiredForStatus: 'CONFIRMED' }),
-    ];
-    const next = planQuoteTemplateMigration(stored)!;
-    expect(next.map((d) => d.key)).toEqual(['get_the_quote_accepted', 'get_deposit_paid']);
-    // The inserted entry is the canonical goal (no rule, multi-step).
-    expect(next[0]).toMatchObject({ key: 'get_the_quote_accepted', autoCompleteRule: null });
-  });
-
-  it('preserves other system items and custom items, and their order', () => {
-    const stored = [
-      tpl({ key: 'send_quote' }),
-      tpl({ key: null, label: 'Book parking', concern: 'venue', requiredForStatus: null }),
-      tpl({ key: 'confirm_quote' }),
-      tpl({ key: 'play_the_gig', requiredForStatus: 'COMPLETE' }),
-    ];
-    const next = planQuoteTemplateMigration(stored)!;
-    expect(next.map((d) => d.key)).toEqual(['get_the_quote_accepted', null, 'play_the_gig']);
-    expect(next.find((d) => d.label === 'Book parking')).toMatchObject({ concern: 'venue' });
-  });
-
-  it('returns null when the template has no flat quote keys', () => {
-    const stored = [tpl({ key: 'get_the_quote_accepted' }), tpl({ key: 'get_deposit_paid' })];
-    expect(planQuoteTemplateMigration(stored)).toBeNull();
   });
 });
