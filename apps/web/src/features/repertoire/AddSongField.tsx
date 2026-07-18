@@ -111,7 +111,10 @@ export function AddSongField({
           className="pl-9"
           onChange={(e) => { setQ(e.target.value); setOpen(true); setActive(-1); }}
           onFocus={() => setOpen(true)}
-          onBlur={() => setTimeout(() => setOpen(false), 120)}
+          // Close when focus leaves the field entirely. Deterministic (vs. a deferred
+          // setTimeout that could fire after unmount): suggestion buttons use
+          // onPointerDown+preventDefault so selecting one never blurs the input.
+          onBlur={(e) => { if (!e.currentTarget.parentElement?.contains(e.relatedTarget)) setOpen(false); }}
           onKeyDown={(e) => handleTypeaheadKey(e, { suggestions, active, setActive, setOpen, addCatalogue })}
         />
         {suggestions.length > 0 && (
