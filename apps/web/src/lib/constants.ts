@@ -40,16 +40,36 @@ export const DEFAULT_ENABLED_GENRES: SongGenre[] = [
   'FILM_TV_MUSICALS',
 ];
 
-export const EVENT_TYPE_LABELS: Record<EventType, string> = {
-  WEDDING:   'Wedding',
-  CORPORATE: 'Corporate',
-  PRIVATE:   'Private event',
-  RESIDENCY: 'Residency',
-  FESTIVAL:  'Festival',
-  OUTDOOR:   'Outdoor event',
-  FUNCTION:  'Function',
-  OTHER:     'Other',
-};
+// ─── Event type ──────────────────────────────────────────────────────────────
+// One vocabulary, two label registers (CONTEXT: [[Package Template]] → category).
+// A booking's event type is the noun the musician is naming, so it reads "Private event".
+// A package's category is a section heading over a grid, where that suffix is noise, so it
+// reads "Private". These are NOT two lists that happen to match — PACKAGE_CATEGORY_LABELS
+// used to be a separate hand-written map, and the registers drifted apart unnoticed.
+export interface EventTypeRow {
+  value: EventType;
+  /** Booking register — the full noun. */
+  label: string;
+  /** Package-category register — bare, for grouping headers. */
+  shortLabel: string;
+}
+
+const EVENT_TYPE_ROWS = [
+  { value: 'WEDDING',   label: 'Wedding',       shortLabel: 'Wedding'   },
+  { value: 'CORPORATE', label: 'Corporate',     shortLabel: 'Corporate' },
+  { value: 'PRIVATE',   label: 'Private event', shortLabel: 'Private'   },
+  { value: 'RESIDENCY', label: 'Residency',     shortLabel: 'Residency' },
+  { value: 'FESTIVAL',  label: 'Festival',      shortLabel: 'Festival'  },
+  { value: 'OUTDOOR',   label: 'Outdoor event', shortLabel: 'Outdoor'   },
+  { value: 'FUNCTION',  label: 'Function',      shortLabel: 'Function'  },
+  { value: 'OTHER',     label: 'Other',         shortLabel: 'Other'     },
+] as const satisfies readonly EventTypeRow[];
+
+export type _EventTypeCoverage = AssertNever<
+  Exclude<EventType, (typeof EVENT_TYPE_ROWS)[number]['value']>
+>;
+
+export const EVENT_TYPE_LABELS = column(EVENT_TYPE_ROWS, 'label');
 
 // ─── Booking lifecycle ───────────────────────────────────────────────────────
 // The booking status vocabulary, declared ONCE (CLAUDE.md: one declaration per
@@ -154,13 +174,21 @@ export type _BookingStatusCoverage = AssertNever<
   Exclude<BookingStatus, (typeof BOOKING_STATUSES)[number]['value']>
 >;
 
-const statusColumn = <K extends keyof BookingStatusRow>(
+/**
+ * Lifts one column out of a vocabulary table into the `Record<Member, …>` shape call sites
+ * expect. This is how every label/token map below is produced instead of being written out
+ * a second time. The cast is sound because each table carries a coverage guard proving it
+ * holds every member of its union, so the Record is total by construction.
+ */
+function column<V extends string, R extends { value: V }, K extends keyof R>(
+  rows: readonly R[],
   key: K,
-): Record<BookingStatus, BookingStatusRow[K]> =>
-  Object.fromEntries(BOOKING_STATUSES.map((row) => [row.value, row[key]])) as Record<
-    BookingStatus,
-    BookingStatusRow[K]
-  >;
+): Record<V, R[K]> {
+  return Object.fromEntries(rows.map((row) => [row.value, row[key]])) as Record<V, R[K]>;
+}
+
+const statusColumn = <K extends keyof BookingStatusRow>(key: K) =>
+  column(BOOKING_STATUSES, key);
 
 export const STATUS_ORDER: BookingStatus[] = BOOKING_STATUSES.map((row) => row.value);
 
@@ -231,20 +259,10 @@ export const GOAL_SUMMARIES: Record<string, string> = {
   send_thank_you:         'A week after, GigLoop reminds you to send a thank-you.',
 };
 
-export const PACKAGE_CATEGORY_LABELS: Record<string, string> = {
-  WEDDING:   'Wedding',
-  CORPORATE: 'Corporate',
-  PRIVATE:   'Private',
-  RESIDENCY: 'Residency',
-  FESTIVAL:  'Festival',
-  OUTDOOR:   'Outdoor',
-  FUNCTION:  'Function',
-  OTHER:     'Other',
-};
+// A package's category is drawn from the event-type vocabulary above, in its short register.
+export const PACKAGE_CATEGORY_LABELS = column(EVENT_TYPE_ROWS, 'shortLabel');
 
-export const PACKAGE_CATEGORY_ORDER = [
-  'WEDDING', 'CORPORATE', 'PRIVATE', 'RESIDENCY', 'FESTIVAL', 'OUTDOOR', 'FUNCTION', 'OTHER',
-] as const;
+export const PACKAGE_CATEGORY_ORDER: EventType[] = EVENT_TYPE_ROWS.map((row) => row.value);
 
 export const LOGISTICS_FIELD_LABELS: Record<string, string> = {
   arrivalTime:    'Arrival time',
