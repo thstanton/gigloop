@@ -40,10 +40,12 @@ One list was doing two jobs. Separating them dissolves every symptom:
 | Concept | Kind | Storage |
 |---|---|---|
 | **Genre** | shared canonical vocabulary | `SONG_GENRES` constant |
-| **My Genres** | the musician's stated **intent** | `UserProfile.myGenres String[]` |
+| **My Genres** | the musician's stated **intent** | `UserProfile.preferences.myGenres` |
 | **Genres in Repertoire** | derived **fact** — genres with ≥1 active `Song` | not stored |
 
-Intent is a *selection over* the shared vocabulary — not per-user genre *values*. That is what keeps it one additive column rather than a `Genre` table with a join.
+Intent is a *selection over* the shared vocabulary — not per-user genre *values*. That is what keeps it a single stored array rather than a `Genre` table with a join.
+
+**My Genres lives in the `preferences` JSON blob, not a column** — beside `checklistDefaults` and `dismissedHints`. It is advisory: never validated against, never in a `WHERE`, never joined. A column would imply a queryable domain attribute it is not, and would take the fleet's one-schema-PR lock for no benefit. Access goes through a read helper mirroring `getChecklistDefaults`, which is what makes the unset ⇒ full-canonical default impossible to omit at a call site — the failure mode being precisely the cold-start deadlock described below. If genre ever becomes something queried across users (a "most-performed genres" analytic), promoting it to a column is a small additive migration at that point.
 
 ### 3. Intent never constrains stored data
 
@@ -116,7 +118,7 @@ Root cause of #699 was narrower than it appeared: `ChecklistDefaultsConfigurator
 - Every genre picker becomes personal; no musician sees the full canonical list.
 - #530 is satisfied without the `Genre` table it seemed to require — ask 1 is `myGenres`, ask 2 is the gap between intent and coverage, rendered as a count.
 - #699 resolves as a consequence of the reorder; its hardest fork (what happens to a reminder set *before* the feature was chosen) disappears, because that ordering is now impossible.
-- One additive nullable column. No destructive migration; expand/contract not required.
+- No schema change at all — My Genres lives in the existing `preferences` blob, so no migration, no expand/contract, and no contention on the fleet one-schema-PR lock.
 - #551's canonical picker remains correct — only its options source changes.
 
 **Bad / accepted**

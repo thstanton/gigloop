@@ -264,7 +264,7 @@ The private, authenticated-only half of the musician's settings (one per `userId
 
 `songRequestFormEnabled` is a global toggle — when false, the music form feature is hidden across the entire app (no [[MusicFormConfig]] creation, no [[MusicForm]] on the [[Portal]]). It is the **master flag** for the feature: the `gather_song_requests` [[BookingChecklistItem]] goal is gated by it (form off ⇒ goal locked off; goal off with form on is a legitimate state — take requests, skip the nagging). First asked in [[OnboardingFlow]] step 1, thereafter in **Booking settings → General**.
 
-`myGenres` (`String[]`) holds [[My Genres]] — see that entry for its semantics.
+[[My Genres]] is stored in the `preferences` blob (`preferences.myGenres`) alongside `checklistDefaults` and `dismissedHints`, not as a column — it is an advisory UI preference, never validated against and never queried across users. Its unset-means-full-canonical default is applied by a read helper, so no call site can omit it.
 
 ### MusicFormResponse
 The client's submitted music preferences, stored on a Booking (zero-to-one). Re-submitting replaces the previous response.
