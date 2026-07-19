@@ -1,8 +1,22 @@
 import { describe, it, expect } from 'vitest';
 import { selectEligibleTips, pickTip, TIP_POOL, type Tip, type TipSnapshot } from './tipEngine';
 
-const allSetUp: TipSnapshot = { hasHomeAddress: true, hasLogo: true, noCustomPackage: false };
-const nothingSetUp: TipSnapshot = { hasHomeAddress: false, hasLogo: false, noCustomPackage: true };
+const allSetUp: TipSnapshot = {
+  hasHomeAddress: true,
+  hasLogo: true,
+  noCustomPackage: false,
+  usesDefaultPortalBranding: false,
+  songRequestsEnabled: true,
+  hasSongs: true,
+};
+const nothingSetUp: TipSnapshot = {
+  hasHomeAddress: false,
+  hasLogo: false,
+  noCustomPackage: true,
+  usesDefaultPortalBranding: true,
+  songRequestsEnabled: true,
+  hasSongs: false,
+};
 
 describe('selectEligibleTips', () => {
   it('includes a tip whose precondition is met and which is not dismissed', () => {
@@ -23,6 +37,45 @@ describe('selectEligibleTips', () => {
 
   it('returns nothing when everything is set up', () => {
     expect(selectEligibleTips(allSetUp, [])).toEqual([]);
+  });
+});
+
+// Onboarding steps 3–5 leave an observable trace when skipped; each maps to one precondition (#669).
+describe('onboarding skip preconditions', () => {
+  const ids = (s: TipSnapshot) => selectEligibleTips(s, []).map((t) => t.id);
+
+  it('surfaces the package tip when the library holds no template of the musician’s own', () => {
+    expect(ids({ ...allSetUp, noCustomPackage: true })).toContain('packages-still-default');
+  });
+
+  it('surfaces the portal tip while the portal still carries the shipped branding', () => {
+    expect(ids({ ...allSetUp, usesDefaultPortalBranding: true })).toContain(
+      'portal-default-branding',
+    );
+  });
+
+  it('drops the portal tip once the branding has been changed', () => {
+    expect(ids({ ...allSetUp, usesDefaultPortalBranding: false })).not.toContain(
+      'portal-default-branding',
+    );
+  });
+
+  it('surfaces the repertoire tip when song requests are on and no song has been added', () => {
+    expect(ids({ ...allSetUp, songRequestsEnabled: true, hasSongs: false })).toContain(
+      'repertoire-empty',
+    );
+  });
+});
+
+describe('song requests turned off', () => {
+  const ids = (s: TipSnapshot) => selectEligibleTips(s, []).map((t) => t.id);
+
+  it('never surfaces a song-request tip, even with an empty repertoire', () => {
+    expect(ids({ ...nothingSetUp, songRequestsEnabled: false })).not.toContain('repertoire-empty');
+  });
+
+  it('leaves the unrelated tips alone', () => {
+    expect(ids({ ...nothingSetUp, songRequestsEnabled: false })).toContain('home-address-missing');
   });
 });
 
