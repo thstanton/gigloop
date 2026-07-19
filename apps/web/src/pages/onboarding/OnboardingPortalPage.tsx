@@ -160,7 +160,7 @@ export default function OnboardingPortalPage() {
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Your portal & branding"
-        subheading="A personalised client portal is created for every booking, to keep your clients in the loop. Customise it here."
+        subheading="Every booking gets a personalised client portal. Your client sees it only when you share the link — GigLoop includes it in the emails you send them. Customise it here."
         className="mb-0"
       />
 

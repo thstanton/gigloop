@@ -16,6 +16,10 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
   play: async ({ canvas }) => {
     await expect((await canvas.findAllByText('Your portal & branding'))[0]).toBeVisible();
+    // The portal is link-gated — the subheading must say so (#700)
+    await expect(
+      (await canvas.findAllByText(/sees it only when you share the link/))[0],
+    ).toBeVisible();
     // Walkthrough sections (the hero-image step only appears for Bold themes)
     await expect(await canvas.findByText('Pick a theme')).toBeVisible();
     await expect(canvas.getByText('Choose your brand colour')).toBeVisible();
