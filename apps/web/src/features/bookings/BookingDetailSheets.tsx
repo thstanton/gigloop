@@ -9,6 +9,7 @@ import {
   ResponsiveDialogHeader,
   ResponsiveDialogTitle,
 } from '@/components/ui/responsive-dialog';
+import { BOOKING_STATUS_LABELS } from '@/lib/constants';
 import { useBooking } from '@/lib/hooks/useBooking';
 import { useBookingChecklist } from '@/lib/hooks/useBookingChecklist';
 import { useBookingFields } from '@/lib/hooks/useBookingFields';
@@ -29,19 +30,10 @@ import InvoiceSheet from '@/features/invoices/InvoiceSheet';
 import MarkSentDialog from '@/features/invoices/MarkSentDialog';
 import { apiGet } from '@/lib/api';
 import type {
-  BookingStatus,
   Template,
   UserProfile,
 } from '@/types/api';
 
-const STATUS_LABELS: Record<BookingStatus, string> = {
-  ENQUIRY:      'Enquiry',
-  PROVISIONAL:  'Provisional',
-  CONFIRMED:    'Confirmed',
-  READY:        'Ready',
-  COMPLETE:     'Complete',
-  CANCELLED:    'Cancelled',
-};
 
 interface BookingDetailSheetsProps {
   bookingId: string;
@@ -112,14 +104,14 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
             </ResponsiveDialogHeader>
             <ResponsiveDialogDescription className="mt-2">
               You've completed all the tasks for this booking. Ready to move it to{' '}
-              <span className="font-medium text-foreground">{STATUS_LABELS[readyDialogStatus]}</span>?
+              <span className="font-medium text-foreground">{BOOKING_STATUS_LABELS[readyDialogStatus]}</span>?
             </ResponsiveDialogDescription>
             <div className="flex gap-2 justify-end mt-4">
               <Button variant="outline" onClick={dismissReadyDialog} disabled={isConfirmingTransition}>
                 Not yet
               </Button>
               <Button onClick={() => confirmStatusTransition(readyDialogStatus)} disabled={isConfirmingTransition}>
-                {isConfirmingTransition ? 'Saving…' : `Mark as ${STATUS_LABELS[readyDialogStatus]}`}
+                {isConfirmingTransition ? 'Saving…' : `Mark as ${BOOKING_STATUS_LABELS[readyDialogStatus]}`}
               </Button>
             </div>
           </ResponsiveDialogContent>

@@ -9,7 +9,7 @@ import { DatePicker } from '@/components/ui/date-picker';
 import BookingsTable from '@/features/bookings/BookingsTable';
 import { useBookings } from '@/lib/hooks/useBookings';
 import { resolveListScope, type ListTab } from '@/lib/bookingScope';
-import { EVENT_TYPE_LABELS } from '@/lib/constants';
+import { BOOKING_STATUS_LABELS, EVENT_TYPE_LABELS, STATUS_ORDER } from '@/lib/constants';
 import type { BookingStatus, EventType } from '@/types/api';
 import { cn } from '@/lib/utils';
 
@@ -33,14 +33,11 @@ function computeTaxYear(yearsAgo: 0 | 1): { from: string; to: string } {
 
 // ─── Filter tabs ─────────────────────────────────────────────────────────────
 
+// 'Active' (the cross-status default scope) then one tab per status, in lifecycle order.
+// Labels come from the status table — this list used to hand-type all six.
 const FILTERS: { label: string; value: ListTab }[] = [
-  { label: 'Active',       value: 'ACTIVE'      },
-  { label: 'Enquiry',      value: 'ENQUIRY'     },
-  { label: 'Provisional',  value: 'PROVISIONAL' },
-  { label: 'Confirmed',    value: 'CONFIRMED'   },
-  { label: 'Ready',        value: 'READY'       },
-  { label: 'Complete',     value: 'COMPLETE'    },
-  { label: 'Cancelled',    value: 'CANCELLED'   },
+  { label: 'Active', value: 'ACTIVE' },
+  ...STATUS_ORDER.map((value) => ({ label: BOOKING_STATUS_LABELS[value], value })),
 ];
 
 function FilterBar({
