@@ -93,14 +93,44 @@ jobs:
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_PROD_TOKEN }}
 
-      - name: Deploy web to Vercel (prod)
-        run: |
-          bunx vercel@latest pull --yes --environment=production --token="${{ secrets.VERCEL_TOKEN }}"
-          bunx vercel@latest build --prod --token="${{ secrets.VERCEL_TOKEN }}"
-          bunx vercel@latest deploy --prebuilt --prod --token="${{ secrets.VERCEL_TOKEN }}"
+      # Build ON Vercel's infra (remote), not in this runner. The prior
+      # `vercel pull -> build -> deploy --prebuilt` built in-runner, so it
+      # depended on `vercel pull` returning every build-time var — but Vercel
+      # deliberately withholds the plaintext of **Sensitive** env vars from
+      # `pull`, so the CI build baked our `VITE_*` client keys as empty strings.
+      # An empty VITE_CLERK_PUBLISHABLE_KEY makes Clerk build a hostless loader
+      # URL (`https:///npm/...`) and the whole prod frontend fails to init.
+      # A remote build runs where Sensitive plaintext IS available (identical to
+      # the preprod git-integration build that never had this problem), so the
+      # keys bake correctly with no change to the Vercel dashboard.
+      - name: Deploy web to Vercel (prod) — remote build so Sensitive vars bake in
+        run: bunx vercel@latest deploy --prod --yes --token="$VERCEL_TOKEN"
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+      - name: Smoke-check Clerk key is live on the production site
+        # A LOUD post-deploy alarm, not a pre-promote gate. We can't verify the
+        # bare *.vercel.app deployment URL — Vercel deployment protection 401s
+        # it — so we check the PUBLIC custom domain after it goes live. If this
+        # fails the build is live but broken: roll back with
+        # `vercel promote <previous-good-deployment-url>` (the kept pre-release
+        # Neon branch is unaffected — this is a web-only rollback).
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            html="$(curl -fsSL https://www.gigloop.co.uk/admin || true)"
+            for chunk in $(printf '%s' "$html" | grep -oE '/assets/[^"]+\.js'); do
+              if curl -fsSL "https://www.gigloop.co.uk$chunk" | grep -q 'pk_live_'; then
+                echo "Clerk publishable key is live in $chunk"
+                exit 0
+              fi
+            done
+            echo "Clerk key not visible yet (attempt $attempt/6) — waiting for alias propagation…"
+            sleep 10
+          done
+          echo "::error::Production bundle at www.gigloop.co.uk has no pk_live_ Clerk key — Clerk is broken. Roll back with: vercel promote <previous-good-deployment-url>"
+          exit 1
 
       - name: Release summary
         if: always()
