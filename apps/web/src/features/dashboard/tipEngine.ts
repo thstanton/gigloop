@@ -12,6 +12,14 @@ export interface TipSnapshot {
   // True when the musician has no package template of their own — an empty library (packages are no
   // longer auto-seeded, #663) or a legacy library still holding only system defaults.
   noCustomPackage: boolean;
+  // True when the portal still carries the shipped theme and brand colour — what skipping
+  // onboarding step 4 leaves behind (#669).
+  usesDefaultPortalBranding: boolean;
+  // The song-request feature switch (Settings, or onboarding step 5's "turn it off"). Song-request
+  // tips read it so a musician who has turned the feature off is never nudged about it.
+  songRequestsEnabled: boolean;
+  // True once the repertoire holds at least one song — what onboarding step 5 asks for.
+  hasSongs: boolean;
 }
 
 /** What the widget needs to render a tip. */
@@ -49,6 +57,20 @@ export const TIP_POOL: Tip[] = [
     condition: (s) => s.noCustomPackage,
     text: 'Set up a package template for the type of gig you do most',
     href: '/admin/packages',
+  },
+  {
+    id: 'portal-default-branding',
+    condition: (s) => s.usesDefaultPortalBranding,
+    text: 'Make your client portal your own — pick a theme and your brand colour',
+    href: '/admin/portal-preview',
+  },
+  {
+    // Suppressed outright when song requests are switched off — the musician has said they don't
+    // want this feature, so the nudge must never fire (#669).
+    id: 'repertoire-empty',
+    condition: (s) => s.songRequestsEnabled && !s.hasSongs,
+    text: 'Add your repertoire so clients can pick their songs from your setlist',
+    href: '/admin/repertoire',
   },
 ];
 
