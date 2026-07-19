@@ -58,6 +58,31 @@ End-to-end coverage is **not** a per-slice tier — it is the curated real-stack
 
 Most slices touch no journey and record "no journey change." Like the reuse and story passes, this is a planning-time judgement (ADR-0030) captured where the human can catch a gap.
 
+### 8. Surface-declared
+
+Every issue headed for `ready-for-agent` declares its **Surfaces** — the modules it expects to touch, at module granularity (e.g. `features/checklist`, `apps/api/src/invoices`, `components/common`, `prisma/schema`), **not** file paths or line numbers (those go stale; modules are durable). Surfaces are a *concurrency annotation, not implementation guidance*: the fleet (see `fleet.md`) allows issues to be worked in parallel only when their Surfaces are disjoint, and permits at most one in-flight issue whose Surfaces include `prisma/schema`. The claiming session re-validates declared Surfaces against the codebase at claim time.
+
+Format in the issue body:
+
+```
+## Surfaces
+
+- features/checklist
+- apps/api/src/checklist
+```
+
+Hot append-mostly shared files (`apps/web/src/types/api.ts`, `lib/constants.ts`, `CONTEXT.md`) are noted when touched but do **not** count as overlap — they rebase trivially.
+
+## Auto-escalation (the bright line batch triage cannot cross)
+
+Batch triage (`fleet.md`) may propose `ready-for-agent` verdicts for the human to rapid-fire approve — **except** for issues touching any of:
+
+- `prisma/schema` / migrations,
+- a lifecycle or state machine (booking status, invoice transitions, checklist evaluation),
+- cross-feature behaviour (a change whose correctness depends on another feature's assumptions).
+
+These **must** go through a full `/grill-with-docs` before they can be labelled `ready-for-agent`. The triage pass's job on such an issue is to say "escalate", not to resolve the design itself. This guards against the triage agent's structural bias to under-escalate — everything looks like a quick fix before you've thought hard.
+
 ## Branch & PR shape (set at planning time)
 
 - **One feature = one branch = one PR.** Sub-issues are commits on that branch (`Closes #N` in the commit body; all closed in the PR description). **Never** split a dependent feature into sibling branches — that is the squash-merge conflict footgun (see ADR-0025).
@@ -74,4 +99,5 @@ Before coding starts, the human should be able to see, in the issues:
 - [ ] UI sub-issues include a story task, sequenced before the build
 - [ ] Journey-touching sub-issues record the curated-spec / CLI-walkthrough decision (ADR-0048)
 - [ ] Each sub-issue has a model recommendation; Haiku candidates are flagged inline
+- [ ] Surfaces are declared (module granularity); schema/lifecycle/cross-feature issues went through the grill, not batch triage
 - [ ] One branch / one PR for the whole feature (or an explicit sequential split)
