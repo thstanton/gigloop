@@ -68,15 +68,24 @@ export function OverviewFields({ value, onChange, series, dateError }: OverviewF
       </div>
 
       <FormField label="Fee (optional)">
-        <Input
-          type="number"
-          min="0"
-          step="0.01"
-          placeholder="0.00"
-          aria-label="Fee"
-          value={value.fee}
-          onChange={(e) => set({ fee: e.target.value })}
-        />
+        <div className="relative">
+          <span
+            className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-muted-foreground"
+            aria-hidden="true"
+          >
+            £
+          </span>
+          <Input
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="0.00"
+            aria-label="Fee"
+            value={value.fee}
+            onChange={(e) => set({ fee: e.target.value })}
+            className="pl-7"
+          />
+        </div>
       </FormField>
 
       <FormField label="Title (optional)">
