@@ -9,6 +9,7 @@ The skills speak in terms of five canonical triage roles. This file maps those r
 | `ready-for-agent`          | `ready-for-agent`    | AFK — fully specified, ready for the loop          |
 | `ready-for-human`          | `ready-for-human`    | HITL — requires human implementation or sign-off   |
 | —                          | `ready-for-review`   | Loop finished the slice; awaiting human review     |
+| —                          | `in-progress`        | Claimed by an active session (see `fleet.md`)      |
 | `wontfix`                  | `wontfix`            | Will not be actioned                               |
 
 When a skill mentions a role (e.g. "apply the AFK-ready triage label"), use the corresponding label string from this table.
@@ -37,3 +38,7 @@ ready-for-agent  ──loop completes slice──▶  ready-for-review  ──hu
 - The loop **selects** only `ready-for-agent`; it skips `ready-for-review` and `ready-for-human`.
 - A `## Blocked by` ref is **satisfied** when that issue is *closed* OR labelled `ready-for-review` — never "has a `Closes` commit" (a rejected slice's `Closes` commit persists and would lie).
 - A human who finishes a **HITL** issue must **close it or label it `ready-for-review`**, or its dependants stay wrongly blocked.
+
+## `in-progress` — the fleet's claim token (see `fleet.md`)
+
+Used by concurrent **interactive** sessions, not the loop. A claim is: label `ready-for-agent` → `in-progress` **+** self-assign **+** a comment naming the branch and worktree. The label drops off when the PR merges and the issue closes (or when a human un-claims a stale one by reverting the label). The set of `in-progress` issues *is* the in-flight map — sessions read it to enforce surface-disjointness and the WIP cap before starting work.

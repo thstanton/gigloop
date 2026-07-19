@@ -165,7 +165,8 @@ This keeps each commit a reviewable unit of work and CI bisectable, while the wh
 
 ### My responsibilities (Claude Code)
 - At the start of any feature session: confirm we are on the feature's branch, or create it; read the tracking issue to find the next unblocked sub-issue.
-- Work **one feature branch at a time.** Do not open parallel sibling branches for a single feature — sub-issues are commits, not branches.
+- Work **one feature branch at a time.** Do not open parallel sibling branches for a single feature — sub-issues are commits, not branches. (Parallel sessions on *independent* issues are allowed — governed by `docs/agents/fleet.md`.)
+- **Concurrent sessions claim before coding:** swap the issue to `in-progress` (+ assignee + branch/worktree comment) and verify its declared Surfaces are disjoint from every other `in-progress` claim, respecting the WIP cap (3) and the one-schema-PR lock. Full protocol: `docs/agents/fleet.md`.
 - Open the PR targeting **`main`** when the whole feature is done, with `gh pr create --base main`. Do not open a PR per sub-issue.
 - Never push application code directly to `main`.
 
@@ -350,7 +351,11 @@ Non-trivial features are planned into issues before any code. `/to-issues` and `
 
 ### Triage labels
 
-Default label vocabulary (needs-triage, needs-info, ready-for-agent, ready-for-human, wontfix). See `docs/agents/triage-labels.md`.
+Default label vocabulary (needs-triage, needs-info, ready-for-agent, ready-for-human, wontfix, in-progress). See `docs/agents/triage-labels.md`.
+
+### Fleet (concurrent sessions) & batch triage
+
+Running several interactive sessions in parallel, and running `/triage` in batch over the `needs-triage` pile, are both governed by `docs/agents/fleet.md` — read it before doing either. Key rules: claim via `in-progress` before coding; surfaces must be disjoint; batch triage fans out one sub-agent per issue and may never approve schema/lifecycle/cross-feature issues itself.
 
 ### Domain docs
 
