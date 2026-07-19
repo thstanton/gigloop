@@ -4,6 +4,7 @@ import { ChevronDown, ChevronRight, Plus } from 'lucide-react';
 import { useChecklistActions } from '@/lib/hooks/useChecklistActions';
 import { Button } from '@/components/ui/button';
 import { GhostButton } from '@/components/common/GhostButton';
+import { InlineHint } from '@/components/common/InlineHint';
 import { BookingConceptCardContainer } from './BookingConceptCardContainer';
 import { Input } from '@/components/ui/input';
 import {
@@ -291,6 +292,7 @@ export default function ChecklistSection({
   }
 
   const sections = buildSections(items, bookingStatus);
+  const hasDueDates = items.some((item) => item.dueDate);
   const autoOpenKey = defaultOpenStage(sections);
   const isOpen = (s: Section) =>
     s.key in openOverrides ? openOverrides[s.key] : s.relation === 'anytime' || s.key === autoOpenKey;
@@ -300,6 +302,18 @@ export default function ChecklistSection({
       {!hideHeader && <h2 className="mb-1 text-sm font-semibold text-foreground">Checklist</h2>}
 
       <BookingConceptCardContainer />
+
+      {/* #698: due dates are derived from the gig date by a rule the musician can't otherwise see.
+          One persistent line names the rule's origin and points at the dial in Settings. */}
+      {hasDueDates && (
+        <InlineHint
+          className="mb-3"
+          href="/admin/settings"
+          actionLabel="Adjust in Settings"
+        >
+          Due dates are set from the gig date.
+        </InlineHint>
+      )}
 
       {sections.map((section) => (
         <StatusSection
