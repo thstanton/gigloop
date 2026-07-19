@@ -62,6 +62,8 @@ This is also forced by `Genres in Repertoire` being derived: it changes whenever
 | **Package template editor** | **My Genres ∩ Genres in Repertoire** |
 | **`enabledGenres`** | **My Genres ∩ Genres in Repertoire** |
 
+**Unset My Genres resolves to the full canonical set, not the empty set.** Narrowing is opt-in; there is no onboarding question for it. The empty-set reading deadlocks the cold start — a new musician's song picker would be empty, so no song could be filed manually, so coverage could never become non-empty, so no genre could ever be offered, and nothing in the product prompts them out of it. With the full-canonical reading the intersection simply collapses to coverage and everything bootstraps.
+
 The two musician-facing surfaces are permissive by design: the song picker must offer Jazz *because* there are no Jazz songs yet — that is how the first one is added; the Repertoire filter unions both so a genre stays filterable after it is unticked with songs still under it.
 
 The two client-bound surfaces take the intersection, **with no empty-library exception.** An uncovered genre is shown *disabled*, carrying a song count and a route to Repertoire — the gap is named where it is relevant, not hidden. We considered relaxing this during onboarding (empty library ⇒ no gating) and rejected it: we cannot know an empty library is deliberate, and the failure it permits is outward-facing.

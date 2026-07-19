@@ -302,7 +302,7 @@ Its purpose is to keep every genre surface personal rather than showing the whol
 
 My Genres is **advisory, never a constraint on stored data.** A [[Song]]'s genre is a fact about that song and a [[Package Template]]'s `defaultGenreSelection` is a saved configuration; neither is invalidated by a later change of intent. Removing a genre from My Genres narrows future pickers only — it never reclassifies songs, never rewrites templates, and is instantly reversible. `Song.genre` therefore continues to validate against the canonical [[Genre]] set, not against My Genres.
 
-An empty My Genres means the musician has not answered yet, not that they perform nothing.
+**Unset means "not answered yet", and resolves to the full canonical [[Genre]] set — never to nothing.** Narrowing is therefore purely opt-in: a refinement a musician chooses once they know what they play, never a precondition for using the app. This is what makes the system bootstrap — with the empty-set reading, a new musician's song picker would be empty (so no song could be filed manually), the intersection at every client-bound surface would be empty (so no genre could ever be offered), and nothing in the product would prompt them out of it. There is deliberately **no onboarding question** for My Genres; it is discovered in Settings when the full list starts to feel too broad.
 
 ### Genres in Repertoire
 The genres in which a musician holds at least one **active** [[Song]] — derived by inspecting the library, never stored. A statement of **fact** about what they can actually deliver.
@@ -317,6 +317,8 @@ The two are used differently depending on whether a surface faces the musician o
 | [[Repertoire]] filter | My Genres ∪ Genres in Repertoire | My Genres exposes the empty slot; the union keeps a genre filterable after it is unticked with songs still filed under it |
 | [[Package Template]] editor | **My Genres ∩ Genres in Repertoire** | anything else ships an empty section to a client |
 | [[MusicFormConfig]] `enabledGenres` | **My Genres ∩ Genres in Repertoire** | same, one step later |
+
+Throughout this table, an unset [[My Genres]] reads as the full canonical [[Genre]] set (see that entry), so the intersection collapses to plain Genres in Repertoire rather than to nothing.
 
 On the two client-bound surfaces the intersection is **absolute — there is no empty-library exception.** A genre the musician performs but has no songs in appears in the picker, disabled, with its `(0)` count and a route to [[Repertoire]]: the gap is named at the moment it is relevant rather than silently hidden. We never assume an empty library is deliberate.
 
