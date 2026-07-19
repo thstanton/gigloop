@@ -15,25 +15,14 @@ import {
   ResponsiveDialogTitle,
 } from '@/components/ui/responsive-dialog';
 import { cn } from '@/lib/utils';
-import { STATUS_ORDER } from '@/lib/constants';
+import { BOOKING_STATUS_LABELS, STATUS_ORDER, STATUS_TOKENS } from '@/lib/constants';
 import type { BookingStatus, ChecklistItem } from '@/types/api';
 
-const STATUS_PILL_CLASSES: Record<BookingStatus, string> = {
-  ENQUIRY:      'bg-status-enquiry/12 text-status-enquiry border-l-status-enquiry',
-  PROVISIONAL:  'bg-status-provisional/12 text-status-provisional border-l-status-provisional',
-  CONFIRMED:    'bg-status-confirmed/12 text-status-confirmed border-l-status-confirmed',
-  READY:        'bg-status-ready/12 text-status-ready border-l-status-ready',
-  COMPLETE:     'bg-status-complete/12 text-status-complete border-l-status-complete',
-  CANCELLED:    'bg-status-cancelled/12 text-status-cancelled border-l-status-cancelled',
-};
-
-const STATUS_LABELS: Record<BookingStatus, string> = {
-  ENQUIRY:      'Enquiry',
-  PROVISIONAL:  'Provisional',
-  CONFIRMED:    'Confirmed',
-  READY:        'Ready',
-  COMPLETE:     'Complete',
-  CANCELLED:    'Cancelled',
+// The pill's three colour columns, joined. Derived from the one status table rather than
+// re-listed here — this file previously kept its own copy of both classes and labels.
+const pillClasses = (status: BookingStatus) => {
+  const { tint, text, borderL } = STATUS_TOKENS[status];
+  return cn(tint, text, borderL);
 };
 
 interface OutstandingChecklistDialogProps {
@@ -44,7 +33,7 @@ interface OutstandingChecklistDialogProps {
 }
 
 function OutstandingChecklistDialog({ pendingStatus, outstandingItems, onConfirm, onCancel }: Readonly<OutstandingChecklistDialogProps>) {
-  const label = STATUS_LABELS[pendingStatus];
+  const label = BOOKING_STATUS_LABELS[pendingStatus];
   const count = outstandingItems.length;
   const plural = count === 1 ? '' : 's';
 
@@ -114,19 +103,19 @@ export default function BookingStatusDropdown({
           <button
             className={cn(
               'inline-flex items-center gap-1 border-l-[3px] pl-2 pr-2.5 py-0.5 text-xs font-medium cursor-pointer transition-opacity',
-              STATUS_PILL_CLASSES[displayStatus],
+              pillClasses(displayStatus),
               isPending && 'opacity-50',
             )}
           >
-            {STATUS_LABELS[displayStatus]}
+            {BOOKING_STATUS_LABELS[displayStatus]}
             <ChevronDown size={10} className="opacity-60" />
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start">
           {STATUS_ORDER.map((s) => (
             <DropdownMenuItem key={s} onSelect={() => handleSelect(s)} className="gap-2">
-              <span className={cn('inline-flex items-center border-l-[3px] pl-2 pr-2.5 py-0.5 text-xs font-medium', STATUS_PILL_CLASSES[s])}>
-                {STATUS_LABELS[s]}
+              <span className={cn('inline-flex items-center border-l-[3px] pl-2 pr-2.5 py-0.5 text-xs font-medium', pillClasses(s))}>
+                {BOOKING_STATUS_LABELS[s]}
               </span>
               {s === currentStatus && <Check size={12} className="ml-auto" />}
             </DropdownMenuItem>

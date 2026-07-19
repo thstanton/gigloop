@@ -1,15 +1,7 @@
 import type { BookingStatus } from '@/types/api';
 import { StatusPill } from '@/components/common/StatusPill';
+import { BOOKING_STATUS_LABELS, STATUS_TOKENS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
-
-const STATUS_CONFIG: Record<BookingStatus, { label: string; bg: string; text: string; border: string }> = {
-  ENQUIRY:     { label: 'Enquiry',     bg: 'bg-status-enquiry/12',     text: 'text-status-enquiry',     border: 'border-l-status-enquiry'     },
-  PROVISIONAL: { label: 'Provisional', bg: 'bg-status-provisional/12', text: 'text-status-provisional', border: 'border-l-status-provisional' },
-  CONFIRMED:   { label: 'Confirmed',   bg: 'bg-status-confirmed/12',   text: 'text-status-confirmed',   border: 'border-l-status-confirmed'   },
-  READY:       { label: 'Ready',       bg: 'bg-status-ready/12',       text: 'text-status-ready',       border: 'border-l-status-ready'       },
-  COMPLETE:    { label: 'Complete',    bg: 'bg-status-complete/12',    text: 'text-status-complete',    border: 'border-l-status-complete'    },
-  CANCELLED:   { label: 'Cancelled',  bg: 'bg-status-cancelled/12',   text: 'text-status-cancelled',   border: 'border-l-status-cancelled'   },
-};
 
 interface BookingStatusPillProps {
   status: BookingStatus;
@@ -17,6 +9,14 @@ interface BookingStatusPillProps {
 }
 
 export default function BookingStatusPill({ status, className }: BookingStatusPillProps) {
-  const config = STATUS_CONFIG[status];
-  return <StatusPill {...config} className={cn(className)} />;
+  const { tint, text, borderL } = STATUS_TOKENS[status];
+  return (
+    <StatusPill
+      label={BOOKING_STATUS_LABELS[status]}
+      bg={tint}
+      text={text}
+      border={borderL}
+      className={cn(className)}
+    />
+  );
 }

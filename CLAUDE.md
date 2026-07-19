@@ -114,6 +114,7 @@ Frontend pages import types from here rather than declaring local interfaces.
   built-in HttpException classes
 - Domain types and DTOs are kept separate
 - **Shared constants:** Label maps and lookup constants (status labels, category labels, ordered enum lists) belong in `apps/web/src/lib/constants.ts`. Never define a label map inside a component or page file if it may be needed elsewhere. Never import shared values from a page file — move them to `lib/constants` first.
+- **One declaration per vocabulary:** a domain vocabulary (booking status, event type, reminder concern…) is declared **exactly once**, as an ordered `as const satisfies` array of records — one row per member, one column per attribute (label, description, colour tokens, flags) — guarded by a compile-time coverage check so a new member cannot be half-added. Every ordered list, `Record<Enum, …>` map and option array is **derived** from that table, never hand-written alongside it. A second hand-written list of the same members is the bug, even when it currently matches: booking status was once declared 13 times and one copy silently lost `PROVISIONAL`. Colour/class columns hold **literal** Tailwind strings (`bg-status-enquiry`) — never `` `bg-status-${slug}` ``, which the Tailwind scanner cannot see and will purge. Tests assert the table's **shape** (columns present, token pattern, key counts, order), never restate its values — a value spec is just one more declaration to drift.
 
 ## Repository Pattern
 Every feature module uses three layers:

@@ -7,7 +7,7 @@ import { toast } from '@/lib/hooks/use-toast';
 import { ItineraryAtom } from './ItineraryAtom';
 import { useItineraryMutations } from './useItineraryMutations';
 import { NO_PACKAGE } from './ItineraryFields';
-import { LOGISTICS_TIME_KEYS } from './DetailsAtom';
+import { LOGISTICS_TIME_KEYS } from '@/lib/constants';
 import type {
   ApplyPackageTemplateResponse,
   BookingDetail,

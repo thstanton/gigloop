@@ -10,7 +10,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { GhostButton } from '@/components/common/GhostButton';
-import { BOOKING_STATUS_LABELS, statusGte } from '@/lib/constants';
+import { BOOKING_STATUS_LABELS, STATUS_TOKENS, statusBefore, statusGte } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 import type { ApplicableReminder, BookingStatus } from '@/types/api';
 
@@ -27,20 +27,9 @@ import type { ApplicableReminder, BookingStatus } from '@/types/api';
 type RequiredStatus = ApplicableReminder['requiredForStatus'];
 
 // `requiredForStatus` is the status a reminder is a prerequisite *for*, so the work happens
-// during the preceding stage (send the contract — prereq for Confirmed — while still Provisional).
-const PRECEDING: Record<NonNullable<RequiredStatus>, 'ENQUIRY' | 'PROVISIONAL' | 'CONFIRMED' | 'READY'> = {
-  PROVISIONAL: 'ENQUIRY',
-  CONFIRMED: 'PROVISIONAL',
-  READY: 'CONFIRMED',
-  COMPLETE: 'READY',
-};
+// during the preceding stage (send the contract — prereq for Confirmed — while still
+// Provisional). statusBefore() walks the one status table, so this cannot drift from it.
 
-const STATUS_TONE: Record<'ENQUIRY' | 'PROVISIONAL' | 'CONFIRMED' | 'READY', string> = {
-  ENQUIRY: 'text-status-enquiry',
-  PROVISIONAL: 'text-status-provisional',
-  CONFIRMED: 'text-status-confirmed',
-  READY: 'text-status-ready',
-};
 
 /**
  * A reminder row. The selector output carries everything the control renders, including the
@@ -85,9 +74,11 @@ export interface RemindMeAboutProps {
 
 // The status the work is done during — bold, and in its status colour unless the reminder is off.
 function StatusName({ status, dimmed }: { status: NonNullable<RequiredStatus>; dimmed?: boolean }) {
-  const display = PRECEDING[status];
+  // Never null for a RequiredStatus (all four have a preceding forward stage); the
+  // fallback keeps the type honest rather than asserting.
+  const display = statusBefore(status) ?? status;
   return (
-    <span className={cn('font-semibold', !dimmed && STATUS_TONE[display])}>
+    <span className={cn('font-semibold', !dimmed && STATUS_TOKENS[display].text)}>
       {BOOKING_STATUS_LABELS[display]}
     </span>
   );
@@ -130,7 +121,7 @@ function actionLabel(reminder: ApplicableReminder): string {
 // `NO_STAGE` is the Select sentinel for "no stage requirement"; it maps to a null requiredForStatus
 // (the row never enters the stage filter / passed collapse). The other options mirror the lifecycle
 // statuses a checklist item can gate — ENQUIRY is excluded because it is the first stage, so nothing
-// can be required *for* it (matching the Checklist card and the PRECEDING coaching map above).
+// can be required *for* it (matching the Checklist card and the statusBefore() coaching above).
 const NO_STAGE = 'NONE';
 const STAGE_OPTIONS: { value: NonNullable<RequiredStatus>; label: string }[] = [
   { value: 'PROVISIONAL', label: 'Required for Provisional' },

@@ -7,7 +7,8 @@ import {
 } from '@/components/ui/sheet';
 import { apiPatch } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
-import { DetailsAtom, LOGISTICS_TIME_KEYS, type DetailsLogistics } from './DetailsAtom';
+import { DetailsAtom, type DetailsLogistics } from './DetailsAtom';
+import { LOGISTICS_TIME_KEYS } from '@/lib/constants';
 import type { BookingDetail } from '@/types/api';
 
 // PRD #511 Module B — the quick-tweak shell for the Details atom. Editing a booking's details is a

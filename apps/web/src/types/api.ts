@@ -543,7 +543,7 @@ export interface PackageTemplate {
   createdAt: string;
   updatedAt: string;
   label: string;
-  category: string | null;
+  category: EventType | null;
   icon: string;
   keyMoments: string[];
   defaultGenreSelection: string[];
@@ -565,7 +565,7 @@ export interface PackageCatalogueSlot {
 export interface PackageCatalogueItem {
   id: string;
   label: string;
-  category: string | null;
+  category: EventType | null;
   icon: string;
   keyMoments: string[];
   defaultGenreSelection: string[];
@@ -582,7 +582,7 @@ export interface SlotInput {
 export interface CreatePackageInput {
   label: string;
   icon: string;
-  category?: string;
+  category?: EventType;
   notes?: string;
   keyMoments?: string[];
   defaultGenreSelection?: string[];
@@ -593,7 +593,7 @@ export interface CreatePackageInput {
 export interface UpdatePackageInput {
   label?: string;
   icon?: string;
-  category?: string | null;
+  category?: EventType | null;
   notes?: string | null;
   keyMoments?: string[];
   defaultGenreSelection?: string[];

@@ -5,21 +5,9 @@ import {
   BOOKING_STATUS_LABELS,
   STATUS_DESCRIPTIONS,
   CREATABLE_BOOKING_STATUSES,
+  STATUS_TOKENS,
 } from '@/lib/constants';
 import type { BookingStatus } from '@/types/api';
-
-// Per-status colour, mirroring BookingStatusPill's tokens so the control speaks the same
-// lifecycle colour language the musician sees everywhere else. `accent` fills the active pill
-// + dot; `panel` is the soft /12 tint behind the selected status's description; `text` colours
-// its label in the panel.
-const STATUS_COLOUR: Record<BookingStatus, { accent: string; panel: string; text: string }> = {
-  ENQUIRY:     { accent: 'bg-status-enquiry',     panel: 'bg-status-enquiry/12',     text: 'text-status-enquiry'     },
-  PROVISIONAL: { accent: 'bg-status-provisional', panel: 'bg-status-provisional/12', text: 'text-status-provisional' },
-  CONFIRMED:   { accent: 'bg-status-confirmed',   panel: 'bg-status-confirmed/12',   text: 'text-status-confirmed'   },
-  READY:       { accent: 'bg-status-ready',       panel: 'bg-status-ready/12',       text: 'text-status-ready'       },
-  COMPLETE:    { accent: 'bg-status-complete',    panel: 'bg-status-complete/12',    text: 'text-status-complete'    },
-  CANCELLED:   { accent: 'bg-status-cancelled',   panel: 'bg-status-cancelled/12',   text: 'text-status-cancelled'   },
-};
 
 interface StatusCoachingFieldProps {
   value: BookingStatus;
@@ -43,7 +31,7 @@ export function StatusCoachingField({ value, onChange }: StatusCoachingFieldProp
         <div role="radiogroup" aria-label="Starting status" className="flex flex-wrap gap-2">
           {CREATABLE_BOOKING_STATUSES.map((status) => {
             const selected = status === value;
-            const { accent } = STATUS_COLOUR[status];
+            const { accent } = STATUS_TOKENS[status];
             return (
               <TogglePill
                 key={status}
@@ -59,9 +47,9 @@ export function StatusCoachingField({ value, onChange }: StatusCoachingFieldProp
             );
           })}
         </div>
-        <div className={cn('rounded-lg p-3', STATUS_COLOUR[value].panel)}>
+        <div className={cn('rounded-lg p-3', STATUS_TOKENS[value].tint)}>
           <p className="text-sm text-muted-foreground">
-            <span className={cn('font-semibold', STATUS_COLOUR[value].text)}>{BOOKING_STATUS_LABELS[value]} · </span>
+            <span className={cn('font-semibold', STATUS_TOKENS[value].text)}>{BOOKING_STATUS_LABELS[value]} · </span>
             {STATUS_DESCRIPTIONS[value]}
           </p>
         </div>
