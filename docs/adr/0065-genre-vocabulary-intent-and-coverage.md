@@ -29,7 +29,18 @@ Two further problems surfaced while examining it:
 
 ### 1. The genre vocabulary stays closed. Widen it instead.
 
-Genres remain a system-owned canonical set. Where the set is too narrow for a real act, **widen the constant** — a one-line change, no schema, no migration. The free-text input is removed and `@IsIn` validation is extended to `defaultGenreSelection` and `enabledGenres`.
+Genres remain a system-owned canonical set. Where the set is too narrow for a real act, **widen the canonical set** — no schema, no migration. The free-text input is removed and `@IsIn` validation is extended to `defaultGenreSelection` and `enabledGenres`.
+
+**Widening is not currently a one-line change, and the widening work must fix that.** The genre list and its labels are duplicated across four sites, which have already drifted:
+
+| Site | Holds |
+|---|---|
+| `apps/api/src/common/constants.ts:14` | `SONG_GENRES` — the nominal source of truth |
+| `apps/api/src/songs/song-catalogue.ts:110` | an API-side `GENRE_LABELS` (`'Film / TV / Musicals'`) |
+| `apps/web/src/lib/constants.ts:20` | the web `GENRE_LABELS` (`'Film, TV & Musicals'`) |
+| `apps/web/src/pages/admin/RepertoirePage.tsx:33` | an inline `z.enum([...])` of the six codes |
+
+Only the web map is typed as `Record<SongGenre, string>`, so only it fails the build when a genre is added. The API-side label map and the inline `z.enum` drift **silently** — a song saved as `SOUL_MOTOWN` would then be rejected by the Repertoire page's own edit schema. Consolidating these to one source of truth is part of the widening, not a follow-up; without it, every future addition repeats the trap.
 
 The set is widened at the same time, from six to thirteen, targeting the UK function/wedding acts the original list actively failed:
 
@@ -83,6 +94,8 @@ The two musician-facing surfaces are permissive by design: the song picker must 
 The two client-bound surfaces take the intersection, **with no empty-library exception.** An uncovered genre is shown *disabled*, carrying a song count and a route to Repertoire — the gap is named where it is relevant, not hidden. We considered relaxing this during onboarding (empty library ⇒ no gating) and rejected it: we cannot know an empty library is deliberate, and the failure it permits is outward-facing.
 
 Counts (`Jazz (0)` beside `Contemporary (23)`) serve as the library-aware nudge #530 asked for. The number *is* the signal; no separate warning UI is needed.
+
+**The gap must be surfaced on the Repertoire page, not only on the two admin pickers.** "I say I play Jazz and have no Jazz songs" is a realisation a musician has while *looking at their repertoire* — but the Repertoire genre filter is a plain `Select` that simply yields an empty list when an uncovered genre is chosen, saying nothing. Rendering the same counts there (and showing the My Genres ∪ Genres in Repertoire options with them) puts the signal where it is acted on.
 
 ### 5. `DEFAULT_ENABLED_GENRES` is deleted, not replaced
 
