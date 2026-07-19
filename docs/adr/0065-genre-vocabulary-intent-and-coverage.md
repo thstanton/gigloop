@@ -31,6 +31,18 @@ Two further problems surfaced while examining it:
 
 Genres remain a system-owned canonical set. Where the set is too narrow for a real act, **widen the constant** — a one-line change, no schema, no migration. The free-text input is removed and `@IsIn` validation is extended to `defaultGenreSelection` and `enabledGenres`.
 
+The set is widened at the same time, from six to thirteen, targeting the UK function/wedding acts the original list actively failed:
+
+| Existing | Added |
+|---|---|
+| `CONTEMPORARY`, `CLASSICAL`, `JAZZ`, `FILM_TV_MUSICALS`, `BOLLYWOOD`, `CHRISTMAS` | `SOUL_MOTOWN`, `FUNK`, `ROCK`, `FOLK_TRADITIONAL`, `SWING_BIGBAND`, `LATIN`, `COUNTRY` |
+
+Widening is only safe *because* of My Genres (§2): thirteen genres shown to everyone would recreate the wading problem, so the widening and the narrowing had to be decided together. Held back for a later pass: `DISCO`, `RNB`, `BLUES`, `WORLD`, `HYMNS_SACRED` — the list can grow at any time, and a narrower start keeps the catalogue-filling job tractable.
+
+**A new genre is not useful until the `SeedCatalogue` has songs in it.** The catalogue's ~76 entries are filed against the original six, so each added genre starts with zero catalogue songs and can only be populated by manual entry — showing `(0)`, and unofferable to a client, until then. Filling the catalogue is part of the work, not a follow-up.
+
+**No data migration is required.** Production currently holds a single musician's data (onboarding complete, one song), so there is no meaningful body of free-text genre strings to map or drop — the "Soul" that prompted this ADR was a walkthrough artefact. Enforcement of `@IsIn` needs only a sanity check of the two columns at implementation time, not a designed migration. Had this been caught later, the same decision would have required mapping onto the widened set with unmapped values dropped.
+
 A genre is not private metadata. The seed catalogue is filed against it, and it names a section on a form a client reads. A per-musician genre value is unmatchable against the catalogue and produces a client-facing section no song can fill — which is the bug above, not an incidental consequence.
 
 ### 2. Three genre concepts, previously conflated
@@ -126,7 +138,7 @@ Root cause of #699 was narrower than it appeared: `ChecklistDefaultsConfigurator
 - We are in the business of curating a genre list. Every "can you add Klezmer?" is a deploy. Accepted as strictly cheaper than a per-user genre store plus its migration, and revisitable: opening the vocabulary later is a change to a *validation rule*, since the column and every narrowed picker already exist.
 - A musician genuinely cannot offer a genre they have no songs in. Deliberate — a template promising Jazz with no Jazz is a promise they cannot keep.
 - Reordering onboarding touches the #663/#668 step designs.
-- Free-text genres already saved to `defaultGenreSelection` / `enabledGenres` in production need a decision (widen to cover, map, or drop) before `@IsIn` is enforced. Tracked separately.
+- Each of the seven added genres starts with zero `SeedCatalogue` songs, so it reads `(0)` and is unofferable to a client until the catalogue is filled. That work ships with the widening, not after it.
 
 ## Alternatives considered
 
