@@ -227,6 +227,68 @@ describe('PortalService.submitMusicForm (integration)', () => {
   });
 });
 
+// #691: notes / freeText come from the unauthenticated portal submit and land in an email sent as
+// HTML. Unescaped, anyone with the portal link can inject markup into the musician's inbox.
+describe('PortalService.submitMusicForm notification escaping (#691)', () => {
+  const keyMoment = { label: 'First Dance', section: 'Ceremony' };
+
+  const bookingData = {
+    id: bookingId,
+    userId,
+    musicFormConfig: { keyMoments: [keyMoment], enabledGenres: ['Pop'], publishedAt: new Date() },
+    musicFormResponse: null,
+  };
+
+  const bookingForSongList = {
+    id: bookingId,
+    date: new Date('2026-08-15'),
+    title: 'Wedding',
+    customer: { name: 'Test Client' },
+    venue: null,
+  };
+
+  const song = { id: 's1', title: 'Perfect', artist: 'Ed Sheeran', genre: 'Pop' };
+
+  it('escapes notes and freeText in the song-list email body', async () => {
+    const send = jest.fn().mockResolvedValue(undefined);
+    const service = new PortalService(
+      { findMusicFormDataByToken: jest.fn().mockResolvedValue(bookingData) } as unknown as import('./portal.repository').PortalRepository,
+      { findByUserId: jest.fn().mockResolvedValue(publicProfile) } as unknown as import('../user-profile/public-profile.repository').PublicProfileRepository,
+      {
+        findByIds: jest.fn().mockResolvedValue([song]),
+        findAll: jest.fn().mockResolvedValue([song]),
+      } as unknown as import('../songs/songs.repository').SongsRepository,
+      {} as unknown as import('../invoices/invoices.repository').InvoicesRepository,
+      { send } as unknown as import('../mail/mail.service').MailService,
+      makeDocumentsService(jest.fn().mockResolvedValue(undefined)),
+      { getPublicUrl: jest.fn() } as unknown as StorageService,
+      { onBookingChanged: jest.fn().mockResolvedValue(undefined) } as unknown as import('../checklist/checklist-reevaluator.service').ChecklistReevaluator,
+      {} as unknown as import('../bookings/contract.repository').ContractRepository,
+      {
+        upsertMusicFormResponse: jest.fn().mockResolvedValue(undefined),
+        findBookingForSongList: jest.fn().mockResolvedValue(bookingForSongList),
+      } as unknown as import('../bookings/music-form-config.repository').MusicFormConfigRepository,
+    );
+
+    await service.submitMusicForm(token, {
+      selectedSongIds: ['s1'],
+      specialRequests: [{ key: keyMoment.label, freeText: '<b>freetext</b>' }],
+      notes: '<b>notes</b><a href="https://evil.example">click</a>',
+    });
+    // The notification is fire-and-forget behind PDF generation — let the event loop flush.
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    expect(send).toHaveBeenCalledTimes(1);
+    const { body } = send.mock.calls[0][0] as { body: string };
+    expect(body).toContain('&lt;b&gt;notes&lt;/b&gt;');
+    expect(body).toContain('&lt;b&gt;freetext&lt;/b&gt;');
+    expect(body).not.toContain('<b>');
+    expect(body).not.toContain('<a href');
+    // Escaping must not eat the plain-text line breaks the body relies on.
+    expect(body).toContain('<br>');
+  });
+});
+
 // #579: the portal token stays valid on a cancelled booking, so the signing endpoints themselves —
 // not just the CTA — must refuse. Guards the real leak: a stale tab / direct POST signing a
 // cancelled gig's contract.
