@@ -56,6 +56,27 @@ function handleTypeaheadKey(
 }
 
 /**
+ * Which panel (if any) hangs below the search input — they are mutually exclusive. Lifted to
+ * module scope alongside handleTypeaheadKey so the decision's branches don't land in
+ * AddSongField's own complexity. A no-match is only asserted once the catalogue has loaded:
+ * an unresolved catalogue and a genuine no-match are both `[]`, so without the loading signal
+ * the field would assert a false negative before the data arrives (#701). Both non-result
+ * panels defer to manual entry once it's open — the absolute panel would sit over its fields.
+ */
+function choosePanel(ctx: {
+  open: boolean;
+  query: string;
+  hasSuggestions: boolean;
+  catalogueLoading: boolean;
+  showManual: boolean;
+}): 'suggestions' | 'searching' | 'no-matches' | null {
+  if (!ctx.open || ctx.query === '') return null;
+  if (ctx.hasSuggestions) return 'suggestions';
+  if (ctx.showManual) return null;
+  return ctx.catalogueLoading ? 'searching' : 'no-matches';
+}
+
+/**
  * The shared "add a song" control (#667). A full-width catalogue autocomplete is the primary path
  * (pick a suggestion → onAdd, with artist/genre filled from the catalogue); manual entry sits
  * behind a chevron disclosure — the same pattern as the add-venue / add-people fields. Presentational:
@@ -84,13 +105,14 @@ export function AddSongField({
   const [showManual, setShowManual] = useState(false);
   const [manual, setManual] = useState<NewSong>(EMPTY);
   const suggestions = open ? filterCatalogue(catalogue, q) : [];
-
-  // Panels below the input, mutually exclusive. A no-match is only asserted once the catalogue
-  // has loaded; while it's still in flight we say "Searching…" instead. Both are suppressed once
-  // manual entry is showing — the absolute panel would otherwise sit over the manual fields.
-  const panelOpen = open && q.trim() !== '' && suggestions.length === 0 && !showManual;
-  const searching = panelOpen && catalogueLoading;
-  const noMatches = panelOpen && !catalogueLoading;
+  const query = q.trim();
+  const panel = choosePanel({
+    open,
+    query,
+    hasSuggestions: suggestions.length > 0,
+    catalogueLoading,
+    showManual,
+  });
 
   function addCatalogue(e: CatalogueEntry) {
     onAdd({ title: e.title, artist: e.artist ?? '', genre: e.genre as SongGenre });
@@ -120,7 +142,7 @@ export function AddSongField({
           autoComplete="off"
           aria-label="Search the catalogue"
           role="combobox"
-          aria-expanded={suggestions.length > 0 || searching || noMatches}
+          aria-expanded={panel !== null}
           disabled={adding}
           className="pl-9"
           onChange={(e) => { setQ(e.target.value); setOpen(true); setActive(-1); }}
@@ -131,7 +153,7 @@ export function AddSongField({
           onBlur={(e) => { if (!e.currentTarget.parentElement?.contains(e.relatedTarget)) setOpen(false); }}
           onKeyDown={(e) => handleTypeaheadKey(e, { suggestions, active, setActive, setOpen, addCatalogue })}
         />
-        {suggestions.length > 0 && (
+        {panel === 'suggestions' && (
           <ul role="listbox" className="absolute z-50 left-0 right-0 mt-1 bg-background border border-border rounded-md overflow-hidden shadow-md">
             {suggestions.map((e, i) => (
               <li key={e.id} role="option" aria-selected={i === active}>
@@ -150,14 +172,14 @@ export function AddSongField({
             ))}
           </ul>
         )}
-        {searching && (
+        {panel === 'searching' && (
           <p className="absolute z-50 left-0 right-0 mt-1 bg-background border border-border rounded-md px-3 py-2 text-sm text-muted shadow-md">
             Searching the catalogue…
           </p>
         )}
-        {noMatches && (
+        {panel === 'no-matches' && (
           <div className="absolute z-50 left-0 right-0 mt-1 bg-background border border-border rounded-md px-3 py-2 shadow-md">
-            <p className="text-sm text-foreground">No matches for “{q.trim()}”.</p>
+            <p className="text-sm text-foreground">No matches for “{query}”.</p>
             <button
               type="button"
               // onPointerDown + preventDefault (as the suggestion buttons do) so the input never
