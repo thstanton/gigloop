@@ -351,7 +351,11 @@ Non-trivial features are planned into issues before any code. `/to-issues` and `
 
 ### Triage labels
 
-Default label vocabulary (needs-triage, needs-info, ready-for-agent, ready-for-human, wontfix). See `docs/agents/triage-labels.md`.
+Default label vocabulary (needs-triage, needs-info, ready-for-agent, ready-for-human, wontfix, in-progress). See `docs/agents/triage-labels.md`.
+
+### Fleet (concurrent sessions) & batch triage
+
+Running several interactive sessions in parallel, and running `/triage` in batch over the `needs-triage` pile, are both governed by `docs/agents/fleet.md` — read it before doing either. Key rules: claim via `in-progress` before coding; surfaces must be disjoint; batch triage fans out one sub-agent per issue and may never approve schema/lifecycle/cross-feature issues itself.
 
 ### Domain docs
 
