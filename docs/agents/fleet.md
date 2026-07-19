@@ -22,10 +22,13 @@ The human dispatches: they decide when to open a session and on what. Everything
 
 Before writing any code:
 
+0. **Normalise the branch.** A session started via `claude --worktree` lands on a random `worktree-<name>` branch. Rename it to the naming convention (`fix/<issue>-<slug>` / `feat/…`, type from the issue's category label) *before* claiming, so the claim comment and eventual PR carry a convention-compliant branch.
 1. **Read the in-flight set** — all open issues labelled `in-progress` — and their declared Surfaces.
 2. **Verify claimability:** the target issue's Surfaces are disjoint from every in-flight claim; the WIP cap (count of `in-progress`) has a free slot; the schema lock is free if this issue touches schema. Re-validate the declared Surfaces against the current codebase while you're at it — they were declared at planning time and may have staled.
 3. **Claim:** swap `ready-for-agent` → `in-progress`, self-assign, and comment the branch and worktree being used.
 4. If any check fails, **stop and tell the human** — do not start coding on an overlapping surface, and do not silently pick a different issue.
+
+The **`fleet-claim`** skill mechanises steps 0–3: it renames the branch, runs a claimability precheck (`scripts/claimability.sh` — prints the in-flight map, each issue's declared Surfaces, and a `CLAIMABLE`/`BLOCKED` verdict), posts the claim, then builds from the agent brief. A session dispatched with a bare issue reference invokes it automatically (see CLAUDE.md → *Dispatch shorthand*).
 
 If mid-build work turns out to need a surface that wasn't declared, treat it exactly like step 4: stop, flag the overlap to the human, and record the widened surface on the issue.
 
@@ -47,6 +50,21 @@ A session's demand on the human is concentrated at its **ends**:
 - **Checkpoint time:** commit done, deviations from the brief summarised (and flagged on the PR, per existing convention).
 
 Between those, the session runs autonomously. **A mid-build question is a defect in the brief.** When one genuinely can't be avoided, the answer is *written back onto the issue* — so the decision is durable and the brief's gap is patched — never just spoken into the session. The only legitimate mid-build stops are: a discovered surface overlap, a Hard Rule / CONTEXT.md contradiction (CLAUDE.md already mandates flagging those), or a design fork that triage should have escalated.
+
+## Stewardship — leave it better, by capturing not detouring
+
+This codebase will outlive any one session. A fleet session cares about its long-term health — but the fleet's discipline (surface-disjoint claims, one commit per issue, and ADR-0030's "refactoring is its own deliberate work") means you improve it by **capture, not detour**:
+
+- **Within your claimed surface** — leave what you touched clean: good names, a story, tests, no lowered bar. This is just the existing quality rules (CLAUDE.md → *No silent shortcuts*) applied with care.
+- **Beyond it** — when you spot a bug, a refactor target, or any decay outside your scope, **file a `needs-triage` issue and keep building your claimed issue.** Don't fix it now (that breaks surface discipline and your commit's focus); don't drop it (that isn't stewardship).
+
+Filing to `needs-triage` needs **no permission** — it is the lowest-commitment state in the machine, and a human still triages it before any work happens. It is the *production* side of the same bucket that batch triage *consumes*. Guardrails:
+
+- **`needs-triage` only.** Never self-promote a finding to `ready-for-agent`, and never start work on it.
+- **Don't change your session's scope.** The finding is parked, not actioned — the session keeps building its claimed issue.
+- **Dedup first.** Check open issues and `.out-of-scope/` — don't file a known or already-rejected thing (the same redundancy check triage runs).
+- **Worth a glance.** A real bug or a concrete refactor target with a reason — not every micro-nit; noise defeats the purpose.
+- **Provenance.** Note it was surfaced while working #X, and prefix the body with `> *AI-filed by a fleet session (working #X).*`
 
 ## Batch triage (feeding the fleet)
 
