@@ -2,7 +2,8 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { Resend } from 'resend';
 import { PrismaService } from '../prisma/prisma.service';
 import { renderTiptap } from './tiptap.renderer';
-import { TEMPLATE_DEFAULT_SUBJECTS, VARIABLE_FALLBACKS } from '../templates/default-templates';
+import { resolveVar, substituteTiptapVariables } from './tiptap-substitute';
+import { TEMPLATE_DEFAULT_SUBJECTS } from '../templates/default-templates';
 
 export interface EmailContext {
   customerName: string;
@@ -131,32 +132,27 @@ export class MailService {
     };
   }
 
+  // Rich-text body: substitute on the Tiptap tree once, then render. The HTML
+  // renderer is a pure output adapter over the substituted tree — variable values
+  // land as text nodes and pass through the renderer's text-node escaping, so a
+  // customer/venue name containing markup can no longer inject into the outbound
+  // body (#689, ADR-0064). The old regex-on-HTML loop that substituted unescaped
+  // values is gone.
   renderTemplate(content: unknown, context: EmailContext): RenderResult {
-    const html = renderTiptap(content);
-    const missingVariables: string[] = [];
-
-    const rendered = html.replace(/\{\{(\w+)\}\}/g, (_, key) => {
-      const value = context[key as keyof EmailContext];
-      if (value) return value.replace(/\n/g, '<br>');
-      missingVariables.push(key);
-      return VARIABLE_FALLBACKS[key] ?? '';
-    });
-
-    return { html: rendered, missingVariables: [...new Set(missingVariables)] };
+    const missing = new Set<string>();
+    const substituted = substituteTiptapVariables(content, context, missing);
+    return { html: renderTiptap(substituted), missingVariables: [...missing] };
   }
 
+  // Subject is an email header, not a body: it stays a plain string — never
+  // escaped (escaping `&`→`&amp;` in a header is a bug) and never `<br>`-broken.
+  // It shares only variable *resolution* with the body path via resolveVar, so
+  // the fallback catalogue and missing-variable semantics can't drift (ADR-0064).
   renderSubject(builtInType: string | null, context: EmailContext): { subject: string; missingVariables: string[] } {
     const template = (builtInType && TEMPLATE_DEFAULT_SUBJECTS[builtInType]) ?? '';
-    const missingVariables: string[] = [];
-
-    const subject = template.replace(/\{\{(\w+)\}\}/g, (_, key) => {
-      const value = context[key as keyof EmailContext];
-      if (value) return value;
-      missingVariables.push(key);
-      return VARIABLE_FALLBACKS[key] ?? '';
-    });
-
-    return { subject, missingVariables: [...new Set(missingVariables)] };
+    const missing = new Set<string>();
+    const subject = template.replace(/\{\{(\w+)\}\}/g, (_, key) => resolveVar(key, context, missing));
+    return { subject, missingVariables: [...missing] };
   }
 
   async sendBatch(emails: MailTransportOptions[]): Promise<void> {

@@ -17,7 +17,7 @@ import { UpdateSetDto } from './dto/update-set.dto';
 import { UpdateBookingPackageDto } from './dto/update-booking-package.dto';
 import { UpsertMusicFormConfigDto } from './dto/upsert-music-form-config.dto';
 import { MailService } from '../mail/mail.service';
-import { substituteTiptapVariables } from '../mail/tiptap-portal';
+import { substituteTiptapVariables } from '../mail/tiptap-substitute';
 import { ChecklistReevaluator } from '../checklist/checklist-reevaluator.service';
 import { getChecklistDefaults } from '../checklist/checklist-defaults';
 import {
