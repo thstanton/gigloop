@@ -37,7 +37,7 @@ export function useChecklistActions(bookingId: string) {
 
   const actions = useBookingActions(bookingId);
   const contractActions = useContractActions(bookingId);
-  const invoiceActions = useInvoiceActions(bookingId);
+  const invoiceActions = useInvoiceActions();
 
   function openCreateInvoice(prefill?: { isDeposit: boolean; amount?: number }) {
     const params: Record<string, string> = { sheet: 'invoice', isDeposit: String(prefill?.isDeposit ?? false) };
@@ -89,7 +89,7 @@ export function useChecklistActions(bookingId: string) {
   function markSentInvoicePaid(isDeposit: boolean): boolean {
     const sent = sentInvoiceOf(isDeposit, invoices);
     if (!sent) return false;
-    invoiceActions.markPaid(sent.id);
+    invoiceActions.markPaid(sent);
     return true;
   }
 
