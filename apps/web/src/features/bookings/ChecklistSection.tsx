@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ChevronDown, ChevronRight, Plus } from 'lucide-react';
 import { useChecklistActions } from '@/lib/hooks/useChecklistActions';
+import { useDismissibleHint } from '@/lib/hooks/useDismissibleHint';
 import { Button } from '@/components/ui/button';
 import { GhostButton } from '@/components/common/GhostButton';
 import { InlineHint } from '@/components/common/InlineHint';
@@ -260,6 +261,8 @@ export default function ChecklistSection({
   clientName = null,
 }: ChecklistSectionProps) {
   const { handleChecklistAction, handleMarkDone, isActionPending } = useChecklistActions(bookingId);
+  const { isDismissed: isDueDateHintDismissed, dismiss: dismissDueDateHint } =
+    useDismissibleHint('checklist-due-date-hint');
   const [, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   // Per-section open state and add state, keyed by section key. Sections fall back to their default
@@ -304,12 +307,14 @@ export default function ChecklistSection({
       <BookingConceptCardContainer />
 
       {/* #698: due dates are derived from the gig date by a rule the musician can't otherwise see.
-          One persistent line names the rule's origin and points at the dial in Settings. */}
-      {hasDueDates && (
+          One line names the rule's origin and points at the dial in Settings; it's dismissable
+          (persisted per-user) once the musician has learned the rule. */}
+      {hasDueDates && !isDueDateHintDismissed && (
         <InlineHint
           className="mb-3"
           href="/admin/settings"
           actionLabel="Adjust in Settings"
+          onDismiss={dismissDueDateHint}
         >
           Due dates are set from the gig date.
         </InlineHint>

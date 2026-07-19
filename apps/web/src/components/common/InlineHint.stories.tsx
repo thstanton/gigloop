@@ -1,6 +1,6 @@
 import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect } from 'storybook/test';
+import { expect, fn, userEvent } from 'storybook/test';
 import { MemoryRouter } from 'react-router-dom';
 import { Home } from 'lucide-react';
 import { InlineHint } from './InlineHint';
@@ -39,5 +39,20 @@ export const WithLeadText: Story = {
 export const CustomIcon: Story = {
   args: {
     icon: React.createElement(Home, { size: 14 }),
+  },
+};
+
+/** With `onDismiss`, a trailing "X" lets the musician clear the hint (persistence is the caller's job). */
+export const Dismissible: Story = {
+  args: {
+    children: 'Due dates are set from the gig date.',
+    actionLabel: 'Adjust in Settings',
+    onDismiss: fn(),
+  },
+  play: async ({ canvas, args }) => {
+    const dismiss = canvas.getByRole('button', { name: /dismiss/i });
+    await expect(dismiss).toBeVisible();
+    await userEvent.click(dismiss);
+    await expect(args.onDismiss).toHaveBeenCalledOnce();
   },
 };
