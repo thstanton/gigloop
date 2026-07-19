@@ -147,7 +147,11 @@ function AddSongRow({ onDone }: { onDone: () => void }) {
 
   // The seed catalogue drives the add-song autocomplete (#667). Fetched here (the container);
   // AddSongField stays presentational.
-  const { data: catalogue = [] } = useQuery({
+  // `isPending` (not `isLoading`) is the "catalogue not yet resolved" signal AddSongField needs:
+  // the query is `enabled`-gated, and while disabled only `isPending` is true. A failed fetch
+  // leaves an empty catalogue and so reads as "no matches" — acceptable, since manual entry is
+  // right there; catalogue error handling is out of scope for #701.
+  const { data: catalogue = [], isPending: catalogueLoading } = useQuery({
     queryKey: ['songs-catalogue'],
     queryFn: () => apiGet<CatalogueGroup[]>('/songs/catalogue'),
     enabled: isLoaded,
@@ -178,6 +182,7 @@ function AddSongRow({ onDone }: { onDone: () => void }) {
         catalogue={catalogueEntries}
         onAdd={(song) => mutation.mutate(song)}
         adding={mutation.isPending}
+        catalogueLoading={catalogueLoading}
       />
       <div className="flex items-center gap-2">
         <Button type="button" size="sm" variant="outline" onClick={onDone}>

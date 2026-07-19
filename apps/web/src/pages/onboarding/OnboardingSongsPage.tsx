@@ -137,7 +137,11 @@ export default function OnboardingSongsPage() {
   // Songs created on this step (adds persist immediately; this is the session's list)
   const [added, setAdded] = useState<Song[]>([]);
 
-  const { data: catalogue = [] } = useQuery({
+  // `isPending` (not `isLoading`) is the "catalogue not yet resolved" signal AddSongField needs:
+  // the query is `enabled`-gated, and while disabled only `isPending` is true. A failed fetch
+  // leaves an empty catalogue and so reads as "no matches" — acceptable, since manual entry is
+  // right there; catalogue error handling is out of scope for #701.
+  const { data: catalogue = [], isPending: catalogueLoading } = useQuery({
     queryKey: ['songs-catalogue'],
     queryFn: () => apiGet<CatalogueGroup[]>('/songs/catalogue'),
     enabled: isLoaded && !!isSignedIn,
@@ -247,6 +251,7 @@ export default function OnboardingSongsPage() {
                 catalogue={catalogueEntries}
                 onAdd={(song) => addMutation.mutate(song)}
                 adding={addMutation.isPending}
+                catalogueLoading={catalogueLoading}
               />
               <div className="pt-1">
                 <p className="text-base font-medium text-foreground">Repertoire</p>
