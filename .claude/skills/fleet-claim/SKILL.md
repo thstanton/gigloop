@@ -50,6 +50,12 @@ works is the human's dispatch decision.
    need an undeclared surface, treat it like a BLOCK: stop, flag the overlap, and
    record the widened surface on the issue.
 
+   **Spot something out of scope?** A bug or refactor target beyond your claimed
+   surface → **file a `needs-triage` issue and keep building** (no permission
+   needed; dedup against open issues + `.out-of-scope/` first; note it was
+   surfaced while working this issue). Don't detour to fix it, don't drop it.
+   See `docs/agents/fleet.md` → *Stewardship*.
+
 ## Not this skill's job
 
 Choosing *which* issues to dispatch (the human's surface-disjoint call), merging

@@ -51,6 +51,21 @@ A session's demand on the human is concentrated at its **ends**:
 
 Between those, the session runs autonomously. **A mid-build question is a defect in the brief.** When one genuinely can't be avoided, the answer is *written back onto the issue* — so the decision is durable and the brief's gap is patched — never just spoken into the session. The only legitimate mid-build stops are: a discovered surface overlap, a Hard Rule / CONTEXT.md contradiction (CLAUDE.md already mandates flagging those), or a design fork that triage should have escalated.
 
+## Stewardship — leave it better, by capturing not detouring
+
+This codebase will outlive any one session. A fleet session cares about its long-term health — but the fleet's discipline (surface-disjoint claims, one commit per issue, and ADR-0030's "refactoring is its own deliberate work") means you improve it by **capture, not detour**:
+
+- **Within your claimed surface** — leave what you touched clean: good names, a story, tests, no lowered bar. This is just the existing quality rules (CLAUDE.md → *No silent shortcuts*) applied with care.
+- **Beyond it** — when you spot a bug, a refactor target, or any decay outside your scope, **file a `needs-triage` issue and keep building your claimed issue.** Don't fix it now (that breaks surface discipline and your commit's focus); don't drop it (that isn't stewardship).
+
+Filing to `needs-triage` needs **no permission** — it is the lowest-commitment state in the machine, and a human still triages it before any work happens. It is the *production* side of the same bucket that batch triage *consumes*. Guardrails:
+
+- **`needs-triage` only.** Never self-promote a finding to `ready-for-agent`, and never start work on it.
+- **Don't change your session's scope.** The finding is parked, not actioned — the session keeps building its claimed issue.
+- **Dedup first.** Check open issues and `.out-of-scope/` — don't file a known or already-rejected thing (the same redundancy check triage runs).
+- **Worth a glance.** A real bug or a concrete refactor target with a reason — not every micro-nit; noise defeats the purpose.
+- **Provenance.** Note it was surfaced while working #X, and prefix the body with `> *AI-filed by a fleet session (working #X).*`
+
 ## Batch triage (feeding the fleet)
 
 The pipeline starves without a stock of claimable issues, so triage runs in batches. The generic `/triage` skill is the engine, untouched; the repo-side convention is:
