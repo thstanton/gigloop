@@ -130,6 +130,11 @@ jobs:
           DIRECT_URL: postgresql://user:password@localhost/db
       - run: cd apps/api && bun run build
         if: needs.detect-changes.outputs.api == 'true'
+      # `nest build` only typechecks src/** — the seed script is outside every
+      # other gate, so it gets its own --noEmit pass here (#639).
+      - name: Typecheck prisma/seed.ts (#639)
+        if: needs.detect-changes.outputs.api == 'true'
+        run: cd apps/api && bun run typecheck:seed
       - run: cd apps/web && bun run build
         if: needs.detect-changes.outputs.web == 'true'
 

@@ -1,0 +1,12 @@
+{
+  // #639 — `nest build` only typechecks `src/**/*` (tsconfig.build.json), so the
+  // seed script sits outside every gate and can silently stop compiling when the
+  // schema or a module it imports is renamed. This config exists purely so
+  // `typecheck:seed` can typecheck it under the API's own strictness settings.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "incremental": false
+  },
+  "include": ["prisma/seed.ts"]
+}
