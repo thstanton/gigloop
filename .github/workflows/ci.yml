@@ -174,7 +174,9 @@ jobs:
           DATABASE_URL: ${{ steps.neon.outputs.db_url }}
           DIRECT_URL: ${{ steps.neon.outputs.db_url }}
       - name: Delete Neon branch
-        if: always()
+        # Only delete when create-branch produced an id — otherwise neonctl errors
+        # with "not enough arguments" and masks the real create/migrate/test failure (#657).
+        if: always() && steps.neon.outputs.branch_id != ''
         uses: neondatabase/delete-branch-action@v3
         with:
           api_key: ${{ secrets.NEON_API_KEY }}
@@ -242,7 +244,9 @@ jobs:
           path: e2e/playwright-report/
           retention-days: 7
       - name: Delete Neon branch
-        if: always()
+        # Only delete when create-branch produced an id — otherwise neonctl errors
+        # with "not enough arguments" and masks the real create/migrate/test failure (#657).
+        if: always() && steps.neon.outputs.branch_id != ''
         uses: neondatabase/delete-branch-action@v3
         with:
           api_key: ${{ secrets.NEON_API_KEY }}
