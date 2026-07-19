@@ -1,5 +1,6 @@
-import { ArrowRight, Sparkle } from 'lucide-react';
+import { ArrowRight, Sparkle, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { IconButton } from '@/components/common/IconButton';
 import { cn } from '@/lib/utils';
 
 interface InlineHintProps {
@@ -15,6 +16,11 @@ interface InlineHintProps {
    * to omit it.
    */
   icon?: React.ReactNode;
+  /**
+   * When provided, renders a trailing dismiss "X" that calls this handler.
+   * Persisting the dismissal is the caller's job (see useDismissibleHint).
+   */
+  onDismiss?: () => void;
   className?: string;
 }
 
@@ -30,6 +36,7 @@ export function InlineHint({
   actionLabel,
   href,
   icon = <Sparkle size={14} />,
+  onDismiss,
   className,
 }: InlineHintProps) {
   return (
@@ -45,6 +52,11 @@ export function InlineHint({
           <ArrowRight size={14} aria-hidden className="flex-shrink-0" />
         </Link>
       </span>
+      {onDismiss && (
+        <IconButton label="Dismiss" onClick={onDismiss} className="-my-2 ml-auto flex-shrink-0">
+          <X size={14} />
+        </IconButton>
+      )}
     </div>
   );
 }

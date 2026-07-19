@@ -82,8 +82,8 @@ export const CurrentStageOpen: Story = {
   },
 };
 
-// #698: when any goal has a due date, one persistent line explains where the dates come from and
-// links to the Settings configurator that governs the rule.
+// #698: when any goal has a due date, one line explains where the dates come from and links to the
+// Settings configurator that governs the rule. The line is dismissable (persisted per-user).
 export const WithDueDates: Story = {
   args: {
     bookingStatus: 'CONFIRMED',
