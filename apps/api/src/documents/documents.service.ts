@@ -13,7 +13,7 @@ import { renderTiptapToPdfmake } from '../mail/tiptap-pdfmake';
 import { decrypt } from '../common/crypto';
 import { buildDocumentTitle, buildPdfHeader, buildPdfFooter } from './pdf-shared';
 import type { EmailContext } from '../mail/mail.service';
-import { substituteTiptapVariables } from '../mail/tiptap-portal';
+import { substituteTiptapVariables } from '../mail/tiptap-substitute';
 import { resolveDocumentVisibility, type PortalVisibilityVerdict } from '../portal/portal-visibility';
 
 // Resolve pdfmake relative to this file so font paths work correctly

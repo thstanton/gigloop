@@ -1,4 +1,4 @@
-import { substituteTiptapVariables } from './tiptap-portal';
+import { substituteTiptapVariables } from './tiptap-substitute';
 import type { EmailContext } from './mail.service';
 
 const ctx: EmailContext = {

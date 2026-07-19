@@ -212,13 +212,34 @@ describe('MailService', () => {
       'issueDate', 'invoiceTotal', 'invoiceDueDate',
     ];
 
-    for (const varName of allVariables) {
+    // Every fixture value here is free of HTML-special characters, so it escapes
+    // to itself — these rendered bodies are byte-identical before and after the
+    // #689 escaping change. setsSchedule is excluded: it is inherently multi-line
+    // and its fixture holds markup, so it gets its own escaped-output test below.
+    for (const varName of allVariables.filter((v) => v !== 'setsSchedule')) {
       it(`substitutes {{${varName}}} when value is present`, () => {
         const { html, missingVariables } = service.renderTemplate(varContent(varName), fullContext);
         expect(html).toBe(`<p>${fullContext[varName]}</p>`);
         expect(missingVariables).not.toContain(varName);
       });
     }
+
+    // #689: values now HTML-escaped — injection fix
+    it('HTML-escapes markup in substituted values (was injected raw into the body)', () => {
+      const { html } = service.renderTemplate(varContent('customerName'), {
+        ...fullContext,
+        customerName: '<script>alert(1)</script>',
+      });
+      expect(html).toContain('&lt;script&gt;');
+      expect(html).not.toContain('<script>');
+    });
+
+    // #689: values now HTML-escaped — injection fix
+    it('escapes markup in setsSchedule when present (previously passed through unescaped)', () => {
+      const { html, missingVariables } = service.renderTemplate(varContent('setsSchedule'), fullContext);
+      expect(html).toBe('<p>&lt;ul&gt;&lt;li&gt;Ceremony&lt;/li&gt;&lt;/ul&gt;</p>');
+      expect(missingVariables).not.toContain('setsSchedule');
+    });
 
     // All variables reported as missing when empty
     for (const varName of allVariables) {
