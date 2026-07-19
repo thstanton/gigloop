@@ -77,6 +77,27 @@ export const CurrentStageOpen: Story = {
     await expect(canvas.getByText('Add venue')).toBeVisible();
     await expect(canvas.getByRole('button', { name: 'Set up' })).toBeVisible();
     await expect(canvas.getByRole('button', { name: 'Mark complete' })).toBeVisible();
+    // #698: no goal carries a due date here, so the derivation hint stays out of the way.
+    await expect(canvas.queryByText(/Due dates are set from the gig date/)).toBeNull();
+  },
+};
+
+// #698: when any goal has a due date, one persistent line explains where the dates come from and
+// links to the Settings configurator that governs the rule.
+export const WithDueDates: Story = {
+  args: {
+    bookingStatus: 'CONFIRMED',
+    items: [
+      item({ label: 'Get the contract signed', requiredForStatus: 'READY', dueDate: '2030-07-20T00:00:00Z', dueDateRule: { basis: 'bookingDate', offsetDays: -60 } }),
+      item({ label: 'Bring spare strings', requiredForStatus: 'READY' }),
+    ],
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText(/Due dates are set from the gig date/)).toBeVisible();
+    const link = canvas.getByRole('link', { name: /Adjust in Settings/ });
+    await expect(link).toHaveAttribute('href', '/admin/settings');
+    // Exactly one hint for the whole checklist — not one per dated goal.
+    await expect(canvas.getAllByText(/Due dates are set from the gig date/)).toHaveLength(1);
   },
 };
 
