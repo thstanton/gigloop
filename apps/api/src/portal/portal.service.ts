@@ -9,6 +9,7 @@ import { MailService } from '../mail/mail.service';
 import { DocumentsService } from '../documents/documents.service';
 import { StorageService } from '../storage/storage.service';
 import { ChecklistReevaluator } from '../checklist/checklist-reevaluator.service';
+import { plainTextToHtml } from '../common/html';
 import {
   resolveContractVisibility,
   resolveMusicFormVisibility,
@@ -492,7 +493,9 @@ export class PortalService {
     await this.mail.send({
       to: publicProfile.email,
       subject: `${booking.customer.name} has submitted their song requests for ${title}`,
-      body: body.replace(/\n/g, '<br>'),
+      // #691: the body carries unauthenticated portal input (notes / freeText) — escape at
+      // this single plain-text → HTML boundary so no field can miss it.
+      body: plainTextToHtml(body),
       attachments: [{ filename: 'song-list.pdf', content: buffer }],
     });
   }
@@ -591,7 +594,7 @@ export class PortalService {
     await this.mail.send({
       to: publicProfile.email,
       subject: `${booking.customer.name} has signed your contract for ${bookingTitle}`,
-      body: body.replace(/\n/g, '<br>'),
+      body: plainTextToHtml(body),
     });
   }
 
