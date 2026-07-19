@@ -262,7 +262,9 @@ The private, authenticated-only half of the musician's settings (one per `userId
 
 **Invoice numbering:** format `INV-{year}-{NNN}` (e.g. `INV-2025-001`). `invoiceNumberSequence` is a per-year counter; `invoiceSequenceYear` records the year it was last reset. Both reset each January. Subject to revision.
 
-`songRequestFormEnabled` is a global toggle — when false, the music form feature is hidden across the entire app (no [[MusicFormConfig]] creation, no [[MusicForm]] on the [[Portal]]).
+`songRequestFormEnabled` is a global toggle — when false, the music form feature is hidden across the entire app (no [[MusicFormConfig]] creation, no [[MusicForm]] on the [[Portal]]). It is the **master flag** for the feature: the `gather_song_requests` [[BookingChecklistItem]] goal is gated by it (form off ⇒ goal locked off; goal off with form on is a legitimate state — take requests, skip the nagging). First asked in [[OnboardingFlow]] step 1, thereafter in **Booking settings → General**.
+
+`myGenres` (`String[]`) holds [[My Genres]] — see that entry for its semantics.
 
 ### MusicFormResponse
 The client's submitted music preferences, stored on a Booking (zero-to-one). Re-submitting replaces the previous response.
@@ -282,10 +284,41 @@ An entry in a musician's repertoire library. Every Song has a `userId` — songs
 
 **Fields:** title (required), artist (optional), genre (required — string, one of `CONTEMPORARY | CLASSICAL | JAZZ | FILM_TV_MUSICALS | BOLLYWOOD | CHRISTMAS`; stored as a plain string, not a Prisma enum), active (boolean — hides without deleting), tags (string array — for search and future playlist generation).
 
-**Seeding:** the [[SeedCatalogue]] (a static file derived from the existing `mick-form` song list, not a DB table — there is no global song pool) is a *search source* for adding individual songs. A musician searches it and adds the songs they actually play, which are created as Song records with their `userId`. There is no bulk/genre opt-in: adding a whole genre blindly would fill the library with songs the musician does not play (anti-confidence + an audit chore). The same add-from-catalogue mechanic powers the Repertoire page and the onboarding "add your first song" activation (see [[OnboardingFlow]] step 5).
+**Seeding:** the [[SeedCatalogue]] (a static file derived from the existing `mick-form` song list, not a DB table — there is no global song pool) is a *search source* for adding individual songs. A musician searches it and adds the songs they actually play, which are created as Song records with their `userId`. There is no bulk/genre opt-in: adding a whole genre blindly would fill the library with songs the musician does not play (anti-confidence + an audit chore). The same add-from-catalogue mechanic powers the Repertoire page and the onboarding "add your first song" activation (see [[OnboardingFlow]] step 3).
 
 ### Genre
-A string value categorising Songs: `CONTEMPORARY | CLASSICAL | JAZZ | FILM_TV_MUSICALS | BOLLYWOOD | CHRISTMAS`. Stored as a plain string (not a Prisma enum) — new genres can be added without a DB migration. Validated in application code against a constants list. Managed at the system level — musicians cannot add custom genres for MVP.
+A string value categorising Songs. Stored as a plain string (not a Prisma enum) — the canonical set can be widened without a DB migration. Validated in application code against a constants list. **Managed at the system level — musicians cannot add custom genres.** The vocabulary is closed by design: a genre is a *shared* classification (the [[SeedCatalogue]] is filed against it, and it names a section on a form the client reads), so a per-musician genre would be unmatchable against the catalogue and could produce a client-facing section no [[Song]] can ever fill. When the canonical set is too narrow for a real act, the answer is to **widen the set**, not to open it to free text. See ADR-0065.
+
+Three distinct genre concepts exist and must not be conflated:
+
+- **Genre** (this entry) — the shared canonical vocabulary. System-owned.
+- **[[My Genres]]** — the subset a given musician performs. Their stated *intent*.
+- **[[Genres in Repertoire]]** — the genres they hold active [[Song]]s in. A derived *fact*.
+
+### My Genres
+The genres a musician says they perform — a per-musician subset of the canonical [[Genre]] set, chosen once in Settings ("The genres I perform") and rarely changed. A statement of **intent** about the act.
+
+Its purpose is to keep every genre surface personal rather than showing the whole canonical list to everyone: it narrows the [[Song]] genre picker (so a jazz trio isn't scrolling past Bollywood to file a song) and, intersected with [[Genres in Repertoire]], determines which genres a musician may offer a client.
+
+My Genres is **advisory, never a constraint on stored data.** A [[Song]]'s genre is a fact about that song and a [[Package Template]]'s `defaultGenreSelection` is a saved configuration; neither is invalidated by a later change of intent. Removing a genre from My Genres narrows future pickers only — it never reclassifies songs, never rewrites templates, and is instantly reversible. `Song.genre` therefore continues to validate against the canonical [[Genre]] set, not against My Genres.
+
+An empty My Genres means the musician has not answered yet, not that they perform nothing.
+
+### Genres in Repertoire
+The genres in which a musician holds at least one **active** [[Song]] — derived by inspecting the library, never stored. A statement of **fact** about what they can actually deliver.
+
+**The gap between [[My Genres]] and Genres in Repertoire is the signal that matters**: "you say you play Jazz, and you have no Jazz songs." Surfaced as a song count beside each genre (`Jazz (0)` next to `Contemporary (23)`) rather than as a separate warning — the number *is* the nudge, shown where the musician is already thinking about genres.
+
+The two are used differently depending on whether a surface faces the musician or the client:
+
+| Surface | Genres shown | Why |
+|---|---|---|
+| [[Song]] genre picker | My Genres | you need Jazz offered *because* you have no Jazz songs yet — it is how the first one gets added |
+| [[Repertoire]] filter | My Genres ∪ Genres in Repertoire | My Genres exposes the empty slot; the union keeps a genre filterable after it is unticked with songs still filed under it |
+| [[Package Template]] editor | **My Genres ∩ Genres in Repertoire** | anything else ships an empty section to a client |
+| [[MusicFormConfig]] `enabledGenres` | **My Genres ∩ Genres in Repertoire** | same, one step later |
+
+On the two client-bound surfaces the intersection is **absolute — there is no empty-library exception.** A genre the musician performs but has no songs in appears in the picker, disabled, with its `(0)` count and a route to [[Repertoire]]: the gap is named at the moment it is relevant rather than silently hidden. We never assume an empty library is deliberate.
 
 ### BookingChecklistItem
 > **Superseded by the goal ⊃ step model ([[Goal]] / [[Step]], ADR-0057) — implemented and live (shipped in #619, 2026-06-30).** This entry describes the *former* flat model and is retained as historical reference. The flat table became the [[Goal]] (the user-facing row) and gained a `BookingChecklistStep` child table; `dependsOn` and `BLOCKED` were retired.
@@ -412,17 +445,33 @@ The per-booking storage for a [[MusicForm]]'s configuration. **To the musician t
 
 **Fields:**
 - `keyMoments` — `{ label: string, section?: string }[]` (**user-facing label: "Special requests"** — the term "key moment" is retired from the **booking and portal music surfaces** — the atom, the client [[Portal]], the admin portal preview, and the apply-template suggestion banners — as users did not grasp it without explanation; the [[Package Template]] editor still labels the seed list "Key moments" (renaming it there is tracked separately); the stored field and code identifiers keep the `keyMoments` name); `section` groups them in the portal form using the **same grouping vocabulary as [[Set]]s — the booking's [[Package]]s**. A moment's `section` identifies the booking-owned [[Package]] it sits under (pre-filled from the source Package on apply), or is empty → grouped under **"Other"**. The musician can **add key moments independently** via an explicit "+ Add key moment" control in the music form editor and assign each to any of the booking's Packages or to "Other" — there is **no free-text section**, grouping stays consistent with the sets. Graceful degradation (the music form owns its moments): removing a [[Package]] drops its key moments to "Other" rather than deleting them, and a music form turned on with no Packages has all moments under "Other". All moments are editable per-booking (add / remove / relabel / regroup) without affecting any [[Package Template]].
-- `enabledGenres` — `string[]`; the genres shown in the general song selection. Copied from applied formats (union of all format defaults) when a package is applied, or seeded from a system default set when the form is turned on without a package; always editable. (Making the no-package default musician-configurable and library-aware is deferred — issue #530.)
+- `enabledGenres` — `string[]`; the genres shown in [[Song Selection]] — and **only** there; [[Special Requests]] search the whole library irrespective of this field. Copied from applied formats (union of all format defaults) when a package is applied, or seeded from [[My Genres]] ∩ [[Genres in Repertoire]] when the form is turned on without a package; always editable. Whether applied or seeded, the offerable set is bounded by that same intersection — a genre with no active [[Song]]s behind it can never be enabled, because it would render a client-facing tab that no song can fill. An empty `enabledGenres` is therefore a legitimate state (a Special-Requests-only form), not a defect to be papered over with a system default set. See ADR-0065.
 
 The `Send music form invite` [[BookingChecklist]] item is irrelevant until the music form is turned on for the booking.
 
 ### MusicForm
-The client-facing song preference form on the [[Portal]]. Has three sections:
-1. **General list** — client selects from the musician's [[Song]] library; browsed via genre tabs (one tab per enabled genre in [[MusicFormConfig]]) with a search bar that queries across all enabled genres; no client details section — identity and booking date are already known from the portal token
-2. **Special requests** (the section formerly labelled "Key moments" — see [[MusicFormConfig]]) — one autocomplete field per request (a named moment), grouped by section (format label) as defined in [[MusicFormConfig]]; searches the full [[Song]] library (not limited to enabled genres); free-text entry allowed if song is not in the library
-3. **Notes** — freeform; covers informal requests and "don't plays"
+The client-facing song preference form on the [[Portal]]. No client details section — identity and booking date are already known from the portal token.
+
+**The form gathers two independent classes of information.** They are not two views of one thing and neither implies the other; a form may carry both, or only one:
+
+1. **[[Song Selection]]** — the client browses the musician's [[Song]] library and picks from it. Requires at least one genre in `enabledGenres`.
+2. **[[Special Requests]]** — the client names what they want for particular moments, and adds free notes. Requires nothing at all.
+
+Treating these as one thing is the mistake that produced the "empty music form" problem: a form with no genres is not broken or degraded — it is a **Special-Requests-only form**, which is exactly right for a musician who takes a first-dance request but publishes no repertoire. Both the client's form and the musician's editor must make the two classes visibly distinct, and make clear that the genre selection drives [[Song Selection]] **only** — it has no bearing on [[Special Requests]], whose autocomplete searches the whole library regardless. Where a class is absent, the musician is told which one and how to enable it (a hint, not a warning — nothing is wrong).
 
 See also [[Song]], [[MusicFormConfig]], [[MusicFormResponse]].
+
+### Song Selection
+The first class of information a [[MusicForm]] gathers: the client picks songs from the musician's [[Song]] library. Browsed via genre tabs — one per genre in [[MusicFormConfig]]'s `enabledGenres` — with a search bar that queries across all enabled genres.
+
+Present only when the musician has at least one genre in [[My Genres]] ∩ [[Genres in Repertoire]]. Absent is a valid state, not a fault.
+
+### Special Requests
+The second class of information a [[MusicForm]] gathers: what the client wants at particular moments, plus anything else they want to say. Formerly labelled "Key moments" — see [[MusicFormConfig]] for the retirement of that term.
+
+Comprises one autocomplete field per named moment, grouped by section (see [[MusicFormConfig]]), plus a freeform **notes** field covering informal requests and "don't plays". Each moment accepts either a library [[Song]] or free text.
+
+Searches the **full** [[Song]] library, deliberately not limited to `enabledGenres` — a client may request a song the musician has filed under a genre they do not publish. Requires no repertoire and no genres whatsoever: a musician with an empty library can still run a Special-Requests-only form.
 
 ### Portal
 The client-facing public interface at `/booking/:token`. Bypasses Clerk auth — access is validated by the Booking's `portalToken`. Sections are conditionally visible based on booking state — not every booking has every section:
@@ -563,12 +612,16 @@ A five-step wizard at `/onboarding/*` that every new musician completes before a
 
 **Philosophy — guided activation, not configuration.** Onboarding collects only the data the app genuinely needs (identity) and otherwise *orients* the musician and *activates* them, rather than presenting exhaustive settings. Two recurring patterns: (1) **show, don't just toggle** — where a choice is offered, the thing being chosen is shown in enough detail to judge it (a package's sets + key moments; a task's due timing), and the act of choosing showcases that almost everything in GigLoop is customisable (a headline value); (2) **configure/create one** — the musician shapes one real artifact (one package template for their most common booking type; one song) to learn the mechanic and leave with something genuinely theirs, never bulk-accepting defaults they cannot evaluate (bulk-seeding a genre of songs the musician does not actually play is anti-confidence and creates an audit chore). Deep configuration is deferred to Settings and taught in-context (see the discoverability principle). A skipped activation is not lost — it becomes a Category-1 precondition for the dashboard tips widget, which nudges the musician later, so onboarding and discoverability reinforce each other.
 
+**Step order is a dependency order, not a narrative one.** A step may only ask a question whose answer does not depend on a later step. Two rules follow, both learned the hard way (#699, #697): the **[[MusicForm]] master question is asked before anything that depends on it**, and the **[[Song]] library is built before any surface that offers genres to a client**, because those surfaces are bounded by [[Genres in Repertoire]]. This is why Songs precedes Packages. See ADR-0065.
+
 **Steps (ordered — "your setup, then your client experience"):**
-1. **Your business** (required) — identity input: `businessName` (the act/brand — shown on the portal, invoices, emails), **"Your name"** (the personal name used to sign emails and contracts — the `displayName` field, relabelled from "Display name" to kill the act-vs-person confusion; falls back to `businessName` if blank), `email`, `phone`, optional home address (travel-time origin). Every field carries purpose-helper text and a live example of where its value appears (e.g. "appears as: *Your quote from James*").
-2. **How GigLoop runs your bookings** (skippable) — orientation: the default [[BookingChecklistItem]] tasks shown with friendly due timing ("Balance invoice — 2 weeks before the gig") and an explanation of the reminder feature ([[DigestNotification]] + Dashboard Actions). Items remain toggleable (informed enable/disable) to showcase customisability.
-3. **What you offer** (skippable) — package templates: a concept callout (what a [[Package Template]] is + what it can include: sets, genres, special requests), then "What's your most common type of booking?" → the musician bases **one** [[Package Template]] on a starter from the read-only catalogue (`GET /packages/catalogue`) and shapes it inline (`PackageForm` with per-field helper text), saved via `POST /packages`. **Nothing else is auto-added** — the library starts empty and the musician builds it deliberately (#663; a deliberate reversal of the earlier "seed the full default set in the background" plan — the customisation-first stance). The starters are the former system-default templates, served read-only, never bulk-copied in. Built on the Package → Package Template split (ADR-0046).
-4. **Your portal & branding** (skippable) — a live [[Portal]] preview rendered *inside* the onboarding shell (reusing the preview renderer — not navigating to `/admin/portal-preview`), with inline guided branding controls (theme cards, brand-colour swatch, logo upload) that update the preview live.
-5. **Emails & song requests** (skippable) — orientation on the emails GigLoop sends on the musician's behalf (quote, contract, invoices, thank-you — light awareness + one peek; custom [[Template]]s are P2), plus an intro to the portal song-request form ([[MusicForm]]) and an **"add your first song"** activation (search the [[SeedCatalogue]] or add one manually; one is enough — no bulk/genre seeding). The song-request section also offers a **"not for you? turn it off"** control that sets `UserProfile.songRequestFormEnabled` to false then and there (some musicians never take song requests); disabling it hides the add-a-song activation and suppresses the related tips-widget nudge, consistent with the global toggle hiding the feature app-wide.
+1. **Your business** (required) — identity input: `businessName` (the act/brand — shown on the portal, invoices, emails), **"Your name"** (the personal name used to sign emails and contracts — the `displayName` field, relabelled from "Display name" to kill the act-vs-person confusion; falls back to `businessName` if blank), `email`, `phone`, optional home address (travel-time origin). Every field carries purpose-helper text and a live example of where its value appears (e.g. "appears as: *Your quote from James*"). **Also carries the song-requests master question** — "do you take song requests?", writing `UserProfile.songRequestFormEnabled`. It sits here, not beside the reminder toggles of step 2, because it is a fact about the act (like the business name) rather than a preference about a feature — and because every later step that touches song requests reads it.
+2. **How GigLoop runs your bookings** (skippable) — orientation: the default [[BookingChecklistItem]] tasks shown with friendly due timing ("Balance invoice — 2 weeks before the gig") and an explanation of the reminder feature ([[DigestNotification]] + Dashboard Actions). Items remain toggleable (informed enable/disable) to showcase customisability. If song requests were declined in step 1, the music reminder shows **disabled with its reason**, not hidden — the same gate Settings already applies.
+3. **Your songs** (skippable) — an intro to the portal song-request form ([[MusicForm]]) and an **"add your first song"** activation (search the [[SeedCatalogue]] or add one manually; one is enough — no bulk/genre seeding). Precedes step 4 because a [[Package Template]]'s offerable genres are bounded by [[Genres in Repertoire]], which does not exist until songs do.
+4. **What you offer** (skippable) — package templates: a concept callout (what a [[Package Template]] is + what it can include: sets, genres, special requests), then "What's your most common type of booking?" → the musician bases **one** [[Package Template]] on a starter from the read-only catalogue (`GET /packages/catalogue`) and shapes it inline (`PackageForm` with per-field helper text), saved via `POST /packages`. **Nothing else is auto-added** — the library starts empty and the musician builds it deliberately (#663; a deliberate reversal of the earlier "seed the full default set in the background" plan — the customisation-first stance). The starters are the former system-default templates, served read-only, never bulk-copied in. Built on the Package → Package Template split (ADR-0046).
+5. **Your portal & branding** (skippable) — a live [[Portal]] preview rendered *inside* the onboarding shell (reusing the preview renderer — not navigating to `/admin/portal-preview`), with inline guided branding controls (theme cards, brand-colour swatch, logo upload) that update the preview live.
+
+**Declining song requests carries visibly forward.** Answering "no" in step 1 does not silently remove the later song-request surfaces — each one appears **inert, with the reason stated and a way back**: the step-2 music reminder is disabled, step 3's repertoire builder is greyed with a re-enable control, and step 4's genre picker likewise. The relationship between the switches is expressed as a *carried state* the musician can see, rather than left to copy. (Before this, the reminder toggle preceded its own master flag and the two read as unrelated settings — #699.)
 
 Each step saves immediately on "Next". Step 1 is required; steps 2–5 are skippable ("Skip for now — customise in Settings"). Completion is recorded by `POST /me/onboarding/complete`, which stamps `UserProfile.onboardingCompletedAt`. The admin route loader gates entry on this field (null → redirect to `/onboarding`); the `/onboarding/*` loader gates the other direction (field set → redirect to `/admin`). See ADR-0027.
 
