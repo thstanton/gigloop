@@ -2,7 +2,7 @@
 
 How several **interactive (HITL) Claude Code sessions** work the backlog simultaneously without treading on each other. This is not Ralph: the AFK loop (ADR-0040/0045) is on ice. But the fleet deliberately runs on the same substrate the loop used — **GitHub labels are the state machine; there is no side-channel coordination state** — so the conventions here transfer if the loop returns.
 
-The human dispatches: they decide when to open a session and on what. Everything below exists so that dispatching, and running three sessions at once, costs the human almost no attention.
+The human dispatches: they decide when to open a session and on what. Everything below exists so that dispatching, and running several sessions at once, costs the human almost no attention.
 
 ## The rules at a glance
 
@@ -10,9 +10,9 @@ The human dispatches: they decide when to open a session and on what. Everything
 | --- | --- |
 | Concurrency | Sessions run in parallel only on issues with **disjoint Surfaces** |
 | Schema lock | At most **one** in-flight PR may touch `prisma/schema` / migrations |
-| WIP cap | **3** concurrent implementation sessions / unmerged implementation PRs |
+| WIP cap | **5** concurrent implementation sessions / unmerged implementation PRs |
 | Claim token | `in-progress` label + assignee + branch/worktree comment |
-| Merging | **Daily merge window**, batched; only the human merges |
+| Merging | Batched **merge window** — daily, or on saturation, whichever comes first; only the human merges |
 | Conflicts | **An agent rebases — never the human.** |
 | Workspace | One git worktree per session (`gigman-<issue>` pattern) |
 
@@ -34,9 +34,27 @@ If mid-build work turns out to need a surface that wasn't declared, treat it exa
 
 **Stale claims:** an `in-progress` issue whose branch has gone quiet is visible by construction (label + branch comment). The human un-claims it (label back to `ready-for-agent`); nothing else needs cleanup.
 
-## Merge window (daily)
+## Worktree bootstrap (once per new worktree, before building)
 
-PRs are merged in **one daily sitting**, not as they land. Between windows, sessions keep filling free slots — nobody waits on a merge.
+A fresh worktree needs its **own local install artefacts** — it does not inherit the main checkout's:
+
+```bash
+bun install        # ~5s; bun hardlinks from cache, so the disk cost is small
+npx prisma generate -w apps/api
+```
+
+This is a trap rather than an inconvenience, because **the unit test project passes without either step.** You discover the gap only when the Storybook suite runs, or when a Prisma type resolves stale.
+
+The Storybook case is the non-obvious one, so it's worth recording the mechanism: the failure looks like a missing `@storybook/addon-vitest` file at a `/@fs/Users/.../gigman/node_modules/...` path — *even when that exact file exists* in the main checkout. Vite's browser mode only serves `/@fs/` paths inside its allowed workspace root. A fleet worktree lives at `.claude/worktrees/<name>`, so the main repo's `node_modules` sits **above** that root and is refused on principle, not for absence. Node's plain upward resolution would have found it; Vite's fs boundary won't. A worktree-local `bun install` puts the file inside the boundary and the suite goes green.
+
+## Merge window (daily, or on saturation)
+
+PRs are merged in **one sitting**, not as they land. Between windows, sessions keep filling free slots — nobody waits on a merge.
+
+The window opens on **either** trigger, whichever comes first:
+
+- **Daily**, as the baseline cadence.
+- **On saturation** — the moment the WIP cap is reached, because at that point every remaining slot is held by an unmerged PR and no session can claim. Waiting for the daily slot would stall the fleet outright. (This is not hypothetical: the fleet saturated on its first concurrent day, with the cap reached hours after the previous window.)
 
 - The human reviews and merges the batch in whatever order they like.
 - If a merge conflicts a sibling PR, an agent gets a **rebase pass** before the next window. The human never resolves a conflict by hand.
@@ -78,6 +96,7 @@ The pipeline starves without a stock of claimable issues, so triage runs in batc
 
 - **Self-claim over a dispatcher.** A dispatcher process holds a private model of what's running — exactly the drift disease ADR-0045 diagnosed in `ralph.sh`. Labels + assignees drift from nothing; any session (or the human, from a phone) can read the whole in-flight map from GitHub.
 - **Declared surfaces over optimistic merging.** Optimistic concurrency surfaces conflicts at merge/preprod time, where the human's attention is the scarce resource. Surface declaration costs ~nothing at grilling (the files are already under discussion) and makes the parallel-safety decision mechanical. Proven in practice before it was named: #713/#714, #715/#716, #725/#726/#727 were all built concurrently as disjoint sets and merged cleanly in arbitrary order.
-- **WIP cap 3, derived from review bandwidth, not agent capacity.** Every PR crosses the human's desk; batches of 2–3 have been absorbed comfortably in one sitting, and beyond that queue-time (and staleness risk) grows faster than throughput.
+- **WIP cap 5, derived from review bandwidth, not agent capacity.** Every PR crosses the human's desk, so the cap budgets *review*, not parallelism. It started at 3 (from pre-fleet manual batches) and was raised after the first saturated day: that batch was 3 PRs totalling 9 changed files, two of them isolated copy changes — plainly under-using a sitting. The number is a proxy, and a crude one, because review cost tracks PR *size* while the cap counts PR *count*; 5 is a recalibration of the proxy, not a new principle. Raise it again only on the same evidence — a sitting that finished with obvious headroom — and lower it the first time a batch doesn't get absorbed in one go.
+- **Expect surface exhaustion to bind before review bandwidth does.** Every additional in-flight claim must be disjoint from *all* the others, and most GigLoop work lands in `apps/web/src/features/*`. Well before the cap, the binding constraint becomes "is there a claimable issue whose Surfaces are still free?" — and its failure mode is a session stopping to ask, which spends the very attention the cap protects. If claims start bouncing on disjointness rather than on the cap, the fix is deeper triage stock across varied surfaces, not a higher number.
 - **The schema lock.** Migration ordering under squash-merge is the one conflict class that is structurally nasty rather than textually trivial — two parallel migration folders can both pass CI and still be wrong when sequenced. One-at-a-time is cheaper than any clever fix.
 - **No ADR.** This is workflow/ops, not architecture — nothing in the running system knows these rules exist. If the fleet model ever starts governing autonomous machinery again (Ralph revived), that's the moment it graduates to an ADR.

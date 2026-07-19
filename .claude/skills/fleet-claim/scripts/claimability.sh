@@ -10,7 +10,8 @@
 # advice: sanity-check it against the codebase before trusting it.
 set -uo pipefail
 
-WIP_CAP=3
+# Keep in sync with the WIP cap in docs/agents/fleet.md — the doc is the authority.
+WIP_CAP=5
 issue="${1:?usage: claimability.sh <issue-number>}"
 
 command -v gh >/dev/null 2>&1 || { echo "error: gh CLI not found on PATH" >&2; exit 2; }

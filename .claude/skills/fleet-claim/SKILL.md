@@ -45,7 +45,13 @@ works is the human's dispatch decision.
      claimability summary. Prefix AI-posted comments with
      `> *AI-posted fleet claim (docs/agents/fleet.md).*`
 
-5. **Build** from the issue's `## Agent Brief` comment, following `CLAUDE.md` — one
+5. **Bootstrap the worktree** (new worktree only, before the first build step):
+   `bun install` then `npx prisma generate -w apps/api`. A worktree does not
+   inherit the main checkout's install artefacts, and the unit tests pass
+   without them — so a skipped bootstrap surfaces later as a Storybook `/@fs/`
+   resolution failure, not here. See `docs/agents/fleet.md` → *Worktree bootstrap*.
+
+6. **Build** from the issue's `## Agent Brief` comment, following `CLAUDE.md` — one
    commit per (sub-)issue, checkpoint per the session-stop rules. If mid-build you
    need an undeclared surface, treat it like a BLOCK: stop, flag the overlap, and
    record the widened surface on the issue.
@@ -59,5 +65,5 @@ works is the human's dispatch decision.
 ## Not this skill's job
 
 Choosing *which* issues to dispatch (the human's surface-disjoint call), merging
-(human-only, daily window), and rebasing after a sibling merges (a separate pass).
+(human-only, batched merge window), and rebasing after a sibling merges (a separate pass).
 See `docs/agents/fleet.md`.
