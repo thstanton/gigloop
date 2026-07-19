@@ -66,10 +66,17 @@ export function AddSongField({
   catalogue,
   onAdd,
   adding = false,
+  catalogueLoading = false,
 }: {
   catalogue: CatalogueEntry[];
   onAdd: (song: NewSong) => void;
   adding?: boolean;
+  /**
+   * True while the host's catalogue query is still pending. An unresolved catalogue and a
+   * catalogue with genuinely no match are both `[]`, so without this the field would assert a
+   * false "No matches" before the data has arrived (#701).
+   */
+  catalogueLoading?: boolean;
 }) {
   const [q, setQ] = useState('');
   const [open, setOpen] = useState(false);
@@ -77,6 +84,13 @@ export function AddSongField({
   const [showManual, setShowManual] = useState(false);
   const [manual, setManual] = useState<NewSong>(EMPTY);
   const suggestions = open ? filterCatalogue(catalogue, q) : [];
+
+  // Panels below the input, mutually exclusive. A no-match is only asserted once the catalogue
+  // has loaded; while it's still in flight we say "Searching…" instead. Both are suppressed once
+  // manual entry is showing — the absolute panel would otherwise sit over the manual fields.
+  const panelOpen = open && q.trim() !== '' && suggestions.length === 0 && !showManual;
+  const searching = panelOpen && catalogueLoading;
+  const noMatches = panelOpen && !catalogueLoading;
 
   function addCatalogue(e: CatalogueEntry) {
     onAdd({ title: e.title, artist: e.artist ?? '', genre: e.genre as SongGenre });
@@ -106,7 +120,7 @@ export function AddSongField({
           autoComplete="off"
           aria-label="Search the catalogue"
           role="combobox"
-          aria-expanded={suggestions.length > 0}
+          aria-expanded={suggestions.length > 0 || searching || noMatches}
           disabled={adding}
           className="pl-9"
           onChange={(e) => { setQ(e.target.value); setOpen(true); setActive(-1); }}
@@ -135,6 +149,26 @@ export function AddSongField({
               </li>
             ))}
           </ul>
+        )}
+        {searching && (
+          <p className="absolute z-50 left-0 right-0 mt-1 bg-background border border-border rounded-md px-3 py-2 text-sm text-muted shadow-md">
+            Searching the catalogue…
+          </p>
+        )}
+        {noMatches && (
+          <div className="absolute z-50 left-0 right-0 mt-1 bg-background border border-border rounded-md px-3 py-2 shadow-md">
+            <p className="text-sm text-foreground">No matches for “{q.trim()}”.</p>
+            <button
+              type="button"
+              // onPointerDown + preventDefault (as the suggestion buttons do) so the input never
+              // blurs — otherwise Safari, which doesn't focus buttons on click, would close the
+              // panel before mouseup and the action would never fire.
+              onPointerDown={(ev) => { ev.preventDefault(); setShowManual(true); }}
+              className="mt-1 text-sm text-primary hover:underline"
+            >
+              Add it manually
+            </button>
+          </div>
         )}
       </div>
 
