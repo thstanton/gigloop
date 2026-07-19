@@ -22,10 +22,13 @@ The human dispatches: they decide when to open a session and on what. Everything
 
 Before writing any code:
 
+0. **Normalise the branch.** A session started via `claude --worktree` lands on a random `worktree-<name>` branch. Rename it to the naming convention (`fix/<issue>-<slug>` / `feat/…`, type from the issue's category label) *before* claiming, so the claim comment and eventual PR carry a convention-compliant branch.
 1. **Read the in-flight set** — all open issues labelled `in-progress` — and their declared Surfaces.
 2. **Verify claimability:** the target issue's Surfaces are disjoint from every in-flight claim; the WIP cap (count of `in-progress`) has a free slot; the schema lock is free if this issue touches schema. Re-validate the declared Surfaces against the current codebase while you're at it — they were declared at planning time and may have staled.
 3. **Claim:** swap `ready-for-agent` → `in-progress`, self-assign, and comment the branch and worktree being used.
 4. If any check fails, **stop and tell the human** — do not start coding on an overlapping surface, and do not silently pick a different issue.
+
+The **`fleet-claim`** skill mechanises steps 0–3: it renames the branch, runs a claimability precheck (`scripts/claimability.sh` — prints the in-flight map, each issue's declared Surfaces, and a `CLAIMABLE`/`BLOCKED` verdict), posts the claim, then builds from the agent brief. A session dispatched with a bare issue reference invokes it automatically (see CLAUDE.md → *Dispatch shorthand*).
 
 If mid-build work turns out to need a surface that wasn't declared, treat it exactly like step 4: stop, flag the overlap to the human, and record the widened surface on the issue.
 

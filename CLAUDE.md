@@ -167,6 +167,7 @@ This keeps each commit a reviewable unit of work and CI bisectable, while the wh
 - At the start of any feature session: confirm we are on the feature's branch, or create it; read the tracking issue to find the next unblocked sub-issue.
 - Work **one feature branch at a time.** Do not open parallel sibling branches for a single feature — sub-issues are commits, not branches. (Parallel sessions on *independent* issues are allowed — governed by `docs/agents/fleet.md`.)
 - **Concurrent sessions claim before coding:** swap the issue to `in-progress` (+ assignee + branch/worktree comment) and verify its declared Surfaces are disjoint from every other `in-progress` claim, respecting the WIP cap (3) and the one-schema-PR lock. Full protocol: `docs/agents/fleet.md`.
+- **Dispatch shorthand:** a session opened with just an issue reference (e.g. `691`), or started in an auto-created worktree (`claude --worktree`, which lands on a random `worktree-*` branch), is a fleet dispatch — invoke the **`fleet-claim`** skill. It normalises the branch to the naming convention, runs the claimability precheck (surface disjointness, WIP cap, schema lock), posts the claim, then builds from the agent brief.
 - Open the PR targeting **`main`** when the whole feature is done, with `gh pr create --base main`. Do not open a PR per sub-issue.
 - Never push application code directly to `main`.
 
