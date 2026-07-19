@@ -1,7 +1,12 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { FormField } from '@/components/common/FormField';
-import { LOGISTICS_FIELD_ICONS } from '@/lib/constants';
+import {
+  LOGISTICS_DETAIL_FIELDS,
+  LOGISTICS_FIELD_ICONS,
+  LOGISTICS_SYSTEM_KEYS,
+  type LogisticsDetailKey,
+} from '@/lib/constants';
 import { cn } from '@/lib/utils';
 import {
   CustomFieldsList,
@@ -30,31 +35,15 @@ import type { BookingDetail, BookingLogisticsEntry } from '@/types/api';
 //
 // Details has no detectable done-state, so it earns no completeness predicate and is never nagged.
 
-type DetailFieldKey = 'dressCode' | 'performanceSpace' | 'foodProvided' | 'greenRoom' | 'equipmentRequired';
-
-const DETAIL_FIELDS: Array<{ key: DetailFieldKey; label: string; type: 'input' | 'select' | 'textarea' }> = [
-  { key: 'dressCode',          label: 'Dress code',          type: 'select' },
-  { key: 'performanceSpace',   label: 'Performance space',   type: 'textarea' },
-  { key: 'foodProvided',       label: 'Food provided',       type: 'textarea' },
-  { key: 'greenRoom',          label: 'Green room',          type: 'textarea' },
-  { key: 'equipmentRequired',  label: 'Equipment required',  type: 'textarea' },
-];
-
-/** The Itinerary-owned time anchors. The Details atom must NOT touch or re-emit these — they are
- *  not detail fields, and (critically) must not be mistaken for user custom fields. The host
- *  preserves them around a Details save. */
-export const LOGISTICS_TIME_KEYS = ['arrivalTime', 'soundCheckTime', 'finishTime'] as const;
-
-const DETAIL_KEYS: ReadonlySet<string> = new Set<string>(DETAIL_FIELDS.map((f) => f.key));
 
 /** Everything the atom does NOT treat as a user custom field: its own detail keys plus the
  *  foreign time anchors. Whatever remains in `logistics` is a genuine custom field. */
-const NON_CUSTOM_KEYS: ReadonlySet<string> = new Set<string>([...DETAIL_KEYS, ...LOGISTICS_TIME_KEYS]);
+const NON_CUSTOM_KEYS: ReadonlySet<string> = new Set<string>(LOGISTICS_SYSTEM_KEYS);
 
 /** The non-temporal slice of `logistics` the atom produces. */
 export type DetailsLogistics = Record<string, BookingLogisticsEntry>;
 
-type LocalState = Record<DetailFieldKey, LocalEntry>;
+type LocalState = Record<LogisticsDetailKey, LocalEntry>;
 
 function buildInitialState(logistics: BookingDetail['logistics']): LocalState {
   return {
@@ -68,7 +57,7 @@ function buildInitialState(logistics: BookingDetail['logistics']): LocalState {
 
 /** The detail + custom slice, ready to merge over the preserved time keys. Empty fields drop out. */
 function buildDetailsPayload(fields: LocalState, customFields: CustomFieldLocal[]): DetailsLogistics {
-  const systemPairs = DETAIL_FIELDS
+  const systemPairs = LOGISTICS_DETAIL_FIELDS
     .filter(({ key }) => fields[key].value)
     .map(({ key }) => [key, toSystemEntry(fields[key])] as const);
   const customPairs = customFields
@@ -102,7 +91,7 @@ export function DetailsAtom({ initialLogistics, onSave, isSaving, saved, saveErr
   const currentPayload = buildDetailsPayload(fields, customFields);
   const dirty = JSON.stringify(currentPayload) !== initialPayload;
 
-  function setEntry(key: DetailFieldKey, patch: Partial<LocalEntry>) {
+  function setEntry(key: LogisticsDetailKey, patch: Partial<LocalEntry>) {
     setFields((prev) => ({ ...prev, [key]: { ...prev[key], ...patch } }));
   }
 
@@ -129,11 +118,11 @@ export function DetailsAtom({ initialLogistics, onSave, isSaving, saved, saveErr
 
   return (
     <div className="space-y-5">
-      {DETAIL_FIELDS.map(({ key, label, type }) => {
+      {LOGISTICS_DETAIL_FIELDS.map(({ key, label, control }) => {
         const entry = fields[key];
         return (
           <FormField key={key} label={label}>
-            <div className={cn('flex gap-2', type === 'textarea' ? 'items-start' : 'items-center')}>
+            <div className={cn('flex gap-2', control === 'textarea' ? 'items-start' : 'items-center')}>
               <LogisticsIconPicker
                 value={entry.icon}
                 defaultIcon={LOGISTICS_FIELD_ICONS[key] ?? ''}
@@ -143,7 +132,7 @@ export function DetailsAtom({ initialLogistics, onSave, isSaving, saved, saveErr
                 <DetailInput
                   fieldKey={key}
                   label={label}
-                  type={type}
+                  type={control}
                   value={entry.value}
                   onChange={(v) => setEntry(key, { value: v })}
                 />

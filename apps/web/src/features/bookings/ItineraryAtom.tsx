@@ -3,8 +3,8 @@ import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { GhostButton } from '@/components/common/GhostButton';
 import { SubLabel } from '@/components/common/SubLabel';
+import { LOGISTICS_ANCHOR_FIELDS, type LogisticsAnchorKey } from '@/lib/constants';
 import {
-  ANCHOR_FIELDS,
   AddSetForm,
   AnchorRow,
   NO_PACKAGE,
@@ -17,7 +17,6 @@ import {
   emptySetDraft,
   orderTimelineSets,
   type AnchorEntry,
-  type AnchorKey,
   type PackageOption,
   type SetDraft,
   type SetValues,
@@ -46,7 +45,7 @@ import type {
 // persistent add-set form, and (for packages) an editable name/icon header. Sets re-parent via a
 // dropdown in the expanded row; start time orders them within a box.
 
-type AnchorDraft = Record<AnchorKey, AnchorEntry>;
+type AnchorDraft = Record<LogisticsAnchorKey, AnchorEntry>;
 
 function buildAnchorDraft(logistics: Record<string, BookingLogisticsEntry> | null): AnchorDraft {
   return {
@@ -126,7 +125,7 @@ export function ItineraryAtom({
   const anchorsPayload = buildAnchorSlice(anchors, initialLogistics);
   const anchorsDirty = JSON.stringify(anchorsPayload) !== anchorsInitial;
 
-  function setAnchor(key: AnchorKey, patch: Partial<AnchorEntry>) {
+  function setAnchor(key: LogisticsAnchorKey, patch: Partial<AnchorEntry>) {
     setAnchors((prev) => ({ ...prev, [key]: { ...prev[key], ...patch } }));
   }
 
@@ -158,7 +157,7 @@ export function ItineraryAtom({
       <section className="space-y-4">
         <SubLabel>Times</SubLabel>
         <div className="space-y-5">
-          {ANCHOR_FIELDS.map(({ key, label }) => (
+          {LOGISTICS_ANCHOR_FIELDS.map(({ key, label }) => (
             <AnchorRow key={key} anchorKey={key} label={label} entry={anchors[key]} onChange={(patch) => setAnchor(key, patch)} />
           ))}
         </div>

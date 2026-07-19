@@ -7,15 +7,19 @@ import type { BookingStatus, EventType, PortalTheme, PortalVisibilityReason, Rem
 
 export type ContactPrimaryRole = 'CUSTOMER' | 'VENUE' | 'BOOKING_AGENT';
 
-export const PRIMARY_ROLE_LABELS: Record<ContactPrimaryRole, string> = {
-  CUSTOMER:      'Customer',
-  VENUE:         'Venue',
-  BOOKING_AGENT: 'Booking agent',
-};
+const PRIMARY_ROLES = [
+  { value: 'CUSTOMER',      label: 'Customer'      },
+  { value: 'VENUE',         label: 'Venue'         },
+  { value: 'BOOKING_AGENT', label: 'Booking agent' },
+] as const satisfies readonly { value: ContactPrimaryRole; label: string }[];
 
-export const PRIMARY_ROLE_ORDER: ContactPrimaryRole[] = [
-  'CUSTOMER', 'VENUE', 'BOOKING_AGENT',
-];
+export type _PrimaryRoleCoverage = AssertNever<
+  Exclude<ContactPrimaryRole, (typeof PRIMARY_ROLES)[number]['value']>
+>;
+
+export const PRIMARY_ROLE_LABELS = column(PRIMARY_ROLES, 'label');
+
+export const PRIMARY_ROLE_ORDER: ContactPrimaryRole[] = PRIMARY_ROLES.map((row) => row.value);
 
 export const GENRE_LABELS: Record<SongGenre, string> = {
   CONTEMPORARY:    'Contemporary',
@@ -264,16 +268,64 @@ export const PACKAGE_CATEGORY_LABELS = column(EVENT_TYPE_ROWS, 'shortLabel');
 
 export const PACKAGE_CATEGORY_ORDER: EventType[] = EVENT_TYPE_ROWS.map((row) => row.value);
 
-export const LOGISTICS_FIELD_LABELS: Record<string, string> = {
-  arrivalTime:    'Arrival time',
-  soundCheckTime: 'Soundcheck time',
-  finishTime:     'Finish time',
-  dressCode:      'Dress code',
-  performanceSpace: 'Performance space',
-  foodProvided:   'Food provided',
-  greenRoom:      'Green room',
-  equipmentRequired: 'Equipment required',
-};
+// ─── Logistics fields ────────────────────────────────────────────────────────
+// The system fields inside a booking's free-form `logistics` blob, declared once. The
+// `group` column carries a real structural split, not a display grouping: ANCHORS are
+// Itinerary-owned time anchors, DETAILS are Details-owned. A Details save must preserve the
+// anchors or a wholesale logistics write wipes the Itinerary. Anything in `logistics` that
+// is NOT in this table is a user-defined custom field — which is why the key list has to be
+// exact, and why four components each keeping their own copy of it was a hazard.
+export interface LogisticsFieldRow {
+  value: string;
+  label: string;
+  /** Key into PACKAGE_ICON_MAP. */
+  icon: string;
+  group: 'anchor' | 'detail';
+  control: 'input' | 'select' | 'textarea';
+}
+
+const LOGISTICS_FIELDS = [
+  { value: 'arrivalTime',       label: 'Arrival time',       icon: 'clock',    group: 'anchor', control: 'input'    },
+  { value: 'soundCheckTime',    label: 'Soundcheck time',    icon: 'music',    group: 'anchor', control: 'input'    },
+  { value: 'finishTime',        label: 'Finish time',        icon: 'moon',     group: 'anchor', control: 'input'    },
+  { value: 'dressCode',         label: 'Dress code',         icon: 'shirt',    group: 'detail', control: 'select'   },
+  { value: 'performanceSpace',  label: 'Performance space',  icon: 'mic-2',    group: 'detail', control: 'textarea' },
+  { value: 'foodProvided',      label: 'Food provided',      icon: 'utensils', group: 'detail', control: 'textarea' },
+  { value: 'greenRoom',         label: 'Green room',         icon: 'sofa',     group: 'detail', control: 'textarea' },
+  { value: 'equipmentRequired', label: 'Equipment required', icon: 'volume-2', group: 'detail', control: 'textarea' },
+] as const satisfies readonly LogisticsFieldRow[];
+
+type LogisticsRow = (typeof LOGISTICS_FIELDS)[number];
+type AnchorRow = Extract<LogisticsRow, { group: 'anchor' }>;
+type DetailRow = Extract<LogisticsRow, { group: 'detail' }>;
+
+// Unlike BookingStatus/EventType these keys have no union type to be checked against — the
+// table IS the definition, so the key types derive from it rather than guarding it.
+export type LogisticsAnchorKey = AnchorRow['value'];
+export type LogisticsDetailKey = DetailRow['value'];
+
+export const LOGISTICS_ANCHOR_FIELDS: ReadonlyArray<{ key: LogisticsAnchorKey; label: string }> =
+  LOGISTICS_FIELDS.filter((row): row is AnchorRow => row.group === 'anchor')
+    .map(({ value, label }) => ({ key: value, label }));
+
+export const LOGISTICS_DETAIL_FIELDS: ReadonlyArray<{
+  key: LogisticsDetailKey;
+  label: string;
+  control: LogisticsFieldRow['control'];
+}> = LOGISTICS_FIELDS.filter((row): row is DetailRow => row.group === 'detail')
+  .map(({ value, label, control }) => ({ key: value, label, control }));
+
+/** The Itinerary-owned time anchors. The Details atom must NOT touch or re-emit these. */
+export const LOGISTICS_TIME_KEYS: readonly LogisticsAnchorKey[] =
+  LOGISTICS_ANCHOR_FIELDS.map((field) => field.key);
+
+export const LOGISTICS_DETAIL_KEYS: readonly LogisticsDetailKey[] =
+  LOGISTICS_DETAIL_FIELDS.map((field) => field.key);
+
+/** Every system key. Whatever remains in `logistics` is a genuine user custom field. */
+export const LOGISTICS_SYSTEM_KEYS: readonly string[] = LOGISTICS_FIELDS.map((row) => row.value);
+
+export const LOGISTICS_FIELD_LABELS = column(LOGISTICS_FIELDS, 'label');
 
 export const PACKAGE_ICON_MAP: Record<string, LucideIcon> = {
   clock: Clock,
@@ -303,16 +355,7 @@ export const PACKAGE_ICON_MAP: Record<string, LucideIcon> = {
 
 export const PACKAGE_ICON_OPTIONS = Object.keys(PACKAGE_ICON_MAP);
 
-export const LOGISTICS_FIELD_ICONS: Record<string, string> = {
-  arrivalTime:       'clock',
-  soundCheckTime:    'music',
-  finishTime:        'moon',
-  dressCode:         'shirt',
-  performanceSpace:  'mic-2',
-  foodProvided:      'utensils',
-  greenRoom:         'sofa',
-  equipmentRequired: 'volume-2',
-};
+export const LOGISTICS_FIELD_ICONS = column(LOGISTICS_FIELDS, 'icon');
 
 export const DRESS_CODE_OPTIONS = [
   'Smart Casual',
@@ -323,19 +366,23 @@ export const DRESS_CODE_OPTIONS = [
   'Cocktail',
 ];
 
-// The reminder concerns, in Builder spine order — the order the New Booking form (#560) renders the
-// per-concern "Remind me about" controls so the create surface matches the Builder.
-export const REMINDER_CONCERN_ORDER: ReminderConcern[] = [
-  'overview', 'people', 'venue', 'itinerary', 'music',
-];
+// The reminder concerns, in Builder spine order — the order the New Booking form (#560) renders
+// the per-concern "Remind me about" controls so the create surface matches the Builder.
+const REMINDER_CONCERNS = [
+  { value: 'overview',  label: 'Overview'  },
+  { value: 'people',    label: 'People'    },
+  { value: 'venue',     label: 'Venue'     },
+  { value: 'itinerary', label: 'Itinerary' },
+  { value: 'music',     label: 'Music'     },
+] as const satisfies readonly { value: ReminderConcern; label: string }[];
 
-export const REMINDER_CONCERN_LABELS: Record<ReminderConcern, string> = {
-  overview: 'Overview',
-  people: 'People',
-  venue: 'Venue',
-  itinerary: 'Itinerary',
-  music: 'Music',
-};
+export type _ReminderConcernCoverage = AssertNever<
+  Exclude<ReminderConcern, (typeof REMINDER_CONCERNS)[number]['value']>
+>;
+
+export const REMINDER_CONCERN_ORDER: ReminderConcern[] = REMINDER_CONCERNS.map((row) => row.value);
+
+export const REMINDER_CONCERN_LABELS = column(REMINDER_CONCERNS, 'label');
 
 // The muted "Not visible …" hint copy for each portal-visibility ReasonCode (ADR-0054). The API
 // returns the stable ReasonCode; this is the only place the English lives. The visible state needs

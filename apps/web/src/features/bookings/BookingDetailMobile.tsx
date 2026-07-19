@@ -2,6 +2,8 @@ import { useAuth } from '@clerk/react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Clock, ClipboardList, Info, MapPin, Pencil } from 'lucide-react';
+import { LOGISTICS_DETAIL_KEYS, LOGISTICS_SYSTEM_KEYS } from '@/lib/constants';
+
 import { useBooking } from '@/lib/hooks/useBooking';
 import { useBookingChecklist } from '@/lib/hooks/useBookingChecklist';
 import { useBookingFields } from '@/lib/hooks/useBookingFields';
@@ -32,6 +34,9 @@ import type {
   Invoice,
   MusicFormConfig,
 } from '@/types/api';
+
+// Module scope, not the component body — the old copy of this set was rebuilt on every render.
+const LOGISTICS_SYSTEM_KEY_SET = new Set<string>(LOGISTICS_SYSTEM_KEYS);
 
 interface BookingDetailMobileProps {
   bookingId: string;
@@ -104,11 +109,9 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
     !logistics?.arrivalTime?.value &&
     !logistics?.soundCheckTime?.value &&
     !logistics?.finishTime?.value;
-  const SYSTEM_DETAIL_KEYS = ['dressCode', 'performanceSpace', 'foodProvided', 'greenRoom', 'equipmentRequired'] as const;
-  const ALL_SYSTEM_KEYS = new Set(['arrivalTime', 'soundCheckTime', 'finishTime', ...SYSTEM_DETAIL_KEYS]);
   const detailsEmpty =
-    !SYSTEM_DETAIL_KEYS.some((k) => !!(logistics ?? {})[k]?.value) &&
-    !Object.entries(logistics ?? {}).some(([k, e]) => !ALL_SYSTEM_KEYS.has(k) && !!e.value);
+    !LOGISTICS_DETAIL_KEYS.some((k) => !!(logistics ?? {})[k]?.value) &&
+    !Object.entries(logistics ?? {}).some(([k, e]) => !LOGISTICS_SYSTEM_KEY_SET.has(k) && !!e.value);
   const venueEmpty = !booking.venue;
   const musicOff = !booking.hasMusicFormConfig;
 

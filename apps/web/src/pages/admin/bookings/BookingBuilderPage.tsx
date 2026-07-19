@@ -31,7 +31,8 @@ import { OverviewAtom, type OverviewChanges, type SeriesChange } from '@/feature
 import { PeopleAtom, type PeopleSelection } from '@/features/bookings/PeopleAtom';
 import { VenueAtom, type VenueSelection } from '@/features/bookings/VenueAtom';
 import { RemindMeAboutContainer } from '@/features/bookings/RemindMeAboutContainer';
-import { DetailsAtom, LOGISTICS_TIME_KEYS, type DetailsLogistics } from '@/features/bookings/DetailsAtom';
+import { DetailsAtom, type DetailsLogistics } from '@/features/bookings/DetailsAtom';
+import { LOGISTICS_TIME_KEYS } from '@/lib/constants';
 import { ItineraryAtom } from '@/features/bookings/ItineraryAtom';
 import { MusicAtom } from '@/features/bookings/MusicAtom';
 import { MobileBuilderStepper, type StepperSection } from '@/features/bookings/MobileBuilderStepper';

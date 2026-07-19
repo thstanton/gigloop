@@ -3,15 +3,16 @@ import { Info, Pencil, Plus } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { GhostButton } from '@/components/common/GhostButton';
 import { EmptyState } from '@/components/common/EmptyState';
-import { LOGISTICS_FIELD_ICONS, LOGISTICS_FIELD_LABELS } from '@/lib/constants';
+import {
+  LOGISTICS_DETAIL_KEYS,
+  LOGISTICS_FIELD_ICONS,
+  LOGISTICS_FIELD_LABELS,
+  LOGISTICS_SYSTEM_KEYS,
+} from '@/lib/constants';
 import FormatIcon from './FormatIcon';
 import type { BookingLogisticsEntry } from '@/types/api';
 
-const SYSTEM_DETAIL_KEYS = ['dressCode', 'performanceSpace', 'foodProvided', 'greenRoom', 'equipmentRequired'] as const;
-const ALL_SYSTEM_KEYS = new Set([
-  'arrivalTime', 'soundCheckTime', 'finishTime',
-  'dressCode', 'performanceSpace', 'foodProvided', 'greenRoom', 'equipmentRequired',
-]);
+const ALL_SYSTEM_KEYS = new Set<string>(LOGISTICS_SYSTEM_KEYS);
 
 interface DetailsCardProps {
   logistics: Record<string, BookingLogisticsEntry> | null;
@@ -20,7 +21,7 @@ interface DetailsCardProps {
 
 export default function DetailsCard({ logistics, hideWhenEmpty = false }: DetailsCardProps) {
   const [, setSearchParams] = useSearchParams();
-  const systemEntries = SYSTEM_DETAIL_KEYS
+  const systemEntries = LOGISTICS_DETAIL_KEYS
     .filter(key => logistics?.[key]?.value)
     .map(key => ({
       key,

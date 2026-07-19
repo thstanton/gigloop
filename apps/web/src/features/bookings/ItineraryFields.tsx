@@ -7,7 +7,11 @@ import { SubLabel } from '@/components/common/SubLabel';
 import { PackageIcon } from '@/components/common/PackageIcon';
 import { IconPicker } from '@/components/common/IconPicker';
 import { LogisticsIconPicker } from './DetailsFields';
-import { LOGISTICS_FIELD_ICONS } from '@/lib/constants';
+import {
+  LOGISTICS_ANCHOR_FIELDS,
+  LOGISTICS_FIELD_ICONS,
+  type LogisticsAnchorKey,
+} from '@/lib/constants';
 import { cn } from '@/lib/utils';
 import type {
   BookingLogisticsEntry,
@@ -22,20 +26,13 @@ import type {
 
 // ─── The three operational time anchors (logistics JSON, ADR-0034) ──────────────
 
-export type AnchorKey = 'arrivalTime' | 'soundCheckTime' | 'finishTime';
-
-export const ANCHOR_FIELDS: ReadonlyArray<{ key: AnchorKey; label: string }> = [
-  { key: 'arrivalTime', label: 'Arrival time' },
-  { key: 'soundCheckTime', label: 'Soundcheck time' },
-  { key: 'finishTime', label: 'Finish time' },
-];
 
 /** Local draft for one anchor — value (HH:MM), optional icon override, and free-text notes. */
 export type AnchorEntry = { value: string; icon: string; notes: string };
 
 export function anchorEntryFrom(
   logistics: Record<string, BookingLogisticsEntry> | null,
-  key: AnchorKey,
+  key: LogisticsAnchorKey,
 ): AnchorEntry {
   const entry = logistics?.[key];
   return { value: entry?.value ?? '', icon: entry?.icon ?? '', notes: entry?.notes ?? '' };
@@ -44,11 +41,11 @@ export function anchorEntryFrom(
 /** Build the anchor slice to PATCH. Empty anchors drop out; share flags are preserved from the
  *  prior entry (the editor doesn't surface them — the read view doesn't either). */
 export function buildAnchorSlice(
-  draft: Record<AnchorKey, AnchorEntry>,
+  draft: Record<LogisticsAnchorKey, AnchorEntry>,
   initial: Record<string, BookingLogisticsEntry> | null,
 ): Record<string, BookingLogisticsEntry> {
   const out: Record<string, BookingLogisticsEntry> = {};
-  for (const { key } of ANCHOR_FIELDS) {
+  for (const { key } of LOGISTICS_ANCHOR_FIELDS) {
     const e = draft[key];
     if (!e.value) continue;
     const prev = initial?.[key];
@@ -71,7 +68,7 @@ export function AnchorRow({
   entry,
   onChange,
 }: {
-  anchorKey: AnchorKey;
+  anchorKey: LogisticsAnchorKey;
   label: string;
   entry: AnchorEntry;
   onChange: (patch: Partial<AnchorEntry>) => void;
