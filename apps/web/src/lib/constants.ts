@@ -51,23 +51,118 @@ export const EVENT_TYPE_LABELS: Record<EventType, string> = {
   OTHER:     'Other',
 };
 
-export const STATUS_ORDER: BookingStatus[] = [
-  'ENQUIRY',
-  'PROVISIONAL',
-  'CONFIRMED',
-  'READY',
-  'COMPLETE',
-  'CANCELLED',
-];
+// ─── Booking lifecycle ───────────────────────────────────────────────────────
+// The booking status vocabulary, declared ONCE (CLAUDE.md: one declaration per
+// vocabulary). Row order IS the lifecycle order — statusGte/statusBefore index into it,
+// and CANCELLED sits last as the off-ramp rather than a sixth forward stage. Every list
+// and Record below this table is DERIVED: never hand-write a second list of statuses,
+// even one that currently matches. (This table replaced 13 hand-written declarations,
+// one of which had silently lost PROVISIONAL.)
+//
+// Colour columns carry LITERAL Tailwind classes off the `status-<slug>` stem — they
+// cannot be templated, as the Tailwind scanner never sees a constructed class name.
+//   accent  — solid fill (stage headers, active pills)
+//   tint    — /12 wash behind a panel or pill
+//   text    — foreground on a tinted ground
+//   borderL — left rule on a pill
+export interface BookingStatusRow {
+  value: BookingStatus;
+  label: string;
+  /** Point-of-use distillation of the CONTEXT lifecycle canon — what the status *means*,
+   *  not how often it is chosen. The single source for status-meaning copy. ADR-0053. */
+  description: string;
+  /** Offered when creating a booking. Cancelled is not — you don't create a cancelled
+   *  booking. Ready and Complete are legitimate (a no-prep series gig; backfilling an
+   *  already-played gig). Distinct from "forward": a future non-creatable forward stage
+   *  would set this false. ADR-0053. */
+  creatable: boolean;
+  accent: string;
+  tint: string;
+  text: string;
+  borderL: string;
+}
 
-export const CHECKLIST_STAGE_ORDER: Array<BookingStatus | null> = [
-  null,
-  'ENQUIRY',
-  'PROVISIONAL',
-  'CONFIRMED',
-  'READY',
-  'COMPLETE',
-];
+const BOOKING_STATUSES = [
+  {
+    value: 'ENQUIRY',
+    label: 'Enquiry',
+    description: 'Initial interest. You haven’t sent a quote yet, or it’s not been accepted.',
+    creatable: true,
+    accent: 'bg-status-enquiry',
+    tint: 'bg-status-enquiry/12',
+    text: 'text-status-enquiry',
+    borderL: 'border-l-status-enquiry',
+  },
+  {
+    value: 'PROVISIONAL',
+    label: 'Provisional',
+    description: 'The client has agreed your quote in principle. Contract and deposit are still to come.',
+    creatable: true,
+    accent: 'bg-status-provisional',
+    tint: 'bg-status-provisional/12',
+    text: 'text-status-provisional',
+    borderL: 'border-l-status-provisional',
+  },
+  {
+    value: 'CONFIRMED',
+    label: 'Confirmed',
+    description: 'Locked in — contract signed and deposit received.',
+    creatable: true,
+    accent: 'bg-status-confirmed',
+    tint: 'bg-status-confirmed/12',
+    text: 'text-status-confirmed',
+    borderL: 'border-l-status-confirmed',
+  },
+  {
+    value: 'READY',
+    label: 'Ready',
+    description: 'Fully prepped — balance invoiced, music form in, logistics resolved.',
+    creatable: true,
+    accent: 'bg-status-ready',
+    tint: 'bg-status-ready/12',
+    text: 'text-status-ready',
+    borderL: 'border-l-status-ready',
+  },
+  {
+    value: 'COMPLETE',
+    label: 'Complete',
+    description: 'Played and wrapped up — thank-you sent, post-gig admin done.',
+    creatable: true,
+    accent: 'bg-status-complete',
+    tint: 'bg-status-complete/12',
+    text: 'text-status-complete',
+    borderL: 'border-l-status-complete',
+  },
+  {
+    value: 'CANCELLED',
+    label: 'Cancelled',
+    description: 'Cancelled at any point in the lifecycle.',
+    creatable: false,
+    accent: 'bg-status-cancelled',
+    tint: 'bg-status-cancelled/12',
+    text: 'text-status-cancelled',
+    borderL: 'border-l-status-cancelled',
+  },
+] as const satisfies readonly BookingStatusRow[];
+
+// Compile-time coverage guard. If a status is added to the BookingStatus union and not to
+// the table above, Exclude<> resolves to that member, which fails the `extends never`
+// constraint here — so a status cannot be half-added. This is also what makes the casts in
+// statusColumn() sound: coverage is proven, so the Record is total.
+type AssertNever<T extends never> = T;
+export type _BookingStatusCoverage = AssertNever<
+  Exclude<BookingStatus, (typeof BOOKING_STATUSES)[number]['value']>
+>;
+
+const statusColumn = <K extends keyof BookingStatusRow>(
+  key: K,
+): Record<BookingStatus, BookingStatusRow[K]> =>
+  Object.fromEntries(BOOKING_STATUSES.map((row) => [row.value, row[key]])) as Record<
+    BookingStatus,
+    BookingStatusRow[K]
+  >;
+
+export const STATUS_ORDER: BookingStatus[] = BOOKING_STATUSES.map((row) => row.value);
 
 // System checklist goals that only apply when the musician's song-request form is enabled.
 // Gated in the Settings configurator (locked off when the form is disabled). Kept as a single
@@ -92,50 +187,34 @@ export function statusBefore(status: BookingStatus): BookingStatus | null {
   return i > 0 ? FORWARD_STATUSES[i - 1] : null;
 }
 
-export const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
-  ENQUIRY:     'Enquiry',
-  PROVISIONAL: 'Provisional',
-  CONFIRMED:   'Confirmed',
-  READY:       'Ready',
-  COMPLETE:    'Complete',
-  CANCELLED:   'Cancelled',
-};
+export const BOOKING_STATUS_LABELS = statusColumn('label');
 
-// Point-of-use distillation of the CONTEXT lifecycle canon (the [[Booking]] lifecycle
-// definitions). The single source for status-meaning copy — the create form's coaching
-// control reads it so there is no parallel copy to drift. Each describes what the status
-// *means*, not how often it is chosen (the creation default is a per-user setting). ADR-0053.
-export const STATUS_DESCRIPTIONS: Record<BookingStatus, string> = {
-  ENQUIRY:     'Initial interest. You haven’t sent a quote yet, or it’s not been accepted.',
-  PROVISIONAL: 'The client has agreed your quote in principle. Contract and deposit are still to come.',
-  CONFIRMED:   'Locked in — contract signed and deposit received.',
-  READY:       'Fully prepped — balance invoiced, music form in, logistics resolved.',
-  COMPLETE:    'Played and wrapped up — thank-you sent, post-gig admin done.',
-  CANCELLED:   'Cancelled at any point in the lifecycle.',
-};
+export const STATUS_DESCRIPTIONS = statusColumn('description');
 
-// The forward lifecycle statuses offered when creating a booking, in order. Cancelled is
-// excluded — you don't create a cancelled booking. Ready and Complete are legitimate
-// creation statuses (a no-prep series gig; backfilling an already-played gig). ADR-0053.
-export const CREATABLE_BOOKING_STATUSES: BookingStatus[] = [
-  'ENQUIRY',
-  'PROVISIONAL',
-  'CONFIRMED',
-  'READY',
-  'COMPLETE',
-];
+export const CREATABLE_BOOKING_STATUSES: BookingStatus[] = BOOKING_STATUSES
+  .filter((row) => row.creatable)
+  .map((row) => row.value);
 
-// Per-status accent background class (the lifecycle colour tokens shared by BookingStatusPill and
-// StatusCoachingField's `accent`). Used as a small status marker where a full pill would be too
-// heavy — e.g. the onboarding "How GigLoop runs your bookings" stage headers (#661).
-export const STATUS_ACCENT_BG: Record<BookingStatus, string> = {
-  ENQUIRY:     'bg-status-enquiry',
-  PROVISIONAL: 'bg-status-provisional',
-  CONFIRMED:   'bg-status-confirmed',
-  READY:       'bg-status-ready',
-  COMPLETE:    'bg-status-complete',
-  CANCELLED:   'bg-status-cancelled',
-};
+// Per-status accent background class. Used as a small status marker where a full pill would be
+// too heavy — e.g. the onboarding "How GigLoop runs your bookings" stage headers (#661).
+export const STATUS_ACCENT_BG = statusColumn('accent');
+
+// The full lifecycle colour set for a status. Consumers pick the columns they need:
+// BookingStatusPill takes tint+text+borderL, StatusCoachingField takes accent+tint+text,
+// RemindMeAbout takes text alone. Before this existed each of them kept its own copy.
+export interface StatusTokens {
+  accent: string;
+  tint: string;
+  text: string;
+  borderL: string;
+}
+
+export const STATUS_TOKENS: Record<BookingStatus, StatusTokens> = Object.fromEntries(
+  BOOKING_STATUSES.map(({ value, accent, tint, text, borderL }) => [
+    value,
+    { accent, tint, text, borderL },
+  ]),
+) as Record<BookingStatus, StatusTokens>;
 
 // Plain-English overview of what each default checklist goal's journey includes (distilled from
 // its steps), shown in the onboarding "How GigLoop runs your bookings" orientation step (#661).
