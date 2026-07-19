@@ -12,7 +12,6 @@ import {
 import InvoiceRow from './InvoiceRow';
 import { apiGet, apiGetBlob } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
-import { useBookingActions } from '@/lib/hooks/useBookingActions';
 import { useInvoiceActions } from '@/lib/hooks/useInvoiceActions';
 import { activeInvoiceOf, coverTemplateFor, depositAmount, balanceAmount } from '@/lib/invoiceDerivations';
 import { buildSetsDescription } from '@/lib/bookingSets';
@@ -142,8 +141,7 @@ export default function InvoiceSection({ bookingId }: Readonly<InvoiceSectionPro
     enabled: !!bookingId,
   });
 
-  const actions = useBookingActions(bookingId);
-  const invoiceActions = useInvoiceActions(bookingId);
+  const invoiceActions = useInvoiceActions();
 
   function openPreviewPdf(invoice: Invoice) {
     // The preview endpoint requires the Clerk bearer token, so a raw window.open() to it
@@ -254,7 +252,7 @@ export default function InvoiceSection({ bookingId }: Readonly<InvoiceSectionPro
             // A DRAFT has no PDF/document yet, so it is simply not on the portal until sent.
             portalVisibility={invoiceDoc?.portalVisibility ?? { visible: false, reason: 'until_sent' }}
             pending={{
-              isDeletePending: actions.isDeletingInvoice,
+              isDeletePending: invoiceActions.deletingInvoiceId === inv.id,
               isVoidPending: invoiceActions.voidingInvoiceId === inv.id,
               isIssuePending: invoiceActions.issuingInvoiceId === inv.id,
               isMarkSentPending: invoiceActions.markingSentId === inv.id,
@@ -263,18 +261,18 @@ export default function InvoiceSection({ bookingId }: Readonly<InvoiceSectionPro
             handlers={{
               onEdit: openEditInvoice,
               onPreview: openPreviewPdf,
-              onIssue: (i) => invoiceActions.issue(i.id),
-              onDelete: (i) => actions.deleteInvoice(i.id),
+              onIssue: (i) => invoiceActions.issue(i),
+              onDelete: (i) => invoiceActions.deleteInvoice(i),
               onSend: openSendInvoice,
               onMarkSent: (i) => {
                 if (i.status === 'ISSUED') {
-                  invoiceActions.markSent(i.id);
+                  invoiceActions.markSent(i);
                 } else {
                   setSearchParams({ sheet: 'markSent', invoiceId: i.id });
                 }
               },
-              onMarkPaid: (i) => invoiceActions.markPaid(i.id),
-              onVoid: (i) => invoiceActions.voidInvoice(i.id),
+              onMarkPaid: (i) => invoiceActions.markPaid(i),
+              onVoid: (i) => invoiceActions.voidInvoice(i),
             }}
           />
           );

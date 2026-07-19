@@ -25,8 +25,10 @@ vi.mock('@/lib/hooks/use-toast', () => ({ toast: (...a: unknown[]) => toast(...a
 const authState = { isLoaded: true, isSignedIn: true };
 vi.mock('@clerk/react', () => ({ useAuth: () => authState }));
 
+// A booking invoice for booking 'b1' — the owner FK (bookingId) drives the endpoint the
+// unified useInvoiceActions derives (#724), so it must be present as it is on a real invoice.
 function invoice(over: Partial<Invoice>): Invoice {
-  return { id: 'i1', isDeposit: false, status: 'DRAFT', ...over } as unknown as Invoice;
+  return { id: 'i1', isDeposit: false, status: 'DRAFT', bookingId: 'b1', seriesId: null, ...over } as unknown as Invoice;
 }
 
 function setup(invoices: Invoice[]) {
