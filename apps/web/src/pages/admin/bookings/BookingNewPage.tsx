@@ -55,14 +55,19 @@ export default function BookingNewPage() {
   const [step, setStep] = useState<1 | 2>(1);
   const [pendingValues, setPendingValues] = useState<BookingFormValues | null>(null);
 
-  const { control, handleSubmit, setValue, formState: { errors } } = useForm<BookingFormValues>({
+  const { control, handleSubmit, setValue, formState: { errors, dirtyFields } } = useForm<BookingFormValues>({
     resolver: zodResolver(bookingFormSchema),
     defaultValues: buildBookingDefaultValues(location.state as BookingNewLocationState | null),
   });
 
   const previewStatus = pendingValues?.status as BookingStatus | undefined;
   const { userProfile, formats, seriesList, reminderPreview, isPreviewLoading, checklistDefaults } =
-    useBookingNewData({ previewStatus, setValue });
+    useBookingNewData({
+      previewStatus,
+      setValue,
+      isStatusDirty: !!dirtyFields.status,
+      isMusicFormDirty: !!dirtyFields.enableMusicForm,
+    });
 
   const { created, isCreating, isError, create, reset } = useCreateBooking();
 

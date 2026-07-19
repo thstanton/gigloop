@@ -17,12 +17,19 @@ interface Params {
   /** The chosen starting status, once known — gates and keys the reminder preview (#560). */
   previewStatus: BookingStatus | undefined;
   setValue: UseFormSetValue<BookingFormValues>;
+  /**
+   * Whether the user has already edited `status` / `enableMusicForm`. The profile-default seed
+   * below must not overwrite a field the user has touched: `/me` resolves late (see the effect),
+   * so an unguarded seed silently reverts their choice (#730).
+   */
+  isStatusDirty: boolean;
+  isMusicFormDirty: boolean;
 }
 
 // The reference data the New Booking form needs (profile, packages, series, reminder preview) plus
 // the profile-driven defaults effect. Keeps the page a thin orchestrator (matches the booking
 // detail surfaces, where children pull their own data via domain hooks).
-export function useBookingNewData({ previewStatus, setValue }: Params) {
+export function useBookingNewData({ previewStatus, setValue, isStatusDirty, isMusicFormDirty }: Params) {
   const { isLoaded } = useAuth();
 
   const { data: userProfile } = useQuery({
@@ -55,14 +62,21 @@ export function useBookingNewData({ previewStatus, setValue }: Params) {
   });
 
   // All prefills (customer/venue/agent/date/series) flow through defaultValues into the
-  // controlled cores; only the profile-driven status default needs a post-mount setValue.
+  // controlled cores; only the profile-driven status/music-form defaults need a post-mount setValue.
+  // `/me` is gated on Clerk init (`enabled: isLoaded`) plus a network round-trip (worse on Neon
+  // cold-starts), so it can resolve AFTER the user has already picked a status — seeding only the
+  // fields they haven't touched keeps a late resolution from silently reverting their choice (#730).
   useEffect(() => {
     if (!userProfile) return;
-    const pref = (userProfile.preferences as { defaultBookingStatus?: string } | undefined)?.defaultBookingStatus ?? 'PROVISIONAL';
-    setValue('status', pref as BookingFormValues['status']);
-    // Music form defaults on when the user has song request forms enabled (set once on profile load,
-    // so a manual toggle afterwards is never clobbered — id is stable across refetches).
-    setValue('enableMusicForm', userProfile.songRequestFormEnabled);
+    if (!isStatusDirty) {
+      const pref = (userProfile.preferences as { defaultBookingStatus?: string } | undefined)?.defaultBookingStatus ?? 'PROVISIONAL';
+      setValue('status', pref as BookingFormValues['status']);
+    }
+    if (!isMusicFormDirty) {
+      setValue('enableMusicForm', userProfile.songRequestFormEnabled);
+    }
+    // Deps intentionally exclude `userProfile` (keyed on its stable id, not refetch identity) and the
+    // dirty flags (read at the moment /me resolves — re-running when they flip would re-clobber).
   }, [userProfile?.id, setValue]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const checklistDefaults: ChecklistDefaultItem[] =
