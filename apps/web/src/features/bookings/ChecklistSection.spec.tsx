@@ -21,6 +21,12 @@ vi.mock('./BookingConceptCardContainer', () => ({
   BookingConceptCardContainer: () => null,
 }));
 
+// The due-date hint's dismissal is read via useMe/useQueryClient too — same rationale; stub it so
+// this spec keeps rendering without providers (dismissal has its own useDismissibleHint coverage).
+vi.mock('@/lib/hooks/useDismissibleHint', () => ({
+  useDismissibleHint: () => ({ isDismissed: false, dismiss: vi.fn() }),
+}));
+
 function item(partial: Partial<ChecklistItem> & { id: string; key: string | null }): ChecklistItem {
   return {
     id: partial.id,
