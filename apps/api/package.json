@@ -9,6 +9,7 @@
     "lint": "eslint src --max-warnings 0",
     "test": "jest",
     "test:integration": "jest --config jest.integration.json --runInBand",
+    "typecheck:seed": "tsc --noEmit -p tsconfig.seed.json",
     "seed": "ts-node -r tsconfig-paths/register prisma/seed.ts",
     "seed:checklists": "ts-node -r tsconfig-paths/register src/scripts/seed-checklists.ts"
   },
