@@ -2,10 +2,17 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { RoleField, type RoleSelection } from './PeopleFields';
 
-// PRD #511 Module B — the People section editor atom (assignment only): composes the shared
-// RoleField core (PeopleFields) for the customer (required) and booking-agent (optional) roles
-// into one self-saving editor. Like VenueAtom it is Sheet-agnostic, owns no mutation, and
-// surfaces intent via onSave(selection); the host injects the regime and the save state.
+// PRD #511 Module B — the People section editor atom: composes the customer (required) and
+// booking-agent (optional) roles into one editor. Like VenueAtom it is Sheet-agnostic.
+//
+// ADR-0066 reversed this atom's original "assignment only" scope. Each role is now *inline-edit-
+// primary*: when a contact is assigned the atom renders AssignedContactCardContainer (which owns
+// the contact PATCH), and only falls back to the assign-mode RoleField core when the role is
+// empty or the musician asks to change it. So this atom does compose a mutation — the "owns no
+// mutation" guarantee survives only in the field cores (PeopleFields), which is what keeps the
+// New Booking create path (BookingFormFields → RoleField directly) free of contact editing.
+//
+// Assignment intent still surfaces via onSave(selection); the host injects the save state.
 
 export type { RoleSelection, NewContactData } from './PeopleFields';
 

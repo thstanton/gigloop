@@ -2,10 +2,16 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { VenueFields, type VenueSelection } from './VenueFields';
 
-// PRD #511 Module B — the Venue section editor atom (assignment only): composes the shared
-// VenueFields core (pick an existing VENUE contact or inline-create a new one) with a Tier-1
-// save row. It is Sheet-agnostic (one atom, three shells) and never owns a mutation: it
-// surfaces the user's intent via `onSave(selection)` and renders its save state from props.
+// PRD #511 Module B — the Venue section editor atom. Sheet-agnostic (one atom, three shells).
+//
+// ADR-0066 reversed this atom's original "assignment only" scope. It is now *inline-edit-primary*:
+// with a venue assigned it renders AssignedContactCardContainer (which owns the contact PATCH),
+// falling back to the assign-mode VenueFields core (pick an existing VENUE contact or inline-create
+// one) when there is no venue or the musician asks to change it. So this atom composes a mutation —
+// the "never owns a mutation" guarantee survives only in VenueFields, which is what keeps the New
+// Booking create path (BookingFormFields → VenueFields directly) free of contact editing.
+//
+// Assignment intent still surfaces via `onSave(selection)`; save state comes from props.
 
 export type { VenueSelection, NewVenueData } from './VenueFields';
 

@@ -7,13 +7,18 @@ import { FormField } from '@/components/common/FormField';
 import { SubLabel } from '@/components/common/SubLabel';
 import ContactPicker from './ContactPicker';
 
-// PRD #511 Module B / ADR-0053 — the controlled presentational core for a People role
-// (customer or booking agent). Sibling to DetailsFields / MusicFields / VenueFields: it owns
-// its ephemeral form state and surfaces the user's intended selection via `onChange` — no
-// booking id, no PATCH, no save row. Two thin compositions consume it: the self-saving
-// PeopleAtom (Builder + quick-tweak) and the New Booking form (create-mode, value bubbles to
-// the atomic POST). New-contact capture is the union of both roles' legacy inline blocks
-// (ADR-0053: enrich the shared atom rather than drop fields).
+// PRD #511 Module B / ADR-0053 — the controlled presentational core for *assigning* a People
+// role (customer or booking agent): pick an existing contact or inline-create a new one.
+// Sibling to DetailsFields / MusicFields / VenueFields: it owns its ephemeral form state and
+// surfaces the user's intended selection via `onChange` — no booking id, no PATCH, no save row.
+// New-contact capture is the union of both roles' legacy inline blocks (ADR-0053: enrich the
+// shared atom rather than drop fields).
+//
+// ADR-0066: this core is *assign-mode only*, and deliberately so. Amending an already-assigned
+// contact is not its job — PeopleAtom swaps in AssignedContactCardContainer for that, which
+// reuses the canonical validated ContactForm. Keeping this file untouched is what structurally
+// excludes contact editing from the New Booking create path, which composes RoleField directly
+// (BookingFormFields) rather than going through PeopleAtom. Do not add an edit mode here.
 
 /** Fields captured when inline-creating a contact for a role. */
 export interface NewContactData {

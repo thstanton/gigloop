@@ -8,12 +8,19 @@ import { SubLabel } from '@/components/common/SubLabel';
 import ContactPicker from './ContactPicker';
 import { VenuePlaceSearch, type VenuePlaceValue } from '@/components/common/VenuePlaceSearch';
 
-// PRD #511 Module B / ADR-0053 — the controlled presentational core for the Venue section.
+// PRD #511 Module B / ADR-0053 — the controlled presentational core for *assigning* the Venue.
 // Sibling to DetailsFields / MusicFields / PeopleFields: it owns its ephemeral form state
 // (Google Places search + parking/access/equipment) and surfaces the user's intended selection
-// via `onChange` — no booking id, no PATCH, no save row. Two thin compositions consume it: the
-// self-saving VenueAtom (Builder + quick-tweak) and the New Booking form (create-mode, value
-// bubbles to the atomic POST).
+// via `onChange` — no booking id, no PATCH, no save row.
+//
+// ADR-0066: this core is *assign-mode only*, and deliberately so. Amending an already-assigned
+// venue is not its job — VenueAtom swaps in AssignedContactCardContainer for that, which reuses
+// the canonical validated ContactForm. Keeping this file untouched is what structurally excludes
+// contact editing from the New Booking create path, which composes VenueFields directly
+// (BookingFormFields) rather than going through VenueAtom. Do not add an edit mode here.
+//
+// Clearing the picker and saving is also how a venue is *removed* from a booking (ADR-0066
+// retired ContactEditSheet, whose footer used to be the only "Remove venue from booking" route).
 
 const EMPTY_VENUE: VenuePlaceValue = {
   name: '',
