@@ -3,157 +3,16 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@clerk/react';
 import { Music } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Switch } from '@/components/ui/switch';
-import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
+import { apiGet, apiPatch } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
 import { PACKAGE_CATEGORY_LABELS, PACKAGE_CATEGORY_ORDER } from '@/lib/constants';
-import type { CreatePackageInput, PackageTemplate, UpdatePackageInput } from '@/types/api';
+import type { PackageTemplate, UpdatePackageInput } from '@/types/api';
 import { Card } from '@/components/common/Card';
 import { EmptyState } from '@/components/common/EmptyState';
 import { PackageIcon } from '@/components/common/PackageIcon';
 import { PackageMusicSummary } from '@/features/packages/PackageMusicSummary';
-import {
-  PackageForm,
-  emptyPackageFormValues,
-  packageToFormValues,
-  packageFormToPayload,
-  type PackageFormValues,
-} from '@/features/packages/PackageForm';
-
-// ─── Package drawer ───────────────────────────────────────────────────────────
-
-type DrawerMode = { type: 'create' } | { type: 'edit'; pkg: PackageTemplate };
-
-// The edit-only delete footer: owns the confirm step, its error, and the delete mutation.
-function DeletePackageSection({ pkgId, onDeleted }: { pkgId: string; onDeleted: () => void }) {
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-
-  const deletePkg = useMutation({
-    mutationFn: () => apiDelete(`/packages/${pkgId}`),
-    onSuccess: onDeleted,
-    onError: (err: Error) => {
-      setDeleteError(err.message || 'This package is used by existing bookings and cannot be deleted');
-      setConfirmDelete(false);
-    },
-  });
-
-  return (
-    <>
-      {deleteError && (
-        <p className="text-sm text-status-cancelled">{deleteError}</p>
-      )}
-      {confirmDelete ? (
-        <div className="flex gap-2">
-          <Button
-            variant="destructive"
-            onClick={() => deletePkg.mutate()}
-            disabled={deletePkg.isPending}
-            className="flex-1"
-          >
-            {deletePkg.isPending ? 'Deleting…' : 'Confirm delete'}
-          </Button>
-          <Button variant="outline" onClick={() => setConfirmDelete(false)} className="flex-1">
-            Cancel
-          </Button>
-        </div>
-      ) : (
-        <Button
-          variant="ghost"
-          onClick={() => setConfirmDelete(true)}
-          className="w-full text-status-cancelled hover:text-status-cancelled"
-        >
-          Delete package
-        </Button>
-      )}
-    </>
-  );
-}
-
-function PackageDrawer({
-  mode,
-  open,
-  onClose,
-}: {
-  mode: DrawerMode;
-  open: boolean;
-  onClose: () => void;
-}) {
-  const qc = useQueryClient();
-  const isEdit = mode.type === 'edit';
-  const existing = isEdit ? mode.pkg : null;
-
-  const initialForm = () => (existing ? packageToFormValues(existing) : emptyPackageFormValues());
-  const [form, setForm] = useState<PackageFormValues>(initialForm);
-
-  // Reset when the drawer opens (or switches mode).
-  const [lastMode, setLastMode] = useState<DrawerMode | null>(null);
-  if (open && mode !== lastMode) {
-    setLastMode(mode);
-    setForm(initialForm());
-  }
-
-  const save = useMutation({
-    mutationFn: () => {
-      const payload = packageFormToPayload(form);
-      if (isEdit) {
-        return apiPatch<PackageTemplate>(`/packages/${existing!.id}`, payload as UpdatePackageInput);
-      }
-      return apiPost<PackageTemplate>('/packages', payload as CreatePackageInput);
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['packages'] });
-      onClose();
-    },
-  });
-
-  return (
-    <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto flex flex-col gap-0 p-0">
-        <SheetHeader className="px-5 pt-5 pb-4 border-b border-border flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
-              <PackageIcon icon={form.icon} size={16} strokeWidth={1.75} />
-            </div>
-            <SheetTitle className="text-base">
-              {isEdit ? 'Edit package' : 'New package'}
-            </SheetTitle>
-          </div>
-        </SheetHeader>
-
-        <div className="flex-1 overflow-y-auto px-5 py-5">
-          <PackageForm value={form} onChange={(patch) => setForm((f) => ({ ...f, ...patch }))} />
-        </div>
-
-        {/* Footer */}
-        <div className="border-t border-border px-5 py-4 flex-shrink-0 space-y-3">
-          {save.error && (
-            <p className="text-sm text-status-cancelled">{(save.error as Error).message}</p>
-          )}
-          <Button
-            onClick={() => save.mutate()}
-            disabled={!form.label.trim() || save.isPending}
-            className="w-full"
-          >
-            {save.isPending ? 'Saving…' : 'Save changes'}
-          </Button>
-
-          {existing && (
-            <DeletePackageSection
-              key={existing.id}
-              pkgId={existing.id}
-              onDeleted={() => {
-                qc.invalidateQueries({ queryKey: ['packages'] });
-                onClose();
-              }}
-            />
-          )}
-        </div>
-      </SheetContent>
-    </Sheet>
-  );
-}
+import { PackageDrawer, type PackageDrawerMode } from '@/features/packages/PackageDrawer';
 
 // ─── Package card ─────────────────────────────────────────────────────────────
 
@@ -254,7 +113,7 @@ function CategoryGroup({
 
 export default function PackagesPage() {
   const { isLoaded } = useAuth();
-  const [drawerMode, setDrawerMode] = useState<DrawerMode | null>(null);
+  const [drawerMode, setDrawerMode] = useState<PackageDrawerMode | null>(null);
 
   const { data: packages = [], isLoading } = useQuery({
     queryKey: ['packages'],

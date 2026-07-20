@@ -1,6 +1,8 @@
 import { Controller, useWatch } from 'react-hook-form';
 import type { Control, FieldErrors } from 'react-hook-form';
 import { z } from 'zod';
+import { Plus } from 'lucide-react';
+import { GhostButton } from '@/components/common/GhostButton';
 import { StatusCoachingField } from './StatusCoachingField';
 import { RoleField, type RoleSelection } from './PeopleFields';
 import { VenueFields, type VenueSelection } from './VenueFields';
@@ -44,6 +46,12 @@ interface Props {
   songRequestFormEnabled?: boolean;
   formats?: PackageTemplate[];
   series?: BookingSeries[];
+  /**
+   * Opens the shell's package-template drawer (#755). Omitted → no create affordance, so this
+   * component stays presentational: it owns no mutation and no fetch, mirroring PackagePicker's
+   * contract (ADR-0053).
+   */
+  onCreateTemplate?: () => void;
 }
 
 export function BookingFormFields({
@@ -52,6 +60,7 @@ export function BookingFormFields({
   songRequestFormEnabled,
   formats,
   series,
+  onCreateTemplate,
 }: Props) {
   // The package picker groups templates by the live event type (matching leads), so it reacts as
   // the musician changes it in the Overview section above.
@@ -153,33 +162,48 @@ export function BookingFormFields({
 
       {/* Packages — shared template picker (ADR-0053 / #546), same component the Builder uses.
           Ungated from the music-form flag (packages are performance structure, independent of
-          the music form); the music-form contribution in previews is what `showMusic` gates. */}
-      {formats && formats.length > 0 && (
-        <section>
-          <h2 className="mb-3 text-base font-semibold text-foreground">Package Templates</h2>
-          <div className="rounded-lg border border-border bg-background p-4">
-            <Controller
-              name="packageTemplateIds"
-              control={control}
-              render={({ field }) => (
-                <PackagePicker
-                  templates={formats}
-                  eventType={eventType}
-                  selectedIds={field.value}
-                  onToggle={(id) =>
-                    field.onChange(
-                      field.value.includes(id)
-                        ? field.value.filter((x) => x !== id)
-                        : [...field.value, id],
-                    )
-                  }
-                  showMusic={!!songRequestFormEnabled}
-                />
-              )}
-            />
-          </div>
-        </section>
-      )}
+          the music form); the music-form contribution in previews is what `showMusic` gates.
+          Also ungated from the library being non-empty (#755): since ADR-0046's 2026-07-07
+          amendment a musician's library legitimately starts empty, and hiding the section there
+          hid the only route to package templates from this flow. PackagePicker already renders
+          its own "no templates yet" line, so the old length check was redundant.
+          Creating a template is the shell's job, not the picker's — the picker owns no mutation
+          and is shared with the Builder (ADR-0053), so the affordance is a callback out. */}
+      <section>
+        <h2 className="mb-3 text-base font-semibold text-foreground">Package Templates</h2>
+        <div className="rounded-lg border border-border bg-background p-4">
+          <Controller
+            name="packageTemplateIds"
+            control={control}
+            render={({ field }) => (
+              <PackagePicker
+                templates={formats ?? []}
+                eventType={eventType}
+                selectedIds={field.value}
+                onToggle={(id) =>
+                  field.onChange(
+                    field.value.includes(id)
+                      ? field.value.filter((x) => x !== id)
+                      : [...field.value, id],
+                  )
+                }
+                showMusic={!!songRequestFormEnabled}
+              />
+            )}
+          />
+          {onCreateTemplate && (
+            <div className="mt-3">
+              <GhostButton
+                variant="primary"
+                icon={<Plus size={14} aria-hidden="true" />}
+                onClick={onCreateTemplate}
+              >
+                New package template
+              </GhostButton>
+            </div>
+          )}
+        </div>
+      </section>
 
       {/* Music — on/off only in create (Story 39 lean variant): the shared MusicFormToggle core,
           the same on/off block the Builder's Music atom renders (ADR-0053 / #547). Genre and

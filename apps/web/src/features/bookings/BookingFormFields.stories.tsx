@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, within } from 'storybook/test';
 import { http, HttpResponse } from 'msw';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -24,7 +24,13 @@ const FORMATS: PackageTemplate[] = [
   },
 ];
 
-function Harness() {
+function Harness({
+  formats = FORMATS,
+  onCreateTemplate,
+}: {
+  formats?: PackageTemplate[];
+  onCreateTemplate?: () => void;
+} = {}) {
   const { control, formState: { errors } } = useForm<BookingFormValues>({
     resolver: zodResolver(bookingFormSchema),
     defaultValues: {
@@ -53,7 +59,8 @@ function Harness() {
         control={control}
         errors={errors}
         songRequestFormEnabled
-        formats={FORMATS}
+        formats={formats}
+        onCreateTemplate={onCreateTemplate}
       />
     </div>
   );
@@ -132,6 +139,40 @@ export const SelectPackage: Story = {
     await expect(chip).toHaveAttribute('aria-pressed', 'true');
     await userEvent.click(chip);
     await expect(chip).toHaveAttribute('aria-pressed', 'false');
+  },
+};
+
+export const EmptyLibrary: Story = {
+  name: 'Package Templates still renders with an empty library, offering the create affordance',
+  // Since ADR-0046's 2026-07-07 amendment an empty library is the normal starting state, so the
+  // section must not vanish — that hid the only route to templates from this flow (#755).
+  render: () => <Harness formats={[]} onCreateTemplate={fn()} />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('heading', { name: 'Package Templates' })).toBeVisible();
+    await expect(canvas.getByText('No package templates yet.')).toBeVisible();
+    await expect(canvas.getByRole('button', { name: /New package template/i })).toBeVisible();
+  },
+};
+
+export const CreateTemplateAffordance: Story = {
+  name: 'The create affordance calls back to the shell (no mutation in this component)',
+  render: (args) => <Harness onCreateTemplate={args.onCreateTemplate} />,
+  args: { onCreateTemplate: fn() },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: /New package template/i }));
+    await expect(args.onCreateTemplate).toHaveBeenCalledTimes(1);
+  },
+};
+
+export const NoCreateAffordanceWhenUnwired: Story = {
+  name: 'Without onCreateTemplate the section renders unchanged (Builder-safe default)',
+  render: () => <Harness />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('heading', { name: 'Package Templates' })).toBeVisible();
+    await expect(canvas.queryByRole('button', { name: /New package template/i })).toBeNull();
   },
 };
 
