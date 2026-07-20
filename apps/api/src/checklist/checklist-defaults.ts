@@ -185,6 +185,25 @@ export const CHECKLIST_DEFAULTS: ChecklistDefaultItem[] = [
     ],
   },
   {
+    // Structural setup item (PRD #511 Module D): auto-completes when a venue is chosen.
+    // Binds to the venue completeness predicate (Module A) via the `completeness` rule —
+    // never re-checks `venueId` independently. A disablable default, like every seeded item.
+    //
+    // #759: CONFIRMED-staged and ordered *ahead of* the contract goal. Contract variables are
+    // substituted at creation and the variable node is replaced by plain text
+    // (mail/tiptap-substitute.ts), so a contract created before the venue is set permanently
+    // reads "Venue: the venue" — setting the venue later never updates it. Putting venue first
+    // in the stage is the light-touch prompt that gets it set while it is still free to fix.
+    // A booking confirmed without a venue is shaky in its own right.
+    key: 'add_venue',
+    label: 'Add venue',
+    completedBy: 'USER',
+    dependsOn: [],
+    autoCompleteRule: { type: 'completeness', concern: 'venue' },
+    requiredForStatus: 'CONFIRMED',
+    dueDateRule: null,
+  },
+  {
     // ADR-0057 / #607: the first multi-step goal. "Get the contract signed" is the
     // outcome; the system sequences create → send → signed beneath it. The goal carries
     // no rule (its state rolls up from the steps) and a goal-level dueDate of -60 days —
@@ -244,19 +263,6 @@ export const CHECKLIST_DEFAULTS: ChecklistDefaultItem[] = [
         dueDateRule: { basis: 'bookingDate', offsetDays: -45 },
       },
     ],
-  },
-  {
-    // Structural setup item (PRD #511 Module D): auto-completes when a venue is chosen.
-    // Binds to the venue completeness predicate (Module A) via the `completeness` rule —
-    // never re-checks `venueId` independently. READY-staged (operational prep) and a
-    // disablable default, like every seeded item.
-    key: 'add_venue',
-    label: 'Add venue',
-    completedBy: 'USER',
-    dependsOn: [],
-    autoCompleteRule: { type: 'completeness', concern: 'venue' },
-    requiredForStatus: 'READY',
-    dueDateRule: null,
   },
   {
     // Structural setup item (PRD #511 Module D / #523): auto-completes when sets exist.

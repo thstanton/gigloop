@@ -1495,7 +1495,8 @@ describe('BookingsService', () => {
 
       const result = await service.getApplicableReminders('u1', 'b1', 'venue');
 
-      // add_venue (READY-staged) is current/future on a CONFIRMED booking, not yet seeded.
+      // add_venue (CONFIRMED-staged) is current on a CONFIRMED booking — isPastStage is
+      // strict (`required < current`), so it stays discoverable — and not yet seeded.
       const addVenue = result.find((r) => r.key === 'add_venue');
       expect(addVenue).toMatchObject({ on: false, itemId: null, source: 'system' });
     });

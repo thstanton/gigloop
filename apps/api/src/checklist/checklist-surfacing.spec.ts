@@ -83,16 +83,21 @@ describe('surfaceActionItems', () => {
     });
   });
 
-  // add_venue (PRD #511 Module D) is an undated, READY-staged item — it flows through the
-  // generic filter with no special-casing. These assert its concrete shape respects the gate.
-  describe('add_venue (undated, READY-staged)', () => {
-    const addVenue = () => item({ dueDate: null, requiredForStatus: 'READY' });
+  // add_venue (PRD #511 Module D) is an undated, CONFIRMED-staged item (#759) — it flows
+  // through the generic filter with no special-casing. These assert its concrete shape
+  // respects the gate.
+  describe('add_venue (undated, CONFIRMED-staged)', () => {
+    const addVenue = () => item({ dueDate: null, requiredForStatus: 'CONFIRMED' });
 
-    it('surfaces on a confirmed booking when it is the only READY blocker', () => {
+    it('surfaces on a confirmed booking when it is the only CONFIRMED blocker', () => {
       expect(surfaceActionItems([addVenue()], 'CONFIRMED', CUTOFF)).toHaveLength(1);
     });
 
-    it('respects the stage gate — drops once the booking has passed READY', () => {
+    // #759 consequence: venue nagging now ends one stage earlier than it used to. A booking
+    // advanced to READY with no venue no longer surfaces it — the same gate every other
+    // CONFIRMED-staged goal already lives under.
+    it('respects the stage gate — drops once the booking has passed CONFIRMED', () => {
+      expect(surfaceActionItems([addVenue()], 'READY', CUTOFF)).toHaveLength(0);
       expect(surfaceActionItems([addVenue()], 'COMPLETE', CUTOFF)).toHaveLength(0);
     });
   });
