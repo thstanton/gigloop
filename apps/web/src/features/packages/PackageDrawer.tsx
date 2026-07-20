@@ -20,14 +20,13 @@ import {
 
 export type PackageDrawerMode = { type: 'create' } | { type: 'edit'; pkg: PackageTemplate };
 
-// api.ts rejects with a `Response`, never an `Error` — so reading `.message` off it yields
-// undefined and renders an empty paragraph, i.e. a silent failure. Mirrors the
-// `error instanceof Response && error.status === …` idiom used across the booking sheets.
-function saveErrorMessage(error: unknown): string {
-  if (error instanceof Response && error.status === 409) {
-    return 'A package template with that name already exists.';
-  }
-  return 'Could not save this package template. Please try again.';
+// api.ts rejects with a `Response`, never an `Error`, and discards the API's JSON body on the way
+// (`throw new Response(res.statusText, …)`) — so `.message` is always undefined and the copy has to
+// be reconstructed from the status. Hand-rolling that per call site is a known wart, not a pattern
+// to copy: this is the 8th site to do it, and reading `.message` off a `Response` had already
+// produced one silent failure here. See #768 on giving api.ts a real error type.
+function apiErrorMessage(error: unknown, whenConflict: string, fallback: string): string {
+  return error instanceof Response && error.status === 409 ? whenConflict : fallback;
 }
 
 // The edit-only delete footer: owns the confirm step, its error, and the delete mutation.
@@ -38,8 +37,14 @@ function DeletePackageSection({ pkgId, onDeleted }: { pkgId: string; onDeleted: 
   const deletePkg = useMutation({
     mutationFn: () => apiDelete(`/packages/${pkgId}`),
     onSuccess: onDeleted,
-    onError: (err: Error) => {
-      setDeleteError(err.message || 'This package is used by existing bookings and cannot be deleted');
+    onError: (err) => {
+      setDeleteError(
+        apiErrorMessage(
+          err,
+          'This package is used by existing bookings and cannot be deleted',
+          'Could not delete this package template. Please try again.',
+        ),
+      );
       setConfirmDelete(false);
     },
   });
@@ -100,11 +105,17 @@ export function PackageDrawer({
   const initialForm = () => (existing ? packageToFormValues(existing) : { ...emptyPackageFormValues(), ...initialValues });
   const [form, setForm] = useState<PackageFormValues>(initialForm);
 
-  // Reset when the drawer opens (or switches mode).
-  const [lastMode, setLastMode] = useState<PackageDrawerMode | null>(null);
-  if (open && mode !== lastMode) {
-    setLastMode(mode);
-    setForm(initialForm());
+  // Reset on the closed→open edge, so each open starts from the current mode/initialValues.
+  // Deliberately keyed on `open` rather than on the identity of `mode`: identity forced every
+  // caller to hand over a brand-new object per open (and, if it kept the drawer mounted for the
+  // close animation, to invent a stable dummy for the closed state) — an unwritten contract that
+  // a memoised `mode` would have broken silently. Matches InvoiceSheet, the app's other
+  // always-mounted form sheet. The only case this drops is switching target while open (edit A →
+  // edit B without closing), which neither caller can reach.
+  const [wasOpen, setWasOpen] = useState(false);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) setForm(initialForm());
   }
 
   const save = useMutation({
@@ -143,7 +154,13 @@ export function PackageDrawer({
         {/* Footer */}
         <div className="border-t border-border px-5 py-4 flex-shrink-0 space-y-3">
           {save.error && (
-            <p className="text-sm text-status-cancelled">{saveErrorMessage(save.error)}</p>
+            <p className="text-sm text-status-cancelled">
+              {apiErrorMessage(
+                save.error,
+                'A package template with that name already exists.',
+                'Could not save this package template. Please try again.',
+              )}
+            </p>
           )}
           <Button
             onClick={() => save.mutate()}

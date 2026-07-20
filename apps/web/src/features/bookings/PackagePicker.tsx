@@ -124,14 +124,14 @@ export function PackagePicker({
     );
   }
 
+  if (templatesLoading) return <p className="text-sm text-muted">Loading…</p>;
+  if (enabled.length === 0) return <p className="text-sm text-muted">No package templates yet.</p>;
+
   // A selected template is never hidden: if one of the "other" templates is selected, the group is
   // forced open regardless of the musician's manual collapse. Otherwise a template selected outside
   // the visible set (created inline from the New Booking form, or staged in the Builder) would be
   // applied to the booking with no chip on screen to say so.
   const showOther = otherOpen || other.some((t) => selectedIds.includes(t.id));
-
-  if (templatesLoading) return <p className="text-sm text-muted">Loading…</p>;
-  if (enabled.length === 0) return <p className="text-sm text-muted">No package templates yet.</p>;
 
   return (
     <div className="space-y-3">

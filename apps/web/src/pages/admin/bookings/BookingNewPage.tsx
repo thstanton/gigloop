@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
-import { PackageDrawer, type PackageDrawerMode } from '@/features/packages/PackageDrawer';
+import { PackageDrawer } from '@/features/packages/PackageDrawer';
 import type { PackageFormValues } from '@/features/packages/PackageForm';
 import {
   BookingFormFields,
@@ -18,11 +18,6 @@ import { useBookingNewData } from '@/features/bookings/useBookingNewData';
 import { useCreateBooking } from '@/features/bookings/useCreateBooking';
 import { EVENT_TYPE_LABELS } from '@/lib/constants';
 import type { BookingStatus, ChecklistDefaultItem, PackageTemplate } from '@/types/api';
-
-// A stable placeholder so the closed drawer never re-triggers its open-time form reset (which is
-// keyed on the identity of `mode`). Each open stores a *fresh* create mode, so the reset fires
-// exactly once per open — see the drawer's own reset block.
-const IDLE_CREATE_MODE: PackageDrawerMode = { type: 'create' };
 
 interface BookingNewLocationState {
   customerId?: string;
@@ -72,19 +67,13 @@ export default function BookingNewPage() {
   // shell owns it (not PackagePicker or BookingFormFields) so those stay presentational per
   // ADR-0053, and so auto-select can reuse the form's own setValue.
   const qc = useQueryClient();
-  const [templateDraft, setTemplateDraft] = useState<
-    { mode: PackageDrawerMode; seed: Partial<PackageFormValues> } | null
-  >(null);
+  const [templateSeed, setTemplateSeed] = useState<Partial<PackageFormValues> | null>(null);
 
   function openTemplateDrawer() {
     // Category is seeded from the event type as it stands *now* and deliberately not kept in sync:
     // the musician may change the event type while the drawer is open, and retro-editing a field
-    // they may already have touched is worse than a slightly stale default. A fresh `mode` object
-    // per open is what tells the drawer to reset its form.
-    setTemplateDraft({
-      mode: { type: 'create' },
-      seed: { category: getValues('overview.eventType') },
-    });
+    // they may already have touched is worse than a slightly stale default.
+    setTemplateSeed({ category: getValues('overview.eventType') });
   }
 
   function handleTemplateCreated(created: PackageTemplate) {
@@ -98,7 +87,7 @@ export default function BookingNewPage() {
   }
 
   const previewStatus = pendingValues?.status as BookingStatus | undefined;
-  const { userProfile, formats, seriesList, reminderPreview, isPreviewLoading, checklistDefaults } =
+  const { userProfile, formats, isFormatsLoading, seriesList, reminderPreview, isPreviewLoading, checklistDefaults } =
     useBookingNewData({
       previewStatus,
       setValue,
@@ -133,6 +122,7 @@ export default function BookingNewPage() {
             errors={errors}
             songRequestFormEnabled={userProfile?.songRequestFormEnabled}
             formats={formats}
+            formatsLoading={isFormatsLoading}
             series={seriesList}
             onCreateTemplate={openTemplateDrawer}
           />
@@ -161,14 +151,14 @@ export default function BookingNewPage() {
         />
       )}
 
-      {/* Kept mounted so the Sheet keeps its close animation; `open` is the draft's presence. It
+      {/* Kept mounted so the Sheet keeps its close animation; `open` is the seed's presence. It
           portals to document.body (components/ui/sheet), so its Save button never nests inside the
           create <form> above. */}
       <PackageDrawer
-        mode={templateDraft?.mode ?? IDLE_CREATE_MODE}
-        open={!!templateDraft}
-        initialValues={templateDraft?.seed}
-        onClose={() => setTemplateDraft(null)}
+        mode={{ type: 'create' }}
+        open={!!templateSeed}
+        initialValues={templateSeed ?? undefined}
+        onClose={() => setTemplateSeed(null)}
         onCreated={handleTemplateCreated}
       />
     </>

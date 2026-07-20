@@ -45,6 +45,9 @@ interface Props {
   errors: FieldErrors<BookingFormValues>;
   songRequestFormEnabled?: boolean;
   formats?: PackageTemplate[];
+  /** Distinguishes "still fetching" from "library is genuinely empty" — without it the section
+   *  flashes its empty state on every page load. */
+  formatsLoading?: boolean;
   series?: BookingSeries[];
   /**
    * Opens the shell's package-template drawer (#755). Omitted → no create affordance, so this
@@ -59,6 +62,7 @@ export function BookingFormFields({
   errors,
   songRequestFormEnabled,
   formats,
+  formatsLoading,
   series,
   onCreateTemplate,
 }: Props) {
@@ -178,6 +182,7 @@ export function BookingFormFields({
             render={({ field }) => (
               <PackagePicker
                 templates={formats ?? []}
+                templatesLoading={formatsLoading}
                 eventType={eventType}
                 selectedIds={field.value}
                 onToggle={(id) =>

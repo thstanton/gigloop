@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { http, HttpResponse } from 'msw';
 import { PackageDrawer } from './PackageDrawer';
-import type { PackageTemplate } from '@/types/api';
+import { packageTemplate } from '@/test/factories';
 
 // The drawer is a container (it owns the create/update mutation), so unlike PackageForm — its
 // presentational core, covered separately — what needs pinning here is the save seam: that a
@@ -10,37 +10,15 @@ import type { PackageTemplate } from '@/types/api';
 // the New Booking form auto-selects on (#755), and every test above this layer stubs the drawer
 // out, so this story is the only place the real onSuccess path runs.
 
-const CREATED: PackageTemplate = {
-  id: 'tmpl-created',
-  createdAt: '2030-01-01T00:00:00Z',
-  updatedAt: '2030-01-01T00:00:00Z',
-  label: 'Corporate Evening',
-  category: 'CORPORATE',
-  icon: 'music',
-  keyMoments: [],
-  defaultGenreSelection: [],
-  notes: null,
-  isSystemDefault: false,
-  enabled: true,
-  slots: [],
-};
+const EXISTING = packageTemplate({ id: 'tmpl-existing', label: 'Wedding Ceremony', category: 'WEDDING' });
 
-const EXISTING: PackageTemplate = { ...CREATED, id: 'tmpl-existing', label: 'Wedding Ceremony', category: 'WEDDING' };
-
+// The happy-path POST /api/packages is already in the global handler set (.storybook/msw-handlers,
+// installed via preview.ts) and echoes the request body back over `id: 'new-pkg'` — so only the
+// failure stories below need to override it.
 const meta: Meta<typeof PackageDrawer> = {
   component: PackageDrawer,
   tags: ['ai-generated'],
   args: { open: true, onClose: fn(), onCreated: fn() },
-  parameters: {
-    msw: {
-      handlers: [
-        http.post('/api/packages', async ({ request }) => {
-          const body = (await request.json()) as { label?: string; category?: string };
-          return HttpResponse.json({ ...CREATED, label: body.label ?? CREATED.label, category: body.category ?? null });
-        }),
-      ],
-    },
-  },
 };
 
 export default meta;
@@ -68,7 +46,7 @@ export const CreateSeededFromEventType: Story = {
     // form values — that id is what the New Booking form selects on.
     await waitFor(() =>
       expect(args.onCreated).toHaveBeenCalledWith(
-        expect.objectContaining({ id: 'tmpl-created', label: 'Corporate Evening', category: 'CORPORATE' }),
+        expect.objectContaining({ id: 'new-pkg', label: 'Corporate Evening', category: 'CORPORATE' }),
       ),
     );
     await waitFor(() => expect(args.onClose).toHaveBeenCalled());
