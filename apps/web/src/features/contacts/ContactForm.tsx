@@ -110,6 +110,15 @@ interface ContactFormProps {
   onCancel?: () => void;
   autoSuggestGreetingName?: boolean;
   contextRole?: RoleKey;
+  /**
+   * Embedded presentation for rendering inside a booking's People/Venue card:
+   * hides the Contact Type select, keeps only Name/Greeting/Email/Phone visible,
+   * and folds Address, Notes and the role-specific block behind a single
+   * "Add contact details" disclosure. VENUE keeps its address visible.
+   */
+  embedded?: boolean;
+  /** Tier-1 inline-save marker — shows "Saved" next to the submit when true and not pending. */
+  saved?: boolean;
 }
 
 export default function ContactForm({
@@ -121,6 +130,8 @@ export default function ContactForm({
   onCancel,
   autoSuggestGreetingName = false,
   contextRole,
+  embedded = false,
+  saved = false,
 }: ContactFormProps) {
   const {
     register,
@@ -187,8 +198,11 @@ export default function ContactForm({
   };
 
   const selectedRole = watch('primaryRole');
-  const [venueOpen, setVenueOpen] = useState(selectedRole === 'VENUE');
-  const [agentOpen, setAgentOpen] = useState(selectedRole === 'BOOKING_AGENT');
+  const isVenue = selectedRole === 'VENUE';
+  const isAgent = selectedRole === 'BOOKING_AGENT';
+  const [venueOpen, setVenueOpen] = useState(isVenue);
+  const [agentOpen, setAgentOpen] = useState(isAgent);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const prevRoleRef = useRef(selectedRole);
 
   // When Contact Type changes, auto-open the matching disclosure and close the other.
@@ -199,35 +213,88 @@ export default function ContactForm({
     setAgentOpen(selectedRole === 'BOOKING_AGENT');
   }, [selectedRole]);
 
+  // Field fragments — placed differently by mode. In embedded mode Address/Notes and
+  // the role block fold behind one disclosure; the full editor keeps them inline with
+  // the two role-specific disclosures.
+  const addressField = (
+    <FormField label={isVenue ? 'Find venue' : 'Address'}>
+      <Controller
+        name="addressLine1"
+        control={control}
+        render={() =>
+          isVenue ? (
+            <VenuePlaceSearch value={venuePlaceValue} onChange={handleVenuePlaceChange} />
+          ) : (
+            <AddressAutocomplete value={addressValue} onChange={handleAddressChange} />
+          )
+        }
+      />
+    </FormField>
+  );
+
+  const notesField = (
+    <FormField label="Notes" error={errors.notes?.message}>
+      <Textarea {...register('notes')} rows={3} />
+    </FormField>
+  );
+
+  const venueFieldsContent = (
+    <div className="space-y-4">
+      <FormField label="Parking" error={errors.parkingInfo?.message}>
+        <Textarea {...register('parkingInfo')} rows={2} />
+      </FormField>
+      <FormField label="Access" error={errors.accessInfo?.message}>
+        <Textarea {...register('accessInfo')} rows={2} />
+      </FormField>
+      <FormField label="Equipment available" error={errors.equipmentAvailable?.message}>
+        <Textarea {...register('equipmentAvailable')} rows={2} />
+      </FormField>
+    </div>
+  );
+
+  const agentFieldsContent = (
+    <div className="space-y-4">
+      <FormField label="Website" error={errors.website?.message}>
+        <Input type="url" {...register('website')} placeholder="https://" />
+      </FormField>
+      <FormField label="Commission arrangement" error={errors.commissionArrangement?.message}>
+        <Textarea {...register('commissionArrangement')} rows={2} />
+      </FormField>
+    </div>
+  );
+
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
 
-      {/* Contact Type — first field, drives disclosure auto-open */}
-      <FormField label="Contact Type" error={errors.primaryRole?.message}>
-        <Controller
-          name="primaryRole"
-          control={control}
-          render={({ field }) => (
-            <Select value={field.value || 'NONE'} onValueChange={(v) => field.onChange(v === 'NONE' ? '' : v)}>
-              <SelectTrigger>
-                <SelectValue placeholder="No contact type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="NONE">No contact type</SelectItem>
-                <SelectItem value="CUSTOMER">Customer</SelectItem>
-                <SelectItem value="VENUE">Venue</SelectItem>
-                <SelectItem value="BOOKING_AGENT">Booking agent</SelectItem>
-              </SelectContent>
-            </Select>
-          )}
-        />
-      </FormField>
+      {/* Contact Type — full editor only. In embedded mode the card's role implies it,
+          and primaryRole round-trips via defaultValues even though it isn't rendered. */}
+      {!embedded && (
+        <FormField label="Contact Type" error={errors.primaryRole?.message}>
+          <Controller
+            name="primaryRole"
+            control={control}
+            render={({ field }) => (
+              <Select value={field.value || 'NONE'} onValueChange={(v) => field.onChange(v === 'NONE' ? '' : v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="No contact type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="NONE">No contact type</SelectItem>
+                  <SelectItem value="CUSTOMER">Customer</SelectItem>
+                  <SelectItem value="VENUE">Venue</SelectItem>
+                  <SelectItem value="BOOKING_AGENT">Booking agent</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+          />
+        </FormField>
+      )}
 
       {/* Core — always visible for every contact */}
       <div className="space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <FormField label="Name" required error={errors.name?.message}>
-            <Input {...register('name')} autoFocus />
+            <Input {...register('name')} autoFocus={!embedded} />
           </FormField>
           <FormField label="Greeting name" error={errors.greetingName?.message}>
             <Input {...greetingNameRegistration} placeholder="e.g. Jane" />
@@ -241,82 +308,70 @@ export default function ContactForm({
             <Input type="tel" {...register('phone')} />
           </FormField>
         </div>
-        <FormField label={selectedRole === 'VENUE' ? 'Find venue' : 'Address'}>
-          <Controller
-            name="addressLine1"
-            control={control}
-            render={() =>
-              selectedRole === 'VENUE' ? (
-                <VenuePlaceSearch
-                  value={venuePlaceValue}
-                  onChange={handleVenuePlaceChange}
-                />
+        {/* Venue keeps its address visible — for a venue the address is the identity. */}
+        {(!embedded || isVenue) && addressField}
+        {!embedded && notesField}
+      </div>
+
+      {embedded ? (
+        /* One disclosure folds the remaining detail. Only the role-matched block is
+           offered — the contact's role is fixed here, so the other blocks are noise. */
+        <div className="space-y-4">
+          <button
+            type="button"
+            onClick={() => setDetailsOpen((o) => !o)}
+            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {detailsOpen ? (
+              <><ChevronUp className="h-4 w-4" aria-hidden="true" />Hide contact details</>
+            ) : (
+              <><ChevronDown className="h-4 w-4" aria-hidden="true" />Add contact details</>
+            )}
+          </button>
+          {detailsOpen && (
+            <div className="space-y-4">
+              {!isVenue && addressField}
+              {notesField}
+              {isVenue && venueFieldsContent}
+              {isAgent && agentFieldsContent}
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+          {/* Venue-specific fields */}
+          <div className="space-y-4">
+            <button
+              type="button"
+              onClick={() => setVenueOpen((o) => !o)}
+              className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {venueOpen ? (
+                <><ChevronUp className="h-4 w-4" aria-hidden="true" />Hide venue fields</>
               ) : (
-                <AddressAutocomplete
-                  value={addressValue}
-                  onChange={handleAddressChange}
-                />
-              )
-            }
-          />
-        </FormField>
-        <FormField label="Notes" error={errors.notes?.message}>
-          <Textarea {...register('notes')} rows={3} />
-        </FormField>
-      </div>
-
-      {/* Venue-specific fields */}
-      <div className="space-y-4">
-        <button
-          type="button"
-          onClick={() => setVenueOpen(o => !o)}
-          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          {venueOpen ? (
-            <><ChevronUp className="h-4 w-4" aria-hidden="true" />Hide venue fields</>
-          ) : (
-            <><ChevronDown className="h-4 w-4" aria-hidden="true" />Show venue fields</>
-          )}
-        </button>
-        {venueOpen && (
-          <div className="space-y-4">
-            <FormField label="Parking" error={errors.parkingInfo?.message}>
-              <Textarea {...register('parkingInfo')} rows={2} />
-            </FormField>
-            <FormField label="Access" error={errors.accessInfo?.message}>
-              <Textarea {...register('accessInfo')} rows={2} />
-            </FormField>
-            <FormField label="Equipment available" error={errors.equipmentAvailable?.message}>
-              <Textarea {...register('equipmentAvailable')} rows={2} />
-            </FormField>
+                <><ChevronDown className="h-4 w-4" aria-hidden="true" />Show venue fields</>
+              )}
+            </button>
+            {venueOpen && venueFieldsContent}
           </div>
-        )}
-      </div>
 
-      {/* Agent-specific fields */}
-      <div className="space-y-4">
-        <button
-          type="button"
-          onClick={() => setAgentOpen(o => !o)}
-          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          {agentOpen ? (
-            <><ChevronUp className="h-4 w-4" aria-hidden="true" />Hide agent fields</>
-          ) : (
-            <><ChevronDown className="h-4 w-4" aria-hidden="true" />Show agent fields</>
-          )}
-        </button>
-        {agentOpen && (
+          {/* Agent-specific fields */}
           <div className="space-y-4">
-            <FormField label="Website" error={errors.website?.message}>
-              <Input type="url" {...register('website')} placeholder="https://" />
-            </FormField>
-            <FormField label="Commission arrangement" error={errors.commissionArrangement?.message}>
-              <Textarea {...register('commissionArrangement')} rows={2} />
-            </FormField>
+            <button
+              type="button"
+              onClick={() => setAgentOpen((o) => !o)}
+              className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {agentOpen ? (
+                <><ChevronUp className="h-4 w-4" aria-hidden="true" />Hide agent fields</>
+              ) : (
+                <><ChevronDown className="h-4 w-4" aria-hidden="true" />Show agent fields</>
+              )}
+            </button>
+            {agentOpen && agentFieldsContent}
           </div>
-        )}
-      </div>
+        </>
+      )}
 
       <div className="flex items-center gap-3">
         <Button type="submit" disabled={isPending}>
@@ -327,6 +382,7 @@ export default function ContactForm({
             Cancel
           </Button>
         )}
+        {saved && !isPending && <span className="text-xs text-muted">Saved</span>}
         {isError && (
           <p className="text-sm text-status-cancelled">Something went wrong</p>
         )}
