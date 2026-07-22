@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, within } from 'storybook/test';
 import { http, HttpResponse } from 'msw';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -8,6 +8,7 @@ import {
   bookingFormSchema,
   type BookingFormValues,
 } from './BookingFormFields';
+import { packageTemplate } from '@/test/factories';
 import type { PackageTemplate } from '@/types/api';
 
 // Smoke coverage for the converged create form (ADR-0053): the consolidated People block
@@ -16,15 +17,19 @@ import type { PackageTemplate } from '@/types/api';
 // PeopleFields.stories / VenueFields.stories; the package picker by PackagePicker.stories.
 
 const FORMATS: PackageTemplate[] = [
-  {
-    id: 'p1', createdAt: '2030-01-01T00:00:00Z', updatedAt: '2030-01-01T00:00:00Z',
-    label: 'Wedding Ceremony', category: 'WEDDING', icon: 'church', keyMoments: [],
-    defaultGenreSelection: [], notes: null, isSystemDefault: false, enabled: true,
+  packageTemplate({
+    id: 'p1', label: 'Wedding Ceremony', category: 'WEDDING', icon: 'church',
     slots: [{ id: 'p1-s1', label: 'Processional', duration: 5, order: 0 }],
-  },
+  }),
 ];
 
-function Harness() {
+function Harness({
+  formats = FORMATS,
+  onCreateTemplate,
+}: {
+  formats?: PackageTemplate[];
+  onCreateTemplate?: () => void;
+}) {
   const { control, formState: { errors } } = useForm<BookingFormValues>({
     resolver: zodResolver(bookingFormSchema),
     defaultValues: {
@@ -53,7 +58,8 @@ function Harness() {
         control={control}
         errors={errors}
         songRequestFormEnabled
-        formats={FORMATS}
+        formats={formats}
+        onCreateTemplate={onCreateTemplate}
       />
     </div>
   );
@@ -62,7 +68,7 @@ function Harness() {
 const meta: Meta<typeof BookingFormFields> = {
   component: BookingFormFields,
   tags: ['ai-generated'],
-  render: () => <Harness />,
+  render: (args) => <Harness formats={args.formats} onCreateTemplate={args.onCreateTemplate} />,
   parameters: {
     msw: {
       handlers: [http.get('/api/contacts', () => HttpResponse.json([]))],
@@ -132,6 +138,38 @@ export const SelectPackage: Story = {
     await expect(chip).toHaveAttribute('aria-pressed', 'true');
     await userEvent.click(chip);
     await expect(chip).toHaveAttribute('aria-pressed', 'false');
+  },
+};
+
+export const EmptyLibrary: Story = {
+  name: 'Package Templates still renders with an empty library, offering the create affordance',
+  // Since ADR-0046's 2026-07-07 amendment an empty library is the normal starting state, so the
+  // section must not vanish — that hid the only route to templates from this flow (#755).
+  args: { formats: [], onCreateTemplate: fn() },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('heading', { name: 'Package Templates' })).toBeVisible();
+    await expect(canvas.getByText('No package templates yet.')).toBeVisible();
+    await expect(canvas.getByRole('button', { name: /New package template/i })).toBeVisible();
+  },
+};
+
+export const CreateTemplateAffordance: Story = {
+  name: 'The create affordance calls back to the shell (no mutation in this component)',
+  args: { onCreateTemplate: fn() },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: /New package template/i }));
+    await expect(args.onCreateTemplate).toHaveBeenCalledTimes(1);
+  },
+};
+
+export const NoCreateAffordanceWhenUnwired: Story = {
+  name: 'Without onCreateTemplate the section renders unchanged (Builder-safe default)',
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('heading', { name: 'Package Templates' })).toBeVisible();
+    await expect(canvas.queryByRole('button', { name: /New package template/i })).toBeNull();
   },
 };
 

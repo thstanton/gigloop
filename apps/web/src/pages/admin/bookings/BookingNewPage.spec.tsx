@@ -40,6 +40,24 @@ const { CANNED_ITEMS } = vi.hoisted(() => ({
   ] as ChecklistDefaultItem[],
 }));
 
+// The template the drawer double hands back on a successful inline create.
+const { CREATED_TEMPLATE } = vi.hoisted(() => ({
+  CREATED_TEMPLATE: {
+    id: 'tmpl-new',
+    label: 'Corporate Evening',
+    category: 'CORPORATE',
+    icon: 'briefcase',
+    slots: [],
+    keyMoments: [],
+    defaultGenreSelection: [],
+    notes: null,
+    isSystemDefault: false,
+    enabled: true,
+    createdAt: '2030-01-01T00:00:00Z',
+    updatedAt: '2030-01-01T00:00:00Z',
+  },
+}));
+
 vi.mock('@clerk/react', () => ({ useAuth: () => ({ isLoaded: true }) }));
 
 vi.mock('react-router-dom', async (importActual) => {
@@ -56,12 +74,23 @@ vi.mock('@/features/bookings/BookingFormFields', async (importActual) => {
   const { useController, useWatch } = await import('react-hook-form');
   return {
     ...actual,
-    BookingFormFields: ({ control }: { control: Control<BookingFormValues> }) => {
+    BookingFormFields: ({
+      control,
+      onCreateTemplate,
+    }: {
+      control: Control<BookingFormValues>;
+      onCreateTemplate?: () => void;
+    }) => {
       const { field } = useController({ control, name: 'customer' });
       const status = useWatch({ control, name: 'status' });
+      const packageIds = useWatch({ control, name: 'packageTemplateIds' });
       return (
         <div>
           <span data-testid="form-status">{status}</span>
+          <span data-testid="selected-templates">{(packageIds ?? []).join(',')}</span>
+          <button type="button" onClick={onCreateTemplate}>
+            open-template-drawer
+          </button>
           <button
             type="button"
             onClick={() => field.onChange({ kind: 'existing', contactId: 'cust-existing' })}
@@ -79,6 +108,28 @@ vi.mock('@/features/bookings/BookingFormFields', async (importActual) => {
     },
   };
 });
+
+// The inline package-template drawer (#755). The double exposes what the page passes in (open
+// state + the seeded category) and lets the test fire a successful create.
+vi.mock('@/features/packages/PackageDrawer', () => ({
+  PackageDrawer: ({
+    open,
+    initialValues,
+    onCreated,
+  }: {
+    open: boolean;
+    initialValues?: { category?: string };
+    onCreated?: (created: unknown) => void;
+  }) =>
+    open ? (
+      <div data-testid="package-drawer">
+        <span data-testid="drawer-seed-category">{initialValues?.category ?? ''}</span>
+        <button type="button" onClick={() => onCreated?.(CREATED_TEMPLATE)}>
+          emit-created
+        </button>
+      </div>
+    ) : null,
+}));
 
 vi.mock('@/features/bookings/ChecklistStep', () => ({
   ChecklistStep: ({
@@ -156,25 +207,24 @@ function mockGet() {
 }
 
 function renderPage() {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
   render(
-    <QueryClientProvider
-      client={
-        new QueryClient({
-          defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-        })
-      }
-    >
+    <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={[{ pathname: '/admin/bookings/new', state: { date: '2025-06-01' } }]}>
         <BookingNewPage />
       </MemoryRouter>
     </QueryClientProvider>,
   );
+  return client;
 }
 
 // Wait until the profile-default effect has seeded the status (so step 2 / the payload carry it).
 async function renderWithLoadedProfile() {
-  renderPage();
+  const client = renderPage();
   await waitFor(() => expect(screen.getByTestId('form-status')).toHaveTextContent('CONFIRMED'));
+  return client;
 }
 
 const bookingPayload = () =>
@@ -236,6 +286,52 @@ describe('BookingNewPage — orchestration', () => {
     expect(screen.getByTestId('created-checkpoint')).toHaveTextContent('My Gig');
     await userEvent.click(screen.getByRole('button', { name: 'finish' }));
     expect(navigateSpy).toHaveBeenCalledWith('/admin/bookings/bk-1');
+  });
+
+  // #755 — creating a package template without leaving the flow.
+  describe('inline package-template creation', () => {
+    it('opens the drawer seeded with the booking’s current event type', async () => {
+      await renderWithLoadedProfile();
+
+      expect(screen.queryByTestId('package-drawer')).not.toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: 'open-template-drawer' }));
+
+      expect(screen.getByTestId('package-drawer')).toBeInTheDocument();
+      // Seeded from overview.eventType, which defaults to WEDDING.
+      expect(screen.getByTestId('drawer-seed-category')).toHaveTextContent('WEDDING');
+    });
+
+    it('writes the created template into the packages cache before selecting it', async () => {
+      const client = await renderWithLoadedProfile();
+      // The picker's data source starts empty (mockGet returns [] for /packages).
+      await waitFor(() => expect(client.getQueryData(['packages'])).toEqual([]));
+
+      await userEvent.click(screen.getByRole('button', { name: 'open-template-drawer' }));
+      await userEvent.click(screen.getByRole('button', { name: 'emit-created' }));
+
+      // Cache first — otherwise the picker holds a selected id it has no template for, and the
+      // chip never renders.
+      expect(client.getQueryData(['packages'])).toEqual([CREATED_TEMPLATE]);
+      // …and the new template is appended to the selection, not replacing it.
+      expect(screen.getByTestId('selected-templates')).toHaveTextContent('tmpl-new');
+    });
+
+    it('carries the inline-created template through to the create payload', async () => {
+      vi.mocked(api.apiPost).mockResolvedValue(createdBooking);
+      await renderWithLoadedProfile();
+
+      await userEvent.click(screen.getByRole('button', { name: 'open-template-drawer' }));
+      await userEvent.click(screen.getByRole('button', { name: 'emit-created' }));
+
+      await userEvent.click(screen.getByRole('button', { name: 'pick-existing-customer' }));
+      await userEvent.click(screen.getByRole('button', { name: /next: reminders/i }));
+      await userEvent.click(screen.getByRole('button', { name: 'do-create' }));
+
+      await waitFor(() => expect(screen.getByTestId('created-checkpoint')).toBeInTheDocument());
+      expect(bookingPayload()).toEqual(
+        expect.objectContaining({ packageTemplateIds: ['tmpl-new'] }),
+      );
+    });
   });
 
   it('does not re-create the new contact when a failed create is retried', async () => {

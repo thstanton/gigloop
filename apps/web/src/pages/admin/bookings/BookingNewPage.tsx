@@ -3,7 +3,10 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { PageHeader } from '@/components/common/PageHeader';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
+import { PackageDrawer } from '@/features/packages/PackageDrawer';
+import type { PackageFormValues } from '@/features/packages/PackageForm';
 import {
   BookingFormFields,
   bookingFormSchema,
@@ -14,7 +17,7 @@ import { CreatedCheckpoint } from '@/features/bookings/CreatedCheckpoint';
 import { useBookingNewData } from '@/features/bookings/useBookingNewData';
 import { useCreateBooking } from '@/features/bookings/useCreateBooking';
 import { EVENT_TYPE_LABELS } from '@/lib/constants';
-import type { BookingStatus, ChecklistDefaultItem } from '@/types/api';
+import type { BookingStatus, ChecklistDefaultItem, PackageTemplate } from '@/types/api';
 
 interface BookingNewLocationState {
   customerId?: string;
@@ -55,13 +58,36 @@ export default function BookingNewPage() {
   const [step, setStep] = useState<1 | 2>(1);
   const [pendingValues, setPendingValues] = useState<BookingFormValues | null>(null);
 
-  const { control, handleSubmit, setValue, formState: { errors, dirtyFields } } = useForm<BookingFormValues>({
+  const { control, handleSubmit, setValue, getValues, formState: { errors, dirtyFields } } = useForm<BookingFormValues>({
     resolver: zodResolver(bookingFormSchema),
     defaultValues: buildBookingDefaultValues(location.state as BookingNewLocationState | null),
   });
 
+  // Inline package-template creation (#755). The drawer is the same one /admin/packages opens; the
+  // shell owns it (not PackagePicker or BookingFormFields) so those stay presentational per
+  // ADR-0053, and so auto-select can reuse the form's own setValue.
+  const qc = useQueryClient();
+  const [templateSeed, setTemplateSeed] = useState<Partial<PackageFormValues> | null>(null);
+
+  function openTemplateDrawer() {
+    // Category is seeded from the event type as it stands *now* and deliberately not kept in sync:
+    // the musician may change the event type while the drawer is open, and retro-editing a field
+    // they may already have touched is worse than a slightly stale default.
+    setTemplateSeed({ category: getValues('overview.eventType') });
+  }
+
+  function handleTemplateCreated(created: PackageTemplate) {
+    // Cache first: invalidateQueries is async, so selecting before the refetch lands would leave
+    // the picker with an id it has no template for — a selected package and no chip on screen.
+    qc.setQueryData<PackageTemplate[]>(['packages'], (old) => [...(old ?? []), created]);
+    // Append, never replace — the picker is multi-select.
+    setValue('packageTemplateIds', [...getValues('packageTemplateIds'), created.id], {
+      shouldDirty: true,
+    });
+  }
+
   const previewStatus = pendingValues?.status as BookingStatus | undefined;
-  const { userProfile, formats, seriesList, reminderPreview, isPreviewLoading, checklistDefaults } =
+  const { userProfile, formats, isFormatsLoading, seriesList, reminderPreview, isPreviewLoading, checklistDefaults } =
     useBookingNewData({
       previewStatus,
       setValue,
@@ -96,7 +122,9 @@ export default function BookingNewPage() {
             errors={errors}
             songRequestFormEnabled={userProfile?.songRequestFormEnabled}
             formats={formats}
+            formatsLoading={isFormatsLoading}
             series={seriesList}
+            onCreateTemplate={openTemplateDrawer}
           />
 
           <div className="flex gap-3">
@@ -122,6 +150,17 @@ export default function BookingNewPage() {
           isError={isError}
         />
       )}
+
+      {/* Kept mounted so the Sheet keeps its close animation; `open` is the seed's presence. It
+          portals to document.body (components/ui/sheet), so its Save button never nests inside the
+          create <form> above. */}
+      <PackageDrawer
+        mode={{ type: 'create' }}
+        open={!!templateSeed}
+        initialValues={templateSeed ?? undefined}
+        onClose={() => setTemplateSeed(null)}
+        onCreated={handleTemplateCreated}
+      />
     </>
   );
 }

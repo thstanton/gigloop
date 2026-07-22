@@ -40,7 +40,7 @@ export function useBookingNewData({ previewStatus, setValue, isStatusDirty, isMu
 
   // Packages are performance structure, independent of the music form (ADR-0046) — offer them to
   // everyone, like the Builder (#546). The music-form *toggle* stays gated on the feature flag.
-  const { data: formats } = useQuery({
+  const { data: formats, isLoading: isFormatsLoading } = useQuery({
     queryKey: ['packages'],
     queryFn: () => apiGet<PackageTemplate[]>('/packages'),
     enabled: isLoaded,
@@ -82,5 +82,5 @@ export function useBookingNewData({ previewStatus, setValue, isStatusDirty, isMu
   const checklistDefaults: ChecklistDefaultItem[] =
     userProfile?.preferences?.checklistDefaults || [];
 
-  return { userProfile, formats, seriesList, reminderPreview, isPreviewLoading, checklistDefaults };
+  return { userProfile, formats, isFormatsLoading, seriesList, reminderPreview, isPreviewLoading, checklistDefaults };
 }

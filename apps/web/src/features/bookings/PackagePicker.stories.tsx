@@ -2,22 +2,8 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import { PackagePicker } from './PackagePicker';
+import { packageTemplate as tmpl } from '@/test/factories';
 import type { PackageTemplate } from '@/types/api';
-
-function tmpl(over: Partial<PackageTemplate> & { id: string; label: string; category: string }): PackageTemplate {
-  return {
-    createdAt: '2030-01-01T00:00:00Z',
-    updatedAt: '2030-01-01T00:00:00Z',
-    icon: 'music',
-    keyMoments: [],
-    defaultGenreSelection: [],
-    notes: null,
-    isSystemDefault: false,
-    enabled: true,
-    slots: [{ id: `${over.id}-s1`, label: 'Set 1', duration: 45, order: 0 }],
-    ...over,
-  };
-}
 
 const TEMPLATES: PackageTemplate[] = [
   tmpl({
@@ -34,11 +20,21 @@ const TEMPLATES: PackageTemplate[] = [
 ];
 
 // Controlled harness mirroring the host (create/Builder) that owns the selection.
-function Harness({ onToggle, showMusic }: { onToggle: (id: string) => void; showMusic: boolean }) {
-  const [selected, setSelected] = useState<string[]>([]);
+function Harness({
+  onToggle,
+  showMusic,
+  templates = TEMPLATES,
+  initialSelected = [],
+}: {
+  onToggle: (id: string) => void;
+  showMusic: boolean;
+  templates?: PackageTemplate[];
+  initialSelected?: string[];
+}) {
+  const [selected, setSelected] = useState<string[]>(initialSelected);
   return (
     <PackagePicker
-      templates={TEMPLATES}
+      templates={templates}
       eventType="WEDDING"
       selectedIds={selected}
       onToggle={(id) => { setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id])); onToggle(id); }}
@@ -51,7 +47,14 @@ const meta: Meta<typeof PackagePicker> = {
   component: PackagePicker,
   tags: ['ai-generated'],
   args: { onToggle: fn(), showMusic: true },
-  render: (args) => <Harness onToggle={args.onToggle} showMusic={args.showMusic ?? true} />,
+  render: (args) => (
+    <Harness
+      onToggle={args.onToggle}
+      showMusic={args.showMusic ?? true}
+      templates={args.templates}
+      initialSelected={args.selectedIds}
+    />
+  ),
 };
 
 export default meta;
@@ -69,6 +72,32 @@ export const Grouping: Story = {
     await expect(canvas.queryByRole('button', { name: 'Conference Day' })).toBeNull();
     await userEvent.click(canvas.getByRole('button', { name: /Other packages \(1\)/i }));
     await expect(canvas.getByRole('button', { name: 'Conference Day' })).toBeVisible();
+  },
+};
+
+export const SelectedOtherIsNeverHidden: Story = {
+  name: 'A selected non-matching template is visible without expanding "Other packages"',
+  // The invariant behind #755: creating a template inline from the New Booking form auto-selects
+  // it, and an off-category one lands in "Other". If the group stayed collapsed the package would
+  // be applied to the booking with nothing on screen to say so.
+  args: { selectedIds: ['t3'] },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    // Visible immediately — no click on the "Other packages" toggle first.
+    const conference = canvas.getByRole('button', { name: 'Conference Day' });
+    await expect(conference).toBeVisible();
+    await expect(conference).toHaveAttribute('aria-pressed', 'true');
+    // And the group reads as expanded.
+    await expect(canvas.getByRole('button', { name: /▾ Other packages \(1\)/i })).toBeVisible();
+  },
+};
+
+export const EmptyLibrary: Story = {
+  name: 'Empty library reads as "not yet", not as a dead end',
+  args: { templates: [] },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText('No package templates yet.')).toBeVisible();
   },
 };
 

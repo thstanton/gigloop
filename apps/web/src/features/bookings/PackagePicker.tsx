@@ -125,7 +125,13 @@ export function PackagePicker({
   }
 
   if (templatesLoading) return <p className="text-sm text-muted">Loading…</p>;
-  if (enabled.length === 0) return <p className="text-sm text-muted">No package templates available.</p>;
+  if (enabled.length === 0) return <p className="text-sm text-muted">No package templates yet.</p>;
+
+  // A selected template is never hidden: if one of the "other" templates is selected, the group is
+  // forced open regardless of the musician's manual collapse. Otherwise a template selected outside
+  // the visible set (created inline from the New Booking form, or staged in the Builder) would be
+  // applied to the booking with no chip on screen to say so.
+  const showOther = otherOpen || other.some((t) => selectedIds.includes(t.id));
 
   return (
     <div className="space-y-3">
@@ -137,9 +143,9 @@ export function PackagePicker({
             onClick={() => setOtherOpen((o) => !o)}
             className="text-sm text-muted transition-colors hover:text-foreground"
           >
-            {otherOpen ? '▾' : '▸'} Other packages ({other.length})
+            {showOther ? '▾' : '▸'} Other packages ({other.length})
           </button>
-          {otherOpen && <div className="mt-2 flex flex-wrap items-start gap-2">{other.map(chip)}</div>}
+          {showOther && <div className="mt-2 flex flex-wrap items-start gap-2">{other.map(chip)}</div>}
         </div>
       )}
     </div>
