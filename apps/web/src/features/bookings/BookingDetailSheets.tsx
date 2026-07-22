@@ -12,7 +12,6 @@ import {
 import { BOOKING_STATUS_LABELS } from '@/lib/constants';
 import { useBooking } from '@/lib/hooks/useBooking';
 import { useBookingChecklist } from '@/lib/hooks/useBookingChecklist';
-import { useBookingFields } from '@/lib/hooks/useBookingFields';
 import { useCopyBooking } from '@/lib/hooks/useCopyBooking';
 import { useContractActions } from '@/lib/hooks/useContractActions';
 import { useBookingInvoices } from '@/lib/hooks/useBookingInvoices';
@@ -20,7 +19,6 @@ import { isDepositPercentageHintEligible, depositAmount } from '@/lib/invoiceDer
 import { buildSetsDescription } from '@/lib/bookingSets';
 import { CopyEventDialog } from '@/features/bookings/CopyEventDialog';
 import ContractSheet from '@/features/bookings/ContractSheet';
-import ContactEditSheet from '@/features/contacts/ContactEditSheet';
 import { VenueQuickTweakSheet } from '@/features/bookings/VenueQuickTweakSheet';
 import { PeopleQuickTweakSheet } from '@/features/bookings/PeopleQuickTweakSheet';
 import { DetailsQuickTweakSheet } from '@/features/bookings/DetailsQuickTweakSheet';
@@ -63,7 +61,6 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
   const sheet = searchParams.get('sheet');
 
   const sheetInvoiceId = searchParams.get('invoiceId');
-  const sheetContactId = searchParams.get('contactId');
   const sheetTemplateType = searchParams.get('templateType') ?? undefined;
   const sheetIsDeposit = searchParams.get('isDeposit') === 'true';
   const sheetAmount = searchParams.get('amount') ? parseFloat(searchParams.get('amount')!) : undefined;
@@ -83,7 +80,6 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
 
   const { data: invoices = [] } = useBookingInvoices(bookingId);
   const contractActions = useContractActions(bookingId);
-  const fields = useBookingFields(bookingId);
   const copy = useCopyBooking(bookingId);
 
   const { data: userProfile } = useQuery({
@@ -119,9 +115,6 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
   const markSentInvoice = sheet === 'markSent' && sheetInvoiceId
     ? invoices.find((inv) => inv.id === sheetInvoiceId)
     : undefined;
-  const editingContact = sheet === 'contactEdit' && sheetContactId
-    ? ([booking.customer, booking.bookingAgent, booking.venue].find((c) => c?.id === sheetContactId) ?? null)
-    : null;
 
   return (
     <>
@@ -153,21 +146,16 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
         open={sheet === 'contract'}
         onClose={() => { setSearchParams({}); }}
       />
-      <ContactEditSheet
-        contact={editingContact}
-        onClose={() => { setSearchParams({}); }}
-        onUnlink={editingContact?.id === booking.venue?.id ? () => { fields.updateVenue(null); setSearchParams({}); } : undefined}
-      />
       <VenueQuickTweakSheet
         bookingId={bookingId}
-        currentVenueId={booking.venue?.id ?? null}
+        venue={booking.venue}
         open={sheet === 'venueTweak'}
         onOpenChange={(open) => { if (!open) setSearchParams({}); }}
       />
       <PeopleQuickTweakSheet
         bookingId={bookingId}
-        currentCustomerId={booking.customer?.id ?? null}
-        currentAgentId={booking.bookingAgent?.id ?? null}
+        customer={booking.customer}
+        agent={booking.bookingAgent}
         open={sheet === 'peopleTweak'}
         onOpenChange={(open) => { if (!open) setSearchParams({}); }}
       />

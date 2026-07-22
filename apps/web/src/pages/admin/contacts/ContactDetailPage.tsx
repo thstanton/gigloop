@@ -169,7 +169,8 @@ export default function ContactDetailPage() {
                 <Plus size={14} className="mr-1" />
                 New booking
               </Button>
-              <Button variant="outline" size="sm" onClick={() => setSearchParams({ edit: 'true' })}>
+              {/* Preserve location.state (the booking back-nav) across the ?edit navigation. */}
+              <Button variant="outline" size="sm" onClick={() => setSearchParams({ edit: 'true' }, { state: location.state })}>
                 Edit
               </Button>
             </div>

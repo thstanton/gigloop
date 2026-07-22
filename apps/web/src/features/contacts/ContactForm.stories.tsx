@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, within } from 'storybook/test';
 import ContactForm from './ContactForm';
 
 const meta = {
@@ -213,6 +213,150 @@ export const RoleAgent: Story = {
     await expect(canvas.queryByLabelText('Parking')).toBeNull();
     await userEvent.click(canvas.getByRole('button', { name: /show venue fields/i }));
     await expect(canvas.getByLabelText('Parking')).toBeVisible();
+  },
+};
+
+// ─── Embedded presentation (in-booking card) ──────────────────────────────────
+
+const embeddedCustomerValues = {
+  name: 'Alice Barker',
+  greetingName: 'Alice',
+  email: 'alice@example.com',
+  phone: '07700 900111',
+  website: '',
+  addressLine1: '4 Rose Lane',
+  addressLine2: '',
+  city: 'Bristol',
+  county: '',
+  postcode: 'BS1 2AA',
+  country: 'GB',
+  latitude: null,
+  longitude: null,
+  placeId: null,
+  notes: 'VIP client',
+  parkingInfo: '',
+  accessInfo: '',
+  equipmentAvailable: '',
+  commissionArrangement: '',
+  primaryRole: 'CUSTOMER' as const,
+};
+
+export const EmbeddedFolded: Story = {
+  name: 'Embedded — core fields only, detail folded',
+  args: {
+    ...baseArgs,
+    embedded: true,
+    submitLabel: 'Save changes',
+    defaultValues: embeddedCustomerValues,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    // Core fields visible (Name carries a required asterisk in its label text)
+    await expect(canvas.getByLabelText(/^name/i)).toBeVisible();
+    await expect(canvas.getByLabelText('Greeting name')).toBeVisible();
+    await expect(canvas.getByLabelText('Email')).toBeVisible();
+    await expect(canvas.getByLabelText('Phone')).toBeVisible();
+
+    // Contact Type is absent in embedded mode
+    await expect(canvas.queryByText('Contact Type')).toBeNull();
+
+    // Address / Notes folded away until the disclosure opens
+    await expect(canvas.queryByLabelText('Notes')).toBeNull();
+    await expect(canvas.queryByLabelText('Address')).toBeNull();
+
+    // Single disclosure control, no venue/agent sub-disclosures
+    await expect(canvas.getByRole('button', { name: /add contact details/i })).toBeVisible();
+    await expect(canvas.queryByRole('button', { name: /show venue fields/i })).toBeNull();
+    await expect(canvas.queryByRole('button', { name: /show agent fields/i })).toBeNull();
+  },
+};
+
+export const EmbeddedExpanded: Story = {
+  name: 'Embedded — disclosure opened reveals Address + Notes',
+  args: {
+    ...baseArgs,
+    embedded: true,
+    submitLabel: 'Save changes',
+    defaultValues: embeddedCustomerValues,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await userEvent.click(canvas.getByRole('button', { name: /add contact details/i }));
+    await expect(canvas.getByText('Address')).toBeVisible();
+    await expect(canvas.getByLabelText('Notes')).toBeVisible();
+
+    // Collapse again
+    await userEvent.click(canvas.getByRole('button', { name: /hide contact details/i }));
+    await expect(canvas.queryByLabelText('Notes')).toBeNull();
+  },
+};
+
+export const EmbeddedVenue: Story = {
+  name: 'Embedded — VENUE keeps its address visible',
+  args: {
+    ...baseArgs,
+    embedded: true,
+    submitLabel: 'Save changes',
+    defaultValues: {
+      ...embeddedCustomerValues,
+      name: 'The Grand Hall',
+      greetingName: '',
+      email: 'info@grandhall.co.uk',
+      phone: '',
+      parkingInfo: '50 spaces round the back',
+      primaryRole: 'VENUE' as const,
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    // Venue address (the "Find venue" search) is visible without opening the disclosure
+    await expect(canvas.getByText('Find venue')).toBeVisible();
+
+    // Venue-specific fields stay folded until the disclosure opens
+    await expect(canvas.queryByLabelText('Parking')).toBeNull();
+    await userEvent.click(canvas.getByRole('button', { name: /add contact details/i }));
+    await expect(canvas.getByLabelText('Parking')).toBeVisible();
+  },
+};
+
+export const EmbeddedSaved: Story = {
+  name: 'Embedded — inline "Saved" marker',
+  args: {
+    ...baseArgs,
+    embedded: true,
+    saved: true,
+    submitLabel: 'Save changes',
+    defaultValues: embeddedCustomerValues,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText('Saved')).toBeVisible();
+  },
+};
+
+export const EmbeddedPreservesRole: Story = {
+  name: 'Embedded — save preserves the hidden primaryRole',
+  args: {
+    ...baseArgs,
+    embedded: true,
+    submitLabel: 'Save changes',
+    onSubmit: fn(),
+    defaultValues: embeddedCustomerValues,
+  },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await userEvent.click(canvas.getByRole('button', { name: /save changes/i }));
+
+    // Contact Type is hidden, but the CUSTOMER role must round-trip through submit.
+    // react-hook-form calls onSubmit as (values, event), so match both positions.
+    await expect(args.onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({ primaryRole: 'CUSTOMER' }),
+      expect.anything(),
+    );
   },
 };
 

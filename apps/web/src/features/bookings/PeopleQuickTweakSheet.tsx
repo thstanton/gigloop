@@ -18,16 +18,16 @@ import type { Contact } from '@/types/api';
 
 interface Props {
   bookingId: string;
-  currentCustomerId: string | null;
-  currentAgentId: string | null;
+  customer: Contact | null;
+  agent: Contact | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
 export function PeopleQuickTweakSheet({
   bookingId,
-  currentCustomerId,
-  currentAgentId,
+  customer,
+  agent,
   open,
   onOpenChange,
 }: Props) {
@@ -91,8 +91,8 @@ export function PeopleQuickTweakSheet({
         </SheetHeader>
         <div className="mt-4">
           <PeopleAtom
-            initialCustomerId={currentCustomerId}
-            initialAgentId={currentAgentId}
+            customer={customer}
+            agent={agent}
             onSave={(selection) => saveMutation.mutate(selection)}
             isSaving={saveMutation.isPending}
             saved={false}
