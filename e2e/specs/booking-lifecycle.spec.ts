@@ -69,7 +69,9 @@ test.describe('booking checklist lifecycle', () => {
 
     // --- Manual goal completion: the first goal (Get the deposit paid) via its
     //     overflow menu → Mark complete. The stage-section count reflects it
-    //     (0/2 → 1/2). The overflow control diverges by layout: mobile is a bottom
+    //     (0/3 → 1/3 — the Provisional bracket holds the three CONFIRMED-target
+    //     goals: get_deposit_paid, add_venue [#759], get_contract_signed). The
+    //     overflow control diverges by layout: mobile is a bottom
     //     sheet (trigger "Actions" → button items); desktop is a dropdown (trigger
     //     "More actions" → menuitem items). ---
     if (wide) {
@@ -79,7 +81,7 @@ test.describe('booking checklist lifecycle', () => {
       await checklist.getByRole('button', { name: 'Actions', exact: true }).first().click();
       await page.getByRole('button', { name: 'Mark complete' }).click();
     }
-    await expect(checklist.getByRole('button', { name: 'Provisional 1/2' })).toBeVisible();
+    await expect(checklist.getByRole('button', { name: 'Provisional 1/3' })).toBeVisible();
     await expect
       .poll(async () =>
         (

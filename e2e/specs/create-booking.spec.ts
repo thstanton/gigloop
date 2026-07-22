@@ -85,7 +85,7 @@ test.describe('create booking', () => {
     // booking header (rendered once, above the mobile/desktop tab-content
     // boundaries), so each is unique page-level: the h1 title (unique to this
     // booking), the "Confirmed" status pill (exact, so it doesn't match the
-    // "Confirmed 0/4" checklist goal), and the date badge. ---
+    // "Confirmed 0/3" checklist goal), and the date badge. ---
     await expect(page.getByRole('heading', { name: title, level: 1 })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Confirmed', exact: true })).toBeVisible();
     await expect(page.getByText(badgeDate).first()).toBeVisible();
