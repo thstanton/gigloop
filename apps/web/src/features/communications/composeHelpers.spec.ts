@@ -11,8 +11,13 @@ import {
   buildSendRequest,
   canRenderEmail,
   canSendEmail,
+  shouldSuggestCreatingContract,
+  shouldSuggestCreatingDepositInvoice,
 } from './composeHelpers';
-import type { Invoice, Template } from '@/types/api';
+import type { ChecklistItem, Contract, Invoice, Template } from '@/types/api';
+
+const goal = (key: string): ChecklistItem => ({ key } as unknown as ChecklistItem);
+const contract = (status: Contract['status']): Contract => ({ status } as unknown as Contract);
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -38,6 +43,70 @@ const balanceInvoice = makeInvoice({ id: 'bal-1', isDeposit: false });
 
 const PAST_DATE = '2020-01-01';
 const FUTURE_DATE = '2099-01-01';
+
+const contractGoal = goal('get_contract_signed');
+const depositGoal = goal('get_deposit_paid');
+
+// ─── shouldSuggestCreatingContract (#757 Hint A) ──────────────────────────────
+
+describe('shouldSuggestCreatingContract', () => {
+  it('suggests when composing a deposit invoice, no contract, contract goal present', () => {
+    expect(shouldSuggestCreatingContract('deposit_invoice_cover', null, [contractGoal])).toBe(true);
+  });
+
+  it('treats a VOID contract as no contract (matches ContractCard)', () => {
+    expect(shouldSuggestCreatingContract('deposit_invoice_cover', contract('VOID'), [contractGoal])).toBe(true);
+  });
+
+  it('does not suggest when a live contract exists', () => {
+    expect(shouldSuggestCreatingContract('deposit_invoice_cover', contract('DRAFT'), [contractGoal])).toBe(false);
+  });
+
+  it('does not suggest when the contract goal is absent from the checklist', () => {
+    expect(shouldSuggestCreatingContract('deposit_invoice_cover', null, [])).toBe(false);
+  });
+
+  it('does not suggest for a non-deposit template', () => {
+    expect(shouldSuggestCreatingContract('contract_cover', null, [contractGoal])).toBe(false);
+    expect(shouldSuggestCreatingContract(null, null, [contractGoal])).toBe(false);
+  });
+
+  it('accepts the legacy flat goal key', () => {
+    expect(shouldSuggestCreatingContract('deposit_invoice_cover', null, [goal('contract_signed')])).toBe(true);
+  });
+});
+
+// ─── shouldSuggestCreatingDepositInvoice (#757 Hint B) ────────────────────────
+
+describe('shouldSuggestCreatingDepositInvoice', () => {
+  const deposit = makeInvoice({ isDeposit: true, status: 'ISSUED' });
+  const voidDeposit = makeInvoice({ isDeposit: true, status: 'VOID' });
+
+  it('suggests when composing a contract, no usable deposit, deposit goal present', () => {
+    expect(shouldSuggestCreatingDepositInvoice('contract_cover', [], [depositGoal])).toBe(true);
+  });
+
+  it('suggests when only a VOID deposit exists (it can be re-created)', () => {
+    expect(shouldSuggestCreatingDepositInvoice('contract_cover', [voidDeposit], [depositGoal])).toBe(true);
+  });
+
+  it('does not suggest when a usable deposit invoice exists', () => {
+    expect(shouldSuggestCreatingDepositInvoice('contract_cover', [deposit], [depositGoal])).toBe(false);
+  });
+
+  it('does not suggest when the deposit goal is absent', () => {
+    expect(shouldSuggestCreatingDepositInvoice('contract_cover', [], [])).toBe(false);
+  });
+
+  it('does not suggest for a non-contract template', () => {
+    expect(shouldSuggestCreatingDepositInvoice('contract_and_deposit_cover', [], [depositGoal])).toBe(false);
+    expect(shouldSuggestCreatingDepositInvoice(null, [], [depositGoal])).toBe(false);
+  });
+
+  it('accepts the legacy flat goal key', () => {
+    expect(shouldSuggestCreatingDepositInvoice('contract_cover', [], [goal('deposit_received')])).toBe(true);
+  });
+});
 
 // ─── getInvoiceIdForTemplate ──────────────────────────────────────────────────
 

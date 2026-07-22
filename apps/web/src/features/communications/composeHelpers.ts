@@ -1,6 +1,46 @@
-import type { BuiltInTemplateType, Invoice, Template } from '@/types/api';
+import type { BuiltInTemplateType, ChecklistItem, Contract, Invoice, Template } from '@/types/api';
 import { VAR_LABELS, BUILT_IN_EMAIL_TYPES } from '@/features/templates/templateMeta';
 import { activeInvoiceOf, hasAnyDepositInvoice } from '@/lib/invoiceDerivations';
+
+// A goal is identified by its post-ADR-0057 key or its legacy flat key — the same dual-key check
+// the API uses (bookings.service.ts). `checklist` is goals-only; step keys never appear here.
+const CONTRACT_GOAL_KEYS = ['get_contract_signed', 'contract_signed'];
+const DEPOSIT_GOAL_KEYS = ['get_deposit_paid', 'deposit_received'];
+
+function hasGoal(checklist: ChecklistItem[], keys: string[]): boolean {
+  return checklist.some((item) => item.key != null && keys.includes(item.key));
+}
+
+/**
+ * #757 Hint A: the musician is composing a deposit-invoice email but there is no usable contract,
+ * and the contract goal is on this booking's checklist. Nudge them to create the contract so both
+ * can go in one email. Gated on the goal so someone who has disabled contracts never sees it.
+ * "No usable contract" matches ContractCard: absent, or VOID (activeContract is not void-filtered).
+ */
+export function shouldSuggestCreatingContract(
+  selectedType: BuiltInTemplateType | null,
+  activeContract: Contract | null,
+  checklist: ChecklistItem[],
+): boolean {
+  const noContract = !activeContract || activeContract.status === 'VOID';
+  return selectedType === 'deposit_invoice_cover' && noContract && hasGoal(checklist, CONTRACT_GOAL_KEYS);
+}
+
+/**
+ * #757 Hint B: the musician is composing a contract email but there is no usable deposit invoice,
+ * and the deposit goal is on this booking's checklist. Nudge them to create the deposit invoice so
+ * both can go in one email. "No usable deposit" is the NON-void predicate (activeInvoiceOf) — a
+ * void-only deposit can still be re-created — distinct from hasAnyDepositInvoice, which governs
+ * template visibility.
+ */
+export function shouldSuggestCreatingDepositInvoice(
+  selectedType: BuiltInTemplateType | null,
+  invoices: Invoice[],
+  checklist: ChecklistItem[],
+): boolean {
+  const noDeposit = !activeInvoiceOf(true, invoices);
+  return selectedType === 'contract_cover' && noDeposit && hasGoal(checklist, DEPOSIT_GOAL_KEYS);
+}
 
 const ATTACHMENT_TEMPLATE_TYPES: BuiltInTemplateType[] = [
   'deposit_invoice_cover',

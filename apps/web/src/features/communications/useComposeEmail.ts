@@ -17,9 +17,11 @@ import {
   buildSendRequest,
   canRenderEmail,
   canSendEmail,
+  shouldSuggestCreatingContract,
+  shouldSuggestCreatingDepositInvoice,
   type AttachmentState,
 } from './composeHelpers';
-import type { BookingDetail, Invoice, Template } from '@/types/api';
+import type { BookingDetail, ChecklistItem, Invoice, Template } from '@/types/api';
 
 interface RenderResult {
   subject: string;
@@ -31,6 +33,7 @@ interface UseComposeEmailArgs {
   bookingId: string;
   booking: BookingDetail;
   invoices: Invoice[];
+  checklist: ChecklistItem[];
   defaultPaymentTermsDays: number | undefined;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -56,6 +59,9 @@ export interface ComposeEmailViewModel {
   editor: Editor | null;
   sendError: string | null;
   musicInviteBlocked: boolean;
+  // #757: cross-suggest the combined contract + deposit send when composing only one half.
+  showCreateContractHint: boolean;
+  showCreateDepositHint: boolean;
   canSend: boolean;
   sending: boolean;
   send: () => void;
@@ -69,6 +75,7 @@ export function useComposeEmail({
   bookingId,
   booking,
   invoices,
+  checklist,
   defaultPaymentTermsDays,
   open,
   onOpenChange,
@@ -131,6 +138,8 @@ export function useComposeEmail({
   // shortcut, or the form being un-published after the sheet opened.
   const musicInviteBlocked =
     selectedType === 'music_form_invite' && !(booking.portalVisibility.musicForm?.visible ?? false);
+  const showCreateContractHint = shouldSuggestCreatingContract(selectedType, booking.activeContract, checklist);
+  const showCreateDepositHint = shouldSuggestCreatingDepositInvoice(selectedType, invoices, checklist);
   const invoiceId = getInvoiceIdForTemplate(selectedType, invoices);
   const invoiceForSend = invoices.find((i) => i.id === invoiceId);
   const attachmentState = getAttachmentState(selectedType, invoices);
@@ -243,6 +252,8 @@ export function useComposeEmail({
     editor,
     sendError,
     musicInviteBlocked,
+    showCreateContractHint,
+    showCreateDepositHint,
     canSend: canSendEmail({
       hasEmail: !noEmail,
       hasTemplate: !!selectedTemplateId,
