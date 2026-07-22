@@ -198,8 +198,12 @@ export default function ContactForm({
   };
 
   const selectedRole = watch('primaryRole');
-  const isVenue = selectedRole === 'VENUE';
-  const isAgent = selectedRole === 'BOOKING_AGENT';
+  // In embedded mode the booking role (contextRole) decides which role-specific block and the
+  // venue-address carve-out apply — not the contact's stored primaryRole, which still round-trips
+  // unchanged through submit. Outside embedded mode the Contact Type select drives it, as before.
+  const embeddedRole = contextRole ?? selectedRole;
+  const isVenue = embedded ? embeddedRole === 'VENUE' : selectedRole === 'VENUE';
+  const isAgent = embedded ? embeddedRole === 'BOOKING_AGENT' : selectedRole === 'BOOKING_AGENT';
   const [venueOpen, setVenueOpen] = useState(isVenue);
   const [agentOpen, setAgentOpen] = useState(isAgent);
   const [detailsOpen, setDetailsOpen] = useState(false);
