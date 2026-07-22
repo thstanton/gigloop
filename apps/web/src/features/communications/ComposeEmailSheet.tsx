@@ -19,17 +19,24 @@ import { InlineHint } from '@/components/common/InlineHint';
 import { TEMPLATE_DISPLAY } from '@/features/templates/templateMeta';
 import { formatMissingVariables, type AttachmentState } from './composeHelpers';
 import { useComposeEmail } from './useComposeEmail';
-import type { BookingDetail, Invoice, Template } from '@/types/api';
+import type { BookingDetail, ChecklistItem, Invoice, Template } from '@/types/api';
 
 interface Props {
   bookingId: string;
   booking: BookingDetail;
   invoices: Invoice[];
+  checklist: ChecklistItem[];
   defaultPaymentTermsDays: number | undefined;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialTemplateType?: string;
   onAfterSend?: (templateType: string | null) => void;
+  /** #757 Hint A action: create the contract, then open its editor (same as the checklist shortcut). */
+  onCreateContract: () => void;
+  /** True while the create-contract mutation is in flight — disables hint A to prevent a double-fire. */
+  creatingContract: boolean;
+  /** #757 Hint B action: route to the pre-filled deposit-invoice sheet. */
+  createDepositInvoiceHref: string;
 }
 
 // ─── Presentational fields ──────────────────────────────────────────────────
@@ -195,10 +202,53 @@ function BodyField({ rendering, editor }: { rendering: boolean; editor: Editor |
   );
 }
 
+// The three teaching hints the compose sheet can surface — grouped so the sheet body stays flat.
+function ComposeHints({
+  bookingId,
+  vm,
+  onCreateContract,
+  creatingContract,
+  createDepositInvoiceHref,
+}: {
+  bookingId: string;
+  vm: ReturnType<typeof useComposeEmail>;
+  onCreateContract: () => void;
+  creatingContract: boolean;
+  createDepositInvoiceHref: string;
+}) {
+  return (
+    <>
+      {vm.musicInviteBlocked && (
+        <InlineHint
+          icon={<EyeOff size={14} />}
+          actionLabel="Publish the form"
+          href={`/admin/bookings/${bookingId}?sheet=musicTweak`}
+        >
+          This music form isn't published yet, so the client can't see it.
+        </InlineHint>
+      )}
+      {vm.showCreateContractHint && (
+        <InlineHint
+          actionLabel={creatingContract ? 'Creating…' : 'Create the contract'}
+          onClick={onCreateContract}
+          disabled={creatingContract}
+        >
+          There's no contract yet — you can send it with this invoice in one email.
+        </InlineHint>
+      )}
+      {vm.showCreateDepositHint && (
+        <InlineHint actionLabel="Create the deposit invoice" href={createDepositInvoiceHref}>
+          You can send the contract and deposit invoice together in one email.
+        </InlineHint>
+      )}
+    </>
+  );
+}
+
 // ─── Body ─────────────────────────────────────────────────────────────────────
 
 function ComposeEmailSheetBody(props: Props) {
-  const { bookingId, booking, onOpenChange } = props;
+  const { bookingId, booking, onOpenChange, onCreateContract, creatingContract, createDepositInvoiceHref } = props;
   const vm = useComposeEmail(props);
 
   return (
@@ -229,15 +279,13 @@ function ComposeEmailSheetBody(props: Props) {
           <SubjectField rendering={vm.rendering} subject={vm.subject} onChange={vm.setSubject} />
         )}
         {vm.selectedTemplateId && <BodyField rendering={vm.rendering} editor={vm.editor} />}
-        {vm.musicInviteBlocked && (
-          <InlineHint
-            icon={<EyeOff size={14} />}
-            actionLabel="Publish the form"
-            href={`/admin/bookings/${bookingId}?sheet=musicTweak`}
-          >
-            This music form isn't published yet, so the client can't see it.
-          </InlineHint>
-        )}
+        <ComposeHints
+          bookingId={bookingId}
+          vm={vm}
+          onCreateContract={onCreateContract}
+          creatingContract={creatingContract}
+          createDepositInvoiceHref={createDepositInvoiceHref}
+        />
         {vm.sendError && <p className="text-sm text-status-cancelled">{vm.sendError}</p>}
       </div>
 

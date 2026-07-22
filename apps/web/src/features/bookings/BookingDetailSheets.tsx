@@ -16,6 +16,8 @@ import { useBookingFields } from '@/lib/hooks/useBookingFields';
 import { useCopyBooking } from '@/lib/hooks/useCopyBooking';
 import { useContractActions } from '@/lib/hooks/useContractActions';
 import { useBookingInvoices } from '@/lib/hooks/useBookingInvoices';
+import { isDepositPercentageHintEligible, depositAmount } from '@/lib/invoiceDerivations';
+import { buildSetsDescription } from '@/lib/bookingSets';
 import { CopyEventDialog } from '@/features/bookings/CopyEventDialog';
 import ContractSheet from '@/features/bookings/ContractSheet';
 import ContactEditSheet from '@/features/contacts/ContactEditSheet';
@@ -30,6 +32,7 @@ import InvoiceSheet from '@/features/invoices/InvoiceSheet';
 import MarkSentDialog from '@/features/invoices/MarkSentDialog';
 import { apiGet } from '@/lib/api';
 import type {
+  BookingDetail,
   Template,
   UserProfile,
 } from '@/types/api';
@@ -37,6 +40,22 @@ import type {
 
 interface BookingDetailSheetsProps {
   bookingId: string;
+}
+
+// #757 Hint B target: the deposit-invoice sheet, pre-filled exactly like the "Add invoice" menu
+// (InvoiceSection.openCreateInvoice) — deposit flag, fee × default-% amount, and the sets description.
+function buildCreateDepositHref(
+  bookingId: string,
+  booking: BookingDetail,
+  depositPercentage: number | null | undefined,
+): string {
+  const params = new URLSearchParams({ sheet: 'invoice', isDeposit: 'true' });
+  if (booking.fee && depositPercentage) {
+    params.set('amount', String(depositAmount(parseFloat(booking.fee), depositPercentage)));
+  }
+  const desc = buildSetsDescription(booking);
+  if (desc) params.set('description', desc);
+  return `/admin/bookings/${bookingId}?${params.toString()}`;
 }
 
 export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
@@ -54,6 +73,7 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
   const { isLoaded } = useAuth();
   const { data: booking } = useBooking(bookingId);
   const {
+    checklist,
     readyDialogStatus,
     celebratoryTitle,
     dismissReadyDialog,
@@ -87,6 +107,15 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
   const invoiceSheetPrefill = sheet === 'invoice' && !sheetInvoiceId && searchParams.has('isDeposit')
     ? { isDeposit: sheetIsDeposit, amount: sheetAmount, description: sheetDescription }
     : undefined;
+  // #758: computed here (not in InvoiceSheet) because neither the fee nor the profile setting is
+  // in the sheet's scope. The sheet decides whether to *show* it (create mode + deposit toggle on).
+  const depositPercentageHintEligible = isDepositPercentageHintEligible(booking.fee, userProfile);
+
+  // #757 Hint A: create the contract then open its editor — byte-for-byte the checklist shortcut
+  // (useChecklistActions). A click fires this once; no destructive route param needed.
+  const onCreateContract = () =>
+    contractActions.createContract(() => setSearchParams({ sheet: 'contract' }));
+  const createDepositInvoiceHref = buildCreateDepositHref(bookingId, booking, userProfile?.depositPercentage);
   const markSentInvoice = sheet === 'markSent' && sheetInvoiceId
     ? invoices.find((inv) => inv.id === sheetInvoiceId)
     : undefined;
@@ -181,6 +210,7 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
         invoice={editingInvoice}
         hasDepositInvoice={invoices.some((inv) => inv.isDeposit)}
         prefill={invoiceSheetPrefill}
+        depositPercentageHintEligible={depositPercentageHintEligible}
         open={sheet === 'invoice'}
         onOpenChange={(open) => { if (!open) setSearchParams({}); }}
         onAfterIssue={(inv) => {
@@ -192,10 +222,14 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
         bookingId={bookingId}
         booking={booking}
         invoices={invoices}
+        checklist={checklist}
         defaultPaymentTermsDays={userProfile?.defaultPaymentTermsDays}
         open={sheet === 'compose'}
         onOpenChange={(open) => { if (!open) setSearchParams({}); }}
         initialTemplateType={sheet === 'compose' ? sheetTemplateType : undefined}
+        onCreateContract={onCreateContract}
+        creatingContract={contractActions.isCreatingContract}
+        createDepositInvoiceHref={createDepositInvoiceHref}
         onAfterSend={(templateType) => {
           const isContractEmail = templateType === 'contract_cover' || templateType === 'contract_and_deposit_cover';
           const contractId = booking.activeContract?.id;

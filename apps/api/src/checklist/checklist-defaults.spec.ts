@@ -21,10 +21,24 @@ const buildItinerary = () => {
 };
 
 describe('add_venue checklist default (Module D)', () => {
-  it('is a READY-staged default bound to the venue completeness predicate', () => {
+  it('is a CONFIRMED-staged default bound to the venue completeness predicate', () => {
     const item = addVenue();
-    expect(item.requiredForStatus).toBe('READY');
+    expect(item.requiredForStatus).toBe('CONFIRMED');
     expect(item.autoCompleteRule).toEqual({ type: 'completeness', concern: 'venue' });
+  });
+
+  // #759: the venue must be settled before the contract is created, because contract
+  // variables are substituted at creation and never re-substituted. Goals sort by stage
+  // first and catalogue order within the stage, so this needs both the CONFIRMED stage
+  // above and the catalogue position asserted here.
+  it('precedes the contract goal in the catalogue', () => {
+    const keys = CHECKLIST_DEFAULTS.map((d) => d.key);
+    expect(keys.indexOf('add_venue')).toBeLessThan(keys.indexOf('get_contract_signed'));
+  });
+
+  it('shares the contract goal’s stage, so ordering is decided by catalogue position', () => {
+    const contract = CHECKLIST_DEFAULTS.find((d) => d.key === 'get_contract_signed');
+    expect(addVenue().requiredForStatus).toBe(contract?.requiredForStatus);
   });
 
   it('is enabled by default (a seeded item, just disablable)', () => {
@@ -35,23 +49,25 @@ describe('add_venue checklist default (Module D)', () => {
     const keysFor = (status: string) =>
       filterItemsByStartingStatus(CHECKLIST_DEFAULTS, status).map((i) => i.key);
 
-    // A READY-staged item is seeded for bookings whose starting status is *before* READY,
-    // and — matching the existing stage-filter semantics for every item (cf.
-    // create_balance_invoice) — is NOT seeded for a booking created already at/after READY,
-    // where READY-stage prep is treated as already handled outside the system.
-    it.each(['ENQUIRY', 'PROVISIONAL', 'CONFIRMED'])(
+    // A CONFIRMED-staged item is seeded for bookings whose starting status is *before*
+    // CONFIRMED, and — matching the existing stage-filter semantics for every item —
+    // is NOT seeded for a booking created already at/after CONFIRMED.
+    it.each(['ENQUIRY', 'PROVISIONAL'])(
       'includes add_venue for a booking starting at %s',
       (status) => {
         expect(keysFor(status)).toContain('add_venue');
       },
     );
 
-    it.each(['READY', 'COMPLETE'])(
-      'excludes add_venue for a booking starting at %s (same as other READY items)',
+    // #759, accepted deliberately: a booking created at CONFIRMED forgoes the whole
+    // CONFIRMED stage — it already forgoes get_contract_signed — so it no longer seeds
+    // add_venue either. Pinned so this is not later mistaken for a regression.
+    it.each(['CONFIRMED', 'READY', 'COMPLETE'])(
+      'excludes add_venue for a booking starting at %s (same as every CONFIRMED item)',
       (status) => {
         expect(keysFor(status)).not.toContain('add_venue');
-        // sanity: it behaves identically to the existing READY default
-        expect(keysFor(status)).not.toContain('invoice_the_balance');
+        // sanity: it behaves identically to the other CONFIRMED-staged goal
+        expect(keysFor(status)).not.toContain('get_contract_signed');
       },
     );
   });
@@ -61,7 +77,10 @@ describe('add_venue checklist default (Module D)', () => {
       const defaults: ChecklistDefaultItem[] = CHECKLIST_DEFAULTS.map((d) =>
         d.key === 'add_venue' ? { ...d, enabled: false } : d,
       );
-      const keys = filterItemsByStartingStatus(defaults, 'CONFIRMED').map((i) => i.key);
+      // PROVISIONAL, not CONFIRMED — add_venue is CONFIRMED-staged, so a CONFIRMED start
+      // would exclude it by stage and the assertion would pass without the disable doing
+      // any work.
+      const keys = filterItemsByStartingStatus(defaults, 'PROVISIONAL').map((i) => i.key);
       expect(keys).not.toContain('add_venue');
       // other defaults still seed — only the disabled one drops out
       expect(keys).toContain('get_the_balance_paid');
@@ -95,7 +114,6 @@ describe('build_itinerary checklist default (Module D / #523)', () => {
       'excludes build_itinerary for a booking starting at %s (same as other READY items)',
       (status) => {
         expect(keysFor(status)).not.toContain('build_itinerary');
-        expect(keysFor(status)).not.toContain('add_venue');
       },
     );
   });
@@ -105,7 +123,7 @@ describe('build_itinerary checklist default (Module D / #523)', () => {
       const defaults: ChecklistDefaultItem[] = CHECKLIST_DEFAULTS.map((d) =>
         d.key === 'build_itinerary' ? { ...d, enabled: false } : d,
       );
-      const keys = filterItemsByStartingStatus(defaults, 'CONFIRMED').map((i) => i.key);
+      const keys = filterItemsByStartingStatus(defaults, 'PROVISIONAL').map((i) => i.key);
       expect(keys).not.toContain('build_itinerary');
       expect(keys).toContain('add_venue');
     });

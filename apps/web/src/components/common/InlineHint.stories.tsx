@@ -42,6 +42,22 @@ export const CustomIcon: Story = {
   },
 };
 
+/** Action as an operation: `onClick` renders a button instead of a link, for hints whose action mutates rather than navigates. */
+export const ActionButton: Story = {
+  args: {
+    href: undefined,
+    onClick: fn(),
+    actionLabel: 'Create the contract',
+    children: "There's no contract yet.",
+  },
+  play: async ({ canvas, args }) => {
+    const button = canvas.getByRole('button', { name: /create the contract/i });
+    await expect(button).toBeVisible();
+    await userEvent.click(button);
+    await expect(args.onClick).toHaveBeenCalledOnce();
+  },
+};
+
 /** With `onDismiss`, a trailing "X" lets the musician clear the hint (persistence is the caller's job). */
 export const Dismissible: Story = {
   args: {

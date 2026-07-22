@@ -7,6 +7,9 @@ import {
   coverTemplateFor,
   activeInvoiceOf,
   sentInvoiceOf,
+  hasAnyDepositInvoice,
+  contractCoverTemplateFor,
+  isDepositPercentageHintEligible,
 } from './invoiceDerivations';
 import type { Invoice } from '@/types/api';
 
@@ -124,5 +127,63 @@ describe('sentInvoiceOf', () => {
 
   it('returns undefined when the kind is not SENT', () => {
     expect(sentInvoiceOf(true, [issuedDeposit])).toBeUndefined();
+  });
+});
+
+describe('hasAnyDepositInvoice (#756)', () => {
+  it('is true when a deposit invoice exists', () => {
+    expect(hasAnyDepositInvoice([make({ isDeposit: true })])).toBe(true);
+  });
+
+  it('is false when only a balance invoice exists', () => {
+    expect(hasAnyDepositInvoice([make({ isDeposit: false })])).toBe(false);
+  });
+
+  it('is false for an empty list', () => {
+    expect(hasAnyDepositInvoice([])).toBe(false);
+  });
+
+  // Void-inclusive on purpose: it must match shouldHideTemplate exactly, so the contract-send
+  // shortcut can never pre-select a template the picker hides. A void-only deposit → template
+  // shown → shortcut may pre-select it (both agree).
+  it('is true for a VOID-only deposit invoice (matches shouldHideTemplate)', () => {
+    expect(hasAnyDepositInvoice([make({ isDeposit: true, status: 'VOID' })])).toBe(true);
+  });
+});
+
+describe('contractCoverTemplateFor (#756) — the shortcut both layouts use', () => {
+  it('offers the combined email when a deposit invoice exists', () => {
+    expect(contractCoverTemplateFor([make({ isDeposit: true })])).toBe('contract_and_deposit_cover');
+  });
+
+  it('offers the plain contract cover when no deposit invoice exists', () => {
+    expect(contractCoverTemplateFor([make({ isDeposit: false })])).toBe('contract_cover');
+    expect(contractCoverTemplateFor([])).toBe('contract_cover');
+  });
+
+  it('offers the combined email even for a VOID-only deposit (never pre-selects a hidden template)', () => {
+    expect(contractCoverTemplateFor([make({ isDeposit: true, status: 'VOID' })])).toBe('contract_and_deposit_cover');
+  });
+});
+
+describe('isDepositPercentageHintEligible (#758)', () => {
+  it('is eligible when the fee is positive and no default percentage is set', () => {
+    expect(isDepositPercentageHintEligible('1500.00', { depositPercentage: null })).toBe(true);
+  });
+
+  it('is not eligible when a default percentage exists', () => {
+    expect(isDepositPercentageHintEligible('1500.00', { depositPercentage: 30 })).toBe(false);
+  });
+
+  it('is not eligible for a null, blank, or zero fee (a different gap)', () => {
+    expect(isDepositPercentageHintEligible(null, { depositPercentage: null })).toBe(false);
+    expect(isDepositPercentageHintEligible('', { depositPercentage: null })).toBe(false);
+    expect(isDepositPercentageHintEligible('0', { depositPercentage: null })).toBe(false);
+    expect(isDepositPercentageHintEligible('0.00', { depositPercentage: null })).toBe(false);
+  });
+
+  it('is not eligible until the profile is known (never flashes on load)', () => {
+    expect(isDepositPercentageHintEligible('1500.00', undefined)).toBe(false);
+    expect(isDepositPercentageHintEligible('1500.00', null)).toBe(false);
   });
 });

@@ -1,10 +1,12 @@
 import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, userEvent, waitFor, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { http, HttpResponse } from 'msw';
 import { MemoryRouter } from 'react-router-dom';
 import ComposeEmailSheet from './ComposeEmailSheet';
-import type { BookingDetail, Invoice } from '@/types/api';
+import type { BookingDetail, ChecklistItem, Invoice } from '@/types/api';
+
+const goal = (key: string): ChecklistItem => ({ key } as unknown as ChecklistItem);
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -70,6 +72,12 @@ const confirmationTemplate = {
   createdAt: '2030-01-01T00:00:00Z', updatedAt: '2030-01-01T00:00:00Z',
 };
 
+const contractCoverTemplate = {
+  id: 'tpl-con', name: 'Contract email', builtInType: 'contract_cover',
+  content: { type: 'doc', content: [] },
+  createdAt: '2030-01-01T00:00:00Z', updatedAt: '2030-01-01T00:00:00Z',
+};
+
 const renderResult = {
   subject: 'Your deposit invoice — Stanton Strings',
   body: '<p>Dear Sophie, please find your deposit invoice attached.</p>',
@@ -92,9 +100,13 @@ const meta = {
     bookingId: 'b1',
     booking,
     invoices: [] as Invoice[],
+    checklist: [] as ChecklistItem[],
     defaultPaymentTermsDays: 30,
     open: true,
     onOpenChange: () => {},
+    onCreateContract: () => {},
+    creatingContract: false,
+    createDepositInvoiceHref: '/admin/bookings/b1?sheet=invoice&isDeposit=true',
   },
 } satisfies Meta<typeof ComposeEmailSheet>;
 
@@ -228,5 +240,83 @@ export const NoAttachment: Story = {
     // No attachment indicator present
     expect(canvas.queryByText(/invoice.*pdf/i)).toBeNull();
     expect(canvas.queryByText(/no.*invoice to attach/i)).toBeNull();
+  },
+};
+
+// #757 Hint A: sending a deposit invoice with no contract, and the contract goal is on the
+// checklist → nudge to create the contract. Its action is a button (a mutation, not a route).
+export const CreateContractHint: Story = {
+  args: {
+    invoices: [issuedDepositInvoice],
+    checklist: [goal('get_contract_signed')],
+    initialTemplateType: 'deposit_invoice_cover',
+    onCreateContract: fn(),
+  },
+  parameters: {
+    msw: {
+      handlers: [
+        http.get('/api/templates', () => HttpResponse.json([depositCoverTemplate])),
+        http.get('/api/bookings/b1/communications/render', () => HttpResponse.json(renderResult)),
+      ],
+    },
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement.ownerDocument.body);
+    const button = await canvas.findByRole('button', { name: /Create the contract/i });
+    await expect(button).toBeVisible();
+    await userEvent.click(button);
+    await expect(args.onCreateContract).toHaveBeenCalledOnce();
+  },
+};
+
+// #757 Hint A while the create-contract mutation is in flight: the action is disabled and reads
+// "Creating…" so a double-click can't fire createContract twice (which would orphan a DRAFT).
+export const CreateContractHintPending: Story = {
+  args: {
+    invoices: [issuedDepositInvoice],
+    checklist: [goal('get_contract_signed')],
+    initialTemplateType: 'deposit_invoice_cover',
+    onCreateContract: fn(),
+    creatingContract: true,
+  },
+  parameters: {
+    msw: {
+      handlers: [
+        http.get('/api/templates', () => HttpResponse.json([depositCoverTemplate])),
+        http.get('/api/bookings/b1/communications/render', () => HttpResponse.json(renderResult)),
+      ],
+    },
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement.ownerDocument.body);
+    const button = await canvas.findByRole('button', { name: /Creating…/i });
+    await expect(button).toBeDisabled();
+    await userEvent.click(button);
+    await expect(args.onCreateContract).not.toHaveBeenCalled();
+  },
+};
+
+// #757 Hint B: sending a contract with no deposit invoice, and the deposit goal is on the
+// checklist → nudge to create the deposit invoice. Its action is a link to the pre-filled sheet.
+export const CreateDepositHint: Story = {
+  args: {
+    invoices: [],
+    checklist: [goal('get_deposit_paid')],
+    initialTemplateType: 'contract_cover',
+    createDepositInvoiceHref: '/admin/bookings/b1?sheet=invoice&isDeposit=true&amount=600.00',
+  },
+  parameters: {
+    msw: {
+      handlers: [
+        http.get('/api/templates', () => HttpResponse.json([contractCoverTemplate])),
+        http.get('/api/bookings/b1/communications/render', () => HttpResponse.json(confirmationRenderResult)),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement.ownerDocument.body);
+    const link = await canvas.findByRole('link', { name: /Create the deposit invoice/i });
+    await expect(link).toBeVisible();
+    await expect(link).toHaveAttribute('href', '/admin/bookings/b1?sheet=invoice&isDeposit=true&amount=600.00');
   },
 };

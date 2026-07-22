@@ -113,10 +113,14 @@ function Wrapper() {
         bookingId="b1"
         booking={mockBooking}
         invoices={[] as Invoice[]}
+        checklist={[]}
         defaultPaymentTermsDays={undefined}
         open={open}
         onOpenChange={setOpen}
         initialTemplateType="confirmation"
+        onCreateContract={() => {}}
+        creatingContract={false}
+        createDepositInvoiceHref="/admin/bookings/b1?sheet=invoice&isDeposit=true"
       />
     </QueryClientProvider>
   );

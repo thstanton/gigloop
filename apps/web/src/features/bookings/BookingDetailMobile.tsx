@@ -6,6 +6,7 @@ import { LOGISTICS_DETAIL_KEYS, LOGISTICS_SYSTEM_KEYS } from '@/lib/constants';
 
 import { useBooking } from '@/lib/hooks/useBooking';
 import { useBookingChecklist } from '@/lib/hooks/useBookingChecklist';
+import { useBookingInvoices } from '@/lib/hooks/useBookingInvoices';
 import { useBookingFields } from '@/lib/hooks/useBookingFields';
 import { useContractActions } from '@/lib/hooks/useContractActions';
 import { useBookingCommunications } from '@/lib/hooks/useBookingCommunications';
@@ -23,6 +24,7 @@ import { SeriesEventsCard } from '@/features/bookings/SeriesEventsCard';
 import ContractCard from '@/features/bookings/ContractCard';
 import SeriesInvoiceCard from '@/features/bookings/SeriesInvoiceCard';
 import InvoiceSection from '@/features/bookings/InvoiceSection';
+import { contractCoverTemplateFor } from '@/lib/invoiceDerivations';
 import { DocumentsCard } from '@/features/bookings/DocumentsCard';
 import MusicFormSection from '@/features/bookings/MusicFormSection';
 import { AddToTheDayCard, type AddToTheDayConcern } from '@/features/bookings/AddToTheDayCard';
@@ -88,14 +90,16 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
     addItem,
     isAddingItem,
   } = useBookingChecklist(bookingId, booking, isLoaded);
+  const { data: invoices = [] } = useBookingInvoices(bookingId);
 
   if (isLoading) return <MobileTabsSkeleton />;
   if (!booking) return null;
 
   const title = booking.title || `Booking ${bookingId.slice(0, 8)}`;
   const backState = { from: `/admin/bookings/${bookingId}`, label: title };
-  const hasDepositItem = checklist.some((item) => item.key === 'deposit_received');
-  const contractShortcutType = hasDepositItem ? 'contract_and_deposit_cover' : 'contract_cover';
+  // #756: key off the deposit invoice, not a checklist item — see BookingDetailDesktop for the full
+  // rationale (goals-only checklist made the old `deposit_received` check permanently false).
+  const contractShortcutType = contractCoverTemplateFor(invoices);
 
   const defaultTab: 'checklist' | 'onTheDay' =
     booking.status === 'ENQUIRY' || booking.status === 'PROVISIONAL' || booking.status === 'CONFIRMED'
