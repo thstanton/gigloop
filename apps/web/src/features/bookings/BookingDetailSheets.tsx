@@ -16,6 +16,7 @@ import { useBookingFields } from '@/lib/hooks/useBookingFields';
 import { useCopyBooking } from '@/lib/hooks/useCopyBooking';
 import { useContractActions } from '@/lib/hooks/useContractActions';
 import { useBookingInvoices } from '@/lib/hooks/useBookingInvoices';
+import { isDepositPercentageHintEligible } from '@/lib/invoiceDerivations';
 import { CopyEventDialog } from '@/features/bookings/CopyEventDialog';
 import ContractSheet from '@/features/bookings/ContractSheet';
 import ContactEditSheet from '@/features/contacts/ContactEditSheet';
@@ -87,6 +88,9 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
   const invoiceSheetPrefill = sheet === 'invoice' && !sheetInvoiceId && searchParams.has('isDeposit')
     ? { isDeposit: sheetIsDeposit, amount: sheetAmount, description: sheetDescription }
     : undefined;
+  // #758: computed here (not in InvoiceSheet) because neither the fee nor the profile setting is
+  // in the sheet's scope. The sheet decides whether to *show* it (create mode + deposit toggle on).
+  const depositPercentageHintEligible = isDepositPercentageHintEligible(booking.fee, userProfile);
   const markSentInvoice = sheet === 'markSent' && sheetInvoiceId
     ? invoices.find((inv) => inv.id === sheetInvoiceId)
     : undefined;
@@ -181,6 +185,7 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
         invoice={editingInvoice}
         hasDepositInvoice={invoices.some((inv) => inv.isDeposit)}
         prefill={invoiceSheetPrefill}
+        depositPercentageHintEligible={depositPercentageHintEligible}
         open={sheet === 'invoice'}
         onOpenChange={(open) => { if (!open) setSearchParams({}); }}
         onAfterIssue={(inv) => {

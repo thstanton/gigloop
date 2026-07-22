@@ -92,6 +92,75 @@ export const NewInvoiceVoidReuse: Story = {
   },
 };
 
+// #758: creating a deposit invoice with a fee set but no default deposit % — the amount can't be
+// pre-filled, so a dismissible hint points at Settings. Container decides eligibility; the sheet
+// shows it only when the deposit toggle is on.
+export const DepositPercentageHint: Story = {
+  args: {
+    prefill: { isDeposit: true },
+    depositPercentageHintEligible: true,
+  },
+  parameters: {
+    msw: {
+      // Stateful /me so the post-dismiss invalidation refetch reflects the dismissal rather
+      // than reverting it (the optimistic update alone would be undone by a stale GET).
+      handlers: (() => {
+        const dismissed: string[] = [];
+        return [
+          http.get('/api/bookings/b1/invoices/preview-number', () => HttpResponse.json(previewFresh)),
+          http.get('/api/me', () => HttpResponse.json({ preferences: { dismissedHints: [...dismissed] } })),
+          http.patch('/api/me', async ({ request }) => {
+            const body = (await request.json()) as { preferences?: { dismissedHints?: string[] } };
+            if (body.preferences?.dismissedHints) {
+              dismissed.length = 0;
+              dismissed.push(...body.preferences.dismissedHints);
+            }
+            return HttpResponse.json({ preferences: { dismissedHints: [...dismissed] } });
+          }),
+        ];
+      })(),
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement.ownerDocument.body);
+    const hint = await canvas.findByText(/Set a default deposit percentage/);
+    await expect(hint).toBeVisible();
+
+    // The action routes to Settings.
+    const link = await canvas.findByRole('link', { name: /Set it in Settings/ });
+    await expect(link).toHaveAttribute('href', '/admin/settings');
+
+    // Dismissing hides it (optimistic).
+    await userEvent.click(await canvas.findByRole('button', { name: 'Dismiss' }));
+    await waitFor(async () => {
+      await expect(canvas.queryByText(/Set a default deposit percentage/)).toBeNull();
+    });
+  },
+};
+
+// #758: with the deposit toggle off, the hint stays hidden even when the container says eligible.
+export const DepositPercentageHintHiddenForNonDeposit: Story = {
+  args: {
+    prefill: { isDeposit: false },
+    depositPercentageHintEligible: true,
+  },
+  parameters: {
+    msw: {
+      handlers: [
+        http.get('/api/bookings/b1/invoices/preview-number', () => HttpResponse.json(previewFresh)),
+        http.get('/api/me', () => HttpResponse.json({ preferences: { dismissedHints: [] } })),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement.ownerDocument.body);
+    await waitFor(async () => {
+      await expect(canvas.findByText(/INV-2026-007/)).resolves.toBeVisible();
+    });
+    await expect(canvas.queryByText(/Set a default deposit percentage/)).toBeNull();
+  },
+};
+
 // Edit mode: no preview line (preview is only shown on create)
 export const EditMode: Story = {
   args: { invoice: draftInvoice },

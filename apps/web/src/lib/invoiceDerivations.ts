@@ -27,6 +27,21 @@ export function balanceAmount(fee: number, pct: number): number {
 }
 
 /**
+ * #758: a deposit amount is pre-filled from fee × default-deposit-%. When the booking has a
+ * positive fee but no default percentage is set, the amount lands blank — the signal to nudge the
+ * user to set a default so future deposits pre-fill. Returns false until the profile is known, so
+ * the hint never flashes before we can tell whether a default exists. `fee` is the Decimal-string
+ * off the booking; a null/blank/zero fee is a different gap (out of scope) and yields false.
+ */
+export function isDepositPercentageHintEligible(
+  fee: string | null,
+  profile: { depositPercentage: number | null } | null | undefined,
+): boolean {
+  if (!profile || profile.depositPercentage != null) return false;
+  return !!fee && parseFloat(fee) > 0;
+}
+
+/**
  * Cover-email template for sending an invoice. A series invoice has isDeposit false, so it resolves
  * to the balance cover — preserving today's hardcoded series send.
  */

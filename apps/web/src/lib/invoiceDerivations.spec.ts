@@ -7,6 +7,7 @@ import {
   coverTemplateFor,
   activeInvoiceOf,
   sentInvoiceOf,
+  isDepositPercentageHintEligible,
 } from './invoiceDerivations';
 import type { Invoice } from '@/types/api';
 
@@ -124,5 +125,27 @@ describe('sentInvoiceOf', () => {
 
   it('returns undefined when the kind is not SENT', () => {
     expect(sentInvoiceOf(true, [issuedDeposit])).toBeUndefined();
+  });
+});
+
+describe('isDepositPercentageHintEligible (#758)', () => {
+  it('is eligible when the fee is positive and no default percentage is set', () => {
+    expect(isDepositPercentageHintEligible('1500.00', { depositPercentage: null })).toBe(true);
+  });
+
+  it('is not eligible when a default percentage exists', () => {
+    expect(isDepositPercentageHintEligible('1500.00', { depositPercentage: 30 })).toBe(false);
+  });
+
+  it('is not eligible for a null, blank, or zero fee (a different gap)', () => {
+    expect(isDepositPercentageHintEligible(null, { depositPercentage: null })).toBe(false);
+    expect(isDepositPercentageHintEligible('', { depositPercentage: null })).toBe(false);
+    expect(isDepositPercentageHintEligible('0', { depositPercentage: null })).toBe(false);
+    expect(isDepositPercentageHintEligible('0.00', { depositPercentage: null })).toBe(false);
+  });
+
+  it('is not eligible until the profile is known (never flashes on load)', () => {
+    expect(isDepositPercentageHintEligible('1500.00', undefined)).toBe(false);
+    expect(isDepositPercentageHintEligible('1500.00', null)).toBe(false);
   });
 });

@@ -21,6 +21,8 @@ import {
 } from '@/components/ui/responsive-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { InlineHint } from '@/components/common/InlineHint';
+import { useDismissibleHint } from '@/lib/hooks/useDismissibleHint';
 import { apiGet, apiPost, apiPatch, apiDelete } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
 import type { Invoice, InvoiceLineItem, InvoiceNumberPreview } from '@/types/api';
@@ -151,6 +153,13 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   prefill?: { isDeposit: boolean; amount?: number; description?: string };
+  /**
+   * True when the booking has a positive fee but no default deposit percentage is set, so the
+   * deposit amount could not be pre-filled (#758). The container owns this because neither the
+   * fee nor the profile setting is in the sheet's scope. The sheet decides *whether* to show the
+   * hint (create mode + the deposit toggle on).
+   */
+  depositPercentageHintEligible?: boolean;
   /** Called after create+issue completes — use to open the compose sheet for the new invoice. */
   onAfterIssue?: (invoice: Invoice) => void;
 }
@@ -162,10 +171,13 @@ export default function InvoiceSheet({
   open,
   onOpenChange,
   prefill,
+  depositPercentageHintEligible = false,
   onAfterIssue,
 }: Props) {
   const isEdit = !!invoice;
   const { isLoaded } = useAuth();
+  const { isDismissed: depositHintDismissed, dismiss: dismissDepositHint } =
+    useDismissibleHint('deposit-percentage-default');
   const queryClient = useQueryClient();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingFormValues, setPendingFormValues] = useState<FormValues | null>(null);
@@ -286,6 +298,11 @@ export default function InvoiceSheet({
   }
 
   const showDepositToggle = !isEdit && !hasDepositInvoice;
+  // #758: only when the user is actually creating a deposit invoice (toggle on) and the default
+  // percentage that would have pre-filled the amount is missing. Forward-looking — following the
+  // link abandons this half-made invoice, so the copy promises the next time, not this one.
+  const showDepositPercentageHint =
+    !isEdit && isDeposit && depositPercentageHintEligible && !depositHintDismissed;
   const isIssuing = createAndIssueMutation.isPending || issueDraftMutation.isPending;
   // Issue is the single committing verb across create and draft-edit (ADR-0056).
   const confirmButtonLabel = isIssuing ? 'Issuing…' : 'Issue invoice';
@@ -314,6 +331,17 @@ export default function InvoiceSheet({
                 />
                 <span className="text-sm font-medium text-foreground">Deposit invoice</span>
               </label>
+            )}
+
+            {/* #758: nudge to set a default deposit percentage so future deposits pre-fill. */}
+            {showDepositPercentageHint && (
+              <InlineHint
+                actionLabel="Set it in Settings"
+                href="/admin/settings"
+                onDismiss={dismissDepositHint}
+              >
+                Set a default deposit percentage and we&rsquo;ll work this out for you next time.
+              </InlineHint>
             )}
 
             {/* Edit mode: show deposit badge (not editable) */}
