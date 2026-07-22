@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { DocumentsCard } from '@/features/bookings/DocumentsCard';
 import { useBooking } from '@/lib/hooks/useBooking';
 import { useBookingChecklist } from '@/lib/hooks/useBookingChecklist';
+import { useBookingInvoices } from '@/lib/hooks/useBookingInvoices';
 import { useBookingFields } from '@/lib/hooks/useBookingFields';
 import { useContractActions } from '@/lib/hooks/useContractActions';
 import { useBookingCommunications } from '@/lib/hooks/useBookingCommunications';
@@ -15,6 +16,7 @@ import { SeriesEventsCard } from '@/features/bookings/SeriesEventsCard';
 import ContractCard from '@/features/bookings/ContractCard';
 import InvoiceSection from '@/features/bookings/InvoiceSection';
 import ChecklistSection, { clientDisplayName } from '@/features/bookings/ChecklistSection';
+import { contractCoverTemplateFor } from '@/lib/invoiceDerivations';
 import PersonCard from '@/features/bookings/PersonCard';
 import InlineNotes from '@/features/bookings/InlineNotes';
 import CommunicationsSection from '@/features/bookings/CommunicationsSection';
@@ -56,13 +58,16 @@ export function BookingDetailDesktop({ bookingId }: BookingDetailDesktopProps) {
   const contractActions = useContractActions(bookingId);
   const fields = useBookingFields(bookingId);
   const { checklist, checklistLoading, toggleItem, addItem, isAddingItem } = useBookingChecklist(bookingId, booking, isLoaded);
+  const { data: invoices = [] } = useBookingInvoices(bookingId);
 
   if (!booking) return null;
 
   const title = booking.title ?? EVENT_TYPE_LABELS[booking.eventType];
   const backState = { from: `/admin/bookings/${bookingId}`, label: title };
-  const hasDepositItem = checklist.some((item) => item.key === 'deposit_received');
-  const contractShortcutType = hasDepositItem ? 'contract_and_deposit_cover' : 'contract_cover';
+  // #756: key off the deposit invoice, not a checklist item. Post-ADR-0057 `checklist` is goals-only
+  // (`deposit_received` is a nested step key, never a goal key), so the old `checklist.some(key ===
+  // 'deposit_received')` was always false and the combined email was never offered.
+  const contractShortcutType = contractCoverTemplateFor(invoices);
 
   function openCompose(templateType?: string) {
     setSearchParams(templateType ? { sheet: 'compose', templateType } : { sheet: 'compose' });

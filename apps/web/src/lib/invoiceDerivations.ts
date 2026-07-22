@@ -54,6 +54,30 @@ export function activeInvoiceOf(isDeposit: boolean, invoices: Invoice[]): Invoic
   return invoices.find((inv) => inv.isDeposit === isDeposit && inv.status !== 'VOID');
 }
 
+/**
+ * Whether a deposit invoice exists in **any** state, including VOID (#756). This governs whether
+ * the combined "Contract & deposit email" is offered — the contract-send shortcut pre-selects it,
+ * and `shouldHideTemplate` hides it — so both MUST key off this one predicate, or the shortcut can
+ * pre-select a template the picker hides. Deliberately distinct from `activeInvoiceOf(true, …)`,
+ * which asks whether a *usable* (non-void) deposit invoice exists — that is the right question for
+ * a hint about attaching one, but the wrong one for template visibility.
+ */
+export function hasAnyDepositInvoice(invoices: Invoice[]): boolean {
+  return invoices.some((inv) => inv.isDeposit);
+}
+
+/**
+ * The cover-email template the contract-send shortcut pre-selects (#756). When a deposit invoice
+ * exists it offers the combined "Contract & deposit email"; otherwise the plain contract cover.
+ * Keyed off `hasAnyDepositInvoice` so both booking-detail layouts derive it identically and it can
+ * never pre-select a template `shouldHideTemplate` hides.
+ */
+export function contractCoverTemplateFor(
+  invoices: Invoice[],
+): 'contract_and_deposit_cover' | 'contract_cover' {
+  return hasAnyDepositInvoice(invoices) ? 'contract_and_deposit_cover' : 'contract_cover';
+}
+
 /** The SENT invoice of the given kind, or undefined. */
 export function sentInvoiceOf(isDeposit: boolean, invoices: Invoice[]): Invoice | undefined {
   return invoices.find((inv) => inv.isDeposit === isDeposit && inv.status === 'SENT');

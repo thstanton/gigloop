@@ -7,6 +7,8 @@ import {
   coverTemplateFor,
   activeInvoiceOf,
   sentInvoiceOf,
+  hasAnyDepositInvoice,
+  contractCoverTemplateFor,
   isDepositPercentageHintEligible,
 } from './invoiceDerivations';
 import type { Invoice } from '@/types/api';
@@ -125,6 +127,42 @@ describe('sentInvoiceOf', () => {
 
   it('returns undefined when the kind is not SENT', () => {
     expect(sentInvoiceOf(true, [issuedDeposit])).toBeUndefined();
+  });
+});
+
+describe('hasAnyDepositInvoice (#756)', () => {
+  it('is true when a deposit invoice exists', () => {
+    expect(hasAnyDepositInvoice([make({ isDeposit: true })])).toBe(true);
+  });
+
+  it('is false when only a balance invoice exists', () => {
+    expect(hasAnyDepositInvoice([make({ isDeposit: false })])).toBe(false);
+  });
+
+  it('is false for an empty list', () => {
+    expect(hasAnyDepositInvoice([])).toBe(false);
+  });
+
+  // Void-inclusive on purpose: it must match shouldHideTemplate exactly, so the contract-send
+  // shortcut can never pre-select a template the picker hides. A void-only deposit → template
+  // shown → shortcut may pre-select it (both agree).
+  it('is true for a VOID-only deposit invoice (matches shouldHideTemplate)', () => {
+    expect(hasAnyDepositInvoice([make({ isDeposit: true, status: 'VOID' })])).toBe(true);
+  });
+});
+
+describe('contractCoverTemplateFor (#756) — the shortcut both layouts use', () => {
+  it('offers the combined email when a deposit invoice exists', () => {
+    expect(contractCoverTemplateFor([make({ isDeposit: true })])).toBe('contract_and_deposit_cover');
+  });
+
+  it('offers the plain contract cover when no deposit invoice exists', () => {
+    expect(contractCoverTemplateFor([make({ isDeposit: false })])).toBe('contract_cover');
+    expect(contractCoverTemplateFor([])).toBe('contract_cover');
+  });
+
+  it('offers the combined email even for a VOID-only deposit (never pre-selects a hidden template)', () => {
+    expect(contractCoverTemplateFor([make({ isDeposit: true, status: 'VOID' })])).toBe('contract_and_deposit_cover');
   });
 });
 

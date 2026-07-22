@@ -1,6 +1,6 @@
 import type { BuiltInTemplateType, Invoice, Template } from '@/types/api';
 import { VAR_LABELS, BUILT_IN_EMAIL_TYPES } from '@/features/templates/templateMeta';
-import { activeInvoiceOf } from '@/lib/invoiceDerivations';
+import { activeInvoiceOf, hasAnyDepositInvoice } from '@/lib/invoiceDerivations';
 
 const ATTACHMENT_TEMPLATE_TYPES: BuiltInTemplateType[] = [
   'deposit_invoice_cover',
@@ -33,7 +33,7 @@ export function shouldHideTemplate(
 ): boolean {
   if (
     (type === 'deposit_invoice_cover' || type === 'contract_and_deposit_cover') &&
-    !invoices.some((i) => i.isDeposit)
+    !hasAnyDepositInvoice(invoices)
   ) return true;
   if (type === 'balance_invoice_cover' && !invoices.some((i) => !i.isDeposit)) return true;
   if (type === 'thank_you') {
