@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Sheet,
@@ -22,16 +22,21 @@ export default function ContactEditDrawer({ contact }: Props) {
   const [searchParams, setSearchParams] = useSearchParams();
   const isOpen = searchParams.get('edit') === 'true';
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const [deleteConfirm, setDeleteConfirm] = useState(false);
 
   function close() {
     saveMutation.reset();
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.delete('edit');
-      return next;
-    });
+    // Preserve location.state (the booking back-nav) when dropping the ?edit param.
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('edit');
+        return next;
+      },
+      { state: location.state },
+    );
     setDeleteConfirm(false);
   }
 
