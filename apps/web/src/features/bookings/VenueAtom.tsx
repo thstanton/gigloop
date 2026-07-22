@@ -1,6 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import type { Contact } from '@/types/api';
 import { VenueFields, type VenueSelection } from './VenueFields';
+import { AssignedContactCardContainer } from './AssignedContactCardContainer';
+
+export type { VenueSelection, NewVenueData } from './VenueFields';
 
 // PRD #511 Module B — the Venue section editor atom. Sheet-agnostic (one atom, three shells).
 //
@@ -11,19 +15,21 @@ import { VenueFields, type VenueSelection } from './VenueFields';
 // the "never owns a mutation" guarantee survives only in VenueFields, which is what keeps the New
 // Booking create path (BookingFormFields → VenueFields directly) free of contact editing.
 //
-// Assignment intent still surfaces via `onSave(selection)`; save state comes from props.
-
-export type { VenueSelection, NewVenueData } from './VenueFields';
+// One Save per box: "Save contact" in edit mode (container's PATCH /contacts), or the assignment
+// Save in assign mode (host's PATCH /bookings). Clearing the picker + assignment Save is the route
+// for *removing* a venue from a booking. A successful assignment returns to edit mode.
 
 interface VenueAtomProps {
   /** The venue currently saved on the booking (null when unset). */
-  initialVenueId: string | null;
+  venue: Contact | null;
   onSave: (selection: VenueSelection) => void;
-  // Tier-1 save state, injected by the host.
+  // Tier-1 assignment-save state, injected by the host.
   isSaving: boolean;
   saved: boolean;
   saveError: string | null;
 }
+
+type Mode = 'edit' | 'assign';
 
 function isVenueDirty(selection: VenueSelection | null, initialVenueId: string | null): boolean {
   if (!selection) return false;
@@ -31,26 +37,55 @@ function isVenueDirty(selection: VenueSelection | null, initialVenueId: string |
   return (selection.venueId ?? null) !== (initialVenueId ?? null);
 }
 
-export function VenueAtom({ initialVenueId, onSave, isSaving, saved, saveError }: VenueAtomProps) {
+export function VenueAtom({ venue, onSave, isSaving, saved, saveError }: VenueAtomProps) {
+  const [mode, setMode] = useState<Mode>(venue ? 'edit' : 'assign');
   const [selection, setSelection] = useState<VenueSelection | null>(null);
+  const saving = useRef(false);
 
-  const canSave = isVenueDirty(selection, initialVenueId);
+  useEffect(() => {
+    if (saved && saving.current) {
+      setMode('edit');
+      setSelection(null);
+      saving.current = false;
+    }
+  }, [saved]);
+
+  // A cleared picker ({ kind: 'existing', venueId: null }) is dirty against a set venue — that is
+  // the "remove venue from booking" path, so it must be saveable.
+  const canSave = isVenueDirty(selection, venue?.id ?? null);
 
   function handleSave() {
-    if (selection) onSave(selection);
+    if (!selection) return;
+    saving.current = true;
+    onSave(selection);
+  }
+
+  if (mode === 'edit' && venue) {
+    return (
+      <AssignedContactCardContainer
+        contact={venue}
+        roleLabel="Venue"
+        contextRole="VENUE"
+        onChangeContact={() => setMode('assign')}
+      />
+    );
   }
 
   return (
     <div className="space-y-3">
-      <VenueFields initialVenueId={initialVenueId} onChange={setSelection} />
+      <VenueFields initialVenueId={venue?.id ?? null} onChange={setSelection} />
 
       {/* Tier-1 inline save (CLAUDE.md Loading & Feedback): disabled + "Saving…" while pending,
-          inline "Saved" on success, inline error below the action. */}
+          inline error below the action. */}
       <div className="flex items-center gap-3 pt-1">
         <Button type="button" onClick={handleSave} disabled={isSaving || !canSave}>
           {isSaving ? 'Saving…' : 'Save'}
         </Button>
-        {saved && !isSaving && <span className="text-xs text-muted">Saved</span>}
+        {venue && (
+          <Button type="button" variant="ghost" onClick={() => { setMode('edit'); setSelection(null); }}>
+            Cancel
+          </Button>
+        )}
         {saveError && <p className="text-sm text-status-cancelled">{saveError}</p>}
       </div>
     </div>

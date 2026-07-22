@@ -669,8 +669,8 @@ export default function BookingBuilderPage() {
           {/* People */}
           <BuilderSection id="people" title="People" sectionRef={peopleRef}>
             <PeopleAtom
-              initialCustomerId={booking.customer?.id ?? null}
-              initialAgentId={booking.bookingAgent?.id ?? null}
+              customer={booking.customer ?? null}
+              agent={booking.bookingAgent ?? null}
               onSave={(sel) => peopleSave.mutate(sel)}
               isSaving={peopleSave.isPending}
               saved={peopleSave.isSuccess}
@@ -684,7 +684,7 @@ export default function BookingBuilderPage() {
           {/* Venue */}
           <BuilderSection id="venue" title="Venue" sectionRef={venueRef}>
             <VenueAtom
-              initialVenueId={booking.venue?.id ?? null}
+              venue={booking.venue ?? null}
               onSave={(sel) => venueSave.mutate(sel)}
               isSaving={venueSave.isPending}
               saved={venueSave.isSuccess}

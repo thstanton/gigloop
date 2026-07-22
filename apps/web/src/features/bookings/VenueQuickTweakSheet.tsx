@@ -23,12 +23,12 @@ import type { Contact } from '@/types/api';
 interface Props {
   bookingId: string;
   /** The venue currently saved on the booking (null when unset). */
-  currentVenueId: string | null;
+  venue: Contact | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-export function VenueQuickTweakSheet({ bookingId, currentVenueId, open, onOpenChange }: Props) {
+export function VenueQuickTweakSheet({ bookingId, venue, open, onOpenChange }: Props) {
   const queryClient = useQueryClient();
 
   const saveMutation = useMutation({
@@ -72,7 +72,7 @@ export function VenueQuickTweakSheet({ bookingId, currentVenueId, open, onOpenCh
         </SheetHeader>
         <div className="mt-4">
           <VenueAtom
-            initialVenueId={currentVenueId}
+            venue={venue}
             onSave={(selection) => saveMutation.mutate(selection)}
             isSaving={saveMutation.isPending}
             saved={false}

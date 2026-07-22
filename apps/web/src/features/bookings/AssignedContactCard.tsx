@@ -32,6 +32,8 @@ export interface AssignedContactCardProps {
    * rather than re-assigning immediately. Controlled — the container derives it from the form.
    */
   dirty?: boolean;
+  /** Forwarded to the embedded ContactForm so the container can track dirty state. */
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 /**
@@ -50,6 +52,7 @@ export function AssignedContactCard({
   saved,
   saveError,
   dirty = false,
+  onDirtyChange,
 }: AssignedContactCardProps) {
   const [confirming, setConfirming] = useState(false);
   const Icon = ROLE_ICON[contextRole];
@@ -75,6 +78,7 @@ export function AssignedContactCard({
         isPending={isSaving}
         isError={saveError}
         saved={saved}
+        onDirtyChange={onDirtyChange}
         submitLabel="Save contact"
       />
 

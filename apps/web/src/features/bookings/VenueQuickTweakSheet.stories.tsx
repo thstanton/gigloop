@@ -42,7 +42,7 @@ const meta = {
   tags: ['ai-generated'],
   args: {
     bookingId: 'b1',
-    currentVenueId: null,
+    venue: null,
     open: true,
     onOpenChange: fn(),
   },

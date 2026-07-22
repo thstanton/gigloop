@@ -119,6 +119,12 @@ interface ContactFormProps {
   embedded?: boolean;
   /** Tier-1 inline-save marker — shows "Saved" next to the submit when true and not pending. */
   saved?: boolean;
+  /**
+   * Fires when the form's dirty state changes (react-hook-form `isDirty`). Lets a container drive
+   * the AssignedContactCard's discard-confirm and clear its "Saved" marker on the next edit —
+   * the change signal #762 needs and ContactForm previously didn't expose.
+   */
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 export default function ContactForm({
@@ -132,6 +138,7 @@ export default function ContactForm({
   contextRole,
   embedded = false,
   saved = false,
+  onDirtyChange,
 }: ContactFormProps) {
   const {
     register,
@@ -139,7 +146,7 @@ export default function ContactForm({
     handleSubmit,
     watch,
     setValue,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<ContactFormValues>({
     resolver: zodResolver(schema),
     defaultValues: defaultValues ?? {
@@ -150,6 +157,12 @@ export default function ContactForm({
       commissionArrangement: '', primaryRole: contextRole ?? '',
     },
   });
+
+  // Surface dirty transitions to a container (saved-clear + discard-confirm). Gated on isDirty so
+  // it fires on change, not every render; on mount reports the clean baseline (false).
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
 
   const greetingNameEdited = useRef(false);
   const watchedName = watch('name');
