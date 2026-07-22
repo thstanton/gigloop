@@ -399,6 +399,13 @@ export class DocumentsService {
     bookingId: string,
     data: SongListPdfData,
   ): Promise<{ buffer: Buffer; url: string }> {
+    // pdfmake's Node.js image loader only handles file paths and data URLs, not remote
+    // HTTPS URLs — a raw logo URL throws ENOENT. Fetch and convert first, exactly as the
+    // invoice/contract generators do. fetchAsDataUrl also applies the SSRF origin guard
+    // (assertOwnAssetUrl), so the logo fetch is vetted like the others. (#769)
+    if (data.logoUrl) {
+      data.logoUrl = await fetchAsDataUrl(data.logoUrl);
+    }
     const docDef = buildSongListDefinition(data);
     const buffer: Buffer = await (pdfmake.createPdf(docDef).getBuffer() as Promise<Buffer>);
 

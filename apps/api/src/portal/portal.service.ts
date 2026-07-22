@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { PortalRepository } from './portal.repository';
 import { PublicProfileRepository } from '../user-profile/public-profile.repository';
 import { SongsRepository } from '../songs/songs.repository';
@@ -177,6 +177,8 @@ function buildBookingSummary(
 
 @Injectable()
 export class PortalService {
+  private readonly logger = new Logger(PortalService.name);
+
   constructor(
     private repo: PortalRepository,
     private publicProfileRepo: PublicProfileRepository,
@@ -403,7 +405,17 @@ export class PortalService {
 
     await this.reeval.onBookingChanged(data.id);
 
-    this.generateSongListAndNotify(data, dto, submittedAt).catch(() => {});
+    // Fire-and-forget so a PDF/email hiccup never blocks the client's submission — but log the
+    // failure. A silent `.catch(() => {})` here is exactly what hid #769 (song-list PDF throwing
+    // on a raw logo URL) from every surface until a user reported it.
+    this.generateSongListAndNotify(data, dto, submittedAt).catch((err) => {
+      this.logger.error(
+        `Failed to generate song-list PDF / notify musician for booking ${data.id}: ${
+          err instanceof Error ? err.message : err
+        }`,
+        err instanceof Error ? err.stack : undefined,
+      );
+    });
   }
 
   private async assertSongIdsOwned(userId: string, dto: SubmitMusicFormDto) {
