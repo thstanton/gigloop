@@ -23,3 +23,6 @@ ralph.current
 *.tsbuildinfo
 apps/web/vite.config.js
 apps/web/vite.config.d.ts
+
+# Vercel CLI local output
+.vercel
