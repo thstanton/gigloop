@@ -13,7 +13,7 @@ type Story = StoryObj<typeof StatusPill>;
 export const Confirmed: Story = {
   args: {
     label: 'Confirmed',
-    bg: 'bg-status-confirmed/12',
+    bg: 'bg-status-confirmed/15',
     text: 'text-status-confirmed',
     border: 'border-l-status-confirmed',
   },
@@ -22,7 +22,7 @@ export const Confirmed: Story = {
 export const Cancelled: Story = {
   args: {
     label: 'Cancelled',
-    bg: 'bg-status-cancelled/12',
+    bg: 'bg-status-cancelled/15',
     text: 'text-status-cancelled',
     border: 'border-l-status-cancelled',
   },
@@ -31,7 +31,7 @@ export const Cancelled: Story = {
 export const Enquiry: Story = {
   args: {
     label: 'Enquiry',
-    bg: 'bg-status-enquiry/12',
+    bg: 'bg-status-enquiry/15',
     text: 'text-status-enquiry',
     border: 'border-l-status-enquiry',
   },

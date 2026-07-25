@@ -18,9 +18,9 @@ function getContractDate(contract: Contract, status: ContractStatus | null): str
 }
 
 const CONTRACT_PILL_CLASSES: Record<string, string> = {
-  DRAFT:  'bg-status-enquiry/12 text-status-enquiry border-l-status-enquiry',
-  SENT:   'bg-status-confirmed/12 text-status-confirmed border-l-status-confirmed',
-  SIGNED: 'bg-status-ready/12 text-status-ready border-l-status-ready',
+  DRAFT:  'bg-status-enquiry/15 text-status-enquiry border-l-status-enquiry',
+  SENT:   'bg-status-confirmed/15 text-status-confirmed border-l-status-confirmed',
+  SIGNED: 'bg-status-ready/15 text-status-ready border-l-status-ready',
   VOID:   'bg-muted/20 text-muted border-l-muted',
 };
 

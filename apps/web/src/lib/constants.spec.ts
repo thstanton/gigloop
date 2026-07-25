@@ -56,6 +56,21 @@ describe('booking status table', () => {
     expect(STATUS_TOKENS[STATUS_ORDER[0]].accent).toBe(STATUS_ACCENT_BG[STATUS_ORDER[0]]);
   });
 
+  // The other invisible-token failure mode, and the one that shipped: an opacity modifier
+  // outside Tailwind's scale (multiples of 5). `bg-status-ready/12` is a well-formed string
+  // that matches TOKEN_PATTERN and type-checks, but Tailwind generates no utility for it at
+  // all — so the tint is silently absent rather than merely wrong. Guards this table only;
+  // a `/12` hand-written into a component is out of its reach. (#752)
+  it('derives tints whose opacity modifier is in Tailwind’s scale', () => {
+    for (const status of STATUS_ORDER) {
+      for (const token of Object.values(STATUS_TOKENS[status])) {
+        const [, modifier] = token.split('/');
+        if (modifier === undefined) continue;
+        expect(Number(modifier) % 5, `${token} is off Tailwind’s opacity scale`).toBe(0);
+      }
+    }
+  });
+
   it('derives forward and creatable lists from the table, not by hand', () => {
     expect(FORWARD_STATUSES).not.toContain('CANCELLED');
     expect(FORWARD_STATUSES).toHaveLength(STATUS_ORDER.length - 1);

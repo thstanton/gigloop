@@ -86,7 +86,10 @@ export const EVENT_TYPE_LABELS = column(EVENT_TYPE_ROWS, 'label');
 // Colour columns carry LITERAL Tailwind classes off the `status-<slug>` stem — they
 // cannot be templated, as the Tailwind scanner never sees a constructed class name.
 //   accent  — solid fill (stage headers, active pills)
-//   tint    — /12 wash behind a panel or pill
+//   tint    — /15 wash behind a panel or pill. The opacity modifier must be a value in
+//             Tailwind's opacity scale (multiples of 5); an off-scale one like the /12 this
+//             table shipped with matches nothing, so NO utility is emitted and the wash is
+//             silently absent. 15 is the floor of the 15–20% band ADR-0011 specifies. (#752)
 //   text    — foreground on a tinted ground
 //   borderL — left rule on a pill
 export interface BookingStatusRow {
@@ -113,7 +116,7 @@ const BOOKING_STATUSES = [
     description: 'Initial interest. You haven’t sent a quote yet, or it’s not been accepted.',
     creatable: true,
     accent: 'bg-status-enquiry',
-    tint: 'bg-status-enquiry/12',
+    tint: 'bg-status-enquiry/15',
     text: 'text-status-enquiry',
     borderL: 'border-l-status-enquiry',
   },
@@ -123,7 +126,7 @@ const BOOKING_STATUSES = [
     description: 'The client has agreed your quote in principle. Contract and deposit are still to come.',
     creatable: true,
     accent: 'bg-status-provisional',
-    tint: 'bg-status-provisional/12',
+    tint: 'bg-status-provisional/15',
     text: 'text-status-provisional',
     borderL: 'border-l-status-provisional',
   },
@@ -133,7 +136,7 @@ const BOOKING_STATUSES = [
     description: 'Locked in — contract signed and deposit received.',
     creatable: true,
     accent: 'bg-status-confirmed',
-    tint: 'bg-status-confirmed/12',
+    tint: 'bg-status-confirmed/15',
     text: 'text-status-confirmed',
     borderL: 'border-l-status-confirmed',
   },
@@ -143,7 +146,7 @@ const BOOKING_STATUSES = [
     description: 'Fully prepped — balance invoiced, music form in, logistics resolved.',
     creatable: true,
     accent: 'bg-status-ready',
-    tint: 'bg-status-ready/12',
+    tint: 'bg-status-ready/15',
     text: 'text-status-ready',
     borderL: 'border-l-status-ready',
   },
@@ -153,7 +156,7 @@ const BOOKING_STATUSES = [
     description: 'Played and wrapped up — thank-you sent, post-gig admin done.',
     creatable: true,
     accent: 'bg-status-complete',
-    tint: 'bg-status-complete/12',
+    tint: 'bg-status-complete/15',
     text: 'text-status-complete',
     borderL: 'border-l-status-complete',
   },
@@ -163,7 +166,7 @@ const BOOKING_STATUSES = [
     description: 'Cancelled at any point in the lifecycle.',
     creatable: false,
     accent: 'bg-status-cancelled',
-    tint: 'bg-status-cancelled/12',
+    tint: 'bg-status-cancelled/15',
     text: 'text-status-cancelled',
     borderL: 'border-l-status-cancelled',
   },
