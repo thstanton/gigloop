@@ -27,9 +27,11 @@ Three access mechanisms were weighed for the private class:
 - The existing public bucket (prod `gigman`) stays public and holds **Assets** only (logos, photos).
 - A **new private bucket** (public access disabled) holds all **Documents** (`CONTRACT`, `INVOICE`, `SONG_LIST`, `UPLOAD`). Its objects are reachable only via signed requests.
 
-**2. Documents are served through access-controlled API endpoints (mechanism 3).** The `url` field returned by `documents.service` and `portal.service` is an **app route**, not a public R2 URL. On request the endpoint validates access, mints a short-TTL (~60s) presigned GET, and 302-redirects to the private bucket:
-- **Admin:** `GET /documents/:id/download` — Clerk-guarded, scoped by `userId` like every other admin route.
-- **Portal:** `GET /booking/:token/documents/:id` (plus a signed-contract variant) — `@Public()`, validates the `portalToken` exactly as the rest of `portal.controller.ts` does. This is the "portal download endpoints validate the `portalToken` before issuing" that ADR-0009 named.
+**2. Documents are served through access-controlled API endpoints (mechanism 3).** The `url` field returned by `documents.service` and `portal.service` is an **app route**, not a public R2 URL. On request the endpoint validates access and mints a short-TTL (~60s) presigned GET against the private bucket. **How that signed URL reaches the browser diverges by caller, because their auth differs** — this ADR originally specified a 302 on both; as shipped (#654, #655) only the portal redirects:
+- **Admin:** `GET /documents/:id/download` — Clerk-guarded, scoped by `userId` like every other admin route. Returns **200 JSON `{ url }`**, *not* a 302: the caller must present the Clerk JWT in an `Authorization` header, and a top-level navigation cannot carry one. The web client fetches the route with auth and then points a pre-opened tab at the returned URL (`openDocument`, `apps/web/src/lib/api.ts`). See `documents/document-download.controller.ts`.
+- **Portal:** `GET /booking/:token/documents/:id` (plus a signed-contract variant) — `@Public()`, validates the `portalToken` exactly as the rest of `portal.controller.ts` does. This is the "portal download endpoints validate the `portalToken` before issuing" that ADR-0009 named. Here the token is *in the path*, so a top-level GET is self-authenticating and the endpoint **302-redirects** to the presigned URL.
+
+  *The two response shapes follow from the two auth mechanisms; the divergence is deliberate, not an oversight. Whether both should sit behind a single URL authority is the open question in #688.*
 
 **3. Assets remain public and unchanged.** `getPublicUrl` continues to serve logos/photos from the public bucket, because their consumption (server-side PDF embedding, already-sent email `<img>` tags) is incompatible with expiring or auth-gated URLs.
 
@@ -37,8 +39,8 @@ The zero-migration timing is deliberate: prod was wiped, so there are no existin
 
 ## Consequences
 - Contracts, invoices, uploads, and song lists are no longer world-readable. Access requires a live admin session (ownership-scoped) or a valid portal token — the same trust boundaries that already gate every other read of the same data.
-- The presigned GET is minted only *after* the access check and lives ~60s — long enough to cover the redirect round-trip, too short to be a useful leaked credential. The app route in the payload carries no secret.
-- Frontend download code is unchanged: `<a href={url} download>` still works; only the meaning of `url` changes (app route → 302 → R2).
+- The presigned GET is minted only *after* the access check and lives ~60s — long enough to cover the hop that follows it (the portal's redirect, or the admin client's tab navigation), too short to be a useful leaked credential. The app route in the payload carries no secret.
+- Frontend download code is unchanged **on the portal**: a plain link still works, because the app route 302s (app route → 302 → R2). **The admin client did need a change** — its route answers with JSON, so a bare `<a href={url} download>` no longer suffices; admin downloads go through an `openDocument` helper that opens a tab, fetches the route with the Clerk JWT, then navigates that tab to the returned URL.
 - The email flow is unaffected: invoices and song lists are attached as PDF **buffers**, and emails link to the token-guarded **portal**, never to a document URL. Logos embedded in email remain public assets.
 - `StorageService` must address two buckets (a private-documents target alongside the public-assets one) and gains a presigned-GET method. Callers that today build a public document URL switch to emitting the app route.
 - The portal API contract changes shape: `signedContractUrl` and `documents[].url` become access-controlled app routes rather than public R2 URLs (CONTEXT.md amended).
