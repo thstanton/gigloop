@@ -22,6 +22,29 @@ export interface PortalVisibilityVerdict {
   reason?: PortalVisibilityReason;
 }
 
+/**
+ * The subset of ReasonCodes a *document* verdict can carry (#750). A document is never
+ * draft-then-published — that gate belongs to the booking-level music-form concern (#533) — so
+ * `until_published` is unreachable for documents under ADR-0054's per-concern mapping.
+ *
+ * Declared exactly once, as this array: the reason type and the DTO's Swagger `enum` are both
+ * derived from it, so the wire contract and the documentation cannot drift apart. `satisfies`
+ * pins it as a genuine subset of `PortalVisibilityReason`.
+ */
+export const DOCUMENT_PORTAL_VISIBILITY_REASONS = [
+  'until_sent',
+  'voided',
+  'not_shared',
+  'cancelled',
+] as const satisfies readonly PortalVisibilityReason[];
+
+export type DocumentPortalVisibilityReason = (typeof DOCUMENT_PORTAL_VISIBILITY_REASONS)[number];
+
+export interface DocumentPortalVisibilityVerdict {
+  visible: boolean;
+  reason?: DocumentPortalVisibilityReason;
+}
+
 export type ContractStatus = 'DRAFT' | 'SENT' | 'SIGNED' | 'VOID';
 
 /**
@@ -64,7 +87,9 @@ export interface PortalDocumentInput {
 // (PAID) — never an ISSUED-but-unsent copy the client was never shown, nor a VOID one superseded.
 const PORTAL_VISIBLE_INVOICE_STATUSES = new Set(['SENT', 'PAID']);
 
-function resolveInvoiceDocumentVisibility(status: string | null | undefined): PortalVisibilityVerdict {
+function resolveInvoiceDocumentVisibility(
+  status: string | null | undefined,
+): DocumentPortalVisibilityVerdict {
   if (status && PORTAL_VISIBLE_INVOICE_STATUSES.has(status)) return { visible: true };
   if (status === 'VOID') return { visible: false, reason: 'voided' };
   // ISSUED (stored at issue time but not yet emailed) — and, defensively, DRAFT / missing.
@@ -84,12 +109,16 @@ function resolveInvoiceDocumentVisibility(status: string | null | undefined): Po
  * - INVOICE → gated on the backing invoice's delivery status (SENT/PAID visible; ISSUED unsent →
  *   `until_sent`; VOID → `voided`).
  * - everything else (SONG_LIST) → visible.
+ *
+ * The narrowed return type is the enforcement point for #750: it makes the four reachable reasons
+ * a compile-time fact, so the DTO enum derived from `DOCUMENT_PORTAL_VISIBILITY_REASONS` cannot
+ * fall out of step with what this function can actually emit.
  */
 export function resolveDocumentVisibility(
   doc: PortalDocumentInput,
   activeContractId: string | null,
   bookingCancelled = false,
-): PortalVisibilityVerdict {
+): DocumentPortalVisibilityVerdict {
   switch (doc.type) {
     case 'UPLOAD':
       return { visible: false, reason: 'not_shared' };
