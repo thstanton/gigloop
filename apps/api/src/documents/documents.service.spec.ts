@@ -160,6 +160,16 @@ describe('DocumentsService.uploadDocument (verdict from the authority, #802)', (
     expect((await upload()).portalVisibility).toEqual({ visible: false, reason: 'not_shared' });
   });
 
+  // The shared DTO mapper reads invoiceId off the row and derives contractStatus from the type,
+  // where the upload endpoint's old inline mapper asserted `null` for both. They agree for an
+  // UPLOAD — pinned here so "no wire-shape change" is a tested claim rather than a reasoned one.
+  it('leaves the invoice and contract fields empty, as the old inline mapper asserted', async () => {
+    const doc = await upload();
+    expect(doc.invoiceId).toBeNull();
+    expect(doc.type).toBe('UPLOAD');
+    expect(doc.contract ?? null).toBeNull();
+  });
+
   // The actual regression guard: reinstating a hardcoded verdict anywhere on this path would keep
   // the assertion above green, because the literal and the authority currently agree.
   it('consults the authority rather than deciding the verdict itself', async () => {
