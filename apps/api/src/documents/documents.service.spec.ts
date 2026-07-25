@@ -1,7 +1,17 @@
+// The upload path must ask the ADR-0054 authority for its portal-visibility verdict rather than
+// assert one of its own (#802). Wrapping the real function in a jest.fn leaves every other test's
+// behaviour identical while letting the upload tests prove the authority was actually *consulted* —
+// an assertion on the returned value alone would stay green if someone reinstated a literal.
+jest.mock('../portal/portal-visibility', () => {
+  const actual = jest.requireActual('../portal/portal-visibility');
+  return { ...actual, resolveDocumentVisibility: jest.fn(actual.resolveDocumentVisibility) };
+});
+
 import { DocumentsService, assertOwnAssetUrl } from './documents.service';
 import { DocumentsRepository } from './documents.repository';
 import { StorageService } from '../storage/storage.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { resolveDocumentVisibility } from '../portal/portal-visibility';
 import type { SongListPdfData } from './song-list-document';
 
 // SSRF guard for the server-side image fetch that embeds a musician's logo into a PDF.
@@ -111,6 +121,67 @@ describe('DocumentsService.findByBooking (portal visibility wiring)', () => {
     const service = makeService([doc({ id: 'contract', type: 'CONTRACT', contractId: 'c1' })], null);
     const result = await service.findByBooking(userId, bookingId);
     expect(result[0].portalVisibility).toEqual({ visible: false, reason: 'voided' });
+  });
+});
+
+// #802: a freshly uploaded document's verdict used to be a literal in the controller, making it a
+// second place deciding what an UPLOAD is worth on the portal alongside the ADR-0054 authority.
+// They agreed, so nothing was broken — the defect was the duplication, and these tests pin the
+// coupling rather than the value it currently produces.
+describe('DocumentsService.uploadDocument (verdict from the authority, #802)', () => {
+  const created = {
+    id: 'd-upload',
+    type: 'UPLOAD',
+    storageKey: 'uploads/u1/b1/d-upload.pdf',
+    createdAt: new Date('2026-07-25'),
+    invoiceId: null,
+    contractId: null,
+    name: 'Rider.pdf',
+  };
+
+  function makeService() {
+    const repo = {
+      create: jest.fn().mockResolvedValue(created),
+    } as unknown as DocumentsRepository;
+    const storage = {
+      putDocument: jest.fn().mockResolvedValue(undefined),
+    } as unknown as StorageService;
+    return new DocumentsService({} as unknown as PrismaService, repo, storage);
+  }
+
+  const upload = () =>
+    makeService().uploadDocument('u1', 'b1', Buffer.from('%PDF-1.4'), 'Rider.pdf');
+
+  beforeEach(() => {
+    (resolveDocumentVisibility as jest.Mock).mockClear();
+  });
+
+  it('carries the verdict the authority returns for an UPLOAD', async () => {
+    expect((await upload()).portalVisibility).toEqual({ visible: false, reason: 'not_shared' });
+  });
+
+  // The shared DTO mapper reads invoiceId off the row and derives contractStatus from the type,
+  // where the upload endpoint's old inline mapper asserted `null` for both. They agree for an
+  // UPLOAD — pinned here so "no wire-shape change" is a tested claim rather than a reasoned one.
+  it('leaves the invoice and contract fields empty, as the old inline mapper asserted', async () => {
+    const doc = await upload();
+    expect(doc.invoiceId).toBeNull();
+    expect(doc.type).toBe('UPLOAD');
+    expect(doc.contract ?? null).toBeNull();
+  });
+
+  // The actual regression guard: reinstating a hardcoded verdict anywhere on this path would keep
+  // the assertion above green, because the literal and the authority currently agree.
+  it('consults the authority rather than deciding the verdict itself', async () => {
+    await upload();
+    expect(resolveDocumentVisibility).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'UPLOAD' }),
+      null,
+    );
+  });
+
+  it('still returns the access-controlled download route rather than a storage URL', async () => {
+    expect((await upload()).url).toBe('/documents/d-upload/download');
   });
 });
 
