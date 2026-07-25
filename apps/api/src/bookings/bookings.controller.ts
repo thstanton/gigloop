@@ -33,6 +33,7 @@ import { RemindersQueryDto } from './dto/reminders-query.dto';
 import { ReminderPreviewQueryDto } from './dto/reminder-preview-query.dto';
 import { ReminderPreviewResponseDto } from './dto/reminder-preview-response.dto';
 import { UpdateBookingSeriesDto } from './dto/update-booking-series.dto';
+import { BookingResponseDto } from './dto/booking-response.dto';
 import type { Request } from 'express';
 
 type AuthedRequest = Request & { userId: string };
@@ -79,6 +80,8 @@ export class BookingsController {
   }
 
   @ApiOperation({ summary: 'Get a booking by ID' })
+  @ApiResponse({ status: 200, type: BookingResponseDto })
+  @ApiResponse({ status: 404, description: 'Booking not found (or not owned by the caller).' })
   @Get(':id')
   findOne(@Req() req: AuthedRequest, @Param('id') id: string) {
     return this.service.findOne(req.userId, id);
@@ -110,6 +113,16 @@ export class BookingsController {
   }
 
   @ApiOperation({ summary: 'Update a booking' })
+  // Deliberately NOT typed as BookingResponseDto: this returns the raw Prisma row (with
+  // `contracts` / `musicFormConfig` / `musicFormResponse` relations) rather than the mapped
+  // `activeContract` / `hasMusicForm*` / `portalVisibility` shape GET :id returns. The web client
+  // discards the body and refetches, so nothing depends on it — the divergence is tracked in #805.
+  @ApiResponse({
+    status: 200,
+    description:
+      'The updated booking as the raw persisted row — NOT the mapped GET /bookings/:id shape (see #805).',
+  })
+  @ApiResponse({ status: 404, description: 'Booking not found (or not owned by the caller).' })
   @Patch(':id')
   update(
     @Req() req: AuthedRequest,
@@ -303,7 +316,8 @@ export class BookingsController {
   }
 
   @ApiOperation({ summary: 'Rename or re-icon a booking-owned Package (does not affect its source template)' })
-  @ApiResponse({ status: 200, description: 'Updated booking' })
+  @ApiResponse({ status: 200, type: BookingResponseDto, description: 'Updated booking' })
+  @ApiResponse({ status: 404, description: 'Booking or applied package not found.' })
   @Patch(':id/packages/:packageId')
   updatePackage(
     @Req() req: AuthedRequest,

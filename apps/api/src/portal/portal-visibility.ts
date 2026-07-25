@@ -10,12 +10,21 @@
 // Slice 1 (#578) seeds the contract and music-form concerns. The booking-CANCELLED gate and the
 // UPLOAD rule landed in #579; the per-document verdict (`resolveDocumentVisibility`) in #580.
 
-export type PortalVisibilityReason =
-  | 'until_sent'
-  | 'until_published'
-  | 'voided'
-  | 'not_shared'
-  | 'cancelled';
+/**
+ * The full ReasonCode vocabulary, declared exactly once as an array so both the type and any
+ * Swagger `enum` can be derived from it rather than hand-restated (#786). A union type is not
+ * enumerable at runtime, so a DTO documenting a verdict would otherwise have to re-list the
+ * members — a second declaration, and the drift #750 was about.
+ */
+export const PORTAL_VISIBILITY_REASONS = [
+  'until_sent',
+  'until_published',
+  'voided',
+  'not_shared',
+  'cancelled',
+] as const;
+
+export type PortalVisibilityReason = (typeof PORTAL_VISIBILITY_REASONS)[number];
 
 export interface PortalVisibilityVerdict {
   visible: boolean;
@@ -45,7 +54,16 @@ export interface DocumentPortalVisibilityVerdict {
   reason?: DocumentPortalVisibilityReason;
 }
 
-export type ContractStatus = 'DRAFT' | 'SENT' | 'SIGNED' | 'VOID';
+/**
+ * The full contract lifecycle, declared once as an array for the same reason as
+ * `PORTAL_VISIBILITY_REASONS` above — a response DTO documenting a contract's status derives its
+ * Swagger `enum` from here (#786) instead of restating the members. Note this is the *read*
+ * vocabulary: `UpdateContractDto` deliberately accepts a narrower writable subset (no SENT — that
+ * transition is the `POST …/send` endpoint's, not a manual patch's).
+ */
+export const CONTRACT_STATUSES = ['DRAFT', 'SENT', 'SIGNED', 'VOID'] as const;
+
+export type ContractStatus = (typeof CONTRACT_STATUSES)[number];
 
 /**
  * Contract-concern visibility. Returns null when there is no contract yet — the contract is not a
