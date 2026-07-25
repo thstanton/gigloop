@@ -1,14 +1,23 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import {
+  DOCUMENT_PORTAL_VISIBILITY_REASONS,
+  type DocumentPortalVisibilityReason,
+} from '../../portal/portal-visibility';
 
-export class PortalVisibilityDto {
+export class DocumentPortalVisibilityDto {
   @ApiProperty({ description: 'Whether the client can currently see this document on the portal' })
   visible!: boolean;
 
+  // Both the enum and the type come from the one declaration in portal-visibility.ts, so Scalar
+  // advertises exactly the reasons `resolveDocumentVisibility` can emit (#750). Documents never
+  // carry `until_published` — draft/published is a booking-level music-form gate (ADR-0054 / #533).
   @ApiPropertyOptional({
-    enum: ['until_sent', 'voided', 'not_shared', 'cancelled'],
-    description: 'When hidden, the portal gate holding it back; absent when visible',
+    enum: [...DOCUMENT_PORTAL_VISIBILITY_REASONS],
+    description:
+      'When hidden, the portal gate holding it back; absent when visible. Never ' +
+      '`until_published` — that gate applies to the booking-level music form, not to documents.',
   })
-  reason?: string;
+  reason?: DocumentPortalVisibilityReason;
 }
 
 export class DocumentResponseDto {
@@ -28,6 +37,9 @@ export class DocumentResponseDto {
   contractStatus?: string | null;
   @ApiPropertyOptional({ description: 'User-provided name for UPLOAD documents; null for system-generated' })
   name?: string | null;
-  @ApiProperty({ type: PortalVisibilityDto, description: 'Per-document portal-visibility verdict (ADR-0054)' })
-  portalVisibility!: PortalVisibilityDto;
+  @ApiProperty({
+    type: DocumentPortalVisibilityDto,
+    description: 'Per-document portal-visibility verdict (ADR-0054)',
+  })
+  portalVisibility!: DocumentPortalVisibilityDto;
 }

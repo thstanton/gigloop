@@ -369,6 +369,19 @@ export interface BookingPortalVisibility {
   musicForm: PortalVisibilityVerdict | null;
 }
 
+// The narrower verdict a *document* carries (#750). Mirrors the API's
+// DOCUMENT_PORTAL_VISIBILITY_REASONS (apps/api/src/portal/portal-visibility.ts): a document is
+// never draft-then-published — that gate is the booking-level music-form concern (#533) — so the
+// API can never send `until_published` on a document, and web code must not branch on it.
+// The booking-level union above deliberately stays at five members; so does
+// PORTAL_VISIBILITY_REASON_COPY in lib/constants.ts, which serves both surfaces.
+export type DocumentPortalVisibilityReason = Exclude<PortalVisibilityReason, 'until_published'>;
+
+export interface DocumentPortalVisibilityVerdict {
+  visible: boolean;
+  reason?: DocumentPortalVisibilityReason;
+}
+
 export interface CreateSetInput {
   order: number;
   duration: number;
@@ -619,7 +632,8 @@ export interface Document {
   contractStatus: string | null;
   name: string | null;
   // Per-document portal-visibility verdict (ADR-0054 / #580) — drives the per-row indicator.
-  portalVisibility: PortalVisibilityVerdict;
+  // Narrowed to the four reasons a document can actually carry (#750).
+  portalVisibility: DocumentPortalVisibilityVerdict;
 }
 
 // ─────────────────────────────────────────

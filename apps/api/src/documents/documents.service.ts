@@ -14,7 +14,10 @@ import { decrypt } from '../common/crypto';
 import { buildDocumentTitle, buildPdfHeader, buildPdfFooter } from './pdf-shared';
 import type { EmailContext } from '../mail/mail.service';
 import { substituteTiptapVariables } from '../mail/tiptap-substitute';
-import { resolveDocumentVisibility, type PortalVisibilityVerdict } from '../portal/portal-visibility';
+import {
+  resolveDocumentVisibility,
+  type DocumentPortalVisibilityVerdict,
+} from '../portal/portal-visibility';
 
 // Resolve pdfmake relative to this file so font paths work correctly
 // regardless of where the process was started from.
@@ -100,7 +103,7 @@ export type DocumentWithUrl = Document & {
 };
 
 // A document in the admin list, carrying its per-row portal-visibility verdict (ADR-0054 / #580).
-export type DocumentListItem = DocumentWithUrl & { portalVisibility: PortalVisibilityVerdict };
+export type DocumentListItem = DocumentWithUrl & { portalVisibility: DocumentPortalVisibilityVerdict };
 
 // Minimal shape needed to build PDF data from an already-fetched invoice.
 // Accepts Prisma Decimal for amount (hence the any — Number() handles it).

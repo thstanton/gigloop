@@ -2,7 +2,10 @@ import {
   resolveContractVisibility,
   resolveMusicFormVisibility,
   resolveDocumentVisibility,
+  DOCUMENT_PORTAL_VISIBILITY_REASONS,
   type ContractStatus,
+  type DocumentPortalVisibilityVerdict,
+  type PortalDocumentInput,
   type PortalVisibilityVerdict,
 } from './portal-visibility';
 
@@ -104,6 +107,41 @@ describe('portal-visibility authority (ADR-0054)', () => {
         expect(
           resolveDocumentVisibility({ type: 'INVOICE', invoice: { status: 'SENT' } }, activeContractId, true),
         ).toEqual({ visible: true });
+      });
+    });
+
+    // #750: the DTO's Swagger enum is derived from DOCUMENT_PORTAL_VISIBILITY_REASONS, so that
+    // array has to stay an accurate description of what this function can emit. These two guards
+    // hold it there from both directions — at runtime over every branch, and at compile time.
+    describe('reasons stay within the declared document subset (#750)', () => {
+      const branches: PortalDocumentInput[] = [
+        { type: 'UPLOAD' },
+        { type: 'SONG_LIST' },
+        { type: 'CONTRACT', contractId: activeContractId },
+        { type: 'CONTRACT', contractId: 'c-old' },
+        { type: 'INVOICE', invoice: { status: 'SENT' } },
+        { type: 'INVOICE', invoice: { status: 'ISSUED' } },
+        { type: 'INVOICE', invoice: { status: 'VOID' } },
+        { type: 'INVOICE', invoice: null },
+      ];
+
+      it.each(branches)('emits a declared reason for %j, cancelled or not', (doc) => {
+        for (const cancelled of [false, true]) {
+          const { reason } = resolveDocumentVisibility(doc, activeContractId, cancelled);
+          if (reason !== undefined) {
+            expect(DOCUMENT_PORTAL_VISIBILITY_REASONS).toContain(reason);
+          }
+        }
+      });
+
+      it('never admits until_published — that gate is booking-level, not per-document', () => {
+        // A document verdict cannot be typed with the music-form reason. If this ever compiles,
+        // the DTO enum has silently gone out of date and ts-jest fails the suite here.
+        // @ts-expect-error -- 'until_published' is not a DocumentPortalVisibilityReason
+        const impossible: DocumentPortalVisibilityVerdict = { visible: false, reason: 'until_published' };
+        expect(impossible.reason).toBe('until_published');
+
+        expect(DOCUMENT_PORTAL_VISIBILITY_REASONS).not.toContain('until_published');
       });
     });
   });
