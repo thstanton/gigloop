@@ -5,41 +5,18 @@ import { useQuery } from '@tanstack/react-query';
 import { apiGet } from '@/lib/api';
 import type { PublicProfile } from '@/types/api';
 import {
-  LayoutDashboard,
-  CalendarDays,
-  Users,
-  Music2,
-  FileText,
-  Settings,
   LogOut,
   ChevronUp,
   MoreHorizontal,
-  Package,
 } from 'lucide-react';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
-
-// ─── Nav config ──────────────────────────────────────────────────────────────
-
-interface NavItem {
-  label: string;
-  to: string;
-  icon: React.ElementType;
-}
-
-const primaryNav: NavItem[] = [
-  { label: 'Dashboard',  to: '/admin',            icon: LayoutDashboard },
-  { label: 'Bookings',   to: '/admin/bookings',   icon: CalendarDays },
-  { label: 'Contacts',   to: '/admin/contacts',   icon: Users },
-  { label: 'Repertoire', to: '/admin/repertoire', icon: Music2 },
-];
-
-const secondaryNav: NavItem[] = [
-  { label: 'Package Templates',  to: '/admin/packages',  icon: Package },
-  { label: 'Templates', to: '/admin/templates', icon: FileText },
-  { label: 'Settings',  to: '/admin/settings',  icon: Settings },
-];
+import {
+  PRIMARY_NAV_DESTINATIONS,
+  SECONDARY_NAV_DESTINATIONS,
+  type NavDestinationRow,
+} from '@/lib/constants';
 
 // ─── Hooks ───────────────────────────────────────────────────────────────────
 
@@ -60,14 +37,14 @@ function usePublicProfileData() {
 
 // ─── Shared: sidebar nav group ───────────────────────────────────────────────
 
-function SidebarNavGroup({ items }: { items: NavItem[] }) {
+function SidebarNavGroup({ items }: { items: readonly NavDestinationRow[] }) {
   return (
     <ul className="space-y-0.5">
-      {items.map(({ label, to, icon: Icon }) => (
-        <li key={to}>
+      {items.map(({ label, route, icon: Icon }) => (
+        <li key={route}>
           <NavLink
-            to={to}
-            end={to === '/admin'}
+            to={route}
+            end={route === '/admin'}
             className={({ isActive }) =>
               cn(
                 'flex items-center gap-3 px-3 py-2 rounded text-sm transition-colors duration-150',
@@ -182,10 +159,10 @@ function Sidebar() {
   return (
     <aside className="hidden md:flex fixed top-14 left-0 bottom-0 w-60 bg-chrome-sidebar flex-col z-30">
       <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-5">
-        <SidebarNavGroup items={primaryNav} />
+        <SidebarNavGroup items={PRIMARY_NAV_DESTINATIONS} />
         <div>
           <div className="h-px bg-chrome-muted/30 mx-1 mb-3" />
-          <SidebarNavGroup items={secondaryNav} />
+          <SidebarNavGroup items={SECONDARY_NAV_DESTINATIONS} />
         </div>
       </nav>
 
@@ -230,7 +207,7 @@ function BottomTabBar() {
   const { signOut } = useClerk();
   const navigate = useNavigate();
   const location = useLocation();
-  const moreIsActive = secondaryNav.some((item) => location.pathname.startsWith(item.to));
+  const moreIsActive = SECONDARY_NAV_DESTINATIONS.some((item) => location.pathname.startsWith(item.route));
 
   const fullName = [user?.firstName, user?.lastName].filter(Boolean).join(' ');
   const email = user?.primaryEmailAddress?.emailAddress ?? '';
@@ -238,11 +215,11 @@ function BottomTabBar() {
   return (
     <>
       <nav className="md:hidden fixed bottom-0 inset-x-0 h-16 bg-chrome border-t border-chrome-muted/30 flex z-30">
-        {primaryNav.map(({ label, to, icon: Icon }) => (
+        {PRIMARY_NAV_DESTINATIONS.map(({ label, route, icon: Icon }) => (
           <NavLink
-            key={to}
-            to={to}
-            end={to === '/admin'}
+            key={route}
+            to={route}
+            end={route === '/admin'}
             className={({ isActive }) =>
               cn(
                 'flex-1 flex flex-col items-center justify-center gap-1 transition-colors duration-150',
@@ -282,10 +259,10 @@ function BottomTabBar() {
 
           {/* Secondary nav */}
           <nav className="py-2">
-            {secondaryNav.map(({ label, to, icon: Icon }) => (
+            {SECONDARY_NAV_DESTINATIONS.map(({ label, route, icon: Icon }) => (
               <NavLink
-                key={to}
-                to={to}
+                key={route}
+                to={route}
                 onClick={() => setMoreOpen(false)}
                 className={({ isActive }) =>
                   cn(
