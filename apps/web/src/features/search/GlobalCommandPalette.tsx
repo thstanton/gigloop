@@ -2,12 +2,18 @@ import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CommandPalette } from '@/components/common/CommandPalette';
 import { useSearch } from '@/lib/hooks/useSearch';
-import { QUICK_ACTIONS, type QuickAction } from '@/lib/constants';
+import { QUICK_ACTIONS, QUICK_ACTION_CREATES, type QuickAction } from '@/lib/constants';
+import { getRecentlyViewed } from '@/lib/recentlyViewed';
 import type { SearchResult } from '@/types/api';
 
 interface GlobalCommandPaletteProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+}
+
+/** ⌘K (mac) / Ctrl-K (win/linux) — the palette toggle chord (ADR-0067 §7). */
+function isPaletteShortcut(event: KeyboardEvent): boolean {
+  return (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k';
 }
 
 /**
@@ -19,8 +25,14 @@ interface GlobalCommandPaletteProps {
  */
 export function GlobalCommandPalette({ open, onOpenChange }: GlobalCommandPaletteProps) {
   const [query, setQuery] = useState('');
+  const [recent, setRecent] = useState<SearchResult[]>([]);
   const navigate = useNavigate();
   const { results, isLoading } = useSearch(query);
+
+  // Refresh the recently-viewed list each time the palette opens (it changes as pages are visited).
+  useEffect(() => {
+    if (open) setRecent(getRecentlyViewed());
+  }, [open]);
 
   // Closing always resets the query, so the palette reopens fresh.
   const handleOpenChange = useCallback(
@@ -31,13 +43,12 @@ export function GlobalCommandPalette({ open, onOpenChange }: GlobalCommandPalett
     [onOpenChange],
   );
 
-  // ⌘K (mac) / Ctrl-K (win/linux) toggles the palette from anywhere in the app.
+  // The toggle chord works from anywhere in the app.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
-        event.preventDefault();
-        handleOpenChange(!open);
-      }
+      if (!isPaletteShortcut(event)) return;
+      event.preventDefault();
+      handleOpenChange(!open);
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
@@ -70,6 +81,8 @@ export function GlobalCommandPalette({ open, onOpenChange }: GlobalCommandPalett
       onSelectResult={handleSelect}
       actions={QUICK_ACTIONS}
       onSelectAction={handleSelectAction}
+      recent={recent}
+      pinnedActions={QUICK_ACTION_CREATES}
     />
   );
 }

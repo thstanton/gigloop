@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import type { SearchResult } from '@/types/api';
-import { QUICK_ACTIONS } from '@/lib/constants';
+import { QUICK_ACTIONS, QUICK_ACTION_CREATES } from '@/lib/constants';
 import { CommandPalette } from './CommandPalette';
 
 const results: SearchResult[] = [
@@ -54,6 +54,8 @@ const meta = {
     results,
     isLoading: false,
     actions: QUICK_ACTIONS,
+    recent: [results[0], results[2]],
+    pinnedActions: QUICK_ACTION_CREATES,
     onOpenChange: fn(),
     onQueryChange: fn(),
     onSelectResult: fn(),
@@ -85,12 +87,26 @@ export const KeyboardSelection: Story = {
   },
 };
 
-/** Opening with no query shows the search hint (Recent lands here in a later slice). */
-export const EmptyQuery: Story = {
+/** Cold open (empty query): pinned Create actions above a Recent list of viewed items (ADR-0067 §7). */
+export const ColdOpen: Story = {
   args: { query: '' },
   play: async () => {
     const body = within(document.body);
-    await expect(body.getByText(/type to search/i)).toBeVisible();
+    await expect(body.getByText('Create')).toBeVisible();
+    await expect(body.getByText('New Booking')).toBeVisible();
+    await expect(body.getByText('Recent')).toBeVisible();
+    await expect(body.getByText('Hartley Wedding')).toBeVisible();
+  },
+};
+
+/** Fresh user with no history: still shows the pinned Create actions, and no empty Recent group. */
+export const ColdOpenNoRecent: Story = {
+  args: { query: '', recent: [] },
+  play: async () => {
+    const body = within(document.body);
+    await expect(body.getByText('New Booking')).toBeVisible();
+    await expect(body.getByText('New Contact')).toBeVisible();
+    expect(body.queryByText('Recent')).toBeNull();
   },
 };
 

@@ -1,6 +1,8 @@
+import { useEffect } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { ChevronLeft } from 'lucide-react';
 import { useBooking } from '@/lib/hooks/useBooking';
+import { bookingToRecent, recordRecentlyViewed } from '@/lib/recentlyViewed';
 import { BookingDetailSheets } from '@/features/bookings/BookingDetailSheets';
 import { BookingDetailDesktop } from '@/features/bookings/BookingDetailDesktop';
 import { BookingDetailMobile, MobileTabsSkeleton } from '@/features/bookings/BookingDetailMobile';
@@ -72,6 +74,11 @@ export default function BookingDetailPage() {
   const backNav = (location.state as { from?: string; label?: string } | null);
 
   const { data: booking, isLoading, isError } = useBooking(id!);
+
+  // Feed the command palette's "Recent" list as the musician opens bookings (ADR-0067 §7).
+  useEffect(() => {
+    if (booking) recordRecentlyViewed(bookingToRecent(booking));
+  }, [booking]);
 
   if (isLoading) {
     return (

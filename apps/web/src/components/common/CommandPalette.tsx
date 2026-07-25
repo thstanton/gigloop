@@ -22,6 +22,10 @@ interface CommandPaletteProps {
   actions?: readonly QuickAction[];
   /** Fired when an action is chosen. Like results, the palette reports it and lets the caller navigate. */
   onSelectAction?: (action: QuickAction) => void;
+  /** Recently-viewed items shown on cold open (empty query), ADR-0067 §7. */
+  recent?: readonly SearchResult[];
+  /** Create actions pinned above Recent on cold open, regardless of recency (New Booking first). */
+  pinnedActions?: readonly QuickAction[];
   className?: string;
 }
 
@@ -75,6 +79,50 @@ function ActionItem({
   );
 }
 
+/** A cmdk group of search results (Bookings / Contacts / Recent). Renders nothing when empty. */
+function ResultGroup({
+  heading,
+  results,
+  onSelectResult,
+}: {
+  heading: string;
+  results: readonly SearchResult[];
+  onSelectResult: (result: SearchResult) => void;
+}) {
+  if (results.length === 0) return null;
+  return (
+    <Command.Group heading={heading}>
+      {results.map((result) => (
+        <ResultItem
+          key={`${result.type}:${result.id}`}
+          result={result}
+          onSelectResult={onSelectResult}
+        />
+      ))}
+    </Command.Group>
+  );
+}
+
+/** A cmdk group of quick actions (Create / Actions). Renders nothing when empty. */
+function ActionGroup({
+  heading,
+  actions,
+  onSelect,
+}: {
+  heading: string;
+  actions: readonly QuickAction[];
+  onSelect: (action: QuickAction) => void;
+}) {
+  if (actions.length === 0) return null;
+  return (
+    <Command.Group heading={heading}>
+      {actions.map((action) => (
+        <ActionItem key={action.id} action={action} onSelect={onSelect} />
+      ))}
+    </Command.Group>
+  );
+}
+
 /**
  * The command-palette shell (ADR-0067 §7). One `@radix-ui/react-dialog` instance with `cmdk`'s
  * `Command` inside, switched purely by CSS at `md`: a **full-height, top-anchored sheet on mobile**
@@ -93,6 +141,8 @@ export function CommandPalette({
   onSelectResult,
   actions = [],
   onSelectAction,
+  recent = [],
+  pinnedActions = [],
   className,
 }: CommandPaletteProps) {
   const bookings = results.filter(isBooking);
@@ -102,60 +152,43 @@ export function CommandPalette({
   const matchingActions =
     hasQuery && onSelectAction ? actions.filter((action) => actionMatches(action, q)) : [];
 
+  const hint = (message: string) => (
+    <p className="px-3 py-6 text-center text-sm text-muted">{message}</p>
+  );
+
+  function renderColdOpen() {
+    // Empty query: pinned creates above a Recent list (ADR-0067 §7); a hint only if neither exists.
+    const hasContent = (onSelectAction && pinnedActions.length > 0) || recent.length > 0;
+    if (!hasContent) return hint('Type to search bookings and contacts.');
+    return (
+      <>
+        {onSelectAction && (
+          <ActionGroup heading="Create" actions={pinnedActions} onSelect={onSelectAction} />
+        )}
+        <ResultGroup heading="Recent" results={recent} onSelectResult={onSelectResult} />
+      </>
+    );
+  }
+
   function renderBody() {
-    const actionsGroup =
-      matchingActions.length > 0 && onSelectAction ? (
-        <Command.Group heading="Actions">
-          {matchingActions.map((action) => (
-            <ActionItem key={action.id} action={action} onSelect={onSelectAction} />
-          ))}
-        </Command.Group>
-      ) : null;
+    if (!hasQuery && !isLoading) return renderColdOpen();
 
-    let resultsNode = null;
-    if (isLoading) {
-      resultsNode = <p className="px-3 py-6 text-center text-sm text-muted">Searching…</p>;
-    } else if (hasQuery && results.length > 0) {
-      resultsNode = (
-        <>
-          {bookings.length > 0 && (
-            <Command.Group heading="Bookings">
-              {bookings.map((result) => (
-                <ResultItem key={result.id} result={result} onSelectResult={onSelectResult} />
-              ))}
-            </Command.Group>
-          )}
-          {contacts.length > 0 && (
-            <Command.Group heading="Contacts">
-              {contacts.map((result) => (
-                <ResultItem key={result.id} result={result} onSelectResult={onSelectResult} />
-              ))}
-            </Command.Group>
-          )}
-        </>
-      );
-    }
-
-    // Fall back to a hint / no-results message only when neither results nor actions are showing.
-    let fallback = null;
-    if (!isLoading && !actionsGroup && !(hasQuery && results.length > 0)) {
-      fallback = hasQuery ? (
-        <p className="px-3 py-6 text-center text-sm text-muted">
-          No results for “{query.trim()}”.
-        </p>
-      ) : (
-        // Recent-viewed lands here in a later slice; for now, a plain prompt.
-        <p className="px-3 py-6 text-center text-sm text-muted">
-          Type to search bookings and contacts.
-        </p>
-      );
-    }
+    // A live query surfaced nothing at all — neither results nor matching actions.
+    const noResults = !isLoading && matchingActions.length === 0 && results.length === 0;
 
     return (
       <>
-        {resultsNode}
-        {actionsGroup}
-        {fallback}
+        {isLoading && hint('Searching…')}
+        {!isLoading && (
+          <>
+            <ResultGroup heading="Bookings" results={bookings} onSelectResult={onSelectResult} />
+            <ResultGroup heading="Contacts" results={contacts} onSelectResult={onSelectResult} />
+          </>
+        )}
+        {onSelectAction && (
+          <ActionGroup heading="Actions" actions={matchingActions} onSelect={onSelectAction} />
+        )}
+        {noResults && hint(`No results for “${query.trim()}”.`)}
       </>
     );
   }
