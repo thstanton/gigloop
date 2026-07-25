@@ -8,15 +8,21 @@ import {
   LogOut,
   ChevronUp,
   MoreHorizontal,
+  Search,
 } from 'lucide-react';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
+import { isEnabled } from '@/lib/featureFlags';
+import { GlobalCommandPalette } from '@/features/search/GlobalCommandPalette';
 import {
   PRIMARY_NAV_DESTINATIONS,
   SECONDARY_NAV_DESTINATIONS,
   type NavDestinationRow,
 } from '@/lib/constants';
+
+// Global command palette (ADR-0067) — dark-launched behind a default-off env flag.
+const SEARCH_FLAG = 'VITE_FEATURE_COMMAND_PALETTE';
 
 // ─── Hooks ───────────────────────────────────────────────────────────────────
 
@@ -175,11 +181,30 @@ function Sidebar() {
 
 // ─── Desktop: top bar ─────────────────────────────────────────────────────────
 
-function DesktopTopBar({ businessName, isLoading }: { businessName: string; isLoading: boolean }) {
+function DesktopTopBar({
+  businessName,
+  isLoading,
+  onOpenSearch,
+}: {
+  businessName: string;
+  isLoading: boolean;
+  onOpenSearch?: () => void;
+}) {
   return (
     <header className="hidden md:flex fixed top-0 inset-x-0 h-14 bg-chrome items-center px-6 z-30">
       <span className="text-2xl font-wordmark font-semibold text-chrome-foreground tracking-wide">GigLoop</span>
-      <div className="ml-auto">
+      <div className="ml-auto flex items-center gap-4">
+        {onOpenSearch && (
+          <button
+            type="button"
+            onClick={onOpenSearch}
+            className="flex items-center gap-2 rounded-md bg-chrome-muted/20 px-3 py-1.5 text-sm text-chrome-muted transition-colors hover:text-chrome-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-chrome-foreground/50"
+          >
+            <Search size={16} aria-hidden />
+            <span>Search</span>
+            <kbd className="ml-2 rounded border border-chrome-muted/40 px-1.5 text-xs font-medium">⌘K</kbd>
+          </button>
+        )}
         {isLoading
           ? <div className="h-3 w-28 bg-chrome-muted/40 rounded animate-pulse" />
           : <span className="text-sm text-chrome-muted">{businessName}</span>
@@ -191,10 +216,20 @@ function DesktopTopBar({ businessName, isLoading }: { businessName: string; isLo
 
 // ─── Mobile: top bar ─────────────────────────────────────────────────────────
 
-function MobileTopBar() {
+function MobileTopBar({ onOpenSearch }: { onOpenSearch?: () => void }) {
   return (
     <header className="md:hidden fixed top-0 inset-x-0 h-14 bg-chrome flex items-center px-4 z-20">
       <span className="text-base font-wordmark font-semibold text-chrome-foreground tracking-wide">GigLoop</span>
+      {onOpenSearch && (
+        <button
+          type="button"
+          onClick={onOpenSearch}
+          aria-label="Search"
+          className="ml-auto -mr-2 flex h-11 w-11 items-center justify-center text-chrome-muted transition-colors hover:text-chrome-foreground"
+        >
+          <Search size={22} strokeWidth={1.75} aria-hidden />
+        </button>
+      )}
     </header>
   );
 }
@@ -305,6 +340,10 @@ export default function AppShell() {
   const { pathname } = useLocation();
   const hideTabBar = BUILDER_ROUTE.test(pathname);
 
+  const searchEnabled = isEnabled(SEARCH_FLAG);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const openSearch = searchEnabled ? () => setSearchOpen(true) : undefined;
+
   return (
     <div className="min-h-screen bg-surface">
       <a
@@ -318,12 +357,12 @@ export default function AppShell() {
       <Sidebar />
 
       {/* Mobile top bar */}
-      <MobileTopBar />
+      <MobileTopBar onOpenSearch={openSearch} />
 
       {/* Content — offset for sidebar on desktop, top bar on mobile. The Builder
           hides the mobile tab bar, so drop its pb-16 to use the full height there. */}
       <div className={cn('md:ml-60 flex flex-col min-h-screen pt-14 md:pb-0', !hideTabBar && 'pb-16')}>
-        <DesktopTopBar businessName={businessName} isLoading={isLoading} />
+        <DesktopTopBar businessName={businessName} isLoading={isLoading} onOpenSearch={openSearch} />
         <main id="main-content" className="flex-1">
           <Outlet />
         </main>
@@ -331,6 +370,9 @@ export default function AppShell() {
 
       {/* Mobile bottom tab bar (hidden inside the Builder — ADR-0051) */}
       {!hideTabBar && <BottomTabBar />}
+
+      {/* Global command palette — dark-launched behind SEARCH_FLAG (ADR-0067) */}
+      {searchEnabled && <GlobalCommandPalette open={searchOpen} onOpenChange={setSearchOpen} />}
     </div>
   );
 }
