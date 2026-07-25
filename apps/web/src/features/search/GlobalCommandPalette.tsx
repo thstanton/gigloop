@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CommandPalette } from '@/components/common/CommandPalette';
 import { useSearch } from '@/lib/hooks/useSearch';
+import { QUICK_ACTIONS, type QuickAction } from '@/lib/constants';
 import type { SearchResult } from '@/types/api';
 
 interface GlobalCommandPaletteProps {
@@ -50,6 +51,14 @@ export function GlobalCommandPalette({ open, onOpenChange }: GlobalCommandPalett
     [navigate, handleOpenChange],
   );
 
+  const handleSelectAction = useCallback(
+    (action: QuickAction) => {
+      navigate(action.route);
+      handleOpenChange(false);
+    },
+    [navigate, handleOpenChange],
+  );
+
   return (
     <CommandPalette
       open={open}
@@ -59,6 +68,8 @@ export function GlobalCommandPalette({ open, onOpenChange }: GlobalCommandPalett
       results={results}
       isLoading={isLoading}
       onSelectResult={handleSelect}
+      actions={QUICK_ACTIONS}
+      onSelectAction={handleSelectAction}
     />
   );
 }

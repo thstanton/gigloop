@@ -482,3 +482,16 @@ export const QUICK_ACTION_CREATES = [
   { id: 'new-booking', label: 'New Booking', route: '/admin/bookings/new', icon: CalendarPlus, keywords: ['new booking', 'add gig', 'create booking'] },
   { id: 'new-contact', label: 'New Contact', route: '/admin/contacts/new', icon: UserPlus,      keywords: ['new contact', 'add contact', 'add client'] },
 ] as const satisfies readonly QuickActionCreateRow[];
+
+// The command palette's Actions section (ADR-0067 §6): the nine pure navigations — the seven
+// section destinations then the two creates — derived from the two tables above, never re-listed.
+// The nav rows carry an extra `group` column the palette ignores; both satisfy QuickAction.
+export interface QuickAction {
+  id: string;
+  label: string;
+  route: string;
+  icon: LucideIcon;
+  keywords: readonly string[];
+}
+
+export const QUICK_ACTIONS: readonly QuickAction[] = [...NAV_DESTINATIONS, ...QUICK_ACTION_CREATES];

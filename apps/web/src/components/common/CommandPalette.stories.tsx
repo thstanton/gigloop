@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import type { SearchResult } from '@/types/api';
+import { QUICK_ACTIONS } from '@/lib/constants';
 import { CommandPalette } from './CommandPalette';
 
 const results: SearchResult[] = [
@@ -52,9 +53,11 @@ const meta = {
     query: 'hart',
     results,
     isLoading: false,
+    actions: QUICK_ACTIONS,
     onOpenChange: fn(),
     onQueryChange: fn(),
     onSelectResult: fn(),
+    onSelectAction: fn(),
   },
 } satisfies Meta<typeof CommandPalette>;
 
@@ -106,5 +109,19 @@ export const NoResults: Story = {
   play: async () => {
     const body = within(document.body);
     await expect(body.getByText(/no results/i)).toBeVisible();
+  },
+};
+
+/** Quick actions: matched by label + keywords (ADR-0067 §6 — "add gig" → New Booking). Selecting
+ *  an action reports it to the caller to navigate; the palette never mutates. */
+export const QuickActions: Story = {
+  args: { query: 'add gig', results: [] },
+  play: async ({ args }) => {
+    const body = within(document.body);
+    await expect(body.getByText('Actions')).toBeVisible();
+    await userEvent.click(body.getByText('New Booking'));
+    await expect(args.onSelectAction).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'new-booking' }),
+    );
   },
 };

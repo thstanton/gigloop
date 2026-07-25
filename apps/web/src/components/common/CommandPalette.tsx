@@ -4,6 +4,7 @@ import { Search } from 'lucide-react';
 import type { BookingSearchResult, ContactSearchResult, SearchResult } from '@/types/api';
 import { Dialog, DialogOverlay, DialogPortal } from '@/components/ui/dialog';
 import { SearchResultRow } from '@/components/common/SearchResultRow';
+import type { QuickAction } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
 interface CommandPaletteProps {
@@ -17,11 +18,21 @@ interface CommandPaletteProps {
   isLoading?: boolean;
   /** Fired when a result is chosen. The palette does not navigate or close itself — the caller does. */
   onSelectResult: (result: SearchResult) => void;
+  /** Quick-action registry (nav + creates, ADR-0067 §6). Filtered here by label/keywords against the query. */
+  actions?: readonly QuickAction[];
+  /** Fired when an action is chosen. Like results, the palette reports it and lets the caller navigate. */
+  onSelectAction?: (action: QuickAction) => void;
   className?: string;
 }
 
 const isBooking = (r: SearchResult): r is BookingSearchResult => r.type === 'booking';
 const isContact = (r: SearchResult): r is ContactSearchResult => r.type === 'contact';
+
+/** Substring match over label + keywords. cmdk's own filter is off (server results are pre-ranked and
+ *  must never be filtered out), so the actions section does its matching here (ADR-0067 §6/§7). */
+function actionMatches(action: QuickAction, q: string): boolean {
+  return action.label.toLowerCase().includes(q) || action.keywords.some((k) => k.toLowerCase().includes(q));
+}
 
 function ResultItem({
   result,
@@ -37,6 +48,29 @@ function ResultItem({
       className="min-h-[44px] cursor-pointer rounded-md data-[selected=true]:bg-accent"
     >
       <SearchResultRow result={result} />
+    </Command.Item>
+  );
+}
+
+function ActionItem({
+  action,
+  onSelect,
+}: {
+  action: QuickAction;
+  onSelect: (action: QuickAction) => void;
+}) {
+  const Icon = action.icon;
+  return (
+    <Command.Item
+      value={action.id}
+      keywords={[...action.keywords]}
+      onSelect={() => onSelect(action)}
+      className="min-h-[44px] cursor-pointer rounded-md data-[selected=true]:bg-accent"
+    >
+      <span className="flex w-full items-center gap-3 rounded-md px-3 py-2">
+        <Icon size={18} className="shrink-0 text-muted" aria-hidden />
+        <span className="truncate text-sm font-medium text-foreground">{action.label}</span>
+      </span>
     </Command.Item>
   );
 }
@@ -57,47 +91,71 @@ export function CommandPalette({
   results,
   isLoading = false,
   onSelectResult,
+  actions = [],
+  onSelectAction,
   className,
 }: CommandPaletteProps) {
   const bookings = results.filter(isBooking);
   const contacts = results.filter(isContact);
   const hasQuery = query.trim().length > 0;
+  const q = query.trim().toLowerCase();
+  const matchingActions =
+    hasQuery && onSelectAction ? actions.filter((action) => actionMatches(action, q)) : [];
 
   function renderBody() {
+    const actionsGroup =
+      matchingActions.length > 0 && onSelectAction ? (
+        <Command.Group heading="Actions">
+          {matchingActions.map((action) => (
+            <ActionItem key={action.id} action={action} onSelect={onSelectAction} />
+          ))}
+        </Command.Group>
+      ) : null;
+
+    let resultsNode = null;
     if (isLoading) {
-      return <p className="px-3 py-6 text-center text-sm text-muted">Searching…</p>;
+      resultsNode = <p className="px-3 py-6 text-center text-sm text-muted">Searching…</p>;
+    } else if (hasQuery && results.length > 0) {
+      resultsNode = (
+        <>
+          {bookings.length > 0 && (
+            <Command.Group heading="Bookings">
+              {bookings.map((result) => (
+                <ResultItem key={result.id} result={result} onSelectResult={onSelectResult} />
+              ))}
+            </Command.Group>
+          )}
+          {contacts.length > 0 && (
+            <Command.Group heading="Contacts">
+              {contacts.map((result) => (
+                <ResultItem key={result.id} result={result} onSelectResult={onSelectResult} />
+              ))}
+            </Command.Group>
+          )}
+        </>
+      );
     }
-    if (!hasQuery) {
-      // Recent-viewed lands here in a later slice; for now, a plain prompt.
-      return (
+
+    // Fall back to a hint / no-results message only when neither results nor actions are showing.
+    let fallback = null;
+    if (!isLoading && !actionsGroup && !(hasQuery && results.length > 0)) {
+      fallback = hasQuery ? (
+        <p className="px-3 py-6 text-center text-sm text-muted">
+          No results for “{query.trim()}”.
+        </p>
+      ) : (
+        // Recent-viewed lands here in a later slice; for now, a plain prompt.
         <p className="px-3 py-6 text-center text-sm text-muted">
           Type to search bookings and contacts.
         </p>
       );
     }
-    if (results.length === 0) {
-      return (
-        <p className="px-3 py-6 text-center text-sm text-muted">
-          No results for “{query.trim()}”.
-        </p>
-      );
-    }
+
     return (
       <>
-        {bookings.length > 0 && (
-          <Command.Group heading="Bookings">
-            {bookings.map((result) => (
-              <ResultItem key={result.id} result={result} onSelectResult={onSelectResult} />
-            ))}
-          </Command.Group>
-        )}
-        {contacts.length > 0 && (
-          <Command.Group heading="Contacts">
-            {contacts.map((result) => (
-              <ResultItem key={result.id} result={result} onSelectResult={onSelectResult} />
-            ))}
-          </Command.Group>
-        )}
+        {resultsNode}
+        {actionsGroup}
+        {fallback}
       </>
     );
   }
