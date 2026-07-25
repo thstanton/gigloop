@@ -93,7 +93,6 @@ const mockBookingWithSeries: BookingDetail = {
   series: {
     id: 's1',
     label: 'Summer Weddings 2026',
-    customerId: 'c1',
   },
   seriesId: 's1',
 };

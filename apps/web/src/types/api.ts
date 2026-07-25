@@ -328,6 +328,10 @@ export interface BookingLogisticsEntry {
   label?: string;
 }
 
+// Mirrors BookingResponseDto (apps/api/src/bookings/dto/booking-response.dto.ts), which documents
+// GET /bookings/:id. Two fields the API sends are deliberately not declared here: `userId` (a
+// tenancy id the frontend must never branch on) and `travelMode` (unused). `sets` / `packages` are
+// likewise the consumed subsets — the API returns the whole rows. See #805.
 export interface BookingDetail extends Omit<BookingListItem, 'customer' | 'venue' | 'bookingAgent'> {
   customer: Contact;
   venue: Contact | null;
@@ -340,7 +344,9 @@ export interface BookingDetail extends Omit<BookingListItem, 'customer' | 'venue
   hasMusicFormConfig: boolean;
   hasMusicFormResponse: boolean;
   seriesId: string | null;
-  series: { id: string; label: string; customerId: string } | null;
+  // The API selects only { id, label } for the series (bookings.repository.ts `bookingIncludes`).
+  // `customerId` was declared here but never sent — anything reading it got `undefined` (#786).
+  series: { id: string; label: string } | null;
   logistics: Record<string, BookingLogisticsEntry> | null;
   notes: string | null;
   // Per-concern portal-visibility verdicts, computed by the single backend authority (ADR-0054).
