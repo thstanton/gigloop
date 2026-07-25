@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, Plus } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -7,6 +8,7 @@ import { VenueMapWidget } from '@/components/common/VenueMapWidget';
 import { Button } from '@/components/ui/button';
 import BookingStatusPill from '@/components/common/BookingStatusPill';
 import { useContact } from '@/lib/hooks/useContact';
+import { contactToRecent, recordRecentlyViewed } from '@/lib/recentlyViewed';
 import { apiGet } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
 import { formatDate } from '@/lib/formatters';
@@ -110,6 +112,11 @@ export default function ContactDetailPage() {
 
   const queryClient = useQueryClient();
   const { data: contact, isLoading, isError } = useContact(id!);
+
+  // Feed the command palette's "Recent" list as the musician opens contacts (ADR-0067 §7).
+  useEffect(() => {
+    if (contact) recordRecentlyViewed(contactToRecent(contact));
+  }, [contact]);
   const { mutate: refreshTravelTime, isPending: isRefreshingTravelTime } = useMutation({
     mutationFn: () => apiGet<TravelTimeResponse>(`/contacts/${id}/travel-time`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['contact', id] }),

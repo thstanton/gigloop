@@ -2,7 +2,9 @@ import type { BookingStatus, Prisma } from '@prisma/client';
 
 const MIN_TOKEN_LENGTH = 2;
 
-function tokenize(q: string): string[] {
+// Exported so other entities' search where-builders (e.g. contact-search.ts, ADR-0067) share the
+// exact same tokenizer semantics — 2-char minimum, whitespace-split — rather than re-declaring it.
+export function tokenize(q: string): string[] {
   return q.split(/\s+/).filter((t) => t.length >= MIN_TOKEN_LENGTH);
 }
 

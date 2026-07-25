@@ -1050,3 +1050,31 @@ export interface TravelTimeResponse {
   distanceMetres: number;
   calculatedAt: string;
 }
+
+// ─────────────────────────────────────────
+// Search (command palette, ADR-0067)
+// ─────────────────────────────────────────
+
+export interface BookingSearchResult {
+  type: 'booking';
+  id: string;
+  url: string;
+  title: string;
+  subtitle: string | null;
+  status: BookingStatus;
+  date: string;
+  eventType: EventType;
+}
+
+export interface ContactSearchResult {
+  type: 'contact';
+  id: string;
+  url: string;
+  title: string;
+  subtitle: string | null;
+  bookingCount: number;
+}
+
+// Discriminated on `type` — grouped bookings-then-contacts, top-N per type, no pagination
+// (ADR-0067 §3/§5). A future searchable entity is a new `type` variant, not a shape change.
+export type SearchResult = BookingSearchResult | ContactSearchResult;

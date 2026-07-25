@@ -2,6 +2,8 @@ import {
   Music, Mic2, Guitar, Piano, Drum, Church, Cake, Wine, Star, Heart,
   GlassWater, Utensils, Moon, Briefcase, Music2, Sparkles, Radio, Headphones,
   Volume2, Users, Clock, Shirt, Sofa, type LucideIcon,
+  LayoutDashboard, CalendarDays, FileText, Settings, Package,
+  CalendarPlus, UserPlus,
 } from 'lucide-react';
 import type { BookingStatus, EventType, PortalTheme, PortalVisibilityReason, ReminderConcern, SongGenre } from '@/types/api';
 
@@ -425,3 +427,74 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   { path: '/onboarding/portal',    label: 'Portal' },
   { path: '/onboarding/songs',     label: 'Songs' },
 ];
+
+// ─── Nav destinations & quick-action creates (ADR-0067 §6) ──────────────────
+// Canonical registry behind AppShell's nav (sidebar + mobile tab bar + More
+// sheet) AND the future command palette's quick-actions mode — declared once
+// per the "one declaration per vocabulary" rule so AppShell no longer hand-
+// writes a second `primaryNav`/`secondaryNav` copy. The palette itself is a
+// later slice (#796+); this table is a pure prefactor with no behaviour change.
+//
+// Unlike BookingStatus/EventType there is no pre-existing external union to
+// guard coverage against — same situation as LOGISTICS_FIELDS above — so
+// `id`/`group` types are derived from the table rather than checked against
+// an enum. `keywords` has no consumer yet; it exists for the palette's future
+// cmdk synonym search (e.g. "add gig" → New Booking, "songs"/"setlist" →
+// Repertoire — ADR-0067 §6).
+export interface NavDestinationRow {
+  id: string;
+  label: string;
+  route: string;
+  icon: LucideIcon;
+  group: 'primary' | 'secondary';
+  keywords: readonly string[];
+}
+
+const NAV_DESTINATIONS_TABLE = [
+  { id: 'dashboard',   label: 'Dashboard',         route: '/admin',            icon: LayoutDashboard, group: 'primary',   keywords: ['dashboard', 'home'] },
+  { id: 'bookings',    label: 'Bookings',          route: '/admin/bookings',   icon: CalendarDays,    group: 'primary',   keywords: ['bookings', 'gigs', 'calendar'] },
+  { id: 'contacts',    label: 'Contacts',          route: '/admin/contacts',   icon: Users,           group: 'primary',   keywords: ['contacts', 'clients', 'customers'] },
+  { id: 'repertoire',  label: 'Repertoire',        route: '/admin/repertoire', icon: Music2,          group: 'primary',   keywords: ['repertoire', 'songs', 'setlist'] },
+  { id: 'packages',    label: 'Package Templates', route: '/admin/packages',  icon: Package,          group: 'secondary', keywords: ['packages', 'package templates'] },
+  { id: 'templates',   label: 'Templates',         route: '/admin/templates', icon: FileText,         group: 'secondary', keywords: ['templates', 'email templates', 'communication templates'] },
+  { id: 'settings',    label: 'Settings',          route: '/admin/settings',  icon: Settings,         group: 'secondary', keywords: ['settings', 'preferences'] },
+] as const satisfies readonly NavDestinationRow[];
+
+export type NavDestinationId = (typeof NAV_DESTINATIONS_TABLE)[number]['id'];
+
+export const NAV_DESTINATIONS: readonly NavDestinationRow[] = NAV_DESTINATIONS_TABLE;
+
+// Derived views AppShell renders from — never a second hand-written list.
+export const PRIMARY_NAV_DESTINATIONS: readonly NavDestinationRow[] =
+  NAV_DESTINATIONS.filter((row) => row.group === 'primary');
+
+export const SECONDARY_NAV_DESTINATIONS: readonly NavDestinationRow[] =
+  NAV_DESTINATIONS.filter((row) => row.group === 'secondary');
+
+// The two route-based creates from ADR-0067 §6 — pure navigations to a form,
+// same as the nav destinations above (no in-place create, no mutation).
+export interface QuickActionCreateRow {
+  id: string;
+  label: string;
+  route: string;
+  icon: LucideIcon;
+  keywords: readonly string[];
+}
+
+export const QUICK_ACTION_CREATES = [
+  { id: 'new-booking', label: 'New Booking', route: '/admin/bookings/new', icon: CalendarPlus, keywords: ['new booking', 'add gig', 'create booking'] },
+  { id: 'new-contact', label: 'New Contact', route: '/admin/contacts/new', icon: UserPlus,      keywords: ['new contact', 'add contact', 'add client'] },
+] as const satisfies readonly QuickActionCreateRow[];
+
+// The command palette's Actions section (ADR-0067 §6): the nine pure navigations — the seven
+// section destinations then the two creates — derived from the two tables above, never re-listed.
+// The nav rows carry an extra `group` column the palette ignores; both satisfy QuickAction.
+export interface QuickAction {
+  id: string;
+  label: string;
+  route: string;
+  icon: LucideIcon;
+  keywords: readonly string[];
+}
+
+export const QUICK_ACTIONS: readonly QuickAction[] = [...NAV_DESTINATIONS, ...QUICK_ACTION_CREATES];
