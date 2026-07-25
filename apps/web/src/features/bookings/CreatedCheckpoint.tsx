@@ -18,7 +18,7 @@ interface CreatedCheckpointProps {
 export function CreatedCheckpoint({ title, onFinish, onContinue }: CreatedCheckpointProps) {
   return (
     <div className="max-w-md">
-      <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-full bg-status-confirmed/12 text-status-confirmed">
+      <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-full bg-status-confirmed/15 text-status-confirmed">
         <CheckCircle2 size={28} />
       </div>
       <h1 className="font-display text-2xl font-semibold text-foreground">Booking created</h1>
