@@ -376,17 +376,30 @@ export class DocumentsService {
     return { ...doc, url: this.documentDownloadRoute(doc.id) };
   }
 
+  // Returns a DocumentListItem — the same verdict-bearing shape findByBooking returns — so both
+  // document-producing paths hand the controller one type and it stays a pure mapper (#802).
+  // The verdict comes from the ADR-0054 authority rather than a literal: previously the controller
+  // asserted `not_shared` itself, which made it a second place deciding what an UPLOAD is worth on
+  // the portal. That agreed with the authority, but only until the UPLOAD rule gains a condition.
+  //
+  // An UPLOAD's verdict is independent of the active contract and the booking's cancelled state,
+  // so those are passed as "no context" rather than paying for a read purely to source them — the
+  // point is that the authority decides, not that this caller pre-computes.
   async uploadDocument(
     userId: string,
     bookingId: string,
     buffer: Buffer,
     name: string,
-  ): Promise<DocumentWithUrl> {
+  ): Promise<DocumentListItem> {
     const documentId = randomUUID();
     const key = `uploads/${userId}/${bookingId}/${documentId}.pdf`;
     await this.storage.putDocument(key, buffer, 'application/pdf');
     const doc = await this.repo.create(userId, bookingId, 'UPLOAD', key, undefined, undefined, name);
-    return { ...doc, url: this.documentDownloadRoute(doc.id) };
+    return {
+      ...doc,
+      url: this.documentDownloadRoute(doc.id),
+      portalVisibility: resolveDocumentVisibility(doc, null),
+    };
   }
 
   async deleteDocument(userId: string, id: string): Promise<void> {

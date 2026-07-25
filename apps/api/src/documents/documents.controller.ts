@@ -12,7 +12,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { DocumentsService } from './documents.service';
+import { DocumentsService, type DocumentListItem } from './documents.service';
 import { DocumentResponseDto } from './dto/document-response.dto';
 import type { Request } from 'express';
 
@@ -22,6 +22,23 @@ type AuthedRequest = Request & { userId: string };
 interface MulterFile { buffer: Buffer; mimetype: string; }
 
 const MAX_PDF_SIZE = 10 * 1024 * 1024;
+
+// The single mapping from the service's DocumentListItem to the wire DTO, shared by the list and
+// upload endpoints. Both used to hand-roll their own, which is how the upload path came to assert
+// its own portal-visibility verdict instead of the ADR-0054 authority's (#802). With one mapper
+// there is nowhere for a second opinion to live, and the controller stays a pure mapper.
+function toDocumentResponse(d: DocumentListItem): DocumentResponseDto {
+  return {
+    id: d.id,
+    createdAt: d.createdAt.toISOString(),
+    type: d.type,
+    url: d.url,
+    invoiceId: d.invoiceId ?? null,
+    contractStatus: d.type === 'CONTRACT' ? (d.contract?.status ?? null) : null,
+    name: d.name ?? null,
+    portalVisibility: d.portalVisibility,
+  };
+}
 
 @ApiTags('Documents')
 @ApiBearerAuth('clerk-jwt')
@@ -37,16 +54,7 @@ export class DocumentsController {
     @Param('bookingId') bookingId: string,
   ): Promise<DocumentResponseDto[]> {
     const docs = await this.service.findByBooking(req.userId, bookingId);
-    return docs.map((d) => ({
-      id: d.id,
-      createdAt: d.createdAt.toISOString(),
-      type: d.type,
-      url: d.url,
-      invoiceId: d.invoiceId ?? null,
-      contractStatus: d.type === 'CONTRACT' ? (d.contract?.status ?? null) : null,
-      name: d.name ?? null,
-      portalVisibility: d.portalVisibility,
-    }));
+    return docs.map(toDocumentResponse);
   }
 
   @ApiOperation({ summary: 'Upload a PDF document to a booking' })
@@ -84,17 +92,7 @@ export class DocumentsController {
     const name: string = (req.body as { name?: string }).name?.trim() ?? '';
     if (!name) throw new BadRequestException('name is required');
     const doc = await this.service.uploadDocument(req.userId, bookingId, file.buffer, name);
-    return {
-      id: doc.id,
-      createdAt: doc.createdAt.toISOString(),
-      type: doc.type,
-      url: doc.url,
-      invoiceId: null,
-      contractStatus: null,
-      name: doc.name ?? null,
-      // A freshly uploaded document is always UPLOAD — private paperwork, never client-visible.
-      portalVisibility: { visible: false, reason: 'not_shared' },
-    };
+    return toDocumentResponse(doc);
   }
 
   @ApiOperation({ summary: 'Delete an uploaded document' })
