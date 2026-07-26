@@ -262,7 +262,7 @@ function EditSongForm({ song, onClose }: { song: Song; onClose: () => void }) {
           <Button
             size="sm"
             variant="outline"
-            className="text-status-cancelled border-status-cancelled hover:bg-status-cancelled/8"
+            className="text-status-cancelled border-status-cancelled hover:bg-status-cancelled/5"
             disabled={deleteMutation.isPending}
             onClick={() => deleteMutation.mutate()}
           >
@@ -272,7 +272,7 @@ function EditSongForm({ song, onClose }: { song: Song; onClose: () => void }) {
           <Button
             size="sm"
             variant="outline"
-            className="text-status-cancelled border-status-cancelled hover:bg-status-cancelled/8"
+            className="text-status-cancelled border-status-cancelled hover:bg-status-cancelled/5"
             onClick={() => setDeleteConfirm(true)}
           >
             Delete song

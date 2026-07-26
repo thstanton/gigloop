@@ -66,7 +66,7 @@ export function GenrePills({
             className={cn(
               'inline-flex items-center px-3 py-1 rounded-full border text-sm transition-colors',
               active
-                ? 'border-primary text-primary bg-primary/8'
+                ? 'border-primary text-primary bg-primary/5'
                 : 'border-border text-muted hover:border-primary',
             )}
           >
