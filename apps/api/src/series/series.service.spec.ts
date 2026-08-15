@@ -3,6 +3,7 @@ import { SeriesService } from './series.service';
 import { SeriesRepository } from './series.repository';
 import { InvoicesRepository } from '../invoices/invoices.repository';
 import { InvoiceTransitionService } from '../invoices/invoice-transition.service';
+import { DocumentsService } from '../documents/documents.service';
 
 type MockRepo = {
   findAll: jest.Mock;
@@ -33,6 +34,11 @@ type MockTransition = {
   markSent: jest.Mock;
   markPaid: jest.Mock;
   voidInvoice: jest.Mock;
+};
+
+type MockDocuments = {
+  generatePreviewPdf: jest.Mock;
+  findByInvoice: jest.Mock;
 };
 
 function makeRepo(): MockRepo {
@@ -70,6 +76,13 @@ function makeTransition(): MockTransition {
   };
 }
 
+function makeDocuments(): MockDocuments {
+  return {
+    generatePreviewPdf: jest.fn().mockResolvedValue(Buffer.from('%PDF-preview')),
+    findByInvoice: jest.fn().mockResolvedValue(null),
+  };
+}
+
 const seriesWithMeta = {
   id: 's1', createdAt: new Date(), updatedAt: new Date(),
   label: 'Hotel X — May 2026', customerId: 'c1',
@@ -92,15 +105,18 @@ describe('SeriesService', () => {
   let repo: MockRepo;
   let invoicesRepo: MockInvoicesRepo;
   let transition: MockTransition;
+  let documents: MockDocuments;
 
   beforeEach(() => {
     repo = makeRepo();
     invoicesRepo = makeInvoicesRepo();
     transition = makeTransition();
+    documents = makeDocuments();
     service = new SeriesService(
       repo as unknown as SeriesRepository,
       invoicesRepo as unknown as InvoicesRepository,
       transition as unknown as InvoiceTransitionService,
+      documents as unknown as DocumentsService,
     );
   });
 
@@ -275,6 +291,55 @@ describe('SeriesService', () => {
     it('throws NotFoundException when invoice not found', async () => {
       invoicesRepo.findSeriesInvoiceById.mockResolvedValue(null);
       await expect(service.markPaidInvoice('u1', 's1', 'inv1')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('generatePreviewPdf', () => {
+    it('renders a DRAFT with the provisional number it would receive on issue', async () => {
+      invoicesRepo.findSeriesInvoiceById.mockResolvedValue(draftInvoice);
+      invoicesRepo.previewSeriesInvoiceNumber.mockResolvedValue({ invoiceNumber: 'INV-2026-001', willReuse: false });
+
+      const buffer = await service.generatePreviewPdf('u1', 's1', 'inv1');
+      expect(invoicesRepo.previewSeriesInvoiceNumber).toHaveBeenCalledWith('u1', 's1');
+      expect(documents.generatePreviewPdf).toHaveBeenCalledWith('u1', 'inv1', 'INV-2026-001');
+      expect(buffer).toEqual(Buffer.from('%PDF-preview'));
+    });
+
+    it('does not look up a provisional number when the invoice already has one', async () => {
+      invoicesRepo.findSeriesInvoiceById.mockResolvedValue(issuedInvoice);
+      await service.generatePreviewPdf('u1', 's1', 'inv1');
+      expect(invoicesRepo.previewSeriesInvoiceNumber).not.toHaveBeenCalled();
+      expect(documents.generatePreviewPdf).toHaveBeenCalledWith('u1', 'inv1', undefined);
+    });
+
+    it('throws NotFoundException when invoice not found', async () => {
+      invoicesRepo.findSeriesInvoiceById.mockResolvedValue(null);
+      await expect(service.generatePreviewPdf('u1', 's1', 'inv1')).rejects.toThrow(NotFoundException);
+      expect(documents.generatePreviewPdf).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getInvoiceDocument', () => {
+    it('returns the stored document (with url) looked up by invoice id', async () => {
+      invoicesRepo.findSeriesInvoiceById.mockResolvedValue(issuedInvoice);
+      const doc = { id: 'doc1', url: '/documents/doc1/download', invoiceId: 'inv1' };
+      documents.findByInvoice.mockResolvedValue(doc);
+
+      const result = await service.getInvoiceDocument('u1', 's1', 'inv1');
+      expect(documents.findByInvoice).toHaveBeenCalledWith('u1', 'inv1');
+      expect(result).toBe(doc);
+    });
+
+    it('returns null when no document exists yet (DRAFT)', async () => {
+      invoicesRepo.findSeriesInvoiceById.mockResolvedValue(draftInvoice);
+      documents.findByInvoice.mockResolvedValue(null);
+      await expect(service.getInvoiceDocument('u1', 's1', 'inv1')).resolves.toBeNull();
+    });
+
+    it('throws NotFoundException when invoice not found (never leaks another owner\'s document)', async () => {
+      invoicesRepo.findSeriesInvoiceById.mockResolvedValue(null);
+      await expect(service.getInvoiceDocument('u1', 's1', 'inv1')).rejects.toThrow(NotFoundException);
+      expect(documents.findByInvoice).not.toHaveBeenCalled();
     });
   });
 

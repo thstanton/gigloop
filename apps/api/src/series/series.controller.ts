@@ -1,10 +1,12 @@
-import { Body, Controller, Delete, Get, HttpCode, NotFoundException, Param, Post, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Header, HttpCode, NotFoundException, Param, Post, Req, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { SeriesService } from './series.service';
 import { SendInvoiceDto } from '../invoices/dto/send-invoice.dto';
 import { MarkSentDto } from '../invoices/dto/mark-sent.dto';
 import { IssueInvoiceDto } from '../invoices/dto/issue-invoice.dto';
 import { InvoiceResponseDto } from '../invoices/dto/invoice-response.dto';
+import { SeriesInvoiceDocumentDto } from './dto/series-invoice-document.dto';
 import type { Request } from 'express';
 
 type AuthedRequest = Request & { userId: string };
@@ -119,6 +121,42 @@ export class SeriesController {
     @Param('invoiceId') invoiceId: string,
   ) {
     return this.service.voidInvoice(req.userId, id, invoiceId);
+  }
+
+  @ApiOperation({ summary: 'Preview the series invoice PDF (freshly generated; DRAFT affordance)' })
+  @ApiResponse({ status: 200, description: 'PDF stream' })
+  @ApiResponse({ status: 404, description: 'Series or invoice not found' })
+  @Get(':id/invoices/:invoiceId/preview.pdf')
+  @Header('Content-Type', 'application/pdf')
+  @Header('Content-Disposition', 'inline; filename="invoice-preview.pdf"')
+  async previewInvoicePdf(
+    @Req() req: AuthedRequest,
+    @Param('id') id: string,
+    @Param('invoiceId') invoiceId: string,
+    @Res() res: Response,
+  ) {
+    const buffer = await this.service.generatePreviewPdf(req.userId, id, invoiceId);
+    res.end(buffer);
+  }
+
+  @ApiOperation({ summary: 'Get the stored PDF document for a series invoice; null when none exists yet' })
+  @ApiResponse({ status: 200, type: SeriesInvoiceDocumentDto, description: 'The stored document, or null for a DRAFT' })
+  @ApiResponse({ status: 404, description: 'Series or invoice not found' })
+  @Get(':id/invoices/:invoiceId/document')
+  async getInvoiceDocument(
+    @Req() req: AuthedRequest,
+    @Param('id') id: string,
+    @Param('invoiceId') invoiceId: string,
+  ): Promise<SeriesInvoiceDocumentDto | null> {
+    const doc = await this.service.getInvoiceDocument(req.userId, id, invoiceId);
+    if (!doc) return null;
+    return {
+      id: doc.id,
+      createdAt: doc.createdAt.toISOString(),
+      type: doc.type,
+      url: doc.url,
+      invoiceId: doc.invoiceId ?? null,
+    };
   }
 
   @ApiOperation({ summary: 'Delete a DRAFT series invoice' })

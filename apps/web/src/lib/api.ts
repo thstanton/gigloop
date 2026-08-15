@@ -57,6 +57,25 @@ export function openDocument(appRoute: string, onError?: () => void): void {
     });
 }
 
+// Open a freshly-generated preview PDF in a new tab. The preview endpoint requires the Clerk
+// bearer token, so a raw window.open() to it 401s. Open the tab synchronously (preserves the
+// user gesture), fetch the PDF with auth, then point the tab at the blob. Path-parameterised so
+// booking and series invoices share one flow; `onError` lets the caller surface a toast.
+export function openPreviewPdf(previewPath: string, onError?: () => void): void {
+  const win = window.open('', '_blank');
+  apiGetBlob(previewPath)
+    .then((blob) => {
+      const url = URL.createObjectURL(blob);
+      if (win) win.location.href = url;
+      else window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    })
+    .catch(() => {
+      win?.close();
+      onError?.();
+    });
+}
+
 export async function apiGetNullable<T>(path: string): Promise<T | null> {
   const res = await authedFetch(path);
   if (res.status === 404) return null;

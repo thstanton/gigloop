@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { SeriesRepository } from './series.repository';
 import { InvoicesRepository } from '../invoices/invoices.repository';
 import { InvoiceTransitionService } from '../invoices/invoice-transition.service';
+import { DocumentsService, type DocumentWithUrl } from '../documents/documents.service';
 import { reconcile } from '../invoices/series-line-reconciler';
 import { isDeletable } from '../invoices/invoice-transition-rules';
 import { SendInvoiceDto } from '../invoices/dto/send-invoice.dto';
@@ -35,6 +36,7 @@ export class SeriesService {
     private repo: SeriesRepository,
     private invoicesRepo: InvoicesRepository,
     private transition: InvoiceTransitionService,
+    private documents: DocumentsService,
   ) {}
 
   findAll(userId: string) {
@@ -131,6 +133,36 @@ export class SeriesService {
     const invoice = await this.invoicesRepo.findSeriesInvoiceById(userId, seriesId, invoiceId);
     if (!invoice) throw new NotFoundException('Invoice not found');
     return this.transition.markPaid(invoice);
+  }
+
+  // ─── Invoice PDF surface (parity with booking invoices) ───────────────────
+
+  /**
+   * Freshly generate the series invoice PDF for preview. Mirrors the booking route — for a
+   * DRAFT (no assigned number yet) the provisional number it would receive on issue is rendered.
+   * Preview-by-regeneration is a DRAFT affordance; the client routes ISSUED+ invoices to the
+   * stored artifact via the document endpoint instead.
+   */
+  async generatePreviewPdf(userId: string, seriesId: string, invoiceId: string): Promise<Buffer> {
+    const invoice = await this.invoicesRepo.findSeriesInvoiceById(userId, seriesId, invoiceId);
+    if (!invoice) throw new NotFoundException('Invoice not found');
+    let previewNumber: string | undefined;
+    if (!invoice.invoiceNumber) {
+      const { invoiceNumber } = await this.invoicesRepo.previewSeriesInvoiceNumber(userId, seriesId);
+      previewNumber = invoiceNumber;
+    }
+    return this.documents.generatePreviewPdf(userId, invoiceId, previewNumber);
+  }
+
+  /**
+   * The stored INVOICE Document (with its access-controlled download url) for a series invoice,
+   * or null when none exists yet (DRAFT). Looked up by invoice id — the document has no bookingId,
+   * so it is otherwise undiscoverable to the client.
+   */
+  async getInvoiceDocument(userId: string, seriesId: string, invoiceId: string): Promise<DocumentWithUrl | null> {
+    const invoice = await this.invoicesRepo.findSeriesInvoiceById(userId, seriesId, invoiceId);
+    if (!invoice) throw new NotFoundException('Invoice not found');
+    return this.documents.findByInvoice(userId, invoiceId);
   }
 
   // ─── Series membership guard + sync ───────────────────────────────────────

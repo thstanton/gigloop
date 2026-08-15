@@ -43,9 +43,12 @@ describe('invoiceOwnerRoute', () => {
       expect(invoiceOwnerRoute(seriesInvoice, 'void').prefix).toBe('/series/s1/invoices');
     });
 
-    it('invalidates only the series invoice cache for every action', () => {
+    it('invalidates the series invoice and its stored-document caches for every action', () => {
       for (const action of ALL_ACTIONS) {
-        expect(invoiceOwnerRoute(seriesInvoice, action).keys).toEqual([['seriesInvoice', 's1']]);
+        expect(invoiceOwnerRoute(seriesInvoice, action).keys).toEqual([
+          ['seriesInvoice', 's1'],
+          ['seriesInvoiceDocument', 's1'],
+        ]);
       }
     });
   });

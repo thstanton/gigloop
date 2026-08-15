@@ -642,6 +642,18 @@ export interface Document {
   portalVisibility: DocumentPortalVisibilityVerdict;
 }
 
+// The stored PDF document for a series invoice (GET /series/:id/invoices/:invoiceId/document).
+// A series has no booking and therefore no portal, so this omits `portalVisibility` — the series
+// invoice is never shown on a single booking's portal. `url` is the same access-controlled
+// download route as Document.url; open it via openDocument() from lib/api.
+export interface SeriesInvoiceDocument {
+  id: string;
+  createdAt: string;
+  type: DocumentType;
+  url: string;
+  invoiceId: string | null;
+}
+
 // ─────────────────────────────────────────
 // Communications
 // ─────────────────────────────────────────

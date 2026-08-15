@@ -15,9 +15,11 @@ export function invoiceOwnerRoute(
   action: InvoiceAction,
 ): { prefix: string; keys: (string | null)[][] } {
   if (invoice.seriesId) {
+    // Issue creates the stored Document (Download appears); void/delete remove it. The doc query
+    // is keyed by seriesId + invoiceId, so this seriesId prefix invalidates it regardless (TIM-42).
     return {
       prefix: `/series/${invoice.seriesId}/invoices`,
-      keys: [['seriesInvoice', invoice.seriesId]],
+      keys: [['seriesInvoice', invoice.seriesId], ['seriesInvoiceDocument', invoice.seriesId]],
     };
   }
 
