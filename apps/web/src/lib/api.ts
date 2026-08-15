@@ -38,6 +38,29 @@ export async function apiGetBlob(path: string): Promise<Blob> {
   return res.blob();
 }
 
+// Open a PDF the API *generates on demand* (an invoice preview) in a new tab. The endpoint
+// streams bytes and needs the Clerk bearer token, so a raw window.open() to it 401s: fetch the
+// PDF with auth, then point the tab at an object URL. The blank tab is opened synchronously to
+// preserve the user gesture, so the popup blocker doesn't eat it during the async fetch.
+//
+// This is the generated-PDF twin of {@link openDocument}, which resolves a *stored* document.
+// Shared by the booking and series invoice surfaces (#830) — it was previously inline in
+// InvoiceSection, and copying it to the series card is what this exists to prevent.
+export function openGeneratedPdf(path: string, onError?: () => void): void {
+  const win = window.open('', '_blank');
+  apiGetBlob(path)
+    .then((blob) => {
+      const url = URL.createObjectURL(blob);
+      if (win) win.location.href = url;
+      else window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    })
+    .catch(() => {
+      win?.close();
+      onError?.();
+    });
+}
+
 // Open an access-controlled document (ADR-0059, #654). A document's `url` is now
 // an app route, not a public URL — we fetch it WITH the Clerk JWT to resolve the
 // real storage URL, then navigate the browser to it. A blank tab is opened

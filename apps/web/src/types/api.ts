@@ -642,6 +642,19 @@ export interface Document {
   portalVisibility: DocumentPortalVisibilityVerdict;
 }
 
+/**
+ * The stored PDF backing an issued series invoice (#830).
+ *
+ * Deliberately narrower than `Document`: it carries no `portalVisibility`, because that verdict
+ * is a *booking* portal concern (ADR-0054) and a series invoice belongs to no single booking.
+ * `url` is the same access-controlled app route — open it via `openDocument()`.
+ */
+export interface SeriesInvoiceDocument {
+  id: string;
+  createdAt: string;
+  url: string;
+}
+
 // ─────────────────────────────────────────
 // Communications
 // ─────────────────────────────────────────
