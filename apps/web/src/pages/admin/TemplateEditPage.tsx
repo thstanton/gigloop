@@ -333,7 +333,7 @@ function TemplateEditor({ template }: { template: Template }) {
               <Button
                 size="sm"
                 variant="outline"
-                className="text-status-cancelled border-status-cancelled hover:bg-status-cancelled/8"
+                className="text-status-cancelled border-status-cancelled hover:bg-status-cancelled/5"
                 disabled={resetMutation.isPending}
                 onClick={() => resetMutation.mutate()}
               >
@@ -344,7 +344,7 @@ function TemplateEditor({ template }: { template: Template }) {
             <Button
               size="sm"
               variant="outline"
-              className="text-status-cancelled border-status-cancelled hover:bg-status-cancelled/8"
+              className="text-status-cancelled border-status-cancelled hover:bg-status-cancelled/5"
               onClick={() => setResetConfirm(true)}
             >
               Reset to default

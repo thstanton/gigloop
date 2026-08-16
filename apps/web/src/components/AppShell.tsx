@@ -56,7 +56,7 @@ function SidebarNavGroup({ items }: { items: readonly NavDestinationRow[] }) {
                 'flex items-center gap-3 px-3 py-2 rounded text-sm transition-colors duration-150',
                 isActive
                   ? 'bg-primary/20 text-chrome-foreground font-medium'
-                  : 'text-chrome-muted hover:bg-chrome-foreground/8 hover:text-chrome-foreground font-normal',
+                  : 'text-chrome-muted hover:bg-chrome-foreground/5 hover:text-chrome-foreground font-normal',
               )
             }
           >
@@ -102,7 +102,7 @@ function UserMenu() {
 
       <button
         onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center gap-2.5 px-3 py-2 rounded hover:bg-chrome-foreground/8 transition-colors duration-150"
+        className="w-full flex items-center gap-2.5 px-3 py-2 rounded hover:bg-chrome-foreground/5 transition-colors duration-150"
       >
         <UserAvatar size="sm" />
         <div className="flex-1 text-left min-w-0">
