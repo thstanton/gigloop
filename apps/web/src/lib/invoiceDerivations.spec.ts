@@ -3,7 +3,8 @@ import {
   invoiceLabel,
   isInvoiceOverdue,
   depositAmount,
-  balanceAmount,
+  invoicedDeposit,
+  balanceDefaultAmount,
   coverTemplateFor,
   activeInvoiceOf,
   sentInvoiceOf,
@@ -73,15 +74,67 @@ describe('isInvoiceOverdue', () => {
   });
 });
 
-describe('depositAmount / balanceAmount', () => {
+describe('depositAmount', () => {
   it('rounds the deposit to pence', () => {
     expect(depositAmount(1000, 25)).toBe(250);
     expect(depositAmount(333.33, 33)).toBe(110); // 109.9989 → 110.00
   });
+});
 
-  it('rounds the balance to pence and complements the deposit', () => {
-    expect(balanceAmount(1000, 25)).toBe(750);
-    expect(depositAmount(1000, 25) + balanceAmount(1000, 25)).toBe(1000);
+// The invoiced-deposit rule (CONTEXT.md → Invoice → "Invoiced deposit — one rule, two consumers"):
+// the balance reads the actual non-VOID deposit invoice, never the default percentage.
+describe('invoicedDeposit', () => {
+  const depositWith = (amounts: number[], status: Invoice['status'] = 'ISSUED') =>
+    make({
+      isDeposit: true,
+      status,
+      lineItems: amounts.map((a, i) => ({
+        id: `li${i}`, createdAt: '', updatedAt: '', description: 'd',
+        amount: a.toFixed(2), order: i, sourceBookingId: null,
+      })),
+    });
+
+  it('is 0 when there is no deposit invoice', () => {
+    expect(invoicedDeposit([])).toBe(0);
+    expect(invoicedDeposit([make({ isDeposit: false })])).toBe(0);
+  });
+
+  it('sums the active deposit invoice line items, rounded to pence', () => {
+    expect(invoicedDeposit([depositWith([250])])).toBe(250);
+    expect(invoicedDeposit([depositWith([100, 50.5, 0.005])])).toBe(150.51);
+  });
+
+  it('is 0 when the only deposit invoice is VOID', () => {
+    expect(invoicedDeposit([depositWith([250], 'VOID')])).toBe(0);
+  });
+
+  it('ignores VOID deposits and reads the live one', () => {
+    expect(invoicedDeposit([depositWith([999], 'VOID'), depositWith([250])])).toBe(250);
+  });
+});
+
+describe('balanceDefaultAmount', () => {
+  const deposit = (amount: number, status: Invoice['status'] = 'ISSUED') =>
+    make({
+      isDeposit: true, status,
+      lineItems: [{ id: 'li', createdAt: '', updatedAt: '', description: 'd', amount: amount.toFixed(2), order: 0, sourceBookingId: null }],
+    });
+
+  it('pre-fills the full fee when there is no deposit invoice', () => {
+    expect(balanceDefaultAmount(1000, [])).toBe(1000);
+  });
+
+  it('pre-fills fee − the negotiated deposit amount, not fee × pct', () => {
+    // Deposit raised for 300 on a 1000 fee (a 30% deal, not the default): balance is 700.
+    expect(balanceDefaultAmount(1000, [deposit(300)])).toBe(700);
+  });
+
+  it('pre-fills the full fee when the only deposit is VOID', () => {
+    expect(balanceDefaultAmount(1000, [deposit(250, 'VOID')])).toBe(1000);
+  });
+
+  it('is not clamped: a fee below an already-raised deposit yields a negative default', () => {
+    expect(balanceDefaultAmount(200, [deposit(300)])).toBe(-100);
   });
 });
 

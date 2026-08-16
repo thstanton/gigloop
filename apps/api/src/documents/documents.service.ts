@@ -150,9 +150,15 @@ export class DocumentsService {
     return [profile.addressLine1, profile.addressLine2, profile.city, profile.postcode].filter(Boolean).join('\n') || null;
   }
 
+  // The invoiced deposit for the balance PDF's "less deposit" deduction: the line-item total of the
+  // booking's active (non-VOID) deposit invoice, or null when there is none (null gates the whole
+  // deduction section off — see buildTotalsSection). Never derived from depositPercentage. A booking
+  // may hold several VOID deposits alongside one live one, so the lookup excludes VOID and orders
+  // deterministically. See CONTEXT.md → Invoice → "Invoiced deposit — one rule, two consumers".
   private async getDepositTotal(userId: string, bookingId: string): Promise<string | null> {
     const depositInvoice = await this.prisma.invoice.findFirst({
-      where: { bookingId, userId, isDeposit: true },
+      where: { bookingId, userId, isDeposit: true, status: { not: 'VOID' } },
+      orderBy: { createdAt: 'desc' },
       include: { lineItems: true },
     });
     if (!depositInvoice) return null;

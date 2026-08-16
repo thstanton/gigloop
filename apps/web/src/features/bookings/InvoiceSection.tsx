@@ -13,7 +13,7 @@ import InvoiceRow from './InvoiceRow';
 import { apiGet, apiGetBlob } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
 import { useInvoiceActions } from '@/lib/hooks/useInvoiceActions';
-import { activeInvoiceOf, coverTemplateFor, depositAmount, balanceAmount } from '@/lib/invoiceDerivations';
+import { activeInvoiceOf, coverTemplateFor, depositAmount, balanceDefaultAmount } from '@/lib/invoiceDerivations';
 import { buildSetsDescription } from '@/lib/bookingSets';
 import type { Invoice, Document, BookingDetail, UserProfile } from '@/types/api';
 
@@ -187,11 +187,12 @@ export default function InvoiceSection({ bookingId }: Readonly<InvoiceSectionPro
   }
 
   function newBalanceInvoice() {
+    // Balance default = fee − invoiced deposit (the actual non-VOID deposit invoice, or 0), never
+    // the default percentage. See CONTEXT.md → Invoice → "Invoiced deposit — one rule, two consumers".
     const fee = booking?.fee ? parseFloat(booking.fee) : null;
-    const pct = userProfile?.depositPercentage;
     openCreateInvoice({
       isDeposit: false,
-      amount: fee && pct ? balanceAmount(fee, pct) : undefined,
+      amount: fee != null ? balanceDefaultAmount(fee, invoices) : undefined,
     });
   }
 

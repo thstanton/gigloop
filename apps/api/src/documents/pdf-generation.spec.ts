@@ -99,3 +99,37 @@ describe('PDF generation', () => {
     expect(buffer.subarray(0, 4).toString()).toBe('%PDF');
   });
 });
+
+// Recursively collect every `text` string in a pdfmake definition node, so a rendered row can be
+// asserted without a fragile positional path into the content tree.
+function collectText(node: unknown): string[] {
+  if (typeof node === 'string') return [];
+  if (Array.isArray(node)) return node.flatMap(collectText);
+  if (node && typeof node === 'object') {
+    const n = node as Record<string, unknown>;
+    const here = typeof n.text === 'string' ? [n.text] : [];
+    return [...here, ...Object.values(n).flatMap(collectText)];
+  }
+  return [];
+}
+
+// The render-time consumer of the invoiced-deposit rule (CONTEXT.md → Invoice → "Invoiced deposit —
+// one rule, two consumers"): the "less deposit" deduction is driven by depositTotal, which the
+// service derives from the active (non-VOID) deposit invoice. buildInvoiceDefinition is pure, so the
+// deduction row and its gating are tested directly here.
+describe('balance invoice deposit deduction', () => {
+  it('renders a "Less deposit" row and the reduced balance when a deposit was invoiced', () => {
+    const def = buildInvoiceDefinition({ ...invoiceData, depositTotal: '150.00' });
+    const texts = collectText(def.content);
+    expect(texts).toContain('Less deposit');
+    expect(texts).toContain('-£150.00');
+    expect(texts).toContain('£1350.00'); // 1500 subtotal − 150 deposit = 1350 balance due
+  });
+
+  it('renders no deduction row when there is no deposit (depositTotal null)', () => {
+    const def = buildInvoiceDefinition({ ...invoiceData, depositTotal: null });
+    const texts = collectText(def.content);
+    expect(texts).not.toContain('Less deposit');
+    expect(texts).toContain('£1500.00'); // full total due, no deduction
+  });
+});
