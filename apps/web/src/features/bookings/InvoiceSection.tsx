@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import InvoiceRow from './InvoiceRow';
-import { apiGet, apiGetBlob } from '@/lib/api';
+import { apiGet, openGeneratedPdf } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
 import { useInvoiceActions } from '@/lib/hooks/useInvoiceActions';
 import { activeInvoiceOf, coverTemplateFor, depositAmount, balanceAmount } from '@/lib/invoiceDerivations';
@@ -21,8 +21,15 @@ export interface SeriesInvoiceSectionProps {
   seriesLabel: string;
   invoice: Invoice | null | undefined;
   isLoading: boolean;
+  /**
+   * App route of the stored PDF backing an issued invoice, or null when there is none yet
+   * (#830). Null for a DRAFT — no PDF exists until issue — which is exactly when `onPreview`
+   * takes over. Previously hard-coded null, which silently withheld Download at every status.
+   */
+  pdfUrl: string | null;
   onCreateInvoice: () => void;
   onEdit: (invoice: Invoice) => void;
+  onPreview: (invoice: Invoice) => void;
   onIssue: (invoice: Invoice) => void;
   onDelete: (invoice: Invoice) => void;
   onSend: (invoice: Invoice) => void;
@@ -41,8 +48,10 @@ export function SeriesInvoiceSection({
   seriesLabel,
   invoice,
   isLoading,
+  pdfUrl,
   onCreateInvoice,
   onEdit,
+  onPreview,
   onIssue,
   onDelete,
   onSend,
@@ -93,11 +102,11 @@ export function SeriesInvoiceSection({
       {notice}
       <InvoiceRow
         invoice={invoice}
-        pdfUrl={null}
+        pdfUrl={pdfUrl}
         pending={{ isDeletePending, isVoidPending, isIssuePending, isMarkSentPending, isMarkPaidPending }}
         handlers={{
           onEdit,
-          onPreview: () => {},
+          onPreview,
           onIssue,
           onDelete,
           onSend,
@@ -144,21 +153,9 @@ export default function InvoiceSection({ bookingId }: Readonly<InvoiceSectionPro
   const invoiceActions = useInvoiceActions();
 
   function openPreviewPdf(invoice: Invoice) {
-    // The preview endpoint requires the Clerk bearer token, so a raw window.open() to it
-    // 401s. Open the tab synchronously (preserves the user gesture), fetch the PDF with
-    // auth, then point the tab at the blob.
-    const win = window.open('', '_blank');
-    apiGetBlob(`/bookings/${bookingId}/invoices/${invoice.id}/preview.pdf`)
-      .then((blob) => {
-        const url = URL.createObjectURL(blob);
-        if (win) win.location.href = url;
-        else window.open(url, '_blank');
-        setTimeout(() => URL.revokeObjectURL(url), 60_000);
-      })
-      .catch(() => {
-        win?.close();
-        toast({ title: 'Failed to open preview', variant: 'destructive' });
-      });
+    openGeneratedPdf(`/bookings/${bookingId}/invoices/${invoice.id}/preview.pdf`, () =>
+      toast({ title: 'Failed to open preview', variant: 'destructive' }),
+    );
   }
 
   function openCreateInvoice(prefill?: { isDeposit: boolean; amount?: number }) {

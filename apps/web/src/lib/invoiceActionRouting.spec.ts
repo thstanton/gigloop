@@ -43,9 +43,15 @@ describe('invoiceOwnerRoute', () => {
       expect(invoiceOwnerRoute(seriesInvoice, 'void').prefix).toBe('/series/s1/invoices');
     });
 
-    it('invalidates only the series invoice cache for every action', () => {
+    // #830: the stored-document key mirrors the booking side's `bookingDocuments` on issue —
+    // issuing creates the PDF (Download appears), voiding/deleting retires it. Without this the
+    // Download action's arrival depends solely on the document query's enabled-gate flipping.
+    it('invalidates the series invoice and its stored-document cache for every action', () => {
       for (const action of ALL_ACTIONS) {
-        expect(invoiceOwnerRoute(seriesInvoice, action).keys).toEqual([['seriesInvoice', 's1']]);
+        expect(invoiceOwnerRoute(seriesInvoice, action).keys).toEqual([
+          ['seriesInvoice', 's1'],
+          ['seriesInvoiceDocument', 's1'],
+        ]);
       }
     });
   });

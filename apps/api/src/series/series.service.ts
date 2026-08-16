@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { SeriesRepository } from './series.repository';
 import { InvoicesRepository } from '../invoices/invoices.repository';
 import { InvoiceTransitionService } from '../invoices/invoice-transition.service';
+import { DocumentsService } from '../documents/documents.service';
 import { reconcile } from '../invoices/series-line-reconciler';
 import { isDeletable } from '../invoices/invoice-transition-rules';
 import { SendInvoiceDto } from '../invoices/dto/send-invoice.dto';
@@ -35,6 +36,7 @@ export class SeriesService {
     private repo: SeriesRepository,
     private invoicesRepo: InvoicesRepository,
     private transition: InvoiceTransitionService,
+    private documents: DocumentsService,
   ) {}
 
   findAll(userId: string) {
@@ -131,6 +133,43 @@ export class SeriesService {
     const invoice = await this.invoicesRepo.findSeriesInvoiceById(userId, seriesId, invoiceId);
     if (!invoice) throw new NotFoundException('Invoice not found');
     return this.transition.markPaid(invoice);
+  }
+
+  // ─── Invoice PDF access (#830) ─────────────────────────────────────────────
+  //
+  // A series invoice's PDF is generated and stored at issue time exactly like a booking
+  // invoice's, but its Document carries `bookingId: null` (it belongs to no single booking), so
+  // it appears in no booking's document list. Without these two reads the artifact exists and is
+  // emailed to the client, yet the musician has no route to it at all.
+
+  /**
+   * The PDF a musician can look at *before* issuing. Regenerated from live data, so it is
+   * DRAFT-only by contract: once issued, the *stored* artifact is the authority — what was
+   * previewed = what is in Documents = what the client received (InvoiceTransitionService.send).
+   * Issued invoices go through {@link getInvoiceDocument} instead.
+   */
+  async generateInvoicePreviewPdf(userId: string, seriesId: string, invoiceId: string): Promise<Buffer> {
+    const invoice = await this.invoicesRepo.findSeriesInvoiceById(userId, seriesId, invoiceId);
+    if (!invoice) throw new NotFoundException('Invoice not found');
+    // A draft has no number yet — render the provisional number it would receive on issue, so the
+    // preview doesn't show a placeholder for its only use case (mirrors the booking preview).
+    let previewNumber: string | undefined;
+    if (!invoice.invoiceNumber) {
+      const { invoiceNumber } = await this.invoicesRepo.previewSeriesInvoiceNumber(userId, seriesId);
+      previewNumber = invoiceNumber;
+    }
+    return this.documents.generatePreviewPdf(userId, invoiceId, previewNumber);
+  }
+
+  /**
+   * The stored PDF backing an issued series invoice — how the client discovers the document id,
+   * and from there the shared access-controlled `/documents/:id/download` route (ADR-0059).
+   * Null while the invoice is a DRAFT: no PDF exists until issue.
+   */
+  async getInvoiceDocument(userId: string, seriesId: string, invoiceId: string) {
+    const invoice = await this.invoicesRepo.findSeriesInvoiceById(userId, seriesId, invoiceId);
+    if (!invoice) throw new NotFoundException('Invoice not found');
+    return this.documents.findByInvoice(userId, invoiceId);
   }
 
   // ─── Series membership guard + sync ───────────────────────────────────────

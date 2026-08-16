@@ -1,13 +1,15 @@
-import { Body, Controller, Delete, Get, HttpCode, NotFoundException, Param, Post, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Header, HttpCode, NotFoundException, Param, Post, Req, Res } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { SeriesService } from './series.service';
 import { SendInvoiceDto } from '../invoices/dto/send-invoice.dto';
 import { MarkSentDto } from '../invoices/dto/mark-sent.dto';
 import { IssueInvoiceDto } from '../invoices/dto/issue-invoice.dto';
 import { InvoiceResponseDto } from '../invoices/dto/invoice-response.dto';
-import type { Request } from 'express';
+import { SeriesInvoiceDocumentResponseDto } from './dto/series-invoice-document-response.dto';
+import type { Request, Response } from 'express';
 
 type AuthedRequest = Request & { userId: string };
+type AuthedResponse = Response;
 
 @ApiTags('Series')
 @ApiBearerAuth('clerk-jwt')
@@ -119,6 +121,48 @@ export class SeriesController {
     @Param('invoiceId') invoiceId: string,
   ) {
     return this.service.voidInvoice(req.userId, id, invoiceId);
+  }
+
+  @ApiOperation({
+    summary: 'Preview a series invoice PDF (regenerated from live data — for DRAFTs)',
+    description:
+      'Renders the invoice as it stands right now. Once issued, the stored PDF is the ' +
+      'authority — use the document endpoint so the musician sees exactly what the client got.',
+  })
+  @ApiResponse({ status: 200, description: 'PDF stream' })
+  @ApiResponse({ status: 404, description: 'Series or invoice not found' })
+  @Get(':id/invoices/:invoiceId/preview.pdf')
+  @Header('Content-Type', 'application/pdf')
+  @Header('Content-Disposition', 'inline; filename="series-invoice-preview.pdf"')
+  async previewInvoicePdf(
+    @Req() req: AuthedRequest,
+    @Param('id') id: string,
+    @Param('invoiceId') invoiceId: string,
+    @Res() res: AuthedResponse,
+  ) {
+    const buffer = await this.service.generateInvoicePreviewPdf(req.userId, id, invoiceId);
+    res.end(buffer);
+  }
+
+  @ApiOperation({
+    summary: 'Get the stored PDF document for an issued series invoice',
+    description:
+      'A series invoice document has no bookingId, so it appears in no booking document list ' +
+      '(#830). This is how the client discovers its id and the /documents/:id/download route.',
+  })
+  @ApiResponse({ status: 200, type: SeriesInvoiceDocumentResponseDto })
+  @ApiResponse({ status: 404, description: 'Series/invoice not found, or the invoice is still a DRAFT (no PDF yet)' })
+  @Get(':id/invoices/:invoiceId/document')
+  async getInvoiceDocument(
+    @Req() req: AuthedRequest,
+    @Param('id') id: string,
+    @Param('invoiceId') invoiceId: string,
+  ): Promise<SeriesInvoiceDocumentResponseDto> {
+    const doc = await this.service.getInvoiceDocument(req.userId, id, invoiceId);
+    // A DRAFT has no stored PDF yet. 404 (rather than a null body) so the client's
+    // apiGetNullable resolves it to null without a second shape to handle.
+    if (!doc) throw new NotFoundException('No stored PDF for this invoice');
+    return { id: doc.id, createdAt: doc.createdAt.toISOString(), url: doc.url };
   }
 
   @ApiOperation({ summary: 'Delete a DRAFT series invoice' })

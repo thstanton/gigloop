@@ -529,7 +529,9 @@ Concerns are flagged where visibility is **non-obvious**: the always-visible [[P
 A musician's own outward-facing branding image — logo or photo — stored in a **public** R2 bucket and served via a stable public URL. Distinct from a **[[Document]]**: an Asset is not customer PII and is deliberately public, because it is embedded server-side into generated PDFs and rendered as `<img>` in already-sent emails, both of which rule out an expiring or auth-gated URL. Guessable-by-URL is accepted for Assets. See ADR-0059 / ADR-0014.
 
 ### Document
-A PDF stored in Cloudflare R2, associated with a Booking. Four types (stored as `DocumentType` Prisma enum): **INVOICE**, **CONTRACT**, **SONG_LIST**, **UPLOAD**.
+A PDF stored in Cloudflare R2, usually associated with a Booking. Four types (stored as `DocumentType` Prisma enum): **INVOICE**, **CONTRACT**, **SONG_LIST**, **UPLOAD**.
+
+**The one Document with no Booking:** the `INVOICE` document of a [[BookingSeries]] invoice. Billing for a series happens at the series level, so its PDF belongs to no single member Booking — it is reached through the series, not through a booking's document list.
 
 **Documents vs Assets — access.** Documents carry customer PII (a signed contract holds the customer's name, IP, and signature; an invoice holds financial data) and are **access-controlled**: they live in a **private** R2 bucket and are reachable only through the API, which checks ownership (admin) or a valid `portalToken` (client) before issuing a short-lived signed link. A Document `url` is therefore an **app route**, never a directly public URL. This is distinct from an **[[Asset]]** (a musician's logo or photo) — low-sensitivity branding that stays in a **public** bucket, because assets are embedded server-side into PDFs and into already-sent emails where an expiring or gated URL is impossible. See ADR-0059 (supersedes ADR-0009).
 
