@@ -619,6 +619,13 @@ The dedicated edit surface for a [[Booking]] — a single scrolling one-pager th
 ### LaunchScreen
 The public-facing entry point at `/`. Shows a hero, a sign-up CTA, and a sign-in link. Not a marketing page — no feature list, pricing, or screenshots. Authenticated users who land on `/` are redirected immediately to `/admin`.
 
+### Musician decoration
+A woodcut-style pen-and-ink figure of a musician, used sparingly to give the **admin** UI character. It is *ornament*, not information: it carries no meaning to decode, is bound to no domain concept or status, and its removal would cost the interface nothing but warmth.
+
+The GigLoop admin UI deliberately evokes a printed musical score — a high-contrast serif face on warm parchment — and a decoration is the **score-cover ornament** of that metaphor. Prominence therefore follows a printing role (title-page vignette, frontispiece, tailpiece) rather than the shape of the slot it sits in.
+
+Distinct from the portal **hero image** (see [[PublicProfile]]), which is a photographic asset belonging to the *musician's* branding of their client-facing [[Portal]]. Decorations are GigLoop's own character and never appear on a client-facing surface.
+
 ### OnboardingFlow
 A five-step wizard at `/onboarding/*` that every new musician completes before accessing the admin.
 
