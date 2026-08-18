@@ -136,6 +136,12 @@ export class SeriesService {
     return this.transition.markPaid(invoice, dto);
   }
 
+  async correctInvoicePayment(userId: string, seriesId: string, invoiceId: string, dto: MarkPaidDto) {
+    const invoice = await this.invoicesRepo.findSeriesInvoiceById(userId, seriesId, invoiceId);
+    if (!invoice) throw new NotFoundException('Invoice not found');
+    return this.transition.correctPayment(invoice, dto);
+  }
+
   // ─── Invoice PDF access (#830) ─────────────────────────────────────────────
   //
   // A series invoice's PDF is generated and stored at issue time exactly like a booking

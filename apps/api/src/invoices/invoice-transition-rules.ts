@@ -25,6 +25,12 @@ export const isVoidable = (i: InvoiceForRules): boolean =>
 /** True when the invoice can be marked paid (status is SENT). */
 export const isPayable = (i: InvoiceForRules): boolean => i.status === 'SENT';
 
+/**
+ * True when the recorded payment (date + reference) can be corrected — the invoice is already PAID
+ * (ADR-0068 / TIM-46). Correcting the payment fact never changes status; the document stays locked.
+ */
+export const isPaymentCorrectable = (i: InvoiceForRules): boolean => i.status === 'PAID';
+
 /** True when line items and metadata can still be edited (status is DRAFT). */
 export const isEditable = (i: InvoiceForRules): boolean => i.status === 'DRAFT';
 

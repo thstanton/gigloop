@@ -5,7 +5,7 @@ import { DocumentsService } from '../documents/documents.service';
 import { CommunicationsService } from '../communications/communications.service';
 import { ChecklistReevaluator } from '../checklist/checklist-reevaluator.service';
 import { ChecklistRepository } from '../checklist/checklist.repository';
-import { isIssuable, isSendable, isVoidable, isPayable, InvoiceForRules } from './invoice-transition-rules';
+import { isIssuable, isSendable, isVoidable, isPayable, isPaymentCorrectable, InvoiceForRules } from './invoice-transition-rules';
 import type { SendInvoiceDto } from './dto/send-invoice.dto';
 import type { IssueInvoiceDto } from './dto/issue-invoice.dto';
 import type { MarkSentDto } from './dto/mark-sent.dto';
@@ -168,6 +168,25 @@ export class InvoiceTransitionService {
     }
     if (invoice.bookingId) {
       await this.reeval.onBookingChanged(invoice.bookingId);
+    }
+    return result;
+  }
+
+  /**
+   * Correct the payment already recorded on a PAID invoice (ADR-0068 / TIM-46): its received date
+   * and optional reference. This is *not* a lifecycle transition — the status stays PAID and the
+   * document (line items, number, issue/due dates) is untouched; only the correctable money fact
+   * changes. The deposit's `depositReceivedAt` is kept in step with the corrected date, mirroring
+   * markPaid (until that column is retired in TIM-47).
+   */
+  async correctPayment(invoice: TransitionInvoice, dto: MarkPaidDto): Promise<Invoice> {
+    if (!isPaymentCorrectable(invoice)) {
+      throw new BadRequestException('Only paid invoices can have their payment corrected');
+    }
+    const paidAt = new Date(dto.paidAt);
+    const result = await this.invoicesRepo.updatePaymentDetails(invoice.id, paidAt, dto.paymentReference ?? null);
+    if (invoice.isDeposit && invoice.bookingId) {
+      await this.invoicesRepo.setBookingDepositReceivedAt(invoice.bookingId, paidAt);
     }
     return result;
   }

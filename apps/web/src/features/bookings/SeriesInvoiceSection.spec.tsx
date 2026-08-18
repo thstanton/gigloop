@@ -46,6 +46,7 @@ function renderSection(overrides: Partial<SeriesInvoiceSectionProps> = {}) {
     onSend: vi.fn(),
     onMarkSent: vi.fn(),
     onMarkPaid: vi.fn(),
+    onEditPayment: vi.fn(),
     onVoid: vi.fn(),
     ...overrides,
   };

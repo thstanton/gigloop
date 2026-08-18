@@ -358,6 +358,16 @@ export class InvoicesRepository {
     });
   }
 
+  // Correct the payment fact on an already-PAID invoice (TIM-46): only paidAt + paymentReference,
+  // never status or document fields.
+  updatePaymentDetails(invoiceId: string, paidAt: Date, paymentReference: string | null) {
+    return this.prisma.invoice.update({
+      where: { id: invoiceId }, // scoped-upstream: service findOne/findSeriesInvoiceById proved ownership (ADR-0061)
+      data: { paidAt, paymentReference },
+      include: invoiceIncludes,
+    });
+  }
+
   setBookingDepositReceivedAt(bookingId: string, receivedAt: Date) {
     return this.prisma.booking.update({
       where: { id: bookingId },

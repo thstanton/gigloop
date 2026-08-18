@@ -1,4 +1,4 @@
-import { isDeletable, isEditable, isIssuable, isPayable, isSendable, isVoidable } from './invoice-transition-rules';
+import { isDeletable, isEditable, isIssuable, isPayable, isPaymentCorrectable, isSendable, isVoidable } from './invoice-transition-rules';
 import type { InvoiceForRules } from './invoice-transition-rules';
 
 const draft: InvoiceForRules = { status: 'DRAFT', invoiceNumber: null };
@@ -41,6 +41,14 @@ describe('isPayable', () => {
   it('is false for ISSUED', () => expect(isPayable(issued)).toBe(false));
   it('is false for PAID', () => expect(isPayable(paid)).toBe(false));
   it('is false for VOID', () => expect(isPayable(voided)).toBe(false));
+});
+
+describe('isPaymentCorrectable', () => {
+  it('is true for PAID', () => expect(isPaymentCorrectable(paid)).toBe(true));
+  it('is false for SENT', () => expect(isPaymentCorrectable(sent)).toBe(false));
+  it('is false for DRAFT', () => expect(isPaymentCorrectable(draft)).toBe(false));
+  it('is false for ISSUED', () => expect(isPaymentCorrectable(issued)).toBe(false));
+  it('is false for VOID', () => expect(isPaymentCorrectable(voided)).toBe(false));
 });
 
 describe('isEditable', () => {

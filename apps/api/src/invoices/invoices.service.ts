@@ -111,6 +111,11 @@ export class InvoicesService {
     return this.transition.markPaid(invoice, dto);
   }
 
+  async correctPayment(userId: string, bookingId: string, id: string, dto: MarkPaidDto) {
+    const invoice = await this.findOne(userId, bookingId, id);
+    return this.transition.correctPayment(invoice, dto);
+  }
+
   async voidInvoice(userId: string, bookingId: string, id: string) {
     const invoice = await this.findOne(userId, bookingId, id);
     return this.transition.voidInvoice(invoice);

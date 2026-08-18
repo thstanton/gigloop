@@ -45,6 +45,7 @@ describe('InvoiceTransitionService', () => {
     getUserPaymentTerms: jest.Mock;
     markSentById: jest.Mock;
     markPaidBase: jest.Mock;
+    updatePaymentDetails: jest.Mock;
     setBookingDepositReceivedAt: jest.Mock;
     voidInvoice: jest.Mock;
     countActiveByType: jest.Mock;
@@ -64,6 +65,7 @@ describe('InvoiceTransitionService', () => {
       getUserPaymentTerms: jest.fn().mockResolvedValue(14),
       markSentById: jest.fn().mockResolvedValue({ ...bookingSent }),
       markPaidBase: jest.fn().mockResolvedValue({ ...bookingPaid }),
+      updatePaymentDetails: jest.fn().mockResolvedValue({ ...bookingPaid }),
       setBookingDepositReceivedAt: jest.fn().mockResolvedValue({}),
       voidInvoice: jest.fn().mockResolvedValue({ ...bookingVoided }),
       countActiveByType: jest.fn().mockResolvedValue(0),
@@ -277,6 +279,41 @@ describe('InvoiceTransitionService', () => {
     it('returns the paid invoice', async () => {
       const result = await service.markPaid(bookingSent, { paidAt: '2026-08-18' });
       expect(result).toEqual(bookingPaid);
+    });
+  });
+
+  // ─── correctPayment (TIM-46) ───────────────────────────────────────────────
+
+  describe('correctPayment', () => {
+    const bookingDepositPaid = { ...bookingDepositSent, status: 'PAID' as const };
+    const seriesPaid = { ...seriesSent, status: 'PAID' as const };
+
+    it('throws BadRequestException when the invoice is not PAID', async () => {
+      await expect(service.correctPayment(bookingSent, { paidAt: '2026-08-18' })).rejects.toThrow(BadRequestException);
+      expect(mockRepo.updatePaymentDetails).not.toHaveBeenCalled();
+    });
+
+    it('updates only the payment date + reference, never the status (no churn)', async () => {
+      await service.correctPayment(bookingPaid, { paidAt: '2026-08-02', paymentReference: 'BACS-9' });
+      expect(mockRepo.updatePaymentDetails).toHaveBeenCalledWith('i1', new Date('2026-08-02'), 'BACS-9');
+      // The correction path never marks-paid again — status is not touched here.
+      expect(mockRepo.markPaidBase).not.toHaveBeenCalled();
+    });
+
+    it('clears the reference when it is omitted', async () => {
+      await service.correctPayment(bookingPaid, { paidAt: '2026-08-02' });
+      expect(mockRepo.updatePaymentDetails).toHaveBeenCalledWith('i1', new Date('2026-08-02'), null);
+    });
+
+    it('keeps depositReceivedAt in step with the corrected date for a deposit invoice', async () => {
+      await service.correctPayment(bookingDepositPaid, { paidAt: '2026-08-02' });
+      expect(mockRepo.setBookingDepositReceivedAt).toHaveBeenCalledWith('b1', new Date('2026-08-02'));
+    });
+
+    it('does not touch depositReceivedAt for a series invoice (ADR-0063)', async () => {
+      await service.correctPayment(seriesPaid, { paidAt: '2026-08-02' });
+      expect(mockRepo.updatePaymentDetails).toHaveBeenCalledWith('i2', new Date('2026-08-02'), null);
+      expect(mockRepo.setBookingDepositReceivedAt).not.toHaveBeenCalled();
     });
   });
 

@@ -33,6 +33,7 @@ type MockTransition = {
   send: jest.Mock;
   markSent: jest.Mock;
   markPaid: jest.Mock;
+  correctPayment: jest.Mock;
   voidInvoice: jest.Mock;
 };
 
@@ -79,6 +80,7 @@ function makeTransition(): MockTransition {
     send: jest.fn().mockResolvedValue(undefined),
     markSent: jest.fn().mockResolvedValue({ status: 'SENT' }),
     markPaid: jest.fn().mockResolvedValue({ status: 'PAID' }),
+    correctPayment: jest.fn().mockResolvedValue({ status: 'PAID' }),
     voidInvoice: jest.fn().mockResolvedValue({ status: 'VOID' }),
   };
 }
@@ -293,6 +295,21 @@ describe('SeriesService', () => {
     it('throws NotFoundException when invoice not found', async () => {
       invoicesRepo.findSeriesInvoiceById.mockResolvedValue(null);
       await expect(service.markPaidInvoice('u1', 's1', 'inv1', dto)).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('correctInvoicePayment', () => {
+    const dto = { paidAt: '2026-08-02', paymentReference: 'BACS-9' };
+
+    it('delegates to transition.correctPayment with the dto', async () => {
+      invoicesRepo.findSeriesInvoiceById.mockResolvedValue(sentInvoice);
+      await service.correctInvoicePayment('u1', 's1', 'inv1', dto);
+      expect(transition.correctPayment).toHaveBeenCalledWith(sentInvoice, dto);
+    });
+
+    it('throws NotFoundException when invoice not found', async () => {
+      invoicesRepo.findSeriesInvoiceById.mockResolvedValue(null);
+      await expect(service.correctInvoicePayment('u1', 's1', 'inv1', dto)).rejects.toThrow(NotFoundException);
     });
   });
 

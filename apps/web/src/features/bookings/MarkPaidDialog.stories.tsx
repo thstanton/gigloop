@@ -78,3 +78,28 @@ export const Pending: Story = {
     await expect(await body.findByRole('button', { name: 'Recording…' })).toBeDisabled();
   },
 };
+
+// Correcting an already-recorded payment (TIM-46): the same dialog opens prefilled with the stored
+// date + reference, and confirming reports the (possibly edited) values back.
+export const EditPrefilled: Story = {
+  args: { initialPaidAt: '2026-08-02', initialReference: 'BACS-1' },
+  play: async ({ args, canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body);
+    // The stored reference is prefilled into the field, not blanked to today's defaults.
+    await expect(body.getByPlaceholderText('Optional')).toHaveValue('BACS-1');
+    await userEvent.click(body.getByRole('button', { name: 'Record payment' }));
+    await expect(args.onConfirm).toHaveBeenCalledWith('2026-08-02', 'BACS-1');
+  },
+};
+
+// Correcting a payment that had no reference: the field opens blank and can be filled in.
+export const EditNoReference: Story = {
+  args: { initialPaidAt: '2026-08-02' },
+  play: async ({ args, canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body);
+    await expect(body.getByPlaceholderText('Optional')).toHaveValue('');
+    await userEvent.type(body.getByPlaceholderText('Optional'), 'ADDED-LATER');
+    await userEvent.click(body.getByRole('button', { name: 'Record payment' }));
+    await expect(args.onConfirm).toHaveBeenCalledWith('2026-08-02', 'ADDED-LATER');
+  },
+};

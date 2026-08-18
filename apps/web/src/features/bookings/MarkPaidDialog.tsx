@@ -32,6 +32,13 @@ export interface MarkPaidDialogProps {
   isPending: boolean;
   /** Label of the invoice being marked paid, so the musician sees which one they're recording. */
   invoiceLabel?: string;
+  /**
+   * When correcting an already-recorded payment (TIM-46), the stored date (YYYY-MM-DD) and
+   * reference to prefill. Omitted when recording a fresh payment — the date then defaults to today
+   * and the reference is blank. Same dialog, one mental model: capture and correction share it.
+   */
+  initialPaidAt?: string;
+  initialReference?: string;
 }
 
 /**
@@ -43,18 +50,27 @@ export interface MarkPaidDialogProps {
  * Presentational only: the mutation lives in the container (`useInvoiceActions`). It is the single
  * dialog behind all three mark-paid surfaces (invoice row, series invoice card, checklist CTA).
  */
-export function MarkPaidDialog({ open, onOpenChange, onConfirm, isPending, invoiceLabel }: MarkPaidDialogProps) {
-  const [paidAt, setPaidAt] = useState(todayYMD());
-  const [paymentReference, setPaymentReference] = useState('');
+export function MarkPaidDialog({
+  open,
+  onOpenChange,
+  onConfirm,
+  isPending,
+  invoiceLabel,
+  initialPaidAt,
+  initialReference,
+}: MarkPaidDialogProps) {
+  const [paidAt, setPaidAt] = useState(initialPaidAt ?? todayYMD());
+  const [paymentReference, setPaymentReference] = useState(initialReference ?? '');
 
-  // One dialog instance is reused across every invoice in a section, so re-prefill today and clear
-  // the reference each time it opens — otherwise a prior invoice's values would leak in.
+  // One dialog instance is reused across every invoice in a section, so re-seed on each open —
+  // to the stored values when correcting, else today + a blank reference — otherwise a prior
+  // invoice's values would leak in.
   useEffect(() => {
     if (open) {
-      setPaidAt(todayYMD());
-      setPaymentReference('');
+      setPaidAt(initialPaidAt ?? todayYMD());
+      setPaymentReference(initialReference ?? '');
     }
-  }, [open]);
+  }, [open, initialPaidAt, initialReference]);
 
   return (
     <ResponsiveDialog open={open} onOpenChange={onOpenChange}>

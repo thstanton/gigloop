@@ -53,6 +53,7 @@ export default function SeriesInvoiceCard({ seriesId, seriesLabel, onEdit, onSen
         onSend={onSend}
         onMarkSent={handleMarkSent}
         onMarkPaid={(inv) => actions.requestMarkPaid(inv)}
+        onEditPayment={(inv) => actions.requestCorrectPayment(inv)}
         onVoid={(inv) => actions.voidInvoice(inv)}
         isCreatePending={actions.isCreating}
         isIssuePending={actions.isIssuing}

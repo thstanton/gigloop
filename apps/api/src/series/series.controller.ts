@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Header, HttpCode, NotFoundException, Param, Post, Req, Res } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Header, HttpCode, NotFoundException, Param, Patch, Post, Req, Res } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { SeriesService } from './series.service';
 import { SendInvoiceDto } from '../invoices/dto/send-invoice.dto';
@@ -112,6 +112,20 @@ export class SeriesController {
     @Body() dto: MarkPaidDto,
   ) {
     return this.service.markPaidInvoice(req.userId, id, invoiceId, dto);
+  }
+
+  @ApiOperation({ summary: 'Correct the recorded payment (date + reference) on a paid series invoice' })
+  @ApiResponse({ status: 200, type: InvoiceResponseDto })
+  @ApiResponse({ status: 400, description: 'Invoice is not paid, or the payment date is missing/unparseable' })
+  @Patch(':id/invoices/:invoiceId/payment')
+  @HttpCode(200)
+  correctInvoicePayment(
+    @Req() req: AuthedRequest,
+    @Param('id') id: string,
+    @Param('invoiceId') invoiceId: string,
+    @Body() dto: MarkPaidDto,
+  ) {
+    return this.service.correctInvoicePayment(req.userId, id, invoiceId, dto);
   }
 
   @ApiOperation({ summary: 'Void a series invoice' })
