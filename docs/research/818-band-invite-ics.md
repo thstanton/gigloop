@@ -3,8 +3,10 @@
 Research asset for [#818](https://github.com/thstanton/gigloop/issues/818), a ticket on
 [Map: band members](https://github.com/thstanton/gigloop/issues/814). Written 2026-08-18.
 
-**This is research, not a decision.** The dependency question needs the human's approval per
-CLAUDE.md. Nothing here has been installed and no code has been written.
+**Status: the three approval questions in §10 were put to the repo owner and all three were approved
+on 2026-08-18** — hand-roll it, floating time, no retraction. Everything below is therefore a
+settled design constraint for [#821](https://github.com/thstanton/gigloop/issues/821) to write up,
+not a proposal. Nothing has been installed and no production code has been written.
 
 Every claim is tagged **[repo]** (verified by reading this codebase at `d2df9c1`), **[spec]**
 (quoted from RFC 5545 or a vendor's own reference), or **[secondhand]** (community reporting —
@@ -14,10 +16,13 @@ treat as a hint, not a fact).
 
 ## 1. Recommendation in one page
 
+**✅** marks a decision the owner approved on 2026-08-18; the rest are recommendations this research
+makes on its own authority.
+
 | Question | Answer | Confidence |
 | --- | --- | --- |
-| `.ics` library or hand-rolled? | **Hand-rolled, ~40 lines. No new dependency.** | High — neither candidate library solves the one hard part |
-| Time representation? | **Floating local time** (RFC 5545 form #1) — no `Z`, no `TZID`, no `VTIMEZONE` | High, but see the flip trigger in §4 |
+| `.ics` library or hand-rolled? | ✅ **Hand-rolled, ~40 lines. No new dependency.** | High — neither candidate library solves the one hard part |
+| Time representation? | ✅ **Floating local time** (RFC 5545 form #1) — no `Z`, no `TZID`, no `VTIMEZONE` | High, but see the flip trigger in §4 |
 | `METHOD:REQUEST`? | **No. Omit `METHOD` entirely** and omit the `method=` Content-Type parameter | High |
 | `Content-Type: text/calendar`? | **Yes** — Resend supports `content_type`; the repo's `MailTransportOptions` must widen by one field | High |
 | `UID` derivation? | **`bookingId` + `contactId`**, *not* the `BookingBandMember` row id | High — the row id duplicates the calendar entry on re-invite |
@@ -108,7 +113,7 @@ RFC 5545 §3.3.5 defines three forms **[spec]**:
    `VTIMEZONE`: *"An individual 'VTIMEZONE' calendar component MUST be specified for each unique
    'TZID' parameter value specified in the iCalendar object."* (§3.2.19) **[spec]**
 
-### Recommendation: floating time
+### ✅ Approved: floating time
 
 It is the only one of the three that is *honest about the data we hold*. We store a wall-clock
 string; floating time is the wire format for a wall-clock string. Forms 2 and 3 both require
@@ -153,9 +158,9 @@ hand-rolled lines vs. a library that handles the *easy* case and hands the hard 
 floating time the libraries add string-escaping and folding — genuinely the fiddly bits, but ~15
 lines of the 40 (see §5) and fully unit-testable.
 
-**Recommendation: hand-roll. No `bun add`.** If the human prefers a library anyway, `ical-generator`
-is the better pick — zero runtime deps, MIT, actively published — and `ics` should be rejected on
-the `yup` transitive dependency alone.
+**✅ Approved 2026-08-18: hand-roll, no `bun add`.** (Had a library been preferred, `ical-generator`
+was the better pick — zero runtime deps, MIT, actively published — and `ics` would have been
+rejected on the `yup` transitive dependency alone. Recorded in case the flip trigger ever fires.)
 
 ---
 
@@ -274,9 +279,9 @@ its storage arrive with it.
 
 ⚠️ **What we cannot do:** retracting a calendar entry requires `METHOD:CANCEL`, which is a
 scheduling transaction — the thing §6 rules out. So when a dep is **removed** (#819's soft-removal),
-their `/band/:token` link dies but **the calendar entry on their phone stays**. This is an accepted
-limitation to state in the ADR, not a bug to design around; the mitigation is that the entry's
-`URL` and `DESCRIPTION` point at a portal that now 404s.
+their `/band/:token` link dies but **the calendar entry on their phone stays**. ✅ **Accepted by the
+owner on 2026-08-18** — it is a limitation to state in the ADR, not a bug to design around; the
+mitigation is that the entry's `URL` and `DESCRIPTION` point at a portal that now 404s.
 
 Note the second-order effect of #824's decision that the invite email carries the *link* not the PDF
 because "invite time is when details are least settled": the `.ics` is frozen at invite time too. A
@@ -380,15 +385,21 @@ write-ups — so they are charted as
 
 ---
 
-## 10. Open questions for the human
+## 10. Approvals — all three granted 2026-08-18
 
-1. **Approve "no new dependency"?** The recommendation is to hand-roll ~40 lines. The alternative is
-   `bun add ical-generator` (MIT, zero runtime deps) — which would still not do `VTIMEZONE`, and
-   would still need a second package if we ever move off floating time.
-2. **Accept floating time**, i.e. accept that a dep whose device is on a foreign zone sees the
-   wall-clock time rather than the converted one — in exchange for never hardcoding `Europe/London`?
-3. **Accept that removal cannot retract a calendar entry** (§7), given that retraction requires the
-   `METHOD:REQUEST`/`CANCEL` machinery that would also open a second confirmation channel?
+Put to the repo owner on the resolution of #818; **all three approved**, so #821 writes these up as
+decisions rather than re-opening them.
+
+1. ✅ **No new dependency** — hand-roll ~40 lines. (The alternative, `bun add ical-generator`, would
+   still not do `VTIMEZONE` and would still need a second package if we ever move off floating time.)
+2. ✅ **Floating time** — accepting that a dep whose device is on a foreign zone sees the wall-clock
+   time rather than the converted one, in exchange for never hardcoding `Europe/London`.
+3. ✅ **Removal cannot retract a calendar entry** (§7) — accepted, since retraction requires the
+   `METHOD:REQUEST`/`CANCEL` machinery that would also open a second confirmation channel.
+
+**What is still open** is not on this list: the send model — compose sheet, one action or N,
+partial-failure policy, logging granularity — is [#842](https://github.com/thstanton/gigloop/issues/842),
+which blocks #821.
 
 ---
 
