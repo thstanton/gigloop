@@ -1,7 +1,7 @@
 # ADR-0054 — Portal visibility is computed by a single authority, consumed by both the portal and the admin indicator
 
 ## Status
-Accepted (2026-06-22; amended 2026-06-24 — final indicator treatment + a second companion fix for the cancelled-booking contract leak; see below). Builds on [ADR-0021](0021-contract-portal-visibility-driven-by-status.md) (contract visibility driven by status), [ADR-0031](0031-portal-visibility-driven-by-source-truth.md) (portal visibility driven by source truth, not checklist state), and [ADR-0042](0042-invoice-issued-state-decouple-issue-from-send.md) (invoice `Issued` vs `Sent`). Anticipates #533 (music-form draft/Published). Sliced into issues #578 (core), #579 (leak fixes), #580 (per-document rows).
+Accepted (2026-06-22; amended 2026-06-24 — final indicator treatment + a second companion fix for the cancelled-booking contract leak; amended 2026-08-18 — visibility gains an *audience* gate alongside its state gate, so a series invoice document is never portal-visible through a member booking's portal; see below). Builds on [ADR-0021](0021-contract-portal-visibility-driven-by-status.md) (contract visibility driven by status), [ADR-0031](0031-portal-visibility-driven-by-source-truth.md) (portal visibility driven by source truth, not checklist state), and [ADR-0042](0042-invoice-issued-state-decouple-issue-from-send.md) (invoice `Issued` vs `Sent`). Anticipates #533 (music-form draft/Published). Sliced into issues #578 (core), #579 (leak fixes), #580 (per-document rows).
 
 ## Context
 
@@ -81,3 +81,22 @@ Consolidating the scattered rules surfaces two pre-existing leaks. Both are deli
 - **Admin reads the portal endpoint (`?preview=admin`) for truth.** Conceptually one source, but couples the admin detail page to the portal token/endpoint and returns client-shaped data the admin UI must re-map. Awkward; rejected.
 - **Three-state lifecycle (Not started / Prepared-not-shared / Visible) on every concern.** Over-modelled — most concerns are genuinely binary; the only real "prepared but not shared" state is the music form, and only once #533 lands. The positive-badge-plus-muted-hint shape carries that nuance in the hint string instead.
 - **Visible-only badge (no hidden hint at all).** Considered: drop the hidden state entirely so absence-of-badge means "not visible". Rejected because it loses the predictive "until sent" value — a `DRAFT` contract would look identical to a non-portal concern — and weakens the "is my agent contract visible?!" reassurance. The muted hint restores both at low chrome cost.
+
+---
+
+## Amendment (2026-08-18) — a document's audience, not just its state
+
+Series invoicing forced a distinction the original authority does not make. `resolveDocumentVisibility` answers *"is this document ready to be seen?"* purely from its own state — an `INVOICE` document is portal-visible once its invoice is `Sent` or `Paid`. That is sufficient while every document belongs to exactly one booking, because "the client" is unambiguous: the booking's customer.
+
+A [[BookingSeries]] invoice breaks the assumption. Its `Document` has `bookingId: null`, and it is addressed to the **series** customer — who, per CONTEXT.md's Membership rules, may differ from any given member booking's own `customerId` (series assignment deliberately never modifies the booking's customer). Its line items itemise *every* member booking's date and fee.
+
+So when the series invoice document becomes discoverable from each member booking's Documents card (see below), state-based visibility alone would expose one client's billing — and the fees of every other date in the series — on another client's portal.
+
+**Amended rule.** Visibility has two gates, and both must pass:
+
+1. **State** — unchanged: the existing `resolveDocumentVisibility` verdict.
+2. **Audience** — a document is portal-visible through a booking's portal only if that booking is its owner. A series invoice document is owned by no booking, so it is **never** portal-visible through a member booking's portal, at any invoice status.
+
+The audience gate is expressed **in the authority**, not by relying on the admin and portal reads happening to use different queries. Today the portal reads the `booking.documents` relation while the admin card reads `findByBooking`, so unioning the series document into the admin read would not in fact leak — but a leak prevented by an accident of query shape is exactly what "a single authority, so the two cannot disagree" exists to rule out. The next person to unify those reads must not be able to reintroduce this.
+
+**Not settled here:** whether a series should have a client-facing surface of its own, addressed to the series customer, on which its invoice *would* legitimately be visible. That is the audience-aware visibility question #816 opens, and this amendment deliberately closes only the leak, not the question.
