@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import { useMutation, useQueryClient, type UseMutationResult } from '@tanstack/react-query';
 import { apiPost, apiPostVoid, apiDelete } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
 import { invoiceOwnerRoute, type InvoiceAction } from '@/lib/invoiceActionRouting';
+import { invoiceLabel } from '@/lib/invoiceDerivations';
 import type { Invoice } from '@/types/api';
 
 // One field-derived home for every invoice transition (ADR-0063 client mirror, #724).
@@ -57,8 +59,19 @@ export function useInvoiceActions() {
 
   const issueMutation = useMutation(config('issue', 'issue', (url) => apiPost(url, {})));
   const markSentMutation = useMutation(config('markSent', 'mark-sent', (url) => apiPost(url, {})));
-  const markPaidMutation = useMutation(config('markPaid', 'mark-paid', (url) => apiPost(url, {})));
   const voidMutation = useMutation(config('void', 'void', (url) => apiPostVoid(url, {})));
+
+  // Mark-paid is no longer a one-tap action: it records the date the payment was *received* plus an
+  // optional reference (ADR-0068), captured in MarkPaidDialog. Unlike the other transitions its
+  // variables carry that payload, so it can't use the empty-body `config()` helper. The target
+  // invoice held here is what a single dialog instance marks paid, whichever surface opened it.
+  const [markPaidTarget, setMarkPaidTarget] = useState<Invoice | null>(null);
+  const markPaidMutation = useMutation({
+    mutationFn: ({ invoice, paidAt, paymentReference }: { invoice: Invoice; paidAt: string; paymentReference?: string }) =>
+      apiPost(`${invoiceOwnerRoute(invoice, 'markPaid').prefix}/${invoice.id}/mark-paid`, { paidAt, paymentReference }),
+    onSuccess: (_data, { invoice }) => onSuccess(invoice, 'markPaid'),
+    onError: () => toast({ title: ERROR_TOAST.markPaid, variant: 'destructive' }),
+  });
   const deleteMutation = useMutation({
     mutationFn: (invoice: Invoice) => apiDelete(`${invoiceOwnerRoute(invoice, 'delete').prefix}/${invoice.id}`),
     onSuccess: (_data, invoice) => onSuccess(invoice, 'delete'),
@@ -81,9 +94,24 @@ export function useInvoiceActions() {
     markingSentId: pendingId(markSentMutation),
     isMarkingSent: markSentMutation.isPending,
 
-    markPaid: (invoice: Invoice) => markPaidMutation.mutate(invoice),
-    markingPaidId: pendingId(markPaidMutation),
+    // Open the mark-paid dialog for an invoice; confirming inside it fires the mutation.
+    requestMarkPaid: (invoice: Invoice) => setMarkPaidTarget(invoice),
+    markingPaidId: markPaidMutation.isPending ? (markPaidMutation.variables?.invoice.id ?? null) : null,
     isMarkingPaid: markPaidMutation.isPending,
+    // Props for the single MarkPaidDialog a container renders; structurally matches MarkPaidDialogProps.
+    markPaidDialog: {
+      open: markPaidTarget !== null,
+      onOpenChange: (open: boolean) => { if (!open) setMarkPaidTarget(null); },
+      onConfirm: (paidAt: string, paymentReference: string) => {
+        if (!markPaidTarget) return;
+        markPaidMutation.mutate(
+          { invoice: markPaidTarget, paidAt, paymentReference: paymentReference || undefined },
+          { onSuccess: () => setMarkPaidTarget(null) },
+        );
+      },
+      isPending: markPaidMutation.isPending,
+      invoiceLabel: markPaidTarget ? invoiceLabel(markPaidTarget) : undefined,
+    },
 
     voidInvoice: (invoice: Invoice) => voidMutation.mutate(invoice),
     voidingInvoiceId: pendingId(voidMutation),

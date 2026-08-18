@@ -350,18 +350,18 @@ export class InvoicesRepository {
     });
   }
 
-  markPaidBase(invoiceId: string) {
+  markPaidBase(invoiceId: string, paidAt: Date, paymentReference: string | null) {
     return this.prisma.invoice.update({
       where: { id: invoiceId },
-      data: { status: 'PAID', paidAt: new Date() },
+      data: { status: 'PAID', paidAt, paymentReference },
       include: invoiceIncludes,
     });
   }
 
-  setBookingDepositReceivedAt(bookingId: string) {
+  setBookingDepositReceivedAt(bookingId: string, receivedAt: Date) {
     return this.prisma.booking.update({
       where: { id: bookingId },
-      data: { depositReceivedAt: new Date() },
+      data: { depositReceivedAt: receivedAt },
     });
   }
 

@@ -19,6 +19,7 @@ const baseInvoice: Invoice = {
   issueDate: '2030-04-01',
   dueDate: '2030-05-01',
   paidAt: null,
+  paymentReference: null,
   bookingId: 'b1',
   seriesId: null,
   billToContactId: 'c1',
@@ -191,11 +192,14 @@ export const IssuedPastDueNotOverdue: Story = {
 
 export const Paid: Story = {
   args: {
-    invoice: { ...baseInvoice, status: 'PAID', paidAt: '2030-05-02T10:00:00Z' },
+    invoice: { ...baseInvoice, status: 'PAID', paidAt: '2030-05-02T10:00:00Z', paymentReference: 'BACS-4417' },
     pdfUrl: 'https://example.com/invoice.pdf',
   },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Paid')).toBeVisible();
+    // The recorded money facts are visible on the paid invoice (ADR-0068).
+    await expect(canvas.getByText('Date received')).toBeVisible();
+    await expect(canvas.getByText('BACS-4417')).toBeVisible();
     // Download is primary action for PAID with pdfUrl
     await expect(canvas.getByRole('button', { name: 'Download' })).toBeVisible();
   },

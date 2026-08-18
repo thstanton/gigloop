@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagg
 import { SeriesService } from './series.service';
 import { SendInvoiceDto } from '../invoices/dto/send-invoice.dto';
 import { MarkSentDto } from '../invoices/dto/mark-sent.dto';
+import { MarkPaidDto } from '../invoices/dto/mark-paid.dto';
 import { IssueInvoiceDto } from '../invoices/dto/issue-invoice.dto';
 import { InvoiceResponseDto } from '../invoices/dto/invoice-response.dto';
 import { SeriesInvoiceDocumentResponseDto } from './dto/series-invoice-document-response.dto';
@@ -99,16 +100,18 @@ export class SeriesController {
     return this.service.markSentInvoice(req.userId, id, invoiceId, dto);
   }
 
-  @ApiOperation({ summary: 'Mark a series invoice as paid' })
+  @ApiOperation({ summary: 'Mark a series invoice as paid, recording the date received and an optional reference' })
   @ApiResponse({ status: 200, type: InvoiceResponseDto })
+  @ApiResponse({ status: 400, description: 'Invoice is not sent, or the payment date is missing/unparseable' })
   @Post(':id/invoices/:invoiceId/mark-paid')
   @HttpCode(200)
   markPaidInvoice(
     @Req() req: AuthedRequest,
     @Param('id') id: string,
     @Param('invoiceId') invoiceId: string,
+    @Body() dto: MarkPaidDto,
   ) {
-    return this.service.markPaidInvoice(req.userId, id, invoiceId);
+    return this.service.markPaidInvoice(req.userId, id, invoiceId, dto);
   }
 
   @ApiOperation({ summary: 'Void a series invoice' })

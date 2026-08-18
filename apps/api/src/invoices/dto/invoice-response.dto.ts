@@ -37,7 +37,8 @@ export class InvoiceResponseDto {
   @ApiPropertyOptional({ nullable: true }) invoiceNumber: string | null;
   @ApiPropertyOptional({ nullable: true }) issueDate: string | null;
   @ApiPropertyOptional({ nullable: true }) dueDate: string | null;
-  @ApiPropertyOptional({ nullable: true }) paidAt: string | null;
+  @ApiPropertyOptional({ nullable: true, description: 'Date the payment was received (ADR-0068)' }) paidAt: string | null;
+  @ApiPropertyOptional({ nullable: true, description: 'Optional payment reference recorded alongside paidAt' }) paymentReference: string | null;
 
   @ApiPropertyOptional({
     nullable: true,

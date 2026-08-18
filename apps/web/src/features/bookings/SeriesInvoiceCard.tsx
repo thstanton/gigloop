@@ -4,6 +4,7 @@ import { useSeriesInvoiceDocument } from '@/lib/hooks/useSeriesInvoiceDocument';
 import { openGeneratedPdf } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
 import { SeriesInvoiceSection } from './InvoiceSection';
+import { MarkPaidDialog } from './MarkPaidDialog';
 import type { Invoice } from '@/types/api';
 
 interface SeriesInvoiceCardProps {
@@ -38,26 +39,29 @@ export default function SeriesInvoiceCard({ seriesId, seriesLabel, onEdit, onSen
   }
 
   return (
-    <SeriesInvoiceSection
-      seriesLabel={seriesLabel}
-      invoice={invoice}
-      isLoading={isPending}
-      pdfUrl={storedPdf?.url ?? null}
-      onCreateInvoice={() => actions.createSeriesInvoice(seriesId)}
-      onEdit={onEdit}
-      onPreview={handlePreview}
-      onIssue={(inv) => actions.issue(inv)}
-      onDelete={(inv) => actions.deleteInvoice(inv)}
-      onSend={onSend}
-      onMarkSent={handleMarkSent}
-      onMarkPaid={(inv) => actions.markPaid(inv)}
-      onVoid={(inv) => actions.voidInvoice(inv)}
-      isCreatePending={actions.isCreating}
-      isIssuePending={actions.isIssuing}
-      isDeletePending={actions.isDeleting}
-      isVoidPending={actions.isVoiding}
-      isMarkSentPending={actions.isMarkingSent}
-      isMarkPaidPending={actions.isMarkingPaid}
-    />
+    <>
+      <SeriesInvoiceSection
+        seriesLabel={seriesLabel}
+        invoice={invoice}
+        isLoading={isPending}
+        pdfUrl={storedPdf?.url ?? null}
+        onCreateInvoice={() => actions.createSeriesInvoice(seriesId)}
+        onEdit={onEdit}
+        onPreview={handlePreview}
+        onIssue={(inv) => actions.issue(inv)}
+        onDelete={(inv) => actions.deleteInvoice(inv)}
+        onSend={onSend}
+        onMarkSent={handleMarkSent}
+        onMarkPaid={(inv) => actions.requestMarkPaid(inv)}
+        onVoid={(inv) => actions.voidInvoice(inv)}
+        isCreatePending={actions.isCreating}
+        isIssuePending={actions.isIssuing}
+        isDeletePending={actions.isDeleting}
+        isVoidPending={actions.isVoiding}
+        isMarkSentPending={actions.isMarkingSent}
+        isMarkPaidPending={actions.isMarkingPaid}
+      />
+      <MarkPaidDialog {...actions.markPaidDialog} />
+    </>
   );
 }

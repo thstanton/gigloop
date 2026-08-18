@@ -236,36 +236,46 @@ describe('InvoiceTransitionService', () => {
 
   describe('markPaid', () => {
     it('throws BadRequestException when invoice is not SENT', async () => {
-      await expect(service.markPaid(bookingDraft)).rejects.toThrow(BadRequestException);
+      await expect(service.markPaid(bookingDraft, { paidAt: '2026-08-18' })).rejects.toThrow(BadRequestException);
       expect(mockRepo.markPaidBase).not.toHaveBeenCalled();
     });
 
-    it('marks the invoice paid', async () => {
-      await service.markPaid(bookingSent);
-      expect(mockRepo.markPaidBase).toHaveBeenCalledWith('i1');
+    it('marks the invoice paid, persisting the chosen date and reference', async () => {
+      await service.markPaid(bookingSent, { paidAt: '2026-08-18', paymentReference: 'BACS-4417' });
+      expect(mockRepo.markPaidBase).toHaveBeenCalledWith('i1', new Date('2026-08-18'), 'BACS-4417');
     });
 
-    it('stamps depositReceivedAt for a deposit booking invoice', async () => {
-      await service.markPaid(bookingDepositSent);
-      expect(mockRepo.setBookingDepositReceivedAt).toHaveBeenCalledWith('b1');
+    // The headline guarantee of ADR-0068: paidAt is the *received* date the caller chose, not now.
+    it('records a backdated payment date, not the current timestamp', async () => {
+      const before = Date.now();
+      await service.markPaid(bookingSent, { paidAt: '2026-08-01' });
+      const [, storedDate, storedRef] = mockRepo.markPaidBase.mock.calls[0];
+      expect(storedDate).toEqual(new Date('2026-08-01'));
+      expect(storedDate.getTime()).toBeLessThan(before); // a fortnight ago, nowhere near "now"
+      expect(storedRef).toBeNull(); // omitted reference persists as null
+    });
+
+    it('stamps depositReceivedAt with the same received date for a deposit booking invoice', async () => {
+      await service.markPaid(bookingDepositSent, { paidAt: '2026-08-01' });
+      expect(mockRepo.setBookingDepositReceivedAt).toHaveBeenCalledWith('b1', new Date('2026-08-01'));
       expect(mockReeval.onBookingChanged).toHaveBeenCalledWith('b1');
     });
 
     it('does not stamp depositReceivedAt for a balance booking invoice, but still re-evaluates', async () => {
-      await service.markPaid(bookingSent);
+      await service.markPaid(bookingSent, { paidAt: '2026-08-18' });
       expect(mockRepo.setBookingDepositReceivedAt).not.toHaveBeenCalled();
       expect(mockReeval.onBookingChanged).toHaveBeenCalledWith('b1');
     });
 
     it('neither stamps a deposit nor re-evaluates for a series invoice (ADR-0063)', async () => {
-      await service.markPaid(seriesSent);
-      expect(mockRepo.markPaidBase).toHaveBeenCalledWith('i2');
+      await service.markPaid(seriesSent, { paidAt: '2026-08-18' });
+      expect(mockRepo.markPaidBase).toHaveBeenCalledWith('i2', new Date('2026-08-18'), null);
       expect(mockRepo.setBookingDepositReceivedAt).not.toHaveBeenCalled();
       expect(mockReeval.onBookingChanged).not.toHaveBeenCalled();
     });
 
     it('returns the paid invoice', async () => {
-      const result = await service.markPaid(bookingSent);
+      const result = await service.markPaid(bookingSent, { paidAt: '2026-08-18' });
       expect(result).toEqual(bookingPaid);
     });
   });

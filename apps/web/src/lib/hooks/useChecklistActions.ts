@@ -86,11 +86,12 @@ export function useChecklistActions(bookingId: string) {
   }
 
   // Mark the sent invoice of the given type paid — the received steps' "Mark as paid" action (#653).
-  // Returns false when there is no sent invoice to mark, so the caller can pick a fallback.
+  // Opens the mark-paid dialog (date + reference, ADR-0068); returns false when there is no sent
+  // invoice to mark, so the caller can pick a fallback.
   function markSentInvoicePaid(isDeposit: boolean): boolean {
     const sent = sentInvoiceOf(isDeposit, invoices);
     if (!sent) return false;
-    invoiceActions.markPaid(sent);
+    invoiceActions.requestMarkPaid(sent);
     return true;
   }
 
@@ -113,5 +114,7 @@ export function useChecklistActions(bookingId: string) {
     isActionPending: actions.isPending || invoiceActions.isMarkingPaid || contractActions.isCreatingContract,
     pendingContract,
     clearPendingContract: () => setPendingContract(null),
+    // Props for the MarkPaidDialog the checklist surface renders (its "Mark as paid" CTA opens it).
+    markPaidDialog: invoiceActions.markPaidDialog,
   };
 }

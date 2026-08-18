@@ -453,19 +453,21 @@ describe('InvoicesService', () => {
       mockTransition.markPaid.mockResolvedValue(paidInvoice);
     });
 
+    const dto = { paidAt: '2026-08-18', paymentReference: 'BACS-4417' };
+
     it('throws NotFoundException when invoice not found', async () => {
       repo.findOne.mockResolvedValue(null);
-      await expect(service.markPaid('u1', 'b1', 'missing')).rejects.toThrow(NotFoundException);
+      await expect(service.markPaid('u1', 'b1', 'missing', dto)).rejects.toThrow(NotFoundException);
       expect(mockTransition.markPaid).not.toHaveBeenCalled();
     });
 
-    it('delegates to transition.markPaid with the loaded invoice', async () => {
-      await service.markPaid('u1', 'b1', 'i1');
-      expect(mockTransition.markPaid).toHaveBeenCalledWith(sentInvoice);
+    it('delegates to transition.markPaid with the loaded invoice and the dto', async () => {
+      await service.markPaid('u1', 'b1', 'i1', dto);
+      expect(mockTransition.markPaid).toHaveBeenCalledWith(sentInvoice, dto);
     });
 
     it('returns the paid invoice', async () => {
-      const result = await service.markPaid('u1', 'b1', 'i1');
+      const result = await service.markPaid('u1', 'b1', 'i1', dto);
       expect(result).toBe(paidInvoice);
     });
   });

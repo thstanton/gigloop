@@ -10,6 +10,7 @@ import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { IssueInvoiceDto } from './dto/issue-invoice.dto';
 import { SendInvoiceDto } from './dto/send-invoice.dto';
 import { MarkSentDto } from './dto/mark-sent.dto';
+import { MarkPaidDto } from './dto/mark-paid.dto';
 import { CreateLineItemDto } from './dto/create-line-item.dto';
 import { UpdateLineItemDto } from './dto/update-line-item.dto';
 
@@ -105,9 +106,9 @@ export class InvoicesService {
     return this.transition.markSent(invoice, dto);
   }
 
-  async markPaid(userId: string, bookingId: string, id: string) {
+  async markPaid(userId: string, bookingId: string, id: string, dto: MarkPaidDto) {
     const invoice = await this.findOne(userId, bookingId, id);
-    return this.transition.markPaid(invoice);
+    return this.transition.markPaid(invoice, dto);
   }
 
   async voidInvoice(userId: string, bookingId: string, id: string) {

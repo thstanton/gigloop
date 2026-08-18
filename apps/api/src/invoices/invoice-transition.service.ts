@@ -9,6 +9,7 @@ import { isIssuable, isSendable, isVoidable, isPayable, InvoiceForRules } from '
 import type { SendInvoiceDto } from './dto/send-invoice.dto';
 import type { IssueInvoiceDto } from './dto/issue-invoice.dto';
 import type { MarkSentDto } from './dto/mark-sent.dto';
+import type { MarkPaidDto } from './dto/mark-paid.dto';
 
 /**
  * The Invoice fields the transition service derives every side-effect from. Invoice is one
@@ -150,17 +151,20 @@ export class InvoiceTransitionService {
   }
 
   /**
-   * Mark a SENT invoice as paid. Side-effects are field-derived: a deposit booking invoice stamps
-   * `booking.depositReceivedAt` and re-evaluates its checklist; a series invoice (bookingId null)
-   * does neither, by construction.
+   * Mark a SENT invoice as paid, recording the date the payment was *received* (ADR-0068) plus an
+   * optional reference — not the moment the button was tapped. Side-effects are field-derived: a
+   * deposit booking invoice stamps `booking.depositReceivedAt` with the same received date (kept
+   * consistent with paidAt until the column is retired in TIM-47) and re-evaluates its checklist;
+   * a series invoice (bookingId null) does neither, by construction.
    */
-  async markPaid(invoice: TransitionInvoice): Promise<Invoice> {
+  async markPaid(invoice: TransitionInvoice, dto: MarkPaidDto): Promise<Invoice> {
     if (!isPayable(invoice)) {
       throw new BadRequestException('Only sent invoices can be marked as paid');
     }
-    const result = await this.invoicesRepo.markPaidBase(invoice.id);
+    const paidAt = new Date(dto.paidAt);
+    const result = await this.invoicesRepo.markPaidBase(invoice.id, paidAt, dto.paymentReference ?? null);
     if (invoice.isDeposit && invoice.bookingId) {
-      await this.invoicesRepo.setBookingDepositReceivedAt(invoice.bookingId);
+      await this.invoicesRepo.setBookingDepositReceivedAt(invoice.bookingId, paidAt);
     }
     if (invoice.bookingId) {
       await this.reeval.onBookingChanged(invoice.bookingId);

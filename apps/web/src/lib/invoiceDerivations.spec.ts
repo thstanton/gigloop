@@ -24,6 +24,7 @@ const base: Invoice = {
   issueDate: null,
   dueDate: null,
   paidAt: null,
+  paymentReference: null,
   bookingId: 'b1',
   seriesId: null,
   billToContactId: 'c1',

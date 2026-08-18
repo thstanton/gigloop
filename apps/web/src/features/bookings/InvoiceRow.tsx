@@ -1,5 +1,6 @@
 import { CheckCircle2, Download, Eye, Send } from 'lucide-react';
 import InvoiceStatusPill from '@/components/common/InvoiceStatusPill';
+import { LabelValue } from '@/components/common/LabelValue';
 import { RowActions } from '@/components/common/RowActions';
 import type { RowAction } from '@/components/common/RowActions';
 import { PortalVisibility } from '@/components/common/PortalVisibility';
@@ -144,7 +145,6 @@ export default function InvoiceRow({ invoice, pdfUrl, portalVisibility, handlers
         <p className="text-xs text-muted mt-0.5">
           {invoice.issueDate ? formatDate(invoice.issueDate) : '—'}
           {invoice.dueDate && ` · due ${formatDate(invoice.dueDate)}`}
-          {isPaid && invoice.paidAt && ` · paid ${formatDate(invoice.paidAt)}`}
         </p>
         <div className="mt-1">
           {pendingLabel ? (
@@ -153,6 +153,14 @@ export default function InvoiceRow({ invoice, pdfUrl, portalVisibility, handlers
             <InvoiceStatusPill status={invoice.status} isOverdue={overdue} />
           )}
         </div>
+        {/* The recorded money facts (ADR-0068): the date the payment was received and the optional
+            reference, shown on the paid invoice so the musician sees what was recorded. */}
+        {isPaid && (invoice.paidAt || invoice.paymentReference) && (
+          <div className="mt-1.5">
+            {invoice.paidAt && <LabelValue label="Date received">{formatDate(invoice.paidAt)}</LabelValue>}
+            {invoice.paymentReference && <LabelValue label="Reference">{invoice.paymentReference}</LabelValue>}
+          </div>
+        )}
         {portalVisibility && (
           <div className="mt-1.5">
             <PortalVisibility {...portalVisibility} />
