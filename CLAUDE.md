@@ -311,7 +311,7 @@ GigLoop is used on phones. Design every screen for 375px first, then enhance for
 - Use the Lucide icons from lucide-react. Do not import from any other icon set.
 - Stick to the type scale. No text-sm for body — use text-base.
 - Empty states get an icon, a heading, one paragraph, and one CTA. Nothing else. (Musician decorations are **not** an exception — see below.)
-- **Musician decorations** (the woodcut figures, `<MusicianDecoration>`) may appear only where **at most one can be visible at a time** — a whole page, or a modal. Never in a card or section that can co-occur with another. Placement is fixed and chosen by hand, never random, and never bound to a domain concept or status. See `docs/musician-decorations-grill.md`.
+- **Musician decorations** (the woodcut figures, `<MusicianDecoration>`) appear at exactly **three approved sites**: the launch screen, the dashboard first-run block, and the stage-advance dialog. Adding a fourth requires approval — it is not enough that a surface satisfies the rule below. Two constraints bound any future site: **at most one figure may be visible at a time** (so a whole page or a modal, never a card or section that can co-occur), and placement is fixed and hand-picked — never random, never bound to a domain concept or status. Empty states are excluded by decision, not by the rule. See `docs/musician-decorations-grill.md`.
 - Forms use react-hook-form with a Zod schema. Validation messages render below the field in text-status-cancelled text-sm.
 
 ## Loading & Feedback States

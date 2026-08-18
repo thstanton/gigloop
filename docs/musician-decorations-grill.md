@@ -76,8 +76,13 @@ ornament**, and the printing metaphor decides placement, prominence and ink.
 
 6. **No empty states carry a decoration.** CLAUDE.md's existing rule ("Empty
    states get an icon, a heading, one paragraph, and one CTA. Nothing else.")
-   stands **unamended**. See §Rejected — this was decided, then reversed on
-   evidence.
+   is **unchanged in substance** — this session added only a cross-reference to
+   the decoration rule, no exception. See §Rejected: decorating empty states was
+   decided, then reversed on evidence.
+
+   Note the three sites are a **closed list**, not merely everything the rule
+   permits. A page-level empty state would satisfy the one-at-a-time rule; it is
+   excluded by decision. A fourth site needs approval.
 
 7. **One shared component**, approved this session per CLAUDE.md's
    requirement that additions to `components/common/` be sanctioned:

@@ -618,9 +618,7 @@ The public-facing entry point at `/`. Shows a hero, a sign-up CTA, and a sign-in
 ### Musician decoration
 A woodcut-style pen-and-ink figure of a musician, used sparingly to give the **admin** UI character. It is *ornament*, not information: it carries no meaning to decode, is bound to no domain concept or status, and its removal would cost the interface nothing but warmth.
 
-The GigLoop admin UI deliberately evokes a printed musical score — a high-contrast serif face on warm parchment — and a decoration is the **score-cover ornament** of that metaphor. Prominence therefore follows a printing role rather than the shape of the slot: a *title-page vignette* on the [[LaunchScreen]], a *frontispiece* on the [[Dashboard]]'s first-run welcome, a *tailpiece* closing the stage-advance dialog.
-
-Governed by one rule: **at most one may be visible at a time** — so a whole page or a modal, never a card or section that can co-occur with another. Placement is fixed and hand-picked, never random.
+The GigLoop admin UI deliberately evokes a printed musical score — a high-contrast serif face on warm parchment — and a decoration is the **score-cover ornament** of that metaphor. Prominence therefore follows a printing role (title-page vignette, frontispiece, tailpiece) rather than the shape of the slot it sits in.
 
 Distinct from the portal **hero image** (see [[PublicProfile]]), which is a photographic asset belonging to the *musician's* branding of their client-facing [[Portal]]. Decorations are GigLoop's own character and never appear on a client-facing surface.
 
