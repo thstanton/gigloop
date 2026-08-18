@@ -21,6 +21,7 @@ treat as a hint, not a fact).
 | `METHOD:REQUEST`? | **No. Omit `METHOD` entirely** and omit the `method=` Content-Type parameter | High |
 | `Content-Type: text/calendar`? | **Yes** — Resend supports `content_type`; the repo's `MailTransportOptions` must widen by one field | High |
 | `UID` derivation? | **`bookingId` + `contactId`**, *not* the `BookingBandMember` row id | High — the row id duplicates the calendar entry on re-invite |
+| `SEQUENCE`? | **Omit it** — meaningless without `METHOD`, and #819's fresh-row re-invite leaves it nowhere to live | High |
 | One `VEVENT` or one per chair? | **One**, spanning the dep's own call time to the end of their last segment | Medium — depends on #826's chair schema landing |
 | Does the substitution engine need changing for per-recipient variables? | **The engine, no. The context builder and the send path, yes** — this is the first server-rendered fan-out email in the app | High |
 
@@ -177,6 +178,16 @@ Not a lot, but each item is a real trap and each deserves a unit test.
 - **Property order.** If a `VALARM` is ever added, it must come *after* the event properties or new
   Outlook silently strips fields such as `LOCATION`. **[secondhand]** Easiest mitigation: don't ship
   a `VALARM` in v1.
+- **Extract the calendar day in UTC.** Use `getUTCFullYear`/`getUTCMonth`/`getUTCDate`, matching the
+  `timeZone: 'UTC'` precedent the digest already sets (`digest.service.ts:156,164`) **[repo]**. A
+  local-time extraction silently slips the gig by a day on any server not running UTC — the exact bug
+  the digest guards against.
+- **Tolerate a `Booking.date` that isn't UTC midnight.** §3 establishes UTC-midnight as the
+  *production* truth, but it is a convention of the write path, not an invariant: `prisma/seed.ts`
+  writes zone-less `new Date('2026-09-12T14:00:00')`, parsed in the **server's** zone
+  (`seed.ts:523` and siblings) **[repo]**. Preprod runs on seeded data, so that is precisely where
+  this gets smoke-tested. Take only the UTC calendar day and discard the rest — never read a time of
+  day off `Booking.date`.
 - **All-day fallback.** When the booking has no set with a `startTime` — entirely possible, the field
   is nullable and free-text — emit `DTSTART;VALUE=DATE:20260915` rather than guessing a time. This
   keeps the attachment useful for an enquiry-stage gig, which is a real case since #817 established
@@ -236,8 +247,30 @@ This collides with a decision already on the map. **#819 ratified that re-invite
 - **`UID` from `bookingId` + `contactId`** ⇒ a re-invite **updates** the existing entry. Correct, and
   stable across the row churn #819 designed in.
 
-**Recommendation: `UID = <bookingId>.<contactId>@<APP_BASE_URL host>`.** Bump `SEQUENCE` on each
-re-send (start at 0) and always stamp a fresh `DTSTAMP`.
+**Recommendation: `UID = <bookingId>.<contactId>@<APP_BASE_URL host>`**, and always stamp a fresh
+`DTSTAMP`.
+
+### Don't ship `SEQUENCE` — and this is why it costs no storage
+
+The obvious companion to a stable `UID` is a `SEQUENCE` counter, and it is a trap here for two
+reasons.
+
+- **It has no meaning without `METHOD`.** RFC 5545 §3.8.7.4 defines it as *"monotonically incremented
+  by the 'Organizer's' CUA each time the 'Organizer' makes a significant revision"*, and *"the
+  'Organizer' includes this property in an iCalendar object that it sends to an 'Attendee' to specify
+  the current version"* **[spec]** — an iTIP scheduling concept. §6 rules iTIP out. With no `METHOD`,
+  a client treats the file as a snapshot and correlates on `UID` alone; `SEQUENCE` is decorative.
+- **It has nowhere to live.** The `UID` is deliberately stable while #819 churns a **fresh
+  `BookingBandMember` row per re-invite**, so a counter on the member row cannot carry it. Nor would
+  a row count be a faithful substitute: #819's soft-removal keeps old rows, so
+  `count(BookingBandMember where bookingId, contactId)` *is* monotonic and needs no column — but it
+  counts *re-invites*, not *revisions*, and would miss the case `SEQUENCE` exists for (the gig time
+  changed and the invite was re-sent to the same row).
+
+**⇒ Omit `SEQUENCE` entirely** (its default is `0` **[spec]**). This is why §9's "no new column"
+holds: the versioning question that would have demanded storage is dissolved rather than deferred.
+If a later effort adopts iTIP — most likely the band-facing agreement #824 parked — `SEQUENCE` and
+its storage arrive with it.
 
 ⚠️ **What we cannot do:** retracting a calendar entry requires `METHOD:CANCEL`, which is a
 scheduling transaction — the thing §6 rules out. So when a dep is **removed** (#819's soft-removal),
@@ -284,10 +317,14 @@ today is rendered for a **human compose sheet** and sent back:
 
 So a band invite that (i) renders differently per dep and (ii) carries an `.ics` **cannot use either
 existing shape**. It needs a service-owned loop calling `MailService.send()` once per member. That
-in turn raises questions #821 must answer, not this ticket:
+in turn raises questions this ticket cannot answer alone — they are live design decisions, not
+write-ups — so they are charted as
+**[#842](https://github.com/thstanton/gigloop/issues/842)**, a grilling ticket blocking #821:
 
 - Does the organiser get a compose sheet at all, and if so what do they see — one representative
   render with the per-dep bits shown as variables?
+- One "invite the band" action or a per-row Invite? #817's per-person checklist steps pull one way,
+  a leader filling five chairs at once pulls the other.
 - Partial failure: 5 deps, send 3 succeeds and 4 fails. `sendEmail()` currently marks one
   `Communication` row per send and rethrows (`communications.service.ts:92-104`) **[repo]**, which
   is the right primitive, but the caller needs a policy: continue-and-report, or stop.
@@ -323,10 +360,12 @@ in turn raises questions #821 must answer, not this ticket:
 **For [#821](https://github.com/thstanton/gigloop/issues/821) (the ADR(s) and PRD):**
 
 - Record the four `.ics` decisions as design constraints: floating time, no `METHOD`, `UID` from
-  `bookingId`+`contactId`, `SEQUENCE` on re-send — plus the stated limitation that a removed dep's
-  calendar entry cannot be retracted.
-- Record the **server-rendered fan-out** as its own design point (§8c). It is the largest piece of
-  new machinery this email implies and it is invisible from the `.ics` framing.
+  `bookingId`+`contactId`, no `SEQUENCE` — plus the stated limitation that a removed dep's calendar
+  entry cannot be retracted.
+- The **server-rendered fan-out** (§8c) is the largest piece of new machinery this email implies and
+  it is invisible from the `.ics` framing. It is now
+  [#842](https://github.com/thstanton/gigloop/issues/842), which blocks this ticket — write up its
+  answer, don't invent one.
 - Decide the `VEVENT` scope. **Recommendation: one event per dep**, `DTSTART` = their own earliest
   chair's derived call time, `DTEND` = the end of their last segment, with the whole-day running
   order in `DESCRIPTION`. This mirrors #826's "call times derived, never stored" and #824's shared
