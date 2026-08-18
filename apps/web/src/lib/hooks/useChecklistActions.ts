@@ -7,7 +7,7 @@ import { useContractActions } from '@/lib/hooks/useContractActions';
 import { useInvoiceActions } from '@/lib/hooks/useInvoiceActions';
 import { apiGet } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
-import { activeInvoiceOf, sentInvoiceOf, depositAmount, balanceAmount } from '@/lib/invoiceDerivations';
+import { activeInvoiceOf, sentInvoiceOf, depositAmount, balanceDefaultAmount } from '@/lib/invoiceDerivations';
 import { buildSetsDescription } from '@/lib/bookingSets';
 import type { BookingDetail, Contract, Invoice, UserProfile } from '@/types/api';
 
@@ -74,13 +74,14 @@ export function useChecklistActions(bookingId: string) {
     }
 
     // No invoice yet: open the create sheet (nothing is persisted until the user saves or issues),
-    // prefilling the deposit/balance amount when the fee and deposit percentage are both known.
+    // prefilling the amount. A deposit pre-fills from the default percentage (a convenience); a
+    // balance pre-fills from fee − invoiced deposit, reading the actual deposit invoice rather than
+    // the percentage. See CONTEXT.md → Invoice → "Invoiced deposit — one rule, two consumers".
     const fee = booking?.fee ? parseFloat(booking.fee) : null;
     const pct = userProfile?.depositPercentage;
     let amount: number | undefined;
-    if (fee && pct) {
-      amount = isDeposit ? depositAmount(fee, pct) : balanceAmount(fee, pct);
-    }
+    if (fee && !isDeposit) amount = balanceDefaultAmount(fee, invoices);
+    else if (fee && pct) amount = depositAmount(fee, pct);
     openCreateInvoice({ isDeposit, amount });
   }
 

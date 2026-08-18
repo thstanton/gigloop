@@ -185,6 +185,41 @@ describe('DocumentsService.uploadDocument (verdict from the authority, #802)', (
   });
 });
 
+// The API-side consumer of the invoiced-deposit rule (CONTEXT.md → Invoice → "Invoiced deposit —
+// one rule, two consumers"). The VOID exclusion and deterministic ordering live in the Prisma
+// `where`/`orderBy`, so the query shape is what these tests pin — a mock returning null proves
+// nothing about VOID on its own. getDepositTotal is private; it is invoked via a typed cast.
+describe('DocumentsService.getDepositTotal (invoiced deposit for the balance PDF)', () => {
+  function makeService(findFirst: jest.Mock) {
+    const prisma = { invoice: { findFirst } } as unknown as PrismaService;
+    return new DocumentsService(prisma, {} as unknown as DocumentsRepository, {} as unknown as StorageService);
+  }
+  const call = (service: DocumentsService) =>
+    (service as unknown as { getDepositTotal(userId: string, bookingId: string): Promise<string | null> })
+      .getDepositTotal('u1', 'b1');
+
+  it('excludes VOID deposits and orders deterministically', async () => {
+    const findFirst = jest.fn().mockResolvedValue(null);
+    await call(makeService(findFirst));
+    expect(findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ bookingId: 'b1', userId: 'u1', isDeposit: true, status: { not: 'VOID' } }),
+        orderBy: expect.objectContaining({ createdAt: expect.anything() }),
+      }),
+    );
+  });
+
+  it('sums the active deposit invoice line items to a fixed-2 string', async () => {
+    const findFirst = jest.fn().mockResolvedValue({ lineItems: [{ amount: '100.00' }, { amount: '50.51' }] });
+    expect(await call(makeService(findFirst))).toBe('150.51');
+  });
+
+  it('returns null when there is no active deposit invoice (gates the deduction off in the PDF)', async () => {
+    const findFirst = jest.fn().mockResolvedValue(null);
+    expect(await call(makeService(findFirst))).toBeNull();
+  });
+});
+
 // #769: the song-list generator must resolve a raw R2 logo URL to a data URL before handing it
 // to pdfmake — a raw https URL throws ENOENT in pdfmake's Node image loader (treated as a file
 // path), which previously killed the PDF + notification silently. A logo-less fixture cannot

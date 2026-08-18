@@ -21,9 +21,27 @@ export function depositAmount(fee: number, pct: number): number {
   return Math.round((fee * pct / 100) * 100) / 100;
 }
 
-/** Balance amount for a fee at the given deposit percentage, rounded to pence. */
-export function balanceAmount(fee: number, pct: number): number {
-  return Math.round((fee * (1 - pct / 100)) * 100) / 100;
+/**
+ * The **invoiced deposit** on a booking: the line-item total of its active (non-VOID) deposit
+ * invoice, or **0** when there is none. Read from the invoice, never from `depositPercentage` —
+ * see CONTEXT.md → Invoice → "Invoiced deposit — one rule, two consumers". A VOID-only deposit
+ * counts as zero (via `activeInvoiceOf`). Rounded to pence. `amount` is a Decimal string.
+ */
+export function invoicedDeposit(invoices: Invoice[]): number {
+  const deposit = activeInvoiceOf(true, invoices);
+  if (!deposit) return 0;
+  const total = deposit.lineItems.reduce((sum, item) => sum + parseFloat(item.amount), 0);
+  return Math.round(total * 100) / 100;
+}
+
+/**
+ * Default pre-filled amount for a **balance** invoice = booking fee − invoiced deposit, rounded to
+ * pence. Reads the actual deposit invoice, so a booking with no (or only a VOID) deposit pre-fills
+ * at the full fee. Not clamped: a fee reduced below an already-raised deposit yields a negative
+ * default on purpose — that discrepancy is the signal the rule exists to surface.
+ */
+export function balanceDefaultAmount(fee: number, invoices: Invoice[]): number {
+  return Math.round((fee - invoicedDeposit(invoices)) * 100) / 100;
 }
 
 /**
