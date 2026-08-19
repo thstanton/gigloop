@@ -244,12 +244,25 @@ jobs:
           DATABASE_URL: ${{ steps.neon.outputs.db_url }}
           DIRECT_URL: ${{ steps.neon.outputs.db_url }}
       - name: Install Playwright browser
-        # `--with-deps` shells out to apt-get, which has stalled indefinitely on
-        # an unreachable Ubuntu mirror (2026-08-19: 38 min of silence after
-        # falling back from azure.archive.ubuntu.com). Fail fast instead — a
-        # re-run lands on a different mirror. Normal time for this step is ~1 min.
+        # No `--with-deps` (#920). It shelled out to apt-get purely to install
+        # nine *font* packages — Japanese, Thai, Chinese, Cyrillic, unifont —
+        # 21.1 MB this suite never renders. Every shared library Chromium needs
+        # is already on the ubuntu-latest image; apt's "NEW packages" list was
+        # fonts and nothing else.
+        #
+        # That apt call was the whole failure mode. On 2026-08-19 the mirror's
+        # pool tier degraded to ~13 kB/s while index files from the same host
+        # still served at ~350 kB/s, and apt has no minimum-throughput floor
+        # (Acquire::http::Timeout measures inactivity, and a steady trickle
+        # keeps resetting it) — so it never aborted and never failed over. That
+        # produced a 6-hour job before this step was bounded, and re-running did
+        # not help: two attempts 28 min apart stalled on the same package at
+        # 4m30s and 4m33s. The mirrorlist does not rotate on re-run.
+        #
+        # The bound stays as a backstop. Without apt the step is a CDN fetch,
+        # normally well under a minute.
         timeout-minutes: 8
-        run: cd e2e && bunx playwright install --with-deps chromium
+        run: cd e2e && bunx playwright install chromium
       - name: Run e2e suite
         run: bun run test:e2e
         env:
