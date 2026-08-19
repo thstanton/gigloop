@@ -46,6 +46,7 @@ GigLoop treats every booking as a small project. It tracks the gig from first en
 
 - **Node 24** (see `.nvmrc` — `nvm use` picks it up)
 - **[Bun](https://bun.sh)** as the package manager and task runner
+- **Docker** (Desktop or Engine) — the local database runs in a container
 
 ### Setup
 
@@ -56,13 +57,42 @@ bun install
 
 # Configure the API environment (see "Environment variables" below)
 cp apps/api/.env.example apps/api/.env
-#   …then fill in the values from each service console
+#   …then fill in the values from each service console. DATABASE_URL and
+#   DIRECT_URL come from docker-compose.yml, not a console — see below.
+
+# Start the local Postgres container, apply migrations, load seed data
+bun run db:up
+bun run db:migrate
+bun run seed
 
 # Start both apps (API + web) together
 bun run dev
 ```
 
 `bun run dev` runs the API and the web app concurrently. The web app is served at **http://localhost:5173** by default.
+
+### The local database
+
+Local development runs **Postgres 18 in Docker** — never a branch of a Neon project. What that database is and where it sits in the wider model is described in [`docs/environments.md`](./docs/environments.md); the reasoning is [ADR-0075 §1](./docs/adr/0075-one-environment-model.md).
+
+The container is defined in [`docker-compose.yml`](./docker-compose.yml), which also explains why it is published on **port 5433** rather than the usual 5432.
+
+| Command | Does |
+|---------|------|
+| `bun run db:up` | Start the container and wait until it accepts connections |
+| `bun run db:migrate` | Apply any migrations the container hasn't got yet |
+| `bun run db:reset` | **Wipe it and start over** — drop, re-apply every migration, reseed. Refuses unless `DATABASE_URL` is loopback |
+| `bun run seed` | Reseed without touching the schema |
+| `bun run db:down` | Stop the container (the data volume survives) |
+| `bun run db:destroy` | Stop it **and delete the volume** — everything goes |
+
+Both `DATABASE_URL` and `DIRECT_URL` are the same plain string — there is no pooler in front of the container — built from `docker-compose.yml`: its `POSTGRES_USER`, `POSTGRES_PASSWORD` and `POSTGRES_DB`, on the port it publishes. No working connection string is committed anywhere in this repo, including this one (CLAUDE.md → Hard Rules).
+
+> **Upgrading an existing checkout?** If your `apps/api/.env` predates this change it still holds a Neon connection string — replace its `DATABASE_URL` and `DIRECT_URL` with the container's, as above. Until you do, the API talks to Neon rather than the container, and `bun run db:reset` refuses to run at all rather than drop a database that isn't yours to drop.
+
+To author a *new* migration after editing `schema.prisma`, use Prisma directly: `cd apps/api && bunx prisma migrate dev --name <description>`.
+
+> One quirk worth knowing: if the container isn't running, the API's boot-time retry loop logs *"likely a Neon cold start"* five times before giving up. That message predates the move to Docker — the real cause is almost always `bun run db:up`.
 
 ---
 
@@ -74,8 +104,8 @@ The API is configured entirely through `apps/api/.env`. **`apps/api/.env.example
 
 | Variable | Where to get it |
 |----------|-----------------|
-| `DATABASE_URL` | Neon console → your project → Connection Details (**pooled** `-pooler` host) — used at runtime |
-| `DIRECT_URL` | Neon console → Connection Details (**direct**, non-pooled host) — used by Prisma for migrations |
+| `DATABASE_URL` | Already correct in `.env.example` — the local Docker container (`localhost:5433`). Deployed environments use the Neon **pooled** `-pooler` host |
+| `DIRECT_URL` | Same as `DATABASE_URL` locally (no pooler in front of the container). Deployed environments use the Neon **direct**, non-pooled host for migrations |
 | `CLERK_SECRET_KEY` | Clerk dashboard → API Keys |
 | `R2_ACCOUNT_ID` | Cloudflare R2 dashboard → account ID |
 | `R2_ACCESS_KEY_ID` | Cloudflare R2 dashboard → Manage R2 API tokens |
@@ -106,6 +136,9 @@ Run from the repo root:
 | `bun run lint` | Lint all workspaces |
 | `bun run test` | Run all unit tests |
 | `bun run test:e2e` | Run the Playwright end-to-end suite |
+| `bun run db:up` / `db:down` | Start / stop the local Postgres container |
+| `bun run db:reset` | Wipe the local database and reseed it from scratch |
+| `bun run seed` | Reseed the local database |
 | `bun --filter @gigloop/api run test -- --testPathPattern=<file>` | Run a single API test file |
 
 Deterministic checks are automated via git hooks (lint on commit; test + build on push) and re-run in CI — you don't need to run them by hand. Hooks require a one-time opt-in: `git config core.hooksPath .githooks`.

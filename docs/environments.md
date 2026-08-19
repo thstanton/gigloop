@@ -45,14 +45,17 @@ Every database is Neon Postgres except local.
 | **prod snapshots** | same | `pre-release-v*` | Rollback targets, one per release (ADR-0044 §6) |
 | **preprod** | `GigLoop PreProd` · `autumn-hill-65970446` | `preprod` | The preprod app |
 | **CI throwaway** | same as preprod | `ci-integration-*`, `ci-e2e-*` | Created and destroyed per CI run |
-| **local** | ⏳ #906 — moving to Docker `postgres:18` | — | Your laptop |
+| **local** | ✅ None — Docker `postgres:18` | — | Your laptop |
 
-Two things worth knowing:
+Three things worth knowing:
 
 - **The CI throwaway branches live inside the preprod project.** ✅ The variable pointing at it is `NEON_PREPROD_PROJECT_ID` — it used to be the *unqualified* `NEON_PROJECT_ID` while prod was the *qualified* `NEON_PROD_PROJECT_ID`, which read backwards (#905).
-- **Local development currently runs on a copy-on-write branch of the *prod* project**, so real customer rows are on the laptop. Moving to Docker (⏳ #906), which finishes the boundary ADR-0059 started when it moved local off prod's R2 credentials.
+- **Local development runs Postgres 18 in Docker**, not Neon. ✅ `docker-compose.yml` at the repo root defines it and README → "The local database" is the setup guide (#906). It used to run on a copy-on-write branch of the *prod* project, putting real customer rows on a laptop; moving it off finishes the boundary ADR-0059 started when it moved local off prod's R2 credentials.
+- ✅ **Neon is two projects, and this table is the whole of it.** The prod project's `dev` branch and the idle `GigLoop Dev` project were deleted on 2026-08-19, completing ADR-0075 §1 (#906). `production` and the `pre-release-v*` rollback branches were unaffected — `dev` was a leaf.
 
 Connection strings come in two forms and it matters which you use. `DATABASE_URL` is **pooled** (`-pooler` host, `pgbouncer=true`) and is what the app runs on. `DIRECT_URL` is **direct** and is what the Prisma CLI uses — `migrate deploy` takes a session-level advisory lock that transaction-mode pooling breaks. `schema.prisma` reads both.
+
+Locally the distinction does not apply: there is no pooler in front of the container, so both variables hold the same plain string. Its source is `docker-compose.yml` rather than a console — but it is still a connection string, so `apps/api/.env.example` carries a placeholder like every other value in that file. The container is published on **port 5433**, for the reason `docker-compose.yml` gives.
 
 > 🔒 A connection string embeds the role password, and on Neon a role is shared across every branch of a project. **Never** paste one into an agent session — copy it from the Neon console into the target config yourself. See CLAUDE.md → Hard Rules.
 
@@ -90,7 +93,7 @@ Five mechanisms, one per database. There is no sixth, and nothing is migrated by
 | preprod | `preprod.yml` | On merge to `main`, before the API deploys |
 | CI integration | `ci.yml` → `integration` | Per PR, against a fresh Neon branch |
 | CI e2e | `ci.yml` → `e2e` | Per PR, against a fresh Neon branch |
-| local | `prisma migrate dev` | By you, against Docker ⏳ #906 |
+| local | `bun run db:migrate` (`prisma migrate deploy`), or `prisma migrate dev` to author a new one | ✅ By you, against the Docker container |
 
 Separately, **`migration-rehearsal.yml`** (manual, on demand) clones *prod* to an ephemeral Neon branch, applies pending migrations there and reports whether they applied cleanly and how long they locked. Run it before tagging a release that carries schema changes. It validates that a migration **applies**; it cannot tell you the migration is *right* — a cleanly-applying migration can still be semantically destructive. That is what expand/contract (ADR-0044 §5) and the rollback branch (§6) are for.
 
@@ -150,8 +153,6 @@ The whole control plane is tracked by **#910**.
 
 | Issue | What |
 |---|---|
-| #905 | One name per environment |
-| #906 | Local dev on Docker Postgres |
 | #908 | Promote to prod from a guarded button |
 | #909 | Flags legible and flippable |
 | #744 | Error alerting (Sentry) |
