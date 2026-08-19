@@ -3,11 +3,11 @@ import { StatusPill } from '@/components/common/StatusPill';
 import { cn } from '@/lib/utils';
 
 const STATUS_CONFIG: Record<InvoiceStatus, { label: string; bg: string; text: string; border: string }> = {
-  DRAFT:   { label: 'Draft',   bg: 'bg-status-completed/15', text: 'text-status-completed', border: 'border-l-status-completed' },
-  ISSUED:  { label: 'Issued',  bg: 'bg-amber-100',           text: 'text-amber-700',         border: 'border-l-amber-500'        },
-  SENT:    { label: 'Sent',    bg: 'bg-status-invoiced/15',  text: 'text-status-invoiced',   border: 'border-l-status-invoiced'  },
-  PAID:    { label: 'Paid',    bg: 'bg-status-confirmed/15', text: 'text-status-confirmed',  border: 'border-l-status-confirmed' },
-  VOID:    { label: 'Void',    bg: 'bg-muted/40',            text: 'text-muted',             border: 'border-l-muted'            },
+  DRAFT:   { label: 'Draft',   bg: 'bg-status-complete/15',    text: 'text-status-complete',    border: 'border-l-status-complete'    },
+  ISSUED:  { label: 'Issued',  bg: 'bg-status-enquiry/15',     text: 'text-status-enquiry',     border: 'border-l-status-enquiry'     },
+  SENT:    { label: 'Sent',    bg: 'bg-status-provisional/15', text: 'text-status-provisional', border: 'border-l-status-provisional' },
+  PAID:    { label: 'Paid',    bg: 'bg-status-confirmed/15',   text: 'text-status-confirmed',   border: 'border-l-status-confirmed'   },
+  VOID:    { label: 'Void',    bg: 'bg-muted/40',              text: 'text-muted',              border: 'border-l-muted'              },
 };
 
 interface InvoiceStatusPillProps {
