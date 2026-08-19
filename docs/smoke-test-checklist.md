@@ -1,6 +1,6 @@
 # Smoke-test critical-path checklist
 
-Run this manually against **preprod** before pushing a `v*` release tag (ADR-0044 §7, ADR-0075). It exercises the risky paths — money, PDFs, email delivery, multi-tenancy, and the client portal — on a prod-shaped stack with synthetic data, so a release candidate is never tagged untested.
+Run this manually against **preprod** before running the "Promote to prod" workflow (ADR-0044 §7, ADR-0075). It exercises the risky paths — money, PDFs, email delivery, multi-tenancy, and the client portal — on a prod-shaped stack with synthetic data, so a release candidate is never tagged untested.
 
 Automate with Playwright once these flows stabilise (auth session pattern already saved from #360).
 

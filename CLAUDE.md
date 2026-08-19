@@ -190,7 +190,7 @@ Protect `main` with:
 The rules a session must obey:
 
 - **A merge to `main` deploys to preprod, NOT prod.** Preprod is prod-shaped but runs on **synthetic data** (its own Clerk dev instance, its own R2 buckets, sunk email, seeded Neon DB). Never assume merging ships to real users.
-- **Prod deploys ONLY when a human pushes a `v*` git tag.** Tagging is a **deliberate human action** — I never cut a release tag myself. Merging a PR is where my responsibility ends.
+- **Prod deploys ONLY when a human runs the "Promote to prod" workflow.** Tagging is a **deliberate human action** — I never cut a release tag myself, nor trigger that workflow. Merging a PR is where my responsibility ends.
 - **Never run a database migration without confirming first** (see Session Behaviour). The rollback target for a bad prod migration is the `pre-release-<tag>` Neon branch, not PITR — the 6h window is too short.
 - **Destructive / narrowing schema changes MUST use expand/contract:** dropping a column, renaming, narrowing a type, or adding `NOT NULL`/unique to existing data → add the new shape → deploy → backfill → drop the old shape only in a *later* release. Additive changes (nullable column, new table, new index) ship in one step. The app and the DB never cut over atomically, so during a deploy window the running app must tolerate **both** schemas.
 - **A multi-week feature does not get a long-lived branch** (ADR-0025 forbids it). It merges to `main` continuously behind a **feature flag** and ships dark. Flags are **environment variables, default-off** — `apps/web/src/lib/featureFlags.ts` and `apps/api/src/common/featureFlags.ts` (`isEnabled('FLAG')`). No flags table, no per-user targeting.
