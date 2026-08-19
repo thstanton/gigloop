@@ -85,7 +85,10 @@ export class CommunicationsService {
       // parity with the booking branch below. #847 made this path reachable from the UI for the
       // first time, so the two branches must not differ on who may be emailed.
       await this.contacts.assertOwned(userId, [contactId]);
-      await this.mail.send({ to, subject, body, attachments });
+      // #932: client-facing correspondence — personalize From/Reply-To with the musician's
+      // own identity so a client's reply reaches them, not a black hole.
+      const senderIdentity = await this.mail.getSenderIdentity(userId);
+      await this.mail.send({ to, subject, body, attachments, senderIdentity });
       // No Communication row: `Communication.bookingId` is non-nullable, and a series
       // communication would appear in no booking's list anyway — the same orphaning as #830's
       // series Document. Recording it needs a schema change plus a surface to read it on.
@@ -101,7 +104,9 @@ export class CommunicationsService {
     await this.assertMusicInviteAllowed(userId, bookingId, templateId);
     const communication = await this.repo.createPending(userId, bookingId, contactId, subject, body, templateId, documentId);
     try {
-      await this.mail.send({ to, subject, body, attachments });
+      // #932: client-facing correspondence — personalize From/Reply-To.
+      const senderIdentity = await this.mail.getSenderIdentity(userId);
+      await this.mail.send({ to, subject, body, attachments, senderIdentity });
       await this.repo.markSent(communication.id);
       await this.reeval.onBookingChanged(bookingId);
     } catch (err) {

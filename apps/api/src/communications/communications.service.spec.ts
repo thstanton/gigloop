@@ -30,7 +30,7 @@ function makeRepo(): MockRepo {
   };
 }
 
-const mockMail = { send: jest.fn() } as unknown as MailService;
+const mockMail = { send: jest.fn(), getSenderIdentity: jest.fn() } as unknown as MailService;
 
 const communication = {
   id: 'c1',
@@ -65,6 +65,7 @@ describe('CommunicationsService', () => {
       mockContacts as unknown as import('../contacts/contacts.service').ContactsService,
     );
     (mockMail.send as jest.Mock).mockReset().mockResolvedValue(undefined);
+    (mockMail.getSenderIdentity as jest.Mock).mockReset().mockResolvedValue({ name: 'Tim Stanton', email: 'tim@example.com' });
   });
 
   describe('findAll', () => {
@@ -174,6 +175,15 @@ describe('CommunicationsService', () => {
       );
     });
 
+    // #932: client-facing sends personalize From/Reply-To with the caller's own identity.
+    it('resolves and passes the caller\'s senderIdentity to mail.send', async () => {
+      await service.sendEmail(options);
+      expect(mockMail.getSenderIdentity).toHaveBeenCalledWith('u1');
+      expect(mockMail.send).toHaveBeenCalledWith(
+        expect.objectContaining({ senderIdentity: { name: 'Tim Stanton', email: 'tim@example.com' } }),
+      );
+    });
+
     it('marks communication SENT on success', async () => {
       await service.sendEmail(options);
       expect(repo.markSent).toHaveBeenCalledWith('comm1');
@@ -209,6 +219,7 @@ describe('CommunicationsService', () => {
 
     // #847: the series-invoice send (no bookingId). Reachable from the UI for the first time, so
     // its guards must match the booking branch's rather than being skipped along with the row.
+    // #932: this branch also personalizes From/Reply-To.
     describe('series path (no bookingId)', () => {
       const seriesOptions = { ...options, bookingId: undefined };
 
@@ -227,6 +238,14 @@ describe('CommunicationsService', () => {
         mockContacts.assertOwned.mockRejectedValue(new NotFoundException('Contact not found'));
         await expect(service.sendEmail(seriesOptions)).rejects.toThrow(NotFoundException);
         expect(mockMail.send).not.toHaveBeenCalled();
+      });
+
+      it('resolves and passes the caller\'s senderIdentity to mail.send', async () => {
+        await service.sendEmail(seriesOptions);
+        expect(mockMail.getSenderIdentity).toHaveBeenCalledWith('u1');
+        expect(mockMail.send).toHaveBeenCalledWith(
+          expect.objectContaining({ senderIdentity: { name: 'Tim Stanton', email: 'tim@example.com' } }),
+        );
       });
     });
 

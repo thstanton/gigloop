@@ -115,7 +115,7 @@ The API is configured entirely through `apps/api/.env`. **`apps/api/.env.example
 | `R2_DOCUMENTS_BUCKET_NAME` | Private documents bucket (contracts, invoices) — e.g. `gigloop-dev-documents` |
 | `ENCRYPTION_KEY` | AES-256-GCM key (exactly 64 hex chars) for encrypting bank details at rest — generate locally |
 | `RESEND_API_KEY` | Resend dashboard → API Keys |
-| `RESEND_FROM` | The from-address for outbound email (`onboarding@resend.dev` for dev) |
+| `RESEND_FROM` | Bare from-address for outbound email — no display name (`onboarding@resend.dev` for dev; `bookings@<domain>` in production, never `noreply@`) |
 | `APP_BASE_URL` | Frontend base URL, used to build portal links (`http://localhost:5173` in dev) |
 | `CORS_ORIGIN` | Allowed CORS origin for the API (the frontend URL) |
 | `GOOGLE_MAPS_API_KEY` | Google Cloud console → Distance Matrix API key (for travel-time calc) |
