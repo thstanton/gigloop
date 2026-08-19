@@ -26,11 +26,16 @@ works is the human's dispatch decision.
    - `git branch -m <type>/<issue>-<slug>`
    - **Idempotent:** if already on a `fix/…` or `feat/…` branch, skip.
 
-2. **Run the claimability precheck:** `scripts/claimability.sh <issue>` (bundled).
-   It prints the in-flight map, each issue's declared Surfaces, and a
-   `VERDICT: CLAIMABLE | BLOCKED`. Surface parsing is heuristic —
-   **sanity-check it against the codebase**, and re-validate this issue's Surfaces
-   (declared at planning time, they may have staled).
+2. **Run the claimability precheck:**
+   `.claude/skills/fleet-claim/scripts/claimability.sh <issue>` (path is
+   repo-relative; it lives in this skill's own `scripts/` directory, not the
+   repo-root `scripts/`). It prints the in-flight map, each issue's declared
+   Surfaces, and a `VERDICT: CLAIMABLE | BLOCKED`. Surface parsing is heuristic,
+   and the WIP cap is **advisory** — a cap hit warns but still reports
+   `CLAIMABLE` (confirm the extra review load with the human); only a surface
+   overlap or a held schema lock is a hard `BLOCKED`. **Sanity-check the verdict
+   against the codebase**, and re-validate this issue's Surfaces (declared at
+   planning time, they may have staled).
 
 3. **Decide:**
    - `BLOCKED`, or any doubt on your own read → **stop and tell the human.** Do not
