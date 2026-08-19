@@ -1,7 +1,7 @@
 # ADR-0054 — Portal visibility is computed by a single authority, consumed by both the portal and the admin indicator
 
 ## Status
-Accepted (2026-06-22; amended 2026-06-24 — final indicator treatment + a second companion fix for the cancelled-booking contract leak; amended 2026-08-18 — visibility gains an *audience* gate alongside its state gate, so a series invoice document is never portal-visible through a member booking's portal; see below). Builds on [ADR-0021](0021-contract-portal-visibility-driven-by-status.md) (contract visibility driven by status), [ADR-0031](0031-portal-visibility-driven-by-source-truth.md) (portal visibility driven by source truth, not checklist state), and [ADR-0042](0042-invoice-issued-state-decouple-issue-from-send.md) (invoice `Issued` vs `Sent`). Anticipates #533 (music-form draft/Published). Sliced into issues #578 (core), #579 (leak fixes), #580 (per-document rows).
+Accepted (2026-06-22; amended 2026-06-24 — final indicator treatment + a second companion fix for the cancelled-booking contract leak; amended 2026-08-18 — visibility gains an *audience* gate alongside its state gate, so a series invoice document is never portal-visible through a member booking's portal; see below; **amended 2026-08-19** — the authority gains an `audience: CLIENT | BAND` parameter, answering the question the 2026-08-18 amendment deliberately left open; see [ADR-0073](0073-band-portal-visibility-and-projection.md)). Builds on [ADR-0021](0021-contract-portal-visibility-driven-by-status.md) (contract visibility driven by status), [ADR-0031](0031-portal-visibility-driven-by-source-truth.md) (portal visibility driven by source truth, not checklist state), and [ADR-0042](0042-invoice-issued-state-decouple-issue-from-send.md) (invoice `Issued` vs `Sent`). Anticipates #533 (music-form draft/Published). Sliced into issues #578 (core), #579 (leak fixes), #580 (per-document rows).
 
 ## Context
 
@@ -100,3 +100,25 @@ So when the series invoice document becomes discoverable from each member bookin
 The audience gate is expressed **in the authority**, not by relying on the admin and portal reads happening to use different queries. Today the portal reads the `booking.documents` relation while the admin card reads `findByBooking`, so unioning the series document into the admin read would not in fact leak — but a leak prevented by an accident of query shape is exactly what "a single authority, so the two cannot disagree" exists to rule out. The next person to unify those reads must not be able to reintroduce this.
 
 **Not settled here:** whether a series should have a client-facing surface of its own, addressed to the series customer, on which its invoice *would* legitimately be visible. That is the audience-aware visibility question #816 opens, and this amendment deliberately closes only the leak, not the question.
+
+
+## Amendment (2026-08-19) — the authority gains an `audience` parameter
+
+The 2026-08-18 amendment above closed the series-invoice leak and explicitly left the wider question open: *"whether a series should have a client-facing surface of its own… That is the audience-aware visibility question #816 opens."*
+
+[#816](https://github.com/thstanton/gigloop/issues/816) answered it for a different second audience — the dep, at `/band/:token`. **[ADR-0073](0073-band-portal-visibility-and-projection.md) holds the decision**; this amendment records its effect on *this* ADR:
+
+**The authority takes an `audience: CLIENT | BAND` parameter.** Same pure module, same two-consumers-one-truth guarantee, one more argument. A second authority for the band portal was rejected as exactly the duplication this ADR exists to prevent, one audience later.
+
+⚠️ **Two different things are now called "audience", and they are orthogonal.**
+
+| Gate | Question | Added |
+| --- | --- | --- |
+| **Ownership** (2026-08-18) | Does this booking own the document being asked about? | this ADR |
+| **Audience** (2026-08-19) | Who is asking — the client, or a band member? | ADR-0073 |
+
+A series invoice document is ownership-excluded from every booking portal *regardless of who looks*. The 2026-08-18 gate is unchanged and remains correct; the word is simply doing two jobs. Implementers should read the older gate as **ownership**.
+
+**Consequence for existing call sites:** every current caller must pass `CLIENT` explicitly, which makes the previously-implicit audience visible at each site. That is mechanical, and it is the point.
+
+**Not settled here:** a client-facing surface for a *series*, addressed to the series customer. Still open, still not this.

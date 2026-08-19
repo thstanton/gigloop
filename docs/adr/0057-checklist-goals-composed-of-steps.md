@@ -1,6 +1,6 @@
 # ADR-0057 — The checklist is Goals composed of Steps (goal ⊃ step model)
 
-**Status:** accepted — supersedes parts of ADR-0052 (per-concern reminders); amends ADR-0016 (stored checklist model). Grilled from the decision record in `docs/597-checklist-questlines-grill.md` (#597). **Amended 2026-06-30** (defaults-audit grill, PRD #613) — see [Amendment (2026-06-30)](#amendment-2026-06-30--defaults-audit-prd-613).
+**Status:** accepted — supersedes parts of ADR-0052 (per-concern reminders); amends ADR-0016 (stored checklist model). Grilled from the decision record in `docs/597-checklist-questlines-grill.md` (#597). **Amended 2026-06-30** (defaults-audit grill, PRD #613) — see [Amendment (2026-06-30)](#amendment-2026-06-30--defaults-audit-prd-613). **Amended 2026-08-19** — a new general step state `DECLINED`, and the `BAND_MEMBER` actor activated; see [Amendment (2026-08-19)](#amendment-2026-08-19--the-declined-step-state-and-the-band_member-actor).
 
 ## Context
 
@@ -148,3 +148,34 @@ This is not new surfacing machinery — it is the existing USER-surfaces / CUSTO
 - **Follow-up: one-shot-via-reseeding vs a true re-arming type.**
 - **Progress ring visual spec** (colour token, behaviour on FAILED/overdue).
 - **Generic cross-concern continuation routing** — #585 wires the invoice → compose hand-off by hand; whether to make the cross-concern hop a general model-described behaviour is a deferred increment. #585's within-concern Issue button is permanent correct sheet design, not a stopgap.
+
+
+## Amendment (2026-08-19) — the `DECLINED` step state, and the `BAND_MEMBER` actor
+
+Charted by the band-members map ([#814](https://github.com/thstanton/gigloop/issues/814)), decided in [#817](https://github.com/thstanton/gigloop/issues/817) and [#868](https://github.com/thstanton/gigloop/issues/868). **[ADR-0074](0074-band-communications.md) holds the band-side detail**; this amendment records the two changes to the general checklist model.
+
+### 1. A new general step state: `DECLINED`
+
+`PENDING | COMPLETE | FAILED` gains **`DECLINED`** — *the answer arrived, expectedly, and it was no.*
+
+- **Terminal and non-contributing.** The step-level sibling of goal-level `SKIPPED`.
+- **Excluded from `milestoneProgress`'s total**, or the ring can never fill.
+- **Muted glyph, never red.** It is deliberately **not `FAILED`**: red must keep meaning *unexpected*, and a dep saying no is an ordinary outcome. Conflating them would train the musician to ignore red.
+
+This is a **general** state, not a band one. `quote_accepted` and `contract_signed` are the obvious later adopters — a declined quote is today squeezed into `FAILED` for want of this state.
+
+`BookingChecklistStep.state` is already a `String` column, so this costs no migration.
+
+### 2. The `BAND_MEMBER` actor activates
+
+This ADR declared `completedBy: USER | CUSTOMER | BAND_MEMBER` and shipped the third value dormant — the schema comment has carried it since. It now has a consumer: `{name} confirms` steps, AWAITED, completed by the dep answering on their portal.
+
+⚠️ **`GoalRow`'s CTA suppression is what kept it dormant** — it kills the action on every AWAITED non-USER step. Band steps **deliberately nag**: `findActionItems` omits only `CUSTOMER`, and band steps name the person, closing the half of #634 that was deferred.
+
+### 3. Steps may be materialised per-entity
+
+Band steps are **materialised rows** the evaluator derives from `BookingBandMember.status`, via a nullable `bandMemberId` FK and **shared template keys** — not dynamic keys. `PredicateEntry.predicate` widens to `(ctx, step)`.
+
+Two shapes were explicitly rejected: **virtual steps** (invisible to `findActionItems`) and **service-written rows** (which would declare status twice).
+
+The COMPLETE-is-sticky ratchet is unchanged. Where a roster mutation regresses a goal, the band service **resets the goal explicitly** — the `voidInvoice` precedent — so no evaluator exception dents stickiness.
