@@ -125,7 +125,7 @@ If that becomes a real problem the fix is to serve flags from the API (`GET /api
 
 | Question | Where |
 |---|---|
-| What's deployed where, and did it succeed? | ✅ GitHub → [Environments](https://github.com/thstanton/gigloop/deployments) — curated to exactly `prod` and `preprod` (#907); confirmed empirically that a live preprod deploy after the cleanup added no new bot-created entries, now that git auto-deploy is off on both services. Both `preprod.yml` and `release.yml` declare a job-level `environment:`, so every run should record a deployment against it with the deployed ref (a tag for prod, e.g. `v0.6.0`) and its success/failure status — ⏳ unexercised until the next merge to `main` / next `v*` tag, since that's the first run carrying this change. |
+| What's deployed where, and did it succeed? | GitHub → [Environments](https://github.com/thstanton/gigloop/deployments) — curated to exactly `prod` and `preprod` (#907). Both `preprod.yml` and `release.yml` declare a job-level `environment:`, so every run records a deployment against it with the deployed ref (a tag for prod, e.g. `v0.6.0`) and its success/failure status. |
 | Did the deploy workflow fail? | GitHub → Actions |
 | Did a migration fail? | The same workflow run — a failed migration halts it before anything deploys |
 | Is the app throwing errors? | ⏳ #744 — Sentry. Until then, Railway logs |
