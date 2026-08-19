@@ -67,13 +67,15 @@ Connection strings come in two forms and it matters which you use. `DATABASE_URL
 | Commit lands on `main` | `preprod.yml` ✅ | migrate → deploy API → deploy web |
 | Human pushes a `v*` tag | `release.yml` ✅ | snapshot → migrate → deploy API → deploy web |
 
+⚠️ **Railway prod and preprod are the same project and the same service — only the *environment* differs.** `RAILWAY_PROD_PROJECT_ID` and `RAILWAY_PREPROD_PROJECT_ID` hold the same id, and both `*_SERVICE` variables say `valiant-respect`. So `RAILWAY_PREPROD_ENVIRONMENT` is the **only** thing keeping a preprod deploy out of prod, and `railway up` with a wrong `--environment` exits 0 having deployed to the wrong place. The variables are qualified anyway (ADR-0075 §3): an unqualified name is how you end up editing the wrong one. Vercel is not like this — prod and preprod are separate projects, which is why `vercel deploy --prod` is safe in both workflows.
+
 The two are deliberately the same shape. Prod's extra first step is the durable `pre-release-<tag>` Neon branch that ADR-0044 §6 makes the rollback target. Preprod takes no snapshot — it is synthetic and disposable — and does not reseed (ADR-0044 §7: seed once, evolve via migrations).
 
 **A merge to `main` does not reach real users.** Prod ships only on a deliberate human-pushed tag.
 
 Both paths are workflow-only, and each got there the hard way:
 
-- ✅ **#875** — `preprod.yml` exists, and is the only path to preprod once git auto-deploy is off on the Railway preprod environment and the Vercel preprod project (the human half of that change — until both are flipped, git integration still deploys preprod in parallel, unordered). It replaced the Railway and Vercel git integration, which had no slot in which a migration could run first: on 2026-08-19, PR #867 merged a migration and every Prisma read of `Invoice` on preprod failed with P2022 until it was applied by hand. There is no `continue-on-error` in it, so a failed migration halts the run before anything deploys and the previous build keeps serving.
+- ✅ **#875** — `preprod.yml` is the only path to preprod. Git auto-deploy is off on the Railway preprod environment and the Vercel preprod project, and the workflow's first run (merge of #915, 2026-08-19) was verified end to end: it migrated the `preprod` branch of `GigLoop PreProd` over the **non-pooled** host, deployed Railway `--environment preprod`, and deployed the `gigloop-preprod` Vercel project — prod was untouched. It replaced the Railway and Vercel git integration, which had no slot in which a migration could run first: on 2026-08-19, PR #867 merged a migration and every Prisma read of `Invoice` on preprod failed with P2022 until it was applied by hand. There is no `continue-on-error` in it, so a failed migration halts the run before anything deploys and the previous build keeps serving.
 - ✅ Prod git auto-deploy is **off** on both Railway and Vercel (confirmed 2026-08-19), so the tag really is the only path to prod.
 
 ---
