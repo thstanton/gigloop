@@ -169,12 +169,15 @@ jobs:
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lockb') }}
       - run: bun install --frozen-lockfile
         if: steps.cache.outputs.cache-hit != 'true'
+      # CI's throwaway branches are cut inside the PREPROD Neon project, not a
+      # project of their own. The variable used to be the unqualified
+      # NEON_PROJECT_ID, which read as though it meant prod (#905, ADR-0075 §3).
       - name: Create Neon branch
         id: neon
         uses: neondatabase/create-branch-action@v6
         with:
           api_key: ${{ secrets.NEON_API_KEY }}
-          project_id: ${{ vars.NEON_PROJECT_ID }}
+          project_id: ${{ vars.NEON_PREPROD_PROJECT_ID }}
           branch_name: ci-integration-${{ github.run_id }}
       - name: Run migrations
         run: cd apps/api && bunx prisma migrate deploy
@@ -198,7 +201,7 @@ jobs:
         uses: neondatabase/delete-branch-action@v3
         with:
           api_key: ${{ secrets.NEON_API_KEY }}
-          project_id: ${{ vars.NEON_PROJECT_ID }}
+          project_id: ${{ vars.NEON_PREPROD_PROJECT_ID }}
           branch: ${{ steps.neon.outputs.branch_id }}
 
   # Real-stack Playwright suite (ADR-0048). Non-blocking with retries: 2 (set in
@@ -228,7 +231,7 @@ jobs:
         uses: neondatabase/create-branch-action@v6
         with:
           api_key: ${{ secrets.NEON_API_KEY }}
-          project_id: ${{ vars.NEON_PROJECT_ID }}
+          project_id: ${{ vars.NEON_PREPROD_PROJECT_ID }}
           branch_name: ci-e2e-${{ github.run_id }}
       - name: Run migrations
         run: cd apps/api && bunx prisma migrate deploy
@@ -274,7 +277,7 @@ jobs:
         uses: neondatabase/delete-branch-action@v3
         with:
           api_key: ${{ secrets.NEON_API_KEY }}
-          project_id: ${{ vars.NEON_PROJECT_ID }}
+          project_id: ${{ vars.NEON_PREPROD_PROJECT_ID }}
           branch: ${{ steps.neon.outputs.branch_id }}
 
   ci-result:
