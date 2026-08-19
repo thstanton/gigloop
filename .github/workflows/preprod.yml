@@ -65,6 +65,15 @@ jobs:
     # Generous, but bounded: this job holds the `preprod` concurrency group,
     # so a hung deploy on GitHub's 6h default would block every later merge.
     timeout-minutes: 30
+    # Native GitHub Actions environment tracking (issue #907): declaring
+    # `environment:` records a Deployment against this environment when the
+    # job starts and sets its status to success/failure from the job outcome
+    # — no extra API calls needed. Shows up under repo → Environments →
+    # `preprod`, with the deployed ref, replacing the two dashboards this
+    # issue was filed to collapse.
+    environment:
+      name: preprod
+      url: https://preprod.gigloop.co.uk
     steps:
       - uses: actions/checkout@v4
 

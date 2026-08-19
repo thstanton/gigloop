@@ -47,6 +47,15 @@ jobs:
   release:
     name: Release ${{ github.ref_name }}
     runs-on: ubuntu-latest
+    # Native GitHub Actions environment tracking (issue #907): declaring
+    # `environment:` records a Deployment against this environment when the
+    # job starts and sets its status to success/failure from the job outcome
+    # — no extra API calls needed. This run is tag-triggered, so the
+    # deployment's ref is the tag itself (e.g. `v0.6.0`), not a bare SHA.
+    # Shows up under repo → Environments → `prod`.
+    environment:
+      name: prod
+      url: https://www.gigloop.co.uk
     steps:
       - uses: actions/checkout@v4
 
