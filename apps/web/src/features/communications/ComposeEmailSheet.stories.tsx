@@ -27,7 +27,7 @@ const booking: BookingDetail = {
   title: "Sophie's Wedding", fee: '2000.00', notes: null,
   customerId: 'c1', customer,
   venueId: null, venue: null, bookingAgentId: null, bookingAgent: null,
-  sets: [], packages: [], activeContract: null, depositReceivedAt: null,
+  sets: [], packages: [], activeContract: null,
   portalToken: 'tok1', hasMusicFormConfig: false, hasMusicFormResponse: false,
   portalVisibility: { contract: null, musicForm: null },
   seriesId: null, series: null, logistics: null,

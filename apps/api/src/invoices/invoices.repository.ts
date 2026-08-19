@@ -368,13 +368,6 @@ export class InvoicesRepository {
     });
   }
 
-  setBookingDepositReceivedAt(bookingId: string, receivedAt: Date) {
-    return this.prisma.booking.update({
-      where: { id: bookingId },
-      data: { depositReceivedAt: receivedAt },
-    });
-  }
-
   findLineItem(userId: string, invoiceId: string, itemId: string) {
     return this.prisma.invoiceLineItem.findFirst({
       where: { id: itemId, invoiceId, userId },
@@ -403,6 +396,15 @@ export class InvoicesRepository {
       where: { bookingId, userId, isDeposit: true, status: 'SENT' },
       select: { dueDate: true },
     });
+  }
+
+  // TIM-47: the deposit is "received" when its invoice is PAID (ADR-0068) — the booking no longer
+  // records the fact. Mirrors how balance receipt is derived from the invoice, never a booking column.
+  async hasPaidDepositInvoice(bookingId: string, userId: string): Promise<boolean> {
+    const count = await this.prisma.invoice.count({
+      where: { bookingId, userId, isDeposit: true, status: 'PAID' },
+    });
+    return count > 0;
   }
 
   async previewBookingInvoiceNumber(

@@ -18,7 +18,7 @@ const baseBooking: BookingDetail = {
       id: 'pkg1', order: 0, label: 'Wedding Package', icon: 'heart',
     },
   ],
-  activeContract: null, depositReceivedAt: null, portalToken: 'tok_abc',
+  activeContract: null, portalToken: 'tok_abc',
   hasMusicFormConfig: false, hasMusicFormResponse: false,
   portalVisibility: { contract: null, musicForm: null },
   seriesId: null, series: null,

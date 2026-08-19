@@ -33,13 +33,16 @@ const VALID_STATUSES = new Set<string>(Object.values(BookingStatus));
 
 const BOOKING_FIELD_SHORTCUT: Readonly<Record<string, string>> = {
   activeContract: 'create_contract',
+  // TIM-47 flipped `deposit_received`'s catalog rule to invoicePaid, but pre-existing step rows keep
+  // their stored `bookingField depositReceivedAt` rule (deriveShortcut reads the row's rule, not the
+  // catalog) — this entry keeps their "Mark as paid" CTA resolving. New rows route via invoicePaid.
   depositReceivedAt: 'mark_deposit_received',
   fee: 'set_fee', // #618 fee precondition → routes to the booking's Overview
 };
 
 // The booking fields a checklist auto-complete rule binds to: changing any of them must re-run the
 // evaluator so the dependent goal/step auto-completes. Add a field here when a new rule binds to it.
-const RULE_BOUND_FIELDS = ['status', 'venueId', 'depositReceivedAt', 'fee'] as const satisfies ReadonlyArray<
+const RULE_BOUND_FIELDS = ['status', 'venueId', 'fee'] as const satisfies ReadonlyArray<
   keyof UpdateBookingDto
 >;
 
@@ -355,7 +358,7 @@ export class BookingsService {
       await this.checklistRepo.recomputeChecklistDueDates(id, updated.date, updated.createdAt);
     }
     // Re-evaluate auto-complete rules when a field a rule binds to changes (status drives stage
-    // gates, venueId the add_venue item, depositReceivedAt the deposit_received step — ADR-0057).
+    // gates, venueId the add_venue item, fee the invoice preconditions — ADR-0057).
     if (touchesRuleBoundField(dto)) {
       await this.reeval.onBookingChanged(id);
     }
@@ -646,18 +649,11 @@ export class BookingsService {
     state: 'COMPLETE' | 'PENDING' | 'SKIPPED',
   ) {
     await this.assertOwnership(userId, bookingId);
-    const item = await this.repo.findChecklistItemById(userId, bookingId, itemId);
     const result = await this.checklistRepo.updateChecklistItemState(userId, bookingId, itemId, state);
     if (result.count === 0) throw new NotFoundException('Checklist item not found');
-    if (item?.key === 'deposit_received') {
-      // COMPLETE records the real deposit fact; PENDING (a genuine un-tick) clears it.
-      // SKIPPED is an opt-out of the *reminder* — it must not wipe a real deposit date.
-      if (state === 'COMPLETE') {
-        await this.repo.setDepositReceivedAt(bookingId, new Date()).catch(() => {});
-      } else if (state === 'PENDING') {
-        await this.repo.clearDepositReceivedAt(bookingId).catch(() => {});
-      }
-    }
+    // deposit_received no longer stamps the booking (TIM-47): it reads its invoice's PAID status
+    // exactly as balance_received does. Toggling the step records nothing — a payment taken without
+    // an invoice is not money as far as GigLoop is concerned (ADR-0068).
     await this.reeval.onBookingChanged(bookingId);
     // Return the recomputed checklist (post-evaluate) so the client settles the
     // toggle and its dependency cascade in one round-trip — no follow-up refetch.

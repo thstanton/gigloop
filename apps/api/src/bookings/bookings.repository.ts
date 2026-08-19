@@ -471,13 +471,6 @@ export class BookingsRepository {
     });
   }
 
-  findChecklistItemById(userId: string, bookingId: string, itemId: string) {
-    return this.prisma.bookingChecklistItem.findFirst({
-      where: { id: itemId, bookingId, userId },
-      select: { key: true },
-    });
-  }
-
   // The per-concern "Remind me about" selector must SEE skipped items (to render
   // them as off/re-enableable), unlike findChecklistItems which hides them from the
   // Checklist card. Returns the fields the selector reads, all states included.
@@ -494,20 +487,6 @@ export class BookingsRepository {
         label: true,
         order: true,
       },
-    });
-  }
-
-  setDepositReceivedAt(bookingId: string, date: Date) {
-    return this.prisma.booking.update({
-      where: { id: bookingId },
-      data: { depositReceivedAt: date },
-    });
-  }
-
-  clearDepositReceivedAt(bookingId: string) {
-    return this.prisma.booking.update({
-      where: { id: bookingId },
-      data: { depositReceivedAt: null },
     });
   }
 

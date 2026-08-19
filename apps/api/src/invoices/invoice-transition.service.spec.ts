@@ -46,7 +46,6 @@ describe('InvoiceTransitionService', () => {
     markSentById: jest.Mock;
     markPaidBase: jest.Mock;
     updatePaymentDetails: jest.Mock;
-    setBookingDepositReceivedAt: jest.Mock;
     voidInvoice: jest.Mock;
     countActiveByType: jest.Mock;
   };
@@ -66,7 +65,6 @@ describe('InvoiceTransitionService', () => {
       markSentById: jest.fn().mockResolvedValue({ ...bookingSent }),
       markPaidBase: jest.fn().mockResolvedValue({ ...bookingPaid }),
       updatePaymentDetails: jest.fn().mockResolvedValue({ ...bookingPaid }),
-      setBookingDepositReceivedAt: jest.fn().mockResolvedValue({}),
       voidInvoice: jest.fn().mockResolvedValue({ ...bookingVoided }),
       countActiveByType: jest.fn().mockResolvedValue(0),
     };
@@ -257,22 +255,21 @@ describe('InvoiceTransitionService', () => {
       expect(storedRef).toBeNull(); // omitted reference persists as null
     });
 
-    it('stamps depositReceivedAt with the same received date for a deposit booking invoice', async () => {
+    // TIM-47: no booking column is stamped any more — a PAID deposit invoice re-evaluates the
+    // checklist so `deposit_received` auto-completes from the invoice, exactly like the balance.
+    it('re-evaluates the checklist for a deposit booking invoice, stamping no booking column', async () => {
       await service.markPaid(bookingDepositSent, { paidAt: '2026-08-01' });
-      expect(mockRepo.setBookingDepositReceivedAt).toHaveBeenCalledWith('b1', new Date('2026-08-01'));
       expect(mockReeval.onBookingChanged).toHaveBeenCalledWith('b1');
     });
 
-    it('does not stamp depositReceivedAt for a balance booking invoice, but still re-evaluates', async () => {
+    it('re-evaluates the checklist for a balance booking invoice', async () => {
       await service.markPaid(bookingSent, { paidAt: '2026-08-18' });
-      expect(mockRepo.setBookingDepositReceivedAt).not.toHaveBeenCalled();
       expect(mockReeval.onBookingChanged).toHaveBeenCalledWith('b1');
     });
 
-    it('neither stamps a deposit nor re-evaluates for a series invoice (ADR-0063)', async () => {
+    it('does not re-evaluate for a series invoice (ADR-0063)', async () => {
       await service.markPaid(seriesSent, { paidAt: '2026-08-18' });
       expect(mockRepo.markPaidBase).toHaveBeenCalledWith('i2', new Date('2026-08-18'), null);
-      expect(mockRepo.setBookingDepositReceivedAt).not.toHaveBeenCalled();
       expect(mockReeval.onBookingChanged).not.toHaveBeenCalled();
     });
 
@@ -305,15 +302,17 @@ describe('InvoiceTransitionService', () => {
       expect(mockRepo.updatePaymentDetails).toHaveBeenCalledWith('i1', new Date('2026-08-02'), null);
     });
 
-    it('keeps depositReceivedAt in step with the corrected date for a deposit invoice', async () => {
+    // TIM-47: correcting the date on an already-PAID deposit invoice changes no checklist state
+    // (the invoice stays PAID, so `deposit_received` is unaffected) and stamps no booking column.
+    it('does not re-evaluate the checklist for a deposit invoice — the status stays PAID', async () => {
       await service.correctPayment(bookingDepositPaid, { paidAt: '2026-08-02' });
-      expect(mockRepo.setBookingDepositReceivedAt).toHaveBeenCalledWith('b1', new Date('2026-08-02'));
+      expect(mockRepo.updatePaymentDetails).toHaveBeenCalledWith('i1', new Date('2026-08-02'), null);
+      expect(mockReeval.onBookingChanged).not.toHaveBeenCalled();
     });
 
-    it('does not touch depositReceivedAt for a series invoice (ADR-0063)', async () => {
+    it('updates only the payment details for a series invoice (ADR-0063)', async () => {
       await service.correctPayment(seriesPaid, { paidAt: '2026-08-02' });
       expect(mockRepo.updatePaymentDetails).toHaveBeenCalledWith('i2', new Date('2026-08-02'), null);
-      expect(mockRepo.setBookingDepositReceivedAt).not.toHaveBeenCalled();
     });
   });
 

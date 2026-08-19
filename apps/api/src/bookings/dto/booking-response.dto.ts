@@ -162,13 +162,6 @@ export class BookingResponseDto {
   })
   portalToken: string;
 
-  @ApiProperty({
-    nullable: true,
-    type: String,
-    description: 'ISO 8601 timestamp the deposit was marked received; null until then.',
-  })
-  depositReceivedAt: string | null;
-
   @ApiProperty({ nullable: true, type: String }) travelMode: string | null;
 
   // Per ADR-0057's sibling convention for JSON columns: documented as an opaque object rather than

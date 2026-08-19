@@ -181,7 +181,7 @@ describe('Invoice flow (integration)', () => {
   });
 
   describe('Mark deposit invoice PAID', () => {
-    it('depositReceivedAt set on booking + deposit_received checklist COMPLETE', async () => {
+    it('deposit_received checklist COMPLETE, no booking column stamped (TIM-47)', async () => {
       const bookingId = await createBooking();
       const invoiceId = await createInvoice(bookingId, true);
 
@@ -198,9 +198,7 @@ describe('Invoice flow (integration)', () => {
         .send({});
       expect(res.status).toBe(201);
 
-      const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
-      expect(booking?.depositReceivedAt).not.toBeNull();
-
+      // TIM-47: the PAID deposit invoice completes the step directly — no booking column is written.
       const item = await getChecklistItem(bookingId, 'deposit_received');
       expect(item?.state).toBe('COMPLETE');
 
