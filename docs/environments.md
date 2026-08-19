@@ -90,7 +90,7 @@ Five mechanisms, one per database. There is no sixth, and nothing is migrated by
 
 | Database | Applied by | When |
 |---|---|---|
-| prod | `release.yml` | On a `v*` tag, before the API deploys |
+| prod | `release.yml` | On promotion (dispatched by `promote.yml` at the new tag), before the API deploys |
 | preprod | `preprod.yml` | On merge to `main`, before the API deploys |
 | CI integration | `ci.yml` → `integration` | Per PR, against a fresh Neon branch |
 | CI e2e | `ci.yml` → `e2e` | Per PR, against a fresh Neon branch |

@@ -65,8 +65,9 @@ jobs:
 
       - name: Validate version and refuse to tag anything off main's own history
         id: guard
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
-          VERSION="${{ inputs.version }}"
           if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "::error::Version '$VERSION' must be plain semver, e.g. 0.7.0 — no leading v, no suffix."
             exit 1
@@ -84,7 +85,15 @@ jobs:
           # fetch it explicitly rather than assume it's there.
           git fetch origin main
 
-          if ! git rev-list --first-parent origin/main | grep -qx "$GITHUB_SHA"; then
+          # Captured into a variable, not piped straight into `grep -qx`:
+          # under GitHub Actions' default `bash -eo pipefail`, `grep -q`
+          # closes its stdin as soon as it finds a match, SIGPIPEs the
+          # still-running `git rev-list`, and `pipefail` turns that SIGPIPE
+          # into a nonzero pipeline exit even though the match succeeded —
+          # so the guard would reject every legitimate commit, not just bad
+          # ones. A here-string has no live producer to SIGPIPE.
+          MAIN_HISTORY="$(git rev-list --first-parent origin/main)"
+          if ! grep -qx "$GITHUB_SHA" <<< "$MAIN_HISTORY"; then
             echo "::error::$GITHUB_SHA is not on origin/main's first-parent history — refusing to tag. Re-run this workflow with 'Use workflow from' set to main."
             exit 1
           fi
