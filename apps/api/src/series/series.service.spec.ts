@@ -175,6 +175,32 @@ describe('SeriesService', () => {
       ]));
     });
 
+    it('returns the created invoice alongside a feeless-member count', async () => {
+      repo.findOneMinimal.mockResolvedValue(series);
+      invoicesRepo.countNonVoidSeriesInvoices.mockResolvedValue(0);
+      repo.findMemberBookingsForInvoice.mockResolvedValue([booking]);
+      invoicesRepo.createSeriesInvoice.mockResolvedValue({ id: 'inv1' });
+
+      const result = await service.createInvoice('u1', 's1');
+      expect(result).toEqual({ invoice: { id: 'inv1' }, feelessMemberCount: 0 });
+    });
+
+    // #850: a fee-less member still bills a £0.00 line (the date must appear on the invoice) —
+    // the count surfaces to the musician so it never reaches a client unnoticed.
+    it('counts fee-less members and still bills them a £0.00 line', async () => {
+      const feeless = { id: 'b2', date: new Date('2026-05-08'), fee: null, sets: [] };
+      repo.findOneMinimal.mockResolvedValue(series);
+      invoicesRepo.countNonVoidSeriesInvoices.mockResolvedValue(0);
+      repo.findMemberBookingsForInvoice.mockResolvedValue([booking, feeless]);
+      invoicesRepo.createSeriesInvoice.mockResolvedValue({ id: 'inv1' });
+
+      const result = await service.createInvoice('u1', 's1');
+      expect(result.feelessMemberCount).toBe(1);
+      expect(invoicesRepo.createSeriesInvoice).toHaveBeenCalledWith('u1', 's1', 'c1', expect.arrayContaining([
+        expect.objectContaining({ amount: 0, sourceBookingId: 'b2' }),
+      ]));
+    });
+
     it('throws ConflictException when non-VOID invoice exists', async () => {
       repo.findOneMinimal.mockResolvedValue(series);
       invoicesRepo.countNonVoidSeriesInvoices.mockResolvedValue(1);

@@ -481,6 +481,13 @@ export interface Invoice {
   lineItems: InvoiceLineItem[];
 }
 
+// Response of POST /series/:id/invoices (#850). The invoice still bills every fee-less member a
+// £0.00 line unconditionally — this count is a heads-up so it never reaches a client unnoticed.
+export interface CreateSeriesInvoiceResponse {
+  invoice: Invoice;
+  feelessMemberCount: number;
+}
+
 export interface CreateInvoiceInput {
   status?: InvoiceStatus;
   isDeposit?: boolean;

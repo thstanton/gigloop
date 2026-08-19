@@ -7,6 +7,7 @@ import { MarkPaidDto } from '../invoices/dto/mark-paid.dto';
 import { IssueInvoiceDto } from '../invoices/dto/issue-invoice.dto';
 import { InvoiceResponseDto } from '../invoices/dto/invoice-response.dto';
 import { SeriesInvoiceDocumentResponseDto } from './dto/series-invoice-document-response.dto';
+import { CreateSeriesInvoiceResponseDto } from './dto/create-series-invoice-response.dto';
 import type { Request, Response } from 'express';
 
 type AuthedRequest = Request & { userId: string };
@@ -39,7 +40,7 @@ export class SeriesController {
   }
 
   @ApiOperation({ summary: 'Create a series invoice with auto-generated line items' })
-  @ApiResponse({ status: 201, type: InvoiceResponseDto })
+  @ApiResponse({ status: 201, type: CreateSeriesInvoiceResponseDto })
   @Post(':id/invoices')
   createInvoice(@Req() req: AuthedRequest, @Param('id') id: string) {
     return this.service.createInvoice(req.userId, id);

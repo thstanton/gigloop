@@ -75,9 +75,11 @@ export class SeriesRepository {
   // member bookings and reconciling lines on join/leave. Distinct from Invoice lifecycle CRUD,
   // which lives in invoices.repository.
 
+  // A CANCELLED member is excluded — billing a cancelled gig is the over-bill ADR-0043's
+  // 2026-08-18 amendment exists to kill (#850). Every other status is billable.
   findMemberBookingsForInvoice(userId: string, seriesId: string) {
     return this.prisma.booking.findMany({
-      where: { seriesId, userId },
+      where: { seriesId, userId, status: { not: 'CANCELLED' } },
       include: { sets: { orderBy: { order: 'asc' } } },
       orderBy: { date: 'asc' },
     });

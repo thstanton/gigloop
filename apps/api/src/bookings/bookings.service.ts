@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { BookingStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { BookingsRepository } from './bookings.repository';
@@ -105,6 +105,8 @@ export function deriveShortcut(
 
 @Injectable()
 export class BookingsService {
+  private readonly logger = new Logger(BookingsService.name);
+
   constructor(
     private repo: BookingsRepository,
     private seriesRepo: SeriesRepository,
@@ -362,12 +364,61 @@ export class BookingsService {
     if (touchesRuleBoundField(dto)) {
       await this.reeval.onBookingChanged(id);
     }
+    // Reconcile the series' DRAFT invoice whenever a member's status changes (ADR-0043's
+    // 2026-08-18 amendment, #850): CANCELLED removes its traced line, any other status (re-)adds
+    // it. Fires on every status change, not only a genuine CANCELLED transition — both sync
+    // methods are idempotent no-ops when there is nothing to do, so a CONFIRMED→COMPLETE update
+    // costs one harmless read rather than needing the old status threaded through to detect the
+    // boundary crossing.
+    if (dto.status !== undefined && updated.seriesId) {
+      await this.syncSeriesBillability(userId, updated.seriesId, updated.id, updated.status, {
+        id: updated.id,
+        date: updated.date,
+        fee: updated.fee as MemberBookingForSync['fee'],
+        sets: (updated.sets ?? []) as Array<{ label: string | null; duration: number }>,
+      });
+    }
     return updated;
+  }
+
+  /**
+   * Reconcile a series' DRAFT invoice against one member's billability: CANCELLED removes its
+   * traced line, any other status (re-)adds it — both sync methods are idempotent no-ops when
+   * there is nothing to do, and DRAFT-only by construction (ADR-0043). `joinPayload` is optional
+   * because a CANCELLED transition never needs it — {@link delete}, which always cancels, omits
+   * it. Mirrors ChecklistReevaluator's log-and-swallow policy (ADR-0062): a sync failure must
+   * never fail the booking's own status update.
+   */
+  private async syncSeriesBillability(
+    userId: string,
+    seriesId: string,
+    bookingId: string,
+    status: BookingStatus,
+    joinPayload?: MemberBookingForSync,
+  ): Promise<void> {
+    try {
+      if (status === BookingStatus.CANCELLED) {
+        await this.seriesService.syncMemberLeave(userId, seriesId, bookingId);
+      } else if (joinPayload) {
+        await this.seriesService.syncMemberJoin(userId, seriesId, joinPayload);
+      }
+    } catch (err) {
+      this.logger.warn(
+        `Series billability reconcile failed for booking ${bookingId} in series ${seriesId}`,
+        err instanceof Error ? err.stack : String(err),
+      );
+    }
   }
 
   async delete(userId: string, id: string) {
     await this.assertOwnership(userId, id);
-    return this.repo.cancel(id);
+    const cancelled = await this.repo.cancel(id);
+    // The other status-mutation path to CANCELLED — reconciles the series billability exactly
+    // like update() does (#850). Always CANCELLED here, so no joinPayload is needed.
+    if (cancelled.seriesId) {
+      await this.syncSeriesBillability(userId, cancelled.seriesId, cancelled.id, cancelled.status);
+    }
+    return cancelled;
   }
 
   async addSet(userId: string, bookingId: string, dto: CreateSetDto) {

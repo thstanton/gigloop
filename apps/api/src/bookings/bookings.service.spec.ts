@@ -714,6 +714,59 @@ describe('BookingsService', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       expect((result as any).logistics).toBe(logistics);
     });
+
+    // ADR-0043's 2026-08-18 amendment (#850): a member booking crossing the CANCELLED boundary
+    // reconciles its series' DRAFT invoice exactly as leaving/joining the series would.
+    describe('series billability sync (#850)', () => {
+      it('removes the traced line when a series member is cancelled', async () => {
+        const updated = { ...booking, seriesId: 's1', status: BookingStatus.CANCELLED, date: new Date(), createdAt: new Date() };
+        repo.findOne.mockResolvedValue(booking);
+        repo.update.mockResolvedValue(updated);
+        await service.update('u1', 'b1', { status: BookingStatus.CANCELLED });
+        expect(seriesService.syncMemberLeave).toHaveBeenCalledWith('u1', 's1', 'b1');
+        expect(seriesService.syncMemberJoin).not.toHaveBeenCalled();
+      });
+
+      it('re-adds the traced line when a series member is un-cancelled', async () => {
+        const date = new Date();
+        const sets = [{ label: 'Set 1', duration: 60 }];
+        const updated = { ...booking, seriesId: 's1', status: BookingStatus.CONFIRMED, date, createdAt: new Date(), fee: '500.00', sets };
+        repo.findOne.mockResolvedValue(booking);
+        repo.update.mockResolvedValue(updated);
+        await service.update('u1', 'b1', { status: BookingStatus.CONFIRMED });
+        expect(seriesService.syncMemberJoin).toHaveBeenCalledWith('u1', 's1', { id: 'b1', date, fee: '500.00', sets });
+        expect(seriesService.syncMemberLeave).not.toHaveBeenCalled();
+      });
+
+      it('does not sync when the booking is not a series member', async () => {
+        const updated = { ...booking, status: BookingStatus.CANCELLED, date: new Date(), createdAt: new Date() };
+        repo.findOne.mockResolvedValue(booking);
+        repo.update.mockResolvedValue(updated);
+        await service.update('u1', 'b1', { status: BookingStatus.CANCELLED });
+        expect(seriesService.syncMemberLeave).not.toHaveBeenCalled();
+        expect(seriesService.syncMemberJoin).not.toHaveBeenCalled();
+      });
+
+      it('does not sync when status is not part of the patch, even for a series member', async () => {
+        const updated = { ...booking, seriesId: 's1', date: new Date(), createdAt: new Date() };
+        repo.findOne.mockResolvedValue(booking);
+        repo.update.mockResolvedValue(updated);
+        await service.update('u1', 'b1', { venueId: 'v1' });
+        expect(seriesService.syncMemberLeave).not.toHaveBeenCalled();
+        expect(seriesService.syncMemberJoin).not.toHaveBeenCalled();
+      });
+
+      // Mirrors ChecklistReevaluator's log-and-swallow policy (ADR-0062) — a sync failure must
+      // never fail the booking's own status update.
+      it('swallows a sync failure and still returns the updated booking', async () => {
+        const updated = { ...booking, seriesId: 's1', status: BookingStatus.CANCELLED, date: new Date(), createdAt: new Date() };
+        repo.findOne.mockResolvedValue(booking);
+        repo.update.mockResolvedValue(updated);
+        seriesService.syncMemberLeave.mockRejectedValueOnce(new Error('boom'));
+        const result = await service.update('u1', 'b1', { status: BookingStatus.CANCELLED });
+        expect(result).toBe(updated);
+      });
+    });
   });
 
   describe('delete', () => {
@@ -728,6 +781,23 @@ describe('BookingsService', () => {
       repo.findForOwnership.mockResolvedValue(null);
       await expect(service.delete('u1', 'missing')).rejects.toThrow(NotFoundException);
       expect(repo.cancel).not.toHaveBeenCalled();
+    });
+
+    // #850: the other status-mutation path to CANCELLED — reconciles series billability exactly
+    // like update() does, so a series member cancelled here isn't silently left billed.
+    it('reconciles series billability when a series member is cancelled via delete', async () => {
+      repo.findOne.mockResolvedValue(booking);
+      repo.cancel.mockResolvedValue({ ...booking, seriesId: 's1', status: BookingStatus.CANCELLED });
+      await service.delete('u1', 'b1');
+      expect(seriesService.syncMemberLeave).toHaveBeenCalledWith('u1', 's1', 'b1');
+      expect(seriesService.syncMemberJoin).not.toHaveBeenCalled();
+    });
+
+    it('does not attempt reconciliation when the cancelled booking is not a series member', async () => {
+      repo.findOne.mockResolvedValue(booking);
+      repo.cancel.mockResolvedValue({ ...booking, status: BookingStatus.CANCELLED });
+      await service.delete('u1', 'b1');
+      expect(seriesService.syncMemberLeave).not.toHaveBeenCalled();
     });
   });
 

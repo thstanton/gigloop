@@ -79,6 +79,10 @@ export class SeriesService {
     const bookings = await this.repo.findMemberBookingsForInvoice(userId, seriesId);
     if (bookings.length === 0) throw new BadRequestException('Series has no member bookings');
 
+    // A fee-less member still gets a £0.00 line (the date must appear on the invoice) — the count
+    // is surfaced to the musician so it never reaches a client unnoticed (#850).
+    const feelessMemberCount = bookings.filter((b) => b.fee === null).length;
+
     const lineItems = bookings.map((b, i) => ({
       description: buildLineItemDescription(b.date, b.sets),
       amount: b.fee ? Number(b.fee) : 0,
@@ -86,7 +90,8 @@ export class SeriesService {
       sourceBookingId: b.id,
     }));
 
-    return this.invoicesRepo.createSeriesInvoice(userId, seriesId, series.customerId, lineItems);
+    const invoice = await this.invoicesRepo.createSeriesInvoice(userId, seriesId, series.customerId, lineItems);
+    return { invoice, feelessMemberCount };
   }
 
   async getActiveInvoice(userId: string, seriesId: string) {

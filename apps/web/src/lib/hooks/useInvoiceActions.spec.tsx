@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { useInvoiceActions } from './useInvoiceActions';
 import { apiPost, apiPatch } from '@/lib/api';
+import { toast } from '@/lib/hooks/use-toast';
 import type { Invoice } from '@/types/api';
 
 vi.mock('@/lib/api', () => ({
@@ -98,6 +99,47 @@ describe('useInvoiceActions — correct payment dialog (TIM-46)', () => {
     act(() => result.current.markPaidDialog.onConfirm('2026-08-02', ''));
     await waitFor(() =>
       expect(apiPatch).toHaveBeenCalledWith('/series/s1/invoices/si1/payment', expect.objectContaining({ paidAt: '2026-08-02' })),
+    );
+  });
+});
+
+// #850: creating a series invoice surfaces a count of fee-less members so a £0.00 line never
+// reaches a client unnoticed. The line is still created either way — this is a heads-up, not a block.
+describe('useInvoiceActions — create series invoice fee-less warning (#850)', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('shows no toast when every member has a fee', async () => {
+    vi.mocked(apiPost).mockResolvedValue({ invoice: { id: 'inv1' }, feelessMemberCount: 0 });
+    const { result } = setup();
+
+    act(() => result.current.createSeriesInvoice('s1'));
+    await waitFor(() => expect(apiPost).toHaveBeenCalledWith('/series/s1/invoices', {}));
+    expect(toast).not.toHaveBeenCalled();
+  });
+
+  it('warns with singular copy when exactly one member has no fee', async () => {
+    vi.mocked(apiPost).mockResolvedValue({ invoice: { id: 'inv1' }, feelessMemberCount: 1 });
+    const { result } = setup();
+
+    act(() => result.current.createSeriesInvoice('s1'));
+    await waitFor(() =>
+      expect(toast).toHaveBeenCalledWith(expect.objectContaining({
+        title: '1 member billed with no fee set',
+        description: expect.stringContaining('The line shows £0.00'),
+      })),
+    );
+  });
+
+  it('warns with plural copy when several members have no fee', async () => {
+    vi.mocked(apiPost).mockResolvedValue({ invoice: { id: 'inv1' }, feelessMemberCount: 3 });
+    const { result } = setup();
+
+    act(() => result.current.createSeriesInvoice('s1'));
+    await waitFor(() =>
+      expect(toast).toHaveBeenCalledWith(expect.objectContaining({
+        title: '3 members billed with no fee set',
+        description: expect.stringContaining('The lines show £0.00'),
+      })),
     );
   });
 });
