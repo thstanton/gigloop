@@ -84,7 +84,7 @@ Most of the vocabulary work needs **no migration at all** — `Contact.primaryRo
 
 `bandPortalToken` is `@unique @default(uuid())`, matching `Booking.portalToken` exactly.
 
-The migration ships as its **own PR, merged before the feature branch starts** — the fleet's one-schema-PR lock permits one in-flight migration PR, and carrying it on a multi-week feature branch would hold that lock for the feature's life.
+**The migration is not a slice of its own.** `issue-authoring.md` §1 is explicit that a schema migration alone is a *layer*, not a slice — it cannot be reviewed or tested in isolation. Instead each sequential tracking issue carries the migration it needs: the roster issue takes the four tables and the `Contact`/`Package` columns, the portal issue takes the `DocumentType` conversion for `CALL_SHEET`, and the checklist issue takes `BookingChecklistStep.bandMemberId`. Because the tracking issues are **sequential** — each merged before the next starts — the fleet's one-schema-PR lock is held only for one issue's duration at a time, which is the outcome a standalone schema PR was reaching for.
 
 **`Contact.email` stays optional, enforced nowhere.** Requiring it would exclude the dep who only uses WhatsApp — the exact person ADR-0074's copy-paste channel exists for.
 
