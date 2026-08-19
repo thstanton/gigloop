@@ -12,8 +12,10 @@ import {
 } from 'lucide-react';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
+import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { isEnabled } from '@/lib/featureFlags';
+import { getEnvironmentLabel, type EnvironmentLabel } from '@/lib/environment';
 import { GlobalCommandPalette } from '@/features/search/GlobalCommandPalette';
 import {
   PRIMARY_NAV_DESTINATIONS,
@@ -185,14 +187,24 @@ function DesktopTopBar({
   businessName,
   isLoading,
   onOpenSearch,
+  environmentLabel,
 }: {
   businessName: string;
   isLoading: boolean;
   onOpenSearch?: () => void;
+  environmentLabel: EnvironmentLabel | null;
 }) {
   return (
     <header className="hidden md:flex fixed top-0 inset-x-0 h-14 bg-chrome items-center px-6 z-30">
       <span className="text-2xl font-wordmark font-semibold text-chrome-foreground tracking-wide">GigLoop</span>
+      {environmentLabel && (
+        <Badge
+          variant="outline"
+          className="ml-3 border-chrome-muted/30 bg-chrome-foreground/10 text-chrome-muted"
+        >
+          {environmentLabel}
+        </Badge>
+      )}
       <div className="ml-auto flex items-center gap-4">
         {onOpenSearch && (
           <button
@@ -216,10 +228,24 @@ function DesktopTopBar({
 
 // ─── Mobile: top bar ─────────────────────────────────────────────────────────
 
-function MobileTopBar({ onOpenSearch }: { onOpenSearch?: () => void }) {
+function MobileTopBar({
+  onOpenSearch,
+  environmentLabel,
+}: {
+  onOpenSearch?: () => void;
+  environmentLabel: EnvironmentLabel | null;
+}) {
   return (
     <header className="md:hidden fixed top-0 inset-x-0 h-14 bg-chrome flex items-center px-4 z-20">
       <span className="text-base font-wordmark font-semibold text-chrome-foreground tracking-wide">GigLoop</span>
+      {environmentLabel && (
+        <Badge
+          variant="outline"
+          className="ml-2 border-chrome-muted/30 bg-chrome-foreground/10 text-chrome-muted"
+        >
+          {environmentLabel}
+        </Badge>
+      )}
       {onOpenSearch && (
         <button
           type="button"
@@ -343,6 +369,7 @@ export default function AppShell() {
   const searchEnabled = isEnabled(SEARCH_FLAG);
   const [searchOpen, setSearchOpen] = useState(false);
   const openSearch = searchEnabled ? () => setSearchOpen(true) : undefined;
+  const environmentLabel = getEnvironmentLabel();
 
   return (
     <div className="min-h-screen bg-surface">
@@ -357,12 +384,17 @@ export default function AppShell() {
       <Sidebar />
 
       {/* Mobile top bar */}
-      <MobileTopBar onOpenSearch={openSearch} />
+      <MobileTopBar onOpenSearch={openSearch} environmentLabel={environmentLabel} />
 
       {/* Content — offset for sidebar on desktop, top bar on mobile. The Builder
           hides the mobile tab bar, so drop its pb-16 to use the full height there. */}
       <div className={cn('md:ml-60 flex flex-col min-h-screen pt-14 md:pb-0', !hideTabBar && 'pb-16')}>
-        <DesktopTopBar businessName={businessName} isLoading={isLoading} onOpenSearch={openSearch} />
+        <DesktopTopBar
+          businessName={businessName}
+          isLoading={isLoading}
+          onOpenSearch={openSearch}
+          environmentLabel={environmentLabel}
+        />
         <main id="main-content" className="flex-1">
           <Outlet />
         </main>

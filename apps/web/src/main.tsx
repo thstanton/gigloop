@@ -32,6 +32,12 @@ import OnboardingSongsPage from './pages/onboarding/OnboardingSongsPage';
 import OnboardingPackagesPage from './pages/onboarding/OnboardingPackagesPage';
 import OnboardingChecklistPage from './pages/onboarding/OnboardingChecklistPage';
 import OnboardingPortalPage from './pages/onboarding/OnboardingPortalPage';
+import { getEnvironmentLabel } from './lib/environment';
+
+const environmentLabel = getEnvironmentLabel();
+if (environmentLabel) {
+  document.title = `[${environmentLabel}] ${document.title}`;
+}
 
 const queryClient = new QueryClient();
 
