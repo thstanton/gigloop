@@ -119,15 +119,9 @@ Checks run in layers, so problems surface early and `main` stays releasable (see
 - **Git hooks (local, opt-in):** lint on commit, test + build on push.
 - **CI on every PR to `main`** (`.github/workflows/ci.yml`): **Lint**, **Test** and **Build** are required and must pass to merge. **Integration** and **E2E** (Playwright) also run — each spins up an ephemeral Neon branch — but are informational, not merge-blocking.
 
-Merging is **squash-only**, and deployment is promotion-based rather than tied to the merge:
+Merging is **squash-only**, and deployment is promotion-based rather than tied to the merge: a commit landing on `main` deploys to **preprod** (prod-shaped, synthetic data), and **production ships only on a deliberate human-pushed `v*` tag** — a merge to `main` never reaches real users on its own.
 
-| Trigger | Environment | Workflow |
-|---------|-------------|----------|
-| Squash-merge to `main` | **Preprod** — prod-shaped, synthetic data (smoke-test env) | `ci.yml` → deploy |
-| Human pushes a `v*` git tag | **Production** — snapshot a durable `pre-release-<tag>` Neon branch, `migrate deploy`, then deploy API (Railway) + web (Vercel) | `release.yml` |
-| Manual (before a schema release) | Rehearses the migration against an ephemeral clone of prod and reports apply-clean + lock time | `migration-rehearsal.yml` |
-
-Production ships **only** on a deliberate human-pushed tag — a merge to `main` never reaches real users on its own.
+**The environments, databases, deploy paths, migration mechanisms and feature flags are described in one place: [`docs/environments.md`](./docs/environments.md).** The reasoning behind the model is [ADR-0075](./docs/adr/0075-one-environment-model.md); [ADR-0044](./docs/adr/0044-preprod-and-release-process.md) covers why prod and preprod are split, migration rehearsal, expand/contract and rollback.
 
 ---
 
@@ -137,6 +131,7 @@ The deep documentation lives alongside the code and is the living source of trut
 
 - **[`CLAUDE.md`](./CLAUDE.md)** — hard rules, conventions, commands and the workflow model
 - **[`CONTEXT.md`](./CONTEXT.md)** — the domain model: booking lifecycle, entities and design principles
+- **[`docs/environments.md`](./docs/environments.md)** — the single description of environments, deploys, migrations and flags
 - **[`docs/adr/`](./docs/adr/)** — Architecture Decision Records (the reasoning behind key choices)
 - **[`docs/north-star.md`](./docs/north-star.md)** — the directional roadmap for the next wave of features
 - **[`SPEC.md`](./SPEC.md)** — historical pre-MVP reference (partly stale; `CLAUDE.md` and `CONTEXT.md` win where they disagree)
@@ -145,6 +140,6 @@ The deep documentation lives alongside the code and is the living source of trut
 
 ## Project status & contributing
 
-GigLoop is a greenfield, actively-developed project. Development follows a **feature-branch → PR → squash-merge to `main`** model; merging to `main` deploys to a preprod smoke-test environment, and production ships only on a human-pushed `v*` git tag. The full workflow, branching rules and code-quality gates are documented in [`CLAUDE.md`](./CLAUDE.md).
+GigLoop is a greenfield, actively-developed project. Development follows a **feature-branch → PR → squash-merge to `main`** model; merging to `main` deploys to preprod, and production ships only on a human-pushed `v*` git tag. The full workflow, branching rules and code-quality gates are documented in [`CLAUDE.md`](./CLAUDE.md).
 
 _Private project — all rights reserved._

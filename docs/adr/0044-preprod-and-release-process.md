@@ -2,7 +2,11 @@
 
 ## Status
 
-Accepted
+Accepted. **§3 and §4 superseded by [ADR-0075](0075-one-environment-model.md)** (2026-08-19).
+
+§3 (the smoke-test environment) and §4 (promotion) described an environment named three different ways and a preprod `migrate deploy` that was never implemented — see #875. ADR-0075 replaces both: GitHub workflows own the deploy sequence in **every** environment, each environment has exactly one name (`prod`, `preprod`), and [`docs/environments.md`](../environments.md) is the single operational description.
+
+**Everything else here stands unchanged** — §1 (why prod and preprod are split), §2 (migration rehearsal), §5 (expand/contract), §6 (rollback via a named Neon branch), §7 (seed once, evolve via migrations) and §8 (flags are per-environment environment variables).
 
 ## Context
 
