@@ -608,10 +608,61 @@ A named **library** builder defining what a musician offers for a specific type 
 | Solo Piano | — | Solo Piano, 60 min | — |
 
 ### Contact Roles (on a Booking)
-A Booking has up to three Contact relations, each a separate FK:
+A Booking has up to three Contact relations, each a separate FK. (A fourth kind of contact association exists — [[Band member]]s — but it is a **join table**, not an FK on the Booking, and is many-per-booking; see [[Band roster]].)
 - **Customer** (required): the direct payer (e.g. a couple getting married). Rarely repeats.
 - **Venue** (optional): the location of the performance. Repeats across bookings; persistent notes (e.g. parking info) live on the Contact record.
 - **Booking agent** (optional): the professional third party who sourced the booking — a formal booking agent, a wedding planner acting in that capacity, or similar. Always someone with a commercial role in originating the booking; casual personal referrals are not recorded here. Repeats across bookings.
+
+### Band member
+A musician the organiser books to play a [[Booking]] alongside (or instead of) themselves. A band member **is a [[Contact]]** — there is no separate person entity — linked to the booking by a `BookingBandMember` row that inherits the organiser's `userId`. `Contact.primaryRole = BAND_MEMBER` is a **filing label, not a constraint**: any contact can be rostered, and the roster row stays authoritative. See ADR-0072.
+
+Colloquially a **dep** (short for *deputy* — the standard UK term for a stand-in musician). The two are used interchangeably in conversation; **band member** is the term in code, DTOs and UI copy.
+
+`BookingBandMember` carries what belongs to the *person on this gig*: `contactId`, `bandPortalToken`, `status`, `isSelf`, [[Session fee]], and the lifecycle timestamps (`invitedAt`, `respondedAt`, `removedAt`). It does **not** carry role or call time — those belong to the [[Chair]].
+
+**Statuses:** `ADDED → INVITED → CONFIRMED | DECLINED`. `ADDED → CONFIRMED` is legal (confirming on someone's behalf must not fabricate an invitation that never happened). There is deliberately **no `REPLACED` status** — replacement is soft removal (`removedAt` + frozen status), and "replaced" is derived. All reversals are organiser-only.
+
+### Chair
+A **seat in a segment** — one part to be played, at one point in the day. `BookingBandChair` carries `role`, `order`, an optional `packageId` (null = booking-level) and a **nullable `memberId`**.
+
+**A vacancy is `memberId = null`** — a first-class thing the musician looks at, not an absence. Assignment therefore **never creates or destroys a row; it sets a field.**
+
+The chair/member split follows what varies with what: **role, segment and call time are per-chair; token, invitation, confirmation and fee are per-person.** One [[Band member]] playing the ceremony and the evening set holds two Chairs but has one link, one fee and one confirmation. **Call times are derived** from each segment's earliest [[Set]] `startTime`, never stored. See ADR-0072.
+
+### Band roster
+The set of [[Chair]]s and [[Band member]]s on a [[Booking]] — "who is playing this gig, and what". Available at **any lifecycle stage with no implied order**, and never part of booking creation or the [[Booking Builder]] (preserving ADR-0047's atomic create).
+
+Read on three surfaces, divided by question: the **Itinerary** (*who plays what, and when* — inline under each package header), the **Band card** in the Info tab (*who these people are and how to reach them* — a directory grouped by answer), and the **Band sheet** (*change something*). All three derive from one `band` block on the booking response. See ADR-0072.
+
+Roster rows **block [[Contact]] deletion** (409), alongside the three existing booking FKs.
+
+### Lineup Template
+A named **library** entry defining a reusable group of parts — "my five-piece". `LineupTemplate` → `LineupTemplateSlot` (role, order), symmetric with [[Package Template]] → its slots.
+
+Applied, a lineup **is** the [[Chair]]s, exactly as a [[Package]]'s sets are its [[Set]] rows — and **provenance is severed** the same way ([[Package]] keeps a `lineupName` snapshot, not an FK). A [[Package Template]] may carry a **nullable** default lineup, so applying a package auto-applies its lineup; the musician can override. Roles are **free text**, with type-ahead derived from existing slots and soft matching in the picker (a hard filter breaks on `Sax` vs `Saxophone`).
+
+The musician is an **optional `isSelf` row**, so a five-piece yields four vacancies rather than five. Library lives as a tab on `/admin/packages`. See ADR-0072 and ADR-0046.
+
+### Session fee
+What a [[Band member]] is paid for one [[Booking]] — `BookingBandMember.sessionFee`. **One fee per person per gig**, however many [[Chair]]s they hold.
+
+Organiser-private except to the member themselves: a dep sees **their own** fee via the [[Band portal]]'s `self` scope, and **no other member's fee ever crosses**. It is deliberately absent from the [[Call sheet]], which is shared and forwardable.
+
+A per-role guide rate, `Contact.defaultSessionFee` and `PackageTemplate.guideFee` are **out of scope** — each exists only to reverse-engineer a quote, so they belong to the Quote Calculator (`docs/north-star.md`), not here.
+
+### Band portal
+The dep-facing counterpart to the [[Portal]], at `/band/:token`. Validates a `BookingBandMember.bandPortalToken`, bypasses Clerk exactly as `/booking/:token` does, and is **read-only beyond a single confirm action**.
+
+Presented as **the gig sheet**: a date-badge hero, the day read top to bottom, and the response in a sticky bar that disappears once answered — leaving a pure reference sheet. The response is **one-shot**; reversals are organiser-only.
+
+What crosses is a **declared projection**, `BAND_PORTAL_FIELDS`, with a `scope` of `roster` (what every dep sees about everyone) or `self` (what this member sees about themselves). Private by default — only declared crossings cross. Member **statuses do not cross**. A cancelled booking renders a cancelled state; a **removed** member's token 404s. See ADR-0073.
+
+### Call sheet
+The document a [[Band member]] works from on the day — **one shared sheet per [[Booking]]**, generated on demand, **never versioned**.
+
+Shared rather than per-dep so it stays **forwardable** (to the venue, the engineer, a dep's own dep) — which is why it carries **no [[Session fee]]**. Content is the [[Band portal]]'s roster projection rendered: branded header, title, date, venue, the roster table with derived call times, the whole-day running order, `shareWithBand` logistics, organiser contact, and a **self-dating footer** ("Generated {ts} — check your portal").
+
+The portal download is unstored; a **[[Document]] row exists only on send**, so a sent sheet lists as "Call sheet — sent 12 Aug" and is re-downloadable. Any non-removed member may read it — an `INVITED` dep deciding whether to take the gig is exactly who needs it. See ADR-0073.
 
 ### Booking Builder
 The dedicated edit surface for a [[Booking]] — a single scrolling one-pager that stacks every concern (Overview, People, Venue, Package Templates, Itinerary, Details, Music, Notes) in spine order, each rendered by its own reusable atom in self-saving (incremental-PATCH) mode. It is the **superset** edit surface, opened from the "Builder" action on the booking detail page; it replaces the retired overloaded `BookingEditDrawer`. A **completeness rail** (derived from the same predicates that drive the structural [[BookingChecklistItem]]s, so the two never diverge) gives at-a-glance progress and jump-to-section navigation. Editing a booking is incremental and a booking is legitimately incomplete for most of its life — the Builder orients rather than gates: progress is **ambient** (the rail), arrival in a section is **positional**, and an **exit-backstop** offers a final gentle nudge for still-empty sections, never a hard gate. The per-concern quick-tweak sheets reached from the detail-page cards reuse the *same* atoms; the Builder is where they are all gathered. (Layout — including the mobile presentation of the rail — is implementation detail; see ADR-0051.) Distinct from booking *creation*, which is a separate lean form ending at a commit checkpoint (ADR-0047), after which the Builder takes over. See ADR-0050.

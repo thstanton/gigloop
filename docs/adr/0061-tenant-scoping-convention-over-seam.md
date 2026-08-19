@@ -1,6 +1,6 @@
 # ADR-0061: Tenant scoping stays convention + regression-guard, not a structural seam
 
-- **Status:** Accepted
+- **Status:** Accepted (**amended 2026-08-19** — the band-member trigger did not fire; the seam stays parked, see below)
 - **Date:** 2026-07-18
 - **Supersedes the proposal in:** #683 (grilled 2026-07-18)
 - **Related:** ADR-0025 (no long-lived/sibling branches), #681 (mail recipient), security review 2026-07-07 (B1 / H2 / M1)
@@ -42,3 +42,20 @@ The mechanism analysis also weighed against the seam independently: `$extends` n
 - **`$extends` client extension (ambient userId).** Rejected: needs request-scoped Prisma (cascades through DI, breaks the #612 cold-start retry) or AsyncLocalStorage/CLS; and the cron/portal paths structurally cannot supply an ambient userId, forcing escape hatches at the dangerous paths.
 - **Typed base-repository (explicit userId), full 16-repo migration.** The strongest structural guarantee and the mechanism we would pick *if* we built a seam — but ~40 hand edits committing to a userId-equality model that band-member accounts will invalidate. Deferred, not rejected.
 - **Do nothing beyond FK-ownership.** Rejected: leaves no guard against the future dropped-read regression; the shortcut-detector rule is nearly free.
+
+
+## Amendment (2026-08-19) — the band-member trigger did not fire
+
+This ADR deferred the #683 structural seam, noting that a full base-repository migration would commit "~40 hand edits committing to a userId-equality model that **band-member accounts will invalidate**."
+
+The band-member feature has now been designed in full (map [#814](https://github.com/thstanton/gigloop/issues/814); [ADR-0072](0072-band-roster-chairs-and-members.md), [ADR-0073](0073-band-portal-visibility-and-projection.md), [ADR-0074](0074-band-communications.md)). **The trigger did not fire, and the seam stays parked.**
+
+Why, precisely:
+
+- A band member **is a `Contact`** owned by the organiser. `BookingBandMember` inherits the organiser's `userId`.
+- The dep reaches the app **by bearer token** at `/band/:token`, which bypasses Clerk exactly as `/booking/:token` does. There is **no second authenticated principal**.
+- Therefore **no shared ownership and no cross-tenant read**. Every query predicate remains `userId`-equality, and the "no endpoint may return cross-tenant data" hard rule is untouched.
+
+What was deferred *with* the design, so a later accounts effort needs no retrofit: **email is the linkage key** between a future dep account and the `Contact` rows listing them across organisers; every new band-member field is **explicitly classified shared vs organiser-private** at the point it is added; and the portal read surface is a **named projection** (ADR-0073's `BAND_PORTAL_FIELDS`), not ad-hoc field picking, so an authenticated dep view later reuses one definition.
+
+**The revised trigger:** the seam should be reconsidered when **authenticated dep accounts** are designed — the effort that actually introduces a second principal and a non-`userId`-equality predicate — not when band members ship. A reader arriving here from #683 should expect the parking to hold until then.
