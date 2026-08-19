@@ -20,6 +20,30 @@ function isChecklistCompleteFor(checklist: ChecklistItem[], status: BookingStatu
   return items.length > 0 && items.every((i) => i.state === 'COMPLETE');
 }
 
+// ADR-0076 — settle a toggle response by the server's own version, per goal. A goal's
+// `updatedAt` versions the goal AND its steps (the API touches a parent row whenever one of
+// its steps is written), so it is the one authority on which copy of a goal is newer.
+//
+// Membership comes from `incoming` — it is the server's current truth about WHICH goals exist.
+// For each goal the newer copy wins, and a TIE KEEPS THE CACHED COPY. That tie is not an edge
+// case: the optimistic tick in `onMutate` is a client-side change and does not bump `updatedAt`,
+// so an in-flight goal sits at its old timestamp carrying its new state. Letting the incoming
+// copy win a tie would revert the tap the musician just made — which is #595 itself.
+//
+// String comparison is the right one: `updatedAt` is an ISO-8601 UTC timestamp from
+// `toISOString()`, fixed-width and always `Z`, so lexicographic order is chronological order.
+function mergeByVersion(
+  cached: ChecklistItem[] | undefined,
+  incoming: ChecklistItem[],
+): ChecklistItem[] {
+  if (!cached?.length) return incoming;
+  const byId = new Map(cached.map((item) => [item.id, item]));
+  return incoming.map((item) => {
+    const mine = byId.get(item.id);
+    return mine && mine.updatedAt >= item.updatedAt ? mine : item;
+  });
+}
+
 function findReadyStatus(
   booking: BookingDetail,
   checklist: ChecklistItem[],
@@ -44,9 +68,6 @@ export function useBookingChecklist(
   const dismissedTransitions = useRef(new Set<string>());
   const titleIndex = useRef(0);
   const celebratoryTitle = useRef(CELEBRATORY_TITLES[0]);
-  // Monotonic toggle sequence: only the latest-initiated toggle's response is allowed to write
-  // the cache, so a slow earlier response can't clobber a newer rapid toggle of the same item.
-  const toggleSeq = useRef(0);
 
   const { data: checklist = [], isPending: checklistLoading } = useQuery({
     queryKey: ['bookingChecklist', bookingId],
@@ -68,14 +89,13 @@ export function useBookingChecklist(
     onMutate: async ({ itemId, state }) => {
       await queryClient.cancelQueries({ queryKey: ['bookingChecklist', bookingId] });
       const previous = queryClient.getQueryData<ChecklistItem[]>(['bookingChecklist', bookingId]);
-      const seq = ++toggleSeq.current;
       queryClient.setQueryData<ChecklistItem[]>(['bookingChecklist', bookingId], (old) => {
         if (!old) return [];
         // ADR-0057 / #609: BLOCKED retired — no dependency propagation. The toggled item flips
         // optimistically; the server response settles any rule-driven roll-up in the same round-trip.
         return old.map((item) => (item.id === itemId ? { ...item, state } : item));
       });
-      return { previous, seq };
+      return { previous };
     },
     onError: (_err, _vars, context) => {
       // Reverts to this mutation's own pre-state. A concurrent sibling toggle's optimistic
@@ -83,15 +103,18 @@ export function useBookingChecklist(
       if (context?.previous) queryClient.setQueryData(['bookingChecklist', bookingId], context.previous);
       toast({ title: 'Failed to update checklist item', variant: 'destructive' });
     },
-    onSuccess: (data, _vars, context) => {
+    onSuccess: (data) => {
       if (!Array.isArray(data)) return;
-      // Only the latest-initiated toggle writes the recomputed array — a stale earlier response
-      // must not clobber a newer rapid toggle of the same item.
-      if (context?.seq !== toggleSeq.current) return;
-      // Residual gap (#595): two *different* items toggled concurrently and processed server-side
-      // out of order can leave the latest response missing the sibling's change. Acceptable here —
-      // a fully correct fix needs a server version token; we don't refetch (one round-trip).
-      queryClient.setQueryData<ChecklistItem[]>(['bookingChecklist', bookingId], data);
+      // #595 / ADR-0076: merge per goal by server version rather than replacing the array
+      // wholesale. The write→re-evaluate→re-read in `updateChecklistItem` is not one
+      // transaction, so a concurrent toggle's response can carry a stale copy of a sibling
+      // goal; taking only the goals it is genuinely newer for lets every response contribute
+      // what it actually knows. This replaces the old client-side toggle-sequence guard, which
+      // ordered by *client initiation* — the wrong authority, and which discarded the very
+      // response that carried the correction. We still never refetch (one round-trip, #587).
+      queryClient.setQueryData<ChecklistItem[]>(['bookingChecklist', bookingId], (cached) =>
+        mergeByVersion(cached, data),
+      );
     },
   });
 

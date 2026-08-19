@@ -45,41 +45,155 @@ function setup(initial: ChecklistItem[]) {
   return { result, cached };
 }
 
-describe('useBookingChecklist — toggle stale-response guard', () => {
+// Versions are ISO-8601 UTC, as the API emits them. V0 is what the cache starts at.
+const V0 = '2025-01-01T00:00:00.000Z';
+const V1 = '2025-01-01T00:00:01.000Z';
+const V2 = '2025-01-01T00:00:02.000Z';
+const V3 = '2025-01-01T00:00:03.000Z';
+
+// A toggle's response is the WHOLE recomputed checklist, read after a full re-evaluation that is
+// not in the same transaction as the write (bookings.service.ts). So a response can legitimately
+// carry a stale copy of a goal another in-flight toggle has already moved. ADR-0076: settle by the
+// server's per-goal `updatedAt`, newest wins, ties keep what is on screen.
+describe('useBookingChecklist — toggle responses settle by server version (ADR-0076)', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('a slow earlier response does not clobber a newer rapid toggle of the same item', async () => {
-    // Each call returns a controllable deferred so we can resolve out of order.
+  function deferred() {
     const resolvers: Array<(v: ChecklistItem[]) => void> = [];
     vi.mocked(apiPatch).mockImplementation(
       () => new Promise<ChecklistItem[]>((resolve) => resolvers.push(resolve)),
     );
+    return resolvers;
+  }
 
-    const { result, cached } = setup([item({ id: 'i1', state: 'PENDING' })]);
+  it('keeps both ticks when two different goals are toggled concurrently (#595)', async () => {
+    // THE regression. Under the old client-side toggle-sequence guard this failed: i2's response
+    // (the latest-initiated) wrote its stale copy of i1 wholesale, and i1's own response — the one
+    // carrying the correction — was then discarded for not being the latest. i1 visibly un-ticked.
+    const resolvers = deferred();
+    const { result, cached } = setup([
+      item({ id: 'i1', state: 'PENDING', updatedAt: V0 }),
+      item({ id: 'i2', state: 'PENDING', updatedAt: V0 }),
+    ]);
 
-    // Three rapid toggles of the same item → seq 1, 2, 3.
+    act(() => {
+      result.current.toggleItem('i1', 'COMPLETE');
+      result.current.toggleItem('i2', 'COMPLETE');
+    });
+    await waitFor(() => expect(resolvers).toHaveLength(2));
+
+    const byId = () => Object.fromEntries(cached().map((i) => [i.id, i]));
+
+    // i2's response read the checklist BEFORE i1's write landed, so it carries i1 as still PENDING
+    // at its original version. It resolves first.
+    await act(async () =>
+      resolvers[1]([
+        item({ id: 'i1', state: 'PENDING', updatedAt: V0 }),
+        item({ id: 'i2', state: 'COMPLETE', updatedAt: V2 }),
+      ]),
+    );
+    // i1 ties (the optimistic tick does not bump the version) so the tick survives; i2 is newer.
+    expect(byId().i1.state).toBe('COMPLETE');
+    expect(byId().i2.state).toBe('COMPLETE');
+
+    // i1's own response arrives late carrying its settled version — and a stale i2.
+    await act(async () =>
+      resolvers[0]([
+        item({ id: 'i1', state: 'COMPLETE', updatedAt: V1 }),
+        item({ id: 'i2', state: 'PENDING', updatedAt: V0 }),
+      ]),
+    );
+    expect(byId().i1.state).toBe('COMPLETE');
+    expect(byId().i2.state).toBe('COMPLETE');
+  });
+
+  it('lets a non-latest response settle the goals it is genuinely newer for', async () => {
+    // What the old guard prevented: an earlier toggle response was thrown away entirely, so its
+    // goal never received its server-settled form. Now it contributes exactly what it knows.
+    const resolvers = deferred();
+    const { result, cached } = setup([
+      item({ id: 'i1', state: 'PENDING', updatedAt: V0, label: 'stale' }),
+      item({ id: 'i2', state: 'PENDING', updatedAt: V0 }),
+    ]);
+
+    act(() => {
+      result.current.toggleItem('i1', 'COMPLETE');
+      result.current.toggleItem('i2', 'COMPLETE');
+    });
+    await waitFor(() => expect(resolvers).toHaveLength(2));
+
+    await act(async () =>
+      resolvers[1]([
+        item({ id: 'i1', state: 'PENDING', updatedAt: V0, label: 'stale' }),
+        item({ id: 'i2', state: 'COMPLETE', updatedAt: V2 }),
+      ]),
+    );
+    await act(async () =>
+      resolvers[0]([
+        item({ id: 'i1', state: 'COMPLETE', updatedAt: V1, label: 'settled' }),
+        item({ id: 'i2', state: 'PENDING', updatedAt: V0 }),
+      ]),
+    );
+
+    expect(cached().find((i) => i.id === 'i1')!.label).toBe('settled');
+  });
+
+  it('ignores a slow earlier response for the same goal (the #587 case, now server-ordered)', async () => {
+    const resolvers = deferred();
+    const { result, cached } = setup([item({ id: 'i1', state: 'PENDING', updatedAt: V0 })]);
+
     act(() => {
       result.current.toggleItem('i1', 'COMPLETE');
       result.current.toggleItem('i1', 'PENDING');
       result.current.toggleItem('i1', 'COMPLETE');
     });
-
     await waitFor(() => expect(resolvers).toHaveLength(3));
 
-    const resp = (n: number): ChecklistItem[] => [item({ id: 'i1', state: 'COMPLETE', label: `resp${n}` })];
-
-    // Latest (seq 3) resolves first and writes the cache…
-    await act(async () => resolvers[2](resp(3)));
+    await act(async () =>
+      resolvers[2]([item({ id: 'i1', state: 'COMPLETE', updatedAt: V3, label: 'resp3' })]),
+    );
     expect(cached()[0].label).toBe('resp3');
 
-    // …then the stale seq-1 response arrives late and must be ignored.
-    await act(async () => resolvers[0](resp(1)));
+    // The first toggle's response arrives late at an older version and loses on merit.
+    await act(async () =>
+      resolvers[0]([item({ id: 'i1', state: 'COMPLETE', updatedAt: V1, label: 'resp1' })]),
+    );
     expect(cached()[0].label).toBe('resp3');
   });
 
-  it('applies the server array when the toggle is the latest in flight', async () => {
-    vi.mocked(apiPatch).mockResolvedValue([item({ id: 'i1', state: 'COMPLETE', label: 'server' })]);
-    const { result, cached } = setup([item({ id: 'i1', state: 'PENDING' })]);
+  it('keeps the optimistic tick when a response ties on version', async () => {
+    // The tie is reached on every tap: onMutate flips state client-side without bumping
+    // `updatedAt`, so an in-flight goal carries a new state at its old version. Resolving the
+    // tie towards the incoming copy would revert the tap — which is the bug being fixed.
+    const resolvers = deferred();
+    const { result, cached } = setup([item({ id: 'i1', state: 'PENDING', updatedAt: V0 })]);
+
+    act(() => result.current.toggleItem('i1', 'COMPLETE'));
+    await waitFor(() => expect(resolvers).toHaveLength(1));
+
+    await act(async () => resolvers[0]([item({ id: 'i1', state: 'PENDING', updatedAt: V0 })]));
+
+    expect(cached()[0].state).toBe('COMPLETE');
+  });
+
+  it('takes membership from the server response, never resurrecting a dropped goal', async () => {
+    vi.mocked(apiPatch).mockResolvedValue([item({ id: 'i1', state: 'COMPLETE', updatedAt: V1 })]);
+    const { result, cached } = setup([
+      item({ id: 'i1', state: 'PENDING', updatedAt: V0 }),
+      item({ id: 'i2', state: 'PENDING', updatedAt: V0 }),
+    ]);
+
+    act(() => result.current.toggleItem('i1', 'COMPLETE'));
+
+    await waitFor(() => expect(cached()).toHaveLength(1));
+    expect(cached()[0].id).toBe('i1');
+  });
+
+  it('applies the server array to a cache that has no prior copy', async () => {
+    vi.mocked(apiPatch).mockResolvedValue([
+      item({ id: 'i1', state: 'COMPLETE', updatedAt: V1, label: 'server' }),
+    ]);
+    const { result, cached } = setup([item({ id: 'i1', state: 'PENDING', updatedAt: V0 })]);
 
     act(() => result.current.toggleItem('i1', 'COMPLETE'));
 
