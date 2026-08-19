@@ -127,7 +127,10 @@ describe('PortalService.signContract (integration)', () => {
       { findBookingByToken: jest.fn().mockResolvedValue(booking) } as unknown as import('./portal.repository').PortalRepository,
       { findByUserId: jest.fn().mockResolvedValue(publicProfile) } as unknown as import('../user-profile/public-profile.repository').PublicProfileRepository,
       {} as unknown as import('../songs/songs.repository').SongsRepository,
-      { findDepositInvoice: jest.fn().mockResolvedValue(null) } as unknown as import('../invoices/invoices.repository').InvoicesRepository,
+      {
+        findDepositInvoice: jest.fn().mockResolvedValue(null),
+        hasPaidDepositInvoice: jest.fn().mockResolvedValue(false),
+      } as unknown as import('../invoices/invoices.repository').InvoicesRepository,
       { buildContext: jest.fn().mockResolvedValue(emailContext), send: jest.fn().mockResolvedValue(undefined) } as unknown as import('../mail/mail.service').MailService,
       documents,
       { getPublicUrl: jest.fn() } as unknown as StorageService,

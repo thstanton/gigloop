@@ -20,7 +20,6 @@ function makeBooking(overrides: Record<string, unknown> = {}) {
     status: 'ENQUIRY',
     venueId: null,
     customerId: 'cust-1',
-    depositReceivedAt: null,
     setsCount: 0,
     logistics: null,
     communications: [],
@@ -267,12 +266,12 @@ describe('ChecklistEvaluatorService', () => {
   });
 
   describe('bookingField rule', () => {
-    it('transitions PENDING → COMPLETE when depositReceivedAt is set', async () => {
+    it('transitions PENDING → COMPLETE when the deposit invoice is PAID (TIM-47 invoicePaid)', async () => {
       const item = makeItem({
         key: 'deposit_received',
-        autoCompleteRule: { type: 'bookingField', field: 'depositReceivedAt', operator: 'notNull' },
+        autoCompleteRule: { type: 'invoicePaid', isDeposit: true },
       });
-      const booking = makeBooking({ depositReceivedAt: new Date() });
+      const booking = makeBooking({ invoices: [{ isDeposit: true, status: 'PAID' }] });
       repo.findItemsWithContext.mockResolvedValue({ items: [item], booking });
 
       await service.evaluate('b1');
@@ -391,7 +390,7 @@ describe('ChecklistEvaluatorService', () => {
     });
 
     it('auto-completes a goal out of order — its own rule fires regardless of an unfinished predecessor', async () => {
-      // deposit_received's rule holds (depositReceivedAt set) before send_contract
+      // deposit_received's rule holds (deposit invoice PAID) before send_contract
       // is done. Pre-ADR-0057 the dep gate kept it BLOCKED; now it completes.
       const sendContract = makeItem({
         id: 'i-send',
@@ -405,9 +404,9 @@ describe('ChecklistEvaluatorService', () => {
         key: 'deposit_received',
         state: 'BLOCKED',
         dependsOn: ['send_contract'],
-        autoCompleteRule: { type: 'bookingField', field: 'depositReceivedAt', operator: 'notNull' },
+        autoCompleteRule: { type: 'invoicePaid', isDeposit: true },
       });
-      const booking = makeBooking({ depositReceivedAt: new Date() });
+      const booking = makeBooking({ invoices: [{ isDeposit: true, status: 'PAID' }] });
       repo.findItemsWithContext.mockResolvedValue({ items: [sendContract, depositReceived], booking });
 
       await service.evaluate('b1');
@@ -599,7 +598,7 @@ describe('ChecklistEvaluatorService', () => {
           { id: 's2', key: 'deposit_received', state: 'PENDING', completedAt: null },
         ],
       });
-      const booking = makeBooking({ invoices: [{ isDeposit: true }], depositReceivedAt: new Date() });
+      const booking = makeBooking({ invoices: [{ isDeposit: true, status: 'PAID' }] });
       repo.findItemsWithContext.mockResolvedValue({ items: [goal], booking });
 
       await service.evaluate('b1');
@@ -644,7 +643,6 @@ describe('ChecklistEvaluatorService', () => {
       'communications',
       'invoices',
       'contracts',
-      'depositReceivedAt',
       'musicFormResponse',
       'venueId',
       'customerId',

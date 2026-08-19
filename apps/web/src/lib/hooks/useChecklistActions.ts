@@ -86,24 +86,24 @@ export function useChecklistActions(bookingId: string) {
   }
 
   // Mark the sent invoice of the given type paid — the received steps' "Mark as paid" action (#653).
-  // Returns false when there is no sent invoice to mark, so the caller can pick a fallback.
+  // Opens the mark-paid dialog (date + reference, ADR-0068); returns false when there is no sent
+  // invoice to mark, so the caller can pick a fallback.
   function markSentInvoicePaid(isDeposit: boolean): boolean {
     const sent = sentInvoiceOf(isDeposit, invoices);
     if (!sent) return false;
-    invoiceActions.markPaid(sent);
+    invoiceActions.requestMarkPaid(sent);
     return true;
   }
 
   function handleMarkDone(key: 'mark_contract_signed' | 'mark_deposit_received' | 'mark_balance_received') {
     if (key === 'mark_contract_signed') {
       if (booking?.activeContract) actions.markContractSigned(booking.activeContract.id);
-    } else if (key === 'mark_balance_received') {
-      // No balanceReceivedAt field, so there is no fallback — spine ordering guarantees a sent
-      // balance invoice by this step, and the goal's ⋯ "Mark complete" remains the escape hatch.
-      markSentInvoicePaid(false);
-    } else if (!markSentInvoicePaid(true)) {
-      // Deposit paid outside an invoice (e.g. cash): record it on the booking directly.
-      actions.markDepositReceived();
+    } else {
+      // Both received steps mark the sent invoice of their type paid (TIM-47 / ADR-0068). No
+      // non-invoice fallback for either — a payment taken without an invoice is not money as far
+      // as GigLoop is concerned; spine ordering guarantees a sent invoice by this step, and the
+      // goal's ⋯ "Mark complete" remains the escape hatch.
+      markSentInvoicePaid(key === 'mark_deposit_received');
     }
   }
 
@@ -113,5 +113,7 @@ export function useChecklistActions(bookingId: string) {
     isActionPending: actions.isPending || invoiceActions.isMarkingPaid || contractActions.isCreatingContract,
     pendingContract,
     clearPendingContract: () => setPendingContract(null),
+    // Props for the MarkPaidDialog the checklist surface renders (its "Mark as paid" CTA opens it).
+    markPaidDialog: invoiceActions.markPaidDialog,
   };
 }

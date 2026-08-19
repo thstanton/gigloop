@@ -25,7 +25,7 @@ const booking = {
   venueId: 'c1', venue: venueWithCoords,
   bookingAgentId: null, bookingAgent: null,
   sets: [], packages: [],
-  activeContract: null, depositReceivedAt: null, portalToken: 'tok_abc',
+  activeContract: null, portalToken: 'tok_abc',
   hasMusicFormConfig: false, hasMusicFormResponse: false,
   seriesId: null, series: null, logistics: null,
 };

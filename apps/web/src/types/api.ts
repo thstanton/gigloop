@@ -339,7 +339,6 @@ export interface BookingDetail extends Omit<BookingListItem, 'customer' | 'venue
   sets: PerformanceSet[];
   packages: BookingPackageSummary[];
   activeContract: Contract | null;
-  depositReceivedAt: string | null;
   portalToken: string;
   hasMusicFormConfig: boolean;
   hasMusicFormResponse: boolean;
@@ -468,7 +467,10 @@ export interface Invoice {
   invoiceNumber: string | null;
   issueDate: string | null;
   dueDate: string | null;
+  // The date the payment was received (ADR-0068), chosen by the musician — not the tap moment.
   paidAt: string | null;
+  // Optional payment reference recorded alongside paidAt (e.g. a bank reference); null when unset.
+  paymentReference: string | null;
   // One polymorphic Invoice entity (ADR-0063): a booking invoice has bookingId set and seriesId null;
   // a series invoice has seriesId set and bookingId null. Both FKs are nullable on the wire.
   bookingId: string | null;

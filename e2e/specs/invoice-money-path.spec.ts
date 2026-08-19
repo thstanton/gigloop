@@ -74,9 +74,21 @@ test.describe('invoice money path', () => {
     await expectInvoiceStatus(InvoiceStatus.SENT);
 
     // --- Mark the sent invoice paid ---
+    // Mark-paid now opens a dialog capturing when the payment was received (prefilled to today)
+    // plus an optional reference (ADR-0068 / TIM-45), rather than silently stamping "now". The
+    // dialog portals to the body, so its confirm button is queried at page level. Its name
+    // ("Record payment") is deliberately distinct from the row action ("Mark as paid").
     await openInvoiceMenu();
     await page.getByRole('button', { name: 'Mark as paid', exact: true }).click();
+    const markPaidDialog = page.getByRole('dialog');
+    await markPaidDialog.getByPlaceholder('Optional').fill('BACS-4417');
+    await markPaidDialog.getByRole('button', { name: 'Record payment', exact: true }).click();
     await expect(statusPill('Paid')).toBeVisible();
     await expectInvoiceStatus(InvoiceStatus.PAID);
+
+    // The received date + reference are recorded on the invoice (not just the status).
+    const paid = await prisma.invoice.findUnique({ where: { id: fixture.invoiceId } });
+    expect(paid?.paidAt).not.toBeNull();
+    expect(paid?.paymentReference).toBe('BACS-4417');
   });
 });

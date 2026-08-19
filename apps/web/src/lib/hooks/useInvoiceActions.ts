@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import { useMutation, useQueryClient, type UseMutationResult } from '@tanstack/react-query';
-import { apiPost, apiPostVoid, apiDelete } from '@/lib/api';
+import { apiPost, apiPatch, apiPostVoid, apiDelete } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
 import { invoiceOwnerRoute, type InvoiceAction } from '@/lib/invoiceActionRouting';
+import { invoiceLabel } from '@/lib/invoiceDerivations';
 import type { Invoice } from '@/types/api';
 
 // One field-derived home for every invoice transition (ADR-0063 client mirror, #724).
@@ -57,8 +59,28 @@ export function useInvoiceActions() {
 
   const issueMutation = useMutation(config('issue', 'issue', (url) => apiPost(url, {})));
   const markSentMutation = useMutation(config('markSent', 'mark-sent', (url) => apiPost(url, {})));
-  const markPaidMutation = useMutation(config('markPaid', 'mark-paid', (url) => apiPost(url, {})));
   const voidMutation = useMutation(config('void', 'void', (url) => apiPostVoid(url, {})));
+
+  // Mark-paid is no longer a one-tap action: it records the date the payment was *received* plus an
+  // optional reference (ADR-0068), captured in MarkPaidDialog. The *same* dialog corrects an
+  // already-recorded payment (TIM-46), prefilled from the stored values — so one target, tagged
+  // with its mode, drives both. 'record' POSTs mark-paid (SENT → PAID); 'correct' PATCHes the
+  // payment on an already-PAID invoice without touching its status. Neither can use the empty-body
+  // `config()` helper since their variables carry the payload.
+  const [paymentTarget, setPaymentTarget] = useState<{ invoice: Invoice; mode: 'record' | 'correct' } | null>(null);
+  type PaymentVars = { invoice: Invoice; paidAt: string; paymentReference?: string };
+  const markPaidMutation = useMutation({
+    mutationFn: ({ invoice, paidAt, paymentReference }: PaymentVars) =>
+      apiPost(`${invoiceOwnerRoute(invoice, 'markPaid').prefix}/${invoice.id}/mark-paid`, { paidAt, paymentReference }),
+    onSuccess: (_data, { invoice }) => onSuccess(invoice, 'markPaid'),
+    onError: () => toast({ title: ERROR_TOAST.markPaid, variant: 'destructive' }),
+  });
+  const correctPaymentMutation = useMutation({
+    mutationFn: ({ invoice, paidAt, paymentReference }: PaymentVars) =>
+      apiPatch(`${invoiceOwnerRoute(invoice, 'markPaid').prefix}/${invoice.id}/payment`, { paidAt, paymentReference }),
+    onSuccess: (_data, { invoice }) => onSuccess(invoice, 'markPaid'),
+    onError: () => toast({ title: 'Failed to update payment', variant: 'destructive' }),
+  });
   const deleteMutation = useMutation({
     mutationFn: (invoice: Invoice) => apiDelete(`${invoiceOwnerRoute(invoice, 'delete').prefix}/${invoice.id}`),
     onSuccess: (_data, invoice) => onSuccess(invoice, 'delete'),
@@ -81,9 +103,32 @@ export function useInvoiceActions() {
     markingSentId: pendingId(markSentMutation),
     isMarkingSent: markSentMutation.isPending,
 
-    markPaid: (invoice: Invoice) => markPaidMutation.mutate(invoice),
-    markingPaidId: pendingId(markPaidMutation),
+    // Open the dialog to record a fresh payment (SENT invoice); confirming POSTs mark-paid.
+    requestMarkPaid: (invoice: Invoice) => setPaymentTarget({ invoice, mode: 'record' }),
+    // Open the same dialog to correct an already-recorded payment (PAID invoice); confirming PATCHes.
+    requestCorrectPayment: (invoice: Invoice) => setPaymentTarget({ invoice, mode: 'correct' }),
+    markingPaidId: markPaidMutation.isPending ? (markPaidMutation.variables?.invoice.id ?? null) : null,
     isMarkingPaid: markPaidMutation.isPending,
+    // Props for the single MarkPaidDialog a container renders; structurally matches MarkPaidDialogProps.
+    // The active mutation and the prefill both follow the target's mode.
+    markPaidDialog: {
+      open: paymentTarget !== null,
+      onOpenChange: (open: boolean) => { if (!open) setPaymentTarget(null); },
+      onConfirm: (paidAt: string, paymentReference: string) => {
+        if (!paymentTarget) return;
+        const mutation = paymentTarget.mode === 'correct' ? correctPaymentMutation : markPaidMutation;
+        mutation.mutate(
+          { invoice: paymentTarget.invoice, paidAt, paymentReference: paymentReference || undefined },
+          { onSuccess: () => setPaymentTarget(null) },
+        );
+      },
+      isPending: (paymentTarget?.mode === 'correct' ? correctPaymentMutation : markPaidMutation).isPending,
+      invoiceLabel: paymentTarget ? invoiceLabel(paymentTarget.invoice) : undefined,
+      // When correcting, prefill from the stored values (paidAt is an ISO string → date portion);
+      // when recording, leave undefined so the dialog defaults to today + a blank reference.
+      initialPaidAt: paymentTarget?.mode === 'correct' ? (paymentTarget.invoice.paidAt?.slice(0, 10) ?? undefined) : undefined,
+      initialReference: paymentTarget?.mode === 'correct' ? (paymentTarget.invoice.paymentReference ?? undefined) : undefined,
+    },
 
     voidInvoice: (invoice: Invoice) => voidMutation.mutate(invoice),
     voidingInvoiceId: pendingId(voidMutation),

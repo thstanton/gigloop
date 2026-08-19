@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { GhostButton } from '@/components/common/GhostButton';
 import { InlineHint } from '@/components/common/InlineHint';
 import { BookingConceptCardContainer } from './BookingConceptCardContainer';
+import { MarkPaidDialog } from './MarkPaidDialog';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -260,7 +261,7 @@ export default function ChecklistSection({
   hideHeader = false,
   clientName = null,
 }: ChecklistSectionProps) {
-  const { handleChecklistAction, handleMarkDone, isActionPending } = useChecklistActions(bookingId);
+  const { handleChecklistAction, handleMarkDone, isActionPending, markPaidDialog } = useChecklistActions(bookingId);
   const { isDismissed: isDueDateHintDismissed, dismiss: dismissDueDateHint } =
     useDismissibleHint('checklist-due-date-hint');
   const [, setSearchParams] = useSearchParams();
@@ -339,6 +340,8 @@ export default function ChecklistSection({
           clientName={clientName}
         />
       ))}
+
+      <MarkPaidDialog {...markPaidDialog} />
     </section>
   );
 }

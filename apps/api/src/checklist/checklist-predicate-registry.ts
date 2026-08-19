@@ -38,12 +38,13 @@ export interface PredicateEntry {
  * Keys that reach COMPLETE by awaiting an external event rather than a musician
  * action now. The discriminator is the event source, not `completedBy`:
  *   - contractSigned / musicFormResponse — the client acts in the portal
- *   - depositReceivedAt — an external payment lands (the USER only records it)
- * Everything else (creates, sends, structural completeness) is ACTION.
+ *   - invoicePaid — an external payment lands (the USER only records it)
+ * Everything else (creates, sends, structural completeness) is ACTION. Only used
+ * for atomic goals; the multi-step `*_received` steps set completeMode explicitly.
  */
 function completeModeForRule(rule: AutoCompleteRule): CompleteMode {
   if (rule.type === 'contractSigned' || rule.type === 'musicFormResponse') return 'AWAITED';
-  if (rule.type === 'bookingField' && rule.field === 'depositReceivedAt') return 'AWAITED';
+  if (rule.type === 'invoicePaid') return 'AWAITED';
   return 'ACTION';
 }
 

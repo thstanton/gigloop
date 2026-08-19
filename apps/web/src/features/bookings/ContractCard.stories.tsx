@@ -24,7 +24,6 @@ const baseBooking: BookingDetail = {
   sets: [],
   packages: [],
   activeContract: null,
-  depositReceivedAt: null,
   portalToken: 'tok_abc',
   hasMusicFormConfig: false,
   hasMusicFormResponse: false,

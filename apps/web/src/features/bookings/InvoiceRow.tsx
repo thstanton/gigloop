@@ -1,5 +1,7 @@
-import { CheckCircle2, Download, Eye, Send } from 'lucide-react';
+import { CheckCircle2, Download, Eye, Pencil, Send } from 'lucide-react';
 import InvoiceStatusPill from '@/components/common/InvoiceStatusPill';
+import { LabelValue } from '@/components/common/LabelValue';
+import { GhostButton } from '@/components/common/GhostButton';
 import { RowActions } from '@/components/common/RowActions';
 import type { RowAction } from '@/components/common/RowActions';
 import { PortalVisibility } from '@/components/common/PortalVisibility';
@@ -18,6 +20,7 @@ export interface InvoiceRowHandlers {
   onSend: (invoice: Invoice) => void;
   onMarkSent: (invoice: Invoice) => void;
   onMarkPaid: (invoice: Invoice) => void;
+  onEditPayment: (invoice: Invoice) => void;
   onVoid: (invoice: Invoice) => void;
 }
 
@@ -144,7 +147,6 @@ export default function InvoiceRow({ invoice, pdfUrl, portalVisibility, handlers
         <p className="text-xs text-muted mt-0.5">
           {invoice.issueDate ? formatDate(invoice.issueDate) : '—'}
           {invoice.dueDate && ` · due ${formatDate(invoice.dueDate)}`}
-          {isPaid && invoice.paidAt && ` · paid ${formatDate(invoice.paidAt)}`}
         </p>
         <div className="mt-1">
           {pendingLabel ? (
@@ -153,6 +155,28 @@ export default function InvoiceRow({ invoice, pdfUrl, portalVisibility, handlers
             <InvoiceStatusPill status={invoice.status} isOverdue={overdue} />
           )}
         </div>
+        {/* The recorded money facts (ADR-0068): the date the payment was received and the optional
+            reference, shown on the paid invoice with an Edit affordance that re-opens the record
+            dialog to correct them (TIM-46). Shown for any paid invoice — a seeded row with a null
+            date still offers Edit so the musician can set the real one. */}
+        {isPaid && (
+          <div className="mt-1.5">
+            <LabelValue label="Date received">
+              <span className="inline-flex items-center gap-2">
+                {invoice.paidAt ? formatDate(invoice.paidAt) : '—'}
+                <GhostButton
+                  variant="primary"
+                  size="xs"
+                  icon={<Pencil size={12} />}
+                  onClick={() => handlers.onEditPayment(invoice)}
+                >
+                  Edit
+                </GhostButton>
+              </span>
+            </LabelValue>
+            {invoice.paymentReference && <LabelValue label="Reference">{invoice.paymentReference}</LabelValue>}
+          </div>
+        )}
         {portalVisibility && (
           <div className="mt-1.5">
             <PortalVisibility {...portalVisibility} />

@@ -388,7 +388,11 @@ model Invoice {
   invoiceNumber String?
   issueDate     DateTime?
   dueDate       DateTime?
+  // paidAt is the date the payment was *received* — chosen by the musician, defaulting to today,
+  // captured in the mark-paid dialog and correctable — not the moment the button was tapped (ADR-0068).
   paidAt        DateTime?
+  // Optional payment reference (e.g. a bank reference), captured alongside paidAt when known.
+  paymentReference String?
 
   bookingId String?
   booking   Booking? @relation(fields: [bookingId], references: [id], onDelete: Cascade)

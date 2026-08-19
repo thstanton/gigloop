@@ -54,11 +54,11 @@ function toStepState(s: string): StepState {
 }
 
 // A newly-inserted terminal step whose completion the post-migration evaluate() sweep cannot
-// reconstruct from durable booking state: a no-rule step, or the balance's `invoicePaid` step
-// (#653) — a cash-settled balance has no PAID invoice for evaluate() to key off. On an
-// already-complete goal such a step must inherit the goal's completion so a settled balance never
-// re-nags (Story 21). deposit_received is excluded: its depositReceivedAt column is durable, so the
-// sweep re-completes it.
+// reconstruct from durable booking state: a no-rule step, or an `invoicePaid` received step — a
+// payment settled outside an invoice leaves no PAID invoice for evaluate() to key off. On an
+// already-complete goal such a step must inherit the goal's completion so a settled deposit/balance
+// never re-nags (Story 21). Since TIM-47 both `deposit_received` and `balance_received` are
+// `invoicePaid`, so both inherit — the deposit no longer has a durable booking column to key off.
 function inheritsGoalCompletion(rule: Record<string, unknown> | null | undefined): boolean {
   return rule == null || rule.type === 'invoicePaid';
 }

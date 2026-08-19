@@ -5,10 +5,11 @@ import { DocumentsService } from '../documents/documents.service';
 import { CommunicationsService } from '../communications/communications.service';
 import { ChecklistReevaluator } from '../checklist/checklist-reevaluator.service';
 import { ChecklistRepository } from '../checklist/checklist.repository';
-import { isIssuable, isSendable, isVoidable, isPayable, InvoiceForRules } from './invoice-transition-rules';
+import { isIssuable, isSendable, isVoidable, isPayable, isPaymentCorrectable, InvoiceForRules } from './invoice-transition-rules';
 import type { SendInvoiceDto } from './dto/send-invoice.dto';
 import type { IssueInvoiceDto } from './dto/issue-invoice.dto';
 import type { MarkSentDto } from './dto/mark-sent.dto';
+import type { MarkPaidDto } from './dto/mark-paid.dto';
 
 /**
  * The Invoice fields the transition service derives every side-effect from. Invoice is one
@@ -150,22 +151,37 @@ export class InvoiceTransitionService {
   }
 
   /**
-   * Mark a SENT invoice as paid. Side-effects are field-derived: a deposit booking invoice stamps
-   * `booking.depositReceivedAt` and re-evaluates its checklist; a series invoice (bookingId null)
-   * does neither, by construction.
+   * Mark a SENT invoice as paid, recording the date the payment was *received* (ADR-0068) plus an
+   * optional reference — not the moment the button was tapped. The one side-effect is checklist
+   * re-evaluation: a PAID deposit or balance invoice auto-completes its `*_received` step (both read
+   * the live invoice status; TIM-47 retired the deposit's `depositReceivedAt` write). A series
+   * invoice (bookingId null) has no booking to re-evaluate, by construction.
    */
-  async markPaid(invoice: TransitionInvoice): Promise<Invoice> {
+  async markPaid(invoice: TransitionInvoice, dto: MarkPaidDto): Promise<Invoice> {
     if (!isPayable(invoice)) {
       throw new BadRequestException('Only sent invoices can be marked as paid');
     }
-    const result = await this.invoicesRepo.markPaidBase(invoice.id);
-    if (invoice.isDeposit && invoice.bookingId) {
-      await this.invoicesRepo.setBookingDepositReceivedAt(invoice.bookingId);
-    }
+    const paidAt = new Date(dto.paidAt);
+    const result = await this.invoicesRepo.markPaidBase(invoice.id, paidAt, dto.paymentReference ?? null);
     if (invoice.bookingId) {
       await this.reeval.onBookingChanged(invoice.bookingId);
     }
     return result;
+  }
+
+  /**
+   * Correct the payment already recorded on a PAID invoice (ADR-0068 / TIM-46): its received date
+   * and optional reference. This is *not* a lifecycle transition — the status stays PAID and the
+   * document (line items, number, issue/due dates) is untouched; only the correctable money fact
+   * changes. No checklist side-effect: the invoice is already PAID, so its `*_received` step is
+   * unchanged (TIM-47 retired the deposit's `depositReceivedAt` mirror).
+   */
+  async correctPayment(invoice: TransitionInvoice, dto: MarkPaidDto): Promise<Invoice> {
+    if (!isPaymentCorrectable(invoice)) {
+      throw new BadRequestException('Only paid invoices can have their payment corrected');
+    }
+    const paidAt = new Date(dto.paidAt);
+    return this.invoicesRepo.updatePaymentDetails(invoice.id, paidAt, dto.paymentReference ?? null);
   }
 
   /**

@@ -1,6 +1,6 @@
 import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect } from 'storybook/test';
+import { expect, fn, userEvent } from 'storybook/test';
 import { MemoryRouter } from 'react-router-dom';
 import InvoiceRow from './InvoiceRow';
 import type { Invoice } from '@/types/api';
@@ -19,6 +19,7 @@ const baseInvoice: Invoice = {
   issueDate: '2030-04-01',
   dueDate: '2030-05-01',
   paidAt: null,
+  paymentReference: null,
   bookingId: 'b1',
   seriesId: null,
   billToContactId: 'c1',
@@ -45,6 +46,7 @@ const defaultHandlers = {
   onSend: noop,
   onMarkSent: noop,
   onMarkPaid: noop,
+  onEditPayment: noop,
   onVoid: noop,
 };
 
@@ -191,11 +193,18 @@ export const IssuedPastDueNotOverdue: Story = {
 
 export const Paid: Story = {
   args: {
-    invoice: { ...baseInvoice, status: 'PAID', paidAt: '2030-05-02T10:00:00Z' },
+    invoice: { ...baseInvoice, status: 'PAID', paidAt: '2030-05-02T10:00:00Z', paymentReference: 'BACS-4417' },
     pdfUrl: 'https://example.com/invoice.pdf',
+    handlers: { ...defaultHandlers, onEditPayment: fn() },
   },
-  play: async ({ canvas }) => {
+  play: async ({ args, canvas }) => {
     await expect(canvas.getByText('Paid')).toBeVisible();
+    // The recorded money facts are visible on the paid invoice (ADR-0068).
+    await expect(canvas.getByText('Date received')).toBeVisible();
+    await expect(canvas.getByText('BACS-4417')).toBeVisible();
+    // The Edit affordance re-opens the record dialog to correct the payment (TIM-46).
+    await userEvent.click(canvas.getByRole('button', { name: 'Edit' }));
+    await expect(args.handlers.onEditPayment).toHaveBeenCalledWith(args.invoice);
     // Download is primary action for PAID with pdfUrl
     await expect(canvas.getByRole('button', { name: 'Download' })).toBeVisible();
   },

@@ -8,6 +8,7 @@ import { reconcile } from '../invoices/series-line-reconciler';
 import { isDeletable } from '../invoices/invoice-transition-rules';
 import { SendInvoiceDto } from '../invoices/dto/send-invoice.dto';
 import { MarkSentDto } from '../invoices/dto/mark-sent.dto';
+import { MarkPaidDto } from '../invoices/dto/mark-paid.dto';
 import { IssueInvoiceDto } from '../invoices/dto/issue-invoice.dto';
 
 function buildLineItemDescription(date: Date, sets: Array<{ label: string | null; duration: number }>): string {
@@ -129,10 +130,16 @@ export class SeriesService {
     return this.transition.markSent(invoice, dto);
   }
 
-  async markPaidInvoice(userId: string, seriesId: string, invoiceId: string) {
+  async markPaidInvoice(userId: string, seriesId: string, invoiceId: string, dto: MarkPaidDto) {
     const invoice = await this.invoicesRepo.findSeriesInvoiceById(userId, seriesId, invoiceId);
     if (!invoice) throw new NotFoundException('Invoice not found');
-    return this.transition.markPaid(invoice);
+    return this.transition.markPaid(invoice, dto);
+  }
+
+  async correctInvoicePayment(userId: string, seriesId: string, invoiceId: string, dto: MarkPaidDto) {
+    const invoice = await this.invoicesRepo.findSeriesInvoiceById(userId, seriesId, invoiceId);
+    if (!invoice) throw new NotFoundException('Invoice not found');
+    return this.transition.correctPayment(invoice, dto);
   }
 
   // ─── Invoice PDF access (#830) ─────────────────────────────────────────────

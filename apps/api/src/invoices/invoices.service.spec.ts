@@ -17,7 +17,6 @@ type MockRepo = {
   assignInvoiceNumberOnly: jest.Mock;
   markSentById: jest.Mock;
   markPaidBase: jest.Mock;
-  setBookingDepositReceivedAt: jest.Mock;
   voidInvoice: jest.Mock;
   countActiveByType: jest.Mock;
   getUserPaymentTerms: jest.Mock;
@@ -43,7 +42,6 @@ function makeRepo(): MockRepo {
     assignInvoiceNumberOnly: jest.fn(),
     markSentById: jest.fn(),
     markPaidBase: jest.fn(),
-    setBookingDepositReceivedAt: jest.fn(),
     voidInvoice: jest.fn(),
     countActiveByType: jest.fn(),
     getUserPaymentTerms: jest.fn().mockResolvedValue(14),
@@ -69,6 +67,7 @@ describe('InvoicesService', () => {
     send: jest.Mock;
     markSent: jest.Mock;
     markPaid: jest.Mock;
+    correctPayment: jest.Mock;
     voidInvoice: jest.Mock;
     issueInvoice: jest.Mock;
   };
@@ -80,6 +79,7 @@ describe('InvoicesService', () => {
       send: jest.fn().mockResolvedValue(undefined),
       markSent: jest.fn().mockResolvedValue({ ...draftInvoice, status: 'SENT', invoiceNumber: 'INV-2026-001' }),
       markPaid: jest.fn().mockResolvedValue({ ...draftInvoice, status: 'PAID' }),
+      correctPayment: jest.fn().mockResolvedValue({ ...draftInvoice, status: 'PAID' }),
       voidInvoice: jest.fn().mockResolvedValue({ ...draftInvoice, status: 'VOID', invoiceNumber: 'INV-2026-001' }),
       issueInvoice: jest.fn().mockResolvedValue(issuedInvoice),
     };
@@ -453,20 +453,43 @@ describe('InvoicesService', () => {
       mockTransition.markPaid.mockResolvedValue(paidInvoice);
     });
 
+    const dto = { paidAt: '2026-08-18', paymentReference: 'BACS-4417' };
+
     it('throws NotFoundException when invoice not found', async () => {
       repo.findOne.mockResolvedValue(null);
-      await expect(service.markPaid('u1', 'b1', 'missing')).rejects.toThrow(NotFoundException);
+      await expect(service.markPaid('u1', 'b1', 'missing', dto)).rejects.toThrow(NotFoundException);
       expect(mockTransition.markPaid).not.toHaveBeenCalled();
     });
 
-    it('delegates to transition.markPaid with the loaded invoice', async () => {
-      await service.markPaid('u1', 'b1', 'i1');
-      expect(mockTransition.markPaid).toHaveBeenCalledWith(sentInvoice);
+    it('delegates to transition.markPaid with the loaded invoice and the dto', async () => {
+      await service.markPaid('u1', 'b1', 'i1', dto);
+      expect(mockTransition.markPaid).toHaveBeenCalledWith(sentInvoice, dto);
     });
 
     it('returns the paid invoice', async () => {
-      const result = await service.markPaid('u1', 'b1', 'i1');
+      const result = await service.markPaid('u1', 'b1', 'i1', dto);
       expect(result).toBe(paidInvoice);
+    });
+  });
+
+  describe('correctPayment', () => {
+    const paidInvoice = { id: 'i1', bookingId: 'b1', userId: 'u1', status: 'PAID', isDeposit: false, invoiceNumber: 'INV-2026-001' };
+    const dto = { paidAt: '2026-08-02', paymentReference: 'BACS-9' };
+
+    beforeEach(() => {
+      repo.findOne.mockResolvedValue(paidInvoice);
+      mockTransition.correctPayment.mockResolvedValue(paidInvoice);
+    });
+
+    it('throws NotFoundException when invoice not found', async () => {
+      repo.findOne.mockResolvedValue(null);
+      await expect(service.correctPayment('u1', 'b1', 'missing', dto)).rejects.toThrow(NotFoundException);
+      expect(mockTransition.correctPayment).not.toHaveBeenCalled();
+    });
+
+    it('delegates to transition.correctPayment with the loaded invoice and the dto', async () => {
+      await service.correctPayment('u1', 'b1', 'i1', dto);
+      expect(mockTransition.correctPayment).toHaveBeenCalledWith(paidInvoice, dto);
     });
   });
 

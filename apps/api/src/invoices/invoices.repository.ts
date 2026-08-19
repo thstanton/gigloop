@@ -350,18 +350,21 @@ export class InvoicesRepository {
     });
   }
 
-  markPaidBase(invoiceId: string) {
+  markPaidBase(invoiceId: string, paidAt: Date, paymentReference: string | null) {
     return this.prisma.invoice.update({
       where: { id: invoiceId },
-      data: { status: 'PAID', paidAt: new Date() },
+      data: { status: 'PAID', paidAt, paymentReference },
       include: invoiceIncludes,
     });
   }
 
-  setBookingDepositReceivedAt(bookingId: string) {
-    return this.prisma.booking.update({
-      where: { id: bookingId },
-      data: { depositReceivedAt: new Date() },
+  // Correct the payment fact on an already-PAID invoice (TIM-46): only paidAt + paymentReference,
+  // never status or document fields.
+  updatePaymentDetails(invoiceId: string, paidAt: Date, paymentReference: string | null) {
+    return this.prisma.invoice.update({
+      where: { id: invoiceId }, // scoped-upstream: service findOne/findSeriesInvoiceById proved ownership (ADR-0061)
+      data: { paidAt, paymentReference },
+      include: invoiceIncludes,
     });
   }
 
@@ -393,6 +396,15 @@ export class InvoicesRepository {
       where: { bookingId, userId, isDeposit: true, status: 'SENT' },
       select: { dueDate: true },
     });
+  }
+
+  // TIM-47: the deposit is "received" when its invoice is PAID (ADR-0068) — the booking no longer
+  // records the fact. Mirrors how balance receipt is derived from the invoice, never a booking column.
+  async hasPaidDepositInvoice(bookingId: string, userId: string): Promise<boolean> {
+    const count = await this.prisma.invoice.count({
+      where: { bookingId, userId, isDeposit: true, status: 'PAID' },
+    });
+    return count > 0;
   }
 
   async previewBookingInvoiceNumber(

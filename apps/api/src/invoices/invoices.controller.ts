@@ -21,6 +21,7 @@ import { IssueInvoiceDto } from './dto/issue-invoice.dto';
 import { PreviewInvoiceNumberQuery } from './dto/preview-invoice-number.query';
 import { SendInvoiceDto } from './dto/send-invoice.dto';
 import { MarkSentDto } from './dto/mark-sent.dto';
+import { MarkPaidDto } from './dto/mark-paid.dto';
 import { CreateLineItemDto } from './dto/create-line-item.dto';
 import { UpdateLineItemDto } from './dto/update-line-item.dto';
 import { InvoiceResponseDto, InvoiceLineItemResponseDto } from './dto/invoice-response.dto';
@@ -142,16 +143,30 @@ export class InvoicesController {
     return this.service.voidInvoice(req.userId, bookingId, id);
   }
 
-  @ApiOperation({ summary: 'Mark an invoice as paid' })
-  @ApiResponse({ status: 200, description: 'Invoice marked Paid; depositReceivedAt set if deposit invoice with INVOICE tracking mode', type: InvoiceResponseDto })
-  @ApiResponse({ status: 400, description: 'Invoice is not sent' })
+  @ApiOperation({ summary: 'Mark an invoice as paid, recording the date received and an optional reference' })
+  @ApiResponse({ status: 200, description: 'Invoice marked Paid; paidAt set to the received date. A paid deposit or balance invoice auto-completes its checklist received step', type: InvoiceResponseDto })
+  @ApiResponse({ status: 400, description: 'Invoice is not sent, or the payment date is missing/unparseable' })
   @Post(':id/mark-paid')
   markPaid(
     @Req() req: AuthedRequest,
     @Param('bookingId') bookingId: string,
     @Param('id') id: string,
+    @Body() dto: MarkPaidDto,
   ) {
-    return this.service.markPaid(req.userId, bookingId, id);
+    return this.service.markPaid(req.userId, bookingId, id, dto);
+  }
+
+  @ApiOperation({ summary: 'Correct the recorded payment (date + reference) on a paid invoice' })
+  @ApiResponse({ status: 200, description: 'Payment corrected; invoice stays Paid, document unchanged', type: InvoiceResponseDto })
+  @ApiResponse({ status: 400, description: 'Invoice is not paid, or the payment date is missing/unparseable' })
+  @Patch(':id/payment')
+  correctPayment(
+    @Req() req: AuthedRequest,
+    @Param('bookingId') bookingId: string,
+    @Param('id') id: string,
+    @Body() dto: MarkPaidDto,
+  ) {
+    return this.service.correctPayment(req.userId, bookingId, id, dto);
   }
 
   @ApiOperation({ summary: 'Delete an invoice' })

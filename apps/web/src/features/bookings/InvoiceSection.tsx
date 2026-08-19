@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import InvoiceRow from './InvoiceRow';
+import { MarkPaidDialog } from './MarkPaidDialog';
 import { apiGet, openGeneratedPdf } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
 import { useInvoiceActions } from '@/lib/hooks/useInvoiceActions';
@@ -35,6 +36,7 @@ export interface SeriesInvoiceSectionProps {
   onSend: (invoice: Invoice) => void;
   onMarkSent: (invoice: Invoice) => void;
   onMarkPaid: (invoice: Invoice) => void;
+  onEditPayment: (invoice: Invoice) => void;
   onVoid: (invoice: Invoice) => void;
   isCreatePending?: boolean;
   isIssuePending?: boolean;
@@ -57,6 +59,7 @@ export function SeriesInvoiceSection({
   onSend,
   onMarkSent,
   onMarkPaid,
+  onEditPayment,
   onVoid,
   isCreatePending = false,
   isIssuePending = false,
@@ -112,6 +115,7 @@ export function SeriesInvoiceSection({
           onSend,
           onMarkSent,
           onMarkPaid,
+          onEditPayment,
           onVoid,
         }}
       />
@@ -269,13 +273,15 @@ export default function InvoiceSection({ bookingId }: Readonly<InvoiceSectionPro
                   setSearchParams({ sheet: 'markSent', invoiceId: i.id });
                 }
               },
-              onMarkPaid: (i) => invoiceActions.markPaid(i),
+              onMarkPaid: (i) => invoiceActions.requestMarkPaid(i),
+              onEditPayment: (i) => invoiceActions.requestCorrectPayment(i),
               onVoid: (i) => invoiceActions.voidInvoice(i),
             }}
           />
           );
         })}
       </div>
+      <MarkPaidDialog {...invoiceActions.markPaidDialog} />
     </Card>
   );
 }

@@ -101,7 +101,7 @@ describe('useChecklistActions — draft-aware invoice shortcut (ADR-0056)', () =
   });
 });
 
-describe('useChecklistActions — handleMarkDone marks the invoice paid (#653)', () => {
+describe('useChecklistActions — handleMarkDone opens the mark-paid dialog (#653, ADR-0068)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     authState.isLoaded = true;
@@ -109,26 +109,39 @@ describe('useChecklistActions — handleMarkDone marks the invoice paid (#653)',
     (apiPost as ReturnType<typeof vi.fn>).mockResolvedValue({});
   });
 
-  it('mark_balance_received marks the SENT balance invoice paid (not the draft)', async () => {
+  it('mark_balance_received opens the dialog for the SENT balance invoice (not the draft); confirming records the chosen date + reference', async () => {
     const { result } = setup([
       invoice({ id: 'sb1', isDeposit: false, status: 'SENT' }),
       invoice({ id: 'db1', isDeposit: false, status: 'DRAFT' }),
     ]);
 
+    // Opens the dialog — no POST yet (the tap no longer silently stamps "now").
     act(() => result.current.handleMarkDone('mark_balance_received'));
+    expect(result.current.markPaidDialog.open).toBe(true);
+    expect(apiPost).not.toHaveBeenCalled();
 
+    // Confirming with a chosen date + reference records them against the SENT balance invoice.
+    act(() => result.current.markPaidDialog.onConfirm('2026-08-18', 'BACS-4417'));
     await waitFor(() =>
-      expect(apiPost).toHaveBeenCalledWith('/bookings/b1/invoices/sb1/mark-paid', {}),
+      expect(apiPost).toHaveBeenCalledWith('/bookings/b1/invoices/sb1/mark-paid', {
+        paidAt: '2026-08-18',
+        paymentReference: 'BACS-4417',
+      }),
     );
   });
 
-  it('mark_deposit_received marks the SENT deposit invoice paid', async () => {
+  it('mark_deposit_received opens the dialog for the SENT deposit invoice; a blank reference is omitted', async () => {
     const { result } = setup([invoice({ id: 'sd1', isDeposit: true, status: 'SENT' })]);
 
     act(() => result.current.handleMarkDone('mark_deposit_received'));
+    expect(result.current.markPaidDialog.open).toBe(true);
 
+    act(() => result.current.markPaidDialog.onConfirm('2026-08-18', ''));
     await waitFor(() =>
-      expect(apiPost).toHaveBeenCalledWith('/bookings/b1/invoices/sd1/mark-paid', {}),
+      expect(apiPost).toHaveBeenCalledWith('/bookings/b1/invoices/sd1/mark-paid', {
+        paidAt: '2026-08-18',
+        paymentReference: undefined,
+      }),
     );
   });
 });

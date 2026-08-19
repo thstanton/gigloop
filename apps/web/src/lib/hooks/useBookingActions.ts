@@ -20,16 +20,8 @@ export function useBookingActions(bookingId: string) {
     onError: () => toast({ title: 'Failed to mark contract as signed', variant: 'destructive' }),
   });
 
-  const depositMutation = useMutation({
-    mutationFn: () =>
-      apiPatch(`/bookings/${bookingId}`, { depositReceivedAt: new Date().toISOString() }),
-    onSuccess: () => invalidateBooking(),
-    onError: () => toast({ title: 'Failed to mark deposit as received', variant: 'destructive' }),
-  });
-
   return {
     markContractSigned: (contractId: string) => contractMutation.mutate(contractId),
-    markDepositReceived: () => depositMutation.mutate(),
-    isPending: contractMutation.isPending || depositMutation.isPending,
+    isPending: contractMutation.isPending,
   };
 }
