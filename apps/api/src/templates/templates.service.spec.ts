@@ -48,6 +48,19 @@ describe('TemplatesService', () => {
       expect(result).toEqual(seededTemplates);
     });
 
+    // #846's "no migration" premise: a new built-in type reaches an existing user because
+    // findAll seeds whatever is absent, and only what is absent.
+    it('seeds only the built-ins the user is missing', async () => {
+      const withoutSeriesCover = seededTemplates.filter((t) => t.builtInType !== 'series_invoice_cover');
+      repo.findAll
+        .mockResolvedValueOnce(withoutSeriesCover)
+        .mockResolvedValueOnce(seededTemplates);
+      repo.seedBuiltIns.mockResolvedValue(undefined);
+      const result = await service.findAll('u1');
+      expect(repo.seedBuiltIns).toHaveBeenCalledWith('u1', ['series_invoice_cover']);
+      expect(result).toEqual(seededTemplates);
+    });
+
     it('seeds missing built-ins and returns refreshed list', async () => {
       repo.findAll
         .mockResolvedValueOnce([]) // first call: nothing seeded yet

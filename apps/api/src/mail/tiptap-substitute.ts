@@ -1,5 +1,5 @@
 import { VARIABLE_FALLBACKS } from '../templates/default-templates';
-import type { EmailContext } from './mail.service';
+import type { TemplateContext } from './mail.service';
 
 interface TiptapNode {
   type: string;
@@ -19,8 +19,11 @@ const VAR_PATTERN = /\{\{(\w+)\}\}/g;
 // `missing` (optional): a key is recorded when the *raw* context value is falsy,
 // before the fallback is applied (an empty bookingDate reports missing *and*
 // renders "your event"). The Set dedups; callers that pass none opt out.
-export function resolveVar(key: string, context: EmailContext, missing?: Set<string>): string {
-  const raw = context[key as keyof EmailContext];
+export function resolveVar(key: string, context: TemplateContext, missing?: Set<string>): string {
+  // Resolution is by variable *name*, not by context shape: a name the context in hand does not
+  // carry (a series variable on a booking email, or the reverse) resolves to undefined and takes
+  // the missing/fallback path, rather than being a type error at every call site.
+  const raw: string | undefined = (context as Record<string, string>)[key];
   if (!raw) missing?.add(key);
   return String(raw || VARIABLE_FALLBACKS[key] || '');
 }
@@ -41,7 +44,7 @@ function valueToNodes(value: string, base?: TiptapNode): TiptapNode[] {
 // Returns a new tree — does not mutate the input.
 export function substituteTiptapVariables(
   node: unknown,
-  context: EmailContext,
+  context: TemplateContext,
   missing?: Set<string>,
 ): unknown {
   const n = node as TiptapNode;

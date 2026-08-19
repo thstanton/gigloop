@@ -76,6 +76,11 @@ export function shouldHideTemplate(
     !hasAnyDepositInvoice(invoices)
   ) return true;
   if (type === 'balance_invoice_cover' && !invoices.some((i) => !i.isDeposit)) return true;
+  // The series cover email exists as a built-in (#846) so the musician can edit it in Templates,
+  // but this picker composes for a *booking* and cannot yet resolve a series invoice or its
+  // context. Offering it here would render a body full of fallbacks and attach nothing, with no
+  // warning. #847 replaces this line with owner-aware resolution.
+  if (type === 'series_invoice_cover') return true;
   if (type === 'thank_you') {
     const date = new Date(bookingDate);
     const today = new Date();

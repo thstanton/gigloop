@@ -7,6 +7,7 @@ export const BUILT_IN_EMAIL_TYPES: BuiltInTemplateType[] = [
   'contract_and_deposit_cover',
   'deposit_invoice_cover',
   'balance_invoice_cover',
+  'series_invoice_cover',
   'contract_received',
   'deposit_received',
   'music_form_invite',
@@ -24,6 +25,7 @@ export const TEMPLATE_DISPLAY: Record<BuiltInTemplateType, { name: string; descr
   contract_and_deposit_cover:   { name: 'Contract & deposit email', description: 'Email body when sending the contract link with a deposit invoice' },
   deposit_invoice_cover:        { name: 'Deposit invoice email',    description: 'Email body when sending the deposit invoice' },
   balance_invoice_cover:        { name: 'Balance invoice email',    description: 'Email body when sending the final balance invoice' },
+  series_invoice_cover:         { name: 'Series invoice email',     description: 'Email body when sending the invoice for a series of bookings' },
   contract_received:            { name: 'Contract received',        description: 'Confirmation sent when the client signs the contract' },
   deposit_received:             { name: 'Deposit received',         description: 'Confirmation sent when the deposit payment arrives' },
   music_form_invite:            { name: 'Music form invitation',    description: 'Sent when inviting the client to fill in their music preferences' },
@@ -38,37 +40,9 @@ export interface TemplateVariable {
   label: string;
 }
 
-export const ALL_VARIABLES: TemplateVariable[] = [
-  { name: 'customerName',   label: 'Customer name'    },
-  { name: 'bookingDate',    label: 'Booking date'     },
-  { name: 'venueName',      label: 'Venue name'       },
-  { name: 'bookingFee',     label: 'Booking fee'      },
-  { name: 'setsSchedule',   label: 'Sets schedule'    },
-  { name: 'musicianName',   label: 'Musician name'    },
-  { name: 'musicianEmail',  label: 'Musician email'   },
-  { name: 'portalLink',     label: 'Portal link'      },
-  { name: 'invoiceNumber',  label: 'Invoice number'   },
-  { name: 'issueDate',      label: 'Issue date'       },
-  { name: 'invoiceTotal',   label: 'Invoice total'    },
-  { name: 'invoiceDueDate', label: 'Invoice due date' },
-];
-
-// Human-readable labels keyed by variable name — used to render specific missing-variable warnings.
-export const VAR_LABELS: Record<string, string> = {
-  customerName:   'Customer name',
-  bookingDate:    'Booking date',
-  venueName:      'Venue name',
-  bookingFee:     'Booking fee',
-  setsSchedule:   'Sets schedule',
-  musicianName:   'Musician name',
-  musicianEmail:  'Musician email',
-  portalLink:     'Portal link',
-  invoiceNumber:  'Invoice number',
-  issueDate:      'Issue date',
-  invoiceTotal:   'Invoice total',
-  invoiceDueDate: 'Invoice due date',
-};
-
+// The one declaration of the template-variable vocabulary — one row per variable, one column
+// per attribute. ALL_VARIABLES and VAR_LABELS are derived from it, never written alongside it,
+// so a variable cannot be half-added (CLAUDE.md → One declaration per vocabulary).
 const VAR_NAMES = {
   customerName:   { name: 'customerName',   label: 'Customer name'    },
   bookingDate:    { name: 'bookingDate',     label: 'Booking date'     },
@@ -82,11 +56,20 @@ const VAR_NAMES = {
   issueDate:      { name: 'issueDate',       label: 'Issue date'       },
   invoiceTotal:   { name: 'invoiceTotal',    label: 'Invoice total'    },
   invoiceDueDate: { name: 'invoiceDueDate',  label: 'Invoice due date' },
+  seriesLabel:    { name: 'seriesLabel',     label: 'Series name'      },
+  datesCovered:   { name: 'datesCovered',    label: 'Dates covered'    },
 } as const;
+
+export const ALL_VARIABLES: TemplateVariable[] = Object.values(VAR_NAMES);
+
+// Human-readable labels keyed by variable name — used to render specific missing-variable warnings.
+export const VAR_LABELS: Record<string, string> = Object.fromEntries(
+  ALL_VARIABLES.map((v) => [v.name, v.label]),
+);
 
 const { customerName, bookingDate, venueName, bookingFee, setsSchedule,
         musicianName, musicianEmail, portalLink,
-        invoiceTotal, invoiceDueDate } = VAR_NAMES;
+        invoiceTotal, invoiceDueDate, seriesLabel, datesCovered } = VAR_NAMES;
 
 export const TEMPLATE_VARIABLES: Record<BuiltInTemplateType, TemplateVariable[]> = {
   quote:                       [customerName, bookingDate, venueName, bookingFee, portalLink, musicianName, musicianEmail],
@@ -95,6 +78,9 @@ export const TEMPLATE_VARIABLES: Record<BuiltInTemplateType, TemplateVariable[]>
   contract_and_deposit_cover:  [customerName, bookingDate, venueName, portalLink, invoiceTotal, invoiceDueDate, musicianName, musicianEmail],
   deposit_invoice_cover:       [customerName, bookingDate, invoiceTotal, invoiceDueDate, portalLink, musicianName, musicianEmail],
   balance_invoice_cover:       [customerName, bookingDate, invoiceTotal, invoiceDueDate, portalLink, musicianName, musicianEmail],
+  // A series invoice bills the series customer for many dates — no bookingDate, venue or
+  // portal link exists to offer here (#846, CONTEXT.md → BookingSeries).
+  series_invoice_cover:        [customerName, seriesLabel, datesCovered, invoiceTotal, invoiceDueDate, musicianName, musicianEmail],
   contract_received:           [customerName, bookingDate, portalLink, musicianName, musicianEmail],
   deposit_received:            [customerName, bookingDate, portalLink, musicianName, musicianEmail],
   music_form_invite:           [customerName, bookingDate, venueName, portalLink, musicianName, musicianEmail],

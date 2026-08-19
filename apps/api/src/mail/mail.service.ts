@@ -5,20 +5,40 @@ import { renderTiptap } from './tiptap.renderer';
 import { resolveVar, substituteTiptapVariables } from './tiptap-substitute';
 import { TEMPLATE_DEFAULT_SUBJECTS } from '../templates/default-templates';
 
-export interface EmailContext {
+// What every template context supplies regardless of what the email is about: who it is
+// addressed to, who it is from, and the invoice figures when one is attached.
+export type BaseEmailContext = {
   customerName: string;
   greetingName: string;
+  musicianName: string;
+  musicianEmail: string;
+  issueDate: string;
+  invoiceTotal: string;
+  invoiceDueDate: string;
+};
+
+// Booking-shaped context — one event, one date, one venue, one portal link.
+export type EmailContext = BaseEmailContext & {
   bookingDate: string;
   venueName: string;
   bookingFee: string;
   setsSchedule: string;
-  musicianName: string;
-  musicianEmail: string;
   portalLink: string;
-  issueDate: string;
-  invoiceTotal: string;
-  invoiceDueDate: string;
-}
+};
+
+// Series-shaped context (#846). A series invoice bills the *series* customer for many dates,
+// so there is no single bookingDate/venue/portal link to offer — reaching for one is the bug
+// this shape exists to prevent. See CONTEXT.md → BookingSeries.
+export type SeriesEmailContext = BaseEmailContext & {
+  seriesLabel: string;
+  datesCovered: string;
+};
+
+// Either shape may be rendered: substitution resolves by variable name, and a name the
+// context does not carry falls through VARIABLE_FALLBACKS and is reported as missing.
+export type TemplateContext = EmailContext | SeriesEmailContext;
+
+const EMPTY_INVOICE_CONTEXT = { issueDate: '', invoiceTotal: '', invoiceDueDate: '' };
 
 export interface RenderResult {
   html: string;
@@ -42,6 +62,17 @@ function buildSetsSchedule(sets: SetRow[]): string {
       return `${time}${s.label ?? 'Set'} (${s.duration} min)`;
     })
     .join('\n');
+}
+
+// Summarises the dates a series invoice bills for. ISO dates, matching `bookingDate`'s
+// format so the two never read differently in the same inbox. No dates (an invoice of purely
+// hand-added lines) yields '' — which reports as a missing variable and falls back, exactly
+// as an absent bookingDate does.
+function buildDatesCovered(dates: Date[]): string {
+  const iso = [...new Set(dates.map((d) => d.toISOString().split('T')[0]))].sort((a, b) => a.localeCompare(b));
+  if (iso.length === 0) return '';
+  if (iso.length === 1) return iso[0];
+  return `${iso.length} dates from ${iso[0]} to ${iso[iso.length - 1]}`;
 }
 
 @Injectable()
@@ -72,18 +103,21 @@ export class MailService {
     return process.env.MAIL_REDIRECT_TO || to;
   }
 
+  // `owner` is the invoice's owner FK — a booking or a series (ADR-0029: one polymorphic
+  // Invoice). It is part of the where clause, not just userId, so an invoice id belonging to
+  // a different booking/series can never leak its figures into someone else's cover email.
   private async buildInvoiceContext(
     invoiceId: string,
-    bookingId: string,
+    owner: { bookingId: string } | { seriesId: string },
     userId: string,
     issueDateOverride?: string,
     dueDateOverride?: string,
   ): Promise<{ issueDate: string; invoiceTotal: string; invoiceDueDate: string }> {
     const invoice = await this.prisma.invoice.findFirst({
-      where: { id: invoiceId, bookingId, userId },
+      where: { id: invoiceId, userId, ...owner },
       include: { lineItems: true },
     });
-    if (!invoice) return { issueDate: '', invoiceTotal: '', invoiceDueDate: '' };
+    if (!invoice) return EMPTY_INVOICE_CONTEXT;
 
     const total = invoice.lineItems.reduce((sum, item) => sum + Number(item.amount), 0);
     return {
@@ -115,8 +149,8 @@ export class MailService {
       throw new NotFoundException('Public profile not found — complete your profile before sending emails');
 
     const invoiceContext = invoiceId
-      ? await this.buildInvoiceContext(invoiceId, bookingId, userId, issueDateOverride, dueDateOverride)
-      : { issueDate: '', invoiceTotal: '', invoiceDueDate: '' };
+      ? await this.buildInvoiceContext(invoiceId, { bookingId }, userId, issueDateOverride, dueDateOverride)
+      : EMPTY_INVOICE_CONTEXT;
 
     return {
       customerName: booking.customer.name,
@@ -132,13 +166,70 @@ export class MailService {
     };
   }
 
+  // Which dates an existing series invoice covers. Read from the invoice's *line items*, not
+  // from current series membership: reconciliation only syncs a DRAFT invoice, so once one is
+  // sent, membership drifts from what was actually billed — and the cover email describes the
+  // attached PDF. Hand-added lines carry no sourceBookingId and are skipped (CONTEXT.md →
+  // Invoice → "Series lines trace to a booking").
+  private async buildSeriesDatesCovered(userId: string, invoiceId: string, seriesId: string): Promise<string> {
+    const lines = await this.prisma.invoiceLineItem.findMany({
+      // Scoped by the owning series as well as the tenant, matching buildInvoiceContext: a
+      // mismatched (series, invoice) pair must yield nothing, not dates for someone else's
+      // invoice alongside empty money fields.
+      where: { userId, invoiceId, invoice: { seriesId }, sourceBookingId: { not: null } },
+      select: { sourceBooking: { select: { id: true, date: true } } },
+    });
+
+    const byBooking = new Map<string, Date>();
+    for (const line of lines) {
+      if (line.sourceBooking) byBooking.set(line.sourceBooking.id, line.sourceBooking.date);
+    }
+    return buildDatesCovered([...byBooking.values()]);
+  }
+
+  // Series-shaped counterpart to buildContext (#846). The series customer is authoritative for
+  // who the invoice is addressed to — it may differ from any member booking's own customer
+  // (CONTEXT.md → BookingSeries → Membership), which is precisely why the booking-shaped
+  // builder cannot stand in here.
+  async buildSeriesContext(
+    userId: string,
+    seriesId: string,
+    invoiceId?: string,
+    issueDateOverride?: string,
+    dueDateOverride?: string,
+  ): Promise<SeriesEmailContext> {
+    const series = await this.prisma.bookingSeries.findFirst({
+      where: { id: seriesId, userId },
+      include: { customer: true },
+    });
+    if (!series) throw new NotFoundException('Series not found');
+
+    const publicProfile = await this.prisma.publicProfile.findUnique({ where: { userId } });
+    if (!publicProfile)
+      throw new NotFoundException('Public profile not found — complete your profile before sending emails');
+
+    const invoiceContext = invoiceId
+      ? await this.buildInvoiceContext(invoiceId, { seriesId }, userId, issueDateOverride, dueDateOverride)
+      : EMPTY_INVOICE_CONTEXT;
+
+    return {
+      customerName: series.customer.name,
+      greetingName: series.customer.greetingName ?? series.customer.name,
+      seriesLabel: series.label,
+      datesCovered: invoiceId ? await this.buildSeriesDatesCovered(userId, invoiceId, seriesId) : '',
+      musicianName: publicProfile.displayName ?? publicProfile.businessName ?? '',
+      musicianEmail: publicProfile.email ?? '',
+      ...invoiceContext,
+    };
+  }
+
   // Rich-text body: substitute on the Tiptap tree once, then render. The HTML
   // renderer is a pure output adapter over the substituted tree — variable values
   // land as text nodes and pass through the renderer's text-node escaping, so a
   // customer/venue name containing markup can no longer inject into the outbound
   // body (#689, ADR-0064). The old regex-on-HTML loop that substituted unescaped
   // values is gone.
-  renderTemplate(content: unknown, context: EmailContext): RenderResult {
+  renderTemplate(content: unknown, context: TemplateContext): RenderResult {
     const missing = new Set<string>();
     const substituted = substituteTiptapVariables(content, context, missing);
     return { html: renderTiptap(substituted), missingVariables: [...missing] };
@@ -148,7 +239,7 @@ export class MailService {
   // escaped (escaping `&`→`&amp;` in a header is a bug) and never `<br>`-broken.
   // It shares only variable *resolution* with the body path via resolveVar, so
   // the fallback catalogue and missing-variable semantics can't drift (ADR-0064).
-  renderSubject(builtInType: string | null, context: EmailContext): { subject: string; missingVariables: string[] } {
+  renderSubject(builtInType: string | null, context: TemplateContext): { subject: string; missingVariables: string[] } {
     const template = (builtInType && TEMPLATE_DEFAULT_SUBJECTS[builtInType]) ?? '';
     const missing = new Set<string>();
     const subject = template.replace(/\{\{(\w+)\}\}/g, (_, key) => resolveVar(key, context, missing));

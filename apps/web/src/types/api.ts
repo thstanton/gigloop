@@ -701,6 +701,7 @@ export type BuiltInTemplateType =
   | 'contract_and_deposit_cover'
   | 'deposit_invoice_cover'
   | 'balance_invoice_cover'
+  | 'series_invoice_cover'
   | 'music_form_invite'
   | 'thank_you'
   | 'contract_received'

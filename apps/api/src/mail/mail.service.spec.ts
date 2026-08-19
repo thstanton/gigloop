@@ -1,7 +1,7 @@
 import { NotFoundException } from '@nestjs/common';
-import { MailService, EmailContext } from './mail.service';
+import { MailService, EmailContext, SeriesEmailContext } from './mail.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { BUILT_IN_EMAIL_TYPES, TEMPLATE_DEFAULT_SUBJECTS, VARIABLE_FALLBACKS } from '../templates/default-templates';
+import { BUILT_IN_EMAIL_TYPES, TEMPLATE_DEFAULT_SUBJECTS, VARIABLE_FALLBACKS, getDefaultContent } from '../templates/default-templates';
 
 jest.mock('resend', () => ({
   Resend: jest.fn().mockImplementation(() => ({
@@ -12,8 +12,10 @@ jest.mock('resend', () => ({
 
 const mockPrisma = {
   booking: { findFirst: jest.fn() },
+  bookingSeries: { findFirst: jest.fn() },
   publicProfile: { findUnique: jest.fn() },
   invoice: { findFirst: jest.fn() },
+  invoiceLineItem: { findMany: jest.fn() },
   communication: { create: jest.fn(), update: jest.fn() },
 };
 
@@ -30,6 +32,21 @@ const booking = {
     { order: 2, startTime: null, label: null, duration: 45 },
   ],
 };
+
+const series = {
+  id: 's1',
+  userId: 'u1',
+  label: 'Hotel Intercontinental — May 2026',
+  customer: { name: 'Hotel Intercontinental', greetingName: 'Priya' },
+};
+
+// Line items as buildSeriesDatesCovered selects them: the source booking, or null for a
+// hand-added line (which the query already filters out).
+const seriesLines = [
+  { sourceBooking: { id: 'b1', date: new Date('2026-05-01') } },
+  { sourceBooking: { id: 'b2', date: new Date('2026-05-29') } },
+  { sourceBooking: { id: 'b3', date: new Date('2026-05-15') } },
+];
 
 const publicProfile = {
   displayName: 'Tim Stanton',
@@ -50,6 +67,18 @@ const fullContext: EmailContext = {
   issueDate: '2025-06-01',
   invoiceTotal: '£750.00',
   invoiceDueDate: '2025-07-01',
+};
+
+const fullSeriesContext: SeriesEmailContext = {
+  customerName: 'Hotel Intercontinental',
+  greetingName: 'Priya',
+  seriesLabel: 'Hotel Intercontinental — May 2026',
+  datesCovered: '3 dates from 2026-05-01 to 2026-05-29',
+  musicianName: 'Tim Stanton',
+  musicianEmail: 'tim@example.com',
+  issueDate: '2026-06-01',
+  invoiceTotal: '£1800.00',
+  invoiceDueDate: '2026-06-15',
 };
 
 function makeService(): MailService {
@@ -193,6 +222,137 @@ describe('MailService', () => {
     it('throws NotFoundException when public profile does not exist', async () => {
       mockPrisma.publicProfile.findUnique.mockResolvedValue(null);
       await expect(service.buildContext('u1', 'b1')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  // ─── buildSeriesContext (#846) ────────────────────────────────────────────────
+
+  describe('buildSeriesContext', () => {
+    beforeEach(() => {
+      mockPrisma.bookingSeries.findFirst.mockResolvedValue(series);
+      mockPrisma.publicProfile.findUnique.mockResolvedValue(publicProfile);
+      mockPrisma.invoiceLineItem.findMany.mockResolvedValue(seriesLines);
+      mockPrisma.invoice.findFirst.mockResolvedValue({
+        issueDate: new Date('2026-06-01'),
+        dueDate: new Date('2026-06-15'),
+        lineItems: [{ amount: '600.00' }, { amount: '1200.00' }],
+      });
+    });
+
+    it('addresses the series customer, not any member booking customer', async () => {
+      const ctx = await service.buildSeriesContext('u1', 's1');
+      expect(ctx.customerName).toBe('Hotel Intercontinental');
+      expect(ctx.greetingName).toBe('Priya');
+    });
+
+    it('falls back to the customer name when greetingName is null', async () => {
+      mockPrisma.bookingSeries.findFirst.mockResolvedValue({
+        ...series,
+        customer: { name: 'Hotel Intercontinental', greetingName: null },
+      });
+      const ctx = await service.buildSeriesContext('u1', 's1');
+      expect(ctx.greetingName).toBe('Hotel Intercontinental');
+    });
+
+    it('names the series', async () => {
+      const ctx = await service.buildSeriesContext('u1', 's1');
+      expect(ctx.seriesLabel).toBe('Hotel Intercontinental — May 2026');
+    });
+
+    it('scopes the series lookup to the tenant', async () => {
+      await service.buildSeriesContext('u1', 's1');
+      expect(mockPrisma.bookingSeries.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 's1', userId: 'u1' } }),
+      );
+    });
+
+    it('carries no booking-shaped variables', async () => {
+      const ctx = await service.buildSeriesContext('u1', 's1');
+      expect(Object.keys(ctx)).not.toContain('bookingDate');
+      expect(Object.keys(ctx)).not.toContain('venueName');
+      expect(Object.keys(ctx)).not.toContain('portalLink');
+    });
+
+    it('summarises datesCovered as a count and a range, in date order', async () => {
+      const ctx = await service.buildSeriesContext('u1', 's1', 'inv1');
+      expect(ctx.datesCovered).toBe('3 dates from 2026-05-01 to 2026-05-29');
+    });
+
+    it('reads datesCovered from the invoice line items, scoped to the tenant and the series', async () => {
+      await service.buildSeriesContext('u1', 's1', 'inv1');
+      expect(mockPrisma.invoiceLineItem.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            userId: 'u1',
+            invoiceId: 'inv1',
+            invoice: { seriesId: 's1' },
+            sourceBookingId: { not: null },
+          },
+        }),
+      );
+    });
+
+    it('counts a booking once when several lines trace to it', async () => {
+      mockPrisma.invoiceLineItem.findMany.mockResolvedValue([
+        { sourceBooking: { id: 'b1', date: new Date('2026-05-01') } },
+        { sourceBooking: { id: 'b1', date: new Date('2026-05-01') } },
+        { sourceBooking: { id: 'b2', date: new Date('2026-05-08') } },
+      ]);
+      const ctx = await service.buildSeriesContext('u1', 's1', 'inv1');
+      expect(ctx.datesCovered).toBe('2 dates from 2026-05-01 to 2026-05-08');
+    });
+
+    it('renders a single covered date as the date itself', async () => {
+      mockPrisma.invoiceLineItem.findMany.mockResolvedValue([
+        { sourceBooking: { id: 'b1', date: new Date('2026-05-01') } },
+      ]);
+      const ctx = await service.buildSeriesContext('u1', 's1', 'inv1');
+      expect(ctx.datesCovered).toBe('2026-05-01');
+    });
+
+    it('leaves datesCovered empty for an invoice of purely hand-added lines', async () => {
+      mockPrisma.invoiceLineItem.findMany.mockResolvedValue([]);
+      const ctx = await service.buildSeriesContext('u1', 's1', 'inv1');
+      expect(ctx.datesCovered).toBe('');
+    });
+
+    it('sums the invoice line items for invoiceTotal', async () => {
+      const ctx = await service.buildSeriesContext('u1', 's1', 'inv1');
+      expect(ctx.invoiceTotal).toBe('£1800.00');
+      expect(ctx.issueDate).toBe('2026-06-01');
+      expect(ctx.invoiceDueDate).toBe('2026-06-15');
+    });
+
+    it('resolves the invoice by its series owner, never by a booking', async () => {
+      await service.buildSeriesContext('u1', 's1', 'inv1');
+      expect(mockPrisma.invoice.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'inv1', userId: 'u1', seriesId: 's1' } }),
+      );
+    });
+
+    it('honours the issue and due date overrides used for draft previews', async () => {
+      const ctx = await service.buildSeriesContext('u1', 's1', 'inv1', '2026-07-01', '2026-07-15');
+      expect(ctx.issueDate).toBe('2026-07-01');
+      expect(ctx.invoiceDueDate).toBe('2026-07-15');
+    });
+
+    it('leaves every invoice field empty when no invoiceId is provided', async () => {
+      const ctx = await service.buildSeriesContext('u1', 's1');
+      expect(ctx.issueDate).toBe('');
+      expect(ctx.invoiceTotal).toBe('');
+      expect(ctx.invoiceDueDate).toBe('');
+      expect(ctx.datesCovered).toBe('');
+      expect(mockPrisma.invoiceLineItem.findMany).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException when the series is not found', async () => {
+      mockPrisma.bookingSeries.findFirst.mockResolvedValue(null);
+      await expect(service.buildSeriesContext('u1', 'missing')).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws NotFoundException when the public profile does not exist', async () => {
+      mockPrisma.publicProfile.findUnique.mockResolvedValue(null);
+      await expect(service.buildSeriesContext('u1', 's1')).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -342,6 +502,39 @@ describe('MailService', () => {
     });
   });
 
+  // ─── renderTemplate with a series context (#846) ──────────────────────────────
+
+  describe('renderTemplate with a series context', () => {
+    it('substitutes series variables into the body', () => {
+      const content = {
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [
+              { type: 'text', text: 'Invoice for ' },
+              { type: 'variable', attrs: { name: 'seriesLabel' } },
+              { type: 'text', text: ' covering ' },
+              { type: 'variable', attrs: { name: 'datesCovered' } },
+            ],
+          },
+        ],
+      };
+      const { html, missingVariables } = service.renderTemplate(content, fullSeriesContext);
+      expect(html).toContain('Hotel Intercontinental');
+      expect(html).toContain('3 dates from 2026-05-01 to 2026-05-29');
+      expect(missingVariables).toHaveLength(0);
+    });
+
+    it('renders the shipped series_invoice_cover default without any unresolved variable', () => {
+      const content = getDefaultContent('series_invoice_cover');
+      const { html, missingVariables } = service.renderTemplate(content, fullSeriesContext);
+      expect(html).not.toContain('{{');
+      expect(html).toContain('Hotel Intercontinental — May 2026');
+      expect(missingVariables).toHaveLength(0);
+    });
+  });
+
   // ─── renderSubject ────────────────────────────────────────────────────────────
 
   describe('renderSubject', () => {
@@ -398,6 +591,28 @@ describe('MailService', () => {
     it('deposit_invoice_cover substitutes bookingDate', () => {
       const { subject } = service.renderSubject('deposit_invoice_cover', fullContext);
       expect(subject).toBe('Your deposit invoice — 2025-08-15');
+    });
+
+    // Rendering with a series-shaped context (#846). The it.each coverage case below only
+    // proves a subject exists; these prove the series context actually reaches the output.
+    it('series_invoice_cover substitutes the series label', () => {
+      const { subject, missingVariables } = service.renderSubject('series_invoice_cover', fullSeriesContext);
+      expect(subject).toBe('Your invoice for Hotel Intercontinental — May 2026');
+      expect(missingVariables).toHaveLength(0);
+    });
+
+    it('falls back and reports the series label as missing when it is empty', () => {
+      const { subject, missingVariables } = service.renderSubject('series_invoice_cover', {
+        ...fullSeriesContext,
+        seriesLabel: '',
+      });
+      expect(subject).toBe('Your invoice for your booking series');
+      expect(missingVariables).toContain('seriesLabel');
+    });
+
+    it('reports a booking variable as missing when a booking template is given a series context', () => {
+      const { missingVariables } = service.renderSubject('balance_invoice_cover', fullSeriesContext);
+      expect(missingVariables).toContain('bookingDate');
     });
 
     it('balance_invoice_cover substitutes bookingDate', () => {

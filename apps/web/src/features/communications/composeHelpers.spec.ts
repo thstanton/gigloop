@@ -190,6 +190,10 @@ describe('shouldHideTemplate', () => {
     expect(shouldHideTemplate('balance_invoice_cover', [depositInvoice], PAST_DATE)).toBe(true);
   });
 
+  it('hides series_invoice_cover from the booking compose picker until #847 wires it', () => {
+    expect(shouldHideTemplate('series_invoice_cover', invoices, PAST_DATE)).toBe(true);
+  });
+
   it('shows balance_invoice_cover when balance invoice exists', () => {
     expect(shouldHideTemplate('balance_invoice_cover', invoices, PAST_DATE)).toBe(false);
   });

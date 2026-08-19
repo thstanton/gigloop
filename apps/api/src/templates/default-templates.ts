@@ -5,6 +5,7 @@ export type BuiltInTemplateType =
   | 'contract_and_deposit_cover'
   | 'deposit_invoice_cover'
   | 'balance_invoice_cover'
+  | 'series_invoice_cover'
   | 'music_form_invite'
   | 'thank_you'
   | 'contract_received'
@@ -18,6 +19,7 @@ export const TEMPLATE_DEFAULT_SUBJECTS: Record<string, string> = {
   contract_and_deposit_cover: 'Your contract and deposit invoice — {{bookingDate}}',
   deposit_invoice_cover: 'Your deposit invoice — {{bookingDate}}',
   balance_invoice_cover: 'Your balance invoice — {{bookingDate}}',
+  series_invoice_cover: 'Your invoice for {{seriesLabel}}',
   contract_received: 'Contract received — thank you',
   deposit_received: 'Deposit received — thank you',
   music_form_invite: 'Your music request form — {{bookingDate}}',
@@ -31,6 +33,8 @@ export const VARIABLE_FALLBACKS: Partial<Record<string, string>> = {
   venueName: 'the venue',
   customerName: 'your client',
   greetingName: 'there',
+  seriesLabel: 'your booking series',
+  datesCovered: 'the dates in this series',
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -144,6 +148,26 @@ const DEFAULTS: Partial<Record<BuiltInTemplateType, ReturnType<typeof doc>>> = {
     p(v('musicianEmail', 'Musician email')),
   ),
 
+  // Series invoices are billed to the series customer and cover many dates, so this body
+  // names the series and its covered-dates summary. It must never say "deposit" or "balance"
+  // (that axis is booking-only, CONTEXT.md) nor reach for a singular {{bookingDate}}.
+  series_invoice_cover: doc(
+    p(t('Dear '), v('customerName', 'Customer name'), t(',')),
+    blank(),
+    p(t('Please find attached your invoice for '), v('seriesLabel', 'Series name'), t('.')),
+    blank(),
+    p(t('Dates covered: '), v('datesCovered', 'Dates covered')),
+    blank(),
+    p(t('Amount due: '), v('invoiceTotal', 'Invoice total')),
+    p(t('Due date: '), v('invoiceDueDate', 'Invoice due date')),
+    blank(),
+    p(t('Please don\'t hesitate to get in touch if you have any questions.')),
+    blank(),
+    p(t('Best wishes,')),
+    p(v('musicianName', 'Musician name')),
+    p(v('musicianEmail', 'Musician email')),
+  ),
+
   music_form_invite: doc(
     p(t('Dear '), v('customerName', 'Customer name'), t(',')),
     blank(),
@@ -204,6 +228,7 @@ export const BUILT_IN_EMAIL_TYPES: BuiltInTemplateType[] = [
   'contract_and_deposit_cover',
   'deposit_invoice_cover',
   'balance_invoice_cover',
+  'series_invoice_cover',
   'contract_received',
   'deposit_received',
   'music_form_invite',
@@ -268,6 +293,7 @@ export const BUILT_IN_NAMES: Record<BuiltInTemplateType, string> = {
   contract_and_deposit_cover: 'Contract & deposit email',
   deposit_invoice_cover: 'Deposit invoice email',
   balance_invoice_cover: 'Balance invoice email',
+  series_invoice_cover: 'Series invoice email',
   contract_received: 'Contract received',
   deposit_received: 'Deposit received',
   music_form_invite: 'Music form invitation',
