@@ -14,10 +14,12 @@ name: Release
 # that — a durable rollback target that must survive the run, so there is
 # no delete step here.
 #
-# Prerequisites this workflow depends on but does not itself configure
-# (tracked as issue #442 follow-up, must be done before the first real tag):
-#   - Railway prod environment: branch auto-deploy disabled
-#   - Vercel prod project: branch auto-deploy disabled for `main`
+# Prerequisites this workflow depends on but does not itself configure.
+# Branch auto-deploy is now DISABLED on both prod services (confirmed
+# 2026-08-19), so the tag really is the only path to prod — see
+# docs/environments.md. Preprod is the mirror of this workflow (ADR-0075):
+#   - Railway prod environment: branch auto-deploy disabled  [done]
+#   - Vercel prod project: branch auto-deploy disabled for `main`  [done]
 #   - Repo secrets: PROD_DATABASE_URL, RAILWAY_PROD_TOKEN, VERCEL_TOKEN,
 #     VERCEL_ORG_ID, VERCEL_PROJECT_ID
 #     PROD_DATABASE_URL MUST be the DIRECT (non-pooled) Neon string — host
