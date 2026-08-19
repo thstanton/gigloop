@@ -81,7 +81,14 @@ export class CommunicationsService {
     if (!bookingId) {
       // Series-invoice path: no booking to scope to. The invoice is already loaded under
       // userId upstream (invoices/series service), and `to` is DTO-validated as an email.
+      // FK-ownership (#709/#681 M1): the recipient contact must still belong to the caller —
+      // parity with the booking branch below. #847 made this path reachable from the UI for the
+      // first time, so the two branches must not differ on who may be emailed.
+      await this.contacts.assertOwned(userId, [contactId]);
       await this.mail.send({ to, subject, body, attachments });
+      // No Communication row: `Communication.bookingId` is non-nullable, and a series
+      // communication would appear in no booking's list anyway — the same orphaning as #830's
+      // series Document. Recording it needs a schema change plus a surface to read it on.
       return;
     }
     // #681 (M1): verify the booking belongs to the caller before sending. Without this,

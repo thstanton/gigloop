@@ -1,6 +1,6 @@
 import type { Invoice } from '@/types/api';
 
-export type InvoiceAction = 'edit' | 'issue' | 'markSent' | 'markPaid' | 'void' | 'delete';
+export type InvoiceAction = 'edit' | 'issue' | 'send' | 'markSent' | 'markPaid' | 'void' | 'delete';
 
 /**
  * The endpoint prefix and the TanStack query keys to invalidate for a mutation on
@@ -35,6 +35,10 @@ export function invoiceOwnerRoute(
     // An edit changes only the invoice's own content — no document, no checklist consequence.
     edit: [['bookingInvoices', b]],
     issue: [['bookingInvoices', b], ['bookingDocuments', b], ['bookingChecklist', b]],
+    // #847: emailing the invoice transitions it to SENT and logs a Communication against the
+    // booking. The series branch above needs no equivalent — a series send writes no
+    // Communication row (Communication.bookingId is non-nullable) and moves no booking checklist.
+    send: [['bookingInvoices', b], ['bookingDocuments', b], ['bookingChecklist', b], ['bookingCommunications', b]],
     markSent: [['bookingInvoices', b], ['bookingChecklist', b]],
     markPaid: [['bookingInvoices', b], ['booking', b], ['bookingChecklist', b]],
     void: [['bookingInvoices', b], ['bookingChecklist', b]],

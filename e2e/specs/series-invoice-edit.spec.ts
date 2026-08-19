@@ -56,8 +56,12 @@ test.describe('series invoice — edit and issue', () => {
     const info = mobile.getByRole('tabpanel', { name: 'Info' });
 
     // A series member shows the shared Series Invoice card in place of the booking invoice list.
+    // Scoped to that card: the Bookings-in-Series card above it exposes an overflow trigger with
+    // the same accessible name, so an unscoped `.first()` opens the wrong sheet. `.first()` within
+    // the card because the row re-renders transiently while a status mutation refetches.
+    const invoiceCard = info.getByTestId('series-invoice-card');
     const openInvoiceMenu = () =>
-      info.getByRole('button', { name: 'Actions', exact: true }).first().click();
+      invoiceCard.getByRole('button', { name: 'Actions', exact: true }).first().click();
 
     // --- Open Edit: the sheet must carry the real line items, not an empty create form ---
     await openInvoiceMenu();

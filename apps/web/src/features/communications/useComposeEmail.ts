@@ -6,6 +6,7 @@ import Link_ from '@tiptap/extension-link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@clerk/react';
 import { apiGet, apiPostVoid } from '@/lib/api';
+import { invoiceOwnerRoute } from '@/lib/invoiceActionRouting';
 import { toast } from '@/lib/hooks/use-toast';
 import {
   getInvoiceIdForTemplate,
@@ -20,8 +21,9 @@ import {
   shouldSuggestCreatingContract,
   shouldSuggestCreatingDepositInvoice,
   type AttachmentState,
+  type SeriesComposeTarget,
 } from './composeHelpers';
-import type { BookingDetail, ChecklistItem, Invoice, Template } from '@/types/api';
+import type { BookingDetail, ChecklistItem, Contact, Invoice, Template } from '@/types/api';
 
 interface RenderResult {
   subject: string;
@@ -39,9 +41,17 @@ interface UseComposeEmailArgs {
   onOpenChange: (open: boolean) => void;
   initialTemplateType?: string;
   onAfterSend?: (templateType: string | null) => void;
+  /**
+   * Present ⇒ the sheet was opened to send a *series* invoice (#847). Everything owner-shaped —
+   * which templates are offered, who the recipient is, and where render/send post — follows from
+   * this one prop rather than from the member booking it happens to be rendered on.
+   */
+  series?: SeriesComposeTarget;
 }
 
 export interface ComposeEmailViewModel {
+  /** Who the email is addressed to — the series customer in series mode, else the booking's. */
+  recipient: Contact;
   noEmail: boolean;
   emailTemplates: Template[];
   selectedTemplateId: string;
@@ -81,6 +91,7 @@ export function useComposeEmail({
   onOpenChange,
   initialTemplateType,
   onAfterSend,
+  series,
 }: UseComposeEmailArgs): ComposeEmailViewModel {
   const { isLoaded } = useAuth();
   const queryClient = useQueryClient();
@@ -109,8 +120,8 @@ export function useComposeEmail({
   });
 
   const emailTemplates = useMemo(
-    () => templates.filter((t) => isComposableEmailTemplate(t, booking.hasMusicFormConfig)),
-    [templates, booking.hasMusicFormConfig],
+    () => templates.filter((t) => isComposableEmailTemplate(t, booking.hasMusicFormConfig, series)),
+    [templates, booking.hasMusicFormConfig, series],
   );
 
   // No reset effect needed: the sheet renders <ComposeEmailSheetBody> only while open
@@ -140,9 +151,14 @@ export function useComposeEmail({
     selectedType === 'music_form_invite' && !(booking.portalVisibility.musicForm?.visible ?? false);
   const showCreateContractHint = shouldSuggestCreatingContract(selectedType, booking.activeContract, checklist);
   const showCreateDepositHint = shouldSuggestCreatingDepositInvoice(selectedType, invoices, checklist);
-  const invoiceId = getInvoiceIdForTemplate(selectedType, invoices);
-  const invoiceForSend = invoices.find((i) => i.id === invoiceId);
-  const attachmentState = getAttachmentState(selectedType, invoices);
+  const invoiceId = getInvoiceIdForTemplate(selectedType, invoices, series);
+  // The series invoice is not in the booking's list (it belongs to no booking) — take it from the
+  // target that carried it rather than searching a list it can never be in (#844).
+  const invoiceForSend =
+    series && series.invoice.id === invoiceId
+      ? series.invoice
+      : invoices.find((i) => i.id === invoiceId);
+  const attachmentState = getAttachmentState(selectedType, invoices, series);
   // Route to invoice send endpoint for any non-void invoice template (ISSUED or DRAFT).
   const isInvoiceEmail = !!invoiceId;
   // Date fields are only needed for DRAFT invoices — ISSUED already have dates from issue time.
@@ -165,12 +181,15 @@ export function useComposeEmail({
         issueDate: formIssueDate,
         dueDate: formDueDate,
         showDateFields,
+        series,
       }),
-    [bookingId, selectedTemplateId, invoiceId, formIssueDate, formDueDate, showDateFields],
+    [bookingId, selectedTemplateId, invoiceId, formIssueDate, formDueDate, showDateFields, series],
   );
 
   const { data: renderResult, isFetching: rendering } = useQuery({
-    queryKey: ['renderEmail', bookingId, selectedTemplateId, invoiceId, formIssueDate, formDueDate],
+    // The owner is part of the key: the same template renders differently against a series than
+    // against a booking, so a booking-keyed entry must never serve a series render.
+    queryKey: ['renderEmail', series?.seriesId ?? bookingId, selectedTemplateId, invoiceId, formIssueDate, formDueDate],
     queryFn: () => apiGet<RenderResult>(renderUrl),
     enabled: canRenderEmail({
       isLoaded,
@@ -193,17 +212,21 @@ export function useComposeEmail({
     }
   }, [renderResult, editor]);
 
+  // In series mode the invoice is billed to the *series* customer, which may not be this member
+  // booking's customer (CONTEXT.md → BookingSeries → Membership) — so the recipient follows the
+  // invoice, not the page it was reached from.
+  const recipient = series?.recipient ?? booking.customer;
+
   const sendMutation = useMutation({
     mutationFn: () => {
       const { url, payload } = buildSendRequest({
         bookingId,
-        invoiceId,
-        isInvoiceEmail,
+        invoice: invoiceForSend,
         showDateFields,
         formIssueDate,
         formDueDate,
-        to: booking.customer.email,
-        contactId: booking.customerId,
+        to: recipient.email,
+        contactId: recipient.id,
         subject,
         body: editor?.getHTML() ?? '',
         templateId: selectedTemplateId,
@@ -211,11 +234,21 @@ export function useComposeEmail({
       return apiPostVoid(url, payload);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['bookingCommunications', bookingId] });
-      queryClient.invalidateQueries({ queryKey: ['bookingChecklist', bookingId] });
-      if (isInvoiceEmail && invoiceId) {
-        queryClient.invalidateQueries({ queryKey: ['bookingInvoices', bookingId] });
-        queryClient.invalidateQueries({ queryKey: ['bookingDocuments', bookingId] });
+      if (series) {
+        // Derived from the invoice's owner FK rather than hand-written beside `invoiceOwnerRoute`,
+        // which already declares what a mutation on a series invoice invalidates (CLAUDE.md →
+        // one declaration per vocabulary). A series send writes no Communication row and moves no
+        // booking checklist, so none of the booking-shaped caches has anything to re-read.
+        for (const queryKey of invoiceOwnerRoute(series.invoice, 'send').keys) {
+          queryClient.invalidateQueries({ queryKey });
+        }
+      } else {
+        queryClient.invalidateQueries({ queryKey: ['bookingCommunications', bookingId] });
+        queryClient.invalidateQueries({ queryKey: ['bookingChecklist', bookingId] });
+        if (isInvoiceEmail && invoiceId) {
+          queryClient.invalidateQueries({ queryKey: ['bookingInvoices', bookingId] });
+          queryClient.invalidateQueries({ queryKey: ['bookingDocuments', bookingId] });
+        }
       }
       onAfterSend?.(selectedType);
       onOpenChange(false);
@@ -232,9 +265,10 @@ export function useComposeEmail({
     },
   });
 
-  const noEmail = !booking.customer.email;
+  const noEmail = !recipient.email;
 
   return {
+    recipient,
     noEmail,
     emailTemplates,
     selectedTemplateId,

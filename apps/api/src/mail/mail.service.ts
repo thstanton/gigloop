@@ -45,6 +45,19 @@ export interface RenderResult {
   missingVariables: string[];
 }
 
+/** What a compose surface needs to seed its editable subject + body from a template. */
+export interface ComposeRender {
+  subject: string;
+  body: string;
+  missingVariables: string[];
+}
+
+/** The two template fields a compose render reads — narrower than the Prisma Template row. */
+export interface RenderableTemplate {
+  content: unknown;
+  builtInType: string | null;
+}
+
 export interface MailTransportOptions {
   to: string;
   subject: string;
@@ -244,6 +257,17 @@ export class MailService {
     const missing = new Set<string>();
     const subject = template.replace(/\{\{(\w+)\}\}/g, (_, key) => resolveVar(key, context, missing));
     return { subject, missingVariables: [...missing] };
+  }
+
+  /**
+   * Render a template's subject *and* body against one context, merging the two missing-variable
+   * sets. Owned here rather than by each compose controller so the booking-shaped and
+   * series-shaped surfaces can never diverge on what "missing" means (ADR-0064).
+   */
+  renderForCompose(template: RenderableTemplate, context: TemplateContext): ComposeRender {
+    const { html, missingVariables: bodyMissing } = this.renderTemplate(template.content, context);
+    const { subject, missingVariables: subjectMissing } = this.renderSubject(template.builtInType, context);
+    return { subject, body: html, missingVariables: [...new Set([...subjectMissing, ...bodyMissing])] };
   }
 
   async sendBatch(emails: MailTransportOptions[]): Promise<void> {

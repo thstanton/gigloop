@@ -29,6 +29,9 @@ const ERROR_TOAST: Record<InvoiceAction, string> = {
   // vocabulary so a newly added action can't be half-declared, and the copy matches the sheet's.
   edit: 'Failed to update invoice',
   issue: 'Failed to create invoice',
+  // Like `edit`, dispatched elsewhere — the compose sheet owns the send and shows its failure
+  // inline rather than as a toast. Declared so the map stays exhaustive over the vocabulary.
+  send: 'Failed to send invoice',
   markSent: 'Failed to mark invoice as sent',
   markPaid: 'Failed to mark invoice as paid',
   void: 'Failed to void invoice',

@@ -15,6 +15,12 @@ import {
 // block the contact delete (Invoice.billTo / Communication.contact).
 export async function resetTestData(userId: string = E2E_TEST_USER_ID): Promise<void> {
   await prisma.booking.deleteMany({ where: { userId } });
+  // A series invoice hangs off the series, not a booking, so it survives the booking delete — and
+  // BookingSeries.customerId is Restrict, so a leftover series makes the contact delete below fail
+  // and the *whole run* unrecoverable. Only a spec that dies mid-way leaves one (its own afterEach
+  // normally clears it), which is exactly when a reset has to work.
+  await prisma.invoice.deleteMany({ where: { userId, seriesId: { not: null } } });
+  await prisma.bookingSeries.deleteMany({ where: { userId } });
   await prisma.template.deleteMany({ where: { userId } });
   // Library artifacts the musician builds up (no longer auto-seeded, #663). Not linked to a
   // booking (ADR-0046), so order-independent; packageTemplate slots cascade on delete.

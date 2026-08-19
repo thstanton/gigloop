@@ -1,3 +1,4 @@
+import { useEffect, useMemo } from 'react';
 import { useAuth } from '@clerk/react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -16,7 +17,8 @@ import { useCopyBooking } from '@/lib/hooks/useCopyBooking';
 import { useContractActions } from '@/lib/hooks/useContractActions';
 import { useBookingInvoices } from '@/lib/hooks/useBookingInvoices';
 import { useInvoice } from '@/lib/hooks/useInvoice';
-import { isDepositPercentageHintEligible, depositAmount } from '@/lib/invoiceDerivations';
+import { useSeriesInvoice } from '@/lib/hooks/useSeriesInvoice';
+import { isDepositPercentageHintEligible, depositAmount, coverTemplateFor } from '@/lib/invoiceDerivations';
 import { buildSetsDescription } from '@/lib/bookingSets';
 import { CopyEventDialog } from '@/features/bookings/CopyEventDialog';
 import ContractSheet from '@/features/bookings/ContractSheet';
@@ -27,11 +29,14 @@ import { ItineraryQuickTweakSheet } from '@/features/bookings/ItineraryQuickTwea
 import { OverviewQuickTweakSheet } from '@/features/bookings/OverviewQuickTweakSheet';
 import { MusicQuickTweakSheet } from '@/features/bookings/MusicQuickTweakSheet';
 import ComposeEmailSheet from '@/features/communications/ComposeEmailSheet';
+import type { SeriesComposeTarget } from '@/features/communications/composeHelpers';
 import InvoiceSheet from '@/features/invoices/InvoiceSheet';
 import MarkSentDialog from '@/features/invoices/MarkSentDialog';
 import { apiGet } from '@/lib/api';
+import { toast } from '@/lib/hooks/use-toast';
 import type {
   BookingDetail,
+  Invoice,
   Template,
   UserProfile,
 } from '@/types/api';
@@ -55,6 +60,43 @@ function buildCreateDepositHref(
   const desc = buildSetsDescription(booking);
   if (desc) params.set('description', desc);
   return `/admin/bookings/${bookingId}?${params.toString()}`;
+}
+
+// #847: what the compose sheet needs to send a *series* invoice — the invoice itself plus the
+// contact it is billed to, which is the series customer and may not be this member booking's own.
+// Undefined until both the series and its active invoice have resolved; the sheet is held shut
+// until then, because its template pre-select fires once and cannot be re-run.
+function buildSeriesComposeTarget(
+  series: { id: string; label: string } | null | undefined,
+  invoice: Invoice | null | undefined,
+): SeriesComposeTarget | undefined {
+  if (!series || !invoice) return undefined;
+  return {
+    seriesId: series.id,
+    seriesLabel: series.label,
+    invoice,
+    recipient: invoice.billToContact,
+  };
+}
+
+/**
+ * What the compose sheet gets for a series-cover open: the target, and whether it may open at all.
+ *
+ * `ready` is the gate. The sheet seeds its template selection on the open transition only, so
+ * opening before the series invoice has resolved burns that pre-select against a list which does
+ * not yet contain the series cover — leaving the musician with an open sheet and nothing selected.
+ * On the usual path (Send from the series card) the invoice is already cached, so this only bites
+ * on a cold load of the compose URL — which is exactly the case a walkthrough would miss.
+ *
+ * `ready` false is only ever a *wait*. Once the query settles with no invoice, the effect in the
+ * component toasts and clears the URL, so the sheet can never sit silently shut.
+ */
+function seriesComposeProps(
+  composingSeriesInvoice: boolean,
+  target: SeriesComposeTarget | undefined,
+): { series: SeriesComposeTarget | undefined; ready: boolean } {
+  if (!composingSeriesInvoice) return { series: undefined, ready: true };
+  return { series: target, ready: !!target };
 }
 
 export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
@@ -85,6 +127,30 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
   // old `invoices.find(...)` returned undefined for one and InvoiceSheet fell silently into
   // create mode — an empty form where the real line items should have been.
   const { data: sheetInvoice } = useInvoice(sheetInvoiceId);
+  // #847: the series invoice a series-cover compose is sent for. `current` is the acted-on
+  // invoice by construction — `SeriesService.createInvoice` 409s on a second non-VOID invoice, so
+  // a series has at most one — and it shares the query key SeriesInvoiceCard already mounts on
+  // this page, so opening the sheet is usually a cache read rather than a fetch.
+  const bookingSeries = booking?.series;
+  const { data: seriesInvoice, isPending: seriesInvoicePending } = useSeriesInvoice(bookingSeries?.id);
+  const composeSeries = useMemo(
+    () => buildSeriesComposeTarget(bookingSeries, seriesInvoice),
+    [bookingSeries, seriesInvoice],
+  );
+  const composingSeriesInvoice = sheetTemplateType === 'series_invoice_cover';
+  // `isPending` alone would hang on a booking with no series at all: the query is disabled there,
+  // so it stays pending forever. No series ⇒ settled, with nothing.
+  const seriesInvoiceSettled = !bookingSeries || !seriesInvoicePending;
+
+  // The compose URL is a real address — bookmarkable, refreshable, and reachable after the invoice
+  // it names has been voided. The sheet is held shut until its target resolves (see
+  // seriesComposeProps), so without this the musician would land here and simply see *nothing*
+  // happen. Say so and return them to the booking.
+  useEffect(() => {
+    if (!composingSeriesInvoice || composeSeries || !seriesInvoiceSettled) return;
+    toast({ title: 'No series invoice to send', variant: 'destructive' });
+    setSearchParams({});
+  }, [composingSeriesInvoice, composeSeries, seriesInvoiceSettled, setSearchParams]);
   const contractActions = useContractActions(bookingId);
   const copy = useCopyBooking(bookingId);
 
@@ -117,6 +183,7 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
     contractActions.createContract(() => setSearchParams({ sheet: 'contract' }));
   const createDepositInvoiceHref = buildCreateDepositHref(bookingId, booking, userProfile?.depositPercentage);
   const markSentInvoice = sheet === 'markSent' && sheetInvoiceId ? sheetInvoice : undefined;
+  const seriesCompose = seriesComposeProps(composingSeriesInvoice, composeSeries);
 
   return (
     <>
@@ -207,9 +274,12 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
         // unaffected and opens at once.
         open={sheet === 'invoice' && (!sheetInvoiceId || !!editingInvoice)}
         onOpenChange={(open) => { if (!open) setSearchParams({}); }}
+        // #847: owner-derived, like the row menu's Send. InvoiceSheet has been series-capable
+        // since #845, so a series draft issued *from the sheet* chained straight into a
+        // booking-mode compose — hidden template, nothing attached, and a send posting a series
+        // invoice id to a booking route. The second entry point onto the same defect.
         onAfterIssue={(inv) => {
-          const templateType = inv.isDeposit ? 'deposit_invoice_cover' : 'balance_invoice_cover';
-          setSearchParams({ sheet: 'compose', templateType });
+          setSearchParams({ sheet: 'compose', templateType: coverTemplateFor(inv) });
         }}
       />
       <ComposeEmailSheet
@@ -218,7 +288,8 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
         invoices={invoices}
         checklist={checklist}
         defaultPaymentTermsDays={userProfile?.defaultPaymentTermsDays}
-        open={sheet === 'compose'}
+        series={seriesCompose.series}
+        open={sheet === 'compose' && seriesCompose.ready}
         onOpenChange={(open) => { if (!open) setSearchParams({}); }}
         initialTemplateType={sheet === 'compose' ? sheetTemplateType : undefined}
         onCreateContract={onCreateContract}

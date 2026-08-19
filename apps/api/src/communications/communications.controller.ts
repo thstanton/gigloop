@@ -50,12 +50,7 @@ export class CommunicationsController {
 
     const context = await this.mail.buildContext(req.userId, bookingId, query.invoiceId, query.issueDate, query.dueDate);
 
-    const { html, missingVariables: bodyMissing } = this.mail.renderTemplate(template.content, context);
-    const { subject, missingVariables: subjectMissing } = this.mail.renderSubject(template.builtInType, context);
-
-    const missingVariables = [...new Set([...subjectMissing, ...bodyMissing])];
-
-    return { subject, body: html, missingVariables };
+    return this.mail.renderForCompose(template, context);
   }
 
   @ApiOperation({ summary: 'Get a communication by ID' })

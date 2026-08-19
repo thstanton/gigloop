@@ -13,8 +13,9 @@ import {
   canSendEmail,
   shouldSuggestCreatingContract,
   shouldSuggestCreatingDepositInvoice,
+  type SeriesComposeTarget,
 } from './composeHelpers';
-import type { ChecklistItem, Contract, Invoice, Template } from '@/types/api';
+import type { ChecklistItem, Contact, Contract, Invoice, Template } from '@/types/api';
 
 const goal = (key: string): ChecklistItem => ({ key } as unknown as ChecklistItem);
 const contract = (status: Contract['status']): Contract => ({ status } as unknown as Contract);
@@ -40,6 +41,24 @@ function makeInvoice(overrides: Partial<Invoice> = {}): Invoice {
 
 const depositInvoice = makeInvoice({ id: 'dep-1', isDeposit: true });
 const balanceInvoice = makeInvoice({ id: 'bal-1', isDeposit: false });
+
+// A series invoice as the wire actually carries one (ADR-0029): seriesId set, bookingId null —
+// so it can never appear in a booking's invoice list, which is the whole point of the target.
+const seriesInvoice = makeInvoice({
+  id: 'ser-1',
+  bookingId: null,
+  seriesId: 's1',
+  status: 'ISSUED',
+  invoiceNumber: 'INV-0007',
+});
+
+const seriesTarget: SeriesComposeTarget = {
+  seriesId: 's1',
+  seriesLabel: 'Thursday residency',
+  invoice: seriesInvoice,
+  // The series customer, deliberately not the member booking's.
+  recipient: { id: 'c-series', name: 'Hotel Group', email: 'bookings@hotel.test' } as unknown as Contact,
+};
 
 const PAST_DATE = '2020-01-01';
 const FUTURE_DATE = '2099-01-01';
@@ -190,8 +209,11 @@ describe('shouldHideTemplate', () => {
     expect(shouldHideTemplate('balance_invoice_cover', [depositInvoice], PAST_DATE)).toBe(true);
   });
 
-  it('hides series_invoice_cover from the booking compose picker until #847 wires it', () => {
-    expect(shouldHideTemplate('series_invoice_cover', invoices, PAST_DATE)).toBe(true);
+  // #847: which owner a template belongs to is decided by isComposableEmailTemplate — the
+  // predicate the picker actually calls — so this one no longer has an opinion about the series
+  // cover. Asserted so the rule cannot quietly reappear in two places.
+  it('has no opinion on series_invoice_cover — owner visibility lives in isComposableEmailTemplate', () => {
+    expect(shouldHideTemplate('series_invoice_cover', invoices, PAST_DATE)).toBe(false);
   });
 
   it('shows balance_invoice_cover when balance invoice exists', () => {
@@ -451,10 +473,13 @@ describe('buildRenderUrl', () => {
 // ─── buildSendRequest ───────────────────────────────────────────────────────
 
 describe('buildSendRequest', () => {
+  // A booking-owned invoice: the send URL is derived from its own FKs (invoiceOwnerRoute), not
+  // from the bookingId the sheet was mounted with.
+  const bookingSendInvoice = makeInvoice({ id: 'inv-1', bookingId: 'b1', seriesId: null });
+
   const base = {
     bookingId: 'b1',
-    invoiceId: undefined as string | undefined,
-    isInvoiceEmail: false,
+    invoice: undefined as Invoice | undefined,
     showDateFields: false,
     formIssueDate: '',
     formDueDate: '',
@@ -478,15 +503,14 @@ describe('buildSendRequest', () => {
   });
 
   it('routes invoice emails to the invoice-send endpoint', () => {
-    const { url } = buildSendRequest({ ...base, isInvoiceEmail: true, invoiceId: 'inv-1' });
+    const { url } = buildSendRequest({ ...base, invoice: bookingSendInvoice });
     expect(url).toBe('/bookings/b1/invoices/inv-1/send');
   });
 
   it('includes issue/due dates for draft invoices only', () => {
     const { payload } = buildSendRequest({
       ...base,
-      isInvoiceEmail: true,
-      invoiceId: 'inv-1',
+      invoice: bookingSendInvoice,
       showDateFields: true,
       formIssueDate: '2030-01-01',
       formDueDate: '2030-02-01',
@@ -495,7 +519,7 @@ describe('buildSendRequest', () => {
   });
 
   it('omits dates for issued invoices', () => {
-    const { payload } = buildSendRequest({ ...base, isInvoiceEmail: true, invoiceId: 'inv-1' });
+    const { payload } = buildSendRequest({ ...base, invoice: bookingSendInvoice });
     expect(payload).not.toHaveProperty('issueDate');
   });
 
@@ -565,5 +589,114 @@ describe('canSendEmail', () => {
   it('requires an issue date when date fields are shown', () => {
     expect(canSendEmail({ ...ready, showDateFields: true, formIssueDate: '' })).toBe(false);
     expect(canSendEmail({ ...ready, showDateFields: true, formIssueDate: '2030-01-01' })).toBe(true);
+  });
+});
+
+// ─── Series mode (#847) ─────────────────────────────────────────────────────
+//
+// The compose surface's owner-awareness, gathered in one place: which templates are offered,
+// which invoice is attached, and where render and send post. The booking's invoice list is
+// deliberately non-empty in most cases below — a series invoice must never be found in it, and
+// the booking's own invoices must never be mistaken for it.
+
+describe('series compose target', () => {
+  const bookingInvoices = [depositInvoice, balanceInvoice];
+
+  describe('getInvoiceIdForTemplate', () => {
+    it('resolves the series cover to the target invoice, not anything in the booking list', () => {
+      expect(getInvoiceIdForTemplate('series_invoice_cover', bookingInvoices, seriesTarget)).toBe('ser-1');
+    });
+
+    it('resolves to nothing without a target — a series invoice is never in a booking list', () => {
+      expect(getInvoiceIdForTemplate('series_invoice_cover', bookingInvoices)).toBeUndefined();
+    });
+
+    it('leaves the booking covers reading the booking list even in series mode', () => {
+      expect(getInvoiceIdForTemplate('deposit_invoice_cover', bookingInvoices, seriesTarget)).toBe('dep-1');
+      expect(getInvoiceIdForTemplate('balance_invoice_cover', bookingInvoices, seriesTarget)).toBe('bal-1');
+    });
+  });
+
+  describe('getAttachmentState', () => {
+    it('names the attachment from the series invoice number', () => {
+      expect(getAttachmentState('series_invoice_cover', [], seriesTarget)).toEqual({
+        kind: 'present',
+        filename: 'Invoice INV-0007.pdf',
+      });
+    });
+
+    it('falls back to a series-shaped label when the invoice has no number yet', () => {
+      const draft = { ...seriesTarget, invoice: makeInvoice({ id: 'ser-1', bookingId: null, seriesId: 's1' }) };
+      expect(getAttachmentState('series_invoice_cover', [], draft)).toEqual({
+        kind: 'present',
+        filename: 'Series invoice PDF',
+      });
+    });
+
+    it('warns in series terms when there is no series invoice to attach', () => {
+      expect(getAttachmentState('series_invoice_cover', bookingInvoices)).toEqual({
+        kind: 'warning',
+        message: 'No series invoice to attach',
+      });
+    });
+  });
+
+  describe('isComposableEmailTemplate', () => {
+    const seriesCover = makeTemplate({ builtInType: 'series_invoice_cover' });
+
+    it('offers only the series cover in series mode', () => {
+      expect(isComposableEmailTemplate(seriesCover, false, seriesTarget)).toBe(true);
+      expect(isComposableEmailTemplate(makeTemplate({ builtInType: 'balance_invoice_cover' }), false, seriesTarget)).toBe(false);
+      expect(isComposableEmailTemplate(makeTemplate({ builtInType: 'confirmation' }), true, seriesTarget)).toBe(false);
+    });
+
+    // The regression #846 could not prevent: a built-in email type is offered on every booking
+    // unless something excludes it, and this is the predicate the picker actually calls.
+    it('never offers the series cover on an ordinary booking', () => {
+      expect(isComposableEmailTemplate(seriesCover, false)).toBe(false);
+      expect(isComposableEmailTemplate(seriesCover, true)).toBe(false);
+    });
+  });
+
+  describe('buildRenderUrl', () => {
+    const base = {
+      bookingId: 'b1',
+      templateId: 'tpl-1',
+      invoiceId: 'ser-1',
+      issueDate: '',
+      dueDate: '',
+      showDateFields: false,
+    };
+
+    it('renders against the series, not the member booking it was opened from', () => {
+      expect(buildRenderUrl({ ...base, series: seriesTarget })).toBe(
+        '/series/s1/communications/render?templateId=tpl-1&invoiceId=ser-1',
+      );
+    });
+  });
+
+  describe('buildSendRequest', () => {
+    const base = {
+      // The member booking the sheet is mounted on — deliberately present, and deliberately not
+      // what the URL is built from.
+      bookingId: 'b1',
+      showDateFields: false,
+      formIssueDate: '',
+      formDueDate: '',
+      to: 'bookings@hotel.test',
+      contactId: 'c-series',
+      subject: 'Your invoice',
+      body: '<p>Hi</p>',
+      templateId: 'tpl-1',
+    };
+
+    it('posts to the series send route, derived from the invoice rather than the host booking', () => {
+      expect(buildSendRequest({ ...base, invoice: seriesInvoice }).url).toBe('/series/s1/invoices/ser-1/send');
+    });
+
+    it('still posts a booking-owned invoice to the booking route from the same sheet', () => {
+      const bookingInvoice = makeInvoice({ id: 'bal-9', bookingId: 'b1', seriesId: null });
+      expect(buildSendRequest({ ...base, invoice: bookingInvoice }).url).toBe('/bookings/b1/invoices/bal-9/send');
+    });
   });
 });

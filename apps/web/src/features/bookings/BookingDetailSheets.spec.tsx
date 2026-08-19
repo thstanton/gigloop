@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BookingDetailSheets } from './BookingDetailSheets';
 import { apiGet } from '@/lib/api';
+import { toast } from '@/lib/hooks/use-toast';
 import type { Invoice } from '@/types/api';
 
 // #844 — container-level regression guard for ADR-0069.
@@ -25,6 +26,11 @@ import type { Invoice } from '@/types/api';
 
 vi.mock('@clerk/react', () => ({
   useAuth: () => ({ isLoaded: true }),
+}));
+
+vi.mock('@/lib/hooks/use-toast', () => ({
+  toast: vi.fn(),
+  useToast: () => ({ toast: vi.fn(), dismiss: vi.fn(), toasts: [] }),
 }));
 
 vi.mock('@/lib/api', () => ({
@@ -198,5 +204,47 @@ describe('BookingDetailSheets — resolving the acted-on invoice (#844)', () => 
     // list rather than a `stringContaining` matcher, which `/bookings/b1/invoices` confuses.
     const paths = vi.mocked(apiGet).mock.calls.map(([path]) => path);
     expect(paths.filter((path) => path.startsWith('/invoices/'))).toEqual([]);
+  });
+});
+
+// #847 — the compose URL is a real address: bookmarkable, refreshable, and still reachable after
+// the series invoice it names has been voided. The sheet is held shut until its target resolves
+// (the pre-select fires once and cannot be re-run), so the failure mode is the sheet sitting
+// silently closed — the musician navigates and nothing whatsoever happens. CLAUDE.md → Loading &
+// Feedback: failure must always surface.
+describe('BookingDetailSheets — series compose with no invoice to send (#847)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('surfaces a toast instead of leaving the compose sheet silently shut', async () => {
+    const { apiGetNullable } = await import('@/lib/api');
+    // A series member whose series has no active invoice — `current` 404s, which apiGetNullable
+    // resolves to null rather than throwing.
+    vi.mocked(apiGetNullable).mockResolvedValue(null);
+    vi.mocked(apiGet).mockImplementation((path: string) => {
+      if (path === `/bookings/${BOOKING_ID}`)
+        return Promise.resolve({ ...booking, series: { id: 'ser1', label: 'Hotel X residency' } } as never);
+      if (path === '/me') return Promise.resolve({ depositPercentage: null } as never);
+      return Promise.resolve([] as never);
+    });
+
+    renderSheets('?sheet=compose&templateType=series_invoice_cover');
+
+    await waitFor(() =>
+      expect(toast).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'No series invoice to send', variant: 'destructive' }),
+      ),
+    );
+    // And it stays shut rather than opening onto a picker with nothing in it.
+    expect(screen.queryByRole('heading', { name: 'Compose email' })).not.toBeInTheDocument();
+  });
+
+  it('says nothing when the same page is opened without asking for the series cover', async () => {
+    stubApi({});
+    renderSheets('');
+
+    await waitFor(() => expect(vi.mocked(apiGet)).toHaveBeenCalledWith(`/bookings/${BOOKING_ID}`));
+    expect(toast).not.toHaveBeenCalled();
   });
 });
