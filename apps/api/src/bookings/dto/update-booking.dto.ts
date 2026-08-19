@@ -66,12 +66,6 @@ export class UpdateBookingDto {
   @IsUUID()
   bookingAgentId?: string | null;
 
-  @ApiPropertyOptional({ example: '2026-06-15T10:00:00.000Z', nullable: true })
-  @IsOptional()
-  @ValidateIf((_, v) => v !== null)
-  @IsDateString()
-  depositReceivedAt?: string | null;
-
   @ApiPropertyOptional({ type: Object, description: 'Logistics JSON (pass-through, no per-key validation)' })
   @IsOptional()
   @IsObject()

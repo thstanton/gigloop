@@ -25,6 +25,15 @@ describe('deriveShortcut', () => {
     });
   });
 
+  // TIM-47 flipped deposit_received's catalog rule to invoicePaid, but deriveShortcut reads the
+  // *row's* stored rule — pre-existing step rows keep `bookingField depositReceivedAt`, which must
+  // still resolve to "Mark as paid" or in-flight deposits lose their CTA.
+  it('still maps a pre-existing bookingField depositReceivedAt rule to mark_deposit_received', () => {
+    expect(
+      deriveShortcut({ type: 'bookingField', field: 'depositReceivedAt', operator: 'notNull' }, []),
+    ).toEqual({ shortcutType: 'mark_deposit_received' });
+  });
+
   it('returns no shortcut for a null rule', () => {
     expect(deriveShortcut(null, [])).toEqual({});
   });

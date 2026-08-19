@@ -8,7 +8,6 @@ function makeCtx(overrides: Partial<BookingContext> = {}): BookingContext {
     customerId: null,
     customerEmail: null,
     fee: null,
-    depositReceivedAt: null,
     setsCount: 0,
     logistics: null,
     communications: [],
@@ -64,7 +63,7 @@ describe('STEP_PREDICATES catalog', () => {
     expect(STEP_PREDICATES.send_quote.inputs).toEqual(['communications']);
     expect(STEP_PREDICATES.create_deposit_invoice.inputs).toEqual(['invoices']);
     expect(STEP_PREDICATES.issue_deposit_invoice.inputs).toEqual(['invoices']);
-    expect(STEP_PREDICATES.deposit_received.inputs).toEqual(['depositReceivedAt']);
+    expect(STEP_PREDICATES.deposit_received.inputs).toEqual(['invoices']); // TIM-47: reads its invoice
     expect(STEP_PREDICATES.create_contract.inputs).toEqual(['contracts']); // bookingField activeContract
     expect(STEP_PREDICATES.contract_signed.inputs).toEqual(['contracts']);
     expect(STEP_PREDICATES.song_requests.inputs).toEqual(['musicFormResponse']);
@@ -116,9 +115,13 @@ describe('predicates fire on their declared input and not otherwise', () => {
     expect(STEP_PREDICATES.set_up_and_publish.predicate(makeCtx({ musicFormPublished: true }))).toBe('COMPLETE');
   });
 
-  it('deposit_received completes only when depositReceivedAt is set', () => {
+  it('deposit_received completes only on a PAID deposit invoice, reading invoice status (TIM-47)', () => {
     expect(STEP_PREDICATES.deposit_received.predicate(makeCtx())).toBe('PENDING');
-    expect(STEP_PREDICATES.deposit_received.predicate(makeCtx({ depositReceivedAt: new Date() }))).toBe('COMPLETE');
+    // A SENT (unpaid) deposit invoice does not complete it; a PAID balance invoice is the wrong one.
+    expect(STEP_PREDICATES.deposit_received.predicate(makeCtx({ invoices: [{ isDeposit: true, status: 'SENT' }] }))).toBe('PENDING');
+    expect(STEP_PREDICATES.deposit_received.predicate(makeCtx({ invoices: [{ isDeposit: false, status: 'PAID' }] }))).toBe('PENDING');
+    // A PAID deposit invoice completes it.
+    expect(STEP_PREDICATES.deposit_received.predicate(makeCtx({ invoices: [{ isDeposit: true, status: 'PAID' }] }))).toBe('COMPLETE');
   });
 
   it('balance_received completes only on a PAID balance invoice, reading invoice status (#653)', () => {
@@ -167,6 +170,7 @@ describe('affectedKeys (inverted index)', () => {
     expect(invoiceKeys.has('create_balance_invoice')).toBe(true);
     expect(invoiceKeys.has('issue_balance_invoice')).toBe(true);
     expect(invoiceKeys.has('balance_received')).toBe(true); // #653: invoicePaid reads invoices
+    expect(invoiceKeys.has('deposit_received')).toBe(true); // TIM-47: deposit reads its invoice too
     expect(invoiceKeys.has('add_venue')).toBe(false);
   });
 
@@ -176,8 +180,10 @@ describe('affectedKeys (inverted index)', () => {
     expect(keys.has('contract_signed')).toBe(true);
   });
 
-  it('maps depositReceivedAt to deposit_received alone', () => {
-    expect([...affectedKeys(['depositReceivedAt'])]).toEqual(['deposit_received']);
+  it('maps invoices to both received steps (TIM-47: deposit reads its invoice, like the balance)', () => {
+    const keys = affectedKeys(['invoices']);
+    expect(keys.has('deposit_received')).toBe(true);
+    expect(keys.has('balance_received')).toBe(true);
   });
 
   it('unions the keys across several changed inputs', () => {

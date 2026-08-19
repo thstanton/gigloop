@@ -144,7 +144,7 @@ export class InvoicesController {
   }
 
   @ApiOperation({ summary: 'Mark an invoice as paid, recording the date received and an optional reference' })
-  @ApiResponse({ status: 200, description: 'Invoice marked Paid; paidAt set to the received date; depositReceivedAt mirrored for a deposit invoice', type: InvoiceResponseDto })
+  @ApiResponse({ status: 200, description: 'Invoice marked Paid; paidAt set to the received date. A paid deposit or balance invoice auto-completes its checklist received step', type: InvoiceResponseDto })
   @ApiResponse({ status: 400, description: 'Invoice is not sent, or the payment date is missing/unparseable' })
   @Post(':id/mark-paid')
   markPaid(

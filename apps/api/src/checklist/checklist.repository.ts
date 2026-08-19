@@ -120,7 +120,6 @@ export class ChecklistRepository {
           // #618 precondition inputs: the booking's fee and its customer's email.
           fee: true,
           customer: { select: { email: true } },
-          depositReceivedAt: true,
           logistics: true,
           _count: { select: { sets: true } },
           communications: {

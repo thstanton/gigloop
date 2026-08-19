@@ -171,15 +171,17 @@ export const CHECKLIST_DEFAULTS: ChecklistDefaultItem[] = [
         },
       },
       {
-        // AWAITED: an external payment lands; the USER only records it (via the booking's
-        // depositReceivedAt, set by the mark-deposit-received action). completedBy USER, so it
-        // still surfaces to the musician (chase / record) — unlike a CUSTOMER-awaited step.
+        // AWAITED, USER-completedBy — the musician records the payment; it still surfaces (chase /
+        // record). Auto-completes when the deposit invoice is PAID (TIM-47 / ADR-0068), reading the
+        // live invoice status exactly as `balance_received` does — the `depositReceivedAt` column is
+        // retired, so the deposit no longer has a non-invoice payment path the balance never had.
+        // Its "Mark as paid" action marks the sent deposit invoice paid.
         key: 'deposit_received',
         label: 'Deposit received',
         kind: 'MILESTONE',
         completeMode: 'AWAITED',
         completedBy: 'USER',
-        autoCompleteRule: { type: 'bookingField', field: 'depositReceivedAt', operator: 'notNull' },
+        autoCompleteRule: { type: 'invoicePaid', isDeposit: true },
         dueDateRule: { basis: 'bookingDate', offsetDays: -30 },
       },
     ],

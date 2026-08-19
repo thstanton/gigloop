@@ -75,7 +75,6 @@ const mockBooking: BookingDetail = {
   series: null,
   seriesId: null,
   packages: [],
-  depositReceivedAt: null,
   portalToken: 'tok-1',
   hasMusicFormConfig: false,
   hasMusicFormResponse: false,

@@ -15,11 +15,12 @@ export type AutoCompleteRule =
   // DRAFT does NOT satisfy it (the #585 fix — an unissued draft keeps "Issue" surfaced). VOID is
   // excluded upstream in the context projection either way.
   | { type: 'invoiceExists'; isDeposit: boolean; includeDraft?: boolean }
-  // #653: the invoice has been PAID. The balance has no received-field like the deposit's
-  // `depositReceivedAt` column, so `balance_received` reads the live invoice status directly (VOID
-  // is excluded from the context projection). A COMPLETE step is sticky (checklist-evaluator), so
-  // this does not by itself re-open on void; voiding a paid invoice re-opens the billing goal via
-  // the create-step reset (invoices.service.voidInvoice) — identical for deposit and balance.
+  // #653 / TIM-47: the invoice has been PAID. Both `balance_received` and `deposit_received` read
+  // the live invoice status directly — neither booking column records money any more (ADR-0068; the
+  // deposit's `depositReceivedAt` was retired in TIM-47). VOID is excluded from the context
+  // projection. A COMPLETE step is sticky (checklist-evaluator), so this does not by itself re-open
+  // on void; voiding a paid invoice re-opens the billing goal via the create-step reset
+  // (invoices.service.voidInvoice) — identical for deposit and balance.
   | { type: 'invoicePaid'; isDeposit: boolean }
   | { type: 'musicFormResponse' }
   // #533 / #630: the musician has *published* the music form (MusicFormConfig.publishedAt set).
@@ -39,7 +40,6 @@ export interface BookingContext {
   customerId: string | null;
   customerEmail: string | null;
   fee: string | null;
-  depositReceivedAt: Date | null;
   setsCount: number;
   logistics: unknown;
   communications: Array<{ status: string; template: { builtInType: string | null } | null }>;
@@ -63,7 +63,6 @@ export type InputKey =
   | 'communications'
   | 'invoices'
   | 'contracts'
-  | 'depositReceivedAt'
   | 'musicFormResponse'
   | 'musicFormPublished'
   | 'venueId'
@@ -74,10 +73,12 @@ export type InputKey =
   | 'logistics';
 
 // `bookingField` predicates, keyed by field — a lookup keeps evaluateRule's switch flat. Each maps
-// a booking-context field to "is it set?": `activeContract` reads the contracts relation,
-// `depositReceivedAt`/`fee` (the #618 fee precondition) read their own columns.
+// a booking-context field to "is it set?": `activeContract` reads the contracts relation, `fee`
+// (the #618 fee precondition) reads its own column. A pre-existing `deposit_received` step row may
+// still carry a stored `bookingField depositReceivedAt` rule (TIM-47 flipped the catalog to
+// invoicePaid but does not rewrite rows); such a row evaluates via the catalog, not its stored rule
+// (checklist-evaluator), so no `depositReceivedAt` predicate is needed here.
 const BOOKING_FIELD_PREDICATE: Record<string, (ctx: BookingContext) => boolean> = {
-  depositReceivedAt: (ctx) => ctx.depositReceivedAt !== null,
   activeContract: (ctx) => ctx.contracts.length > 0,
   fee: (ctx) => ctx.fee !== null,
 };
@@ -141,7 +142,6 @@ export function evaluateRuleState(rule: AutoCompleteRule, ctx: BookingContext): 
 // inputsForRule's switch flat. A bookingField not listed reads the contracts relation
 // (`activeContract`).
 const BOOKING_FIELD_INPUTS: Record<string, InputKey> = {
-  depositReceivedAt: 'depositReceivedAt',
   fee: 'fee',
 };
 const COMPLETENESS_INPUTS: Record<CompletenessConcern, InputKey[]> = {

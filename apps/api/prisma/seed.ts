@@ -656,7 +656,6 @@ async function main() {
       fee: 1500,
       customerId: charlotte.id,
       venueId: stMarys.id,
-      depositReceivedAt: new Date('2026-04-22'),
       notes: 'Acoustic only. Wants Canon in D for the processional.',
     },
   });
@@ -762,7 +761,6 @@ async function main() {
       fee: 1200,
       customerId: meridian.id,
       venueId: theNed.id,
-      depositReceivedAt: new Date('2026-03-20'),
     },
   });
 
@@ -852,7 +850,6 @@ async function main() {
       customerId: emma.id,
       venueId: barnsleyHouse.id,
       bookingAgentId: cellarSociety.id,
-      depositReceivedAt: new Date('2025-11-22'),
       notes: "Valentine's Day wedding. Went very well — great feedback from the couple.",
     },
   });
@@ -967,7 +964,6 @@ async function main() {
       customerId: meridian.id,
       venueId: theNed.id,
       seriesId: meridianSeries.id,
-      depositReceivedAt: new Date('2026-06-01'),
     },
   });
   await seedChecklist(booking7.id, booking7.date, booking7.createdAt, {

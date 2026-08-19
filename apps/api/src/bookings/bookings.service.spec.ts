@@ -40,10 +40,7 @@ type MockRepo = {
   findChecklistItems: jest.Mock;
   countNonVoidInvoices: jest.Mock;
   updateSeries: jest.Mock;
-  findChecklistItemById: jest.Mock;
   findChecklistItemsForReminders: jest.Mock;
-  setDepositReceivedAt: jest.Mock;
-  clearDepositReceivedAt: jest.Mock;
 };
 
 type MockContractRepo = {
@@ -104,10 +101,7 @@ function makeRepo(): MockRepo {
     findChecklistItems: jest.fn(),
     countNonVoidInvoices: jest.fn(),
     updateSeries: jest.fn(),
-    findChecklistItemById: jest.fn(),
     findChecklistItemsForReminders: jest.fn().mockResolvedValue([]),
-    setDepositReceivedAt: jest.fn().mockResolvedValue(undefined),
-    clearDepositReceivedAt: jest.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -1367,46 +1361,21 @@ describe('BookingsService', () => {
   });
 
   describe('updateChecklistItem', () => {
-    it('clears depositReceivedAt when deposit_received is un-marked to PENDING', async () => {
+    // TIM-47: toggling deposit_received records nothing on the booking — the step reads its invoice's
+    // PAID status, exactly like balance_received. It simply re-evaluates and returns the checklist.
+    it('re-evaluates the checklist without stamping any booking column when deposit_received is toggled', async () => {
       repo.findOne.mockResolvedValue(booking);
-      repo.findChecklistItemById.mockResolvedValue({ id: 'i1', key: 'deposit_received' });
-      checklistRepo.updateChecklistItemState.mockResolvedValue({ count: 1 });
-      repo.findChecklistItems.mockResolvedValue([]);
-
-      await service.updateChecklistItem('u1', 'b1', 'i1', 'PENDING');
-
-      expect(repo.clearDepositReceivedAt).toHaveBeenCalledWith('b1');
-      expect(repo.setDepositReceivedAt).not.toHaveBeenCalled();
-    });
-
-    it('sets depositReceivedAt when deposit_received is marked COMPLETE', async () => {
-      repo.findOne.mockResolvedValue(booking);
-      repo.findChecklistItemById.mockResolvedValue({ id: 'i1', key: 'deposit_received' });
       checklistRepo.updateChecklistItemState.mockResolvedValue({ count: 1 });
       repo.findChecklistItems.mockResolvedValue([]);
 
       await service.updateChecklistItem('u1', 'b1', 'i1', 'COMPLETE');
 
-      expect(repo.setDepositReceivedAt).toHaveBeenCalledWith('b1', expect.any(Date));
-      expect(repo.clearDepositReceivedAt).not.toHaveBeenCalled();
-    });
-
-    it('does NOT clear depositReceivedAt when deposit_received is SKIPPED (opt-out is not an un-tick)', async () => {
-      repo.findOne.mockResolvedValue(booking);
-      repo.findChecklistItemById.mockResolvedValue({ id: 'i1', key: 'deposit_received' });
-      checklistRepo.updateChecklistItemState.mockResolvedValue({ count: 1 });
-      repo.findChecklistItems.mockResolvedValue([]);
-
-      await service.updateChecklistItem('u1', 'b1', 'i1', 'SKIPPED');
-
-      expect(repo.clearDepositReceivedAt).not.toHaveBeenCalled();
-      expect(repo.setDepositReceivedAt).not.toHaveBeenCalled();
+      expect(evaluator.onBookingChanged).toHaveBeenCalledWith('b1');
     });
 
     it('returns the recomputed checklist (post-evaluate) so the toggle settles in one round-trip', async () => {
       const callOrder: string[] = [];
       repo.findOne.mockResolvedValue(booking);
-      repo.findChecklistItemById.mockResolvedValue({ id: 'i1', key: null });
       checklistRepo.updateChecklistItemState.mockResolvedValue({ count: 1 });
       evaluator.onBookingChanged.mockImplementation(async () => {
         callOrder.push('evaluate');

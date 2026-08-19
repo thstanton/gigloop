@@ -339,7 +339,6 @@ export interface BookingDetail extends Omit<BookingListItem, 'customer' | 'venue
   sets: PerformanceSet[];
   packages: BookingPackageSummary[];
   activeContract: Contract | null;
-  depositReceivedAt: string | null;
   portalToken: string;
   hasMusicFormConfig: boolean;
   hasMusicFormResponse: boolean;

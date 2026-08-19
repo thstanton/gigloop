@@ -587,7 +587,10 @@ export class PortalService {
   ) {
     if (!publicProfile.email) return;
 
-    const depositInvoice = booking.depositReceivedAt
+    // The deposit is "received" when its invoice is PAID (TIM-47 / ADR-0068) — the booking no longer
+    // records it. An unpaid SENT deposit invoice means we are still awaiting the deposit.
+    const depositReceived = await this.invoicesRepo.hasPaidDepositInvoice(booking.id, booking.userId);
+    const depositInvoice = depositReceived
       ? null
       : await this.invoicesRepo.findDepositInvoice(booking.id, booking.userId);
 
@@ -599,7 +602,7 @@ export class PortalService {
       customerName: booking.customer.name,
       venueName: booking.venue?.name ?? null,
       signedAt,
-      depositReceivedAt: booking.depositReceivedAt ?? null,
+      depositReceived,
       depositInvoice: depositInvoice ?? null,
     });
 
@@ -617,7 +620,7 @@ export class PortalService {
     customerName: string;
     venueName: string | null;
     signedAt: Date;
-    depositReceivedAt: Date | null;
+    depositReceived: boolean;
     depositInvoice: { dueDate: Date | null } | null;
   }): string {
     const {
@@ -627,14 +630,14 @@ export class PortalService {
       customerName,
       venueName,
       signedAt,
-      depositReceivedAt,
+      depositReceived,
       depositInvoice,
     } = params;
     const adminUrl = `${process.env.APP_BASE_URL}/admin/bookings/${bookingId}`;
     const venueLine = venueName ? `\nVenue: ${venueName}` : '';
 
     let depositSection = '';
-    if (depositReceivedAt) {
+    if (depositReceived) {
       depositSection = `\n\nThe deposit has also been received. Mark this booking as Confirmed:\n${adminUrl}`;
     } else if (depositInvoice) {
       const dueLine = depositInvoice.dueDate

@@ -17,7 +17,6 @@ type MockRepo = {
   assignInvoiceNumberOnly: jest.Mock;
   markSentById: jest.Mock;
   markPaidBase: jest.Mock;
-  setBookingDepositReceivedAt: jest.Mock;
   voidInvoice: jest.Mock;
   countActiveByType: jest.Mock;
   getUserPaymentTerms: jest.Mock;
@@ -43,7 +42,6 @@ function makeRepo(): MockRepo {
     assignInvoiceNumberOnly: jest.fn(),
     markSentById: jest.fn(),
     markPaidBase: jest.fn(),
-    setBookingDepositReceivedAt: jest.fn(),
     voidInvoice: jest.fn(),
     countActiveByType: jest.fn(),
     getUserPaymentTerms: jest.fn().mockResolvedValue(14),

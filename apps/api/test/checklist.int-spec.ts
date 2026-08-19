@@ -355,27 +355,16 @@ describe('ChecklistEvaluator (integration)', () => {
       await prisma.booking.delete({ where: { id: bookingId } });
     });
 
-    it('recording the deposit on the booking auto-completes the deposit_received step (sticky)', async () => {
-      // ADR-0057: the deposit_received step is AWAITED and not user-PATCHable — the deposit fact is
-      // recorded on the booking (here directly; in the app via the invoice mark-paid / booking
-      // action), and the evaluator auto-completes the step. Completion is sticky (Story 23): later
-      // clearing the booking field clears the field but does not un-complete the step.
+    it('the booking update endpoint no longer accepts depositReceivedAt (TIM-47)', async () => {
+      // TIM-47: the deposit no longer has a booking column — deposit_received reads its invoice's
+      // PAID status, exactly like balance_received (that completion path is covered end-to-end in
+      // invoices.int-spec). The retired field is now rejected by the whitelist ValidationPipe.
       const bookingId = await createBooking();
 
-      await request(app.getHttpServer())
+      const rejected = await request(app.getHttpServer())
         .patch(`/api/bookings/${bookingId}`)
         .send({ depositReceivedAt: FUTURE_DATE });
-      const afterSet = await prisma.booking.findUnique({ where: { id: bookingId } });
-      expect(afterSet?.depositReceivedAt).not.toBeNull();
-      expect((await getItem(bookingId, 'deposit_received'))?.state).toBe('COMPLETE');
-
-      await request(app.getHttpServer())
-        .patch(`/api/bookings/${bookingId}`)
-        .send({ depositReceivedAt: null });
-      const afterClear = await prisma.booking.findUnique({ where: { id: bookingId } });
-      expect(afterClear?.depositReceivedAt).toBeNull();
-      // Sticky: the already-completed step stays COMPLETE.
-      expect((await getItem(bookingId, 'deposit_received'))?.state).toBe('COMPLETE');
+      expect(rejected.status).toBe(400);
 
       await prisma.booking.delete({ where: { id: bookingId } });
     });

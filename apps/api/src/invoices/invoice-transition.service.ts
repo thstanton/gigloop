@@ -152,10 +152,10 @@ export class InvoiceTransitionService {
 
   /**
    * Mark a SENT invoice as paid, recording the date the payment was *received* (ADR-0068) plus an
-   * optional reference — not the moment the button was tapped. Side-effects are field-derived: a
-   * deposit booking invoice stamps `booking.depositReceivedAt` with the same received date (kept
-   * consistent with paidAt until the column is retired in TIM-47) and re-evaluates its checklist;
-   * a series invoice (bookingId null) does neither, by construction.
+   * optional reference — not the moment the button was tapped. The one side-effect is checklist
+   * re-evaluation: a PAID deposit or balance invoice auto-completes its `*_received` step (both read
+   * the live invoice status; TIM-47 retired the deposit's `depositReceivedAt` write). A series
+   * invoice (bookingId null) has no booking to re-evaluate, by construction.
    */
   async markPaid(invoice: TransitionInvoice, dto: MarkPaidDto): Promise<Invoice> {
     if (!isPayable(invoice)) {
@@ -163,9 +163,6 @@ export class InvoiceTransitionService {
     }
     const paidAt = new Date(dto.paidAt);
     const result = await this.invoicesRepo.markPaidBase(invoice.id, paidAt, dto.paymentReference ?? null);
-    if (invoice.isDeposit && invoice.bookingId) {
-      await this.invoicesRepo.setBookingDepositReceivedAt(invoice.bookingId, paidAt);
-    }
     if (invoice.bookingId) {
       await this.reeval.onBookingChanged(invoice.bookingId);
     }
@@ -176,19 +173,15 @@ export class InvoiceTransitionService {
    * Correct the payment already recorded on a PAID invoice (ADR-0068 / TIM-46): its received date
    * and optional reference. This is *not* a lifecycle transition — the status stays PAID and the
    * document (line items, number, issue/due dates) is untouched; only the correctable money fact
-   * changes. The deposit's `depositReceivedAt` is kept in step with the corrected date, mirroring
-   * markPaid (until that column is retired in TIM-47).
+   * changes. No checklist side-effect: the invoice is already PAID, so its `*_received` step is
+   * unchanged (TIM-47 retired the deposit's `depositReceivedAt` mirror).
    */
   async correctPayment(invoice: TransitionInvoice, dto: MarkPaidDto): Promise<Invoice> {
     if (!isPaymentCorrectable(invoice)) {
       throw new BadRequestException('Only paid invoices can have their payment corrected');
     }
     const paidAt = new Date(dto.paidAt);
-    const result = await this.invoicesRepo.updatePaymentDetails(invoice.id, paidAt, dto.paymentReference ?? null);
-    if (invoice.isDeposit && invoice.bookingId) {
-      await this.invoicesRepo.setBookingDepositReceivedAt(invoice.bookingId, paidAt);
-    }
-    return result;
+    return this.invoicesRepo.updatePaymentDetails(invoice.id, paidAt, dto.paymentReference ?? null);
   }
 
   /**
