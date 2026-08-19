@@ -124,6 +124,18 @@ If that becomes a real problem the fix is to serve flags from the API (`GET /api
 
 ---
 
+## Environment identification
+
+`VITE_ENVIRONMENT` is not a feature flag — it doesn't gate behaviour, it labels which deployment the UI is running in, so nobody mistakes preprod's synthetic data for the real thing. `apps/web/src/lib/environment.ts` reads it:
+
+- **Local dev** is detected automatically via Vite's own `DEV` flag — no variable to set.
+- **Preprod** sets `VITE_ENVIRONMENT=preprod` on the preprod Vercel project.
+- **Prod** leaves it unset.
+
+When set, the app prefixes the browser tab title (`[PreProd] GigLoop`) and shows a small badge next to the wordmark in the top bar. Same Sensitive-variable caveat as above applies.
+
+---
+
 ## Where to look when something breaks
 
 | Question | Where |
