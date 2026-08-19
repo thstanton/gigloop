@@ -718,6 +718,84 @@ describe('MailService', () => {
         expect.objectContaining({ attachments: [{ filename: 'inv.pdf', content: content.toString('base64') }] }),
       );
     });
+
+    // #932: senderIdentity personalizes From/Reply-To for client-facing sends only.
+    // RESEND_FROM is pinned explicitly (mirrors the MAIL_REDIRECT_TO tests below) so
+    // assertions on the built `from` string don't depend on ambient shell/CI env state.
+    describe('senderIdentity', () => {
+      beforeEach(() => {
+        process.env.RESEND_FROM = 'bookings@gigloop.app';
+      });
+
+      afterEach(() => {
+        delete process.env.RESEND_FROM;
+      });
+
+      it('uses the plain RESEND_FROM address with no senderIdentity (portal/digest default)', async () => {
+        await service.send(sendOptions);
+        const resendInstance = (service as unknown as { resend: { emails: { send: jest.Mock } } }).resend;
+        const call = resendInstance.emails.send.mock.calls[0][0];
+        expect(call.from).toBe('bookings@gigloop.app');
+        expect(call.replyTo).toBeUndefined();
+      });
+
+      it('builds From as "<name> <RESEND_FROM>" and sets replyTo when senderIdentity is provided', async () => {
+        await service.send({ ...sendOptions, senderIdentity: { name: 'Tim Stanton', email: 'tim@example.com' } });
+        const resendInstance = (service as unknown as { resend: { emails: { send: jest.Mock } } }).resend;
+        expect(resendInstance.emails.send).toHaveBeenCalledWith(
+          expect.objectContaining({ from: 'Tim Stanton <bookings@gigloop.app>', replyTo: 'tim@example.com' }),
+        );
+      });
+
+      it('falls back to a generic "GigLoop" display name when senderIdentity.name is blank', async () => {
+        await service.send({ ...sendOptions, senderIdentity: { name: '', email: 'tim@example.com' } });
+        const resendInstance = (service as unknown as { resend: { emails: { send: jest.Mock } } }).resend;
+        expect(resendInstance.emails.send).toHaveBeenCalledWith(
+          expect.objectContaining({ from: 'GigLoop <bookings@gigloop.app>' }),
+        );
+      });
+
+      it('omits replyTo entirely when senderIdentity.email is blank', async () => {
+        await service.send({ ...sendOptions, senderIdentity: { name: 'Tim Stanton', email: '' } });
+        const resendInstance = (service as unknown as { resend: { emails: { send: jest.Mock } } }).resend;
+        const call = resendInstance.emails.send.mock.calls[0][0];
+        expect(call.replyTo).toBeUndefined();
+      });
+    });
+  });
+
+  // ─── getSenderIdentity ────────────────────────────────────────────────────────
+
+  describe('getSenderIdentity', () => {
+    it('returns displayName and email from the public profile', async () => {
+      mockPrisma.publicProfile.findUnique.mockResolvedValue(publicProfile);
+      const identity = await service.getSenderIdentity('u1');
+      expect(identity).toEqual({ name: 'Tim Stanton', email: 'tim@example.com' });
+    });
+
+    it('falls back to businessName when displayName is null', async () => {
+      mockPrisma.publicProfile.findUnique.mockResolvedValue({ ...publicProfile, displayName: null });
+      const identity = await service.getSenderIdentity('u1');
+      expect(identity.name).toBe('Tim Stanton Music');
+    });
+
+    it('returns empty strings when the public profile does not exist', async () => {
+      mockPrisma.publicProfile.findUnique.mockResolvedValue(null);
+      const identity = await service.getSenderIdentity('u1');
+      expect(identity).toEqual({ name: '', email: '' });
+    });
+
+    it('returns an empty name when displayName and businessName are both null', async () => {
+      mockPrisma.publicProfile.findUnique.mockResolvedValue({ ...publicProfile, displayName: null, businessName: null });
+      const identity = await service.getSenderIdentity('u1');
+      expect(identity.name).toBe('');
+    });
+
+    it('returns an empty email when the profile email is null', async () => {
+      mockPrisma.publicProfile.findUnique.mockResolvedValue({ ...publicProfile, email: null });
+      const identity = await service.getSenderIdentity('u1');
+      expect(identity.email).toBe('');
+    });
   });
 
   // ─── MAIL_REDIRECT_TO (dev/preprod safety) ──────────────────────────────────────

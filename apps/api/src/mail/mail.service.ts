@@ -58,11 +58,18 @@ export interface RenderableTemplate {
   builtInType: string | null;
 }
 
+export interface SenderIdentity {
+  name: string;
+  email: string;
+}
+
 export interface MailTransportOptions {
   to: string;
   subject: string;
   body: string;
   attachments?: Array<{ filename: string; content: Buffer }>;
+  /** Client-facing sends only (#932) — personalizes From/Reply-To with the musician's identity. */
+  senderIdentity?: SenderIdentity;
 }
 
 type SetRow = { startTime: string | null; label: string | null; duration: number };
@@ -114,6 +121,18 @@ export class MailService {
   // used the real recipient while send() was hardcoded to a personal address.
   private resolveRecipient(to: string): string {
     return process.env.MAIL_REDIRECT_TO || to;
+  }
+
+  // #932: lightweight identity lookup for client-facing sends — same fallback chain as
+  // buildContext's musicianName/musicianEmail, but standalone since the series-invoice send
+  // path has no bookingId to build a full EmailContext from. Never throws: a missing/blank
+  // profile just means the caller's send() falls back to the generic default.
+  async getSenderIdentity(userId: string): Promise<SenderIdentity> {
+    const publicProfile = await this.prisma.publicProfile.findUnique({ where: { userId } });
+    return {
+      name: publicProfile?.displayName ?? publicProfile?.businessName ?? '',
+      email: publicProfile?.email ?? '',
+    };
   }
 
   // `owner` is the invoice's owner FK — a booking or a series (ADR-0029: one polymorphic
@@ -283,15 +302,22 @@ export class MailService {
   }
 
   async send(options: MailTransportOptions): Promise<void> {
-    const { to, subject, body, attachments } = options;
+    const { to, subject, body, attachments, senderIdentity } = options;
+    const fromAddress = process.env.RESEND_FROM ?? 'noreply@gigman.com';
+
+    // #932: senderIdentity is opt-in (only CommunicationsService's client-facing sends pass
+    // it) — its absence must reproduce today's plain `fromAddress` exactly, so portal
+    // notifications and the digest are byte-for-byte unaffected.
+    const from = senderIdentity ? `${senderIdentity.name || 'GigLoop'} <${fromAddress}>` : fromAddress;
 
     // Resend SDK v6 never throws — it returns { data, error }. Check explicitly
     // so that rejected requests surface as errors rather than silently succeeding.
     const { error } = await this.resend.emails.send({
-      from: process.env.RESEND_FROM ?? 'noreply@gigman.com',
+      from,
       to: this.resolveRecipient(to),
       subject,
       html: body,
+      ...(senderIdentity?.email ? { replyTo: senderIdentity.email } : {}),
       attachments: attachments?.map((a) => ({
         filename: a.filename,
         // Resend SDK v6 uses JSON.stringify internally; Buffer serialises as
