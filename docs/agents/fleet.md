@@ -88,7 +88,7 @@ Filing to `needs-triage` needs **no permission** — it is the lowest-commitment
 
 The pipeline starves without a stock of claimable issues, so triage runs in batches. The generic `/triage` skill is the engine, untouched; the repo-side convention is:
 
-1. **Fan out** the investigation: one sub-agent per `needs-triage` issue, each returning a draft verdict (`ready-for-agent` / `needs-info` / `wontfix` / **escalate to grill**), a draft agent brief, and proposed Surfaces.
+1. **Fan out** the investigation: one sub-agent per `needs-triage` issue, each returning a draft verdict (`ready-for-agent` / `needs-info` / `wontfix` / **`escalate-to-grill`**), a draft agent brief, and proposed Surfaces. Each verdict is a label — including the escalate one (see `triage-labels.md`); post the triage notes so the grill starts from them rather than re-deriving them.
 2. **Rapid-fire sitting:** the human approves/vetoes pre-baked verdicts, not raw issues.
 3. **Auto-escalation is a bright line** (see `issue-authoring.md`): anything touching schema, a lifecycle/state machine, or cross-feature behaviour cannot be batch-approved to `ready-for-agent` — it goes to a full `/grill-with-docs`.
 
