@@ -299,3 +299,74 @@ export async function seedConfirmedBookingWithDraftInvoice(
 
   return { bookingId: booking.id, invoiceId: invoice.id, customerId: customer.id };
 }
+
+export interface SeriesWithDraftInvoice {
+  seriesId: string;
+  invoiceId: string;
+  customerId: string;
+  /** A member booking — the series invoice is reached from any member's detail page. */
+  bookingId: string;
+  /** The traced line for `bookingId`, i.e. one the reconciler owns. */
+  tracedLineId: string;
+}
+
+// Per-test fixture (ADR-0048 §5) for the series-invoice edit journey (#845): a series with two
+// member bookings and a DRAFT series invoice carrying one traced line per member.
+//
+// Shaped to mirror what `SeriesService.createInvoice` produces rather than an arbitrary row:
+// `bookingId` is null and `seriesId` set (ADR-0029's polymorphic Invoice), `isDeposit` is false
+// (the deposit/balance split is a single-booking concept), and each line carries the
+// `sourceBookingId` that makes it traced — which is what ADR-0043's reconciler keys on.
+export async function seedSeriesWithDraftInvoice(
+  userId: string = E2E_TEST_USER_ID,
+): Promise<SeriesWithDraftInvoice> {
+  const customer = await prisma.contact.create({
+    data: { userId, name: 'E2E Residency Client', email: 'residency@e2e.test' },
+  });
+
+  const series = await prisma.bookingSeries.create({
+    data: { userId, label: 'E2E Hotel Residency', customerId: customer.id },
+  });
+
+  const makeBooking = (title: string, date: string) =>
+    prisma.booking.create({
+      data: {
+        userId,
+        status: BookingStatus.CONFIRMED,
+        eventType: 'Corporate',
+        title,
+        date: new Date(date),
+        fee: '500.00',
+        customerId: customer.id,
+        seriesId: series.id,
+      },
+    });
+
+  const first = await makeBooking('E2E Residency — night 1', '2099-05-01T19:00:00.000Z');
+  const second = await makeBooking('E2E Residency — night 2', '2099-05-08T19:00:00.000Z');
+
+  const invoice = await prisma.invoice.create({
+    data: {
+      userId,
+      status: InvoiceStatus.DRAFT,
+      isDeposit: false,
+      seriesId: series.id,
+      billToContactId: customer.id,
+      lineItems: {
+        create: [
+          { userId, description: '1 May 2099', amount: '500.00', order: 0, sourceBookingId: first.id },
+          { userId, description: '8 May 2099', amount: '500.00', order: 1, sourceBookingId: second.id },
+        ],
+      },
+    },
+    include: { lineItems: { orderBy: { order: 'asc' } } },
+  });
+
+  return {
+    seriesId: series.id,
+    invoiceId: invoice.id,
+    customerId: customer.id,
+    bookingId: first.id,
+    tracedLineId: invoice.lineItems[0].id,
+  };
+}

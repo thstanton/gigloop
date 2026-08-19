@@ -25,6 +25,9 @@ const SUCCESS_TOAST: Partial<Record<InvoiceAction, string>> = {
   markSent: 'Invoice marked as sent',
 };
 const ERROR_TOAST: Record<InvoiceAction, string> = {
+  // `edit` is dispatched by InvoiceSheet, not this hook — but the map stays exhaustive over the
+  // vocabulary so a newly added action can't be half-declared, and the copy matches the sheet's.
+  edit: 'Failed to update invoice',
   issue: 'Failed to create invoice',
   markSent: 'Failed to mark invoice as sent',
   markPaid: 'Failed to mark invoice as paid',

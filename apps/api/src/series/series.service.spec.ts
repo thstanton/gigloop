@@ -420,6 +420,56 @@ describe('SeriesService', () => {
     });
   });
 
+  // ADR-0043's guarantee, finally exercised (#845). Its whole rationale is that reconciliation
+  // preserves manual edits and custom lines — but until the owner-agnostic write routes existed
+  // no route could produce either, so the reconciler's `sourceBookingId !== null` guard had been
+  // protecting an empty set. These assert the guarantee against line states that are now reachable.
+  describe('reconciliation preserves hand-made changes (ADR-0043)', () => {
+    const booking = { id: 'b1', date: new Date('2026-05-01'), fee: 500, sets: [] };
+
+    it('leaves a manually edited amount on a traced line untouched', async () => {
+      // The line traces to b1 but its amount was edited by hand to 750, against a 500 fee.
+      // Reconciliation must not rewrite it back.
+      repo.findDraftSeriesInvoiceWithLines.mockResolvedValue({
+        id: 'inv1',
+        lineItems: [{ id: 'li1', sourceBookingId: 'b1', order: 0, amount: 750 }],
+      });
+      await service.syncMemberJoin('u1', 's1', booking);
+      expect(repo.appendSeriesInvoiceLine).not.toHaveBeenCalled();
+      expect(repo.removeSeriesInvoiceLine).not.toHaveBeenCalled();
+    });
+
+    it('leaves a hand-added custom line untouched when a new member joins', async () => {
+      repo.findDraftSeriesInvoiceWithLines.mockResolvedValue({
+        id: 'inv1',
+        lineItems: [{ id: 'li-custom', sourceBookingId: null, order: 0, amount: 200 }],
+      });
+      await service.syncMemberJoin('u1', 's1', booking);
+      expect(repo.removeSeriesInvoiceLine).not.toHaveBeenCalled();
+      // The joining member still gets its own traced line — a custom line neither blocks the
+      // append nor is mistaken for one.
+      expect(repo.appendSeriesInvoiceLine).toHaveBeenCalledWith(
+        'u1', 'inv1',
+        expect.objectContaining({ sourceBookingId: 'b1' }),
+        undefined,
+      );
+    });
+
+    it('keeps custom lines and edited traced lines across a departure', async () => {
+      repo.findDraftSeriesInvoiceWithLines.mockResolvedValue({
+        id: 'inv1',
+        lineItems: [
+          { id: 'li1', sourceBookingId: 'b1', order: 0, amount: 500 },
+          { id: 'li2', sourceBookingId: 'b2', order: 1, amount: 900 },
+          { id: 'li-custom', sourceBookingId: null, order: 2, amount: 200 },
+        ],
+      });
+      await service.syncMemberLeave('u1', 's1', 'b1');
+      expect(repo.removeSeriesInvoiceLine).toHaveBeenCalledTimes(1);
+      expect(repo.removeSeriesInvoiceLine).toHaveBeenCalledWith('li1');
+    });
+  });
+
   describe('syncMemberLeave', () => {
     it('is a no-op when no draft invoice exists', async () => {
       repo.findDraftSeriesInvoiceWithLines.mockResolvedValue(null);

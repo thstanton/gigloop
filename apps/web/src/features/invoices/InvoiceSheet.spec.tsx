@@ -1,0 +1,217 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import InvoiceSheet from './InvoiceSheet';
+import { apiPost, apiPatch, apiDelete } from '@/lib/api';
+import type { Invoice } from '@/types/api';
+
+// #845 — the write half of ADR-0069.
+//
+// `persistLineItemEdits` addressed `/bookings/${bookingId}/invoices/...` for every create,
+// update and delete. A series invoice has no owning booking, so each of those calls named a
+// resource that cannot exist and no line item on a series invoice had ever been editable —
+// which is also why ADR-0043's "reconciliation preserves manual edits and custom lines"
+// guarantee had never had anything to preserve.
+//
+// These assert the *routes* the sheet writes to, because that is precisely what was wrong.
+
+vi.mock('@clerk/react', () => ({
+  useAuth: () => ({ isLoaded: true }),
+}));
+
+vi.mock('@/lib/api', () => ({
+  apiGet: vi.fn().mockResolvedValue({ invoiceNumber: 'INV-2026-001', willReuse: false }),
+  apiPost: vi.fn().mockResolvedValue({ id: 'si1' }),
+  apiPatch: vi.fn().mockResolvedValue({}),
+  apiDelete: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('@/lib/hooks/use-toast', () => ({ toast: vi.fn() }));
+
+function invoice(overrides: Partial<Invoice> = {}): Invoice {
+  return {
+    id: 'si1',
+    status: 'DRAFT',
+    isDeposit: false,
+    invoiceNumber: null,
+    issueDate: null,
+    dueDate: null,
+    paidAt: null,
+    // A series invoice: owned by a series, owned by no booking.
+    bookingId: null,
+    seriesId: 'ser1',
+    lineItems: [
+      { id: 'li1', description: 'May 1 — Hotel X', amount: '500.00', order: 0, sourceBookingId: 'b1' },
+      { id: 'li2', description: 'May 8 — Hotel X', amount: '500.00', order: 1, sourceBookingId: 'b2' },
+    ],
+    ...overrides,
+  } as unknown as Invoice;
+}
+
+function renderSheet(inv: Invoice) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  render(
+    <QueryClientProvider client={client}>
+      <InvoiceSheet
+        // Deliberately supplied, and deliberately irrelevant: a series invoice is reached from a
+        // member booking's page, so the host passes a bookingId. No edit write may consult it.
+        bookingId="b1"
+        invoice={inv}
+        hasDepositInvoice={false}
+        open
+        onOpenChange={() => {}}
+      />
+    </QueryClientProvider>,
+  );
+}
+
+const descriptionFields = () => screen.getAllByPlaceholderText('Description');
+const amountFields = () => screen.getAllByPlaceholderText('0.00');
+
+async function save() {
+  await userEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+}
+
+describe('InvoiceSheet — editing a series invoice (#845)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(apiPost).mockResolvedValue({ id: 'new-line' });
+    vi.mocked(apiPatch).mockResolvedValue({});
+    vi.mocked(apiDelete).mockResolvedValue(undefined);
+  });
+
+  it('seeds the form from the series invoice it was handed', async () => {
+    renderSheet(invoice());
+    await waitFor(() => {
+      expect(descriptionFields()[0]).toHaveValue('May 1 — Hotel X');
+    });
+    expect(descriptionFields()[1]).toHaveValue('May 8 — Hotel X');
+  });
+
+  it('persists an edited description to the owner-agnostic route', async () => {
+    renderSheet(invoice());
+    await waitFor(() => expect(descriptionFields()[0]).toHaveValue('May 1 — Hotel X'));
+
+    await userEvent.clear(descriptionFields()[0]);
+    await userEvent.type(descriptionFields()[0], 'May 1 — Hotel X (matinee)');
+    await save();
+
+    await waitFor(() => {
+      expect(vi.mocked(apiPatch)).toHaveBeenCalledWith(
+        '/invoices/si1/line-items/li1',
+        expect.objectContaining({ description: 'May 1 — Hotel X (matinee)' }),
+      );
+    });
+    // The booking-scoped path is the bug; it must not appear at all.
+    expect(vi.mocked(apiPatch)).not.toHaveBeenCalledWith(
+      expect.stringContaining('/bookings/'),
+      expect.anything(),
+    );
+  });
+
+  it('persists an edited amount', async () => {
+    renderSheet(invoice());
+    await waitFor(() => expect(amountFields()[1]).toHaveValue('500'));
+
+    await userEvent.clear(amountFields()[1]);
+    await userEvent.type(amountFields()[1], '750');
+    await save();
+
+    await waitFor(() => {
+      expect(vi.mocked(apiPatch)).toHaveBeenCalledWith(
+        '/invoices/si1/line-items/li2',
+        expect.objectContaining({ amount: 750 }),
+      );
+    });
+  });
+
+  // The line ADR-0043 exists to protect: no `sourceBookingId`, so reconciliation leaves it alone.
+  it('adds a hand-written custom line', async () => {
+    renderSheet(invoice());
+    await waitFor(() => expect(descriptionFields()).toHaveLength(2));
+
+    await userEvent.click(screen.getByRole('button', { name: /add line item/i }));
+    await userEvent.type(descriptionFields()[2], 'PA hire');
+    await userEvent.type(amountFields()[2], '200');
+    await save();
+
+    await waitFor(() => {
+      expect(vi.mocked(apiPost)).toHaveBeenCalledWith(
+        '/invoices/si1/line-items',
+        expect.objectContaining({ description: 'PA hire', amount: 200 }),
+      );
+    });
+  });
+
+  it('deletes a removed line', async () => {
+    renderSheet(invoice());
+    await waitFor(() => expect(descriptionFields()).toHaveLength(2));
+
+    await userEvent.click(screen.getAllByRole('button', { name: 'Remove line item' })[0]);
+    await save();
+
+    await waitFor(() => {
+      expect(vi.mocked(apiDelete)).toHaveBeenCalledWith('/invoices/si1/line-items/li1');
+    });
+    expect(vi.mocked(apiDelete)).not.toHaveBeenCalledWith('/invoices/si1/line-items/li2');
+  });
+
+  it('sends the new order when a line is appended after an existing one', async () => {
+    renderSheet(invoice());
+    await waitFor(() => expect(descriptionFields()).toHaveLength(2));
+
+    await userEvent.click(screen.getByRole('button', { name: /add line item/i }));
+    await userEvent.type(descriptionFields()[2], 'Travel');
+    await userEvent.type(amountFields()[2], '80');
+    await save();
+
+    await waitFor(() => {
+      expect(vi.mocked(apiPost)).toHaveBeenCalledWith(
+        '/invoices/si1/line-items',
+        expect.objectContaining({ order: 2 }),
+      );
+    });
+  });
+
+  // Issue is still owner-routed — the nine transitions have not migrated (#853) — but the prefix
+  // must come from the invoice's own FK, not the bookingId prop, or this 404s for a series.
+  it('issues via the series transition route, not the booking one', async () => {
+    renderSheet(invoice());
+    await waitFor(() => expect(descriptionFields()).toHaveLength(2));
+
+    await userEvent.click(screen.getByRole('button', { name: 'Issue invoice' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Issue invoice', hidden: false }));
+
+    await waitFor(() => {
+      expect(vi.mocked(apiPost)).toHaveBeenCalledWith('/series/ser1/invoices/si1/issue', {});
+    });
+  });
+});
+
+describe('InvoiceSheet — editing a booking invoice is unchanged in behaviour (#845)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(apiPatch).mockResolvedValue({});
+  });
+
+  // The routes move for booking invoices too — that is the point of owner-agnostic, and the
+  // server keeps the old ones for now — but the user-visible behaviour must not change.
+  it('writes a booking invoice edit to the same owner-agnostic route', async () => {
+    renderSheet(invoice({ id: 'bi1', bookingId: 'b1', seriesId: null } as Partial<Invoice>));
+    await waitFor(() => expect(descriptionFields()[0]).toHaveValue('May 1 — Hotel X'));
+
+    await userEvent.clear(amountFields()[0]);
+    await userEvent.type(amountFields()[0], '650');
+    await save();
+
+    await waitFor(() => {
+      expect(vi.mocked(apiPatch)).toHaveBeenCalledWith(
+        '/invoices/bi1/line-items/li1',
+        expect.objectContaining({ amount: 650 }),
+      );
+    });
+  });
+});

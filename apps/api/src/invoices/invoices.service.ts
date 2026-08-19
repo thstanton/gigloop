@@ -4,7 +4,7 @@ import { DocumentsService } from '../documents/documents.service';
 import { ChecklistReevaluator } from '../checklist/checklist-reevaluator.service';
 import { ContactsService } from '../contacts/contacts.service';
 import { InvoiceTransitionService } from './invoice-transition.service';
-import { isEditable, isDeletable } from './invoice-transition-rules';
+import { isEditable, isDeletable, type InvoiceForRules } from './invoice-transition-rules';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { IssueInvoiceDto } from './dto/issue-invoice.dto';
@@ -13,6 +13,11 @@ import { MarkSentDto } from './dto/mark-sent.dto';
 import { MarkPaidDto } from './dto/mark-paid.dto';
 import { CreateLineItemDto } from './dto/create-line-item.dto';
 import { UpdateLineItemDto } from './dto/update-line-item.dto';
+
+// What the shared write helpers actually need from a resolved invoice: the fields the status
+// rules read, plus its id. Deliberately narrower than the Prisma row, so the helpers work
+// unchanged whichever route resolved the invoice.
+type EditableInvoice = InvoiceForRules & { id: string };
 
 @Injectable()
 export class InvoicesService {
@@ -69,12 +74,21 @@ export class InvoicesService {
   }
 
   async update(userId: string, bookingId: string, id: string, dto: UpdateInvoiceDto) {
-    const invoice = await this.findOne(userId, bookingId, id);
+    return this.applyUpdate(userId, await this.findOne(userId, bookingId, id), dto);
+  }
+
+  // Owner-agnostic entry point (ADR-0069). Differs from `update` only in how the invoice is
+  // resolved; the rules below are shared, so a series invoice cannot drift from a booking one.
+  async updateById(userId: string, id: string, dto: UpdateInvoiceDto) {
+    return this.applyUpdate(userId, await this.findById(userId, id), dto);
+  }
+
+  private async applyUpdate(userId: string, invoice: EditableInvoice, dto: UpdateInvoiceDto) {
     if (!isEditable(invoice)) throw new BadRequestException('Only draft invoices can be updated');
     // FK-ownership (#709): a re-pointed billTo contact must belong to the caller — invoiceIncludes
     // returns billToContact, so a foreign id would otherwise leak on the next read.
     await this.contacts.assertOwned(userId, [dto.billToContactId]);
-    return this.repo.update(id, dto);
+    return this.repo.update(invoice.id, dto);
   }
 
   async delete(userId: string, bookingId: string, id: string) {
@@ -132,24 +146,62 @@ export class InvoicesService {
   }
 
   async addLineItem(userId: string, bookingId: string, id: string, dto: CreateLineItemDto) {
-    const invoice = await this.findOne(userId, bookingId, id);
-    if (!isEditable(invoice)) throw new BadRequestException('Line items can only be modified on DRAFT invoices');
-    return this.repo.addLineItem(userId, id, dto);
+    return this.applyAddLineItem(userId, await this.findOne(userId, bookingId, id), dto);
   }
 
   async updateLineItem(userId: string, bookingId: string, id: string, itemId: string, dto: UpdateLineItemDto) {
-    const invoice = await this.findOne(userId, bookingId, id);
-    if (!isEditable(invoice)) throw new BadRequestException('Line items can only be modified on DRAFT invoices');
-    const item = await this.repo.findLineItem(userId, id, itemId);
-    if (!item) throw new NotFoundException('Line item not found');
-    return this.repo.updateLineItem(item.id, dto);
+    return this.applyUpdateLineItem(userId, await this.findOne(userId, bookingId, id), itemId, dto);
   }
 
   async deleteLineItem(userId: string, bookingId: string, id: string, itemId: string) {
-    const invoice = await this.findOne(userId, bookingId, id);
-    if (!isEditable(invoice)) throw new BadRequestException('Line items can only be modified on DRAFT invoices');
-    const item = await this.repo.findLineItem(userId, id, itemId);
-    if (!item) throw new NotFoundException('Line item not found');
+    return this.applyDeleteLineItem(userId, await this.findOne(userId, bookingId, id), itemId);
+  }
+
+  // Owner-agnostic line-item operations (ADR-0069). Until #845 these existed only under
+  // /bookings/:bookingId/invoices, which is why a series invoice's lines had never been
+  // editable — and why ADR-0043's reconciler guard had been protecting an empty set.
+  async addLineItemById(userId: string, id: string, dto: CreateLineItemDto) {
+    return this.applyAddLineItem(userId, await this.findById(userId, id), dto);
+  }
+
+  async updateLineItemById(userId: string, id: string, itemId: string, dto: UpdateLineItemDto) {
+    return this.applyUpdateLineItem(userId, await this.findById(userId, id), itemId, dto);
+  }
+
+  async deleteLineItemById(userId: string, id: string, itemId: string) {
+    return this.applyDeleteLineItem(userId, await this.findById(userId, id), itemId);
+  }
+
+  private applyAddLineItem(userId: string, invoice: EditableInvoice, dto: CreateLineItemDto) {
+    this.assertLineItemsEditable(invoice);
+    return this.repo.addLineItem(userId, invoice.id, dto);
+  }
+
+  private async applyUpdateLineItem(
+    userId: string,
+    invoice: EditableInvoice,
+    itemId: string,
+    dto: UpdateLineItemDto,
+  ) {
+    const item = await this.loadLineItem(userId, invoice, itemId);
+    return this.repo.updateLineItem(item.id, dto);
+  }
+
+  private async applyDeleteLineItem(userId: string, invoice: EditableInvoice, itemId: string) {
+    const item = await this.loadLineItem(userId, invoice, itemId);
     return this.repo.deleteLineItem(item.id);
+  }
+
+  private assertLineItemsEditable(invoice: EditableInvoice) {
+    if (!isEditable(invoice)) {
+      throw new BadRequestException('Line items can only be modified on DRAFT invoices');
+    }
+  }
+
+  private async loadLineItem(userId: string, invoice: EditableInvoice, itemId: string) {
+    this.assertLineItemsEditable(invoice);
+    const item = await this.repo.findLineItem(userId, invoice.id, itemId);
+    if (!item) throw new NotFoundException('Line item not found');
+    return item;
   }
 }

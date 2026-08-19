@@ -1,8 +1,11 @@
-import { Controller, Get, Param, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Req } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { InvoicesService } from './invoices.service';
-import { InvoiceResponseDto } from './dto/invoice-response.dto';
+import { InvoiceResponseDto, InvoiceLineItemResponseDto } from './dto/invoice-response.dto';
+import { UpdateInvoiceDto } from './dto/update-invoice.dto';
+import { CreateLineItemDto } from './dto/create-line-item.dto';
+import { UpdateLineItemDto } from './dto/update-line-item.dto';
 
 type AuthedRequest = Request & { userId: string };
 
@@ -13,10 +16,10 @@ type AuthedRequest = Request & { userId: string };
  * before the invoice exists there is no FK to derive from, and the two creation paths
  * genuinely differ.
  *
- * This is the first member of a family that grows in stages. `PATCH` and the three line-item
- * routes follow (#845); the nine duplicated transitions migrate later (#853), at which point
- * `invoiceOwnerRoute`'s prefix logic collapses to a constant. Two route families coexisting
- * is a declared intermediate state, not drift — see ADR-0069.
+ * The family grows in stages. `GET`, `PATCH` and the three line-item routes are here; the nine
+ * duplicated transitions migrate later (#853), at which point `invoiceOwnerRoute`'s prefix logic
+ * collapses to a constant. Two route families coexisting is a declared intermediate state, not
+ * drift — see ADR-0069.
  */
 @ApiTags('Invoices')
 @ApiBearerAuth('clerk-jwt')
@@ -35,5 +38,51 @@ export class InvoiceOperationsController {
   @Get(':id')
   findOne(@Req() req: AuthedRequest, @Param('id') id: string) {
     return this.service.findById(req.userId, id);
+  }
+
+  @ApiOperation({ summary: 'Update an invoice, whichever owner it has' })
+  @ApiResponse({ status: 200, type: InvoiceResponseDto })
+  @ApiResponse({ status: 400, description: 'Invoice is not a draft' })
+  @ApiResponse({ status: 404, description: 'No invoice with that id belongs to the caller' })
+  @Patch(':id')
+  update(@Req() req: AuthedRequest, @Param('id') id: string, @Body() dto: UpdateInvoiceDto) {
+    return this.service.updateById(req.userId, id, dto);
+  }
+
+  @ApiOperation({ summary: 'Add a line item to an invoice, whichever owner it has' })
+  @ApiResponse({ status: 201, type: InvoiceLineItemResponseDto })
+  @ApiResponse({ status: 400, description: 'Invoice is not a draft' })
+  @ApiResponse({ status: 404, description: 'No invoice with that id belongs to the caller' })
+  @Post(':id/line-items')
+  addLineItem(@Req() req: AuthedRequest, @Param('id') id: string, @Body() dto: CreateLineItemDto) {
+    return this.service.addLineItemById(req.userId, id, dto);
+  }
+
+  @ApiOperation({ summary: 'Update a line item on an invoice, whichever owner it has' })
+  @ApiResponse({ status: 200, type: InvoiceLineItemResponseDto })
+  @ApiResponse({ status: 400, description: 'Invoice is not a draft' })
+  @ApiResponse({ status: 404, description: 'No such invoice or line item for the caller' })
+  @Patch(':id/line-items/:itemId')
+  updateLineItem(
+    @Req() req: AuthedRequest,
+    @Param('id') id: string,
+    @Param('itemId') itemId: string,
+    @Body() dto: UpdateLineItemDto,
+  ) {
+    return this.service.updateLineItemById(req.userId, id, itemId, dto);
+  }
+
+  @ApiOperation({ summary: 'Remove a line item from an invoice, whichever owner it has' })
+  @ApiResponse({ status: 204, description: 'Line item removed' })
+  @ApiResponse({ status: 400, description: 'Invoice is not a draft' })
+  @ApiResponse({ status: 404, description: 'No such invoice or line item for the caller' })
+  @Delete(':id/line-items/:itemId')
+  @HttpCode(204)
+  deleteLineItem(
+    @Req() req: AuthedRequest,
+    @Param('id') id: string,
+    @Param('itemId') itemId: string,
+  ) {
+    return this.service.deleteLineItemById(req.userId, id, itemId);
   }
 }

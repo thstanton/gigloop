@@ -24,6 +24,7 @@ import { Input } from '@/components/ui/input';
 import { InlineHint } from '@/components/common/InlineHint';
 import { useDismissibleHint } from '@/lib/hooks/useDismissibleHint';
 import { apiGet, apiPost, apiPatch, apiDelete } from '@/lib/api';
+import { invoiceOwnerRoute } from '@/lib/invoiceActionRouting';
 import { toast } from '@/lib/hooks/use-toast';
 import type { Invoice, InvoiceLineItem, InvoiceNumberPreview } from '@/types/api';
 
@@ -92,7 +93,12 @@ function buildCreatePayload(values: FormValues) {
 
 // Diff the form's line items against the saved invoice and persist the changes (create/update/
 // delete). Does not close the sheet or toast — callers compose it. A no-op when nothing changed.
-async function persistLineItemEdits(bookingId: string, invoice: Invoice, values: FormValues) {
+//
+// Writes go to the owner-agnostic `/invoices/:id` family (ADR-0069). They were hard-wired to
+// `/bookings/${bookingId}/invoices/...` until #845, which is why a series invoice's line items
+// had never been editable: it has no owning booking, so every one of these calls named a
+// resource that could not exist.
+async function persistLineItemEdits(invoice: Invoice, values: FormValues) {
   const originalById = Object.fromEntries(invoice.lineItems.map((i) => [i.id, i]));
   const keptServerIds = new Set(values.lineItems.map((i) => i.serverId).filter(Boolean));
 
@@ -104,17 +110,17 @@ async function persistLineItemEdits(bookingId: string, invoice: Invoice, values:
 
   await Promise.all([
     ...toDelete.map((i) =>
-      apiDelete(`/bookings/${bookingId}/invoices/${invoice.id}/line-items/${i.id}`),
+      apiDelete(`/invoices/${invoice.id}/line-items/${i.id}`),
     ),
     ...toCreate.map((item, idx) =>
-      apiPost(`/bookings/${bookingId}/invoices/${invoice.id}/line-items`, {
+      apiPost(`/invoices/${invoice.id}/line-items`, {
         description: item.description,
         amount: parseFloat(item.amount),
         order: values.lineItems.indexOf(item) + idx,
       }),
     ),
     ...toUpdate.map((item) =>
-      apiPatch(`/bookings/${bookingId}/invoices/${invoice.id}/line-items/${item.serverId}`, {
+      apiPatch(`/invoices/${invoice.id}/line-items/${item.serverId}`, {
         description: item.description,
         amount: parseFloat(item.amount),
       }),
@@ -147,6 +153,12 @@ function useInvoiceAction<TResult>(opts: {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 interface Props {
+  /**
+   * Create mode only — the owner an invoice is created *for*. Every write on an invoice that
+   * already exists is owner-agnostic (ADR-0069) and derives its route from the invoice itself,
+   * so this is not consulted when editing. Creation genuinely differs per owner and stays
+   * owner-scoped; a series invoice is created from `SeriesInvoiceCard`, not here.
+   */
   bookingId: string;
   invoice?: Invoice;
   hasDepositInvoice: boolean;
@@ -245,13 +257,23 @@ export default function InvoiceSheet({
     },
   });
 
+  // Owner-correct cache invalidation: a series invoice has no `bookingInvoices` list to
+  // refresh, and a booking invoice has no `seriesInvoice` query. Plus the by-id read #844
+  // introduced, which any open sheet is holding.
+  function invalidateFor(inv: Invoice, action: 'edit' | 'issue') {
+    for (const queryKey of invoiceOwnerRoute(inv, action).keys) {
+      queryClient.invalidateQueries({ queryKey });
+    }
+    queryClient.invalidateQueries({ queryKey: ['invoice', inv.id] });
+  }
+
   const editMutation = useMutation({
     mutationFn: async (values: FormValues) => {
       if (!invoice) return;
-      await persistLineItemEdits(bookingId, invoice, values);
+      await persistLineItemEdits(invoice, values);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['bookingInvoices', bookingId] });
+      if (invoice) invalidateFor(invoice, 'edit');
       onOpenChange(false);
       toast({ title: 'Invoice updated' });
     },
@@ -265,13 +287,15 @@ export default function InvoiceSheet({
   const issueDraftMutation = useMutation({
     mutationFn: async (values: FormValues) => {
       if (!invoice) throw new Error('No invoice to issue');
-      await persistLineItemEdits(bookingId, invoice, values);
-      return apiPost<Invoice>(`/bookings/${bookingId}/invoices/${invoice.id}/issue`, {});
+      await persistLineItemEdits(invoice, values);
+      // Issue is still owner-routed: the nine transitions have not migrated yet (#853). The
+      // prefix is derived from the invoice's own FK rather than the booking prop, so this
+      // reaches a series invoice's transition route instead of 404ing on a booking path.
+      const { prefix } = invoiceOwnerRoute(invoice, 'issue');
+      return apiPost<Invoice>(`${prefix}/${invoice.id}/issue`, {});
     },
     onSuccess: (issuedInvoice) => {
-      queryClient.invalidateQueries({ queryKey: ['bookingInvoices', bookingId] });
-      queryClient.invalidateQueries({ queryKey: ['bookingDocuments', bookingId] });
-      queryClient.invalidateQueries({ queryKey: ['bookingChecklist', bookingId] });
+      if (invoice) invalidateFor(invoice, 'issue');
       onOpenChange(false);
       onAfterIssue?.(issuedInvoice);
     },

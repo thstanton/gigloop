@@ -1,6 +1,6 @@
 import type { Invoice } from '@/types/api';
 
-export type InvoiceAction = 'issue' | 'markSent' | 'markPaid' | 'void' | 'delete';
+export type InvoiceAction = 'edit' | 'issue' | 'markSent' | 'markPaid' | 'void' | 'delete';
 
 /**
  * The endpoint prefix and the TanStack query keys to invalidate for a mutation on
@@ -11,6 +11,11 @@ export type InvoiceAction = 'issue' | 'markSent' | 'markPaid' | 'void' | 'delete
  * checklist fan-out never fires for a series invoice, by construction. Booking key sets
  * are per-action (they were irregular in the two pre-#724 implementations and are
  * preserved exactly here).
+ *
+ * `edit` was added by #845, when editing an existing invoice became possible for a series
+ * invoice at all. Note the *prefix* is only still owner-derived because the nine transitions
+ * have yet to migrate (#853); the edit and line-item writes themselves now go to the
+ * owner-agnostic `/invoices/:id` family, so only the cache keys here matter for `edit`.
  */
 export function invoiceOwnerRoute(
   invoice: Pick<Invoice, 'bookingId' | 'seriesId'>,
@@ -27,6 +32,8 @@ export function invoiceOwnerRoute(
 
   const b = invoice.bookingId;
   const keys: Record<InvoiceAction, (string | null)[][]> = {
+    // An edit changes only the invoice's own content — no document, no checklist consequence.
+    edit: [['bookingInvoices', b]],
     issue: [['bookingInvoices', b], ['bookingDocuments', b], ['bookingChecklist', b]],
     markSent: [['bookingInvoices', b], ['bookingChecklist', b]],
     markPaid: [['bookingInvoices', b], ['booking', b], ['bookingChecklist', b]],
