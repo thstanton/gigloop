@@ -9,6 +9,10 @@ import type { Document, Invoice } from '@/types/api';
 
 function getDocumentLabel(doc: Document, invoice: Invoice | undefined): string {
   if (doc.type === 'UPLOAD') return doc.name ?? 'Uploaded document';
+  // The series invoice is discoverable here but not owned by this booking (#848) — it never
+  // appears in this booking's own `invoices` list, so it carries no VOID suffix: only the active
+  // (non-VOID) series invoice document is ever unioned in.
+  if (doc.isSeriesInvoice) return 'Series invoice';
   if (doc.type !== 'CONTRACT') {
     const base = invoice?.isDeposit ? 'Deposit invoice' : 'Balance invoice';
     return invoice?.status === 'VOID' ? `${base} [VOID]` : base;

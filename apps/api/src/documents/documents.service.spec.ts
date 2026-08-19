@@ -57,26 +57,28 @@ describe('DocumentsService.findByBooking (portal visibility wiring)', () => {
   const bookingId = 'b1';
   const activeContractId = 'c-active';
 
-  function makeService(docs: unknown[], ctx: unknown) {
+  function makeService(docs: unknown[], ctx: unknown, seriesDoc: unknown = null) {
     const repo = {
       findByBooking: jest.fn().mockResolvedValue(docs),
       findBookingVisibilityContext: jest.fn().mockResolvedValue(ctx),
+      findActiveSeriesInvoiceDocument: jest.fn().mockResolvedValue(seriesDoc),
     } as unknown as DocumentsRepository;
     const storage = {
       getPublicUrl: jest.fn().mockReturnValue('https://example.com/doc.pdf'),
     } as unknown as StorageService;
-    return new DocumentsService({} as unknown as PrismaService, repo, storage);
+    return { service: new DocumentsService({} as unknown as PrismaService, repo, storage), repo };
   }
 
   const doc = (over: Record<string, unknown>) => ({
     id: 'd',
     storageKey: 'k',
     createdAt: new Date('2026-07-01'),
+    bookingId,
     ...over,
   });
 
   it('computes a per-document verdict across every type × backing-status', async () => {
-    const service = makeService(
+    const { service } = makeService(
       [
         doc({ id: 'contract-active', type: 'CONTRACT', contractId: activeContractId }),
         doc({ id: 'contract-old', type: 'CONTRACT', contractId: 'c-old' }),
@@ -102,7 +104,7 @@ describe('DocumentsService.findByBooking (portal visibility wiring)', () => {
   });
 
   it('applies the cancelled gate to contract documents only, leaving invoices payable', async () => {
-    const service = makeService(
+    const { service } = makeService(
       [
         doc({ id: 'contract-active', type: 'CONTRACT', contractId: activeContractId }),
         doc({ id: 'invoice-sent', type: 'INVOICE', invoice: { status: 'SENT' } }),
@@ -118,9 +120,97 @@ describe('DocumentsService.findByBooking (portal visibility wiring)', () => {
   });
 
   it('treats a missing booking context as no active contract (contract PDFs read voided)', async () => {
-    const service = makeService([doc({ id: 'contract', type: 'CONTRACT', contractId: 'c1' })], null);
+    const { service } = makeService([doc({ id: 'contract', type: 'CONTRACT', contractId: 'c1' })], null);
     const result = await service.findByBooking(userId, bookingId);
     expect(result[0].portalVisibility).toEqual({ visible: false, reason: 'voided' });
+  });
+
+  it('marks every ordinary booking-owned document isSeriesInvoice: false', async () => {
+    const { service } = makeService(
+      [doc({ id: 'invoice-sent', type: 'INVOICE', invoice: { status: 'SENT' } })],
+      { status: 'CONFIRMED', contracts: [] },
+    );
+    const result = await service.findByBooking(userId, bookingId);
+    expect(result[0].isSeriesInvoice).toBe(false);
+  });
+});
+
+// #848: a BookingSeries invoice's document belongs to no single booking (`bookingId: null`), yet
+// is discoverable from every member booking's Documents card because it covers all of them
+// (CONTEXT.md → "The one Document with no Booking"). It must never read as portal-visible through
+// a member booking regardless of its invoice's status — the ownership gate lives in the shared
+// authority (ADR-0054 amendment), not here, but this proves findByBooking threads it correctly.
+describe('DocumentsService.findByBooking (series invoice document union, #848)', () => {
+  const userId = 'u1';
+  const bookingId = 'b1';
+  const seriesId = 's1';
+
+  function makeService(seriesDoc: unknown) {
+    const repo = {
+      findByBooking: jest.fn().mockResolvedValue([]),
+      findBookingVisibilityContext: jest
+        .fn()
+        .mockResolvedValue({ status: 'CONFIRMED', seriesId, contracts: [] }),
+      findActiveSeriesInvoiceDocument: jest.fn().mockResolvedValue(seriesDoc),
+    } as unknown as DocumentsRepository;
+    const storage = {
+      getPublicUrl: jest.fn().mockReturnValue('https://example.com/doc.pdf'),
+    } as unknown as StorageService;
+    return { service: new DocumentsService({} as unknown as PrismaService, repo, storage), repo };
+  }
+
+  const seriesDoc = (invoiceStatus: string) => ({
+    id: 'd-series',
+    storageKey: 'k',
+    createdAt: new Date('2026-07-01'),
+    bookingId: null,
+    type: 'INVOICE',
+    invoiceId: 'inv-series',
+    invoice: { status: invoiceStatus },
+  });
+
+  it('unions the active series invoice document into a member booking\'s list', async () => {
+    const { service } = makeService(seriesDoc('SENT'));
+    const result = await service.findByBooking(userId, bookingId);
+    expect(result.map((d) => d.id)).toEqual(['d-series']);
+    expect(result[0].isSeriesInvoice).toBe(true);
+  });
+
+  it('looks the series document up by the booking\'s own seriesId', async () => {
+    const { service, repo } = makeService(seriesDoc('SENT'));
+    await service.findByBooking(userId, bookingId);
+    expect(repo.findActiveSeriesInvoiceDocument).toHaveBeenCalledWith(userId, seriesId);
+  });
+
+  it.each(['SENT', 'PAID', 'ISSUED'])(
+    'never marks the series document portal-visible, whatever its invoice status (%s)',
+    async (status) => {
+      const { service } = makeService(seriesDoc(status));
+      const result = await service.findByBooking(userId, bookingId);
+      expect(result[0].portalVisibility).toEqual({ visible: false, reason: 'other_booking' });
+    },
+  );
+
+  it('adds nothing when the booking is not in a series', async () => {
+    const repo = {
+      findByBooking: jest.fn().mockResolvedValue([]),
+      findBookingVisibilityContext: jest
+        .fn()
+        .mockResolvedValue({ status: 'CONFIRMED', seriesId: null, contracts: [] }),
+      findActiveSeriesInvoiceDocument: jest.fn(),
+    } as unknown as DocumentsRepository;
+    const storage = {} as unknown as StorageService;
+    const service = new DocumentsService({} as unknown as PrismaService, repo, storage);
+
+    const result = await service.findByBooking(userId, bookingId);
+    expect(result).toEqual([]);
+    expect(repo.findActiveSeriesInvoiceDocument).not.toHaveBeenCalled();
+  });
+
+  it('adds nothing when the series has no active (non-VOID) invoice document', async () => {
+    const { service } = makeService(null);
+    const result = await service.findByBooking(userId, bookingId);
+    expect(result).toEqual([]);
   });
 });
 

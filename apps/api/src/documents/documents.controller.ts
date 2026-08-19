@@ -36,6 +36,7 @@ function toDocumentResponse(d: DocumentListItem): DocumentResponseDto {
     invoiceId: d.invoiceId ?? null,
     contractStatus: d.type === 'CONTRACT' ? (d.contract?.status ?? null) : null,
     name: d.name ?? null,
+    isSeriesInvoice: d.isSeriesInvoice,
     portalVisibility: d.portalVisibility,
   };
 }

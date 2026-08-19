@@ -51,34 +51,46 @@ function makeDocumentsService(putObjectMock: jest.Mock) {
 
 describe('isPortalVisibleDocument', () => {
   const activeContractId = 'c-active';
+  // Every case in this block is a booking-owned, non-cancelled scenario — the two trailing args
+  // are required (not defaulted) on this portal-facing wrapper (#848), so they are always passed.
+  const owned = (doc: Parameters<typeof isPortalVisibleDocument>[0]) =>
+    isPortalVisibleDocument(doc, activeContractId, false, true);
 
   it('shows the active contract document, hides superseded ones', () => {
-    expect(isPortalVisibleDocument({ type: 'CONTRACT', contractId: activeContractId }, activeContractId)).toBe(true);
-    expect(isPortalVisibleDocument({ type: 'CONTRACT', contractId: 'c-old' }, activeContractId)).toBe(false);
+    expect(owned({ type: 'CONTRACT', contractId: activeContractId })).toBe(true);
+    expect(owned({ type: 'CONTRACT', contractId: 'c-old' })).toBe(false);
   });
 
   it('shows invoice documents only when the invoice is SENT or PAID', () => {
     for (const status of ['SENT', 'PAID']) {
-      expect(isPortalVisibleDocument({ type: 'INVOICE', invoice: { status } }, activeContractId)).toBe(true);
+      expect(owned({ type: 'INVOICE', invoice: { status } })).toBe(true);
     }
   });
 
   it('hides invoice documents for unsent (DRAFT/ISSUED) and VOID invoices', () => {
     for (const status of ['DRAFT', 'ISSUED', 'VOID']) {
-      expect(isPortalVisibleDocument({ type: 'INVOICE', invoice: { status } }, activeContractId)).toBe(false);
+      expect(owned({ type: 'INVOICE', invoice: { status } })).toBe(false);
     }
   });
 
   it('hides an invoice document whose invoice link has been cleared', () => {
-    expect(isPortalVisibleDocument({ type: 'INVOICE', invoice: null }, activeContractId)).toBe(false);
+    expect(owned({ type: 'INVOICE', invoice: null })).toBe(false);
   });
 
   it('always shows non-contract, non-invoice documents (e.g. song lists)', () => {
-    expect(isPortalVisibleDocument({ type: 'SONG_LIST' }, activeContractId)).toBe(true);
+    expect(owned({ type: 'SONG_LIST' })).toBe(true);
   });
 
   it('never shows UPLOAD documents — they are private musician paperwork (#579)', () => {
-    expect(isPortalVisibleDocument({ type: 'UPLOAD' }, activeContractId)).toBe(false);
+    expect(owned({ type: 'UPLOAD' })).toBe(false);
+  });
+
+  // #848: the required (not defaulted) 4th arg is what makes a call site fail to compile rather
+  // than fail open when it forgets to compute ownership.
+  it('hides a document not owned by this booking, whatever its own state', () => {
+    expect(isPortalVisibleDocument({ type: 'INVOICE', invoice: { status: 'SENT' } }, activeContractId, false, false)).toBe(
+      false,
+    );
   });
 });
 
@@ -405,7 +417,7 @@ describe('PortalService.getBookingData (visibility outputs)', () => {
   // #579 leak fixes: UPLOAD documents are never client-visible, and a cancelled booking hides the
   // whole contract concern (status, signed download, contract doc row) while keeping other docs.
   function doc(over: Record<string, unknown>) {
-    return { id: 'd', storageKey: 'k', createdAt: new Date('2026-07-01'), ...over };
+    return { id: 'd', storageKey: 'k', createdAt: new Date('2026-07-01'), bookingId, ...over };
   }
   const contractDoc = doc({ id: 'dc', type: 'CONTRACT', contractId: 'c1' });
   const invoiceDoc = doc({
@@ -451,4 +463,25 @@ describe('PortalService.getBookingData (visibility outputs)', () => {
     expect(result.signedContractUrl).not.toBeNull();
     expect(result.documents.map((d) => d.type)).toEqual(['CONTRACT', 'INVOICE']);
   });
+
+  // ADR-0054 amendment (2026-08-18) / #848: a BookingSeries invoice document has `bookingId: null`
+  // and is unioned onto every member booking's admin Documents list, but must never surface on any
+  // member booking's portal. This exercises the real getBookingData filter with a document whose
+  // bookingId does not match the requested booking — the scenario a future query widening could
+  // introduce — rather than only the pure authority in isolation, so a regression here fails a test
+  // that touches the actual portal path, not just resolveDocumentVisibility.
+  it.each(['SENT', 'PAID'])(
+    'excludes a document not owned by this booking from the portal, at any invoice status (%s, #848)',
+    async (status) => {
+      const seriesInvoiceDoc = doc({
+        id: 'dsi',
+        type: 'INVOICE',
+        bookingId: null,
+        invoice: { status, invoiceNumber: 'SI-1', isDeposit: false },
+      });
+      const service = makeService({ documents: [invoiceDoc, seriesInvoiceDoc] });
+      const result = await service.getBookingData(token);
+      expect(result.documents.map((d) => d.id)).toEqual(['di']);
+    },
+  );
 });

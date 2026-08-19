@@ -398,6 +398,7 @@ export const PORTAL_VISIBILITY_REASON_COPY: Record<PortalVisibilityReason, strin
   voided:          'Not visible — voided',
   not_shared:      'Not visible to client',
   cancelled:       'Not visible — cancelled',
+  other_booking:   'Not visible — belongs to the series',
 };
 
 // Portal theme choices, in display order. Consumed by the shared branding controls

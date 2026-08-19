@@ -362,7 +362,8 @@ export type PortalVisibilityReason =
   | 'until_published'
   | 'voided'
   | 'not_shared'
-  | 'cancelled';
+  | 'cancelled'
+  | 'other_booking';
 
 export interface PortalVisibilityVerdict {
   visible: boolean;
@@ -639,8 +640,12 @@ export interface Document {
   invoiceId: string | null;
   contractStatus: string | null;
   name: string | null;
+  // True for a BookingSeries invoice document — the one Document with no owning booking, listed
+  // on every member booking's card because it covers all of them (#848, CONTEXT.md → "The one
+  // Document with no Booking"). Never true for a document this booking actually owns.
+  isSeriesInvoice: boolean;
   // Per-document portal-visibility verdict (ADR-0054 / #580) — drives the per-row indicator.
-  // Narrowed to the four reasons a document can actually carry (#750).
+  // Narrowed to the reasons a document can actually carry (#750).
   portalVisibility: DocumentPortalVisibilityVerdict;
 }
 

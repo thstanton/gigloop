@@ -110,6 +110,33 @@ describe('portal-visibility authority (ADR-0054)', () => {
       });
     });
 
+    // ADR-0054 amendment (2026-08-18) / #848: ownership is the outermost gate — a document not
+    // owned by the booking asking about it is never visible, whatever its own state says. This is
+    // the leak a BookingSeries invoice document (bookingId: null, unioned into every member
+    // booking's Documents list) would otherwise open onto a member booking's portal.
+    describe('ownership is the outermost gate (ADR-0054 amendment, #848)', () => {
+      it.each(['SENT', 'PAID', 'ISSUED', 'VOID'])(
+        'hides a %s invoice document not owned by this booking',
+        (status) => {
+          expect(
+            resolveDocumentVisibility({ type: 'INVOICE', invoice: { status } }, activeContractId, false, false),
+          ).toEqual({ visible: false, reason: 'other_booking' });
+        },
+      );
+
+      it('still hides it on a cancelled booking (both gates agree, ownership wins first)', () => {
+        expect(
+          resolveDocumentVisibility({ type: 'INVOICE', invoice: { status: 'SENT' } }, activeContractId, true, false),
+        ).toEqual({ visible: false, reason: 'other_booking' });
+      });
+
+      it('defaults ownedByBooking to true, leaving every existing call site unaffected', () => {
+        expect(
+          resolveDocumentVisibility({ type: 'INVOICE', invoice: { status: 'SENT' } }, activeContractId),
+        ).toEqual({ visible: true });
+      });
+    });
+
     // #750: the DTO's Swagger enum is derived from DOCUMENT_PORTAL_VISIBILITY_REASONS, so that
     // array has to stay an accurate description of what this function can emit. These two guards
     // hold it there from both directions — at runtime over every branch, and at compile time.
