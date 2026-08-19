@@ -4,10 +4,19 @@ on:
   pull_request:
     branches: [main]
 
+# One in-flight run per branch. A new push supersedes the previous run rather
+# than racing it — without this, a pushed-over commit's jobs kept running to
+# their own completion, holding a runner and (for integration/e2e) an ephemeral
+# Neon branch for the life of the zombie run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   detect-changes:
     name: Detect Changes
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       api: ${{ steps.filter.outputs.api }}
       web: ${{ steps.filter.outputs.web }}
@@ -42,6 +51,7 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.api == 'true' || needs.detect-changes.outputs.web == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -72,6 +82,7 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.api == 'true' || needs.detect-changes.outputs.web == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -111,6 +122,7 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.api == 'true' || needs.detect-changes.outputs.web == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -143,6 +155,7 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.api == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
@@ -196,6 +209,7 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.e2e == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
@@ -227,6 +241,11 @@ jobs:
           DATABASE_URL: ${{ steps.neon.outputs.db_url }}
           DIRECT_URL: ${{ steps.neon.outputs.db_url }}
       - name: Install Playwright browser
+        # `--with-deps` shells out to apt-get, which has stalled indefinitely on
+        # an unreachable Ubuntu mirror (2026-08-19: 38 min of silence after
+        # falling back from azure.archive.ubuntu.com). Fail fast instead — a
+        # re-run lands on a different mirror. Normal time for this step is ~1 min.
+        timeout-minutes: 8
         run: cd e2e && bunx playwright install --with-deps chromium
       - name: Run e2e suite
         run: bun run test:e2e
@@ -263,6 +282,7 @@ jobs:
     needs: [lint, test, build]
     if: always()
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Pass if all required jobs succeeded or were skipped
         run: |
