@@ -11,6 +11,17 @@ export interface InvoiceForRules {
 /** True when the invoice is a draft and can be issued (DRAFT → ISSUED). */
 export const isIssuable = (i: InvoiceForRules): boolean => i.status === 'DRAFT';
 
+/**
+ * True when a prior issue committed the number + dates but a downstream failure (PDF render, R2
+ * write) never produced a Document, leaving the invoice ISSUED and stranded — un-reissuable and
+ * un-sendable (#849, ADR-0070). This is a repair, not a re-issue: the number, issue date and due
+ * date stay frozen; only the missing artifact is regenerated. The moment a Document exists the
+ * invoice is frozen again and this closes. `hasDocument` is supplied by the caller — this predicate
+ * stays pure and never fetches it itself.
+ */
+export const isRepairableIssue = (i: InvoiceForRules, hasDocument: boolean): boolean =>
+  i.status === 'ISSUED' && !hasDocument;
+
 /** True when the invoice can be sent or marked-sent (status is ISSUED). */
 export const isSendable = (i: InvoiceForRules): boolean => i.status === 'ISSUED';
 

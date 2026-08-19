@@ -52,6 +52,7 @@ describe('InvoiceTransitionService', () => {
   let mockDocuments: {
     generateAndStoreInvoicePdf: jest.Mock;
     getStoredInvoicePdfBuffer: jest.Mock;
+    findByInvoice: jest.Mock;
   };
   let mockComms: { sendEmail: jest.Mock };
   let mockReeval: { onBookingChanged: jest.Mock };
@@ -71,6 +72,9 @@ describe('InvoiceTransitionService', () => {
     mockDocuments = {
       generateAndStoreInvoicePdf: jest.fn().mockResolvedValue({ buffer: pdfBuffer, documentId: 'doc-generated' }),
       getStoredInvoicePdfBuffer: jest.fn().mockResolvedValue({ buffer: pdfBuffer, documentId: 'doc-stored' }),
+      // Default: an ISSUED fixture already has its Document, matching normal (non-stranded) reality.
+      // Repair-path tests override this to null to simulate a stranded invoice.
+      findByInvoice: jest.fn().mockResolvedValue({ id: 'doc-existing' }),
     };
     mockComms = { sendEmail: jest.fn().mockResolvedValue(undefined) };
     mockReeval = { onBookingChanged: jest.fn().mockResolvedValue(undefined) };
@@ -87,9 +91,17 @@ describe('InvoiceTransitionService', () => {
   // ─── issueInvoice ──────────────────────────────────────────────────────────
 
   describe('issueInvoice', () => {
-    it('throws BadRequestException when invoice is not DRAFT', async () => {
+    it('throws BadRequestException for an ISSUED invoice that already has a Document', async () => {
       await expect(service.issueInvoice('u1', bookingIssued, {})).rejects.toThrow(BadRequestException);
       expect(mockRepo.assignAndMarkIssued).not.toHaveBeenCalled();
+      expect(mockDocuments.generateAndStoreInvoicePdf).not.toHaveBeenCalled();
+    });
+
+    it('throws BadRequestException for SENT/PAID/VOID regardless of document state', async () => {
+      mockDocuments.findByInvoice.mockResolvedValue(null);
+      await expect(service.issueInvoice('u1', bookingSent, {})).rejects.toThrow(BadRequestException);
+      await expect(service.issueInvoice('u1', bookingPaid, {})).rejects.toThrow(BadRequestException);
+      await expect(service.issueInvoice('u1', bookingVoided, {})).rejects.toThrow(BadRequestException);
     });
 
     it('allocates a booking number via assignAndMarkIssued with booking context', async () => {
@@ -163,6 +175,75 @@ describe('InvoiceTransitionService', () => {
     it('returns the written invoice without re-fetching', async () => {
       const result = await service.issueInvoice('u1', bookingDraft, {});
       expect(result).toBe(numberedInvoice);
+    });
+  });
+
+  // ─── issueInvoice: repair path (#849, ADR-0070) ────────────────────────────
+  // A prior issue committed the number + dates but a downstream failure (PDF render, R2 write)
+  // never produced a Document — the invoice is ISSUED and stranded. Repair regenerates only the
+  // missing artifact; it must never reallocate the number or recompute the dates.
+
+  describe('issueInvoice — repair of a stranded ISSUED invoice', () => {
+    beforeEach(() => {
+      mockDocuments.findByInvoice.mockResolvedValue(null);
+    });
+
+    it('regenerates the PDF without reallocating a number or dates', async () => {
+      await service.issueInvoice('u1', bookingIssued, {});
+      expect(mockRepo.assignAndMarkIssued).not.toHaveBeenCalled();
+      expect(mockRepo.assignSeriesAndMarkIssued).not.toHaveBeenCalled();
+      expect(mockDocuments.generateAndStoreInvoicePdf).toHaveBeenCalledWith('u1', 'i1', undefined, 'b1');
+    });
+
+    it('passes undefined bookingId to generateAndStoreInvoicePdf for a series invoice', async () => {
+      await service.issueInvoice('u1', seriesIssued, {});
+      expect(mockDocuments.generateAndStoreInvoicePdf).toHaveBeenCalledWith('u1', 'i2', undefined, undefined);
+    });
+
+    it('re-evaluates the booking checklist — the tail the interrupted issue never reached', async () => {
+      await service.issueInvoice('u1', bookingIssued, {});
+      expect(mockReeval.onBookingChanged).toHaveBeenCalledWith('b1');
+    });
+
+    it('does not re-evaluate any checklist for a series invoice', async () => {
+      await service.issueInvoice('u1', seriesIssued, {});
+      expect(mockReeval.onBookingChanged).not.toHaveBeenCalled();
+    });
+
+    it('returns the invoice unchanged — number, status, dates untouched', async () => {
+      const result = await service.issueInvoice('u1', bookingIssued, {});
+      expect(result).toBe(bookingIssued);
+    });
+
+    it('refuses when a Document already exists — the invoice is frozen again', async () => {
+      mockDocuments.findByInvoice.mockResolvedValue({ id: 'doc-existing' });
+      await expect(service.issueInvoice('u1', bookingIssued, {})).rejects.toThrow(BadRequestException);
+      expect(mockDocuments.generateAndStoreInvoicePdf).not.toHaveBeenCalled();
+      expect(mockReeval.onBookingChanged).not.toHaveBeenCalled();
+    });
+
+    it('does not surface a repair for DRAFT — DRAFT always takes the normal issue path', async () => {
+      mockDocuments.findByInvoice.mockResolvedValue(null);
+      await service.issueInvoice('u1', bookingDraft, {});
+      expect(mockDocuments.findByInvoice).not.toHaveBeenCalled();
+      expect(mockRepo.assignAndMarkIssued).toHaveBeenCalled();
+    });
+
+    // The scenario #849 exists to fix: a real PDF-generation failure strands the invoice, then a
+    // second issue call repairs it.
+    it('recovers a real strand: PDF generation fails on issue, then repairs on retry', async () => {
+      mockDocuments.generateAndStoreInvoicePdf.mockRejectedValueOnce(new Error('R2 outage'));
+      await expect(service.issueInvoice('u1', bookingDraft, {})).rejects.toThrow('R2 outage');
+      // The number/status write already committed — the invoice is now stranded: ISSUED, no Document.
+      expect(mockRepo.assignAndMarkIssued).toHaveBeenCalledTimes(1);
+      expect(mockReeval.onBookingChanged).not.toHaveBeenCalled();
+
+      mockDocuments.generateAndStoreInvoicePdf.mockResolvedValue({ buffer: pdfBuffer, documentId: 'doc-repaired' });
+      const repaired = await service.issueInvoice('u1', bookingIssued, {});
+
+      expect(mockRepo.assignAndMarkIssued).toHaveBeenCalledTimes(1); // never re-allocated
+      expect(repaired).toBe(bookingIssued);
+      expect(mockReeval.onBookingChanged).toHaveBeenCalledWith('b1');
     });
   });
 
