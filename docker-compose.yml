@@ -1,0 +1,53 @@
+# The local development database (#906).
+#
+# Why local runs a container rather than a branch of a Neon project: ADR-0075 §1.
+# Where it sits in the wider model: docs/environments.md. How to use it:
+# README → "The local database".
+#
+# The image is pinned to postgres:18 to match prod's major version.
+#
+# The credentials below define the container — they are not a connection string
+# to anything, which is why apps/api/.env.example carries a placeholder and you
+# assemble the URL from these by hand. They are trivial on purpose: this
+# database is loopback-only and holds nothing but seed data that
+# `bun run db:reset` regenerates. If that ever stops being true, move them to a
+# gitignored root .env and read them here as ${POSTGRES_PASSWORD}.
+
+# Pinned so the project name doesn't follow the checkout directory (a worktree
+# would otherwise get its own network, volume and container).
+name: gigloop
+
+services:
+  db:
+    image: postgres:18
+    container_name: gigloop-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: gigloop
+      POSTGRES_PASSWORD: gigloop
+      POSTGRES_DB: gigloop
+    ports:
+      # Published on 5433, not 5432, and bound to loopback only. A machine that
+      # already runs a native Postgres holds 127.0.0.1:5432; Docker still binds
+      # *:5432 successfully, so nothing errors — `localhost:5432` just silently
+      # reaches the *other* server and Prisma reports a baffling P1010. 5433
+      # keeps the two apart. Loopback-only keeps the database off the LAN.
+      - '127.0.0.1:5433:5432'
+    volumes:
+      # postgres:18 declares /var/lib/postgresql as its volume and puts the
+      # cluster in $PGDATA=/var/lib/postgresql/18/docker beneath it. Mounting
+      # the older /var/lib/postgresql/data path would leave the real data
+      # directory inside the container layer, so the database would silently
+      # not survive `docker compose down`.
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      # Makes `docker compose up -d --wait` mean "accepting connections",
+      # so `bun run db:up && bun run db:reset` works without a sleep.
+      test: ['CMD-SHELL', 'pg_isready -U gigloop -d gigloop']
+      interval: 2s
+      timeout: 5s
+      retries: 15
+      start_period: 5s
+
+volumes:
+  pgdata:

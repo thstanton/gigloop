@@ -8,7 +8,13 @@
     "build": "npm run build -ws --if-present",
     "lint": "npm run lint -ws --if-present",
     "test": "npm run test -ws --if-present",
-    "test:e2e": "npm run test:e2e -w @gigloop/e2e"
+    "test:e2e": "npm run test:e2e -w @gigloop/e2e",
+    "db:up": "docker compose up -d --wait",
+    "db:down": "docker compose down",
+    "db:destroy": "docker compose down -v",
+    "db:migrate": "npm run db:migrate -w apps/api",
+    "db:reset": "npm run db:reset -w apps/api",
+    "seed": "npm run seed -w apps/api"
   },
   "devDependencies": {
     "@storybook/react": "^10.4.1",
