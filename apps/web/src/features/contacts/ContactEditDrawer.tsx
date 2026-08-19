@@ -102,8 +102,7 @@ export default function ContactEditDrawer({ contact }: Props) {
             {deleteConfirm ? (
               <Button
                 size="sm"
-                variant="outline"
-                className="text-status-cancelled border-status-cancelled hover:bg-status-cancelled/5"
+                variant="destructiveOutline"
                 disabled={deleteMutation.isPending}
                 onClick={() => deleteMutation.mutate()}
               >
@@ -112,8 +111,7 @@ export default function ContactEditDrawer({ contact }: Props) {
             ) : (
               <Button
                 size="sm"
-                variant="outline"
-                className="text-status-cancelled border-status-cancelled hover:bg-status-cancelled/5"
+                variant="destructiveOutline"
                 disabled={totalBookings > 0}
                 onClick={() => setDeleteConfirm(true)}
               >
