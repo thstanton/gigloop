@@ -8,6 +8,8 @@ import { buildInvoiceNumber } from '../src/invoices/invoices.repository';
 
 const OTHER_USER_ID = 'invoice-other-user';
 const FUTURE_DATE = '2027-09-15T14:00:00.000Z';
+// Deliberately not today: a today-shaped date cannot tell a recorded received date from a now() stamp.
+const RECEIVED_ON = '2026-08-11';
 
 describe('Invoice flow (integration)', () => {
   let app: INestApplication;
@@ -195,12 +197,18 @@ describe('Invoice flow (integration)', () => {
 
       const res = await request(app.getHttpServer())
         .post(`/api/bookings/${bookingId}/invoices/${invoiceId}/mark-paid`)
-        .send({});
+        .send({ paidAt: RECEIVED_ON, paymentReference: 'BACS-4417' });
       expect(res.status).toBe(201);
+
+      // ADR-0068: the date recorded is the one supplied, not the moment the button was tapped.
+      expect(res.body.paidAt).toContain(RECEIVED_ON);
+      expect(res.body.paymentReference).toBe('BACS-4417');
 
       // TIM-47: the PAID deposit invoice completes the step directly — no booking column is written.
       const item = await getChecklistItem(bookingId, 'deposit_received');
       expect(item?.state).toBe('COMPLETE');
+      const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
+      expect(booking?.depositReceivedAt).toBeNull();
 
       await prisma.booking.delete({ where: { id: bookingId } });
     });
@@ -477,9 +485,10 @@ describe('Invoice flow (integration)', () => {
       const bookingId = await createBooking();
       const invoiceId = await createInvoice(bookingId, true);
 
+      // A valid payment date, so the 400 proves the state guard rather than DTO validation.
       const res = await request(app.getHttpServer())
         .post(`/api/bookings/${bookingId}/invoices/${invoiceId}/mark-paid`)
-        .send({});
+        .send({ paidAt: RECEIVED_ON });
       expect(res.status).toBe(400);
 
       await prisma.booking.delete({ where: { id: bookingId } });
