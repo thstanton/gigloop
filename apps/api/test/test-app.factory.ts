@@ -46,6 +46,8 @@ const mockMailService = {
   renderTemplate: jest.fn().mockReturnValue({ html: '<p>mock</p>', missingVariables: [] }),
   renderSubject: jest.fn().mockReturnValue({ subject: 'Mock Subject', missingVariables: [] }),
   buildContext: jest.fn().mockResolvedValue(mockEmailContext),
+  // #932: CommunicationsService.sendEmail resolves this for every client-facing send.
+  getSenderIdentity: jest.fn().mockResolvedValue({ name: mockEmailContext.musicianName, email: mockEmailContext.musicianEmail }),
 };
 
 const mockDistanceMatrixClient = {
