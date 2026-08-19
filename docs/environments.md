@@ -18,18 +18,18 @@ There are **two deployed environments**, plus local development and throwaway da
 |---|---|---|
 | Who uses it | Real musicians, real data | You, before a release |
 | Web | `www.gigloop.co.uk` | `preprod.gigloop.co.uk` |
-| API | `valiant-respect-production-c8bb.up.railway.app/api` | `valiant-respect-staging.up.railway.app/api` |
+| API | `valiant-respect-production-c8bb.up.railway.app/api` | `valiant-respect-staging.up.railway.app/api` (hostname is vestigial — see below) |
 | Data | Real customer data | **Synthetic** — seeded, never a copy of prod |
 | Clerk | Production instance | Development instance |
 | R2 | `gigloop-public` / `gigloop-documents` | `gigloop-preprod-public` / `gigloop-preprod-documents` |
 | Email | Real delivery | Resend sandbox sender — cannot reach a real client |
 | Deploys when | A human pushes a `v*` tag | A commit lands on `main` |
 
-**"Preprod" is the only name for that environment.** ✅ Docs, GitHub variables and GitHub Environments say `preprod`. ⏳ #905 — Railway still calls its environment `staging` and Neon still calls the branch `production`; both are console renames.
+**"Preprod" is the only name for that environment.** ✅ Docs, GitHub variables, GitHub Environments, the Railway environment and the Neon branch all say `preprod` (#905, completed 2026-08-19).
 
 "Smoke test" survives only as the name of the *activity* you run there, never the place. ADR-0044's body still says "smoke-test environment" throughout — that is left as a historical record, not swept; its header note carries the supersession.
 
-⚠️ **Renaming the Railway environment may change the generated public hostname** (today `valiant-respect-staging.up.railway.app`). If it does, `VITE_API_BASE_URL` on the Vercel preprod project must be updated and preprod redeployed, or the preprod frontend calls a host that no longer exists. Check the domain immediately after the rename.
+⚠️ **The preprod API hostname still contains the word `staging` — `valiant-respect-staging.up.railway.app` — and that is deliberate.** Railway kept the generated hostname when the environment was renamed (verified 2026-08-19), so nothing broke. It is left alone because the hostname is baked into `VITE_API_BASE_URL` on the Vercel preprod project; changing it would break the preprod frontend for no benefit. **Treat `valiant-respect-staging` as a vestigial label, not a second environment.**
 
 Environment names are **not** domain vocabulary and are deliberately absent from `CONTEXT.md`, which is the product domain — bookings, invoices, contacts.
 
@@ -43,7 +43,7 @@ Every database is Neon Postgres except local.
 |---|---|---|---|
 | **prod** | `GigLoop` · `curly-forest-25260742` | `production` | The live app |
 | **prod snapshots** | same | `pre-release-v*` | Rollback targets, one per release (ADR-0044 §6) |
-| **preprod** | `GigLoop PreProd` · `autumn-hill-65970446` | `production` → `preprod` (⏳ #905 — Neon rename is a console action) | The preprod app |
+| **preprod** | `GigLoop PreProd` · `autumn-hill-65970446` | `preprod` | The preprod app |
 | **CI throwaway** | same as preprod | `ci-integration-*`, `ci-e2e-*` | Created and destroyed per CI run |
 | **local** | ⏳ #906 — moving to Docker `postgres:18` | — | Your laptop |
 
