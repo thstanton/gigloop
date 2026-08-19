@@ -15,7 +15,7 @@ export class InvoiceLineItemResponseDto {
 
   @ApiProperty() order: number;
 
-  @ApiPropertyOptional({ nullable: true }) sourceBookingId: string | null;
+  @ApiPropertyOptional({ type: String, nullable: true }) sourceBookingId: string | null;
 }
 
 // Wire shape of an Invoice — the one polymorphic entity of ADR-0063/#687.
@@ -34,19 +34,21 @@ export class InvoiceResponseDto {
   @ApiProperty({ description: 'Always present; false for series invoices' })
   isDeposit: boolean;
 
-  @ApiPropertyOptional({ nullable: true }) invoiceNumber: string | null;
-  @ApiPropertyOptional({ nullable: true }) issueDate: string | null;
-  @ApiPropertyOptional({ nullable: true }) dueDate: string | null;
-  @ApiPropertyOptional({ nullable: true, description: 'Date the payment was received (ADR-0068)' }) paidAt: string | null;
-  @ApiPropertyOptional({ nullable: true, description: 'Optional payment reference recorded alongside paidAt' }) paymentReference: string | null;
+  @ApiPropertyOptional({ type: String, nullable: true }) invoiceNumber: string | null;
+  @ApiPropertyOptional({ type: String, nullable: true }) issueDate: string | null;
+  @ApiPropertyOptional({ type: String, nullable: true }) dueDate: string | null;
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'Date the payment was received (ADR-0068)' }) paidAt: string | null;
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'Optional payment reference recorded alongside paidAt' }) paymentReference: string | null;
 
   @ApiPropertyOptional({
+    type: String,
     nullable: true,
     description: 'Set for a booking invoice; null for a series invoice. Exactly one of bookingId/seriesId is set.',
   })
   bookingId: string | null;
 
   @ApiPropertyOptional({
+    type: String,
     nullable: true,
     description: 'Set for a series invoice; null for a booking invoice. Exactly one of bookingId/seriesId is set.',
   })

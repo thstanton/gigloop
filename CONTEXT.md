@@ -187,7 +187,7 @@ A reusable content block stored as Tiptap JSON. Used for email body rendering an
 
 **Fields:** name, content (Tiptap JSON), builtInType (optional enum — only set for system-provided templates)
 
-**Built-in email types:** `quote | confirmation | contract_cover | contract_and_deposit_cover | deposit_invoice_cover | balance_invoice_cover | contract_received | deposit_received | music_form_invite | thank_you`
+**Built-in email types:** `quote | confirmation | contract_cover | contract_and_deposit_cover | deposit_invoice_cover | balance_invoice_cover | series_invoice_cover | contract_received | deposit_received | music_form_invite | thank_you`
 
 **Built-in document types:** `contract`
 
@@ -201,13 +201,16 @@ The template type encodes what gets attached — the musician picks the template
 | `contract_and_deposit_cover` | ✓ | deposit [[Invoice]] PDF |
 | `deposit_invoice_cover` | — | deposit [[Invoice]] PDF |
 | `balance_invoice_cover` | — | balance [[Invoice]] PDF |
+| `series_invoice_cover` | — | series [[Invoice]] PDF |
 | all others | — | none |
 
 `contract_and_deposit_cover` is the common first-contact flow: send the contract link and the deposit invoice together. `deposit_invoice_cover` and `balance_invoice_cover` are for sending invoices independently. The distinction between deposit and balance is encoded in the template type rather than a runtime selection — this prevents accidentally sending the wrong invoice.
 
+`series_invoice_cover` is the [[BookingSeries]] counterpart, and the one email template that is **not** booking-shaped: it is addressed to the series customer and names the series and the dates its invoice covers. It is rendered from a series-shaped context (`seriesLabel`, `datesCovered` — no `bookingDate`, `venueName` or `portalLink`), because a series invoice has no single event date and the deposit/balance axis is booking-only.
+
 The `quote` template is optional — in current practice quotes are sent externally before a booking is created in the app. It becomes more useful once P2 email ingestion allows bookings to be created at the enquiry stage.
 
-**Variable substitution:** flat named variables — the API pre-computes a flat context object before rendering. No dot-notation paths or loops in template content. Multi-value data (e.g. sets schedule) is pre-rendered into a single substitution variable (e.g. `{{setsSchedule}}`). Variables are filtered per template type in the editor — only variables that are meaningful for that template are offered for insertion.
+**Variable substitution:** flat named variables — the API pre-computes a flat context object before rendering. There are two such shapes: the booking-shaped `EmailContext` and the series-shaped `SeriesEmailContext`, sharing the fields that describe the recipient, the musician and the attached invoice. Substitution resolves by variable *name*, so a variable the context in hand does not carry falls back and is reported in `missingVariables` rather than failing. No dot-notation paths or loops in template content. Multi-value data (e.g. sets schedule) is pre-rendered into a single substitution variable (e.g. `{{setsSchedule}}`). Variables are filtered per template type in the editor — only variables that are meaningful for that template are offered for insertion.
 
 **Variable chips:** in the template editor, variables are inserted as non-editable inline nodes (chips) that display a human-readable label (e.g. "Customer name") but serialise as `{{customerName}}` in the Tiptap JSON. Free-typing variable syntax is not supported — variables must be inserted via the picker.
 

@@ -17,9 +17,9 @@ import {
 import { DatePicker } from '@/components/ui/date-picker';
 import { InlineHint } from '@/components/common/InlineHint';
 import { TEMPLATE_DISPLAY } from '@/features/templates/templateMeta';
-import { formatMissingVariables, type AttachmentState } from './composeHelpers';
+import { formatMissingVariables, type AttachmentState, type SeriesComposeTarget } from './composeHelpers';
 import { useComposeEmail } from './useComposeEmail';
-import type { BookingDetail, ChecklistItem, Invoice, Template } from '@/types/api';
+import type { ChecklistItem, Contact, Invoice, Template, BookingDetail } from '@/types/api';
 
 interface Props {
   bookingId: string;
@@ -37,11 +37,17 @@ interface Props {
   creatingContract: boolean;
   /** #757 Hint B action: route to the pre-filled deposit-invoice sheet. */
   createDepositInvoiceHref: string;
+  /**
+   * Present ⇒ series mode (#847): the sheet composes the cover for this already-resolved series
+   * invoice — series template, series recipient, series render and send routes — instead of
+   * composing for the member booking it is mounted on.
+   */
+  series?: SeriesComposeTarget;
 }
 
 // ─── Presentational fields ──────────────────────────────────────────────────
 
-function RecipientField({ customer }: { customer: BookingDetail['customer'] }) {
+function RecipientField({ customer }: { customer: Contact }) {
   return (
     <div>
       <p className="text-xs text-muted mb-1">To</p>
@@ -258,7 +264,7 @@ function ComposeEmailSheetBody(props: Props) {
       </SheetHeader>
 
       <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-        <RecipientField customer={booking.customer} />
+        <RecipientField customer={vm.recipient} />
         <TemplatePicker
           templates={vm.emailTemplates}
           value={vm.selectedTemplateId}

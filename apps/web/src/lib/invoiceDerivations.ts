@@ -60,10 +60,15 @@ export function isDepositPercentageHintEligible(
 }
 
 /**
- * Cover-email template for sending an invoice. A series invoice has isDeposit false, so it resolves
- * to the balance cover — preserving today's hardcoded series send.
+ * Cover-email template for sending an invoice, derived from its owner FK first (ADR-0063: one
+ * polymorphic Invoice). The owner check must come first: a series invoice also has `isDeposit`
+ * false, so keying on that alone silently resolved it to the *balance* cover — wrong three times
+ * over for a residency invoice (#846), and the reason a series invoice could not be sent at all
+ * (#847). Every path that pre-selects a cover template goes through here, so the row menu and the
+ * issue-then-send chain out of InvoiceSheet cannot disagree.
  */
 export function coverTemplateFor(invoice: Invoice): BuiltInTemplateType {
+  if (invoice.seriesId) return 'series_invoice_cover';
   return invoice.isDeposit ? 'deposit_invoice_cover' : 'balance_invoice_cover';
 }
 

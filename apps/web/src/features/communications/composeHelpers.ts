@@ -1,6 +1,33 @@
-import type { BuiltInTemplateType, ChecklistItem, Contract, Invoice, Template } from '@/types/api';
+import type { BuiltInTemplateType, ChecklistItem, Contact, Contract, Invoice, Template } from '@/types/api';
 import { VAR_LABELS, BUILT_IN_EMAIL_TYPES } from '@/features/templates/templateMeta';
 import { activeInvoiceOf, hasAnyDepositInvoice } from '@/lib/invoiceDerivations';
+import { invoiceOwnerRoute } from '@/lib/invoiceActionRouting';
+
+/**
+ * The series invoice a compose sheet was opened to send (#847) — the sheet's *owner* for that
+ * open. Present ⇒ series mode: the sheet composes `series_invoice_cover` against the series,
+ * renders with series context, and posts to the series send route.
+ *
+ * The invoice is handed in already resolved. It is never searched for in the member booking's
+ * invoice list — that list is empty for a series member, which is what left the compose sheet
+ * with a hidden template and no attachment (the same defect class as #844).
+ */
+export interface SeriesComposeTarget {
+  seriesId: string;
+  seriesLabel: string;
+  /**
+   * The series' single active invoice. `SeriesService.createInvoice` rejects a second non-VOID
+   * invoice with a 409, so `GET /series/:id/invoices/current` *is* the acted-on invoice — there
+   * is no list to pick the wrong row from.
+   */
+  invoice: Invoice;
+  /**
+   * Who the invoice is billed to. `createSeriesInvoice` seeds `billToContactId` from
+   * `series.customerId`, so this is the *series* customer — which may differ from any member
+   * booking's own customer (CONTEXT.md → BookingSeries → Membership).
+   */
+  recipient: Contact;
+}
 
 // A goal is identified by its post-ADR-0057 key or its legacy flat key — the same dual-key check
 // the API uses (bookings.service.ts). `checklist` is goals-only; step keys never appear here.
@@ -46,6 +73,7 @@ const ATTACHMENT_TEMPLATE_TYPES: BuiltInTemplateType[] = [
   'deposit_invoice_cover',
   'balance_invoice_cover',
   'contract_and_deposit_cover',
+  'series_invoice_cover',
 ];
 
 export type AttachmentState =
@@ -53,10 +81,17 @@ export type AttachmentState =
   | { kind: 'warning'; message: string }
   | null;
 
+/**
+ * The invoice a template attaches. `invoices` is the *booking's* list; `series` is the resolved
+ * series invoice when the sheet is in series mode. The series cover never consults the list — a
+ * series invoice is not booking-scoped, so searching a booking's list for one is the bug (#844).
+ */
 export function getInvoiceIdForTemplate(
   type: BuiltInTemplateType | null,
   invoices: Invoice[],
+  series?: SeriesComposeTarget,
 ): string | undefined {
+  if (type === 'series_invoice_cover') return series?.invoice.id;
   if (type === 'deposit_invoice_cover' || type === 'contract_and_deposit_cover') {
     return activeInvoiceOf(true, invoices)?.id;
   }
@@ -66,6 +101,18 @@ export function getInvoiceIdForTemplate(
   return undefined;
 }
 
+/**
+ * ⚠️ Currently unreferenced by the compose sheet. The picker has filtered on
+ * {@link isComposableEmailTemplate} alone since the ComposeEmailSheet decomposition (#448), so
+ * the invoice-presence rules below decide nothing at runtime: a booking with no deposit invoice
+ * is *offered* `deposit_invoice_cover` and warned by {@link getAttachmentState} instead. It is
+ * kept because `invoiceDerivations` cites it as the authority its shortcut predicates must match.
+ * Wiring it back in is a decision with UX consequences (it would make both that warning and the
+ * #757 create-invoice hints unreachable) — hence its own issue, not a side-effect of #847.
+ *
+ * The series cover is deliberately *not* handled here: which owner the sheet is composing for is
+ * decided in {@link isComposableEmailTemplate}, the wired predicate, so the two cannot disagree.
+ */
 export function shouldHideTemplate(
   type: BuiltInTemplateType,
   invoices: Invoice[],
@@ -87,28 +134,36 @@ export function shouldHideTemplate(
 
 function resolveAttachmentFilename(invoice: Invoice | undefined): string {
   if (invoice?.invoiceNumber) return `Invoice ${invoice.invoiceNumber}.pdf`;
+  if (invoice?.seriesId) return 'Series invoice PDF';
   if (invoice?.isDeposit) return 'Deposit invoice PDF';
   return 'Balance invoice PDF';
 }
 
+const MISSING_ATTACHMENT_MESSAGES: Partial<Record<BuiltInTemplateType, string>> = {
+  balance_invoice_cover: 'No balance invoice to attach',
+  series_invoice_cover: 'No series invoice to attach',
+};
+
 export function getAttachmentState(
   type: BuiltInTemplateType | null,
   invoices: Invoice[],
+  series?: SeriesComposeTarget,
 ): AttachmentState {
   if (!type || !ATTACHMENT_TEMPLATE_TYPES.includes(type)) return null;
 
-  const invoiceId = getInvoiceIdForTemplate(type, invoices);
+  const invoiceId = getInvoiceIdForTemplate(type, invoices, series);
   if (!invoiceId) {
     return {
       kind: 'warning',
-      message:
-        type === 'balance_invoice_cover'
-          ? 'No balance invoice to attach'
-          : 'No deposit invoice to attach',
+      message: MISSING_ATTACHMENT_MESSAGES[type] ?? 'No deposit invoice to attach',
     };
   }
 
-  const invoice = invoices.find((i) => i.id === invoiceId);
+  // The series invoice is not in the booking's list — resolve it from the target that carried it.
+  const invoice =
+    series && series.invoice.id === invoiceId
+      ? series.invoice
+      : invoices.find((i) => i.id === invoiceId);
   const filename = resolveAttachmentFilename(invoice);
 
   return { kind: 'present', filename };
@@ -121,13 +176,24 @@ export function formatMissingVariables(keys: string[]): string {
   return `${labels.slice(0, -1).join(', ')}, and ${labels[labels.length - 1]}`;
 }
 
-/** A template is composable as an email when it is a built-in email type (music-form invites need config). */
-export function isComposableEmailTemplate(t: Template, hasMusicFormConfig: boolean): boolean {
-  return (
-    !!t.builtInType &&
-    BUILT_IN_EMAIL_TYPES.includes(t.builtInType as BuiltInTemplateType) &&
-    (t.builtInType !== 'music_form_invite' || hasMusicFormConfig)
-  );
+/**
+ * A template is composable as an email when it is a built-in email type (music-form invites need
+ * config) *and* it belongs to the owner this sheet was opened for.
+ *
+ * The owner split is what makes the surface owner-aware (#847). In series mode the only sensible
+ * email is the series cover — every other built-in renders against a booking the series invoice
+ * has no single one of. In booking mode the series cover is excluded for the mirror-image reason:
+ * offered on an ordinary booking it would render a body of pure fallbacks and attach nothing.
+ */
+export function isComposableEmailTemplate(
+  t: Template,
+  hasMusicFormConfig: boolean,
+  series?: SeriesComposeTarget,
+): boolean {
+  if (!t.builtInType || !BUILT_IN_EMAIL_TYPES.includes(t.builtInType as BuiltInTemplateType)) return false;
+  if (series) return t.builtInType === 'series_invoice_cover';
+  if (t.builtInType === 'series_invoice_cover') return false;
+  return t.builtInType !== 'music_form_invite' || hasMusicFormConfig;
 }
 
 /** First template matching the requested built-in type, or null. */
@@ -150,6 +216,16 @@ export function computeInvoiceDateDefaults(
   return { issueDate, dueDate: due.toISOString().slice(0, 10) };
 }
 
+/**
+ * The render route's owner prefix. Unlike every other owner-derived invoice URL, this one cannot
+ * come from `invoiceOwnerRoute`: a template renders with or without an invoice (a contract cover
+ * has none), so the owner here is the *sheet's*, not an invoice's. The send URL does go through
+ * `invoiceOwnerRoute` — see buildSendRequest.
+ */
+function renderOwnerPrefix(bookingId: string, series: SeriesComposeTarget | undefined): string {
+  return series ? `/series/${series.seriesId}` : `/bookings/${bookingId}`;
+}
+
 interface RenderUrlOpts {
   bookingId: string;
   templateId: string;
@@ -157,12 +233,13 @@ interface RenderUrlOpts {
   issueDate: string;
   dueDate: string;
   showDateFields: boolean;
+  series?: SeriesComposeTarget;
 }
 
 /** Builds the render-preview URL for the selected template; empty string when no template is selected. */
 export function buildRenderUrl(opts: RenderUrlOpts): string {
   if (!opts.templateId) return '';
-  let url = `/bookings/${opts.bookingId}/communications/render?templateId=${opts.templateId}`;
+  let url = `${renderOwnerPrefix(opts.bookingId, opts.series)}/communications/render?templateId=${opts.templateId}`;
   if (opts.invoiceId) url += `&invoiceId=${opts.invoiceId}`;
   if (opts.issueDate && opts.showDateFields) url += `&issueDate=${opts.issueDate}`;
   if (opts.dueDate && opts.showDateFields) url += `&dueDate=${opts.dueDate}`;
@@ -171,8 +248,12 @@ export function buildRenderUrl(opts: RenderUrlOpts): string {
 
 interface SendRequestOpts {
   bookingId: string;
-  invoiceId: string | undefined;
-  isInvoiceEmail: boolean;
+  /**
+   * The invoice this email attaches, already resolved — absent for a plain (non-invoice) email.
+   * Passing the invoice rather than its id is what lets the endpoint come from
+   * `invoiceOwnerRoute`, the single declaration of where a mutation on an invoice goes.
+   */
+  invoice: Invoice | undefined;
   showDateFields: boolean;
   formIssueDate: string;
   formDueDate: string;
@@ -195,9 +276,11 @@ export function buildSendRequest(opts: SendRequestOpts): {
     body: opts.body,
     ...(opts.templateId ? { templateId: opts.templateId } : {}),
   };
-  if (opts.isInvoiceEmail && opts.invoiceId) {
+  if (opts.invoice) {
     return {
-      url: `/bookings/${opts.bookingId}/invoices/${opts.invoiceId}/send`,
+      // Owner-derived from the invoice's own FK, exactly like every other invoice mutation
+      // (ADR-0063) — never from the page the compose sheet happens to be mounted on.
+      url: `${invoiceOwnerRoute(opts.invoice, 'send').prefix}/${opts.invoice.id}/send`,
       // issueDate/dueDate only for DRAFT; ISSUED invoices have dates from issue time
       payload: {
         ...(opts.showDateFields

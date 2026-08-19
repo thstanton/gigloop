@@ -9,6 +9,7 @@ type MockRepo = {
   findBookingInfo: jest.Mock;
   findAll: jest.Mock;
   findOne: jest.Mock;
+  findById: jest.Mock;
   create: jest.Mock;
   update: jest.Mock;
   delete: jest.Mock;
@@ -34,6 +35,7 @@ function makeRepo(): MockRepo {
     findBookingInfo: jest.fn(),
     findAll: jest.fn(),
     findOne: jest.fn(),
+    findById: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
     delete: jest.fn(),
@@ -58,6 +60,7 @@ const mockDocuments = { generatePreviewPdf: jest.fn() } as unknown as DocumentsS
 
 const draftInvoice = { id: 'i1', bookingId: 'b1', userId: 'u1', status: 'DRAFT', isDeposit: false, invoiceNumber: null };
 const issuedInvoice = { id: 'i1', bookingId: 'b1', userId: 'u1', status: 'ISSUED', isDeposit: false, invoiceNumber: 'INV-2026-001' };
+const seriesInvoice = { id: 'si1', bookingId: null, seriesId: 's1', userId: 'u1', status: 'DRAFT', isDeposit: false, invoiceNumber: null };
 const lineItem = { id: 'li1', invoiceId: 'i1', userId: 'u1' };
 
 describe('InvoicesService', () => {
@@ -113,6 +116,138 @@ describe('InvoicesService', () => {
     it('throws NotFoundException when invoice is not found', async () => {
       repo.findOne.mockResolvedValue(null);
       await expect(service.findOne('u1', 'b1', 'missing')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  // ADR-0069: resolving an existing invoice by id alone, with the owner read off the row.
+  describe('findById', () => {
+    it('resolves a booking invoice without being told its booking', async () => {
+      repo.findById.mockResolvedValue(draftInvoice);
+      const result = await service.findById('u1', 'i1');
+      expect(repo.findById).toHaveBeenCalledWith('u1', 'i1');
+      expect(result).toBe(draftInvoice);
+    });
+
+    // The whole point of the route: a series invoice has `bookingId: null`, so no
+    // booking-scoped read can ever reach it (#844).
+    it('resolves a series invoice, which the booking-scoped read cannot reach', async () => {
+      repo.findById.mockResolvedValue(seriesInvoice);
+      const result = await service.findById('u1', 'si1');
+      expect(repo.findById).toHaveBeenCalledWith('u1', 'si1');
+      expect(result).toBe(seriesInvoice);
+    });
+
+    it('throws NotFoundException when no invoice has that id', async () => {
+      repo.findById.mockResolvedValue(null);
+      await expect(service.findById('u1', 'missing')).rejects.toThrow(NotFoundException);
+    });
+
+    // Tenancy is carried by the userId predicate in the repository, so another tenant's
+    // invoice is indistinguishable from a non-existent one — deliberately.
+    it('throws NotFoundException for another tenant, scoping by the caller userId', async () => {
+      repo.findById.mockResolvedValue(null);
+      await expect(service.findById('u2', 'i1')).rejects.toThrow(NotFoundException);
+      expect(repo.findById).toHaveBeenCalledWith('u2', 'i1');
+    });
+  });
+
+  // ADR-0069 write half (#845). Before these routes existed, `PATCH` and the three line-item
+  // operations lived only under /bookings/:bookingId/invoices, so a series invoice's lines
+  // could not be edited by any route at all.
+  describe('owner-agnostic writes', () => {
+    describe('updateById', () => {
+      it('updates a series invoice, resolving it by id alone', async () => {
+        repo.findById.mockResolvedValue(seriesInvoice);
+        repo.update.mockResolvedValue(seriesInvoice);
+        await service.updateById('u1', 'si1', { billToContactId: 'c1' });
+        expect(repo.findById).toHaveBeenCalledWith('u1', 'si1');
+        expect(repo.update).toHaveBeenCalledWith('si1', { billToContactId: 'c1' });
+      });
+
+      it('applies the same DRAFT guard as the owner-scoped route', async () => {
+        repo.findById.mockResolvedValue(issuedInvoice);
+        await expect(service.updateById('u1', 'i1', {})).rejects.toThrow(BadRequestException);
+        expect(repo.update).not.toHaveBeenCalled();
+      });
+
+      it('404s for another tenant rather than updating', async () => {
+        repo.findById.mockResolvedValue(null);
+        await expect(service.updateById('u2', 'si1', {})).rejects.toThrow(NotFoundException);
+        expect(repo.update).not.toHaveBeenCalled();
+      });
+
+      it('still validates a re-pointed billTo contact belongs to the caller (#709)', async () => {
+        repo.findById.mockResolvedValue(seriesInvoice);
+        repo.update.mockResolvedValue(seriesInvoice);
+        await service.updateById('u1', 'si1', { billToContactId: 'c9' });
+        expect(mockContacts.assertOwned).toHaveBeenCalledWith('u1', ['c9']);
+      });
+    });
+
+    describe('addLineItemById', () => {
+      it('adds a custom line to a series invoice', async () => {
+        repo.findById.mockResolvedValue(seriesInvoice);
+        repo.addLineItem.mockResolvedValue({ id: 'new' });
+        await service.addLineItemById('u1', 'si1', { description: 'PA hire', amount: 200 });
+        expect(repo.addLineItem).toHaveBeenCalledWith('u1', 'si1', { description: 'PA hire', amount: 200 });
+      });
+
+      it('refuses once the invoice is no longer a draft', async () => {
+        repo.findById.mockResolvedValue(issuedInvoice);
+        await expect(
+          service.addLineItemById('u1', 'i1', { description: 'PA hire', amount: 200 }),
+        ).rejects.toThrow(BadRequestException);
+        expect(repo.addLineItem).not.toHaveBeenCalled();
+      });
+
+      it('404s for another tenant', async () => {
+        repo.findById.mockResolvedValue(null);
+        await expect(
+          service.addLineItemById('u2', 'si1', { description: 'PA hire', amount: 200 }),
+        ).rejects.toThrow(NotFoundException);
+      });
+    });
+
+    describe('updateLineItemById', () => {
+      it('updates a line on a series invoice', async () => {
+        repo.findById.mockResolvedValue(seriesInvoice);
+        repo.findLineItem.mockResolvedValue({ id: 'li1' });
+        repo.updateLineItem.mockResolvedValue({ id: 'li1' });
+        await service.updateLineItemById('u1', 'si1', 'li1', { amount: 1750 });
+        expect(repo.findLineItem).toHaveBeenCalledWith('u1', 'si1', 'li1');
+        expect(repo.updateLineItem).toHaveBeenCalledWith('li1', { amount: 1750 });
+      });
+
+      // The line lookup is itself userId-scoped, so a line belonging to someone else's
+      // invoice cannot be reached even with a valid invoice id.
+      it('404s when the line does not belong to the caller', async () => {
+        repo.findById.mockResolvedValue(seriesInvoice);
+        repo.findLineItem.mockResolvedValue(null);
+        await expect(service.updateLineItemById('u1', 'si1', 'nope', {})).rejects.toThrow(NotFoundException);
+        expect(repo.updateLineItem).not.toHaveBeenCalled();
+      });
+
+      it('refuses once the invoice is no longer a draft', async () => {
+        repo.findById.mockResolvedValue(issuedInvoice);
+        await expect(service.updateLineItemById('u1', 'i1', 'li1', {})).rejects.toThrow(BadRequestException);
+        expect(repo.findLineItem).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('deleteLineItemById', () => {
+      it('deletes a line from a series invoice', async () => {
+        repo.findById.mockResolvedValue(seriesInvoice);
+        repo.findLineItem.mockResolvedValue({ id: 'li1' });
+        repo.deleteLineItem.mockResolvedValue(undefined);
+        await service.deleteLineItemById('u1', 'si1', 'li1');
+        expect(repo.deleteLineItem).toHaveBeenCalledWith('li1');
+      });
+
+      it('refuses once the invoice is no longer a draft', async () => {
+        repo.findById.mockResolvedValue(issuedInvoice);
+        await expect(service.deleteLineItemById('u1', 'i1', 'li1')).rejects.toThrow(BadRequestException);
+        expect(repo.deleteLineItem).not.toHaveBeenCalled();
+      });
     });
   });
 

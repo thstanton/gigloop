@@ -82,7 +82,7 @@ export function SeriesInvoiceSection({
 
   if (isLoading) {
     return (
-      <Card title="Series Invoice">
+      <Card title="Series Invoice" testId="series-invoice-card">
         <div className="h-9 bg-border rounded animate-pulse" />
       </Card>
     );
@@ -90,7 +90,7 @@ export function SeriesInvoiceSection({
 
   if (!invoice) {
     return (
-      <Card title="Series Invoice" action={createAction}>
+      <Card title="Series Invoice" action={createAction} testId="series-invoice-card">
         {notice}
         <div className="flex items-center gap-2 text-muted py-1">
           <DollarSign size={14} />
@@ -101,7 +101,7 @@ export function SeriesInvoiceSection({
   }
 
   return (
-    <Card title="Series Invoice">
+    <Card title="Series Invoice" testId="series-invoice-card">
       {notice}
       <InvoiceRow
         invoice={invoice}

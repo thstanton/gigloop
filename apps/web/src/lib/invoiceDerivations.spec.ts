@@ -148,8 +148,11 @@ describe('coverTemplateFor', () => {
     expect(coverTemplateFor(make({ isDeposit: false }))).toBe('balance_invoice_cover');
   });
 
-  it('uses the balance cover for a series invoice (isDeposit false)', () => {
-    expect(coverTemplateFor(make({ seriesId: 'ser1', bookingId: null, isDeposit: false }))).toBe('balance_invoice_cover');
+  // #847: the owner FK decides before isDeposit does. A series invoice also has isDeposit false,
+  // so keying on that alone resolved it to the balance cover — the pre-select that opened compose
+  // in booking mode for an invoice belonging to no booking.
+  it('uses the series cover for a series invoice, despite isDeposit being false', () => {
+    expect(coverTemplateFor(make({ seriesId: 'ser1', bookingId: null, isDeposit: false }))).toBe('series_invoice_cover');
   });
 });
 

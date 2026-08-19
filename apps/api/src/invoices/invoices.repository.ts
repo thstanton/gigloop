@@ -63,6 +63,18 @@ export class InvoicesRepository {
     });
   }
 
+  // Owner-agnostic read (ADR-0069): an invoice that already exists is found by its own id,
+  // with the owner read off the row rather than off the path. Tenancy is unchanged — the
+  // `userId` predicate is the same one the owner-scoped reads carry (ADR-0061); what is
+  // absent is the owner FK, which is exactly what let a series invoice (`bookingId: null`)
+  // be unreachable from the booking-scoped routes.
+  findById(userId: string, id: string) {
+    return this.prisma.invoice.findFirst({
+      where: { id, userId },
+      include: invoiceIncludes,
+    });
+  }
+
   create(
     userId: string,
     bookingId: string,

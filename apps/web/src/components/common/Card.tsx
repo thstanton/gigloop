@@ -25,6 +25,12 @@ interface CardProps {
   /** Secondary header actions, collapsed into a "…" overflow menu beside the primary action. */
   menu?: CardMenuItem[];
   className?: string;
+  /**
+   * Stable hook for e2e scoping. Several cards on one page expose an "Actions" trigger with the
+   * same accessible name (this card's overflow menu and RowActions both use it), so a role query
+   * alone cannot say *which* card — hence a testid on the card that owns the row.
+   */
+  testId?: string;
   children: React.ReactNode;
 }
 
@@ -103,12 +109,12 @@ function CardMenu({ items, label }: { items: CardMenuItem[]; label?: string }) {
   );
 }
 
-export function Card({ title, action, menu, className, children }: CardProps) {
+export function Card({ title, action, menu, className, testId, children }: CardProps) {
   const hasMenu = !!menu && menu.length > 0;
   const hasHeader = !!title || !!action || hasMenu;
 
   return (
-    <div className={cn('bg-background border border-border rounded-lg p-4', className)}>
+    <div className={cn('bg-background border border-border rounded-lg p-4', className)} data-testid={testId}>
       {hasHeader && (
         <div className="flex items-center justify-between mb-3">
           {title ? <SubLabel>{title}</SubLabel> : <span />}

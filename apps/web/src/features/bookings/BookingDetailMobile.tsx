@@ -272,7 +272,7 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
               seriesId={booking.series.id}
               seriesLabel={booking.series.label}
               onEdit={openEditInvoice}
-              onSend={() => openCompose('balance_invoice_cover')}
+              onSend={() => openCompose('series_invoice_cover')}
               onMarkSent={(inv) => setSearchParams({ sheet: 'markSent', invoiceId: inv.id })}
             />
           ) : (

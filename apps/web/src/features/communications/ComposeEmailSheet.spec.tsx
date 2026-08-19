@@ -166,3 +166,128 @@ describe('ComposeEmailSheet — mutation error recovery', () => {
     });
   });
 });
+
+// ─── Series mode (#847) ─────────────────────────────────────────────────────
+
+const mockSeriesContact = { ...mockContact, id: 'c-series', name: 'Hotel Group', email: 'bookings@hotel.test' };
+
+const mockSeriesInvoice = {
+  id: 'ser-1',
+  createdAt: '2026-01-01T00:00:00Z',
+  updatedAt: '2026-01-01T00:00:00Z',
+  status: 'ISSUED',
+  isDeposit: false,
+  invoiceNumber: 'INV-0007',
+  issueDate: '2026-01-01',
+  dueDate: null,
+  paidAt: null,
+  paymentReference: null,
+  bookingId: null,
+  seriesId: 's1',
+  billToContactId: 'c-series',
+  billToContact: mockSeriesContact,
+  lineItems: [],
+} as unknown as Invoice;
+
+const seriesTarget = {
+  seriesId: 's1',
+  seriesLabel: 'Thursday residency',
+  invoice: mockSeriesInvoice,
+  recipient: mockSeriesContact,
+};
+
+const mockSeriesCoverTemplate: Template = {
+  id: 'tpl-series',
+  createdAt: '2026-01-01T00:00:00Z',
+  updatedAt: '2026-01-01T00:00:00Z',
+  name: 'Series invoice email',
+  builtInType: 'series_invoice_cover',
+  content: {},
+};
+
+function SeriesWrapper({ series }: { series?: typeof seriesTarget }) {
+  const [open, setOpen] = useState(true);
+  return (
+    <QueryClientProvider client={makeClient()}>
+      <ComposeEmailSheet
+        bookingId="b1"
+        booking={mockBooking}
+        // The member booking's own invoice list — always empty for a series member, which is what
+        // left the old booking-scoped resolution with nothing to attach.
+        invoices={[] as Invoice[]}
+        checklist={[]}
+        defaultPaymentTermsDays={undefined}
+        open={open}
+        onOpenChange={setOpen}
+        initialTemplateType="series_invoice_cover"
+        onCreateContract={() => {}}
+        creatingContract={false}
+        createDepositInvoiceHref="/admin/bookings/b1?sheet=invoice&isDeposit=true"
+        series={series}
+      />
+    </QueryClientProvider>
+  );
+}
+
+describe('ComposeEmailSheet — series invoice cover', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    const { apiGet, apiPostVoid } = await import('@/lib/api');
+    vi.mocked(apiGet).mockImplementation((path: string) => {
+      // Both built-ins are returned: the picker must choose by owner, not by what is available.
+      if (path === '/templates') return Promise.resolve([mockTemplate, mockSeriesCoverTemplate]);
+      if (path.includes('/render'))
+        return Promise.resolve({
+          subject: 'Your invoice for Thursday residency',
+          body: '<p>Dear Hotel Group,</p>',
+          missingVariables: [],
+        });
+      return Promise.resolve([]);
+    });
+    vi.mocked(apiPostVoid).mockResolvedValue(undefined);
+  });
+
+  it('composes against the series: series recipient, stored PDF attached, series render + send routes', async () => {
+    const user = userEvent.setup();
+    const { apiGet, apiPostVoid } = await import('@/lib/api');
+
+    render(<SeriesWrapper series={seriesTarget} />);
+
+    // Addressed to the series customer — not the member booking's customer (Sarah Johnson).
+    expect(await screen.findByText('Hotel Group')).toBeInTheDocument();
+    expect(screen.queryByText('Sarah Johnson')).not.toBeInTheDocument();
+
+    // The attachment is the series invoice's stored PDF, named from its number — resolved from
+    // the target, never from the (empty) booking invoice list.
+    expect(await screen.findByText('Invoice INV-0007.pdf')).toBeInTheDocument();
+
+    // Rendered with series context, via the series route.
+    await waitFor(() =>
+      expect(vi.mocked(apiGet)).toHaveBeenCalledWith(
+        '/series/s1/communications/render?templateId=tpl-series&invoiceId=ser-1',
+      ),
+    );
+    expect(await screen.findByDisplayValue('Your invoice for Thursday residency')).toBeInTheDocument();
+
+    const sendBtn = await screen.findByRole('button', { name: /^send$/i });
+    await waitFor(() => expect(sendBtn).not.toBeDisabled(), { timeout: 3000 });
+    await user.click(sendBtn);
+
+    await waitFor(() =>
+      expect(vi.mocked(apiPostVoid)).toHaveBeenCalledWith(
+        '/series/s1/invoices/ser-1/send',
+        expect.objectContaining({ to: 'bookings@hotel.test', contactId: 'c-series', templateId: 'tpl-series' }),
+      ),
+    );
+  });
+
+  // Why BookingDetailSheets holds the sheet shut until the series invoice resolves: the pre-select
+  // fires once, and with no target the series cover is not in the list to select. Opening early
+  // therefore burns the pre-select and leaves the musician staring at an unselected picker.
+  it('selects nothing when opened for the series cover without a resolved target', async () => {
+    render(<SeriesWrapper />);
+
+    expect(await screen.findByText('Select a template')).toBeInTheDocument();
+    expect(screen.queryByText('Invoice INV-0007.pdf')).not.toBeInTheDocument();
+  });
+});

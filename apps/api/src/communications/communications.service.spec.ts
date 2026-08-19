@@ -207,6 +207,29 @@ describe('CommunicationsService', () => {
       expect(calledUserId).toBe('u1');
     });
 
+    // #847: the series-invoice send (no bookingId). Reachable from the UI for the first time, so
+    // its guards must match the booking branch's rather than being skipped along with the row.
+    describe('series path (no bookingId)', () => {
+      const seriesOptions = { ...options, bookingId: undefined };
+
+      it('sends without a booking, and writes no Communication row', async () => {
+        await service.sendEmail(seriesOptions);
+        expect(mockMail.send).toHaveBeenCalledWith(
+          expect.objectContaining({ to: 'jane@example.com', subject: 'Your invoice' }),
+        );
+        // Communication.bookingId is non-nullable, and a series communication would appear in no
+        // booking's list — recording one needs a schema change plus a surface to read it on.
+        expect(repo.createPending).not.toHaveBeenCalled();
+        expect(repo.findBookingById).not.toHaveBeenCalled();
+      });
+
+      it('rejects and never sends when the recipient contact is not owned by the caller', async () => {
+        mockContacts.assertOwned.mockRejectedValue(new NotFoundException('Contact not found'));
+        await expect(service.sendEmail(seriesOptions)).rejects.toThrow(NotFoundException);
+        expect(mockMail.send).not.toHaveBeenCalled();
+      });
+    });
+
     // #533 / #631: the music-form invite is gated on the form being published.
     describe('music-form invite gate', () => {
       const inviteOptions = { ...options, templateId: 'tmpl-invite' };
