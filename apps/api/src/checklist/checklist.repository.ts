@@ -188,18 +188,43 @@ export class ChecklistRepository {
         where: { id: step.goalId, state: 'COMPLETE' },
         data: { state: 'PENDING', completedAt: null },
       }),
+      // ADR-0076: a goal's `updatedAt` is the version of the goal AND its steps, so it must
+      // move even when the un-stick above matched nothing (the goal was already non-terminal).
+      // Otherwise this step reset is invisible to the client's per-goal response ordering.
+      this.prisma.bookingChecklistItem.updateMany({
+        where: { id: step.goalId }, // scoped-upstream: parent of the step row this same call writes, located via `goal: { bookingId }`
+        data: { updatedAt: new Date() },
+      }),
     ]);
   }
 
   // Persist goal-row and step-row state changes from one evaluation pass in a SINGLE
   // transaction. Goal state is a roll-up of its steps (ADR-0057), so a split write
   // would leave a window where a goal reads COMPLETE while a step is still PENDING.
-  applyStateUpdates(
+  //
+  // ADR-0076 INVARIANT — a goal's `updatedAt` is the version of the goal AND its steps.
+  // The client orders concurrent checklist responses by it (per goal, newest wins), so a
+  // step write whose parent row does not move is invisible to that ordering and silently
+  // reintroduces #595. `buildGoalUpdate` returns null when the roll-up is unchanged, so a
+  // step routinely changes without its parent appearing in `goalUpdates` — hence the
+  // explicit touch below. ANY NEW STEP-WRITING PATH MUST DO THE SAME.
+  async applyStateUpdates(
     goalUpdates: Array<{ id: string; state: string; completedAt?: Date | null }>,
     stepUpdates: Array<{ id: string; state: string; completedAt?: Date | null }>,
   ) {
-    if (!goalUpdates.length && !stepUpdates.length) return Promise.resolve();
-    return this.prisma.$transaction([
+    if (!goalUpdates.length && !stepUpdates.length) return;
+    // Parentage is immutable, so resolving it outside the transaction is safe. Resolved HERE
+    // rather than threaded in by the caller: the invariant then holds for every caller of this
+    // method, present and future, instead of depending on each one remembering to pass it.
+    const parents = stepUpdates.length
+      ? await this.prisma.bookingChecklistStep.findMany({
+          where: { id: { in: stepUpdates.map((s) => s.id) } },
+          select: { goalId: true },
+        })
+      : [];
+    const alreadyWritten = new Set(goalUpdates.map((g) => g.id));
+    const toTouch = [...new Set(parents.map((p) => p.goalId))].filter((id) => !alreadyWritten.has(id));
+    await this.prisma.$transaction([
       ...goalUpdates.map(({ id, state, completedAt }) =>
         this.prisma.bookingChecklistItem.update({
           where: { id },
@@ -212,6 +237,14 @@ export class ChecklistRepository {
           data: { state, ...(completedAt !== undefined ? { completedAt } : {}) },
         }),
       ),
+      ...(toTouch.length
+        ? [
+            this.prisma.bookingChecklistItem.updateMany({
+              where: { id: { in: toTouch } }, // scoped-upstream: parents of the step rows this same call writes; ownership proved by the evaluate() read that produced them
+              data: { updatedAt: new Date() },
+            }),
+          ]
+        : []),
     ]);
   }
 

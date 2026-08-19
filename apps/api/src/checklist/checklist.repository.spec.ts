@@ -14,6 +14,7 @@ type MockPrisma = {
   };
   bookingChecklistStep: {
     findFirst: jest.Mock;
+    findMany: jest.Mock;
     update: jest.Mock;
     updateMany: jest.Mock;
   };
@@ -34,6 +35,7 @@ function makePrisma(): MockPrisma {
     },
     bookingChecklistStep: {
       findFirst: jest.fn(),
+      findMany: jest.fn(),
       update: jest.fn(),
       updateMany: jest.fn(),
     },
@@ -448,6 +450,96 @@ describe('ChecklistRepository — resetItemByKey (void un-stick, ADR-0057 / #608
       where: { id: 'goal-1', state: 'COMPLETE' },
       data: { state: 'PENDING', completedAt: null },
     });
+    // ADR-0076: and the parent's updatedAt moves UNCONDITIONALLY — the un-stick above matches
+    // nothing when the goal was already non-terminal, which would leave the step reset
+    // invisible to the client's per-goal response ordering.
+    expect(prisma.bookingChecklistItem.updateMany).toHaveBeenCalledWith({
+      where: { id: 'goal-1' },
+      data: { updatedAt: expect.any(Date) },
+    });
+  });
+});
+
+// ADR-0076 — a goal's `updatedAt` is the version of the goal AND its steps. The client orders
+// concurrent checklist responses by it (per goal, newest wins), so a step write whose parent row
+// does not move is invisible to that ordering and silently reintroduces #595. Nothing about a
+// forgotten parent touch fails to compile or type-check: THIS is the guard.
+describe('ChecklistRepository — applyStateUpdates keeps a goal updatedAt versioning its steps (ADR-0076)', () => {
+  let repo: ChecklistRepository;
+  let prisma: MockPrisma;
+
+  beforeEach(() => {
+    prisma = makePrisma();
+    repo = new ChecklistRepository(prisma as unknown as PrismaService);
+    prisma.$transaction.mockImplementation((ops: unknown[]) => Promise.resolve(ops));
+  });
+
+  // A touch is an updateMany whose only payload is a fresh updatedAt.
+  function touches() {
+    return prisma.bookingChecklistItem.updateMany.mock.calls.filter(
+      ([arg]) => arg?.data?.updatedAt instanceof Date,
+    );
+  }
+
+  it('touches the parent goal when a step moves but the goal roll-up does not', async () => {
+    // The reachable case: buildGoalUpdate returns null for an unchanged roll-up, so the goal
+    // never reaches goalUpdates even though one of its steps just changed.
+    prisma.bookingChecklistStep.findMany.mockResolvedValue([{ goalId: 'goal-1' }]);
+
+    await repo.applyStateUpdates([], [{ id: 'step-1', state: 'COMPLETE' }]);
+
+    expect(prisma.bookingChecklistStep.findMany).toHaveBeenCalledWith({
+      where: { id: { in: ['step-1'] } },
+      select: { goalId: true },
+    });
+    expect(touches()).toHaveLength(1);
+    expect(touches()[0][0].where).toEqual({ id: { in: ['goal-1'] } });
+  });
+
+  it('does not double-write a parent that is already receiving its own state update', async () => {
+    prisma.bookingChecklistStep.findMany.mockResolvedValue([{ goalId: 'goal-1' }]);
+
+    await repo.applyStateUpdates(
+      [{ id: 'goal-1', state: 'COMPLETE' }],
+      [{ id: 'step-1', state: 'COMPLETE' }],
+    );
+
+    // goal-1's own update already bumps updatedAt; a second touch would be redundant.
+    expect(touches()).toHaveLength(0);
+  });
+
+  it('touches each distinct parent once when several steps across several goals move', async () => {
+    prisma.bookingChecklistStep.findMany.mockResolvedValue([
+      { goalId: 'goal-1' },
+      { goalId: 'goal-1' },
+      { goalId: 'goal-2' },
+    ]);
+
+    await repo.applyStateUpdates(
+      [],
+      [
+        { id: 'step-1', state: 'COMPLETE' },
+        { id: 'step-2', state: 'FAILED' },
+        { id: 'step-3', state: 'COMPLETE' },
+      ],
+    );
+
+    expect(touches()).toHaveLength(1);
+    expect(touches()[0][0].where).toEqual({ id: { in: ['goal-1', 'goal-2'] } });
+  });
+
+  it('makes no parent lookup and no touch when only goals change', async () => {
+    await repo.applyStateUpdates([{ id: 'goal-1', state: 'COMPLETE' }], []);
+
+    expect(prisma.bookingChecklistStep.findMany).not.toHaveBeenCalled();
+    expect(touches()).toHaveLength(0);
+  });
+
+  it('writes nothing at all when there is nothing to update', async () => {
+    await repo.applyStateUpdates([], []);
+
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(prisma.bookingChecklistStep.findMany).not.toHaveBeenCalled();
   });
 });
 
