@@ -128,7 +128,7 @@ If that becomes a real problem the fix is to serve flags from the API (`GET /api
 
 | Question | Where |
 |---|---|
-| What's deployed where, and did it succeed? | GitHub → Environments ⏳ #907 (curated to `prod`/`preprod`) |
+| What's deployed where, and did it succeed? | GitHub → [Environments](https://github.com/thstanton/gigloop/deployments) — curated to exactly `prod` and `preprod` (#907). Both `preprod.yml` and `release.yml` declare a job-level `environment:`, so every run records a deployment against it with the deployed ref (a tag for prod, e.g. `v0.6.0`) and its success/failure status. |
 | Did the deploy workflow fail? | GitHub → Actions |
 | Did a migration fail? | The same workflow run — a failed migration halts it before anything deploys |
 | Is the app throwing errors? | ⏳ #744 — Sentry. Until then, Railway logs |
@@ -153,7 +153,6 @@ The whole control plane is tracked by **#910**.
 
 | Issue | What |
 |---|---|
-| #907 | Curated GitHub Environments + deployment records |
 | #908 | Promote to prod from a guarded button |
 | #909 | Flags legible and flippable |
 | #744 | Error alerting (Sentry) |
