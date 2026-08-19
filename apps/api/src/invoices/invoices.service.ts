@@ -34,6 +34,16 @@ export class InvoicesService {
     return invoice;
   }
 
+  // Owner-agnostic read (ADR-0069). Returns the same shape as the owner-scoped `findOne`,
+  // so a caller that does not know (or care) whether an invoice belongs to a booking or a
+  // series can resolve it. 404 covers both "no such invoice" and "another tenant's invoice" —
+  // the caller cannot tell them apart, which is the intent.
+  async findById(userId: string, id: string) {
+    const invoice = await this.repo.findById(userId, id);
+    if (!invoice) throw new NotFoundException('Invoice not found');
+    return invoice;
+  }
+
   async create(userId: string, bookingId: string, dto: CreateInvoiceDto) {
     const booking = await this.repo.findBookingInfo(userId, bookingId);
     if (!booking) throw new NotFoundException('Booking not found');

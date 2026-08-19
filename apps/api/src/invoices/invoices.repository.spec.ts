@@ -1,4 +1,4 @@
-import { InvoicesRepository, buildInvoiceNumber } from './invoices.repository';
+import { InvoicesRepository, buildInvoiceNumber, invoiceIncludes } from './invoices.repository';
 import { allocate } from './invoice-number-allocator';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -115,6 +115,26 @@ describe('InvoicesRepository', () => {
       await repo.findOne('u1', 'b1', 'i1');
       expect(prisma.invoice.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({ where: { id: 'i1', userId: 'u1', bookingId: 'b1' } }),
+      );
+    });
+  });
+
+  describe('findById', () => {
+    // ADR-0069 removes the owner FK from the predicate, never the tenancy one — the
+    // `where` must stay `{ id, userId }` so ADR-0061 still holds.
+    it('queries by id and userId, with no owner FK in the predicate', async () => {
+      prisma.invoice.findFirst.mockResolvedValue(null);
+      await repo.findById('u1', 'i1');
+      expect(prisma.invoice.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'i1', userId: 'u1' } }),
+      );
+    });
+
+    it('returns the row with its line items and billTo contact', async () => {
+      prisma.invoice.findFirst.mockResolvedValue(null);
+      await repo.findById('u1', 'i1');
+      expect(prisma.invoice.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ include: invoiceIncludes }),
       );
     });
   });

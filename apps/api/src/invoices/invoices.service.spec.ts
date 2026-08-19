@@ -9,6 +9,7 @@ type MockRepo = {
   findBookingInfo: jest.Mock;
   findAll: jest.Mock;
   findOne: jest.Mock;
+  findById: jest.Mock;
   create: jest.Mock;
   update: jest.Mock;
   delete: jest.Mock;
@@ -34,6 +35,7 @@ function makeRepo(): MockRepo {
     findBookingInfo: jest.fn(),
     findAll: jest.fn(),
     findOne: jest.fn(),
+    findById: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
     delete: jest.fn(),
@@ -58,6 +60,7 @@ const mockDocuments = { generatePreviewPdf: jest.fn() } as unknown as DocumentsS
 
 const draftInvoice = { id: 'i1', bookingId: 'b1', userId: 'u1', status: 'DRAFT', isDeposit: false, invoiceNumber: null };
 const issuedInvoice = { id: 'i1', bookingId: 'b1', userId: 'u1', status: 'ISSUED', isDeposit: false, invoiceNumber: 'INV-2026-001' };
+const seriesInvoice = { id: 'si1', bookingId: null, seriesId: 's1', userId: 'u1', status: 'DRAFT', isDeposit: false, invoiceNumber: null };
 const lineItem = { id: 'li1', invoiceId: 'i1', userId: 'u1' };
 
 describe('InvoicesService', () => {
@@ -113,6 +116,38 @@ describe('InvoicesService', () => {
     it('throws NotFoundException when invoice is not found', async () => {
       repo.findOne.mockResolvedValue(null);
       await expect(service.findOne('u1', 'b1', 'missing')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  // ADR-0069: resolving an existing invoice by id alone, with the owner read off the row.
+  describe('findById', () => {
+    it('resolves a booking invoice without being told its booking', async () => {
+      repo.findById.mockResolvedValue(draftInvoice);
+      const result = await service.findById('u1', 'i1');
+      expect(repo.findById).toHaveBeenCalledWith('u1', 'i1');
+      expect(result).toBe(draftInvoice);
+    });
+
+    // The whole point of the route: a series invoice has `bookingId: null`, so no
+    // booking-scoped read can ever reach it (#844).
+    it('resolves a series invoice, which the booking-scoped read cannot reach', async () => {
+      repo.findById.mockResolvedValue(seriesInvoice);
+      const result = await service.findById('u1', 'si1');
+      expect(repo.findById).toHaveBeenCalledWith('u1', 'si1');
+      expect(result).toBe(seriesInvoice);
+    });
+
+    it('throws NotFoundException when no invoice has that id', async () => {
+      repo.findById.mockResolvedValue(null);
+      await expect(service.findById('u1', 'missing')).rejects.toThrow(NotFoundException);
+    });
+
+    // Tenancy is carried by the userId predicate in the repository, so another tenant's
+    // invoice is indistinguishable from a non-existent one — deliberately.
+    it('throws NotFoundException for another tenant, scoping by the caller userId', async () => {
+      repo.findById.mockResolvedValue(null);
+      await expect(service.findById('u2', 'i1')).rejects.toThrow(NotFoundException);
+      expect(repo.findById).toHaveBeenCalledWith('u2', 'i1');
     });
   });
 

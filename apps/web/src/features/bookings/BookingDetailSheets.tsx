@@ -15,6 +15,7 @@ import { useBookingChecklist } from '@/lib/hooks/useBookingChecklist';
 import { useCopyBooking } from '@/lib/hooks/useCopyBooking';
 import { useContractActions } from '@/lib/hooks/useContractActions';
 import { useBookingInvoices } from '@/lib/hooks/useBookingInvoices';
+import { useInvoice } from '@/lib/hooks/useInvoice';
 import { isDepositPercentageHintEligible, depositAmount } from '@/lib/invoiceDerivations';
 import { buildSetsDescription } from '@/lib/bookingSets';
 import { CopyEventDialog } from '@/features/bookings/CopyEventDialog';
@@ -79,6 +80,11 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
   } = useBookingChecklist(bookingId, booking, isLoaded);
 
   const { data: invoices = [] } = useBookingInvoices(bookingId);
+  // ADR-0069 / #844: the invoice a sheet acts on is resolved by id, not by searching the
+  // booking's list. That list can never hold a series invoice (`bookingId: null`), so the
+  // old `invoices.find(...)` returned undefined for one and InvoiceSheet fell silently into
+  // create mode — an empty form where the real line items should have been.
+  const { data: sheetInvoice } = useInvoice(sheetInvoiceId);
   const contractActions = useContractActions(bookingId);
   const copy = useCopyBooking(bookingId);
 
@@ -97,9 +103,7 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
 
   if (!booking) return null;
 
-  const editingInvoice = sheet === 'invoice' && sheetInvoiceId
-    ? invoices.find((inv) => inv.id === sheetInvoiceId)
-    : undefined;
+  const editingInvoice = sheet === 'invoice' && sheetInvoiceId ? sheetInvoice : undefined;
   const invoiceSheetPrefill = sheet === 'invoice' && !sheetInvoiceId && searchParams.has('isDeposit')
     ? { isDeposit: sheetIsDeposit, amount: sheetAmount, description: sheetDescription }
     : undefined;
@@ -112,9 +116,7 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
   const onCreateContract = () =>
     contractActions.createContract(() => setSearchParams({ sheet: 'contract' }));
   const createDepositInvoiceHref = buildCreateDepositHref(bookingId, booking, userProfile?.depositPercentage);
-  const markSentInvoice = sheet === 'markSent' && sheetInvoiceId
-    ? invoices.find((inv) => inv.id === sheetInvoiceId)
-    : undefined;
+  const markSentInvoice = sheet === 'markSent' && sheetInvoiceId ? sheetInvoice : undefined;
 
   return (
     <>
@@ -199,7 +201,11 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
         hasDepositInvoice={invoices.some((inv) => inv.isDeposit)}
         prefill={invoiceSheetPrefill}
         depositPercentageHintEligible={depositPercentageHintEligible}
-        open={sheet === 'invoice'}
+        // Held shut until an edit target has actually resolved: InvoiceSheet seeds its form
+        // on the open transition only, so opening early would show a create-mode form and
+        // never correct itself once the invoice arrived. Create mode (no invoiceId) is
+        // unaffected and opens at once.
+        open={sheet === 'invoice' && (!sheetInvoiceId || !!editingInvoice)}
         onOpenChange={(open) => { if (!open) setSearchParams({}); }}
         onAfterIssue={(inv) => {
           const templateType = inv.isDeposit ? 'deposit_invoice_cover' : 'balance_invoice_cover';
