@@ -1,9 +1,22 @@
 name: Release
 
-# Tag-triggered production release (ADR-0044 §4, PRD #436, issue #442).
-# Prod deploys ONLY on a `v*` tag push — merges to `main` never deploy prod.
-# This is the first pipeline that touches real prod data: HITL for the
-# first releases (a human watches the run, not just merges the PR).
+# Production release (ADR-0044 §4, PRD #436, issue #442). Prod deploys ONLY
+# via `workflow_dispatch` — merges to `main` never deploy prod, and neither
+# does pushing a tag by hand. This is the first pipeline that touches real
+# prod data: HITL for the first releases (a human watches the run, not just
+# merges the PR).
+#
+# Triggered exclusively by `promote.yml` (issue #908), which validates the
+# target commit, creates+pushes the `v*` tag, then dispatches this workflow
+# `--ref <that tag>` — so `github.ref_name` below is already the tag by the
+# time this job starts, with no separate tag input needed. Deliberately
+# NOT also triggered by `on: push: tags:` — a tag pushed by promote.yml's
+# GITHUB_TOKEN wouldn't reliably re-trigger via a push event anyway (GitHub
+# suppresses workflow runs triggered by a GITHUB_TOKEN-authored push, to
+# prevent trigger loops), and keeping both trigger types would risk two
+# concurrent runs racing the same prod migration and Neon snapshot branch
+# for one tag — a single trigger path removes that risk entirely rather
+# than relying on unverified suppression behaviour.
 #
 # Fixed, data-protecting step order: snapshot -> migrate -> deploy API ->
 # deploy web. Deliberately NO `continue-on-error` anywhere in this job — a
@@ -34,9 +47,7 @@ name: Release
 #     (NEON_API_KEY secret + NEON_PROD_PROJECT_ID variable already exist,
 #     reused from migration-rehearsal.yml)
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_dispatch:
 
 # A second tag pushed mid-release must not race this one against prod.
 concurrency:

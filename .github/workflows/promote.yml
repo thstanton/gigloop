@@ -1,0 +1,118 @@
+name: Promote to prod
+
+# workflow_dispatch button for cutting a prod release (ADR-0075 §4, issue
+# #908). Tagging remains a deliberate human act (ADR-0044 §4) — nothing
+# here runs on a push or a schedule. This workflow's only job is to verify
+# the target commit is genuinely on `origin/main`'s first-parent history,
+# create+push the `v*` tag, then explicitly start `release.yml` at that
+# tag. `release.yml` itself is untouched other than gaining the
+# `workflow_dispatch` trigger this workflow calls — the actual
+# snapshot/migrate/deploy sequence lives there, unchanged.
+#
+# Why the check exists: `git tag` with no commit argument pins HEAD, not
+# main. A tag cut by hand while standing on a feature branch once shipped
+# a tree missing five merged PRs (docs/environments.md). `git branch
+# --contains` and `merge-base --is-ancestor` both report "on main" for a
+# commit that only reached main via a side-branch merge commit — this repo
+# uses true merge commits, so neither check catches it. First-parent
+# reachability (`git rev-list --first-parent origin/main | grep -qx <sha>`)
+# is the check that does.
+#
+# Why an explicit `gh workflow run` rather than relying on the tag push
+# itself to trigger `release.yml`: GitHub suppresses workflow runs
+# triggered by a push authored by the default GITHUB_TOKEN (loop
+# prevention), so this workflow's own tag push would not reliably reach
+# `release.yml`. A `workflow_dispatch` call is not subject to that
+# restriction, so dispatching `release.yml` directly at the tag we just
+# pushed is what actually starts the deploy — no PAT, no new secret.
+#
+# Bootstrap note: the dispatch API resolves a workflow's definition from
+# the ref being dispatched. The very first tag cut after this PR merges
+# works because it's cut from a `main` that already has `release.yml`'s
+# `workflow_dispatch` trigger; a tag cut from an older commit (predating
+# this change) would fail to dispatch — not a concern in steady state.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release, plain semver without the v prefix (e.g. 0.7.0)'
+        required: true
+        type: string
+      smoke_test_passed:
+        description: 'I ran docs/smoke-test-checklist.md against preprod and it passed'
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  promote:
+    name: Tag v${{ inputs.version }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require the smoke-test attestation
+        if: ${{ inputs.smoke_test_passed != true }}
+        run: |
+          echo "::error::Re-run with the smoke-test box checked. Tagging is the human's attestation that docs/smoke-test-checklist.md passed against preprod — see docs/environments.md -> Releasing."
+          exit 1
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate version and refuse to tag anything off main's own history
+        id: guard
+        run: |
+          VERSION="${{ inputs.version }}"
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Version '$VERSION' must be plain semver, e.g. 0.7.0 — no leading v, no suffix."
+            exit 1
+          fi
+
+          TAG="v$VERSION"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "::error::Tag $TAG already exists."
+            exit 1
+          fi
+
+          # actions/checkout at fetch-depth 0 does not reliably leave a
+          # refs/remotes/origin/main behind when dispatched from a non-main
+          # ref — which is exactly the case this guard exists to catch — so
+          # fetch it explicitly rather than assume it's there.
+          git fetch origin main
+
+          if ! git rev-list --first-parent origin/main | grep -qx "$GITHUB_SHA"; then
+            echo "::error::$GITHUB_SHA is not on origin/main's first-parent history — refusing to tag. Re-run this workflow with 'Use workflow from' set to main."
+            exit 1
+          fi
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Create and push the tag
+        run: |
+          TAG="${{ steps.guard.outputs.tag }}"
+          git tag "$TAG" "$GITHUB_SHA"
+          git push origin "$TAG"
+
+      - name: Start release.yml at the new tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run release.yml --ref "${{ steps.guard.outputs.tag }}"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Promote to prod — v${{ inputs.version }}"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Tagged commit | \`${{ github.sha }}\` |"
+            echo "| Tag | \`${{ steps.guard.outputs.tag }}\` |"
+            echo "| Job result | ${{ job.status }} |"
+            echo ""
+            echo "Follow the actual deploy under **Actions → Release**."
+          } >> "$GITHUB_STEP_SUMMARY"

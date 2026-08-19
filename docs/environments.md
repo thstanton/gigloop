@@ -23,7 +23,7 @@ There are **two deployed environments**, plus local development and throwaway da
 | Clerk | Production instance | Development instance |
 | R2 | `gigloop-public` / `gigloop-documents` | `gigloop-preprod-public` / `gigloop-preprod-documents` |
 | Email | Real delivery | Resend sandbox sender — cannot reach a real client |
-| Deploys when | A human pushes a `v*` tag | A commit lands on `main` |
+| Deploys when | A human runs "Promote to prod" | A commit lands on `main` |
 
 **"Preprod" is the only name for that environment.** ✅ Docs, GitHub variables, GitHub Environments, the Railway environment and the Neon branch all say `preprod` (#905, completed 2026-08-19).
 
@@ -68,18 +68,19 @@ Locally the distinction does not apply: there is no pooler in front of the conta
 | Trigger | Workflow | Sequence |
 |---|---|---|
 | Commit lands on `main` | `preprod.yml` ✅ | migrate → deploy API → deploy web |
-| Human pushes a `v*` tag | `release.yml` ✅ | snapshot → migrate → deploy API → deploy web |
+| Human runs "Promote to prod" (`promote.yml`) ✅ | `release.yml`, dispatched at the new tag | guard commit → tag → snapshot → migrate → deploy API → deploy web |
 
 ⚠️ **Railway prod and preprod are the same project and the same service — only the *environment* differs.** `RAILWAY_PROD_PROJECT_ID` and `RAILWAY_PREPROD_PROJECT_ID` hold the same id, and both `*_SERVICE` variables say `valiant-respect`. So `RAILWAY_PREPROD_ENVIRONMENT` is the **only** thing keeping a preprod deploy out of prod, and `railway up` with a wrong `--environment` exits 0 having deployed to the wrong place. The variables are qualified anyway (ADR-0075 §3): an unqualified name is how you end up editing the wrong one. Vercel is not like this — prod and preprod are separate projects, which is why `vercel deploy --prod` is safe in both workflows.
 
 The two are deliberately the same shape. Prod's extra first step is the durable `pre-release-<tag>` Neon branch that ADR-0044 §6 makes the rollback target. Preprod takes no snapshot — it is synthetic and disposable — and does not reseed (ADR-0044 §7: seed once, evolve via migrations).
 
-**A merge to `main` does not reach real users.** Prod ships only on a deliberate human-pushed tag.
+**A merge to `main` does not reach real users.** Prod ships only when a human runs "Promote to prod" and it survives the guard.
 
 Both paths are workflow-only, and each got there the hard way:
 
 - ✅ **#875** — `preprod.yml` is the only path to preprod. Git auto-deploy is off on the Railway preprod environment and the Vercel preprod project, and the workflow's first run (merge of #915, 2026-08-19) was verified end to end: it migrated the `preprod` branch of `GigLoop PreProd` over the **non-pooled** host, deployed Railway `--environment preprod`, and deployed the `gigloop-preprod` Vercel project — prod was untouched. It replaced the Railway and Vercel git integration, which had no slot in which a migration could run first: on 2026-08-19, PR #867 merged a migration and every Prisma read of `Invoice` on preprod failed with P2022 until it was applied by hand. There is no `continue-on-error` in it, so a failed migration halts the run before anything deploys and the previous build keeps serving.
-- ✅ Prod git auto-deploy is **off** on both Railway and Vercel (confirmed 2026-08-19), so the tag really is the only path to prod.
+- ✅ Prod git auto-deploy is **off** on both Railway and Vercel (confirmed 2026-08-19).
+- ✅ **#908** — cutting a release is a `workflow_dispatch` button (`promote.yml`), not a remembered `git tag` ritual. It refuses to tag anything that isn't on `origin/main`'s first-parent history (the exact check quoted below), requires an explicit smoke-test attestation, then dispatches `release.yml` at the new tag. `release.yml` no longer triggers on a raw tag push — only `promote.yml`'s dispatch reaches it — so there is exactly one path into a prod deploy, not two racing ones. ⏳ Unexercised until the first real release after this merges.
 
 ---
 
@@ -155,9 +156,9 @@ The whole control plane is tracked by **#910**.
 1. Merge to `main`. Preprod deploys.
 2. Run [`docs/smoke-test-checklist.md`](smoke-test-checklist.md) against preprod.
 3. If the release carries schema changes, run `migration-rehearsal.yml`.
-4. Push a `v*` tag from an up-to-date `main` checkout. Prod deploys.
+4. Run **Actions → Promote to prod → Run workflow**, giving the version (plain semver, e.g. `0.7.0`) and checking the smoke-test box. Prod deploys.
 
-> ⚠️ **`git tag` with no commit argument pins `HEAD`, not `main`.** A tag cut while standing on a feature branch once shipped a tree missing five merged PRs. This repo uses true merge commits, so `git branch --contains` and `merge-base --is-ancestor` both report "on main" for a commit that sits on a merged-in side branch — they cannot catch it. The check that works is first-parent reachability: `git rev-list --first-parent origin/main | grep -q <sha>`. ⏳ #908 makes this a guarded button.
+> ⚠️ **`git tag` with no commit argument pins `HEAD`, not `main`.** A tag cut while standing on a feature branch once shipped a tree missing five merged PRs. This repo uses true merge commits, so `git branch --contains` and `merge-base --is-ancestor` both report "on main" for a commit that sits on a merged-in side branch — they cannot catch it. The check that works is first-parent reachability: `git rev-list --first-parent origin/main | grep -q <sha>`. ✅ #908 — `promote.yml` runs exactly this check before it will create a tag.
 
 ---
 
@@ -165,7 +166,7 @@ The whole control plane is tracked by **#910**.
 
 | Issue | What |
 |---|---|
-| #908 | Promote to prod from a guarded button |
 | #909 | Flags legible and flippable |
 | #744 | Error alerting (Sentry) |
 | #910 | Control plane — tracking issue for #907–#909 + #744 |
+| #926 | Scope deploy secrets to GitHub Environments, gate prod behind a required reviewer |
