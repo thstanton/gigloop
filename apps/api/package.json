@@ -10,11 +10,10 @@
     "test": "jest",
     "test:integration": "jest --config jest.integration.json --runInBand",
     "typecheck:seed": "tsc --noEmit -p tsconfig.seed.json",
+    "db:migrate": "prisma migrate deploy",
+    "db:reset": "node ../../scripts/assert-local-database.mjs && prisma migrate reset --force",
     "seed": "ts-node -r tsconfig-paths/register prisma/seed.ts",
     "seed:checklists": "ts-node -r tsconfig-paths/register src/scripts/seed-checklists.ts"
-  },
-  "prisma": {
-    "seed": "ts-node -r tsconfig-paths/register prisma/seed.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1051.0",
