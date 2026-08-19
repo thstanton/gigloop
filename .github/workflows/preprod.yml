@@ -1,0 +1,131 @@
+name: PreProd
+
+# Merge-triggered preprod deploy (ADR-0075 §2, issue #875).
+# The mirror of `release.yml`: GitHub owns the deploy sequence in EVERY
+# environment, so there is exactly one answer to "how does a deploy happen".
+#
+# Fixed step order: migrate -> deploy API -> deploy web. Preprod takes no
+# snapshot — it is synthetic and disposable (ADR-0044 §1), so the durable
+# `pre-release-<tag>` Neon branch that `release.yml` cuts first has no
+# analogue here. It also does NOT reseed: seed once, evolve via migrations
+# (ADR-0044 §7).
+#
+# Deliberately NO `continue-on-error` anywhere, matching `release.yml`. A
+# failed migration must halt the run BEFORE anything deploys, leaving the
+# previous (working) API serving the un-migrated database. Deploying code
+# against a database that lacks its columns is exactly the #867 failure this
+# workflow exists to prevent: every Prisma read of `Invoice` on preprod
+# returned P2022 for a day.
+#
+# This runs unconditionally on every commit that lands on `main` — no path
+# filter. "A commit lands on `main`" is the documented trigger
+# (docs/environments.md), and a filter would create a way for a code commit
+# to silently not deploy. It also does not re-run lint/test/build: `main` is
+# green by construction, because those are required checks on every PR.
+#
+# Prerequisites this workflow depends on but does not itself configure:
+#   - Railway preprod environment: branch auto-deploy DISABLED
+#   - Vercel preprod project: branch auto-deploy DISABLED for `main`
+#     (until both are off, a merge deploys twice — once here, once by git
+#     integration — and the git-integration one is the unordered path this
+#     issue removes)
+#   - Repo secrets: PREPROD_DATABASE_URL, RAILWAY_PREPROD_TOKEN,
+#     VERCEL_PREPROD_PROJECT_ID
+#     PREPROD_DATABASE_URL MUST be the DIRECT (non-pooled) Neon string — host
+#     WITHOUT `-pooler`, no `pgbouncer=true` — with `connect_timeout=15`.
+#     `prisma migrate deploy` (below) takes a session-level advisory lock that
+#     transaction-mode pooling breaks, and it is the first step to touch the
+#     preprod compute, which scale-to-zeros — a cold resume exceeds Prisma's
+#     5s default. Take it from Neon project `GigLoop PreProd`
+#     (autumn-hill-65970446), branch `preprod`. Never route it through an
+#     agent session (CLAUDE.md → Hard Rules, #675).
+#     The schema's datasource reads `directUrl` (= DIRECT_URL) for migrations.
+#   - Repo variables: RAILWAY_PREPROD_PROJECT_ID, RAILWAY_PREPROD_ENVIRONMENT,
+#     RAILWAY_PREPROD_SERVICE
+#     Qualified even where the value duplicates prod's — preprod may well be
+#     the same Railway project and service under a different environment, and
+#     ADR-0075 §3 forbids referring to an environment by an unqualified name.
+#     (VERCEL_ORG_ID + VERCEL_TOKEN secrets are shared with `release.yml`;
+#     the existing VERCEL_PROJECT_ID is prod's and is NOT reused here.)
+on:
+  push:
+    branches: [main]
+
+# Two merges in quick succession must not run two migrations at once.
+# `cancel-in-progress: false` is deliberate: queueing a deploy is fine,
+# cancelling one mid-migration is not.
+concurrency:
+  group: preprod
+  cancel-in-progress: false
+
+jobs:
+  preprod:
+    name: Deploy preprod
+    runs-on: ubuntu-latest
+    # Generous, but bounded: this job holds the `preprod` concurrency group,
+    # so a hung deploy on GitHub's 6h default would block every later merge.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.1.3'
+      - uses: actions/cache@v4
+        id: cache
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lockb') }}
+      - run: bun install --frozen-lockfile
+        if: steps.cache.outputs.cache-hit != 'true'
+
+      - name: Generate Prisma client
+        run: cd apps/api && bunx prisma generate
+        env:
+          DATABASE_URL: ${{ secrets.PREPROD_DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.PREPROD_DATABASE_URL }}
+
+      - name: Migrate preprod database
+        # Consumes DIRECT_URL (schema datasource `directUrl`).
+        # PREPROD_DATABASE_URL must be the direct/non-pooled string — see the
+        # header note on the secret.
+        run: cd apps/api && bunx prisma migrate deploy
+        env:
+          DATABASE_URL: ${{ secrets.PREPROD_DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.PREPROD_DATABASE_URL }}
+
+      - name: Deploy API to Railway (preprod)
+        run: |
+          bunx @railway/cli@latest up \
+            --service "${{ vars.RAILWAY_PREPROD_SERVICE }}" \
+            --project "${{ vars.RAILWAY_PREPROD_PROJECT_ID }}" \
+            --environment "${{ vars.RAILWAY_PREPROD_ENVIRONMENT }}" \
+            -m "preprod ${{ github.sha }}"
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_PREPROD_TOKEN }}
+
+      # Build ON Vercel's infra (remote), not in this runner — same reason as
+      # `release.yml`: `vercel pull` withholds the plaintext of **Sensitive**
+      # env vars, so an in-runner build bakes the `VITE_*` client keys as empty
+      # strings and the frontend fails to init. Preprod is a separate Vercel
+      # project, so `--prod` targets ITS production alias
+      # (preprod.gigloop.co.uk), not prod's.
+      - name: Deploy web to Vercel (preprod) — remote build so Sensitive vars bake in
+        run: bunx vercel@latest deploy --prod --yes --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PREPROD_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+      - name: PreProd summary
+        if: always()
+        run: |
+          {
+            echo "## PreProd deploy"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Commit | \`${{ github.sha }}\` |"
+            echo "| Sequence | migrate → API → web (no snapshot, no reseed) |"
+            echo "| Job result | ${{ job.status }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
