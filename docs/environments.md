@@ -18,14 +18,18 @@ There are **two deployed environments**, plus local development and throwaway da
 |---|---|---|
 | Who uses it | Real musicians, real data | You, before a release |
 | Web | `www.gigloop.co.uk` | `preprod.gigloop.co.uk` |
-| API | `valiant-respect-production-c8bb.up.railway.app/api` | `valiant-respect-staging.up.railway.app/api` |
+| API | `valiant-respect-production-c8bb.up.railway.app/api` | `valiant-respect-staging.up.railway.app/api` (hostname is vestigial — see below) |
 | Data | Real customer data | **Synthetic** — seeded, never a copy of prod |
 | Clerk | Production instance | Development instance |
 | R2 | `gigloop-public` / `gigloop-documents` | `gigloop-preprod-public` / `gigloop-preprod-documents` |
 | Email | Real delivery | Resend sandbox sender — cannot reach a real client |
 | Deploys when | A human pushes a `v*` tag | A commit lands on `main` |
 
-**"Preprod" is the only name for that environment.** It is also called `staging` in Railway and "smoke-test environment" in ADR-0044 — both are being retired (⏳ #905). "Smoke test" survives only as the name of the *activity* you run there, never the place.
+**"Preprod" is the only name for that environment.** ✅ Docs, GitHub variables, GitHub Environments, the Railway environment and the Neon branch all say `preprod` (#905, completed 2026-08-19).
+
+"Smoke test" survives only as the name of the *activity* you run there, never the place. ADR-0044's body still says "smoke-test environment" throughout — that is left as a historical record, not swept; its header note carries the supersession.
+
+⚠️ **The preprod API hostname still contains the word `staging` — `valiant-respect-staging.up.railway.app` — and that is deliberate.** Railway kept the generated hostname when the environment was renamed (verified 2026-08-19), so nothing broke. It is left alone because the hostname is baked into `VITE_API_BASE_URL` on the Vercel preprod project; changing it would break the preprod frontend for no benefit. **Treat `valiant-respect-staging` as a vestigial label, not a second environment.**
 
 Environment names are **not** domain vocabulary and are deliberately absent from `CONTEXT.md`, which is the product domain — bookings, invoices, contacts.
 
@@ -39,13 +43,13 @@ Every database is Neon Postgres except local.
 |---|---|---|---|
 | **prod** | `GigLoop` · `curly-forest-25260742` | `production` | The live app |
 | **prod snapshots** | same | `pre-release-v*` | Rollback targets, one per release (ADR-0044 §6) |
-| **preprod** | `GigLoop PreProd` · `autumn-hill-65970446` | `production` → `preprod` (⏳ #905) | The preprod app |
+| **preprod** | `GigLoop PreProd` · `autumn-hill-65970446` | `preprod` | The preprod app |
 | **CI throwaway** | same as preprod | `ci-integration-*`, `ci-e2e-*` | Created and destroyed per CI run |
 | **local** | ⏳ #906 — moving to Docker `postgres:18` | — | Your laptop |
 
 Two things worth knowing:
 
-- **The CI throwaway branches live inside the preprod project**, and the GitHub variable pointing at that project is currently the *unqualified* `NEON_PROJECT_ID` while prod is the *qualified* `NEON_PROD_PROJECT_ID`. That reads backwards. Becoming `NEON_PREPROD_PROJECT_ID` (⏳ #905).
+- **The CI throwaway branches live inside the preprod project.** ✅ The variable pointing at it is `NEON_PREPROD_PROJECT_ID` — it used to be the *unqualified* `NEON_PROJECT_ID` while prod was the *qualified* `NEON_PROD_PROJECT_ID`, which read backwards (#905).
 - **Local development currently runs on a copy-on-write branch of the *prod* project**, so real customer rows are on the laptop. Moving to Docker (⏳ #906), which finishes the boundary ADR-0059 started when it moved local off prod's R2 credentials.
 
 Connection strings come in two forms and it matters which you use. `DATABASE_URL` is **pooled** (`-pooler` host, `pgbouncer=true`) and is what the app runs on. `DIRECT_URL` is **direct** and is what the Prisma CLI uses — `migrate deploy` takes a session-level advisory lock that transaction-mode pooling breaks. `schema.prisma` reads both.
