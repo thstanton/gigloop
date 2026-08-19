@@ -1,17 +1,16 @@
 # Smoke-test critical-path checklist
 
-Run this manually against the smoke-test environment before pushing a `v*` release tag (ADR-0044 §4/§7). It exercises the risky paths — money, PDFs, email delivery, multi-tenancy, and the client portal — on a prod-shaped stack with synthetic data, so a release candidate is never tagged untested.
+Run this manually against **preprod** before pushing a `v*` release tag (ADR-0044 §7, ADR-0075). It exercises the risky paths — money, PDFs, email delivery, multi-tenancy, and the client portal — on a prod-shaped stack with synthetic data, so a release candidate is never tagged untested.
 
 Automate with Playwright once these flows stabilise (auth session pattern already saved from #360).
 
 ## Environment
 
+Run this against **preprod** — never prod. The environment itself (URLs, database, Clerk instance, R2 buckets, email sink) is described in [`docs/environments.md`](environments.md); this section carries only what you need to sign in and read the data.
+
 - **Web:** https://preprod.gigloop.co.uk
-- **API:** https://valiant-respect-staging.up.railway.app/api (Railway `staging` environment, project `gigman-be`)
-- **DB:** Neon project `autumn-hill-65970446` (eu-west-2), seeded via `bun run seed` against `SEED_USER_ID`
 - **Sign-in:** Clerk **development** instance. Test user `user_3G0hAnuoLfBCZbIqniyXmNHAEdZ` — sign in with its email using the Clerk dev-mode OTP `424242` (no real email is sent; any `+clerk_test@` address auto-verifies this way)
-- **Email:** Resend, `RESEND_FROM=onboarding@resend.dev` — sandbox sender, only ever delivers to the Resend account's own inbox. A smoke-test send can never reach a real client by construction.
-- **Storage:** R2 bucket `gigloop-preprod`
+- **Data:** synthetic and seeded, not auto-reset. It has survived real migration history, so it is not pristine — reseed by hand if it gets messy.
 
 ## Checklist
 
