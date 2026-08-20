@@ -280,6 +280,54 @@ describe('InvoiceSheet — editing a series invoice (#845)', () => {
     });
   });
 
+  // #929 diagnostic (unit-level, not the flake itself — this asserts what the code guarantees so
+  // the mechanism can be ruled in/out deterministically): a background refetch of `['invoice', id]`
+  // (e.g. from the checklist mutation's invalidation landing mid-edit) updates the `invoice` prop
+  // to a *new object reference* without the parent ever flipping `open`. The reset effect's
+  // dependency array is `[open]` only, so this must not re-seed the form. If this test starts
+  // failing, the effect's dependencies changed and the #929 mechanism is back in play.
+  it('preserves an in-progress edit through an invoice prop refresh while open never changes', async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    const inv = invoice();
+    const props = {
+      bookingId: 'b1',
+      hasDepositInvoice: false,
+      onOpenChange: () => {},
+      open: true,
+    };
+
+    const { rerender } = render(
+      <QueryClientProvider client={client}>
+        <InvoiceSheet {...props} invoice={inv} />
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(amountFields()[0]).toHaveValue('500'));
+
+    await userEvent.clear(amountFields()[0]);
+    await userEvent.type(amountFields()[0], '750');
+
+    // A new `invoice` object, same underlying data — exactly what a background refetch that found
+    // nothing changed server-side would hand back. `open` is never touched.
+    rerender(
+      <QueryClientProvider client={client}>
+        <InvoiceSheet {...props} invoice={invoice()} />
+      </QueryClientProvider>,
+    );
+
+    expect(amountFields()[0]).toHaveValue('750');
+
+    await save();
+
+    await waitFor(() => {
+      expect(vi.mocked(apiPatch)).toHaveBeenCalledWith(
+        '/invoices/si1/line-items/li1',
+        expect.objectContaining({ amount: 750 }),
+      );
+    });
+  });
+
   // Issue is still owner-routed — the nine transitions have not migrated (#853) — but the prefix
   // must come from the invoice's own FK, not the bookingId prop, or this 404s for a series.
   it('issues via the series transition route, not the booking one', async () => {
