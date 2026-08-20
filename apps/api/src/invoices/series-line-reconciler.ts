@@ -46,7 +46,13 @@ export interface OrderedLine {
   id: string;
   order: number;
   sourceBookingId: string | null;
-  /** The source booking's date — null for a custom line, or an auto line whose source was deleted. */
+  /**
+   * The source booking's date — null for a custom line. `InvoiceLineItem.sourceBookingId` is
+   * `onDelete: SetNull`, so a line with `sourceBookingId` set can never actually have a null
+   * date (its source booking's deletion would have cleared `sourceBookingId` too, reclassifying
+   * it as custom) — the type stays nullable defensively, and `computeJoinInsertion` sorts such
+   * an (unreachable) line to the end of the auto group rather than treat it as the earliest.
+   */
   sourceBookingDate: Date | null;
 }
 
@@ -67,8 +73,12 @@ export interface JoinInsertion {
  */
 export function computeJoinInsertion(existingLines: OrderedLine[], newBookingDate: Date): JoinInsertion {
   const byOrder = (a: OrderedLine, b: OrderedLine) => a.order - b.order;
-  const byDate = (a: OrderedLine, b: OrderedLine) =>
-    (a.sourceBookingDate?.getTime() ?? 0) - (b.sourceBookingDate?.getTime() ?? 0);
+  const byDate = (a: OrderedLine, b: OrderedLine): number => {
+    if (a.sourceBookingDate === null && b.sourceBookingDate === null) return 0;
+    if (a.sourceBookingDate === null) return 1;
+    if (b.sourceBookingDate === null) return -1;
+    return a.sourceBookingDate.getTime() - b.sourceBookingDate.getTime();
+  };
 
   const autoLines = existingLines.filter((l) => l.sourceBookingId !== null).sort(byDate);
   const customLines = existingLines.filter((l) => l.sourceBookingId === null).sort(byOrder);

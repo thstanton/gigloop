@@ -133,6 +133,19 @@ describe('computeJoinInsertion', () => {
     ]));
   });
 
+  it('sorts an auto line with no resolvable date to the end of the auto group, not the front (defensive — unreachable under onDelete: SetNull)', () => {
+    const existing = [
+      { id: 'a-orphan', order: 0, sourceBookingId: 'gone', sourceBookingDate: null },
+      auto('a1', 1, '2026-06-01'),
+    ];
+    const result = computeJoinInsertion(existing, new Date('2026-05-01'));
+    // The dated line (2026-06-01) is later than the new join (2026-05-01), so the new line goes
+    // first; the orphaned null-date line must not jump ahead of it — it stays last, only shifting
+    // to make room. a1's position (1) is unchanged so it does not appear in reorder.
+    expect(result.newOrder).toBe(0);
+    expect(result.reorder).toEqual([{ id: 'a-orphan', order: 2 }]);
+  });
+
   it('does not reorder a line whose position is unchanged', () => {
     const existing = [
       auto('a1', 0, '2026-05-01'),

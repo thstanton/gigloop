@@ -65,7 +65,7 @@ export class SeriesController {
 
   @ApiOperation({ summary: 'Issue a series draft invoice (assign number, lock line items, store PDF)' })
   @ApiResponse({ status: 200, description: 'Invoice issued successfully', type: InvoiceResponseDto })
-  @ApiResponse({ status: 400, description: 'Invoice is not in DRAFT status' })
+  @ApiResponse({ status: 400, description: 'Invoice is not in DRAFT status, or the draft has no line items' })
   @ApiResponse({ status: 404, description: 'Series or invoice not found' })
   @Post(':id/invoices/:invoiceId/issue')
   @HttpCode(200)
