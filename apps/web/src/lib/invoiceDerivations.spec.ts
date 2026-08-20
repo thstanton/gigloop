@@ -200,10 +200,9 @@ describe('hasAnyDepositInvoice (#756)', () => {
     expect(hasAnyDepositInvoice([])).toBe(false);
   });
 
-  // Void-inclusive on purpose: it must match shouldHideTemplate exactly, so the contract-send
-  // shortcut can never pre-select a template the picker hides. A void-only deposit → template
-  // shown → shortcut may pre-select it (both agree).
-  it('is true for a VOID-only deposit invoice (matches shouldHideTemplate)', () => {
+  // Void-inclusive on purpose: the contract-send shortcut pre-selects the combined cover whenever
+  // any deposit invoice exists, even a VOID one — see contractCoverTemplateFor below.
+  it('is true for a VOID-only deposit invoice (the shortcut still pre-selects the combined cover)', () => {
     expect(hasAnyDepositInvoice([make({ isDeposit: true, status: 'VOID' })])).toBe(true);
   });
 });
@@ -218,7 +217,7 @@ describe('contractCoverTemplateFor (#756) — the shortcut both layouts use', ()
     expect(contractCoverTemplateFor([])).toBe('contract_cover');
   });
 
-  it('offers the combined email even for a VOID-only deposit (never pre-selects a hidden template)', () => {
+  it('offers the combined email even for a VOID-only deposit', () => {
     expect(contractCoverTemplateFor([make({ isDeposit: true, status: 'VOID' })])).toBe('contract_and_deposit_cover');
   });
 });
