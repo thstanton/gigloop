@@ -1613,13 +1613,12 @@ describe('BookingsService', () => {
   // ADR-0071: the durable guard against the divergence this issue fixes — a write silently
   // reverting to the raw repo row (rather than the shared mapper) breaks this immediately.
   describe('response shape parity (ADR-0071)', () => {
-    // A `bookingIncludes`-shaped raw row — the shape every repo method under test returns.
+    // A `bookingDetailSelect`-shaped raw row — the shape every repo method under test returns.
     function rawRow(overrides: Record<string, unknown> = {}) {
       return {
         id: 'b1',
         createdAt: new Date('2026-01-01'),
         updatedAt: new Date('2026-01-01'),
-        userId: 'u1',
         status: BookingStatus.CONFIRMED,
         eventType: 'WEDDING',
         date: new Date('2026-06-01'),
