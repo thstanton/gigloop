@@ -6,6 +6,7 @@ function makeCtx(overrides: Partial<BookingContext> = {}): BookingContext {
     status: 'ENQUIRY',
     venueId: null,
     customerId: null,
+    seriesId: null,
     customerEmail: null,
     fee: null,
     setsCount: 0,

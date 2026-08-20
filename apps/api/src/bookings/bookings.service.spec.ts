@@ -1446,6 +1446,39 @@ describe('BookingsService', () => {
       expect(seriesRepo.create).toHaveBeenCalledWith('u1', 'Hotel Grand Events', 'c1');
       expect(repo.updateSeries).toHaveBeenCalledWith('b1', 'new-s1');
     });
+
+    // ADR-0078: updateSeries was the one series-membership mutation that never re-derived
+    // the checklist — closing that gap is what makes the money-goal SKIP actually fire on
+    // retroactive join (creation already covers create-time SKIP via its own reeval call).
+    it('re-evaluates the checklist on joining a series', async () => {
+      repo.findOne.mockResolvedValue(bookingWithCustomer);
+      seriesRepo.findOneLight.mockResolvedValue(series);
+      (repo.countNonVoidInvoices as jest.Mock).mockResolvedValue(0);
+      (repo.updateSeries as jest.Mock).mockResolvedValue({ ...bookingWithCustomer, seriesId: 's1' });
+
+      await service.updateSeries('u1', 'b1', 's1');
+
+      expect(evaluator.onBookingChanged).toHaveBeenCalledWith('b1');
+    });
+
+    it('re-evaluates the checklist on leaving a series', async () => {
+      repo.findOne.mockResolvedValue({ ...bookingWithCustomer, seriesId: 's1' });
+      (repo.updateSeries as jest.Mock).mockResolvedValue({ ...bookingWithCustomer, seriesId: null });
+
+      await service.updateSeries('u1', 'b1', null);
+
+      expect(evaluator.onBookingChanged).toHaveBeenCalledWith('b1');
+    });
+
+    it('does not re-evaluate the checklist when a differing-customer join is halted for confirmation', async () => {
+      repo.findOne.mockResolvedValue(bookingDifferentCustomer);
+      seriesRepo.findOneLight.mockResolvedValue(series);
+      (repo.countNonVoidInvoices as jest.Mock).mockResolvedValue(0);
+
+      await service.updateSeries('u1', 'b1', 's1');
+
+      expect(evaluator.onBookingChanged).not.toHaveBeenCalled();
+    });
   });
 
   describe('updateChecklistItem', () => {

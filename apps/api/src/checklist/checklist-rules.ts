@@ -38,6 +38,10 @@ export interface BookingContext {
   status: string;
   venueId: string | null;
   customerId: string | null;
+  // ADR-0078: a series member can never hold a booking-level invoice, so the money
+  // goals SKIP entirely when this is set — a raw FK, not a pre-derived boolean, mirroring
+  // how venueId/customerId are already carried.
+  seriesId: string | null;
   customerEmail: string | null;
   fee: string | null;
   setsCount: number;

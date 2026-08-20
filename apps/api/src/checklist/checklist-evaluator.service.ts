@@ -16,13 +16,19 @@ function statusGte(current: string, threshold: string): boolean {
   return STATUS_ORDER.indexOf(current) >= STATUS_ORDER.indexOf(threshold);
 }
 
-// Goals that become SKIPPED when booking status reaches a threshold. The contract
-// outcome is an awaited goal the READY transition makes moot (the gig is happening) —
-// it is skipped, not failed. Keyed on the GOAL (`get_contract_signed`) now that the
-// contract is a multi-step goal; resolveSkip sets the goal SKIPPED directly, ahead of
-// any step roll-up. (Pre-#607 this keyed on the flat `contract_signed` item.)
-const SKIP_RULES: Array<{ keys: string[]; threshold: string }> = [
-  { keys: ['get_contract_signed'], threshold: 'READY' },
+// Goals that become SKIPPED under some booking-context condition. One skip mechanism,
+// not two parallel ones (ADR-0078). resolveSkip sets the goal SKIPPED directly, ahead
+// of any step roll-up.
+const SKIP_RULES: Array<{ keys: string[]; condition: (ctx: BookingContext) => boolean }> = [
+  // The contract outcome is an awaited goal the READY transition makes moot (the gig
+  // is happening) — it is skipped, not failed. Keyed on the GOAL (`get_contract_signed`)
+  // now that the contract is a multi-step goal. (Pre-#607 this keyed on the flat
+  // `contract_signed` item.)
+  { keys: ['get_contract_signed'], condition: (ctx) => statusGte(ctx.status, 'READY') },
+  // ADR-0078: a series member can never hold a booking-level invoice — billing lives on
+  // the series invoice instead — so the money goals are structurally unsatisfiable and
+  // are skipped outright rather than left dead-PENDING.
+  { keys: ['get_deposit_paid', 'get_the_balance_paid'], condition: (ctx) => ctx.seriesId != null },
 ];
 
 /**
@@ -61,10 +67,9 @@ function isTerminalGoal(state: string): boolean {
   return state === 'COMPLETE' || state === 'SKIPPED';
 }
 
-function resolveSkip(goal: EvalGoal, bookingStatus: string): boolean {
+function resolveSkip(goal: EvalGoal, ctx: BookingContext): boolean {
   return SKIP_RULES.some(
-    ({ keys, threshold }) =>
-      goal.key && keys.includes(goal.key) && statusGte(bookingStatus, threshold),
+    ({ keys, condition }) => goal.key && keys.includes(goal.key) && condition(ctx),
   );
 }
 
@@ -118,7 +123,7 @@ function evaluateGoal(
   goal: EvalGoal,
   ctx: BookingContext,
 ): { goalUpdate: StateUpdate | null; stepUpdates: StateUpdate[] } {
-  if (resolveSkip(goal, ctx.status)) {
+  if (resolveSkip(goal, ctx)) {
     return { goalUpdate: buildGoalUpdate(goal, 'SKIPPED'), stepUpdates: [] };
   }
   const { state, stepUpdates } = nextGoalState(goal, ctx);
@@ -192,8 +197,8 @@ export class ChecklistEvaluatorService {
    * abandoned.
    *
    * Hard constraint if ever wired: status/date-driven re-evaluation must always use
-   * {@link evaluate} — the SKIP_RULES path keys on booking status, which is not an
-   * InputKey the index can target.
+   * {@link evaluate} — the SKIP_RULES path keys on booking status and series membership
+   * (ADR-0078), neither of which is an InputKey the index can target.
    */
   async evaluateForEvent(bookingId: string, changedInputs: InputKey[]): Promise<void> {
     const { items, booking } = await this.repo.findItemsWithContext(bookingId);
