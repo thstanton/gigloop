@@ -81,9 +81,20 @@ test.describe('series invoice — edit and issue', () => {
     await amounts.nth(2).fill('200');
     await sheet.getByRole('button', { name: 'Save draft', exact: true }).click();
 
+    // #929: the client fires the new line's POST and the traced line's amount PATCH concurrently
+    // (`Promise.all` in `persistLineItemEdits`) — they settle independently, and the PATCH was
+    // observed taking ~400ms longer than the POST in CI. Polling on count alone is satisfied as
+    // soon as the POST lands, so a bare `const saved = await lineItems()` right after could read
+    // between the two writes and see the traced line's pre-edit amount — a real, rare, order-
+    // independent flake, not a lost edit (the write itself is correct; the read raced it). The
+    // poll's predicate must cover everything the rest of the test depends on being settled.
     await expect
-      .poll(async () => (await lineItems()).length)
-      .toBe(3);
+      .poll(async () => {
+        const items = await lineItems();
+        const traced = items.find((l) => l.id === fixture.tracedLineId);
+        return { count: items.length, tracedAmount: traced?.amount.toString() };
+      })
+      .toEqual({ count: 3, tracedAmount: '750' });
 
     const saved = await lineItems();
 
