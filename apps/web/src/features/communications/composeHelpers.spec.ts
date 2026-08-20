@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
   getInvoiceIdForTemplate,
-  shouldHideTemplate,
   formatMissingVariables,
   getAttachmentState,
   isComposableEmailTemplate,
@@ -13,8 +12,10 @@ import {
   canSendEmail,
   shouldSuggestCreatingContract,
   shouldSuggestCreatingDepositInvoice,
+  EMAIL_TEMPLATE_SCOPE,
   type SeriesComposeTarget,
 } from './composeHelpers';
+import { BUILT_IN_EMAIL_TYPES, BUILT_IN_DOCUMENT_TYPES } from '@/features/templates/templateMeta';
 import type { ChecklistItem, Contact, Contract, Invoice, Template } from '@/types/api';
 
 const goal = (key: string): ChecklistItem => ({ key } as unknown as ChecklistItem);
@@ -59,9 +60,6 @@ const seriesTarget: SeriesComposeTarget = {
   // The series customer, deliberately not the member booking's.
   recipient: { id: 'c-series', name: 'Hotel Group', email: 'bookings@hotel.test' } as unknown as Contact,
 };
-
-const PAST_DATE = '2020-01-01';
-const FUTURE_DATE = '2099-01-01';
 
 const contractGoal = goal('get_contract_signed');
 const depositGoal = goal('get_deposit_paid');
@@ -176,64 +174,6 @@ describe('getInvoiceIdForTemplate', () => {
   });
 });
 
-// ─── shouldHideTemplate ───────────────────────────────────────────────────────
-
-describe('shouldHideTemplate', () => {
-  const invoices = [depositInvoice, balanceInvoice];
-
-  it('does not hide non-invoice templates regardless of invoices', () => {
-    const unaffected = ['quote', 'confirmation', 'contract_cover', 'contract_received',
-      'deposit_received', 'music_form_invite'] as const;
-    for (const type of unaffected) {
-      expect(shouldHideTemplate(type, [], PAST_DATE)).toBe(false);
-    }
-  });
-
-  it('hides deposit_invoice_cover when no deposit invoice exists', () => {
-    expect(shouldHideTemplate('deposit_invoice_cover', [balanceInvoice], PAST_DATE)).toBe(true);
-  });
-
-  it('shows deposit_invoice_cover when deposit invoice exists', () => {
-    expect(shouldHideTemplate('deposit_invoice_cover', invoices, PAST_DATE)).toBe(false);
-  });
-
-  it('hides contract_and_deposit_cover when no deposit invoice exists', () => {
-    expect(shouldHideTemplate('contract_and_deposit_cover', [balanceInvoice], PAST_DATE)).toBe(true);
-  });
-
-  it('shows contract_and_deposit_cover when deposit invoice exists', () => {
-    expect(shouldHideTemplate('contract_and_deposit_cover', invoices, PAST_DATE)).toBe(false);
-  });
-
-  it('hides balance_invoice_cover when no balance invoice exists', () => {
-    expect(shouldHideTemplate('balance_invoice_cover', [depositInvoice], PAST_DATE)).toBe(true);
-  });
-
-  // #847: which owner a template belongs to is decided by isComposableEmailTemplate — the
-  // predicate the picker actually calls — so this one no longer has an opinion about the series
-  // cover. Asserted so the rule cannot quietly reappear in two places.
-  it('has no opinion on series_invoice_cover — owner visibility lives in isComposableEmailTemplate', () => {
-    expect(shouldHideTemplate('series_invoice_cover', invoices, PAST_DATE)).toBe(false);
-  });
-
-  it('shows balance_invoice_cover when balance invoice exists', () => {
-    expect(shouldHideTemplate('balance_invoice_cover', invoices, PAST_DATE)).toBe(false);
-  });
-
-  it('hides thank_you when booking date is in the future', () => {
-    expect(shouldHideTemplate('thank_you', invoices, FUTURE_DATE)).toBe(true);
-  });
-
-  it('shows thank_you when booking date is in the past', () => {
-    expect(shouldHideTemplate('thank_you', invoices, PAST_DATE)).toBe(false);
-  });
-
-  it('hides thank_you for today (date not yet passed)', () => {
-    const today = new Date().toISOString();
-    expect(shouldHideTemplate('thank_you', invoices, today)).toBe(true);
-  });
-});
-
 // ─── getAttachmentState ───────────────────────────────────────────────────────
 
 describe('getAttachmentState', () => {
@@ -291,7 +231,8 @@ describe('getAttachmentState', () => {
   });
 
   it('returns deposit warning when only a VOID deposit invoice exists', () => {
-    // VOID deposit satisfies shouldHideTemplate (invoice exists) but getInvoiceIdForTemplate filters it out
+    // getInvoiceIdForTemplate filters VOID invoices out via activeInvoiceOf, so a VOID-only
+    // deposit resolves to no id here even though the template is still offered (offer-then-warn).
     expect(getAttachmentState('deposit_invoice_cover', [voidDeposit])).toEqual({
       kind: 'warning',
       message: 'No deposit invoice to attach',
@@ -316,6 +257,40 @@ describe('getAttachmentState', () => {
     expect(getAttachmentState('contract_and_deposit_cover', [issuedBalance])).toEqual({
       kind: 'warning',
       message: 'No deposit invoice to attach',
+    });
+  });
+});
+
+// ─── Offer-then-warn (#928) ────────────────────────────────────────────────
+//
+// The compose picker's only visibility predicate (isComposableEmailTemplate) never consults
+// invoice presence — a booking missing the relevant invoice still gets offered the template, and
+// getAttachmentState warns instead of the template disappearing. This was previously implied by
+// the now-deleted shouldHideTemplate's own (unwired) spec; pinned directly against the live
+// predicates here so a future "hide it" change can't silently reintroduce a hide policy.
+
+describe('offer-then-warn: a missing invoice never hides the template', () => {
+  it('still offers deposit_invoice_cover with no deposit invoice, and warns on attachment', () => {
+    expect(isComposableEmailTemplate(makeTemplate({ builtInType: 'deposit_invoice_cover' }), false)).toBe(true);
+    expect(getAttachmentState('deposit_invoice_cover', [])).toEqual({
+      kind: 'warning',
+      message: 'No deposit invoice to attach',
+    });
+  });
+
+  it('still offers contract_and_deposit_cover with no deposit invoice, and warns on attachment', () => {
+    expect(isComposableEmailTemplate(makeTemplate({ builtInType: 'contract_and_deposit_cover' }), false)).toBe(true);
+    expect(getAttachmentState('contract_and_deposit_cover', [])).toEqual({
+      kind: 'warning',
+      message: 'No deposit invoice to attach',
+    });
+  });
+
+  it('still offers balance_invoice_cover with no balance invoice, and warns on attachment', () => {
+    expect(isComposableEmailTemplate(makeTemplate({ builtInType: 'balance_invoice_cover' }), false)).toBe(true);
+    expect(getAttachmentState('balance_invoice_cover', [])).toEqual({
+      kind: 'warning',
+      message: 'No balance invoice to attach',
     });
   });
 });
@@ -381,14 +356,55 @@ describe('isComposableEmailTemplate', () => {
     expect(isComposableEmailTemplate(makeTemplate({ builtInType: null }), false)).toBe(false);
   });
 
-  it('excludes document-only built-in types', () => {
-    expect(isComposableEmailTemplate(makeTemplate({ builtInType: 'contract' }), false)).toBe(false);
+  it('excludes document-only built-in types, in booking mode and series mode alike', () => {
+    const t = makeTemplate({ builtInType: 'contract' });
+    expect(isComposableEmailTemplate(t, false)).toBe(false);
+    expect(isComposableEmailTemplate(t, false, seriesTarget)).toBe(false);
   });
 
   it('hides music_form_invite unless the booking has a music form configured', () => {
     const t = makeTemplate({ builtInType: 'music_form_invite' });
     expect(isComposableEmailTemplate(t, false)).toBe(false);
     expect(isComposableEmailTemplate(t, true)).toBe(true);
+  });
+});
+
+// ─── EMAIL_TEMPLATE_SCOPE guards against #846 ──────────────────────────────
+//
+// EMAIL_TEMPLATE_SCOPE is a compile-time completeness check (a Record over every
+// BuiltInTemplateType member) — a new built-in type can't go undeclared — and
+// isComposableEmailTemplate reads it directly, so a wrongly-declared row is a real behaviour
+// change, not just a mismatched comment. These tests pin that behaviour per entry, the way the
+// dead shouldHideTemplate's own spec never pinned anything the picker actually ran (#928).
+
+describe('EMAIL_TEMPLATE_SCOPE', () => {
+  it('every built-in email type has a booking or series scope declared', () => {
+    for (const type of BUILT_IN_EMAIL_TYPES) {
+      expect(['booking', 'series']).toContain(EMAIL_TEMPLATE_SCOPE[type]);
+    }
+  });
+
+  it('isComposableEmailTemplate composes exactly the booking-scoped types in booking mode', () => {
+    for (const type of BUILT_IN_EMAIL_TYPES) {
+      const t = makeTemplate({ builtInType: type });
+      expect(isComposableEmailTemplate(t, true)).toBe(EMAIL_TEMPLATE_SCOPE[type] === 'booking');
+    }
+  });
+
+  it('isComposableEmailTemplate composes exactly the series-scoped types in series mode', () => {
+    for (const type of BUILT_IN_EMAIL_TYPES) {
+      const t = makeTemplate({ builtInType: type });
+      expect(isComposableEmailTemplate(t, true, seriesTarget)).toBe(EMAIL_TEMPLATE_SCOPE[type] === 'series');
+    }
+  });
+
+  it('marks exactly the built-in document types as document-scoped', () => {
+    for (const type of BUILT_IN_DOCUMENT_TYPES) {
+      expect(EMAIL_TEMPLATE_SCOPE[type]).toBe('document');
+    }
+    for (const type of BUILT_IN_EMAIL_TYPES) {
+      expect(EMAIL_TEMPLATE_SCOPE[type]).not.toBe('document');
+    }
   });
 });
 

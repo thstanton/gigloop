@@ -78,12 +78,16 @@ export function activeInvoiceOf(isDeposit: boolean, invoices: Invoice[]): Invoic
 }
 
 /**
- * Whether a deposit invoice exists in **any** state, including VOID (#756). This governs whether
- * the combined "Contract & deposit email" is offered — the contract-send shortcut pre-selects it,
- * and `shouldHideTemplate` hides it — so both MUST key off this one predicate, or the shortcut can
- * pre-select a template the picker hides. Deliberately distinct from `activeInvoiceOf(true, …)`,
- * which asks whether a *usable* (non-void) deposit invoice exists — that is the right question for
- * a hint about attaching one, but the wrong one for template visibility.
+ * Whether a deposit invoice exists in **any** state, including VOID (#756). This is what the
+ * contract-send shortcut checks to decide which cover to pre-select — the combined "Contract &
+ * deposit email" when one exists, otherwise the plain contract cover (`contractCoverTemplateFor`).
+ * Deliberately distinct from `activeInvoiceOf(true, …)`, which asks whether a *usable* (non-void)
+ * deposit invoice exists — that is the right question for a hint about attaching one, but the
+ * wrong one for the shortcut's pre-selection.
+ *
+ * Not a visibility gate: the compose picker (`isComposableEmailTemplate`) offers every
+ * invoice-cover template regardless of invoice presence and warns on a missing attachment instead
+ * (`getAttachmentState`) — see #928.
  */
 export function hasAnyDepositInvoice(invoices: Invoice[]): boolean {
   return invoices.some((inv) => inv.isDeposit);
@@ -92,8 +96,7 @@ export function hasAnyDepositInvoice(invoices: Invoice[]): boolean {
 /**
  * The cover-email template the contract-send shortcut pre-selects (#756). When a deposit invoice
  * exists it offers the combined "Contract & deposit email"; otherwise the plain contract cover.
- * Keyed off `hasAnyDepositInvoice` so both booking-detail layouts derive it identically and it can
- * never pre-select a template `shouldHideTemplate` hides.
+ * Keyed off `hasAnyDepositInvoice` so both booking-detail layouts derive it identically.
  */
 export function contractCoverTemplateFor(
   invoices: Invoice[],

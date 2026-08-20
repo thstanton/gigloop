@@ -1,6 +1,6 @@
 import type { BuiltInTemplateType, ChecklistItem, Contact, Contract, Invoice, Template } from '@/types/api';
-import { VAR_LABELS, BUILT_IN_EMAIL_TYPES } from '@/features/templates/templateMeta';
-import { activeInvoiceOf, hasAnyDepositInvoice } from '@/lib/invoiceDerivations';
+import { VAR_LABELS } from '@/features/templates/templateMeta';
+import { activeInvoiceOf } from '@/lib/invoiceDerivations';
 import { invoiceOwnerRoute } from '@/lib/invoiceActionRouting';
 
 /**
@@ -58,7 +58,7 @@ export function shouldSuggestCreatingContract(
  * and the deposit goal is on this booking's checklist. Nudge them to create the deposit invoice so
  * both can go in one email. "No usable deposit" is the NON-void predicate (activeInvoiceOf) — a
  * void-only deposit can still be re-created — distinct from hasAnyDepositInvoice, which governs
- * template visibility.
+ * which cover template the contract-send shortcut pre-selects, not which templates the picker offers.
  */
 export function shouldSuggestCreatingDepositInvoice(
   selectedType: BuiltInTemplateType | null,
@@ -99,37 +99,6 @@ export function getInvoiceIdForTemplate(
     return activeInvoiceOf(false, invoices)?.id;
   }
   return undefined;
-}
-
-/**
- * ⚠️ Currently unreferenced by the compose sheet. The picker has filtered on
- * {@link isComposableEmailTemplate} alone since the ComposeEmailSheet decomposition (#448), so
- * the invoice-presence rules below decide nothing at runtime: a booking with no deposit invoice
- * is *offered* `deposit_invoice_cover` and warned by {@link getAttachmentState} instead. It is
- * kept because `invoiceDerivations` cites it as the authority its shortcut predicates must match.
- * Wiring it back in is a decision with UX consequences (it would make both that warning and the
- * #757 create-invoice hints unreachable) — hence its own issue, not a side-effect of #847.
- *
- * The series cover is deliberately *not* handled here: which owner the sheet is composing for is
- * decided in {@link isComposableEmailTemplate}, the wired predicate, so the two cannot disagree.
- */
-export function shouldHideTemplate(
-  type: BuiltInTemplateType,
-  invoices: Invoice[],
-  bookingDate: string,
-): boolean {
-  if (
-    (type === 'deposit_invoice_cover' || type === 'contract_and_deposit_cover') &&
-    !hasAnyDepositInvoice(invoices)
-  ) return true;
-  if (type === 'balance_invoice_cover' && !invoices.some((i) => !i.isDeposit)) return true;
-  if (type === 'thank_you') {
-    const date = new Date(bookingDate);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return date >= today;
-  }
-  return false;
 }
 
 function resolveAttachmentFilename(invoice: Invoice | undefined): string {
@@ -177,22 +146,46 @@ export function formatMissingVariables(keys: string[]): string {
 }
 
 /**
+ * #928: which sheet mode may compose each built-in type — the explicit decision #846 skipped when
+ * `series_invoice_cover` was added to `BUILT_IN_EMAIL_TYPES` without excluding it from the booking
+ * picker. `Record<BuiltInTemplateType, …>` is exhaustive: adding a member to that union without an
+ * entry here fails to compile. {@link isComposableEmailTemplate} reads this table directly (rather
+ * than a scope hand-derived alongside it) so a wrongly-declared row changes real behaviour and gets
+ * caught by the series-mode / booking-mode tests, not just a documentation mismatch.
+ */
+export const EMAIL_TEMPLATE_SCOPE: Record<BuiltInTemplateType, 'booking' | 'series' | 'document'> = {
+  quote: 'booking',
+  confirmation: 'booking',
+  contract_cover: 'booking',
+  contract_and_deposit_cover: 'booking',
+  deposit_invoice_cover: 'booking',
+  balance_invoice_cover: 'booking',
+  series_invoice_cover: 'series',
+  music_form_invite: 'booking',
+  thank_you: 'booking',
+  contract_received: 'booking',
+  deposit_received: 'booking',
+  contract: 'document',
+};
+
+/**
  * A template is composable as an email when it is a built-in email type (music-form invites need
  * config) *and* it belongs to the owner this sheet was opened for.
  *
- * The owner split is what makes the surface owner-aware (#847). In series mode the only sensible
- * email is the series cover — every other built-in renders against a booking the series invoice
- * has no single one of. In booking mode the series cover is excluded for the mirror-image reason:
- * offered on an ordinary booking it would render a body of pure fallbacks and attach nothing.
+ * The owner split is what makes the surface owner-aware (#847), read from {@link EMAIL_TEMPLATE_SCOPE}.
+ * In series mode the only sensible email is the series cover — every other built-in renders against
+ * a booking the series invoice has no single one of. In booking mode the series cover is excluded
+ * for the mirror-image reason: offered on an ordinary booking it would render a body of pure
+ * fallbacks and attach nothing.
  */
 export function isComposableEmailTemplate(
   t: Template,
   hasMusicFormConfig: boolean,
   series?: SeriesComposeTarget,
 ): boolean {
-  if (!t.builtInType || !BUILT_IN_EMAIL_TYPES.includes(t.builtInType as BuiltInTemplateType)) return false;
-  if (series) return t.builtInType === 'series_invoice_cover';
-  if (t.builtInType === 'series_invoice_cover') return false;
+  if (!t.builtInType) return false;
+  const scope = EMAIL_TEMPLATE_SCOPE[t.builtInType];
+  if (scope !== (series ? 'series' : 'booking')) return false;
   return t.builtInType !== 'music_form_invite' || hasMusicFormConfig;
 }
 
