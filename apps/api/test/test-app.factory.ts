@@ -6,6 +6,7 @@ import { AuthModule } from '../src/auth/auth.module';
 import { StorageService } from '../src/storage/storage.service';
 import { MailService } from '../src/mail/mail.service';
 import { DistanceMatrixClient } from '../src/contacts/distance-matrix.client';
+import { DocumentsService } from '../src/documents/documents.service';
 import { TestAuthGuard } from './test-auth.guard';
 
 // Replaces AuthModule: provides TestAuthGuard as the global APP_GUARD.
@@ -54,8 +55,32 @@ const mockDistanceMatrixClient = {
   getDistance: jest.fn().mockResolvedValue({ minutes: 30, distanceMetres: 20000 }),
 };
 
-export async function createTestApp(): Promise<INestApplication> {
-  const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+// Real pdfmake rendering (fonts + layout) is by far the most expensive part of the invoice/contract
+// state-transition tests (#948) — most of those tests assert on state/DB, never on PDF content, so
+// they don't need it. `documentId` is deliberately left undefined rather than a fake string: it flows
+// into Communication.documentId, a real FK to Document, and a fake id would violate it on insert.
+export const mockDocumentsService = {
+  generateAndStoreInvoicePdf: jest.fn().mockResolvedValue({ buffer: Buffer.from('%PDF-mock'), documentId: undefined }),
+  generatePreviewPdf: jest.fn().mockResolvedValue(Buffer.from('%PDF-mock')),
+  getStoredInvoicePdfBuffer: jest.fn().mockResolvedValue({ buffer: Buffer.from('%PDF-mock'), documentId: undefined }),
+  generateAndStoreSignedContractPdf: jest.fn().mockResolvedValue(undefined),
+  generateAndStoreSongListPdf: jest.fn().mockResolvedValue({ buffer: Buffer.from('%PDF-mock'), url: '/documents/mock/download' }),
+  findByBooking: jest.fn().mockResolvedValue([]),
+  findByInvoice: jest.fn().mockResolvedValue(null),
+  findContractForBooking: jest.fn().mockResolvedValue(null),
+  resolveDownloadTarget: jest.fn().mockResolvedValue({ url: 'https://mock-storage.test/presigned-get' }),
+  uploadDocument: jest.fn().mockResolvedValue(undefined),
+  deleteDocument: jest.fn().mockResolvedValue(undefined),
+};
+
+export interface CreateTestAppOptions {
+  // Opt into the real DocumentsService (real pdfmake rendering) instead of the default mock — for
+  // the one test per suite that needs to prove real PDF generation still works end-to-end (#948).
+  realDocuments?: boolean;
+}
+
+export async function createTestApp(options: CreateTestAppOptions = {}): Promise<INestApplication> {
+  const moduleBuilder = Test.createTestingModule({ imports: [AppModule] })
     .overrideModule(AuthModule)
     .useModule(TestAuthModule)
     .overrideProvider(StorageService)
@@ -63,8 +88,13 @@ export async function createTestApp(): Promise<INestApplication> {
     .overrideProvider(MailService)
     .useValue(mockMailService)
     .overrideProvider(DistanceMatrixClient)
-    .useValue(mockDistanceMatrixClient)
-    .compile();
+    .useValue(mockDistanceMatrixClient);
+
+  if (!options.realDocuments) {
+    moduleBuilder.overrideProvider(DocumentsService).useValue(mockDocumentsService);
+  }
+
+  const moduleRef = await moduleBuilder.compile();
 
   const app = moduleRef.createNestApplication();
   app.setGlobalPrefix('api');

@@ -54,8 +54,8 @@ describe('Invoice flow (integration)', () => {
 
   // ── helpers ───────────────────────────────────────────────────────────────
 
-  async function createBooking(): Promise<string> {
-    const res = await request(app.getHttpServer())
+  async function createBooking(target: INestApplication = app): Promise<string> {
+    const res = await request(target.getHttpServer())
       .post('/api/bookings')
       .send({
         eventType: 'WEDDING',
@@ -76,8 +76,8 @@ describe('Invoice flow (integration)', () => {
     return res.body.id as string;
   }
 
-  async function createInvoice(bookingId: string, isDeposit = false): Promise<string> {
-    const res = await request(app.getHttpServer())
+  async function createInvoice(bookingId: string, isDeposit = false, target: INestApplication = app): Promise<string> {
+    const res = await request(target.getHttpServer())
       .post(`/api/bookings/${bookingId}/invoices`)
       .send({ isDeposit });
     expect(res.status).toBe(201);
@@ -85,7 +85,7 @@ describe('Invoice flow (integration)', () => {
 
     // A draft with no line items can no longer be issued (ADR-0043, #851) —
     // give every invoice created via this helper a line so `issue` succeeds.
-    const lineItemRes = await request(app.getHttpServer())
+    const lineItemRes = await request(target.getHttpServer())
       .post(`/api/bookings/${bookingId}/invoices/${invoiceId}/line-items`)
       .send({ description: 'Performance fee', amount: 500 });
     expect(lineItemRes.status).toBe(201);
@@ -93,12 +93,12 @@ describe('Invoice flow (integration)', () => {
     return invoiceId;
   }
 
-  async function sendInvoice(bookingId: string, invoiceId: string): Promise<void> {
-    const issueRes = await request(app.getHttpServer())
+  async function sendInvoice(bookingId: string, invoiceId: string, target: INestApplication = app): Promise<void> {
+    const issueRes = await request(target.getHttpServer())
       .post(`/api/bookings/${bookingId}/invoices/${invoiceId}/issue`)
       .send({ issueDate: '2027-01-01', dueDate: '2027-01-15' });
     expect(issueRes.status).toBe(201);
-    const res = await request(app.getHttpServer())
+    const res = await request(target.getHttpServer())
       .post(`/api/bookings/${bookingId}/invoices/${invoiceId}/send`)
       .send({
         to: 'client@example.com',
@@ -167,15 +167,33 @@ describe('Invoice flow (integration)', () => {
     });
   });
 
-  describe('Send invoice', () => {
+  // The one real-DB + real-pdfmake happy path in this suite (#948) — every other test in this
+  // file mocks DocumentsService (the default via createTestApp()) and asserts on state/DB only.
+  // This is the sole test that can catch a "real persisted data breaks real pdfmake rendering"
+  // class of bug.
+  describe('Send invoice (real PDF generation)', () => {
+    let realApp: INestApplication;
+
+    beforeAll(async () => {
+      realApp = await createTestApp({ realDocuments: true });
+    });
+
+    afterAll(async () => {
+      await realApp.close();
+    });
+
     it('putDocument called, Document record created, invoice number assigned, email sent', async () => {
-      const bookingId = await createBooking();
-      const invoiceId = await createInvoice(bookingId, true);
+      const bookingId = await createBooking(realApp);
+      const invoiceId = await createInvoice(bookingId, true, realApp);
 
-      await sendInvoice(bookingId, invoiceId);
+      await sendInvoice(bookingId, invoiceId, realApp);
 
-      // PDF stored
+      // PDF stored — and it's a real rendered PDF, not the mock's placeholder buffer (the
+      // '%PDF-' prefix alone wouldn't discriminate: the mock's own buffer also carries it).
       expect(mockStorageService.putDocument).toHaveBeenCalledTimes(1);
+      const [, pdfBuffer] = mockStorageService.putDocument.mock.calls[0];
+      expect(pdfBuffer.subarray(0, 5).toString()).toBe('%PDF-');
+      expect(pdfBuffer.length).toBeGreaterThan(1000);
 
       // Document record created
       const doc = await prisma.document.findFirst({ where: { invoiceId } });
