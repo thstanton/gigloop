@@ -3,6 +3,10 @@ import {
   BOOKING_STATUS_LABELS,
   CREATABLE_BOOKING_STATUSES,
   FORWARD_STATUSES,
+  INVOICE_OVERDUE_TOKENS,
+  INVOICE_STATUS_LABELS,
+  INVOICE_STATUS_ORDER,
+  INVOICE_STATUS_TOKENS,
   STATUS_ACCENT_BG,
   STATUS_DESCRIPTIONS,
   STATUS_ORDER,
@@ -103,5 +107,61 @@ describe('lifecycle comparisons', () => {
     // CANCELLED is absent from FORWARD_STATUSES, so indexOf is -1. Guarding this
     // pins the behaviour rather than leaving it to indexOf's fallback.
     expect(statusBefore('CANCELLED' as BookingStatus)).toBeNull();
+  });
+});
+
+// Shape, never values — same rationale as the booking status table above. VOID sits
+// off the `status-<slug>` stem (bg-muted/text-muted/border-l-muted), so the pattern
+// here also accepts a bare `muted` stem.
+const INVOICE_TOKEN_PATTERN = /^(bg|text|border-l)-(status-[a-z]+|muted)(\/\d+)?$/;
+
+describe('invoice status table', () => {
+  it('covers every status exactly once', () => {
+    expect(INVOICE_STATUS_ORDER).toHaveLength(5);
+    expect(new Set(INVOICE_STATUS_ORDER).size).toBe(INVOICE_STATUS_ORDER.length);
+  });
+
+  it('derives a total, non-empty map of labels', () => {
+    expect(Object.keys(INVOICE_STATUS_LABELS)).toHaveLength(INVOICE_STATUS_ORDER.length);
+    for (const status of INVOICE_STATUS_ORDER) {
+      expect(INVOICE_STATUS_LABELS[status]?.trim()).toBeTruthy();
+    }
+  });
+
+  it('derives colour tokens that Tailwind can actually see', () => {
+    for (const status of INVOICE_STATUS_ORDER) {
+      const tokens = INVOICE_STATUS_TOKENS[status];
+      expect(Object.values(tokens)).toHaveLength(3);
+      for (const token of Object.values(tokens)) {
+        expect(token).toMatch(INVOICE_TOKEN_PATTERN);
+      }
+      // All three tokens share the same colour stem — a copy/paste slip between rows
+      // passes the pattern but not this.
+      const stems = Object.values(tokens).map((t) => t.replace(/^(bg|text|border-l)-/, '').split('/')[0]);
+      expect(new Set(stems).size).toBe(1);
+    }
+  });
+
+  it('derives tints whose opacity modifier is in Tailwind’s scale', () => {
+    for (const status of INVOICE_STATUS_ORDER) {
+      for (const token of Object.values(INVOICE_STATUS_TOKENS[status])) {
+        const [, modifier] = token.split('/');
+        if (modifier === undefined) continue;
+        expect(Number(modifier) % 5, `${token} is off Tailwind’s opacity scale`).toBe(0);
+      }
+    }
+  });
+
+  // OVERDUE is not an InvoiceStatus, so it cannot live in the coverage-guarded table
+  // (InvoiceStatusRow.value only accepts real union members — this is enforced by the
+  // type system, not this test). It gets its own named tokens instead.
+  it('gives the overdue override its own valid, non-empty tokens', () => {
+    expect(INVOICE_OVERDUE_TOKENS.label.trim()).toBeTruthy();
+    const tokens = [INVOICE_OVERDUE_TOKENS.tint, INVOICE_OVERDUE_TOKENS.text, INVOICE_OVERDUE_TOKENS.borderL];
+    for (const token of tokens) {
+      expect(token).toMatch(INVOICE_TOKEN_PATTERN);
+    }
+    const stems = tokens.map((t) => t.replace(/^(bg|text|border-l)-/, '').split('/')[0]);
+    expect(new Set(stems).size).toBe(1);
   });
 });

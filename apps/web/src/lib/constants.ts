@@ -5,7 +5,7 @@ import {
   LayoutDashboard, CalendarDays, FileText, Settings, Package,
   CalendarPlus, UserPlus,
 } from 'lucide-react';
-import type { BookingStatus, EventType, PortalTheme, PortalVisibilityReason, ReminderConcern, SongGenre } from '@/types/api';
+import type { BookingStatus, EventType, InvoiceStatus, PortalTheme, PortalVisibilityReason, ReminderConcern, SongGenre } from '@/types/api';
 
 export type ContactPrimaryRole = 'CUSTOMER' | 'VENUE' | 'BOOKING_AGENT';
 
@@ -272,6 +272,57 @@ export const GOAL_SUMMARIES: Record<string, string> = {
 export const PACKAGE_CATEGORY_LABELS = column(EVENT_TYPE_ROWS, 'shortLabel');
 
 export const PACKAGE_CATEGORY_ORDER: EventType[] = EVENT_TYPE_ROWS.map((row) => row.value);
+
+// ─── Invoice lifecycle ───────────────────────────────────────────────────────
+// The invoice status vocabulary, declared ONCE (CLAUDE.md: one declaration per
+// vocabulary) — previously hand-written a second time inside InvoiceStatusPill,
+// with no compile-time proof every status was covered. Mirrors the booking-status
+// table's shape; see its header comment above for the colour-column contract.
+// VOID is the one row off the `status-<slug>` stem (bg-muted/text-muted/border-l-muted)
+// — a deliberately neutral, not-a-lifecycle-colour treatment. (#916)
+export interface InvoiceStatusRow {
+  value: InvoiceStatus;
+  label: string;
+  tint: string;
+  text: string;
+  borderL: string;
+}
+
+const INVOICE_STATUSES = [
+  { value: 'DRAFT',  label: 'Draft',  tint: 'bg-status-complete/15',    text: 'text-status-complete',    borderL: 'border-l-status-complete'    },
+  { value: 'ISSUED', label: 'Issued', tint: 'bg-status-enquiry/15',     text: 'text-status-enquiry',     borderL: 'border-l-status-enquiry'     },
+  { value: 'SENT',   label: 'Sent',   tint: 'bg-status-provisional/15', text: 'text-status-provisional', borderL: 'border-l-status-provisional' },
+  { value: 'PAID',   label: 'Paid',   tint: 'bg-status-confirmed/15',   text: 'text-status-confirmed',   borderL: 'border-l-status-confirmed'   },
+  { value: 'VOID',   label: 'Void',   tint: 'bg-muted/40',              text: 'text-muted',              borderL: 'border-l-muted'              },
+] as const satisfies readonly InvoiceStatusRow[];
+
+export type _InvoiceStatusCoverage = AssertNever<
+  Exclude<InvoiceStatus, (typeof INVOICE_STATUSES)[number]['value']>
+>;
+
+export const INVOICE_STATUS_ORDER: InvoiceStatus[] = INVOICE_STATUSES.map((row) => row.value);
+
+export const INVOICE_STATUS_LABELS = column(INVOICE_STATUSES, 'label');
+
+export interface InvoiceStatusTokens {
+  tint: string;
+  text: string;
+  borderL: string;
+}
+
+export const INVOICE_STATUS_TOKENS: Record<InvoiceStatus, InvoiceStatusTokens> = Object.fromEntries(
+  INVOICE_STATUSES.map(({ value, tint, text, borderL }) => [value, { tint, text, borderL }]),
+) as Record<InvoiceStatus, InvoiceStatusTokens>;
+
+// Not a member of InvoiceStatus — an overdue invoice keeps its real status but is
+// visually overridden in the pill. Named here so the component carries no inline
+// Tailwind literals, without corrupting the coverage-guarded table with a fake row.
+export const INVOICE_OVERDUE_TOKENS: { label: string } & InvoiceStatusTokens = {
+  label: 'Overdue',
+  tint: 'bg-status-cancelled/15',
+  text: 'text-status-cancelled',
+  borderL: 'border-l-status-cancelled',
+};
 
 // ─── Logistics fields ────────────────────────────────────────────────────────
 // The system fields inside a booking's free-form `logistics` blob, declared once. The
