@@ -93,7 +93,7 @@ export class InvoicesController {
 
   @ApiOperation({ summary: 'Issue a draft invoice: assign number, lock line items, store PDF' })
   @ApiResponse({ status: 200, description: 'Invoice issued (ISSUED status)', type: InvoiceResponseDto })
-  @ApiResponse({ status: 400, description: 'Invoice is not a draft' })
+  @ApiResponse({ status: 400, description: 'Invoice is not a draft, or the draft has no line items' })
   @Post(':id/issue')
   issue(
     @Req() req: AuthedRequest,

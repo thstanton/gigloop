@@ -4,7 +4,7 @@ import { SeriesRepository } from './series.repository';
 import { InvoicesRepository } from '../invoices/invoices.repository';
 import { InvoiceTransitionService } from '../invoices/invoice-transition.service';
 import { DocumentsService } from '../documents/documents.service';
-import { reconcile } from '../invoices/series-line-reconciler';
+import { computeJoinInsertion, reconcile } from '../invoices/series-line-reconciler';
 import { isDeletable } from '../invoices/invoice-transition-rules';
 import { SendInvoiceDto } from '../invoices/dto/send-invoice.dto';
 import { MarkSentDto } from '../invoices/dto/mark-sent.dto';
@@ -29,6 +29,19 @@ function memberFeeAmount(fee: MemberBookingForSync['fee']): number {
   if (typeof fee === 'number') return fee;
   if (typeof fee === 'string') return Number(fee);
   return fee.toNumber();
+}
+
+const NO_ACTIVE_SERIES_INVOICE_MESSAGE = 'A non-VOID invoice already exists for this series';
+
+// True for a P2002 raised by `Invoice_seriesId_active_key` (#852) — the partial unique index
+// backing this same message's TOCTOU-racy count-then-create guard above.
+function isActiveSeriesInvoiceViolation(err: unknown): boolean {
+  return (
+    err instanceof Prisma.PrismaClientKnownRequestError &&
+    err.code === 'P2002' &&
+    Array.isArray(err.meta?.target) &&
+    (err.meta.target as unknown[]).includes('seriesId')
+  );
 }
 
 @Injectable()
@@ -74,10 +87,14 @@ export class SeriesService {
     const series = await this.requireSeries(userId, seriesId);
 
     const existing = await this.invoicesRepo.countNonVoidSeriesInvoices(userId, seriesId);
-    if (existing > 0) throw new ConflictException('A non-VOID invoice already exists for this series');
+    if (existing > 0) throw new ConflictException(NO_ACTIVE_SERIES_INVOICE_MESSAGE);
 
     const bookings = await this.repo.findMemberBookingsForInvoice(userId, seriesId);
     if (bookings.length === 0) throw new BadRequestException('Series has no member bookings');
+
+    // A fee-less member still gets a £0.00 line (the date must appear on the invoice) — the count
+    // is surfaced to the musician so it never reaches a client unnoticed (#850).
+    const feelessMemberCount = bookings.filter((b) => b.fee === null).length;
 
     const lineItems = bookings.map((b, i) => ({
       description: buildLineItemDescription(b.date, b.sets),
@@ -86,7 +103,18 @@ export class SeriesService {
       sourceBookingId: b.id,
     }));
 
-    return this.invoicesRepo.createSeriesInvoice(userId, seriesId, series.customerId, lineItems);
+    // The count check above is a TOCTOU-racy guard, not a guarantee — a concurrent request can
+    // pass it too. `Invoice_seriesId_active_key` (#852) is the real backstop; only creation can
+    // ever violate it (no code path updates an existing invoice's seriesId or un-voids a row), so
+    // a violation here is always this series' active-invoice conflict, mapped to the same 409.
+    let invoice: Awaited<ReturnType<InvoicesRepository['createSeriesInvoice']>>;
+    try {
+      invoice = await this.invoicesRepo.createSeriesInvoice(userId, seriesId, series.customerId, lineItems);
+    } catch (err) {
+      if (isActiveSeriesInvoiceViolation(err)) throw new ConflictException(NO_ACTIVE_SERIES_INVOICE_MESSAGE);
+      throw err;
+    }
+    return { invoice, feelessMemberCount };
   }
 
   async getActiveInvoice(userId: string, seriesId: string) {
@@ -195,8 +223,10 @@ export class SeriesService {
   }
 
   /**
-   * After a booking joins a series, append a traced line to the series DRAFT invoice (if any).
-   * No-op when no DRAFT invoice exists.
+   * After a booking joins a series, insert a traced line into the series DRAFT invoice (if any)
+   * at its date position among the other auto-generated lines — a back-dated booking joining
+   * mid-way lands next to its date, not at the bottom (#851). Custom lines always stay after
+   * every auto-generated line. No-op when no DRAFT invoice exists.
    */
   async syncMemberJoin(
     userId: string,
@@ -216,14 +246,26 @@ export class SeriesService {
     ]);
     if (add.length === 0) return;
 
-    const maxOrder = draftInvoice.lineItems.reduce((m, l) => Math.max(m, l.order), -1);
+    const { newOrder, reorder } = computeJoinInsertion(
+      draftInvoice.lineItems.map((l) => ({
+        id: l.id,
+        order: l.order,
+        sourceBookingId: l.sourceBookingId,
+        sourceBookingDate: l.sourceBooking?.date ?? null,
+      })),
+      booking.date,
+    );
+    if (reorder.length > 0) {
+      await this.repo.reorderSeriesInvoiceLines(reorder, tx);
+    }
+
     await this.repo.appendSeriesInvoiceLine(
       userId,
       draftInvoice.id,
       {
         description: add[0].description,
         amount: add[0].amount,
-        order: maxOrder + 1,
+        order: newOrder,
         sourceBookingId: booking.id,
       },
       tx,

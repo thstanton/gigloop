@@ -75,18 +75,27 @@ export class SeriesRepository {
   // member bookings and reconciling lines on join/leave. Distinct from Invoice lifecycle CRUD,
   // which lives in invoices.repository.
 
+  // A CANCELLED member is excluded — billing a cancelled gig is the over-bill ADR-0043's
+  // 2026-08-18 amendment exists to kill (#850). Every other status is billable.
   findMemberBookingsForInvoice(userId: string, seriesId: string) {
     return this.prisma.booking.findMany({
-      where: { seriesId, userId },
+      where: { seriesId, userId, status: { not: 'CANCELLED' } },
       include: { sets: { orderBy: { order: 'asc' } } },
       orderBy: { date: 'asc' },
     });
   }
 
+  // sourceBooking.date is fetched so a joining member's line can be placed at its date position
+  // among the other auto-generated lines (#851) — the line itself carries no date of its own.
   findDraftSeriesInvoiceWithLines(userId: string, seriesId: string, tx?: Prisma.TransactionClient) {
     return (tx ?? this.prisma).invoice.findFirst({
       where: { seriesId, userId, status: 'DRAFT' },
-      include: { lineItems: { orderBy: { order: 'asc' } } },
+      include: {
+        lineItems: {
+          orderBy: { order: 'asc' },
+          include: { sourceBooking: { select: { date: true } } },
+        },
+      },
     });
   }
 
@@ -99,6 +108,22 @@ export class SeriesRepository {
     return (tx ?? this.prisma).invoiceLineItem.create({
       data: { userId, invoiceId, ...line },
     });
+  }
+
+  // Renumbers existing lines to make room for a mid-series join at its date position (#851).
+  reorderSeriesInvoiceLines(
+    updates: Array<{ id: string; order: number }>,
+    tx?: Prisma.TransactionClient,
+  ) {
+    const client = tx ?? this.prisma;
+    return Promise.all(
+      updates.map((u) =>
+        client.invoiceLineItem.update({
+          where: { id: u.id }, // scoped-upstream: updates are resolved from findDraftSeriesInvoiceWithLines, already scoped to userId (ADR-0061)
+          data: { order: u.order },
+        }),
+      ),
+    );
   }
 
   removeSeriesInvoiceLine(lineId: string) {

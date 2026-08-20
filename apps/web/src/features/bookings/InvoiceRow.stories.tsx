@@ -1,6 +1,6 @@
 import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, fn, userEvent } from 'storybook/test';
+import { expect, fn, userEvent, within } from 'storybook/test';
 import { MemoryRouter } from 'react-router-dom';
 import InvoiceRow from './InvoiceRow';
 import type { Invoice } from '@/types/api';
@@ -132,12 +132,36 @@ export const SentMarkingPaid: Story = {
 };
 
 export const DepositIssued: Story = {
-  args: { invoice: { ...baseInvoice, status: 'ISSUED', isDeposit: true } },
+  args: {
+    invoice: { ...baseInvoice, status: 'ISSUED', isDeposit: true },
+    pdfUrl: 'https://example.com/invoice.pdf',
+  },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Deposit')).toBeVisible();
     await expect(canvas.getByText('Issued')).toBeVisible();
     // Send is the primary action for ISSUED
     await expect(canvas.getByRole('button', { name: 'Send' })).toBeVisible();
+  },
+};
+
+// A prior issue committed the number/dates but a downstream PDF/storage failure left the invoice
+// ISSUED with no Document — stranded, un-sendable (#849, ADR-0070). Issue is re-offered to repair
+// it; Send and Download are absent since there is nothing yet to send or download.
+export const IssuedDocumentMissing: Story = {
+  args: {
+    invoice: { ...baseInvoice, status: 'ISSUED', isDeposit: true },
+    pdfUrl: null,
+    handlers: { ...defaultHandlers, onIssue: fn() },
+  },
+  play: async ({ args, canvas }) => {
+    await expect(canvas.getByText('Issued')).toBeVisible();
+    await expect(canvas.queryByRole('button', { name: 'Send' })).toBeNull();
+    await expect(canvas.queryByRole('button', { name: 'Download' })).toBeNull();
+    // Issue has no icon (matching "Create invoice" on a DRAFT row), so it lives in the overflow
+    // menu rather than as a primary desktop shortcut.
+    await userEvent.click(canvas.getByRole('button', { name: 'More actions' }), { pointerEventsCheck: 0 });
+    await userEvent.click(await within(document.body).findByText('Issue'), { pointerEventsCheck: 0 });
+    await expect(args.handlers.onIssue).toHaveBeenCalledWith(args.invoice);
   },
 };
 

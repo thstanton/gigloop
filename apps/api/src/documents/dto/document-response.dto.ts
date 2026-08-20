@@ -38,6 +38,13 @@ export class DocumentResponseDto {
   @ApiPropertyOptional({ description: 'User-provided name for UPLOAD documents; null for system-generated' })
   name?: string | null;
   @ApiProperty({
+    description:
+      'True for a BookingSeries invoice document — the one Document with no owning booking, ' +
+      'listed on every member booking\'s card because it covers all of them (#848). Never true ' +
+      'for a document this booking actually owns.',
+  })
+  isSeriesInvoice!: boolean;
+  @ApiProperty({
     type: DocumentPortalVisibilityDto,
     description: 'Per-document portal-visibility verdict (ADR-0054)',
   })

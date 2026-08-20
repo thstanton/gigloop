@@ -41,6 +41,7 @@ const contractDoc: Document = {
   invoiceId: null,
   contractStatus: 'SIGNED',
   name: null,
+  isSeriesInvoice: false,
   portalVisibility: { visible: true },
 };
 

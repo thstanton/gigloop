@@ -362,7 +362,8 @@ export type PortalVisibilityReason =
   | 'until_published'
   | 'voided'
   | 'not_shared'
-  | 'cancelled';
+  | 'cancelled'
+  | 'other_booking';
 
 export interface PortalVisibilityVerdict {
   visible: boolean;
@@ -478,6 +479,13 @@ export interface Invoice {
   billToContactId: string;
   billToContact: Contact;
   lineItems: InvoiceLineItem[];
+}
+
+// Response of POST /series/:id/invoices (#850). The invoice still bills every fee-less member a
+// £0.00 line unconditionally — this count is a heads-up so it never reaches a client unnoticed.
+export interface CreateSeriesInvoiceResponse {
+  invoice: Invoice;
+  feelessMemberCount: number;
 }
 
 export interface CreateInvoiceInput {
@@ -639,8 +647,12 @@ export interface Document {
   invoiceId: string | null;
   contractStatus: string | null;
   name: string | null;
+  // True for a BookingSeries invoice document — the one Document with no owning booking, listed
+  // on every member booking's card because it covers all of them (#848, CONTEXT.md → "The one
+  // Document with no Booking"). Never true for a document this booking actually owns.
+  isSeriesInvoice: boolean;
   // Per-document portal-visibility verdict (ADR-0054 / #580) — drives the per-row indicator.
-  // Narrowed to the four reasons a document can actually carry (#750).
+  // Narrowed to the reasons a document can actually carry (#750).
   portalVisibility: DocumentPortalVisibilityVerdict;
 }
 

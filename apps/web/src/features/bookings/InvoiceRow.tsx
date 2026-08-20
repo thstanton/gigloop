@@ -44,6 +44,46 @@ function downloadAction(pdfUrl: string): RowAction {
   };
 }
 
+function voidAction(
+  invoice: Invoice,
+  handlers: InvoiceRowHandlers,
+  pending: InvoiceRowPending,
+  description = 'The invoice will be marked void. You can create a new one if needed.',
+): RowAction {
+  return {
+    label: 'Void',
+    variant: 'destructive',
+    confirmation: { title: 'Void invoice?', description },
+    onClick: () => handlers.onVoid(invoice),
+    isPending: pending.isVoidPending,
+  };
+}
+
+// The invoice was issued and its PDF is stored — the ordinary ISSUED state.
+function issuedActions(
+  invoice: Invoice,
+  handlers: InvoiceRowHandlers,
+  pending: InvoiceRowPending,
+  pdfUrl: string,
+): RowAction[] {
+  return [
+    { label: 'Send', icon: <Send size={14} />, onClick: () => handlers.onSend(invoice) },
+    { label: 'Mark as sent', onClick: () => handlers.onMarkSent(invoice), isPending: pending.isMarkSentPending },
+    downloadAction(pdfUrl),
+    voidAction(invoice, handlers, pending),
+  ];
+}
+
+// A stored PDF failed to generate at issue time, stranding the invoice: no document to send or
+// download. Re-offer Issue so the musician can repair it (#849, ADR-0070) — the number, issue
+// date and due date are untouched; only the missing artifact is regenerated.
+function strandedIssuedActions(invoice: Invoice, handlers: InvoiceRowHandlers, pending: InvoiceRowPending): RowAction[] {
+  return [
+    { label: 'Issue', onClick: () => handlers.onIssue(invoice), isPending: pending.isIssuePending },
+    voidAction(invoice, handlers, pending),
+  ];
+}
+
 function getInvoiceActions(
   invoice: Invoice,
   handlers: InvoiceRowHandlers,
@@ -66,19 +106,7 @@ function getInvoiceActions(
   }
 
   if (invoice.status === 'ISSUED') {
-    const acts: RowAction[] = [
-      { label: 'Send', icon: <Send size={14} />, onClick: () => handlers.onSend(invoice) },
-      { label: 'Mark as sent', onClick: () => handlers.onMarkSent(invoice), isPending: pending.isMarkSentPending },
-    ];
-    if (pdfUrl) acts.push(downloadAction(pdfUrl));
-    acts.push({
-      label: 'Void',
-      variant: 'destructive',
-      confirmation: { title: 'Void invoice?', description: 'The invoice will be marked void. You can create a new one if needed.' },
-      onClick: () => handlers.onVoid(invoice),
-      isPending: pending.isVoidPending,
-    });
-    return acts;
+    return pdfUrl ? issuedActions(invoice, handlers, pending, pdfUrl) : strandedIssuedActions(invoice, handlers, pending);
   }
 
   if (invoice.status === 'SENT') {
@@ -86,26 +114,14 @@ function getInvoiceActions(
       { label: 'Mark as paid', icon: <CheckCircle2 size={14} />, onClick: () => handlers.onMarkPaid(invoice), isPending: pending.isMarkPaidPending },
     ];
     if (pdfUrl) acts.push(downloadAction(pdfUrl));
-    acts.push({
-      label: 'Void',
-      variant: 'destructive',
-      confirmation: { title: 'Void invoice?', description: 'The invoice will be marked void. You can create a new one if needed.' },
-      onClick: () => handlers.onVoid(invoice),
-      isPending: pending.isVoidPending,
-    });
+    acts.push(voidAction(invoice, handlers, pending));
     return acts;
   }
 
   if (invoice.status === 'PAID') {
     const acts: RowAction[] = [];
     if (pdfUrl) acts.push(downloadAction(pdfUrl));
-    acts.push({
-      label: 'Void',
-      variant: 'destructive',
-      confirmation: { title: 'Void invoice?', description: 'The invoice will be marked void.' },
-      onClick: () => handlers.onVoid(invoice),
-      isPending: pending.isVoidPending,
-    });
+    acts.push(voidAction(invoice, handlers, pending, 'The invoice will be marked void.'));
     return acts;
   }
 

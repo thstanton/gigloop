@@ -1,4 +1,4 @@
-import { isDeletable, isEditable, isIssuable, isPayable, isPaymentCorrectable, isSendable, isVoidable } from './invoice-transition-rules';
+import { isDeletable, isEditable, isEmptyDraft, isIssuable, isPayable, isPaymentCorrectable, isRepairableIssue, isSendable, isVoidable } from './invoice-transition-rules';
 import type { InvoiceForRules } from './invoice-transition-rules';
 
 const draft: InvoiceForRules = { status: 'DRAFT', invoiceNumber: null };
@@ -15,6 +15,27 @@ describe('isIssuable', () => {
   it('is false for SENT', () => expect(isIssuable(sent)).toBe(false));
   it('is false for PAID', () => expect(isIssuable(paid)).toBe(false));
   it('is false for VOID', () => expect(isIssuable(voided)).toBe(false));
+});
+
+describe('isEmptyDraft', () => {
+  it('is true for a DRAFT with zero line items', () => expect(isEmptyDraft(draft, 0)).toBe(true));
+  it('is false for a DRAFT with at least one line item', () => expect(isEmptyDraft(draft, 1)).toBe(false));
+  it('is false for ISSUED regardless of line item count', () => expect(isEmptyDraft(issued, 0)).toBe(false));
+  it('is false for SENT regardless of line item count', () => expect(isEmptyDraft(sent, 0)).toBe(false));
+  it('is false for PAID regardless of line item count', () => expect(isEmptyDraft(paid, 0)).toBe(false));
+  it('is false for VOID regardless of line item count', () => expect(isEmptyDraft(voided, 0)).toBe(false));
+});
+
+describe('isRepairableIssue', () => {
+  it('is true for ISSUED with no Document', () => expect(isRepairableIssue(issued, false)).toBe(true));
+  it('is false for ISSUED with a Document — already frozen', () => expect(isRepairableIssue(issued, true)).toBe(false));
+  it('is false for DRAFT regardless of document state', () => {
+    expect(isRepairableIssue(draft, false)).toBe(false);
+    expect(isRepairableIssue(draft, true)).toBe(false);
+  });
+  it('is false for SENT — send already proved a document existed', () => expect(isRepairableIssue(sent, false)).toBe(false));
+  it('is false for PAID', () => expect(isRepairableIssue(paid, false)).toBe(false));
+  it('is false for VOID', () => expect(isRepairableIssue(voided, false)).toBe(false));
 });
 
 describe('isSendable', () => {

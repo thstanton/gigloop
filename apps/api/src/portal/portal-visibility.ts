@@ -22,6 +22,7 @@ export const PORTAL_VISIBILITY_REASONS = [
   'voided',
   'not_shared',
   'cancelled',
+  'other_booking',
 ] as const;
 
 export type PortalVisibilityReason = (typeof PORTAL_VISIBILITY_REASONS)[number];
@@ -45,6 +46,7 @@ export const DOCUMENT_PORTAL_VISIBILITY_REASONS = [
   'voided',
   'not_shared',
   'cancelled',
+  'other_booking',
 ] as const satisfies readonly PortalVisibilityReason[];
 
 export type DocumentPortalVisibilityReason = (typeof DOCUMENT_PORTAL_VISIBILITY_REASONS)[number];
@@ -120,23 +122,34 @@ function resolveInvoiceDocumentVisibility(
  * and the portal renderer reads `.visible` from the same function (via `isPortalVisibleDocument`),
  * so the two cannot disagree (ADR-0054).
  *
+ * - **Ownership** (`other_booking`, outermost — ADR-0054 amendment 2026-08-18) — a document is
+ *   portal-visible through a booking's portal only if that booking owns it. A [[BookingSeries]]
+ *   invoice's document belongs to no single booking (`bookingId: null`) yet is discoverable from
+ *   every member booking's Documents card (#848), so it must never leak onto a member booking's
+ *   portal at any state — it is addressed to the series customer, who may differ from the member
+ *   booking's own customer, and itemises every other member's fee. `ownedByBooking` is supplied by
+ *   the caller (never inferred from doc type here) so the gate holds even if a future caller widens
+ *   its query to include documents beyond the booking's own — see the amendment for why relying on
+ *   today's narrow query would be "an accident of query shape".
  * - UPLOAD → never shared (`not_shared`): private musician paperwork.
  * - CONTRACT → the signed PDF of the active contract is visible; a superseded copy reuses `voided`
  *   (its contract is VOID). A cancelled booking hides the contract concern entirely (`cancelled`,
- *   outermost — #579).
+ *   outermost among the state gates — #579).
  * - INVOICE → gated on the backing invoice's delivery status (SENT/PAID visible; ISSUED unsent →
  *   `until_sent`; VOID → `voided`).
  * - everything else (SONG_LIST) → visible.
  *
- * The narrowed return type is the enforcement point for #750: it makes the four reachable reasons
- * a compile-time fact, so the DTO enum derived from `DOCUMENT_PORTAL_VISIBILITY_REASONS` cannot
- * fall out of step with what this function can actually emit.
+ * The narrowed return type is the enforcement point for #750: it makes the reachable reasons a
+ * compile-time fact, so the DTO enum derived from `DOCUMENT_PORTAL_VISIBILITY_REASONS` cannot fall
+ * out of step with what this function can actually emit.
  */
 export function resolveDocumentVisibility(
   doc: PortalDocumentInput,
   activeContractId: string | null,
   bookingCancelled = false,
+  ownedByBooking = true,
 ): DocumentPortalVisibilityVerdict {
+  if (!ownedByBooking) return { visible: false, reason: 'other_booking' };
   switch (doc.type) {
     case 'UPLOAD':
       return { visible: false, reason: 'not_shared' };

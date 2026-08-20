@@ -81,7 +81,16 @@ describe('Invoice flow (integration)', () => {
       .post(`/api/bookings/${bookingId}/invoices`)
       .send({ isDeposit });
     expect(res.status).toBe(201);
-    return res.body.id as string;
+    const invoiceId = res.body.id as string;
+
+    // A draft with no line items can no longer be issued (ADR-0043, #851) —
+    // give every invoice created via this helper a line so `issue` succeeds.
+    const lineItemRes = await request(app.getHttpServer())
+      .post(`/api/bookings/${bookingId}/invoices/${invoiceId}/line-items`)
+      .send({ description: 'Performance fee', amount: 500 });
+    expect(lineItemRes.status).toBe(201);
+
+    return invoiceId;
   }
 
   async function sendInvoice(bookingId: string, invoiceId: string): Promise<void> {

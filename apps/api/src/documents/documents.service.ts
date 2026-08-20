@@ -102,8 +102,13 @@ export type DocumentWithUrl = Document & {
   invoice?: { status: string } | null;
 };
 
-// A document in the admin list, carrying its per-row portal-visibility verdict (ADR-0054 / #580).
-export type DocumentListItem = DocumentWithUrl & { portalVisibility: DocumentPortalVisibilityVerdict };
+// A document in the admin list, carrying its per-row portal-visibility verdict (ADR-0054 / #580)
+// and whether it is a series invoice's document (#848) — the one Document with no owning booking,
+// unioned into every member booking's list but discoverable-only (never portal-visible there).
+export type DocumentListItem = DocumentWithUrl & {
+  portalVisibility: DocumentPortalVisibilityVerdict;
+  isSeriesInvoice: boolean;
+};
 
 // Minimal shape needed to build PDF data from an already-fetched invoice.
 // Accepts Prisma Decimal for amount (hence the any — Number() handles it).
@@ -356,6 +361,12 @@ export class DocumentsService {
     return { ...doc, url: this.documentDownloadRoute(doc.id) };
   }
 
+  // Unions the booking's own documents with its series invoice's document, if any (#848) — the one
+  // Document with no owning booking, listed on every member booking's card because it covers all
+  // of them. `ownedByBooking` is computed here, from the document's own `bookingId` against the
+  // booking asked about, and threaded into the authority explicitly rather than assumed — the
+  // series document is never portal-visible through this (or any member) booking's portal
+  // regardless of its invoice's state (ADR-0054 amendment).
   async findByBooking(userId: string, bookingId: string): Promise<DocumentListItem[]> {
     const [docs, ctx] = await Promise.all([
       this.repo.findByBooking(userId, bookingId),
@@ -363,10 +374,20 @@ export class DocumentsService {
     ]);
     const activeContractId = ctx?.contracts[0]?.id ?? null;
     const bookingCancelled = ctx?.status === 'CANCELLED';
-    return docs.map((d) => ({
+    const seriesDoc = ctx?.seriesId
+      ? await this.repo.findActiveSeriesInvoiceDocument(userId, ctx.seriesId)
+      : null;
+    const allDocs = seriesDoc ? [...docs, seriesDoc] : docs;
+    return allDocs.map((d) => ({
       ...d,
       url: this.documentDownloadRoute(d.id),
-      portalVisibility: resolveDocumentVisibility(d, activeContractId, bookingCancelled),
+      isSeriesInvoice: d.bookingId === null,
+      portalVisibility: resolveDocumentVisibility(
+        d,
+        activeContractId,
+        bookingCancelled,
+        d.bookingId === bookingId,
+      ),
     }));
   }
 
@@ -404,6 +425,7 @@ export class DocumentsService {
     return {
       ...doc,
       url: this.documentDownloadRoute(doc.id),
+      isSeriesInvoice: false,
       portalVisibility: resolveDocumentVisibility(doc, null),
     };
   }

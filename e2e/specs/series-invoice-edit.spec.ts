@@ -116,4 +116,35 @@ test.describe('series invoice — edit and issue', () => {
     expect(issued.find((l) => l.id === fixture.tracedLineId)?.amount.toString()).toBe('750');
     expect(issued.some((l) => l.description === 'PA hire')).toBe(true);
   });
+
+  // ADR-0043's 2026-08-18 amendment (#850): cancelling a series member reconciles the draft
+  // invoice exactly as leaving the series would, through the real booking-status control
+  // (BookingOverviewStrip's status dropdown) — not a direct DB write, since the reconcile is
+  // triggered from that mutation path.
+  test('cancelling a member removes its line from the draft; un-cancelling re-adds it', async ({ page }) => {
+    await page.goto(`/admin/bookings/${fixture.secondBookingId}`);
+
+    // --- Cancel the second member — its traced line is removed ---
+    await page.getByRole('button', { name: 'Confirmed' }).click();
+    await page.getByRole('menuitem', { name: 'Cancelled', exact: true }).click();
+
+    await expect
+      .poll(async () => (await lineItems()).length)
+      .toBe(1);
+
+    // The first member's traced line is untouched — reconciliation, not regeneration.
+    const afterCancel = await lineItems();
+    expect(afterCancel[0].sourceBookingId).toBe(fixture.bookingId);
+    expect(afterCancel.some((l) => l.sourceBookingId === fixture.secondBookingId)).toBe(false);
+
+    // --- Un-cancel: the line re-appears, traced to the same booking ---
+    await page.getByRole('button', { name: 'Cancelled' }).click();
+    await page.getByRole('menuitem', { name: 'Confirmed', exact: true }).click();
+
+    await expect
+      .poll(async () => (await lineItems()).length)
+      .toBe(2);
+
+    expect((await lineItems()).some((l) => l.sourceBookingId === fixture.secondBookingId)).toBe(true);
+  });
 });

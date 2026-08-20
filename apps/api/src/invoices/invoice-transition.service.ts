@@ -5,7 +5,7 @@ import { DocumentsService } from '../documents/documents.service';
 import { CommunicationsService } from '../communications/communications.service';
 import { ChecklistReevaluator } from '../checklist/checklist-reevaluator.service';
 import { ChecklistRepository } from '../checklist/checklist.repository';
-import { isIssuable, isSendable, isVoidable, isPayable, isPaymentCorrectable, InvoiceForRules } from './invoice-transition-rules';
+import { isEmptyDraft, isIssuable, isRepairableIssue, isSendable, isVoidable, isPayable, isPaymentCorrectable, InvoiceForRules } from './invoice-transition-rules';
 import type { SendInvoiceDto } from './dto/send-invoice.dto';
 import type { IssueInvoiceDto } from './dto/issue-invoice.dto';
 import type { MarkSentDto } from './dto/mark-sent.dto';
@@ -23,6 +23,7 @@ export type TransitionInvoice = InvoiceForRules & {
   bookingId: string | null;
   seriesId: string | null;
   isDeposit: boolean;
+  lineItems: unknown[];
 };
 
 /**
@@ -75,10 +76,34 @@ export class InvoiceTransitionService {
    *
    * The write returns the fully-hydrated invoice (same shape as the owner's findOne), so callers
    * return it directly without re-fetching (#591); PDF generation reads it but never mutates it.
+   *
+   * A non-draft invoice falls to the repair path (#849, ADR-0070): if it is ISSUED with no backing
+   * Document — a prior issue committed the number/dates but a downstream PDF/storage failure never
+   * produced the artifact — this regenerates only the missing Document and runs the same tail
+   * (checklist re-evaluation) the interrupted issue never reached. The number, issue date and due
+   * date are never reallocated. Any other non-draft invoice is refused, unchanged.
+   *
+   * A DRAFT with zero line items is refused outright, before any number is allocated (#851,
+   * ADR-0043 amended 2026-08-18) — a drained draft is for the musician to delete or refill, never
+   * to issue as a numbered £0.00 document.
    */
   async issueInvoice(userId: string, invoice: TransitionInvoice, dto: IssueInvoiceDto) {
+    if (isEmptyDraft(invoice, invoice.lineItems.length)) {
+      throw new BadRequestException('Cannot issue an invoice with no line items — add a line, or delete the draft');
+    }
+
     if (!isIssuable(invoice)) {
-      throw new BadRequestException('Only draft invoices can be issued');
+      // Only an ISSUED invoice can possibly be repairable — skip the Document lookup for
+      // SENT/PAID/VOID, where the answer is always "no".
+      const hasDocument = invoice.status === 'ISSUED' && !!(await this.documents.findByInvoice(userId, invoice.id));
+      if (!isRepairableIssue(invoice, hasDocument)) {
+        throw new BadRequestException('Only draft invoices can be issued');
+      }
+      await this.documents.generateAndStoreInvoicePdf(userId, invoice.id, undefined, invoice.bookingId ?? undefined);
+      if (invoice.bookingId) {
+        await this.reeval.onBookingChanged(invoice.bookingId);
+      }
+      return invoice;
     }
 
     const { issueDate, dueDate } = await this.resolveIssueDates(userId, dto);

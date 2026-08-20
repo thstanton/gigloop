@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { SeriesService } from './series.service';
 import { SeriesRepository } from './series.repository';
 import { InvoicesRepository } from '../invoices/invoices.repository';
@@ -13,6 +14,7 @@ type MockRepo = {
   findMemberBookingsForInvoice: jest.Mock;
   findDraftSeriesInvoiceWithLines: jest.Mock;
   appendSeriesInvoiceLine: jest.Mock;
+  reorderSeriesInvoiceLines: jest.Mock;
   removeSeriesInvoiceLine: jest.Mock;
 };
 
@@ -46,6 +48,7 @@ function makeRepo(): MockRepo {
     findMemberBookingsForInvoice: jest.fn(),
     findDraftSeriesInvoiceWithLines: jest.fn().mockResolvedValue(null),
     appendSeriesInvoiceLine: jest.fn(),
+    reorderSeriesInvoiceLines: jest.fn(),
     removeSeriesInvoiceLine: jest.fn(),
   };
 }
@@ -175,6 +178,32 @@ describe('SeriesService', () => {
       ]));
     });
 
+    it('returns the created invoice alongside a feeless-member count', async () => {
+      repo.findOneMinimal.mockResolvedValue(series);
+      invoicesRepo.countNonVoidSeriesInvoices.mockResolvedValue(0);
+      repo.findMemberBookingsForInvoice.mockResolvedValue([booking]);
+      invoicesRepo.createSeriesInvoice.mockResolvedValue({ id: 'inv1' });
+
+      const result = await service.createInvoice('u1', 's1');
+      expect(result).toEqual({ invoice: { id: 'inv1' }, feelessMemberCount: 0 });
+    });
+
+    // #850: a fee-less member still bills a £0.00 line (the date must appear on the invoice) —
+    // the count surfaces to the musician so it never reaches a client unnoticed.
+    it('counts fee-less members and still bills them a £0.00 line', async () => {
+      const feeless = { id: 'b2', date: new Date('2026-05-08'), fee: null, sets: [] };
+      repo.findOneMinimal.mockResolvedValue(series);
+      invoicesRepo.countNonVoidSeriesInvoices.mockResolvedValue(0);
+      repo.findMemberBookingsForInvoice.mockResolvedValue([booking, feeless]);
+      invoicesRepo.createSeriesInvoice.mockResolvedValue({ id: 'inv1' });
+
+      const result = await service.createInvoice('u1', 's1');
+      expect(result.feelessMemberCount).toBe(1);
+      expect(invoicesRepo.createSeriesInvoice).toHaveBeenCalledWith('u1', 's1', 'c1', expect.arrayContaining([
+        expect.objectContaining({ amount: 0, sourceBookingId: 'b2' }),
+      ]));
+    });
+
     it('throws ConflictException when non-VOID invoice exists', async () => {
       repo.findOneMinimal.mockResolvedValue(series);
       invoicesRepo.countNonVoidSeriesInvoices.mockResolvedValue(1);
@@ -187,6 +216,53 @@ describe('SeriesService', () => {
       invoicesRepo.countNonVoidSeriesInvoices.mockResolvedValue(0);
       repo.findMemberBookingsForInvoice.mockResolvedValue([]);
       await expect(service.createInvoice('u1', 's1')).rejects.toThrow(BadRequestException);
+    });
+
+    // #852: the count check above is a TOCTOU-racy guard — a concurrent request can pass it too.
+    // `Invoice_seriesId_active_key` is the real backstop; a violation must still read as a plain
+    // 409 to the musician, not a raw database error. `meta.target: ['seriesId']` is the shape
+    // Prisma actually normalizes this raw (schema-DSL-invisible) constraint's error to — verified
+    // empirically against a local Postgres, not assumed.
+    it('maps a P2002 unique-constraint violation on create to the same friendly 409', async () => {
+      repo.findOneMinimal.mockResolvedValue(series);
+      invoicesRepo.countNonVoidSeriesInvoices.mockResolvedValue(0);
+      repo.findMemberBookingsForInvoice.mockResolvedValue([booking]);
+      invoicesRepo.createSeriesInvoice.mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+          code: 'P2002',
+          clientVersion: '6.19.3',
+          meta: { modelName: 'Invoice', target: ['seriesId'] },
+        }),
+      );
+
+      await expect(service.createInvoice('u1', 's1')).rejects.toThrow(ConflictException);
+      await expect(service.createInvoice('u1', 's1')).rejects.toThrow(
+        'A non-VOID invoice already exists for this series',
+      );
+    });
+
+    it('rethrows a P2002 on an unrelated constraint unchanged', async () => {
+      repo.findOneMinimal.mockResolvedValue(series);
+      invoicesRepo.countNonVoidSeriesInvoices.mockResolvedValue(0);
+      repo.findMemberBookingsForInvoice.mockResolvedValue([booking]);
+      const otherViolation = new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+        code: 'P2002',
+        clientVersion: '6.19.3',
+        meta: { modelName: 'Invoice', target: ['id'] },
+      });
+      invoicesRepo.createSeriesInvoice.mockRejectedValue(otherViolation);
+
+      await expect(service.createInvoice('u1', 's1')).rejects.toThrow(otherViolation);
+    });
+
+    it('rethrows a non-P2002 error from create unchanged', async () => {
+      repo.findOneMinimal.mockResolvedValue(series);
+      invoicesRepo.countNonVoidSeriesInvoices.mockResolvedValue(0);
+      repo.findMemberBookingsForInvoice.mockResolvedValue([booking]);
+      const dbError = new Error('connection reset');
+      invoicesRepo.createSeriesInvoice.mockRejectedValue(dbError);
+
+      await expect(service.createInvoice('u1', 's1')).rejects.toThrow(dbError);
     });
   });
 
@@ -417,6 +493,59 @@ describe('SeriesService', () => {
       });
       await service.syncMemberJoin('u1', 's1', booking);
       expect(repo.appendSeriesInvoiceLine).not.toHaveBeenCalled();
+    });
+
+    // #851: a back-dated booking joining a series mid-way must land at its date position among
+    // the auto-generated lines, not at the bottom.
+    it('inserts a retro-joined booking at its date position, bumping later auto lines up', async () => {
+      const retroBooking = { id: 'b2', date: new Date('2026-05-15'), fee: 500, sets: [] };
+      repo.findDraftSeriesInvoiceWithLines.mockResolvedValue({
+        id: 'inv1',
+        lineItems: [
+          { id: 'li1', sourceBookingId: 'b1', order: 0, sourceBooking: { date: new Date('2026-05-01') } },
+          { id: 'li3', sourceBookingId: 'b3', order: 1, sourceBooking: { date: new Date('2026-06-01') } },
+        ],
+      });
+      await service.syncMemberJoin('u1', 's1', retroBooking);
+      expect(repo.reorderSeriesInvoiceLines).toHaveBeenCalledWith([{ id: 'li3', order: 2 }], undefined);
+      expect(repo.appendSeriesInvoiceLine).toHaveBeenCalledWith(
+        'u1', 'inv1',
+        expect.objectContaining({ sourceBookingId: 'b2', order: 1 }),
+        undefined,
+      );
+    });
+
+    it('keeps a custom line after every auto-generated line when a member joins', async () => {
+      const joiningBooking = { id: 'b2', date: new Date('2026-06-01'), fee: 500, sets: [] };
+      repo.findDraftSeriesInvoiceWithLines.mockResolvedValue({
+        id: 'inv1',
+        lineItems: [
+          { id: 'li1', sourceBookingId: 'b1', order: 0, sourceBooking: { date: new Date('2026-05-01') } },
+          { id: 'li-custom', sourceBookingId: null, order: 1 },
+        ],
+      });
+      await service.syncMemberJoin('u1', 's1', joiningBooking);
+      expect(repo.appendSeriesInvoiceLine).toHaveBeenCalledWith(
+        'u1', 'inv1',
+        expect.objectContaining({ sourceBookingId: 'b2', order: 1 }),
+        undefined,
+      );
+      // li-custom shifts from 1 to 2 to stay after the new line; li1 is untouched.
+      expect(repo.reorderSeriesInvoiceLines).toHaveBeenCalledWith([{ id: 'li-custom', order: 2 }], undefined);
+    });
+
+    it('does not reorder anything when the new line simply appends at the end', async () => {
+      repo.findDraftSeriesInvoiceWithLines.mockResolvedValue({
+        id: 'inv1',
+        lineItems: [{ id: 'li1', sourceBookingId: 'b0', order: 0, sourceBooking: { date: new Date('2026-01-01') } }],
+      });
+      await service.syncMemberJoin('u1', 's1', booking); // booking date 2026-05-01, after li1
+      expect(repo.reorderSeriesInvoiceLines).not.toHaveBeenCalled();
+      expect(repo.appendSeriesInvoiceLine).toHaveBeenCalledWith(
+        'u1', 'inv1',
+        expect.objectContaining({ sourceBookingId: 'b1', order: 1 }),
+        undefined,
+      );
     });
   });
 

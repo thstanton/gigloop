@@ -89,14 +89,23 @@ function labelDocument(doc: {
  * shared per-document authority (`resolveDocumentVisibility`, #580), so the portal filter and the
  * admin per-row indicator can never disagree (ADR-0054). UPLOADs are never client-visible;
  * CONTRACT is limited to the active contract (superseded copies drop off); INVOICE is gated on
- * delivery status; a cancelled booking hides the contract concern entirely (#579).
+ * delivery status; a cancelled booking hides the contract concern entirely (#579); a document
+ * owned by another booking (a series invoice's document, discovered via #848) is never visible
+ * here regardless of state (ADR-0054 amendment).
+ *
+ * `bookingCancelled` and `ownedByBooking` are deliberately required, not defaulted — this is the
+ * portal-facing wrapper, so a call site that forgets to compute ownership should fail to compile
+ * rather than silently fail open onto a client's portal. (`resolveDocumentVisibility` itself keeps
+ * a permissive default: it also serves the admin-side authority, where "owned" is the overwhelmingly
+ * common case and many existing call sites reasonably don't ask the ownership question at all.)
  */
 export function isPortalVisibleDocument(
   doc: { type: string; contractId?: string | null; invoice?: { status: string } | null },
   activeContractId: string | null,
-  bookingCancelled = false,
+  bookingCancelled: boolean,
+  ownedByBooking: boolean,
 ): boolean {
-  return resolveDocumentVisibility(doc, activeContractId, bookingCancelled).visible;
+  return resolveDocumentVisibility(doc, activeContractId, bookingCancelled, ownedByBooking).visible;
 }
 
 // Access-controlled portal download routes (ADR-0059, #655). Emitted into the
@@ -218,7 +227,7 @@ export class PortalService {
     // `bookingCancelled` drops the CONTRACT document rows, which also nulls `signedContractUrl`
     // below — so the signed-contract download disappears alongside the CTA.
     const portalDocs = booking.documents.filter((doc) =>
-      isPortalVisibleDocument(doc, activeContractId, bookingCancelled),
+      isPortalVisibleDocument(doc, activeContractId, bookingCancelled, doc.bookingId === booking.id),
     );
     const signedContractDoc = portalDocs.find((d) => d.type === 'CONTRACT') ?? null;
     const documents = portalDocs.map((doc) => ({
@@ -267,7 +276,7 @@ export class PortalService {
     const activeContractId = booking.contracts?.[0]?.id ?? null;
     const bookingCancelled = booking.status === 'CANCELLED';
     const doc = booking.documents.find((d) => d.id === documentId);
-    if (!doc || !isPortalVisibleDocument(doc, activeContractId, bookingCancelled)) {
+    if (!doc || !isPortalVisibleDocument(doc, activeContractId, bookingCancelled, doc.bookingId === booking.id)) {
       throw new NotFoundException('Document not found');
     }
     return this.storage.getPresignedDownloadUrl(doc.storageKey);
@@ -283,7 +292,9 @@ export class PortalService {
     const activeContractId = booking.contracts?.[0]?.id ?? null;
     const bookingCancelled = booking.status === 'CANCELLED';
     const doc = booking.documents.find(
-      (d) => d.type === 'CONTRACT' && isPortalVisibleDocument(d, activeContractId, bookingCancelled),
+      (d) =>
+        d.type === 'CONTRACT' &&
+        isPortalVisibleDocument(d, activeContractId, bookingCancelled, d.bookingId === booking.id),
     );
     if (!doc) throw new NotFoundException('Signed contract not found');
     return this.storage.getPresignedDownloadUrl(doc.storageKey);

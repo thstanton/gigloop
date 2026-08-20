@@ -61,6 +61,20 @@ const uploadDoc = {
   portalVisibility: { visible: false, reason: 'not_shared' },
 };
 
+// The one Document with no owning booking (#848) — a BookingSeries invoice's PDF, discoverable on
+// every member booking's card but never portal-visible through one (ADR-0054 amendment).
+const seriesInvoiceDoc = {
+  id: 'd5',
+  createdAt: '2030-04-06T10:00:00Z',
+  type: 'INVOICE',
+  url: 'https://example.com/series-invoice.pdf',
+  invoiceId: 'inv-series',
+  contractStatus: null,
+  name: null,
+  isSeriesInvoice: true,
+  portalVisibility: { visible: false, reason: 'other_booking' },
+};
+
 const meta = {
   component: DocumentsCard,
   tags: ['ai-generated'],
@@ -132,6 +146,22 @@ export const WithUploadDocument: Story = {
     await expect(canvas.findByText('O2 Academy Contract')).resolves.toBeVisible();
     // The UPLOAD row reads the private-paperwork hint, never a visible badge.
     await expect(canvas.findByText('Not visible to client')).resolves.toBeVisible();
+  },
+};
+
+export const WithSeriesInvoice: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.get('/api/bookings/bd1/documents', () => HttpResponse.json([invoiceDoc, seriesInvoiceDoc])),
+        http.get('/api/bookings/bd1/invoices', () => HttpResponse.json([depositInvoice])),
+      ],
+    },
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.findByText('Series invoice')).resolves.toBeVisible();
+    // Never portal-visible through a member booking, whatever its own state (#848).
+    await expect(canvas.findByText('Not visible — belongs to the series')).resolves.toBeVisible();
   },
 };
 

@@ -176,6 +176,84 @@ describe('InvoiceSheet — editing a series invoice (#845)', () => {
     });
   });
 
+  it('edits an amount AND appends a custom line in the same save', async () => {
+    renderSheet(invoice());
+    await waitFor(() => expect(amountFields()[0]).toHaveValue('500'));
+
+    await userEvent.clear(amountFields()[0]);
+    await userEvent.type(amountFields()[0], '750');
+    await userEvent.click(screen.getByRole('button', { name: /add line item/i }));
+    await userEvent.type(descriptionFields()[2], 'PA hire');
+    await userEvent.type(amountFields()[2], '200');
+    await save();
+
+    await waitFor(() => {
+      expect(vi.mocked(apiPost)).toHaveBeenCalledWith(
+        '/invoices/si1/line-items',
+        expect.objectContaining({ description: 'PA hire', amount: 200 }),
+      );
+    });
+    expect(vi.mocked(apiPatch)).toHaveBeenCalledWith(
+      '/invoices/si1/line-items/li1',
+      expect.objectContaining({ amount: 750 }),
+    );
+  });
+
+  // #855: BookingDetailSheets computes `open` as
+  // `sheet === 'invoice' && (!sheetInvoiceId || !!editingInvoice)` — held false while the edit
+  // target (`useInvoice`, gcTime: 0) hasn't resolved. That can transiently flip `open` false→true
+  // again for the *same* invoice — e.g. a background refetch briefly clearing `data` — without
+  // InvoiceSheet itself ever closing. The old effect reset the form on every such flip, silently
+  // discarding whatever the user had already typed. This reproduces that flip directly and proves
+  // the in-progress edit survives it.
+  it('preserves an in-progress edit through a spurious re-open of the same invoice', async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    const inv = invoice();
+    const props = {
+      bookingId: 'b1',
+      invoice: inv,
+      hasDepositInvoice: false,
+      onOpenChange: () => {},
+    };
+
+    const { rerender } = render(
+      <QueryClientProvider client={client}>
+        <InvoiceSheet {...props} open />
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(amountFields()[0]).toHaveValue('500'));
+
+    await userEvent.clear(amountFields()[0]);
+    await userEvent.type(amountFields()[0], '750');
+
+    // The parent transiently holds the sheet shut while re-resolving the same edit target, then
+    // reopens it — InvoiceSheet never called onOpenChange itself, so this is not a real close.
+    rerender(
+      <QueryClientProvider client={client}>
+        <InvoiceSheet {...props} open={false} />
+      </QueryClientProvider>,
+    );
+    rerender(
+      <QueryClientProvider client={client}>
+        <InvoiceSheet {...props} open />
+      </QueryClientProvider>,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /add line item/i }));
+    await userEvent.type(descriptionFields()[2], 'PA hire');
+    await userEvent.type(amountFields()[2], '200');
+    await save();
+
+    await waitFor(() => {
+      expect(vi.mocked(apiPatch)).toHaveBeenCalledWith(
+        '/invoices/si1/line-items/li1',
+        expect.objectContaining({ amount: 750 }),
+      );
+    });
+  });
+
   // Issue is still owner-routed — the nine transitions have not migrated (#853) — but the prefix
   // must come from the invoice's own FK, not the bookingId prop, or this 404s for a series.
   it('issues via the series transition route, not the booking one', async () => {

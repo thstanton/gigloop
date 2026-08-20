@@ -4,7 +4,7 @@ import { apiPost, apiPatch, apiPostVoid, apiDelete } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
 import { invoiceOwnerRoute, type InvoiceAction } from '@/lib/invoiceActionRouting';
 import { invoiceLabel } from '@/lib/invoiceDerivations';
-import type { Invoice } from '@/types/api';
+import type { CreateSeriesInvoiceResponse, Invoice } from '@/types/api';
 
 // One field-derived home for every invoice transition (ADR-0063 client mirror, #724).
 // The owner FK on the invoice (bookingId vs seriesId) derives both the endpoint prefix
@@ -95,8 +95,19 @@ export function useInvoiceActions() {
 
   // Series-only: no invoice exists yet, so this derives from the seriesId directly.
   const createSeriesMutation = useMutation({
-    mutationFn: (seriesId: string) => apiPost<Invoice>(`/series/${seriesId}/invoices`, {}),
-    onSuccess: (_data, seriesId) => queryClient.invalidateQueries({ queryKey: ['seriesInvoice', seriesId] }),
+    mutationFn: (seriesId: string) => apiPost<CreateSeriesInvoiceResponse>(`/series/${seriesId}/invoices`, {}),
+    onSuccess: (data, seriesId) => {
+      queryClient.invalidateQueries({ queryKey: ['seriesInvoice', seriesId] });
+      // A fee-less member still bills a £0.00 line unconditionally (#850) — this is a heads-up,
+      // not a block, so it never reaches a client unnoticed.
+      if (data.feelessMemberCount > 0) {
+        const isSingle = data.feelessMemberCount === 1;
+        toast({
+          title: `${data.feelessMemberCount} member${isSingle ? '' : 's'} billed with no fee set`,
+          description: `The line${isSingle ? '' : 's'} ${isSingle ? 'shows' : 'show'} £0.00 — set a fee or edit the line before sending.`,
+        });
+      }
+    },
     onError: () => toast({ title: 'Failed to create series invoice', variant: 'destructive' }),
   });
 

@@ -314,6 +314,8 @@ export interface SeriesWithDraftInvoice {
   bookingId: string;
   /** The traced line for `bookingId`, i.e. one the reconciler owns. */
   tracedLineId: string;
+  /** The other member booking, for cases that must not disturb `bookingId`'s own line. */
+  secondBookingId: string;
 }
 
 // Per-test fixture (ADR-0048 §5) for the series-invoice edit journey (#845): a series with two
@@ -374,5 +376,6 @@ export async function seedSeriesWithDraftInvoice(
     customerId: customer.id,
     bookingId: first.id,
     tracedLineId: invoice.lineItems[0].id,
+    secondBookingId: second.id,
   };
 }
