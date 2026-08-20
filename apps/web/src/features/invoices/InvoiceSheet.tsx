@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -208,13 +208,37 @@ export default function InvoiceSheet({
 
   const { fields, append, remove } = useFieldArray({ control, name: 'lineItems' });
 
+  // Which edit target ('create', or an invoice id) the form was last seeded for. Cleared only on
+  // a genuine close (see handleOpenChange) — never implicitly by the `open` prop alone.
+  //
+  // `open` is computed by the parent as `sheet === 'invoice' && (!sheetInvoiceId || !!editingInvoice)`
+  // (BookingDetailSheets) — it is deliberately held `false` while the edit target hasn't resolved
+  // yet, so it can transiently flip false→true again for the *same* invoice while this sheet is
+  // conceptually still open to the user (e.g. a background refetch of the invoice briefly clears
+  // `data`). Resetting on every such flip silently discarded in-progress edits (#855): a user could
+  // type a new amount, add a line, and have the amount edit vanish before Save was even clicked.
+  // Keying the reset on the resolved edit target — and only re-arming it on a close this component
+  // itself acknowledged — means a spurious flip for the same target is a no-op, while a genuine
+  // open (new target, or reopening after a real close) still seeds fresh.
+  const seededKeyRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (open) {
-      reset(buildDefaults(invoice, prefill));
-      setConfirmOpen(false);
-      setPendingFormValues(null);
-    }
+    if (!open) return;
+    const key = invoice?.id ?? 'create';
+    if (seededKeyRef.current === key) return;
+    seededKeyRef.current = key;
+    reset(buildDefaults(invoice, prefill));
+    setConfirmOpen(false);
+    setPendingFormValues(null);
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Every close this component itself drives (Sheet chrome, or a mutation's onSuccess) goes
+  // through here so the next genuine open re-seeds. A spurious open→false→true flip that this
+  // component never asked for (see seededKeyRef above) never calls this, so it is not affected.
+  function handleOpenChange(next: boolean) {
+    if (!next) seededKeyRef.current = null;
+    onOpenChange(next);
+  }
 
   const isDeposit = watch('isDeposit');
   const lineItems = watch('lineItems');
@@ -236,7 +260,7 @@ export default function InvoiceSheet({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bookingInvoices', bookingId] });
       queryClient.invalidateQueries({ queryKey: ['bookingChecklist', bookingId] });
-      onOpenChange(false);
+      handleOpenChange(false);
       toast({ title: 'Draft saved' });
     },
   });
@@ -252,7 +276,7 @@ export default function InvoiceSheet({
       queryClient.invalidateQueries({ queryKey: ['bookingInvoices', bookingId] });
       queryClient.invalidateQueries({ queryKey: ['bookingDocuments', bookingId] });
       queryClient.invalidateQueries({ queryKey: ['bookingChecklist', bookingId] });
-      onOpenChange(false);
+      handleOpenChange(false);
       onAfterIssue?.(issuedInvoice);
     },
   });
@@ -274,7 +298,7 @@ export default function InvoiceSheet({
     },
     onSuccess: () => {
       if (invoice) invalidateFor(invoice, 'edit');
-      onOpenChange(false);
+      handleOpenChange(false);
       toast({ title: 'Invoice updated' });
     },
     onError: () => {
@@ -296,7 +320,7 @@ export default function InvoiceSheet({
     },
     onSuccess: (issuedInvoice) => {
       if (invoice) invalidateFor(invoice, 'issue');
-      onOpenChange(false);
+      handleOpenChange(false);
       onAfterIssue?.(issuedInvoice);
     },
     onError: () => toast({ title: 'Failed to issue invoice', variant: 'destructive' }),
@@ -338,7 +362,7 @@ export default function InvoiceSheet({
 
   return (
     <>
-      <Sheet open={open} onOpenChange={onOpenChange}>
+      <Sheet open={open} onOpenChange={handleOpenChange}>
         <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto">
           <SheetHeader className="mb-6">
             <SheetTitle>{isEdit ? 'Edit Invoice' : 'New Invoice'}</SheetTitle>
