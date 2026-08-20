@@ -1,6 +1,16 @@
 import * as dotenv from 'dotenv';
 dotenv.config();
 
+// Sentry must init before any other application module is required (below) —
+// its instrumentation cannot retroactively patch modules already loaded.
+import * as Sentry from '@sentry/nestjs';
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.SENTRY_ENVIRONMENT,
+  });
+}
+
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';

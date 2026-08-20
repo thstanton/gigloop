@@ -1,5 +1,8 @@
 import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus, Logger } from '@nestjs/common';
+import * as Sentry from '@sentry/nestjs';
 import type { Response, Request } from 'express';
+
+type MaybeAuthedRequest = Request & { userId?: string };
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
@@ -8,7 +11,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
-    const request = ctx.getRequest<Request>();
+    const request = ctx.getRequest<MaybeAuthedRequest>();
 
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
@@ -17,6 +20,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
         ? (body as Record<string, unknown>).message
         : exception.message;
 
+      if (status >= 500) this.captureToSentry(exception, request);
       this.log(status, request, String(message), status >= 500 ? exception.stack : undefined);
       response.status(status).json(body);
       return;
@@ -24,11 +28,18 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     const message = exception instanceof Error ? exception.message : String(exception);
     const stack = exception instanceof Error ? exception.stack : undefined;
+    this.captureToSentry(exception, request);
     this.log(HttpStatus.INTERNAL_SERVER_ERROR, request, message, stack);
 
     response.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
       statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
       message: 'Internal Server Error',
+    });
+  }
+
+  private captureToSentry(exception: unknown, request: MaybeAuthedRequest) {
+    Sentry.captureException(exception, {
+      tags: request.userId ? { userId: request.userId } : undefined,
     });
   }
 

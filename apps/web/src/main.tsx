@@ -1,3 +1,10 @@
+// Must be the first import: under ES module evaluation, a module's own
+// statements run only after all its imports resolve, so a guard inlined here
+// would still run after every module below has already loaded. A separate,
+// first-imported module evaluates (and so calls Sentry.init()) before any
+// sibling import's subtree does.
+import './instrument';
+
 import React from 'react';
 import '@/styles/globals.css';
 import ReactDOM from 'react-dom/client';
