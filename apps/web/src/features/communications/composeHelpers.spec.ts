@@ -12,7 +12,7 @@ import {
   canSendEmail,
   shouldSuggestCreatingContract,
   shouldSuggestCreatingDepositInvoice,
-  EMAIL_TEMPLATE_SCOPE,
+  EMAIL_TEMPLATE_OWNER,
   type SeriesComposeTarget,
 } from './composeHelpers';
 import { BUILT_IN_EMAIL_TYPES, BUILT_IN_DOCUMENT_TYPES } from '@/features/templates/templateMeta';
@@ -369,41 +369,44 @@ describe('isComposableEmailTemplate', () => {
   });
 });
 
-// ─── EMAIL_TEMPLATE_SCOPE guards against #846 ──────────────────────────────
+// ─── EMAIL_TEMPLATE_OWNER guards against #846 ──────────────────────────────
 //
-// EMAIL_TEMPLATE_SCOPE is a compile-time completeness check (a Record over every
-// BuiltInTemplateType member) — a new built-in type can't go undeclared — and
-// isComposableEmailTemplate reads it directly, so a wrongly-declared row is a real behaviour
-// change, not just a mismatched comment. These tests pin that behaviour per entry, the way the
-// dead shouldHideTemplate's own spec never pinned anything the picker actually ran (#928).
+// EMAIL_TEMPLATE_OWNER declares only the ownership dimension — whether a type is an email type at
+// all stays the sole responsibility of BUILT_IN_EMAIL_TYPES/BUILT_IN_DOCUMENT_TYPES (templateMeta.ts,
+// CLAUDE.md "one declaration per vocabulary"). Its Partial type means the compiler can't force
+// completeness, so the first test below does that at runtime; isComposableEmailTemplate reads the
+// table directly, so a wrongly-declared row is a real behaviour change, not just a mismatched
+// comment — the remaining tests pin that behaviour per entry, the way the dead shouldHideTemplate's
+// own spec never pinned anything the picker actually ran (#928).
 
-describe('EMAIL_TEMPLATE_SCOPE', () => {
-  it('every built-in email type has a booking or series scope declared', () => {
+describe('EMAIL_TEMPLATE_OWNER', () => {
+  it('every built-in email type has a booking or series owner declared', () => {
     for (const type of BUILT_IN_EMAIL_TYPES) {
-      expect(['booking', 'series']).toContain(EMAIL_TEMPLATE_SCOPE[type]);
+      expect(['booking', 'series']).toContain(EMAIL_TEMPLATE_OWNER[type]);
     }
   });
 
-  it('isComposableEmailTemplate composes exactly the booking-scoped types in booking mode', () => {
-    for (const type of BUILT_IN_EMAIL_TYPES) {
-      const t = makeTemplate({ builtInType: type });
-      expect(isComposableEmailTemplate(t, true)).toBe(EMAIL_TEMPLATE_SCOPE[type] === 'booking');
-    }
-  });
-
-  it('isComposableEmailTemplate composes exactly the series-scoped types in series mode', () => {
-    for (const type of BUILT_IN_EMAIL_TYPES) {
-      const t = makeTemplate({ builtInType: type });
-      expect(isComposableEmailTemplate(t, true, seriesTarget)).toBe(EMAIL_TEMPLATE_SCOPE[type] === 'series');
-    }
-  });
-
-  it('marks exactly the built-in document types as document-scoped', () => {
+  it('no built-in document type has an owner declared', () => {
     for (const type of BUILT_IN_DOCUMENT_TYPES) {
-      expect(EMAIL_TEMPLATE_SCOPE[type]).toBe('document');
+      expect(EMAIL_TEMPLATE_OWNER[type]).toBeUndefined();
     }
+  });
+
+  it('has no extra entries beyond the built-in email types', () => {
+    expect(Object.keys(EMAIL_TEMPLATE_OWNER).length).toBe(BUILT_IN_EMAIL_TYPES.length);
+  });
+
+  it('isComposableEmailTemplate composes exactly the booking-owned types in booking mode', () => {
     for (const type of BUILT_IN_EMAIL_TYPES) {
-      expect(EMAIL_TEMPLATE_SCOPE[type]).not.toBe('document');
+      const t = makeTemplate({ builtInType: type });
+      expect(isComposableEmailTemplate(t, true)).toBe(EMAIL_TEMPLATE_OWNER[type] === 'booking');
+    }
+  });
+
+  it('isComposableEmailTemplate composes exactly the series-owned types in series mode', () => {
+    for (const type of BUILT_IN_EMAIL_TYPES) {
+      const t = makeTemplate({ builtInType: type });
+      expect(isComposableEmailTemplate(t, true, seriesTarget)).toBe(EMAIL_TEMPLATE_OWNER[type] === 'series');
     }
   });
 });

@@ -146,14 +146,17 @@ export function formatMissingVariables(keys: string[]): string {
 }
 
 /**
- * #928: which sheet mode may compose each built-in type — the explicit decision #846 skipped when
- * `series_invoice_cover` was added to `BUILT_IN_EMAIL_TYPES` without excluding it from the booking
- * picker. `Record<BuiltInTemplateType, …>` is exhaustive: adding a member to that union without an
- * entry here fails to compile. {@link isComposableEmailTemplate} reads this table directly (rather
- * than a scope hand-derived alongside it) so a wrongly-declared row changes real behaviour and gets
- * caught by the series-mode / booking-mode tests, not just a documentation mismatch.
+ * #928: which sheet mode composes each built-in *email* type — the explicit decision #846 skipped
+ * when `series_invoice_cover` was added to `BUILT_IN_EMAIL_TYPES` without excluding it from the
+ * booking picker. Deliberately partial and keyed only on ownership: whether a type is an email type
+ * at all is already declared exactly once, in `BUILT_IN_EMAIL_TYPES`/`BUILT_IN_DOCUMENT_TYPES`
+ * (templateMeta.ts) — restating that split here would be the second hand-written list CLAUDE.md's
+ * "one declaration per vocabulary" rule forbids. `composeHelpers.spec.ts` asserts every entry in
+ * `BUILT_IN_EMAIL_TYPES` has a row here (the completeness this Partial type can't get from the
+ * compiler), and {@link isComposableEmailTemplate} reads this table directly, so a wrongly-declared
+ * row changes real behaviour and gets caught by the series-mode / booking-mode tests.
  */
-export const EMAIL_TEMPLATE_SCOPE: Record<BuiltInTemplateType, 'booking' | 'series' | 'document'> = {
+export const EMAIL_TEMPLATE_OWNER: Partial<Record<BuiltInTemplateType, 'booking' | 'series'>> = {
   quote: 'booking',
   confirmation: 'booking',
   contract_cover: 'booking',
@@ -165,14 +168,13 @@ export const EMAIL_TEMPLATE_SCOPE: Record<BuiltInTemplateType, 'booking' | 'seri
   thank_you: 'booking',
   contract_received: 'booking',
   deposit_received: 'booking',
-  contract: 'document',
 };
 
 /**
  * A template is composable as an email when it is a built-in email type (music-form invites need
  * config) *and* it belongs to the owner this sheet was opened for.
  *
- * The owner split is what makes the surface owner-aware (#847), read from {@link EMAIL_TEMPLATE_SCOPE}.
+ * The owner split is what makes the surface owner-aware (#847), read from {@link EMAIL_TEMPLATE_OWNER}.
  * In series mode the only sensible email is the series cover — every other built-in renders against
  * a booking the series invoice has no single one of. In booking mode the series cover is excluded
  * for the mirror-image reason: offered on an ordinary booking it would render a body of pure
@@ -184,8 +186,8 @@ export function isComposableEmailTemplate(
   series?: SeriesComposeTarget,
 ): boolean {
   if (!t.builtInType) return false;
-  const scope = EMAIL_TEMPLATE_SCOPE[t.builtInType];
-  if (scope !== (series ? 'series' : 'booking')) return false;
+  const owner = EMAIL_TEMPLATE_OWNER[t.builtInType];
+  if (owner !== (series ? 'series' : 'booking')) return false;
   return t.builtInType !== 'music_form_invite' || hasMusicFormConfig;
 }
 
