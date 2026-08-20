@@ -116,7 +116,21 @@ describe('Contract flow (integration)', () => {
 
   // ── happy paths ────────────────────────────────────────────────────────────
 
+  // The one real-DB + real-pdfmake happy path in this suite (#948) — every other test in this
+  // file mocks DocumentsService (the default via createTestApp()) and asserts on state/DB only.
+  // Only the final sign request needs the real service — contract create/send never touches PDF
+  // generation (see 'DRAFT → SENT: no Document generated at send time' below).
   describe('Full sign flow', () => {
+    let realApp: INestApplication;
+
+    beforeAll(async () => {
+      realApp = await createTestApp({ realDocuments: true });
+    });
+
+    afterAll(async () => {
+      await realApp.close();
+    });
+
     it('DRAFT → SENT → portal GET content → portal sign → SIGNED with correct state', async () => {
       const bookingId = await createBooking();
       await forceCompleteChecklist(bookingId, ['send_quote', 'confirm_quote']);
@@ -138,7 +152,7 @@ describe('Contract flow (integration)', () => {
       expect(contentRes.body).toHaveProperty('content');
       expect(contentRes.body).toHaveProperty('title');
 
-      const signRes = await request(app.getHttpServer())
+      const signRes = await request(realApp.getHttpServer())
         .post(`/api/booking/${token}/sign`)
         .send({ signature: SIGNATURE_PNG });
       expect(signRes.status).toBe(201);
@@ -158,8 +172,13 @@ describe('Contract flow (integration)', () => {
       expect(docs).toHaveLength(1);
       expect(docs[0].contractId).toBe(contract.id);
 
-      // StorageService.putDocument called once (signed contract PDF → private bucket)
+      // StorageService.putDocument called once (signed contract PDF → private bucket) — and it's
+      // a real rendered PDF, not the mock's placeholder buffer (the '%PDF-' prefix alone wouldn't
+      // discriminate: the mock's own buffer also carries it).
       expect(mockStorageService.putDocument).toHaveBeenCalledTimes(1);
+      const [, pdfBuffer] = mockStorageService.putDocument.mock.calls[0];
+      expect(pdfBuffer.subarray(0, 5).toString()).toBe('%PDF-');
+      expect(pdfBuffer.length).toBeGreaterThan(1000);
 
       await prisma.booking.delete({ where: { id: bookingId } });
     });
