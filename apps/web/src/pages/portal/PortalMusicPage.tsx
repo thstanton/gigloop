@@ -237,6 +237,8 @@ export default function PortalMusicPage() {
     `px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${active ? activeLabelClass : inactiveLabelClass}`;
   const selectedCheckClass = bold ? 'bg-white border-white' : 'bg-[#1a1a1a] border-[#1a1a1a]';
   const unselectedCheckClass = bold ? 'border-white/30 bg-transparent' : 'border-[#d1d5db] bg-transparent';
+  const selectedTileClass = bold ? 'bg-white/15' : 'bg-[#eef2ff]';
+  const unselectedTileClass = bold ? 'hover:bg-white/10' : 'hover:bg-[#f3f4f6]';
   const submitLabel = data.existingResponse ? 'Update requests' : 'Submit requests';
 
   const sectionHeadingClass = `text-xs font-medium uppercase tracking-wide mb-3 ${bold ? 'text-white/50' : 'text-[#9ca3af]'}`;
@@ -249,7 +251,7 @@ export default function PortalMusicPage() {
   return (
     <>
       {isPreview && <PreviewBanner customerName="" backHref={previewFrom} />}
-      <PortalLayout profile={profile}>
+      <PortalLayout profile={profile} wide>
       <div className="space-y-8">
         <div>
           <h1 className={`${displayFont} text-3xl mb-1 ${bold ? 'text-white' : 'text-[#1a1a1a]'}`}>
@@ -295,22 +297,20 @@ export default function PortalMusicPage() {
           )}
 
           {/* Song list */}
-          <div className={`rounded-lg divide-y overflow-hidden ${bold ? 'divide-white/10 bg-white/5' : 'divide-[#e5e5e5] border border-[#e5e5e5]'}`}>
-            {displaySongs.length === 0 ? (
-              <p className={`px-4 py-6 text-sm text-center ${bold ? 'text-white/40' : 'text-[#9ca3af]'}`}>
-                No songs found.
-              </p>
-            ) : (
-              displaySongs.map((song) => {
+          {displaySongs.length === 0 ? (
+            <p className={`px-4 py-6 text-sm text-center ${bold ? 'text-white/40' : 'text-[#9ca3af]'}`}>
+              No songs found.
+            </p>
+          ) : (
+            <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-3">
+              {displaySongs.map((song) => {
                 const isSelected = selected.has(song.id);
                 return (
                   <button
                     key={song.id}
                     type="button"
                     onClick={() => toggleSong(song.id)}
-                    className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${
-                      bold ? 'hover:bg-white/10' : 'hover:bg-[#f9fafb]'
-                    }`}
+                    className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors ${isSelected ? selectedTileClass : unselectedTileClass}`}
                   >
                     <span
                       className={`flex-shrink-0 h-5 w-5 rounded border flex items-center justify-center transition-colors ${isSelected ? selectedCheckClass : unselectedCheckClass}`}
@@ -319,21 +319,21 @@ export default function PortalMusicPage() {
                         <Check className={`h-3 w-3 ${bold ? 'text-[#1a1a1a]' : 'text-white'}`} />
                       )}
                     </span>
-                    <span className="min-w-0 flex-1">
-                      <span className={`text-sm ${bold ? 'text-white' : 'text-[#1a1a1a]'}`}>
+                    <span className="min-w-0">
+                      <span className={`block text-sm ${bold ? 'text-white' : 'text-[#1a1a1a]'}`}>
                         {song.title}
                       </span>
                       {song.artist && (
-                        <span className={`text-sm ${bold ? 'text-white/50' : 'text-[#9ca3af]'}`}>
-                          {' '}— {song.artist}
+                        <span className={`block text-sm ${bold ? 'text-white/50' : 'text-[#9ca3af]'}`}>
+                          {song.artist}
                         </span>
                       )}
                     </span>
                   </button>
                 );
-              })
-            )}
-          </div>
+              })}
+            </div>
+          )}
           {selected.size > 0 && (
             <p className={`text-sm ${bold ? 'text-white/60' : 'text-[#6b7280]'}`}>
               {selected.size} song{selected.size !== 1 ? 's' : ''} selected
