@@ -112,11 +112,11 @@ async function persistLineItemEdits(invoice: Invoice, values: FormValues) {
     ...toDelete.map((i) =>
       apiDelete(`/invoices/${invoice.id}/line-items/${i.id}`),
     ),
-    ...toCreate.map((item, idx) =>
+    ...toCreate.map((item) =>
       apiPost(`/invoices/${invoice.id}/line-items`, {
         description: item.description,
         amount: parseFloat(item.amount),
-        order: values.lineItems.indexOf(item) + idx,
+        order: values.lineItems.indexOf(item),
       }),
     ),
     ...toUpdate.map((item) =>
