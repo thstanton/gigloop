@@ -119,6 +119,9 @@ jobs:
       - name: Local-database guard unit tests (#906)
         if: needs.detect-changes.outputs.web == 'true'
         run: node --test scripts/assert-local-database.test.mjs
+      - name: Prod API host guard unit tests (#865)
+        if: needs.detect-changes.outputs.web == 'true'
+        run: node --test scripts/verify-prod-api-host.test.mjs
 
   build:
     name: Build

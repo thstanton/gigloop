@@ -154,6 +154,35 @@ jobs:
           echo "::error::Production bundle at www.gigloop.co.uk has no pk_live_ Clerk key — Clerk is broken. Roll back with: vercel promote <previous-good-deployment-url>"
           exit 1
 
+      - name: Smoke-check production API host is live on the production site
+        # Sibling to the Clerk-key check above (#865) — the same white-screen
+        # risk applies to VITE_API_BASE_URL: resolveApiBaseUrl
+        # (apps/web/src/lib/apiBaseUrl.ts) fails closed at runtime, in the
+        # browser, not at build time, so an empty or wrong value used to sail
+        # past this gate as long as the Clerk key was present. Own fetch/retry
+        # loop and own message, deliberately not folded into the step above,
+        # so neither check can mask the other's failure. Host-matching logic
+        # lives in scripts/verify-prod-api-host.mjs (unit-tested in CI) — this
+        # step only owns the fetch/retry loop, mirroring the Clerk check.
+        run: |
+          last_reason=""
+          for attempt in 1 2 3 4 5 6; do
+            html="$(curl -fsSL https://www.gigloop.co.uk/admin || true)"
+            bundle=""
+            for chunk in $(printf '%s' "$html" | grep -oE '/assets/[^"]+\.js'); do
+              bundle="$bundle$(curl -fsSL "https://www.gigloop.co.uk$chunk" || true)"
+            done
+            if output="$(printf '%s' "$bundle" | node scripts/verify-prod-api-host.mjs 2>&1)"; then
+              echo "$output"
+              exit 0
+            fi
+            last_reason="$output"
+            echo "Production API host not confirmed yet (attempt $attempt/6): $last_reason — waiting for alias propagation…"
+            sleep 10
+          done
+          echo "::error::Production bundle at www.gigloop.co.uk does not reference the production API host: $last_reason. Roll back with: vercel promote <previous-good-deployment-url>"
+          exit 1
+
       - name: Release summary
         if: always()
         run: |
