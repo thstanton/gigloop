@@ -181,6 +181,20 @@ function makeContacts(): MockContacts {
 const booking = { id: 'b1', userId: 'u1', status: BookingStatus.CONFIRMED };
 const set = { id: 's1', bookingId: 'b1', userId: 'u1' };
 
+// The fields `mapBooking` adds to a raw repo row that carries no musicFormConfig/contracts (the
+// shape every fixture in this file's `create`/`update` tests uses). ADR-0071 (#872): asserting the
+// mapped shape once here, rather than repeating the literal at each call site, keeps the assertions
+// from drifting out of sync with `mapBooking` itself.
+function withNoContractOrMusicForm<T extends object>(raw: T) {
+  return {
+    ...raw,
+    hasMusicFormConfig: false,
+    hasMusicFormResponse: false,
+    activeContract: null,
+    portalVisibility: { contract: null, musicForm: null },
+  };
+}
+
 const baseContext: EmailContext = {
   customerName: 'Jane Smith',
   greetingName: 'Jane',
@@ -368,7 +382,8 @@ describe('BookingsService', () => {
       // enableMusicForm defaults to false when the dto omits it.
       expect(repo.create).toHaveBeenCalledWith('u1', dto, false, TX);
       expect(repo.findPackageTemplates).not.toHaveBeenCalled();
-      expect(result).toBe(createdBooking);
+      // ADR-0071: create returns the mapped shape (findOne's shape), not the raw repo row.
+      expect(result).toEqual(withNoContractOrMusicForm(createdBooking));
     });
 
     it('evaluates auto-complete rules after commit so structural items reflect data set at creation (#511)', async () => {
@@ -431,7 +446,8 @@ describe('BookingsService', () => {
       expect(repo.findPackageTemplates).toHaveBeenCalledWith('u1', ['f1']);
       // No enableMusicForm in the dto → music form off (config row not created).
       expect(repo.createWithPackageTemplates).toHaveBeenCalledWith('u1', dto, [tmpl], false, TX);
-      expect(result).toBe(createdBooking);
+      // ADR-0071: create returns the mapped shape (findOne's shape), not the raw repo row.
+      expect(result).toEqual(withNoContractOrMusicForm(createdBooking));
     });
 
     it('passes enableMusicForm=true to createWithPackageTemplates when the dto opts in', async () => {
@@ -646,7 +662,8 @@ describe('BookingsService', () => {
       repo.update.mockResolvedValue(updated);
       const result = await service.update('u1', 'b1', { status: BookingStatus.CONFIRMED });
       expect(repo.update).toHaveBeenCalledWith('b1', { status: BookingStatus.CONFIRMED });
-      expect(result).toBe(updated);
+      // ADR-0071: update returns the mapped shape (findOne's shape), not the raw repo row.
+      expect(result).toEqual(withNoContractOrMusicForm(updated));
     });
 
     it('throws NotFoundException without calling update when booking is not found', async () => {
@@ -764,7 +781,8 @@ describe('BookingsService', () => {
         repo.update.mockResolvedValue(updated);
         seriesService.syncMemberLeave.mockRejectedValueOnce(new Error('boom'));
         const result = await service.update('u1', 'b1', { status: BookingStatus.CANCELLED });
-        expect(result).toBe(updated);
+        // ADR-0071: update returns the mapped shape (findOne's shape), not the raw repo row.
+        expect(result).toEqual(withNoContractOrMusicForm(updated));
       });
     });
   });
@@ -1589,6 +1607,70 @@ describe('BookingsService', () => {
       const result = await service.previewReminders('u1', 'ENQUIRY');
 
       expect(result.find((r) => r.key === 'get_the_quote_accepted')).toBeUndefined();
+    });
+  });
+
+  // ADR-0071: the durable guard against the divergence this issue fixes — a write silently
+  // reverting to the raw repo row (rather than the shared mapper) breaks this immediately.
+  describe('response shape parity (ADR-0071)', () => {
+    // A `bookingIncludes`-shaped raw row — the shape every repo method under test returns.
+    function rawRow(overrides: Record<string, unknown> = {}) {
+      return {
+        id: 'b1',
+        createdAt: new Date('2026-01-01'),
+        updatedAt: new Date('2026-01-01'),
+        userId: 'u1',
+        status: BookingStatus.CONFIRMED,
+        eventType: 'WEDDING',
+        date: new Date('2026-06-01'),
+        title: null,
+        fee: null,
+        notes: null,
+        portalToken: 'tok',
+        travelMode: null,
+        logistics: null,
+        customerId: 'c1',
+        customer: { id: 'c1', name: 'Jane Smith' },
+        venueId: null,
+        venue: null,
+        bookingAgentId: null,
+        bookingAgent: null,
+        seriesId: null,
+        series: null,
+        sets: [],
+        packages: [],
+        musicFormConfig: null,
+        musicFormResponse: null,
+        contracts: [],
+        ...overrides,
+      };
+    }
+
+    it('creating, patching, updating a series, and reading a booking all return the same key set', async () => {
+      repo.create.mockResolvedValue(rawRow());
+      const createResult = await service.create('u1', {
+        eventType: 'WEDDING',
+        date: '2026-06-01',
+        customerId: 'c1',
+        checklistItems: [],
+      });
+
+      repo.update.mockResolvedValue(rawRow());
+      const updateResult = await service.update('u1', 'b1', {});
+
+      repo.findOne.mockResolvedValue(rawRow());
+      const readResult = await service.findOne('u1', 'b1');
+
+      // seriesId null → null: skips the series lookup/sync branches, exercising only the
+      // read-then-map path this test cares about.
+      repo.updateSeries.mockResolvedValue(rawRow());
+      const updateSeriesResult = await service.updateSeries('u1', 'b1', null);
+
+      const keySetOf = (obj: object) => Object.keys(obj).sort((a, b) => a.localeCompare(b));
+      const readKeys = keySetOf(readResult);
+      expect(keySetOf(createResult)).toEqual(readKeys);
+      expect(keySetOf(updateResult)).toEqual(readKeys);
+      expect(keySetOf(updateSeriesResult)).toEqual(readKeys);
     });
   });
 });

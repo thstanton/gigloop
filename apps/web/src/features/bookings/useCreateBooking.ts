@@ -94,6 +94,9 @@ export function useCreateBooking() {
       if (!('bookingAgentId' in cache)) cache.bookingAgentId = await resolveContactId(values.bookingAgent, 'BOOKING_AGENT');
       if (!('venueId' in cache)) cache.venueId = await resolveVenueId(values.venue);
       if (!cache.customerId) throw new Error('A customer is required.');
+      // POST /bookings genuinely returns this shape (ADR-0071 / #872) — it used to return the raw
+      // Prisma row instead, a type-level lie this declaration survived only because `onSuccess`
+      // below happens to read fields present on both shapes.
       return apiPost<BookingDetail>(
         '/bookings',
         buildBookingPayload(
