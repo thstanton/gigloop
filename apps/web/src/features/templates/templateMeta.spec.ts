@@ -2,14 +2,12 @@ import { describe, it, expect } from 'vitest';
 import {
   BUILT_IN_EMAIL_TYPES,
   BUILT_IN_DOCUMENT_TYPES,
+  ALL_BUILT_IN_TEMPLATE_TYPES,
   TEMPLATE_DISPLAY,
   TEMPLATE_VARIABLES,
   ALL_VARIABLES,
   VAR_LABELS,
 } from './templateMeta';
-import type { BuiltInTemplateType } from '@/types/api';
-
-const ALL_BUILT_IN_TYPES: BuiltInTemplateType[] = [...BUILT_IN_EMAIL_TYPES, ...BUILT_IN_DOCUMENT_TYPES];
 
 describe('templateMeta completeness', () => {
   it('every built-in email type has an entry in TEMPLATE_DISPLAY', () => {
@@ -25,13 +23,13 @@ describe('templateMeta completeness', () => {
   });
 
   it('every TEMPLATE_DISPLAY entry has a non-empty name', () => {
-    for (const type of ALL_BUILT_IN_TYPES) {
+    for (const type of ALL_BUILT_IN_TEMPLATE_TYPES) {
       expect(TEMPLATE_DISPLAY[type].name.length).toBeGreaterThan(0);
     }
   });
 
   it('every TEMPLATE_DISPLAY entry has a non-empty description', () => {
-    for (const type of ALL_BUILT_IN_TYPES) {
+    for (const type of ALL_BUILT_IN_TEMPLATE_TYPES) {
       expect(TEMPLATE_DISPLAY[type].description.length).toBeGreaterThan(0);
     }
   });
@@ -49,7 +47,7 @@ describe('templateMeta completeness', () => {
   });
 
   it('every TEMPLATE_VARIABLES entry contains objects with name and label', () => {
-    for (const type of ALL_BUILT_IN_TYPES) {
+    for (const type of ALL_BUILT_IN_TEMPLATE_TYPES) {
       for (const v of TEMPLATE_VARIABLES[type]) {
         expect(typeof v.name).toBe('string');
         expect(typeof v.label).toBe('string');
@@ -61,7 +59,7 @@ describe('templateMeta completeness', () => {
 
   it('every variable in TEMPLATE_VARIABLES references a known variable from ALL_VARIABLES', () => {
     const knownNames = new Set(ALL_VARIABLES.map((v) => v.name));
-    for (const type of ALL_BUILT_IN_TYPES) {
+    for (const type of ALL_BUILT_IN_TEMPLATE_TYPES) {
       for (const v of TEMPLATE_VARIABLES[type]) {
         expect(knownNames.has(v.name)).toBe(true);
       }
@@ -87,18 +85,25 @@ describe('templateMeta completeness', () => {
     expect(new Set(names).size).toBe(names.length);
   });
 
-  it('no duplicate type entries in BUILT_IN_EMAIL_TYPES', () => {
-    expect(new Set(BUILT_IN_EMAIL_TYPES).size).toBe(BUILT_IN_EMAIL_TYPES.length);
-  });
-
-  it('no duplicate type entries in BUILT_IN_DOCUMENT_TYPES', () => {
-    expect(new Set(BUILT_IN_DOCUMENT_TYPES).size).toBe(BUILT_IN_DOCUMENT_TYPES.length);
-  });
-
-  it('email and document type lists do not overlap', () => {
+  // BUILT_IN_EMAIL_TYPES/BUILT_IN_DOCUMENT_TYPES are both derived from one row-per-type table
+  // (templateMeta.ts) keyed by BuiltInTemplateType, so a type appearing twice or in both lists is
+  // no longer reachable — these assert the derivation's shape against the canonical
+  // ALL_BUILT_IN_TEMPLATE_TYPES list, not against the two lists' own concatenation.
+  it('every declared built-in type belongs to exactly one of the email/document lists', () => {
     const emailSet = new Set(BUILT_IN_EMAIL_TYPES);
-    for (const type of BUILT_IN_DOCUMENT_TYPES) {
-      expect(emailSet.has(type)).toBe(false);
+    const documentSet = new Set(BUILT_IN_DOCUMENT_TYPES);
+    for (const type of ALL_BUILT_IN_TEMPLATE_TYPES) {
+      expect(emailSet.has(type) !== documentSet.has(type)).toBe(true);
+    }
+    expect(BUILT_IN_EMAIL_TYPES.length + BUILT_IN_DOCUMENT_TYPES.length).toBe(ALL_BUILT_IN_TEMPLATE_TYPES.length);
+  });
+
+  // TemplatesListPage.tsx renders BUILT_IN_EMAIL_TYPES in list order — pin that the filter can't
+  // silently reorder it (e.g. a future Set round-trip or .sort()).
+  it("BUILT_IN_EMAIL_TYPES preserves the table's declaration order", () => {
+    const indices = BUILT_IN_EMAIL_TYPES.map((type) => ALL_BUILT_IN_TEMPLATE_TYPES.indexOf(type));
+    for (let i = 1; i < indices.length; i++) {
+      expect(indices[i]).toBeGreaterThan(indices[i - 1]);
     }
   });
 

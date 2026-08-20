@@ -1,37 +1,56 @@
 import type { BuiltInTemplateType } from '@/types/api';
 
-export const BUILT_IN_EMAIL_TYPES: BuiltInTemplateType[] = [
-  'quote',
-  'confirmation',
-  'contract_cover',
-  'contract_and_deposit_cover',
-  'deposit_invoice_cover',
-  'balance_invoice_cover',
-  'series_invoice_cover',
-  'contract_received',
-  'deposit_received',
-  'music_form_invite',
-  'thank_you',
-];
+interface TemplateMetaRow {
+  value: BuiltInTemplateType;
+  kind: 'email' | 'document';
+  name: string;
+  description: string;
+}
 
-export const BUILT_IN_DOCUMENT_TYPES: BuiltInTemplateType[] = [
-  'contract',
-];
+// The one declaration of the built-in-template vocabulary — one row per type, one column per
+// attribute, matching the array-of-records + compile-time coverage pattern established in
+// lib/constants.ts (CLAUDE.md → One declaration per vocabulary). BUILT_IN_EMAIL_TYPES,
+// BUILT_IN_DOCUMENT_TYPES, ALL_BUILT_IN_TEMPLATE_TYPES and TEMPLATE_DISPLAY are all derived from
+// it below, never written alongside it, so a type cannot be half-added.
+const TEMPLATE_META = [
+  { value: 'quote',                      kind: 'email',    name: 'Quote',                    description: 'Sent when providing a price quote for a new enquiry' },
+  { value: 'confirmation',               kind: 'email',    name: 'Booking confirmation',     description: 'Sent to confirm an accepted booking' },
+  { value: 'contract_cover',             kind: 'email',    name: 'Contract email',           description: 'Email body when sending only the contract link' },
+  { value: 'contract_and_deposit_cover', kind: 'email',    name: 'Contract & deposit email', description: 'Email body when sending the contract link with a deposit invoice' },
+  { value: 'deposit_invoice_cover',      kind: 'email',    name: 'Deposit invoice email',    description: 'Email body when sending the deposit invoice' },
+  { value: 'balance_invoice_cover',      kind: 'email',    name: 'Balance invoice email',    description: 'Email body when sending the final balance invoice' },
+  { value: 'series_invoice_cover',       kind: 'email',    name: 'Series invoice email',     description: 'Email body when sending the invoice for a series of bookings' },
+  { value: 'contract_received',          kind: 'email',    name: 'Contract received',        description: 'Confirmation sent when the client signs the contract' },
+  { value: 'deposit_received',           kind: 'email',    name: 'Deposit received',         description: 'Confirmation sent when the deposit payment arrives' },
+  { value: 'music_form_invite',          kind: 'email',    name: 'Music form invitation',    description: 'Sent when inviting the client to fill in their music preferences' },
+  { value: 'thank_you',                  kind: 'email',    name: 'Thank you',                description: 'Sent after the performance to thank the client' },
+  { value: 'contract',                   kind: 'document', name: 'Contract',                 description: 'Performance agreement sent to clients for signing' },
+] as const satisfies readonly TemplateMetaRow[];
 
-export const TEMPLATE_DISPLAY: Record<BuiltInTemplateType, { name: string; description: string }> = {
-  quote:                        { name: 'Quote',                    description: 'Sent when providing a price quote for a new enquiry' },
-  confirmation:                 { name: 'Booking confirmation',     description: 'Sent to confirm an accepted booking' },
-  contract_cover:               { name: 'Contract email',           description: 'Email body when sending only the contract link' },
-  contract_and_deposit_cover:   { name: 'Contract & deposit email', description: 'Email body when sending the contract link with a deposit invoice' },
-  deposit_invoice_cover:        { name: 'Deposit invoice email',    description: 'Email body when sending the deposit invoice' },
-  balance_invoice_cover:        { name: 'Balance invoice email',    description: 'Email body when sending the final balance invoice' },
-  series_invoice_cover:         { name: 'Series invoice email',     description: 'Email body when sending the invoice for a series of bookings' },
-  contract_received:            { name: 'Contract received',        description: 'Confirmation sent when the client signs the contract' },
-  deposit_received:             { name: 'Deposit received',         description: 'Confirmation sent when the deposit payment arrives' },
-  music_form_invite:            { name: 'Music form invitation',    description: 'Sent when inviting the client to fill in their music preferences' },
-  thank_you:                    { name: 'Thank you',                description: 'Sent after the performance to thank the client' },
-  contract:                     { name: 'Contract',                 description: 'Performance agreement sent to clients for signing' },
-};
+// Compile-time coverage guard. If a type is added to BuiltInTemplateType and not to the table
+// above, Exclude<> resolves to that member, which fails the `extends never` constraint here — so
+// a type cannot be half-added (same mechanism as lib/constants.ts's _BookingStatusCoverage).
+type AssertNever<T extends never> = T;
+export type _TemplateMetaCoverage = AssertNever<
+  Exclude<BuiltInTemplateType, (typeof TEMPLATE_META)[number]['value']>
+>;
+
+// Declaration order of every built-in template type — exported so specs can pin the derived
+// lists' shape (partition, order) against the canonical table instead of against each other.
+export const ALL_BUILT_IN_TEMPLATE_TYPES: BuiltInTemplateType[] = TEMPLATE_META.map((row) => row.value);
+
+export const BUILT_IN_EMAIL_TYPES: BuiltInTemplateType[] = TEMPLATE_META
+  .filter((row) => row.kind === 'email')
+  .map((row) => row.value);
+
+export const BUILT_IN_DOCUMENT_TYPES: BuiltInTemplateType[] = TEMPLATE_META
+  .filter((row) => row.kind === 'document')
+  .map((row) => row.value);
+
+export const TEMPLATE_DISPLAY: Record<BuiltInTemplateType, Omit<TemplateMetaRow, 'value' | 'kind'>> =
+  Object.fromEntries(
+    TEMPLATE_META.map(({ value, name, description }) => [value, { name, description }]),
+  ) as Record<BuiltInTemplateType, Omit<TemplateMetaRow, 'value' | 'kind'>>;
 
 // ─── Variable definitions ─────────────────────────────────────────────────────
 
