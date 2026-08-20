@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { BookingStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { BookingsRepository } from './bookings.repository';
+import { BookingsRepository, type BookingWithIncludes } from './bookings.repository';
 import { ContractRepository } from './contract.repository';
 import { MusicFormConfigRepository } from './music-form-config.repository';
 import { ChecklistRepository, ChecklistItemSeed } from '../checklist/checklist.repository';
@@ -28,6 +28,31 @@ import {
 } from '../checklist/checklist-reminders';
 import { ReminderConcern } from '../checklist/checklist-concerns';
 import { resolveContractVisibility, resolveMusicFormVisibility, type ContractStatus } from '../portal/portal-visibility';
+
+// The single mapped shape every booking read and write returns (ADR-0071): `bookingIncludes`'
+// relations collapsed to `has*` flags / `activeContract` / `portalVisibility`. Derived from
+// `BookingWithIncludes` rather than hand-declared, so the mapper's actual output can never drift
+// from what it destructures out of.
+export type NormalisedContract = {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  status: string;
+  content: unknown;
+  signedAt: string | null;
+};
+
+export type BookingPortalVisibility = {
+  contract: ReturnType<typeof resolveContractVisibility>;
+  musicForm: ReturnType<typeof resolveMusicFormVisibility>;
+};
+
+export type MappedBooking = Omit<BookingWithIncludes, 'musicFormConfig' | 'musicFormResponse' | 'contracts'> & {
+  hasMusicFormConfig: boolean;
+  hasMusicFormResponse: boolean;
+  activeContract: NormalisedContract | null;
+  portalVisibility: BookingPortalVisibility;
+};
 
 const VALID_STATUSES = new Set<string>(Object.values(BookingStatus));
 
@@ -137,22 +162,10 @@ export class BookingsService {
     return this.repo.findAll(userId, statuses as BookingStatus[], q, eventType, from, to);
   }
 
-  async findOne(userId: string, id: string) {
+  async findOne(userId: string, id: string): Promise<MappedBooking> {
     const booking = await this.repo.findOne(userId, id);
     if (!booking) throw new NotFoundException('Booking not found');
-    const { musicFormConfig, musicFormResponse, contracts, ...rest } = booking;
-    return {
-      ...rest,
-      hasMusicFormConfig: !!musicFormConfig,
-      hasMusicFormResponse: !!musicFormResponse,
-      activeContract: this.normaliseContract(contracts?.[0] ?? null),
-      portalVisibility: this.buildPortalVisibility(
-        contracts?.[0]?.status,
-        !!musicFormConfig,
-        booking.status,
-        musicFormConfig?.publishedAt != null,
-      ),
-    };
+    return this.mapBooking(booking);
   }
 
   // The per-concern portal-visibility map for the admin indicator (ADR-0054 / #578), computed by
@@ -165,7 +178,7 @@ export class BookingsService {
     hasMusicFormConfig: boolean,
     bookingStatus: string,
     musicFormPublished: boolean,
-  ) {
+  ): BookingPortalVisibility {
     return {
       contract: resolveContractVisibility(
         (contractStatus ?? null) as ContractStatus | null,
@@ -249,7 +262,7 @@ export class BookingsService {
     return created;
   }
 
-  async create(userId: string, dto: CreateBookingDto) {
+  async create(userId: string, dto: CreateBookingDto): Promise<MappedBooking> {
     // Reads (and the optional new-series insert) stay outside the transaction — see ADR-0047.
     // FK-ownership (#709): the customer/venue/agent must belong to the caller before we attach
     // them, else a foreign contact could be read back through the owned booking.
@@ -284,7 +297,8 @@ export class BookingsService {
     // affects the atomic create unit (ADR-0047).
     await this.reeval.onBookingChanged(created.id);
 
-    return created;
+    // ADR-0071: a write returns the same mapped shape a read of the same resource would.
+    return this.mapBooking(created);
   }
 
   // Copy Event (#507 / ADR-0049): clone *this* booking into the same series on a new date.
@@ -293,7 +307,7 @@ export class BookingsService {
   // portalToken, no invoices/documents/communications/music form response/deposit). Checklist
   // items copy but their completion resets to pending and due dates recompute against the new
   // date (reusing seedChecklistItems).
-  async copyBooking(userId: string, id: string, dto: CopyBookingDto) {
+  async copyBooking(userId: string, id: string, dto: CopyBookingDto): Promise<MappedBooking> {
     const source = await this.repo.findOneForClone(userId, id);
     if (!source) throw new NotFoundException('Booking not found');
 
@@ -347,10 +361,10 @@ export class BookingsService {
     // than re-nag work already done (PRD #511 Story 20). Post-commit + best-effort.
     await this.reeval.onBookingChanged(copied.id);
 
-    return copied;
+    return this.mapBooking(copied);
   }
 
-  async update(userId: string, id: string, dto: UpdateBookingDto) {
+  async update(userId: string, id: string, dto: UpdateBookingDto): Promise<MappedBooking> {
     await this.assertOwnership(userId, id);
     // FK-ownership (#709): validate any contact FK present in the patch. Nullish values (an
     // omitted field, or venue/agent cleared to null) are skipped by assertOwned.
@@ -378,7 +392,8 @@ export class BookingsService {
         sets: (updated.sets ?? []) as Array<{ label: string | null; duration: number }>,
       });
     }
-    return updated;
+    // ADR-0071: a write returns the same mapped shape a read of the same resource would.
+    return this.mapBooking(updated);
   }
 
   /**
@@ -410,6 +425,11 @@ export class BookingsService {
     }
   }
 
+  // Not routed through the shared mapper (ADR-0071 scopes the parity rule to "creating, patching,
+  // updating a series, and reading"): the controller returns 204 No Content for a cancel, which by
+  // definition carries no body, so there is no client-visible shape to unify. `repo.cancel` also
+  // has no `include`, unlike every mapped write — adding one just to feed a discarded body would
+  // be an unjustified over-fetch.
   async delete(userId: string, id: string) {
     await this.assertOwnership(userId, id);
     const cancelled = await this.repo.cancel(id);
@@ -530,8 +550,9 @@ export class BookingsService {
     return this.mapBooking(booking!);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private mapBooking(booking: any) {
+  // The single place the booking response shape is constructed (ADR-0071). Every read and write
+  // method funnels its `bookingIncludes`-shaped row through here rather than re-deriving the shape.
+  private mapBooking(booking: BookingWithIncludes): MappedBooking {
     const { musicFormConfig, musicFormResponse, contracts, ...rest } = booking;
     return {
       ...rest,
@@ -547,7 +568,9 @@ export class BookingsService {
     };
   }
 
-  private normaliseContract(raw: { id: string; createdAt: Date; updatedAt: Date; status: string; content: unknown; signedAt: Date | null } | null) {
+  private normaliseContract(
+    raw: { id: string; createdAt: Date; updatedAt: Date; status: string; content: unknown; signedAt: Date | null } | null,
+  ): NormalisedContract | null {
     if (!raw) return null;
     return {
       id: raw.id,
@@ -821,9 +844,15 @@ export class BookingsService {
     return null;
   }
 
-  async updateSeries(userId: string, bookingId: string, seriesId: string | null, confirm?: boolean, newSeriesLabel?: string) {
+  async updateSeries(
+    userId: string,
+    bookingId: string,
+    seriesId: string | null,
+    confirm?: boolean,
+    newSeriesLabel?: string,
+  ): Promise<MappedBooking | { requiresConfirmation: true; warning: string }> {
     const booking = await this.findOne(userId, bookingId);
-    const previousSeriesId = (booking as { seriesId?: string | null }).seriesId ?? null;
+    const previousSeriesId = booking.seriesId;
 
     if (newSeriesLabel) {
       const created = await this.seriesRepo.create(userId, newSeriesLabel, booking.customerId);
@@ -842,16 +871,17 @@ export class BookingsService {
     if (seriesId !== null) {
       const syncPayload: MemberBookingForSync = {
         id: booking.id,
-        date: booking.date as unknown as Date,
+        date: booking.date,
         fee: booking.fee as MemberBookingForSync['fee'],
-        sets: (booking.sets ?? []) as Array<{ label: string | null; duration: number }>,
+        sets: booking.sets,
       };
       await this.seriesService.syncMemberJoin(userId, seriesId, syncPayload);
     } else if (previousSeriesId) {
       await this.seriesService.syncMemberLeave(userId, previousSeriesId, bookingId);
     }
 
-    return result;
+    // ADR-0071: a write returns the same mapped shape a read of the same resource would.
+    return this.mapBooking(result);
   }
 
   async getActions(userId: string) {

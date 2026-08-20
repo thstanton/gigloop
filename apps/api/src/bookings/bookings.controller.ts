@@ -88,13 +88,14 @@ export class BookingsController {
   }
 
   @ApiOperation({ summary: 'Create a booking' })
+  @ApiResponse({ status: 201, type: BookingResponseDto })
   @Post()
   create(@Req() req: AuthedRequest, @Body() dto: CreateBookingDto) {
     return this.service.create(req.userId, dto);
   }
 
   @ApiOperation({ summary: 'Copy a booking into the same series on a new date (clones content, resets lifecycle state)' })
-  @ApiResponse({ status: 201, description: 'The newly created booking.' })
+  @ApiResponse({ status: 201, type: BookingResponseDto, description: 'The newly created booking.' })
   @ApiResponse({ status: 404, description: 'Source booking not found.' })
   @ApiResponse({ status: 409, description: 'Series invoice is locked — cannot copy into it.' })
   @Post(':id/copy')
@@ -102,7 +103,11 @@ export class BookingsController {
     return this.service.copyBooking(req.userId, id, dto);
   }
 
+  // Success returns BookingResponseDto (ADR-0071); a customer-mismatch conflict returns
+  // { requiresConfirmation: true, warning } instead — not modelled as a oneOf here, per the
+  // summary text below covering the deviation.
   @ApiOperation({ summary: 'Assign or remove the booking from a series; returns requiresConfirmation on customer mismatch' })
+  @ApiResponse({ status: 200, type: BookingResponseDto })
   @Patch(':id/series')
   updateSeries(
     @Req() req: AuthedRequest,
@@ -113,15 +118,8 @@ export class BookingsController {
   }
 
   @ApiOperation({ summary: 'Update a booking' })
-  // Deliberately NOT typed as BookingResponseDto: this returns the raw Prisma row (with
-  // `contracts` / `musicFormConfig` / `musicFormResponse` relations) rather than the mapped
-  // `activeContract` / `hasMusicForm*` / `portalVisibility` shape GET :id returns. The web client
-  // discards the body and refetches, so nothing depends on it — the divergence is tracked in #805.
-  @ApiResponse({
-    status: 200,
-    description:
-      'The updated booking as the raw persisted row — NOT the mapped GET /bookings/:id shape (see #805).',
-  })
+  // ADR-0071: returns the same mapped shape GET :id does (previously the raw Prisma row — #805).
+  @ApiResponse({ status: 200, type: BookingResponseDto })
   @ApiResponse({ status: 404, description: 'Booking not found (or not owned by the caller).' })
   @Patch(':id')
   update(

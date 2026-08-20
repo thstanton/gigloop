@@ -9,11 +9,13 @@ import {
   type PortalVisibilityReason,
 } from '../../portal/portal-visibility';
 
-// The wire shape of a single booking as returned by `BookingsService.findOne` — the source of
-// truth for everything below (`mapBooking` produces the same shape for the package endpoints).
-// Nothing ties this file to that method at compile time: `findOne` spreads a Prisma row and
-// `mapBooking` takes `any`, so there is no return type to `satisfies`-check against. **Update
-// this DTO whenever the `findOne` return changes** (#786).
+// The wire shape of a single booking, as constructed by `BookingsService.mapBooking` — the one
+// place every read and write method builds this shape (ADR-0071 / #872). `mapBooking` carries a
+// real return type (`MappedBooking`, in bookings.service.ts) rather than `any`, but nothing
+// `satisfies`-checks it against this DTO: `MappedBooking`'s dates/Decimal stay as Prisma's native
+// `Date`/`Decimal` (JSON-serialised correctly without conversion), while this DTO documents them as
+// `string` per the shared-types convention below — so the two are related by convention, not by
+// the compiler. **Update this DTO whenever `mapBooking`'s output changes** (#786).
 //
 // Mirrors `BookingDetail` in apps/web/src/types/api.ts, with two deliberate differences:
 //   • `userId` is omitted, exactly as `ContactResponseDto` omits it. The tenancy id *is* currently

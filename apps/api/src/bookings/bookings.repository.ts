@@ -38,6 +38,11 @@ const bookingIncludes = {
   contracts: CONTRACT_INCLUDE,
 } as const;
 
+// The shape every read and write method below returns (ADR-0071): the raw row `BookingsService`'s
+// shared mapper takes as input. Every method that returns a booking uses `bookingIncludes` so this
+// one type describes all of them.
+export type BookingWithIncludes = Prisma.BookingGetPayload<{ include: typeof bookingIncludes }>;
+
 // The booking list is the highest-frequency, unpaginated endpoint, so it uses a top-level
 // `select` to return only the scalars the list renders (#588). Deliberately omitted: the
 // `logistics` JSON, `notes`, and `portalToken` (the last also a mild data-exposure smell) —
