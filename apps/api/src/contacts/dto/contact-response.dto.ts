@@ -10,30 +10,30 @@ export class ContactResponseDto {
   @ApiProperty() updatedAt: string;
   @ApiProperty() name: string;
 
-  @ApiPropertyOptional({ nullable: true }) greetingName: string | null;
-  @ApiPropertyOptional({ nullable: true }) email: string | null;
-  @ApiPropertyOptional({ nullable: true }) phone: string | null;
-  @ApiPropertyOptional({ nullable: true }) notes: string | null;
-  @ApiPropertyOptional({ nullable: true }) addressLine1: string | null;
-  @ApiPropertyOptional({ nullable: true }) addressLine2: string | null;
-  @ApiPropertyOptional({ nullable: true }) city: string | null;
-  @ApiPropertyOptional({ nullable: true }) county: string | null;
-  @ApiPropertyOptional({ nullable: true }) postcode: string | null;
-  @ApiPropertyOptional({ nullable: true }) country: string | null;
+  @ApiPropertyOptional({ nullable: true, type: String }) greetingName: string | null;
+  @ApiPropertyOptional({ nullable: true, type: String }) email: string | null;
+  @ApiPropertyOptional({ nullable: true, type: String }) phone: string | null;
+  @ApiPropertyOptional({ nullable: true, type: String }) notes: string | null;
+  @ApiPropertyOptional({ nullable: true, type: String }) addressLine1: string | null;
+  @ApiPropertyOptional({ nullable: true, type: String }) addressLine2: string | null;
+  @ApiPropertyOptional({ nullable: true, type: String }) city: string | null;
+  @ApiPropertyOptional({ nullable: true, type: String }) county: string | null;
+  @ApiPropertyOptional({ nullable: true, type: String }) postcode: string | null;
+  @ApiPropertyOptional({ nullable: true, type: String }) country: string | null;
 
   @ApiPropertyOptional({ nullable: true, type: Number }) latitude: number | null;
   @ApiPropertyOptional({ nullable: true, type: Number }) longitude: number | null;
-  @ApiPropertyOptional({ nullable: true }) placeId: string | null;
+  @ApiPropertyOptional({ nullable: true, type: String }) placeId: string | null;
 
   @ApiPropertyOptional({ nullable: true, type: Number }) travelTimeMinutes: number | null;
   @ApiPropertyOptional({ nullable: true, type: Number }) travelDistanceMetres: number | null;
-  @ApiPropertyOptional({ nullable: true }) travelTimeCalculatedAt: string | null;
-  @ApiPropertyOptional({ nullable: true }) travelMode: string | null;
+  @ApiPropertyOptional({ nullable: true, type: String }) travelTimeCalculatedAt: string | null;
+  @ApiPropertyOptional({ nullable: true, type: String }) travelMode: string | null;
 
-  @ApiPropertyOptional({ nullable: true }) parkingInfo: string | null;
-  @ApiPropertyOptional({ nullable: true }) accessInfo: string | null;
-  @ApiPropertyOptional({ nullable: true }) equipmentAvailable: string | null;
-  @ApiPropertyOptional({ nullable: true }) website: string | null;
-  @ApiPropertyOptional({ nullable: true }) commissionArrangement: string | null;
-  @ApiPropertyOptional({ nullable: true }) primaryRole: string | null;
+  @ApiPropertyOptional({ nullable: true, type: String }) parkingInfo: string | null;
+  @ApiPropertyOptional({ nullable: true, type: String }) accessInfo: string | null;
+  @ApiPropertyOptional({ nullable: true, type: String }) equipmentAvailable: string | null;
+  @ApiPropertyOptional({ nullable: true, type: String }) website: string | null;
+  @ApiPropertyOptional({ nullable: true, type: String }) commissionArrangement: string | null;
+  @ApiPropertyOptional({ nullable: true, type: String }) primaryRole: string | null;
 }

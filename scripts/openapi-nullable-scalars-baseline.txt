@@ -1,0 +1,87 @@
+# Pre-existing nullable scalars documented as `type: object` in the generated
+# OpenAPI document, accepted as known debt (ADR-0030, #871).
+# The openapi-nullable-scalars guard blocks NEW violations; these are paid
+# down opportunistically when the file is next touched.
+# Remove a line when its property gets an explicit `type:` on the decorator.
+# Entries are `ClassName.propertyName`, matching the generated schema — not
+# file:line, since the guard asserts against the generated document.
+# A genuinely-object nullable field (e.g. `Record<string, unknown> | null`,
+# such as BookingChecklistItemResponseDto.autoCompleteRule) never appears
+# here or anywhere in the guard's candidate set — it's excluded by
+# construction (not a scalar union), not by baseline entry.
+# At authoring time (#871) this list was checked in both directions against
+# the live check — every line here matched a real violation, and every real
+# violation was listed here. That was a one-time manual check, not something
+# the guard enforces on every run: the guard only fails on violations NOT in
+# this list, so a line that gets fixed but isn't removed goes stale silently
+# (it just re-permits that exact violation if reintroduced) rather than
+# failing CI. Removing paid-down lines promptly is what keeps this accurate.
+ApplicableReminderResponseDto.after
+ApplicableReminderResponseDto.autoCompleteHint
+ApplicableReminderResponseDto.itemId
+ApplicableReminderResponseDto.key
+ApplicableReminderResponseDto.requiredForStatus
+BookingChecklistItemResponseDto.completedAt
+BookingChecklistItemResponseDto.dueDate
+BookingChecklistItemResponseDto.key
+BookingChecklistItemResponseDto.requiredForStatus
+BookingChecklistStepResponseDto.completedAt
+BookingChecklistStepResponseDto.key
+BookingSearchResultDto.subtitle
+ChecklistDefaultItemResponseDto.concern
+ChecklistDefaultItemResponseDto.key
+ChecklistItemInput.key
+ContactSearchResultDto.subtitle
+CreateChecklistItemDto.dueDate
+DocumentResponseDto.contractStatus
+DocumentResponseDto.invoiceId
+DocumentResponseDto.name
+ReminderPreviewResponseDto.autoCompleteHint
+UpdateBookingDto.bookingAgentId
+UpdateBookingDto.fee
+UpdateBookingDto.notes
+UpdateBookingDto.title
+UpdateBookingDto.venueId
+UpdateBookingSeriesDto.seriesId
+UpdateContactDto.accessInfo
+UpdateContactDto.addressLine1
+UpdateContactDto.addressLine2
+UpdateContactDto.city
+UpdateContactDto.commissionArrangement
+UpdateContactDto.country
+UpdateContactDto.county
+UpdateContactDto.email
+UpdateContactDto.equipmentAvailable
+UpdateContactDto.greetingName
+UpdateContactDto.latitude
+UpdateContactDto.longitude
+UpdateContactDto.notes
+UpdateContactDto.parkingInfo
+UpdateContactDto.phone
+UpdateContactDto.placeId
+UpdateContactDto.postcode
+UpdateContactDto.website
+UpdatePackageDto.category
+UpdatePackageDto.notes
+UpdatePublicProfileDto.bio
+UpdatePublicProfileDto.displayName
+UpdatePublicProfileDto.email
+UpdatePublicProfileDto.logoUrl
+UpdatePublicProfileDto.phone
+UpdatePublicProfileDto.photo
+UpdatePublicProfileDto.website
+UpdateSetDto.label
+UpdateSetDto.packageId
+UpdateSetDto.startTime
+UpdateSongDto.artist
+UpdateUserProfileDto.addressLine1
+UpdateUserProfileDto.addressLine2
+UpdateUserProfileDto.bankDetails
+UpdateUserProfileDto.city
+UpdateUserProfileDto.country
+UpdateUserProfileDto.county
+UpdateUserProfileDto.latitude
+UpdateUserProfileDto.longitude
+UpdateUserProfileDto.placeId
+UpdateUserProfileDto.postcode
+UpdateUserProfileDto.vatNumber
