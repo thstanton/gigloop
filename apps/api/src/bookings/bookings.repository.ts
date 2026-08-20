@@ -6,7 +6,7 @@ import { UpdateBookingDto } from './dto/update-booking.dto';
 import { CreateSetDto } from './dto/create-set.dto';
 import { UpdateSetDto } from './dto/update-set.dto';
 import { UpdateBookingPackageDto } from './dto/update-booking-package.dto';
-import { CONTRACT_INCLUDE } from './booking.includes';
+import { CONTRACT_INCLUDE, NESTED_CONTACT_SELECT } from './booking.includes';
 import { buildBookingSearchWhere } from './booking-search';
 
 type PackageTemplateWithSlots = {
@@ -24,24 +24,63 @@ export type BookingForClone = NonNullable<
   Awaited<ReturnType<BookingsRepository['findOneForClone']>>
 >;
 
-const bookingIncludes = {
-  customer: true,
-  venue: true,
-  bookingAgent: true,
+// Narrowed to exactly what `BookingPerformanceSetDto` declares (ADR-0071 / #873) — no `userId`.
+export const setSelect = {
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  bookingId: true,
+  order: true,
+  duration: true,
+  startTime: true,
+  label: true,
+  packageId: true,
+} as const;
+
+// Narrowed to exactly what `BookingPackageDto` declares (ADR-0071 / #873) — no `userId`.
+export const packageSelect = {
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  bookingId: true,
+  label: true,
+  icon: true,
+  order: true,
+} as const;
+
+// The shape every read and write method below returns (ADR-0071 / #873): an explicit `select`
+// mirroring `BookingResponseDto` field-for-field — `userId` excluded at every level (top-level
+// booking, nested contacts, sets, packages). Every method that returns a booking uses
+// `bookingDetailSelect` so this one type describes all of them.
+export const bookingDetailSelect = {
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  status: true,
+  eventType: true,
+  date: true,
+  title: true,
+  fee: true,
+  notes: true,
+  portalToken: true,
+  travelMode: true,
+  logistics: true,
+  customerId: true,
+  customer: { select: NESTED_CONTACT_SELECT },
+  venueId: true,
+  venue: { select: NESTED_CONTACT_SELECT },
+  bookingAgentId: true,
+  bookingAgent: { select: NESTED_CONTACT_SELECT },
+  seriesId: true,
   series: { select: { id: true, label: true } },
-  sets: { orderBy: { order: 'asc' as const } },
-  packages: {
-    orderBy: { order: 'asc' as const },
-  },
+  sets: { select: setSelect, orderBy: { order: 'asc' as const } },
+  packages: { select: packageSelect, orderBy: { order: 'asc' as const } },
   musicFormConfig: { select: { id: true, publishedAt: true } },
   musicFormResponse: { select: { id: true } },
   contracts: CONTRACT_INCLUDE,
 } as const;
 
-// The shape every read and write method below returns (ADR-0071): the raw row `BookingsService`'s
-// shared mapper takes as input. Every method that returns a booking uses `bookingIncludes` so this
-// one type describes all of them.
-export type BookingWithIncludes = Prisma.BookingGetPayload<{ include: typeof bookingIncludes }>;
+export type BookingDetailRow = Prisma.BookingGetPayload<{ select: typeof bookingDetailSelect }>;
 
 // The booking list is the highest-frequency, unpaginated endpoint, so it uses a top-level
 // `select` to return only the scalars the list renders (#588). Deliberately omitted: the
@@ -82,7 +121,7 @@ export class BookingsRepository {
   findOne(userId: string, id: string) {
     return this.prisma.booking.findFirst({
       where: { id, userId },
-      include: bookingIncludes,
+      select: bookingDetailSelect,
     });
   }
 
@@ -181,7 +220,7 @@ export class BookingsRepository {
       });
     }
 
-    return db.booking.findFirstOrThrow({ where: { id: booking.id }, include: bookingIncludes });
+    return db.booking.findFirstOrThrow({ where: { id: booking.id }, select: bookingDetailSelect });
   }
 
   async create(
@@ -202,14 +241,14 @@ export class BookingsRepository {
     // No packages here, so an enabled music form starts empty (ADR-0046: provenance
     // severed, nothing to seed from; moments are added later or suggested on apply).
     if (!enableMusicForm) {
-      return db.booking.create({ data, include: bookingIncludes });
+      return db.booking.create({ data, select: bookingDetailSelect });
     }
 
     const booking = await db.booking.create({ data });
     await db.musicFormConfig.create({
       data: { userId, bookingId: booking.id, enabledGenres: [], keyMoments: [] },
     });
-    return db.booking.findFirstOrThrow({ where: { id: booking.id }, include: bookingIncludes });
+    return db.booking.findFirstOrThrow({ where: { id: booking.id }, select: bookingDetailSelect });
   }
 
   findPackageTemplates(userId: string, ids: string[]) {
@@ -277,7 +316,7 @@ export class BookingsRepository {
       });
     }
 
-    return db.booking.findFirstOrThrow({ where: { id: booking.id }, include: bookingIncludes });
+    return db.booking.findFirstOrThrow({ where: { id: booking.id }, select: bookingDetailSelect });
   }
 
   update(id: string, dto: UpdateBookingDto) {
@@ -289,7 +328,7 @@ export class BookingsRepository {
         ...(date !== undefined ? { date: new Date(date) } : {}),
         ...(logistics !== undefined ? { logistics: logistics as Prisma.InputJsonValue } : {}),
       },
-      include: bookingIncludes,
+      select: bookingDetailSelect,
     });
   }
 
@@ -394,7 +433,7 @@ export class BookingsRepository {
       }
     });
 
-    return this.prisma.booking.findFirst({ where: { id: bookingId }, include: bookingIncludes });
+    return this.prisma.booking.findFirst({ where: { id: bookingId }, select: bookingDetailSelect });
   }
 
   async removePackage(bookingId: string, packageId: string, packageLabel: string) {
@@ -424,12 +463,12 @@ export class BookingsRepository {
 
       await tx.package.delete({ where: { id: packageId } });
     });
-    return this.prisma.booking.findFirst({ where: { id: bookingId }, include: bookingIncludes });
+    return this.prisma.booking.findFirst({ where: { id: bookingId }, select: bookingDetailSelect });
   }
 
   async updatePackage(bookingId: string, packageId: string, dto: UpdateBookingPackageDto) {
     await this.prisma.package.update({ where: { id: packageId }, data: dto });
-    return this.prisma.booking.findFirst({ where: { id: bookingId }, include: bookingIncludes });
+    return this.prisma.booking.findFirst({ where: { id: bookingId }, select: bookingDetailSelect });
   }
 
   findChecklistItems(userId: string, bookingId: string) {
@@ -505,7 +544,7 @@ export class BookingsRepository {
     return this.prisma.booking.update({
       where: { id: bookingId },
       data: { seriesId },
-      include: bookingIncludes,
+      select: bookingDetailSelect,
     });
   }
 }

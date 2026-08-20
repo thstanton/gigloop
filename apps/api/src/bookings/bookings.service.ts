@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { BookingStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { BookingsRepository, type BookingWithIncludes } from './bookings.repository';
+import { BookingsRepository, type BookingDetailRow } from './bookings.repository';
 import { ContractRepository } from './contract.repository';
 import { MusicFormConfigRepository } from './music-form-config.repository';
 import { ChecklistRepository, ChecklistItemSeed } from '../checklist/checklist.repository';
@@ -29,9 +29,9 @@ import {
 import { ReminderConcern } from '../checklist/checklist-concerns';
 import { resolveContractVisibility, resolveMusicFormVisibility, type ContractStatus } from '../portal/portal-visibility';
 
-// The single mapped shape every booking read and write returns (ADR-0071): `bookingIncludes`'
+// The single mapped shape every booking read and write returns (ADR-0071): `bookingDetailSelect`'
 // relations collapsed to `has*` flags / `activeContract` / `portalVisibility`. Derived from
-// `BookingWithIncludes` rather than hand-declared, so the mapper's actual output can never drift
+// `BookingDetailRow` rather than hand-declared, so the mapper's actual output can never drift
 // from what it destructures out of.
 export type NormalisedContract = {
   id: string;
@@ -47,7 +47,7 @@ export type BookingPortalVisibility = {
   musicForm: ReturnType<typeof resolveMusicFormVisibility>;
 };
 
-export type MappedBooking = Omit<BookingWithIncludes, 'musicFormConfig' | 'musicFormResponse' | 'contracts'> & {
+export type MappedBooking = Omit<BookingDetailRow, 'musicFormConfig' | 'musicFormResponse' | 'contracts'> & {
   hasMusicFormConfig: boolean;
   hasMusicFormResponse: boolean;
   activeContract: NormalisedContract | null;
@@ -551,8 +551,8 @@ export class BookingsService {
   }
 
   // The single place the booking response shape is constructed (ADR-0071). Every read and write
-  // method funnels its `bookingIncludes`-shaped row through here rather than re-deriving the shape.
-  private mapBooking(booking: BookingWithIncludes): MappedBooking {
+  // method funnels its `bookingDetailSelect`-shaped row through here rather than re-deriving the shape.
+  private mapBooking(booking: BookingDetailRow): MappedBooking {
     const { musicFormConfig, musicFormResponse, contracts, ...rest } = booking;
     return {
       ...rest,

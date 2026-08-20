@@ -17,18 +17,20 @@ import {
 // `string` per the shared-types convention below — so the two are related by convention, not by
 // the compiler. **Update this DTO whenever `mapBooking`'s output changes** (#786).
 //
-// Mirrors `BookingDetail` in apps/web/src/types/api.ts, with two deliberate differences:
-//   • `userId` is omitted, exactly as `ContactResponseDto` omits it. The tenancy id *is* currently
-//     on the wire (the repository uses `include`, not `select`, so every scalar is returned) —
-//     documenting it would enshrine an over-fetch as contract. Tracked separately, see #805.
-//   • Prisma `Decimal` is documented as `string` and `DateTime` as an ISO `string`, per the
-//     shared-types convention.
+// Mirrors `BookingDetail` in apps/web/src/types/api.ts, with one deliberate difference: Prisma
+// `Decimal` is documented as `string` and `DateTime` as an ISO `string`, per the shared-types
+// convention.
+//
+// `userId` is omitted, exactly as `ContactResponseDto` omits it — and, since #873 (ADR-0071), it is
+// no longer on the wire either: the repository's `bookingDetailSelect` is an explicit `select`
+// naming every field below (top-level booking, nested contacts, sets, packages), not an `include`
+// that would return every scalar including the tenancy id.
 //
 // Two decorator traps this file deliberately avoids, both of which produce *wrong* docs silently:
 //   • A `string | null` property needs an explicit `type: String`. The reflected design-type of a
 //     union is `Object`, so `{ nullable: true }` alone documents the field as `type: object`.
-//   • Nullable is not optional. Every field here is always a key in the JSON (the repository uses
-//     `include`, so Prisma returns every scalar) — so they take `@ApiProperty`, not
+//   • Nullable is not optional. Every field here is always a key in the JSON (`bookingDetailSelect`
+//     names every field explicitly, so Prisma always returns it) — so they take `@ApiProperty`, not
 //     `@ApiPropertyOptional`, which would mark them `required: false`. The single genuinely
 //     optional property is a verdict's `reason`, which the resolvers omit entirely when visible.
 

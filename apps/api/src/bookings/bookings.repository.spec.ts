@@ -160,16 +160,33 @@ describe('BookingsRepository', () => {
       );
     });
 
-    it('includes customer, venue, bookingAgent, and sets', async () => {
+    it('selects customer, venue, bookingAgent, sets, and packages', async () => {
       prisma.booking.findFirst.mockResolvedValue(null);
       await repo.findOne('u1', 'b1');
-      const include = prisma.booking.findFirst.mock.calls[0][0].include;
-      expect(include).toMatchObject({
-        customer: true,
-        venue: true,
-        bookingAgent: true,
-        sets: expect.anything(),
-      });
+      const select = prisma.booking.findFirst.mock.calls[0][0].select;
+      expect(select.customer).toBeDefined();
+      expect(select.venue).toBeDefined();
+      expect(select.bookingAgent).toBeDefined();
+      expect(select.sets).toBeDefined();
+      expect(select.packages).toBeDefined();
+    });
+
+    // ADR-0071 / #873: the detail query narrows to an explicit `select` (not `include`), so
+    // `userId` never ships — at the top level or on any nested contact, set, or package.
+    it('uses an explicit select, never include, and excludes userId at every level', async () => {
+      prisma.booking.findFirst.mockResolvedValue(null);
+      await repo.findOne('u1', 'b1');
+      const call = prisma.booking.findFirst.mock.calls[0][0];
+      expect(call.include).toBeUndefined();
+
+      const select = call.select;
+      expect(select.userId).toBeUndefined();
+      expect(select.customer.select.userId).toBeUndefined();
+      expect(select.venue.select.userId).toBeUndefined();
+      expect(select.bookingAgent.select.userId).toBeUndefined();
+      expect(select.sets.select.userId).toBeUndefined();
+      expect(select.packages.select.userId).toBeUndefined();
+      expect(select.contracts.select.userId).toBeUndefined();
     });
   });
 

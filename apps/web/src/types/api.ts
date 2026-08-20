@@ -329,9 +329,9 @@ export interface BookingLogisticsEntry {
 }
 
 // Mirrors BookingResponseDto (apps/api/src/bookings/dto/booking-response.dto.ts), which documents
-// GET /bookings/:id. Two fields the API sends are deliberately not declared here: `userId` (a
-// tenancy id the frontend must never branch on) and `travelMode` (unused). `sets` / `packages` are
-// likewise the consumed subsets — the API returns the whole rows. See #805.
+// GET /bookings/:id. `travelMode`, and the `createdAt`/`updatedAt`/`bookingId` fields on nested
+// sets and packages, are declared server-side (BookingPerformanceSetDto / BookingPackageDto) but
+// unused here — a narrower projection of the DTO's shape, not an over-fetch.
 export interface BookingDetail extends Omit<BookingListItem, 'customer' | 'venue' | 'bookingAgent'> {
   customer: Contact;
   venue: Contact | null;
@@ -343,7 +343,7 @@ export interface BookingDetail extends Omit<BookingListItem, 'customer' | 'venue
   hasMusicFormConfig: boolean;
   hasMusicFormResponse: boolean;
   seriesId: string | null;
-  // The API selects only { id, label } for the series (bookings.repository.ts `bookingIncludes`).
+  // The API selects only { id, label } for the series (bookings.repository.ts `bookingDetailSelect`).
   // `customerId` was declared here but never sent — anything reading it got `undefined` (#786).
   series: { id: string; label: string } | null;
   logistics: Record<string, BookingLogisticsEntry> | null;
