@@ -1,4 +1,4 @@
-# ADR-0077: Series member bookings SKIP the deposit/balance checklist goals
+# ADR-0078: Series member bookings SKIP the deposit/balance checklist goals
 
 - **Status:** Accepted
 - **Date:** 2026-08-20
