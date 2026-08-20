@@ -4,7 +4,7 @@ import { SeriesRepository } from './series.repository';
 import { InvoicesRepository } from '../invoices/invoices.repository';
 import { InvoiceTransitionService } from '../invoices/invoice-transition.service';
 import { DocumentsService } from '../documents/documents.service';
-import { reconcile } from '../invoices/series-line-reconciler';
+import { computeJoinInsertion, reconcile } from '../invoices/series-line-reconciler';
 import { isDeletable } from '../invoices/invoice-transition-rules';
 import { SendInvoiceDto } from '../invoices/dto/send-invoice.dto';
 import { MarkSentDto } from '../invoices/dto/mark-sent.dto';
@@ -200,8 +200,10 @@ export class SeriesService {
   }
 
   /**
-   * After a booking joins a series, append a traced line to the series DRAFT invoice (if any).
-   * No-op when no DRAFT invoice exists.
+   * After a booking joins a series, insert a traced line into the series DRAFT invoice (if any)
+   * at its date position among the other auto-generated lines — a back-dated booking joining
+   * mid-way lands next to its date, not at the bottom (#851). Custom lines always stay after
+   * every auto-generated line. No-op when no DRAFT invoice exists.
    */
   async syncMemberJoin(
     userId: string,
@@ -221,14 +223,26 @@ export class SeriesService {
     ]);
     if (add.length === 0) return;
 
-    const maxOrder = draftInvoice.lineItems.reduce((m, l) => Math.max(m, l.order), -1);
+    const { newOrder, reorder } = computeJoinInsertion(
+      draftInvoice.lineItems.map((l) => ({
+        id: l.id,
+        order: l.order,
+        sourceBookingId: l.sourceBookingId,
+        sourceBookingDate: l.sourceBooking?.date ?? null,
+      })),
+      booking.date,
+    );
+    if (reorder.length > 0) {
+      await this.repo.reorderSeriesInvoiceLines(reorder, tx);
+    }
+
     await this.repo.appendSeriesInvoiceLine(
       userId,
       draftInvoice.id,
       {
         description: add[0].description,
         amount: add[0].amount,
-        order: maxOrder + 1,
+        order: newOrder,
         sourceBookingId: booking.id,
       },
       tx,

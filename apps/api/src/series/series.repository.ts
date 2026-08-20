@@ -85,10 +85,17 @@ export class SeriesRepository {
     });
   }
 
+  // sourceBooking.date is fetched so a joining member's line can be placed at its date position
+  // among the other auto-generated lines (#851) — the line itself carries no date of its own.
   findDraftSeriesInvoiceWithLines(userId: string, seriesId: string, tx?: Prisma.TransactionClient) {
     return (tx ?? this.prisma).invoice.findFirst({
       where: { seriesId, userId, status: 'DRAFT' },
-      include: { lineItems: { orderBy: { order: 'asc' } } },
+      include: {
+        lineItems: {
+          orderBy: { order: 'asc' },
+          include: { sourceBooking: { select: { date: true } } },
+        },
+      },
     });
   }
 
@@ -101,6 +108,22 @@ export class SeriesRepository {
     return (tx ?? this.prisma).invoiceLineItem.create({
       data: { userId, invoiceId, ...line },
     });
+  }
+
+  // Renumbers existing lines to make room for a mid-series join at its date position (#851).
+  reorderSeriesInvoiceLines(
+    updates: Array<{ id: string; order: number }>,
+    tx?: Prisma.TransactionClient,
+  ) {
+    const client = tx ?? this.prisma;
+    return Promise.all(
+      updates.map((u) =>
+        client.invoiceLineItem.update({
+          where: { id: u.id }, // scoped-upstream: updates are resolved from findDraftSeriesInvoiceWithLines, already scoped to userId (ADR-0061)
+          data: { order: u.order },
+        }),
+      ),
+    );
   }
 
   removeSeriesInvoiceLine(lineId: string) {

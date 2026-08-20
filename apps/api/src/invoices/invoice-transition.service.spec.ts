@@ -10,15 +10,23 @@ import { ChecklistRepository } from '../checklist/checklist.repository';
 // Invoice is one polymorphic entity (ADR-0029): a booking invoice has bookingId set + seriesId
 // null; a series invoice the reverse. Every field-derived side-effect keys off these.
 
-const bookingDraft = { id: 'i1', status: 'DRAFT' as const, invoiceNumber: null, bookingId: 'b1', seriesId: null, isDeposit: false };
+const bookingDraft = {
+  id: 'i1', status: 'DRAFT' as const, invoiceNumber: null, bookingId: 'b1', seriesId: null, isDeposit: false,
+  lineItems: [{ description: 'Fee', amount: 1000, order: 0 }],
+};
 const bookingDepositDraft = { ...bookingDraft, isDeposit: true };
+const bookingDraftEmpty = { ...bookingDraft, lineItems: [] };
 const bookingIssued = { ...bookingDraft, status: 'ISSUED' as const, invoiceNumber: 'INV-2026-001' };
 const bookingSent = { ...bookingDraft, status: 'SENT' as const, invoiceNumber: 'INV-2026-001' };
 const bookingDepositSent = { ...bookingSent, isDeposit: true };
 const bookingPaid = { ...bookingSent, status: 'PAID' as const };
 const bookingVoided = { ...bookingSent, status: 'VOID' as const };
 
-const seriesDraft = { id: 'i2', status: 'DRAFT' as const, invoiceNumber: null, bookingId: null, seriesId: 's1', isDeposit: false };
+const seriesDraft = {
+  id: 'i2', status: 'DRAFT' as const, invoiceNumber: null, bookingId: null, seriesId: 's1', isDeposit: false,
+  lineItems: [{ description: 'Fee', amount: 1000, order: 0 }],
+};
+const seriesDraftEmpty = { ...seriesDraft, lineItems: [] };
 const seriesIssued = { ...seriesDraft, status: 'ISSUED' as const, invoiceNumber: 'INV-2026-002' };
 const seriesSent = { ...seriesDraft, status: 'SENT' as const, invoiceNumber: 'INV-2026-002' };
 
@@ -175,6 +183,22 @@ describe('InvoiceTransitionService', () => {
     it('returns the written invoice without re-fetching', async () => {
       const result = await service.issueInvoice('u1', bookingDraft, {});
       expect(result).toBe(numberedInvoice);
+    });
+  });
+
+  // ─── issueInvoice: zero-line-item guard (#851, ADR-0043 amended) ──────────
+
+  describe('issueInvoice — zero-line-item guard', () => {
+    it('throws BadRequestException for a booking DRAFT with no line items, without allocating a number', async () => {
+      await expect(service.issueInvoice('u1', bookingDraftEmpty, {})).rejects.toThrow(BadRequestException);
+      expect(mockRepo.assignAndMarkIssued).not.toHaveBeenCalled();
+      expect(mockDocuments.generateAndStoreInvoicePdf).not.toHaveBeenCalled();
+    });
+
+    it('applies the same guard to a series DRAFT with no line items', async () => {
+      await expect(service.issueInvoice('u1', seriesDraftEmpty, {})).rejects.toThrow(BadRequestException);
+      expect(mockRepo.assignSeriesAndMarkIssued).not.toHaveBeenCalled();
+      expect(mockDocuments.generateAndStoreInvoicePdf).not.toHaveBeenCalled();
     });
   });
 

@@ -5,7 +5,7 @@ import { DocumentsService } from '../documents/documents.service';
 import { CommunicationsService } from '../communications/communications.service';
 import { ChecklistReevaluator } from '../checklist/checklist-reevaluator.service';
 import { ChecklistRepository } from '../checklist/checklist.repository';
-import { isIssuable, isRepairableIssue, isSendable, isVoidable, isPayable, isPaymentCorrectable, InvoiceForRules } from './invoice-transition-rules';
+import { isEmptyDraft, isIssuable, isRepairableIssue, isSendable, isVoidable, isPayable, isPaymentCorrectable, InvoiceForRules } from './invoice-transition-rules';
 import type { SendInvoiceDto } from './dto/send-invoice.dto';
 import type { IssueInvoiceDto } from './dto/issue-invoice.dto';
 import type { MarkSentDto } from './dto/mark-sent.dto';
@@ -23,6 +23,7 @@ export type TransitionInvoice = InvoiceForRules & {
   bookingId: string | null;
   seriesId: string | null;
   isDeposit: boolean;
+  lineItems: unknown[];
 };
 
 /**
@@ -81,8 +82,16 @@ export class InvoiceTransitionService {
    * produced the artifact — this regenerates only the missing Document and runs the same tail
    * (checklist re-evaluation) the interrupted issue never reached. The number, issue date and due
    * date are never reallocated. Any other non-draft invoice is refused, unchanged.
+   *
+   * A DRAFT with zero line items is refused outright, before any number is allocated (#851,
+   * ADR-0043 amended 2026-08-18) — a drained draft is for the musician to delete or refill, never
+   * to issue as a numbered £0.00 document.
    */
   async issueInvoice(userId: string, invoice: TransitionInvoice, dto: IssueInvoiceDto) {
+    if (isEmptyDraft(invoice, invoice.lineItems.length)) {
+      throw new BadRequestException('Cannot issue an invoice with no line items — add a line, or delete the draft');
+    }
+
     if (!isIssuable(invoice)) {
       // Only an ISSUED invoice can possibly be repairable — skip the Document lookup for
       // SENT/PAID/VOID, where the answer is always "no".

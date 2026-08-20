@@ -13,6 +13,7 @@ type MockRepo = {
   findMemberBookingsForInvoice: jest.Mock;
   findDraftSeriesInvoiceWithLines: jest.Mock;
   appendSeriesInvoiceLine: jest.Mock;
+  reorderSeriesInvoiceLines: jest.Mock;
   removeSeriesInvoiceLine: jest.Mock;
 };
 
@@ -46,6 +47,7 @@ function makeRepo(): MockRepo {
     findMemberBookingsForInvoice: jest.fn(),
     findDraftSeriesInvoiceWithLines: jest.fn().mockResolvedValue(null),
     appendSeriesInvoiceLine: jest.fn(),
+    reorderSeriesInvoiceLines: jest.fn(),
     removeSeriesInvoiceLine: jest.fn(),
   };
 }
@@ -443,6 +445,59 @@ describe('SeriesService', () => {
       });
       await service.syncMemberJoin('u1', 's1', booking);
       expect(repo.appendSeriesInvoiceLine).not.toHaveBeenCalled();
+    });
+
+    // #851: a back-dated booking joining a series mid-way must land at its date position among
+    // the auto-generated lines, not at the bottom.
+    it('inserts a retro-joined booking at its date position, bumping later auto lines up', async () => {
+      const retroBooking = { id: 'b2', date: new Date('2026-05-15'), fee: 500, sets: [] };
+      repo.findDraftSeriesInvoiceWithLines.mockResolvedValue({
+        id: 'inv1',
+        lineItems: [
+          { id: 'li1', sourceBookingId: 'b1', order: 0, sourceBooking: { date: new Date('2026-05-01') } },
+          { id: 'li3', sourceBookingId: 'b3', order: 1, sourceBooking: { date: new Date('2026-06-01') } },
+        ],
+      });
+      await service.syncMemberJoin('u1', 's1', retroBooking);
+      expect(repo.reorderSeriesInvoiceLines).toHaveBeenCalledWith([{ id: 'li3', order: 2 }], undefined);
+      expect(repo.appendSeriesInvoiceLine).toHaveBeenCalledWith(
+        'u1', 'inv1',
+        expect.objectContaining({ sourceBookingId: 'b2', order: 1 }),
+        undefined,
+      );
+    });
+
+    it('keeps a custom line after every auto-generated line when a member joins', async () => {
+      const joiningBooking = { id: 'b2', date: new Date('2026-06-01'), fee: 500, sets: [] };
+      repo.findDraftSeriesInvoiceWithLines.mockResolvedValue({
+        id: 'inv1',
+        lineItems: [
+          { id: 'li1', sourceBookingId: 'b1', order: 0, sourceBooking: { date: new Date('2026-05-01') } },
+          { id: 'li-custom', sourceBookingId: null, order: 1 },
+        ],
+      });
+      await service.syncMemberJoin('u1', 's1', joiningBooking);
+      expect(repo.appendSeriesInvoiceLine).toHaveBeenCalledWith(
+        'u1', 'inv1',
+        expect.objectContaining({ sourceBookingId: 'b2', order: 1 }),
+        undefined,
+      );
+      // li-custom shifts from 1 to 2 to stay after the new line; li1 is untouched.
+      expect(repo.reorderSeriesInvoiceLines).toHaveBeenCalledWith([{ id: 'li-custom', order: 2 }], undefined);
+    });
+
+    it('does not reorder anything when the new line simply appends at the end', async () => {
+      repo.findDraftSeriesInvoiceWithLines.mockResolvedValue({
+        id: 'inv1',
+        lineItems: [{ id: 'li1', sourceBookingId: 'b0', order: 0, sourceBooking: { date: new Date('2026-01-01') } }],
+      });
+      await service.syncMemberJoin('u1', 's1', booking); // booking date 2026-05-01, after li1
+      expect(repo.reorderSeriesInvoiceLines).not.toHaveBeenCalled();
+      expect(repo.appendSeriesInvoiceLine).toHaveBeenCalledWith(
+        'u1', 'inv1',
+        expect.objectContaining({ sourceBookingId: 'b1', order: 1 }),
+        undefined,
+      );
     });
   });
 
