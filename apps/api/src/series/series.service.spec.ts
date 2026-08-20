@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { SeriesService } from './series.service';
 import { SeriesRepository } from './series.repository';
 import { InvoicesRepository } from '../invoices/invoices.repository';
@@ -215,6 +216,53 @@ describe('SeriesService', () => {
       invoicesRepo.countNonVoidSeriesInvoices.mockResolvedValue(0);
       repo.findMemberBookingsForInvoice.mockResolvedValue([]);
       await expect(service.createInvoice('u1', 's1')).rejects.toThrow(BadRequestException);
+    });
+
+    // #852: the count check above is a TOCTOU-racy guard — a concurrent request can pass it too.
+    // `Invoice_seriesId_active_key` is the real backstop; a violation must still read as a plain
+    // 409 to the musician, not a raw database error. `meta.target: ['seriesId']` is the shape
+    // Prisma actually normalizes this raw (schema-DSL-invisible) constraint's error to — verified
+    // empirically against a local Postgres, not assumed.
+    it('maps a P2002 unique-constraint violation on create to the same friendly 409', async () => {
+      repo.findOneMinimal.mockResolvedValue(series);
+      invoicesRepo.countNonVoidSeriesInvoices.mockResolvedValue(0);
+      repo.findMemberBookingsForInvoice.mockResolvedValue([booking]);
+      invoicesRepo.createSeriesInvoice.mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+          code: 'P2002',
+          clientVersion: '6.19.3',
+          meta: { modelName: 'Invoice', target: ['seriesId'] },
+        }),
+      );
+
+      await expect(service.createInvoice('u1', 's1')).rejects.toThrow(ConflictException);
+      await expect(service.createInvoice('u1', 's1')).rejects.toThrow(
+        'A non-VOID invoice already exists for this series',
+      );
+    });
+
+    it('rethrows a P2002 on an unrelated constraint unchanged', async () => {
+      repo.findOneMinimal.mockResolvedValue(series);
+      invoicesRepo.countNonVoidSeriesInvoices.mockResolvedValue(0);
+      repo.findMemberBookingsForInvoice.mockResolvedValue([booking]);
+      const otherViolation = new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+        code: 'P2002',
+        clientVersion: '6.19.3',
+        meta: { modelName: 'Invoice', target: ['id'] },
+      });
+      invoicesRepo.createSeriesInvoice.mockRejectedValue(otherViolation);
+
+      await expect(service.createInvoice('u1', 's1')).rejects.toThrow(otherViolation);
+    });
+
+    it('rethrows a non-P2002 error from create unchanged', async () => {
+      repo.findOneMinimal.mockResolvedValue(series);
+      invoicesRepo.countNonVoidSeriesInvoices.mockResolvedValue(0);
+      repo.findMemberBookingsForInvoice.mockResolvedValue([booking]);
+      const dbError = new Error('connection reset');
+      invoicesRepo.createSeriesInvoice.mockRejectedValue(dbError);
+
+      await expect(service.createInvoice('u1', 's1')).rejects.toThrow(dbError);
     });
   });
 

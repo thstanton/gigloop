@@ -377,6 +377,14 @@ model BookingSeries {
   @@index([customerId])
 }
 
+// A partial unique index — `Invoice_seriesId_active_key`, on (seriesId) WHERE seriesId IS NOT
+// NULL AND status <> 'VOID' — backs the "at most one non-VOID invoice per series" invariant.
+// Prisma's schema DSL can't express a filtered unique index, so it isn't declared below as
+// `@@unique`; it exists only in migrations/20260820120000_series_invoice_active_unique_index and
+// in the live database. Do not add a matching `@@unique([seriesId])` here — unlike the partial
+// index, an unfiltered unique constraint would apply to every row regardless of status, so it
+// would forbid a VOID row from ever coexisting with the invoice that replaced it — breaking the
+// invoice-number-reuse model (ADR-0028), which depends on prior VOID rows persisting. See #852.
 model Invoice {
   id        String   @id @default(uuid())
   userId    String
