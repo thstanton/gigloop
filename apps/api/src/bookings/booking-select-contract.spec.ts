@@ -64,17 +64,22 @@ describe('Booking detail select matches its response DTOs (#873)', () => {
     expect(passthroughSelectKeys).toEqual(passthroughDtoKeys);
   });
 
+  function nestedSelectOf(value: unknown): Record<string, unknown> | undefined {
+    if (!value || typeof value !== 'object') return undefined;
+    return (value as { select?: Record<string, unknown> }).select;
+  }
+
+  function flattenSelectKeys(obj: Record<string, unknown>): string[] {
+    const keys: string[] = [];
+    for (const [key, value] of Object.entries(obj)) {
+      keys.push(key);
+      const nested = nestedSelectOf(value);
+      if (nested) keys.push(...flattenSelectKeys(nested));
+    }
+    return keys;
+  }
+
   it('no selected field is named userId, at any level', () => {
-    const flatten = (obj: Record<string, unknown>): string[] => {
-      const keys: string[] = [];
-      for (const [key, value] of Object.entries(obj)) {
-        keys.push(key);
-        if (value && typeof value === 'object' && 'select' in (value as Record<string, unknown>)) {
-          keys.push(...flatten((value as { select: Record<string, unknown> }).select));
-        }
-      }
-      return keys;
-    };
-    expect(flatten(bookingDetailSelect)).not.toContain('userId');
+    expect(flattenSelectKeys(bookingDetailSelect)).not.toContain('userId');
   });
 });

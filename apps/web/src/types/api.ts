@@ -329,7 +329,9 @@ export interface BookingLogisticsEntry {
 }
 
 // Mirrors BookingResponseDto (apps/api/src/bookings/dto/booking-response.dto.ts), which documents
-// GET /bookings/:id. `travelMode` is the only field the API sends that this type omits (unused).
+// GET /bookings/:id. `travelMode`, and the `createdAt`/`updatedAt`/`bookingId` fields on nested
+// sets and packages, are declared server-side (BookingPerformanceSetDto / BookingPackageDto) but
+// unused here — a narrower projection of the DTO's shape, not an over-fetch.
 export interface BookingDetail extends Omit<BookingListItem, 'customer' | 'venue' | 'bookingAgent'> {
   customer: Contact;
   venue: Contact | null;
