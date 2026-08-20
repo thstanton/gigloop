@@ -198,6 +198,18 @@ const packageCatalogue = [
   },
 ];
 
+// Band members v1 (#879, ADR-0072 §3).
+const lineups = [
+  {
+    id: 'lineup1', createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z',
+    label: 'My five-piece',
+    slots: [
+      { id: 'lsl1', role: 'Saxophone', order: 0 },
+      { id: 'lsl2', role: 'Drums', order: 1 },
+    ],
+  },
+];
+
 const templates = [
   {
     id: 't1', createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z',
@@ -512,6 +524,16 @@ export const mswHandlers = {
       );
     }),
   ],
+  lineups: [
+    http.get('/api/lineups', () => HttpResponse.json(lineups)),
+    http.post('/api/lineups', async ({ request }) => {
+      const body = (await request.json()) as Record<string, unknown>;
+      return HttpResponse.json(
+        { id: 'new-lineup', createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z', ...body },
+        { status: 201 },
+      );
+    }),
+  ],
   templates: [
     http.get('/api/templates', () => HttpResponse.json(templates)),
   ],
@@ -523,6 +545,7 @@ export const allHandlers = [
   ...mswHandlers.songs,
   ...mswHandlers.dashboard,
   ...mswHandlers.packages,
+  ...mswHandlers.lineups,
   ...mswHandlers.templates,
   ...mswHandlers.me,
 ];

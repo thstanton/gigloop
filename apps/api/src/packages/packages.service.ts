@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PackagesRepository } from './packages.repository';
+import { LineupsService } from '../lineups/lineups.service';
 import type { CreatePackageDto } from './dto/create-package.dto';
 import type { UpdatePackageDto } from './dto/update-package.dto';
 
@@ -83,7 +84,18 @@ function slug(label: string): string {
 
 @Injectable()
 export class PackagesService {
-  constructor(private repo: PackagesRepository) {}
+  constructor(
+    private repo: PackagesRepository,
+    private lineups: LineupsService,
+  ) {}
+
+  // The defaultLineupTemplateId FK alone would happily accept another tenant's lineup id — this
+  // proves ownership before the write reaches the repository (#879, ADR-0061).
+  private async assertLineupOwnership(userId: string, defaultLineupTemplateId: string | null | undefined) {
+    if (!defaultLineupTemplateId) return;
+    const lineup = await this.lineups.findOne(userId, defaultLineupTemplateId);
+    if (!lineup) throw new NotFoundException('Lineup template not found');
+  }
 
   // Package libraries are no longer auto-seeded (#663): a new musician's library starts empty and
   // they build it up deliberately — one template shaped in onboarding, then more from the catalogue.
@@ -106,13 +118,15 @@ export class PackagesService {
     }));
   }
 
-  create(userId: string, dto: CreatePackageDto) {
+  async create(userId: string, dto: CreatePackageDto) {
+    await this.assertLineupOwnership(userId, dto.defaultLineupTemplateId);
     return this.repo.create(userId, dto);
   }
 
   async update(userId: string, id: string, dto: UpdatePackageDto) {
     const pkg = await this.repo.findOne(userId, id);
     if (!pkg) throw new NotFoundException('Package not found');
+    await this.assertLineupOwnership(userId, dto.defaultLineupTemplateId);
     return this.repo.update(userId, id, dto);
   }
 

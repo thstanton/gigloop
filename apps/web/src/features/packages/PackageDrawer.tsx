@@ -1,9 +1,11 @@
 import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@clerk/react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { apiDelete, apiPatch, apiPost } from '@/lib/api';
-import type { CreatePackageInput, PackageTemplate, UpdatePackageInput } from '@/types/api';
+import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
+import { isEnabled } from '@/lib/featureFlags';
+import type { CreatePackageInput, LineupTemplate, PackageTemplate, UpdatePackageInput } from '@/types/api';
 import { PackageIcon } from '@/components/common/PackageIcon';
 import {
   PackageForm,
@@ -99,8 +101,18 @@ export function PackageDrawer({
   onCreated,
 }: PackageDrawerProps) {
   const qc = useQueryClient();
+  const { isLoaded } = useAuth();
   const isEdit = mode.type === 'edit';
   const existing = isEdit ? mode.pkg : null;
+
+  // Band members v1 (#879, ADR-0072 §3): fetched here (not inside PackageForm, which stays
+  // fetch-free) and passed down — flag off means `lineups` stays undefined, so PackageForm's
+  // picker never renders and every pre-existing caller (onboarding included) is unaffected.
+  const { data: lineups } = useQuery({
+    queryKey: ['lineups'],
+    queryFn: () => apiGet<LineupTemplate[]>('/lineups'),
+    enabled: isLoaded && isEnabled('VITE_FEATURE_BAND_MEMBERS'),
+  });
 
   const initialForm = () => (existing ? packageToFormValues(existing) : { ...emptyPackageFormValues(), ...initialValues });
   const [form, setForm] = useState<PackageFormValues>(initialForm);
@@ -148,7 +160,7 @@ export function PackageDrawer({
         </SheetHeader>
 
         <div className="flex-1 overflow-y-auto px-5 py-5">
-          <PackageForm value={form} onChange={(patch) => setForm((f) => ({ ...f, ...patch }))} />
+          <PackageForm value={form} onChange={(patch) => setForm((f) => ({ ...f, ...patch }))} lineups={lineups} />
         </div>
 
         {/* Footer */}

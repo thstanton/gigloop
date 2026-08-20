@@ -25,6 +25,10 @@ export async function resetTestData(userId: string = E2E_TEST_USER_ID): Promise<
   // Library artifacts the musician builds up (no longer auto-seeded, #663). Not linked to a
   // booking (ADR-0046), so order-independent; packageTemplate slots cascade on delete.
   await prisma.packageTemplate.deleteMany({ where: { userId } });
+  // Band members v1 (#883): also user-level like packageTemplate, and not cascaded off Booking
+  // (chairs/members are) — would otherwise leak between e2e runs. Order-independent relative to
+  // packageTemplate: PackageTemplate.defaultLineupTemplateId is ON DELETE SET NULL.
+  await prisma.lineupTemplate.deleteMany({ where: { userId } });
   await prisma.song.deleteMany({ where: { userId } });
   await prisma.contact.deleteMany({ where: { userId } });
   await prisma.publicProfile.deleteMany({ where: { userId } });

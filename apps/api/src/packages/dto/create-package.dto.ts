@@ -6,6 +6,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  IsUUID,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -65,6 +66,11 @@ export class CreatePackageDto {
   @IsOptional()
   @IsBoolean()
   enabled?: boolean;
+
+  @ApiPropertyOptional({ description: 'Lineup template to auto-apply when this package is applied (#879, ADR-0072 §3)' })
+  @IsOptional()
+  @IsUUID()
+  defaultLineupTemplateId?: string;
 
   @ApiPropertyOptional({ type: [CreateSlotDto] })
   @IsOptional()

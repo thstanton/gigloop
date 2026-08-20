@@ -18,6 +18,10 @@ export const WithPackages: Story = {
   play: async ({ canvas }) => {
     await expect(await canvas.findByText('Wedding Package')).toBeVisible();
     await expect(canvas.getByText('Corporate Dinner')).toBeVisible();
+
+    // #883, ADR-0072 §3: VITE_FEATURE_BAND_MEMBERS is unset in Storybook, so the Lineups tab must
+    // not render at all — not just be unreachable, but genuinely absent from the page.
+    await expect(canvas.queryByRole('tab', { name: 'Lineups' })).toBeNull();
   },
 };
 

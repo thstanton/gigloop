@@ -579,6 +579,8 @@ export interface PackageTemplate {
   notes: string | null;
   isSystemDefault: boolean;
   enabled: boolean;
+  // Band members v1 (#879, ADR-0072 §3): applying this package auto-applies this lineup, if set.
+  defaultLineupTemplateId: string | null;
   slots: PackageTemplateSlot[];
 }
 
@@ -616,6 +618,7 @@ export interface CreatePackageInput {
   keyMoments?: string[];
   defaultGenreSelection?: string[];
   enabled?: boolean;
+  defaultLineupTemplateId?: string;
   slots?: SlotInput[];
 }
 
@@ -627,7 +630,42 @@ export interface UpdatePackageInput {
   keyMoments?: string[];
   defaultGenreSelection?: string[];
   enabled?: boolean;
+  defaultLineupTemplateId?: string | null;
   slots?: SlotInput[];
+}
+
+// ─────────────────────────────────────────
+// Lineup Templates (band members v1, #879, ADR-0072)
+// ─────────────────────────────────────────
+
+export interface LineupTemplateSlot {
+  id: string;
+  role: string;
+  order: number;
+}
+
+export interface LineupTemplate {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  label: string;
+  slots: LineupTemplateSlot[];
+}
+
+export interface LineupSlotInput {
+  id?: string;
+  role: string;
+  order: number;
+}
+
+export interface CreateLineupInput {
+  label: string;
+  slots?: LineupSlotInput[];
+}
+
+export interface UpdateLineupInput {
+  label?: string;
+  slots?: LineupSlotInput[];
 }
 
 // ─────────────────────────────────────────
