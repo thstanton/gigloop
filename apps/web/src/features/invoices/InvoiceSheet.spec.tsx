@@ -176,6 +176,32 @@ describe('InvoiceSheet — editing a series invoice (#845)', () => {
     });
   });
 
+  // #918 — `indexOf(item) + idx` double-counted position, so two lines appended at form
+  // positions 2 and 3 got order 2 and 4 instead of 2 and 3.
+  it('sends contiguous order values when two lines are appended in the same save', async () => {
+    renderSheet(invoice());
+    await waitFor(() => expect(descriptionFields()).toHaveLength(2));
+
+    await userEvent.click(screen.getByRole('button', { name: /add line item/i }));
+    await userEvent.type(descriptionFields()[2], 'Travel');
+    await userEvent.type(amountFields()[2], '80');
+    await userEvent.click(screen.getByRole('button', { name: /add line item/i }));
+    await userEvent.type(descriptionFields()[3], 'PA hire');
+    await userEvent.type(amountFields()[3], '200');
+    await save();
+
+    await waitFor(() => {
+      expect(vi.mocked(apiPost)).toHaveBeenCalledWith(
+        '/invoices/si1/line-items',
+        expect.objectContaining({ description: 'Travel', order: 2 }),
+      );
+    });
+    expect(vi.mocked(apiPost)).toHaveBeenCalledWith(
+      '/invoices/si1/line-items',
+      expect.objectContaining({ description: 'PA hire', order: 3 }),
+    );
+  });
+
   it('edits an amount AND appends a custom line in the same save', async () => {
     renderSheet(invoice());
     await waitFor(() => expect(amountFields()[0]).toHaveValue('500'));
