@@ -117,6 +117,8 @@ export class ChecklistRepository {
           status: true,
           venueId: true,
           customerId: true,
+          // ADR-0078: series membership drives the SKIP of the deposit/balance goals.
+          seriesId: true,
           // #618 precondition inputs: the booking's fee and its customer's email.
           fee: true,
           customer: { select: { email: true } },

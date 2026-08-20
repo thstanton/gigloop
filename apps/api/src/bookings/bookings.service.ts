@@ -876,8 +876,14 @@ export class BookingsService {
         sets: booking.sets,
       };
       await this.seriesService.syncMemberJoin(userId, seriesId, syncPayload);
+      // ADR-0078: closes the pre-existing gap where retroactive join never re-derived the
+      // checklist — creation already covers this via its own reeval call.
+      await this.reeval.onBookingChanged(bookingId);
     } else if (previousSeriesId) {
       await this.seriesService.syncMemberLeave(userId, previousSeriesId, bookingId);
+      // ADR-0078: same gap on the leave branch. Money goals stay SKIPPED (sticky terminal
+      // state) — this does not resurrect them; the manual "Restore" control does.
+      await this.reeval.onBookingChanged(bookingId);
     }
 
     // ADR-0071: a write returns the same mapped shape a read of the same resource would.

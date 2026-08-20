@@ -20,6 +20,7 @@ function makeBooking(overrides: Record<string, unknown> = {}) {
     status: 'ENQUIRY',
     venueId: null,
     customerId: 'cust-1',
+    seriesId: null,
     setsCount: 0,
     logistics: null,
     communications: [],
@@ -505,6 +506,94 @@ describe('ChecklistEvaluatorService', () => {
     it('never changes an already-SKIPPED item', async () => {
       const item = makeItem({ key: 'send_quote', state: 'SKIPPED' });
       const booking = makeBooking({ status: 'ENQUIRY' });
+      repo.findItemsWithContext.mockResolvedValue({ items: [item], booking });
+
+      await service.evaluate('b1');
+
+      expect(repo.applyStateUpdates).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('series-member money goal SKIP (ADR-0078)', () => {
+    const depositGoal = (overrides: Record<string, unknown> = {}) =>
+      makeItem({
+        id: 'g-deposit',
+        key: 'get_deposit_paid',
+        state: 'PENDING',
+        autoCompleteRule: null,
+        steps: [
+          { id: 's-create', key: 'create_deposit_invoice', state: 'PENDING', completedAt: null },
+        ],
+        ...overrides,
+      });
+    const balanceGoal = (overrides: Record<string, unknown> = {}) =>
+      makeItem({
+        id: 'g-balance',
+        key: 'get_the_balance_paid',
+        state: 'PENDING',
+        autoCompleteRule: null,
+        steps: [
+          { id: 's-create-bal', key: 'create_balance_invoice', state: 'PENDING', completedAt: null },
+        ],
+        ...overrides,
+      });
+
+    it('skips get_deposit_paid when the booking is a series member', async () => {
+      const booking = makeBooking({ seriesId: 'series-1' });
+      repo.findItemsWithContext.mockResolvedValue({ items: [depositGoal()], booking });
+
+      await service.evaluate('b1');
+
+      const [goalUpdates, stepUpdates] = repo.applyStateUpdates.mock.calls[0];
+      expect(goalUpdates).toEqual([expect.objectContaining({ id: 'g-deposit', state: 'SKIPPED' })]);
+      // The goal-level SKIP short-circuits before step evaluation — its steps are untouched.
+      expect(stepUpdates).toEqual([]);
+    });
+
+    it('skips get_the_balance_paid when the booking is a series member', async () => {
+      const booking = makeBooking({ seriesId: 'series-1' });
+      repo.findItemsWithContext.mockResolvedValue({ items: [balanceGoal()], booking });
+
+      await service.evaluate('b1');
+
+      expect(repo.applyStateUpdates).toHaveBeenCalledWith(
+        [expect.objectContaining({ id: 'g-balance', state: 'SKIPPED' })],
+        [],
+      );
+    });
+
+    it('does not skip the money goals for a non-series booking', async () => {
+      const booking = makeBooking({ seriesId: null });
+      repo.findItemsWithContext.mockResolvedValue({ items: [depositGoal()], booking });
+
+      await service.evaluate('b1');
+
+      expect(repo.applyStateUpdates).not.toHaveBeenCalled();
+    });
+
+    it('never clobbers an already-COMPLETE money goal on joining a series (stickiness wins)', async () => {
+      const item = depositGoal({ state: 'COMPLETE', completedAt: new Date(), steps: undefined });
+      const booking = makeBooking({ seriesId: 'series-1' });
+      repo.findItemsWithContext.mockResolvedValue({ items: [item], booking });
+
+      await service.evaluate('b1');
+
+      expect(repo.applyStateUpdates).not.toHaveBeenCalled();
+    });
+
+    it('does not resurrect a SKIPPED money goal after leaving the series (no auto-un-skip)', async () => {
+      const item = depositGoal({ state: 'SKIPPED', steps: undefined });
+      const booking = makeBooking({ seriesId: null });
+      repo.findItemsWithContext.mockResolvedValue({ items: [item], booking });
+
+      await service.evaluate('b1');
+
+      expect(repo.applyStateUpdates).not.toHaveBeenCalled();
+    });
+
+    it('does not skip an unrelated goal for a series member', async () => {
+      const item = makeItem({ key: 'send_quote', state: 'PENDING' });
+      const booking = makeBooking({ seriesId: 'series-1' });
       repo.findItemsWithContext.mockResolvedValue({ items: [item], booking });
 
       await service.evaluate('b1');
