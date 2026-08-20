@@ -106,11 +106,13 @@ Separately, **`migration-rehearsal.yml`** (manual, on demand) clones *prod* to a
 
 Flags are **environment variables, default-off** (ADR-0044 §8). No flags table, no per-user targeting. Leaving a flag unset anywhere — including prod — keeps it off.
 
+This table is the **intended-state record** — the workflow below changes the real variable, not this file. A flag flip obliges you to hand-update the row it affects; the workflow's own summary reminds you.
+
 | Flag | Gates | preprod | prod |
 |---|---|---|---|
 | `VITE_FEATURE_COMMAND_PALETTE` | Global ⌘K command palette (#794) | on | off |
 
-⏳ #909 — this table plus a workflow to flip a flag from the control plane.
+✅ **Actions → [Set Feature Flag](https://github.com/thstanton/gigloop/actions/workflows/set-flag.yml) → Run workflow** flips one — give it the flag name, the environment, and on/off (#909). It routes by naming convention: a `VITE_`-prefixed flag is a web flag and gets a Vercel env var + rebuild; anything else is an API flag and gets a Railway variable set. A prod web-flag run rebuilds the last release tag, never unreleased `main` commits — flipping a flag is not a side door around "Promote to prod".
 
 Two helpers read them: `apps/web/src/lib/featureFlags.ts` and `apps/api/src/common/featureFlags.ts`. They are near-identical by necessity, not by accident — the web one **must** use `import.meta.env` for Vite's static replacement.
 
@@ -166,7 +168,6 @@ The whole control plane is tracked by **#910**.
 
 | Issue | What |
 |---|---|
-| #909 | Flags legible and flippable |
 | #744 | Error alerting (Sentry) |
 | #910 | Control plane — tracking issue for #907–#909 + #744 |
 | #926 | Scope deploy secrets to GitHub Environments, gate prod behind a required reviewer |

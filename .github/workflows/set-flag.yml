@@ -1,0 +1,232 @@
+name: Set Feature Flag
+
+# workflow_dispatch button to flip a feature flag without opening a Railway
+# or Vercel dashboard tab (ADR-0075 §5, issue #909). One of the "four panes"
+# from #910, alongside #907/#908.
+#
+# Flags remain environment variables, default-off (ADR-0044 §8) — this
+# workflow does not add a flags table in a database or per-user targeting,
+# it just makes the existing env-var mechanism operable from GitHub. See
+# docs/environments.md -> Feature flags.
+#
+# Routing is by naming convention, not an extra input: a `VITE_`-prefixed
+# flag is a WEB flag (apps/web/src/lib/featureFlags.ts, statically replaced
+# by Vite at build time); anything else is an API flag
+# (apps/api/src/common/featureFlags.ts, read from `process.env` at call
+# time). Both helpers' own header comments document that split already —
+# this workflow just follows it.
+#
+# The latency difference is real and surprising, so it is surfaced twice:
+# in the `flag` input's description below (before you run this) and in
+# each job's step summary (after you do):
+#   - API flag: `railway variable set` alone is enough — Railway restarts
+#     the service on a variable change by default. SECONDS.
+#   - Web flag: the value is baked into the JS bundle at build time, so
+#     this workflow must trigger a full Vercel rebuild. MINUTES.
+#
+# Prod safety: flipping a PROD web flag must never ship unreleased `main`
+# commits to prod — that would be a silent side door around "Promote to
+# prod" (CLAUDE.md hard rule: prod deploys only via a human-run promotion).
+# So a prod rebuild checks out the latest `v*` tag — the last commit
+# release.yml actually deployed — not `main`. Preprod tracks `main`, since
+# that is what is already live there. API flags never rebuild anything
+# (`railway variable set` restarts the already-deployed image in place),
+# so this only applies to the web-flag job.
+# Known limitation, not fixed here: this trusts the latest tag, not the
+# GitHub Deployments "prod" record #907 made authoritative — see #939.
+#
+# Every `run:` step below passes `inputs.flag`/`inputs.value` through an
+# `env:` block rather than interpolating `${{ }}` directly into the shell
+# script — the same pattern promote.yml uses for `inputs.version` — and the
+# `route` job rejects any flag name that isn't SCREAMING_SNAKE_CASE before
+# any later job runs. workflow_dispatch already requires write access to
+# reach this at all, but `flag` is free text landing in a job that holds
+# RAILWAY_PROD_TOKEN / VERCEL_TOKEN, so it is not trusted as shell input.
+#
+# Prerequisites this workflow depends on but does not itself configure —
+# all already exist, reused from preprod.yml / release.yml:
+#   - Repo secrets: RAILWAY_PREPROD_TOKEN, RAILWAY_PROD_TOKEN, VERCEL_TOKEN,
+#     VERCEL_ORG_ID, VERCEL_PROJECT_ID, VERCEL_PREPROD_PROJECT_ID
+#   - Repo variables: RAILWAY_{PREPROD,PROD}_{PROJECT_ID,ENVIRONMENT,SERVICE}
+on:
+  workflow_dispatch:
+    inputs:
+      flag:
+        description: 'Flag name exactly as read in code, e.g. VITE_FEATURE_COMMAND_PALETTE or FEATURE_SERIES_V2. VITE_ prefix = web flag (rebuild, MINUTES); anything else = API flag (restart, SECONDS).'
+        required: true
+        type: string
+      environment:
+        description: 'Environment to flip the flag in'
+        required: true
+        type: choice
+        options:
+          - preprod
+          - prod
+        default: preprod
+      value:
+        description: 'Turn the flag on'
+        required: true
+        type: boolean
+        default: false
+
+concurrency:
+  group: set-flag-${{ github.event.inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  route:
+    name: Validate and route ${{ inputs.flag }}
+    runs-on: ubuntu-latest
+    outputs:
+      is_web: ${{ steps.check.outputs.is_web }}
+    steps:
+      - name: Reject anything that isn't a real flag name before it reaches shell downstream
+        id: check
+        env:
+          FLAG: ${{ inputs.flag }}
+        run: |
+          if [[ ! "$FLAG" =~ ^[A-Z][A-Z0-9_]*$ ]]; then
+            echo "::error::Flag name '$FLAG' must be SCREAMING_SNAKE_CASE (e.g. VITE_FEATURE_X or FEATURE_X) — that's how every flag in apps/web/src/lib/featureFlags.ts and apps/api/src/common/featureFlags.ts is named, and a typo here would silently create a junk variable and still trigger a full rebuild that changes nothing."
+            exit 1
+          fi
+          if [[ "$FLAG" == VITE_* ]]; then
+            echo "is_web=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_web=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  set-api-flag:
+    name: Set API flag (Railway, ${{ inputs.environment }})
+    needs: route
+    if: needs.route.outputs.is_web == 'false'
+    runs-on: ubuntu-latest
+    # Native GitHub Actions environment tracking (#907): this restarts the
+    # already-deployed service with a new variable, which is itself a
+    # deploy — recording it keeps the Environments pane accurate.
+    environment:
+      name: ${{ inputs.environment }}
+      url: ${{ inputs.environment == 'prod' && 'https://www.gigloop.co.uk' || 'https://preprod.gigloop.co.uk' }}
+    steps:
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.1.3'
+
+      - name: Set the variable — Railway restarts the service automatically
+        env:
+          FLAG: ${{ inputs.flag }}
+          VALUE: ${{ inputs.value }}
+          RAILWAY_TOKEN: ${{ inputs.environment == 'prod' && secrets.RAILWAY_PROD_TOKEN || secrets.RAILWAY_PREPROD_TOKEN }}
+          TARGET_PROJECT: ${{ inputs.environment == 'prod' && vars.RAILWAY_PROD_PROJECT_ID || vars.RAILWAY_PREPROD_PROJECT_ID }}
+          TARGET_SERVICE: ${{ inputs.environment == 'prod' && vars.RAILWAY_PROD_SERVICE || vars.RAILWAY_PREPROD_SERVICE }}
+          TARGET_ENVIRONMENT: ${{ inputs.environment == 'prod' && vars.RAILWAY_PROD_ENVIRONMENT || vars.RAILWAY_PREPROD_ENVIRONMENT }}
+        run: |
+          bunx @railway/cli@latest variable set "$FLAG=$VALUE" \
+            --project "$TARGET_PROJECT" \
+            --service "$TARGET_SERVICE" \
+            --environment "$TARGET_ENVIRONMENT"
+
+      - name: Summary
+        if: always()
+        env:
+          FLAG: ${{ inputs.flag }}
+          VALUE: ${{ inputs.value }}
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+        run: |
+          {
+            echo "## Set API flag — \`$FLAG=$VALUE\` ($TARGET_ENVIRONMENT)"
+            echo ""
+            echo "API flags take effect in **seconds** — Railway restarts the service on a variable change, no rebuild."
+            echo ""
+            echo "⚠️ Update the flag table in \`docs/environments.md\` → Feature flags to match — it's the intended-state record, and it just went stale."
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Job result | ${{ job.status }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  set-web-flag:
+    name: Set web flag (Vercel, ${{ inputs.environment }})
+    needs: route
+    if: needs.route.outputs.is_web == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.environment }}
+      url: ${{ inputs.environment == 'prod' && 'https://www.gigloop.co.uk' || 'https://preprod.gigloop.co.uk' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Pin the rebuild ref — prod rebuilds the last release tag, never unreleased main commits
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+        run: |
+          if [[ "$TARGET_ENVIRONMENT" == "prod" ]]; then
+            TAG="$(git describe --tags --abbrev=0 --match 'v*')"
+            echo "Rebuilding prod at $TAG (the last commit release.yml actually deployed)."
+            git checkout "$TAG"
+          else
+            echo "Rebuilding preprod at main."
+          fi
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.1.3'
+
+      # `vercel env`/`vercel deploy` can run off VERCEL_ORG_ID/VERCEL_PROJECT_ID
+      # env vars alone (proven by preprod.yml/release.yml's deploy step), but
+      # `vercel link` is the documented way every Vercel CLI command resolves
+      # project scope, and it's cheap insurance for `env add`/`env rm`
+      # specifically since this checkout has no committed `.vercel/` dir.
+      - name: Link the target Vercel project explicitly
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ inputs.environment == 'prod' && secrets.VERCEL_PROJECT_ID || secrets.VERCEL_PREPROD_PROJECT_ID }}
+        run: bunx vercel@latest link --yes --project "$VERCEL_PROJECT_ID" --token="$VERCEL_TOKEN"
+
+      # `env rm` then `env add` is not atomic — if `add` fails after `rm`
+      # succeeds, the variable is left unset. That is fail-safe, not
+      # fail-open: unset reads as `false` (ADR-0044 §8's default-off), so
+      # the worst case of this window is the flag ending up OFF with a red
+      # job, never accidentally ON.
+      - name: Set the Vercel env var — must stay NON-Sensitive or it bakes as "" (see docs/environments.md)
+        env:
+          FLAG: ${{ inputs.flag }}
+          VALUE: ${{ inputs.value }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ inputs.environment == 'prod' && secrets.VERCEL_PROJECT_ID || secrets.VERCEL_PREPROD_PROJECT_ID }}
+        run: |
+          bunx vercel@latest env rm "$FLAG" production --yes --token="$VERCEL_TOKEN" || true
+          printf '%s' "$VALUE" | bunx vercel@latest env add "$FLAG" production --token="$VERCEL_TOKEN"
+
+      # Remote build (same reasoning as preprod.yml / release.yml): building
+      # in-runner would depend on `vercel pull`, which withholds Sensitive
+      # plaintext and would bake OTHER Sensitive VITE_ vars (e.g. the Clerk
+      # key) as "" even though this flag itself is deliberately non-Sensitive.
+      - name: Rebuild and deploy — remote build so other Sensitive vars still bake in
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ inputs.environment == 'prod' && secrets.VERCEL_PROJECT_ID || secrets.VERCEL_PREPROD_PROJECT_ID }}
+        run: bunx vercel@latest deploy --prod --yes --token="$VERCEL_TOKEN"
+
+      - name: Summary
+        if: always()
+        env:
+          FLAG: ${{ inputs.flag }}
+          VALUE: ${{ inputs.value }}
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+        run: |
+          {
+            echo "## Set web flag — \`$FLAG=$VALUE\` ($TARGET_ENVIRONMENT)"
+            echo ""
+            echo "Web flags take effect in **minutes** — this rebuilds and redeploys the bundle, since Vite bakes \`VITE_\` vars in at build time."
+            echo ""
+            echo "⚠️ Update the flag table in \`docs/environments.md\` → Feature flags to match — it's the intended-state record, and it just went stale."
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Job result | ${{ job.status }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
