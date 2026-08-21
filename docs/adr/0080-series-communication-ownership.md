@@ -1,4 +1,4 @@
-# ADR-0079: Communication gets polymorphic ownership; read surface is the existing booking Communications list
+# ADR-0080: Communication gets polymorphic ownership; read surface is the existing booking Communications list
 
 - **Status:** Accepted
 - **Date:** 2026-08-21

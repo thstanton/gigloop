@@ -222,7 +222,7 @@ Available variables: `{{customerName}}`, `{{bookingDate}}`, `{{venueName}}`, `{{
 ### Communication
 A log entry for an outbound email associated with a [[Booking]] or a [[BookingSeries]]. For MVP: outbound only (sent emails). Modelled generically to accommodate inbound messages (email ingestion) in a future release without schema changes.
 
-**Ownership:** a Communication belongs to either a Booking (`bookingId` set, `seriesId` null) or a BookingSeries (`seriesId` set, `bookingId` null). Exactly one must be set — enforced at the application layer, mirroring [[Invoice]]. See ADR-0079. A series Communication is read on every member Booking's Communications list (not a dedicated series surface) — the same duplication [[Invoice]] already accepts for the series invoice shown via each member Booking.
+**Ownership:** a Communication belongs to either a Booking (`bookingId` set, `seriesId` null) or a BookingSeries (`seriesId` set, `bookingId` null). Exactly one must be set — enforced at the application layer, mirroring [[Invoice]]. See ADR-0080. A series Communication is read on every member Booking's Communications list (not a dedicated series surface) — the same duplication [[Invoice]] already accepts for the series invoice shown via each member Booking.
 
 **Fields:** direction (`OUTBOUND` — MVP only), channel (`EMAIL`), contactId, sentAt (nullable — set only when status is `SENT`), subject, body (rendered HTML), templateId (FK — nullable; records which template seeded the draft, but the body field is authoritative — it stores the exact HTML that was sent, which may have been edited by the musician after template rendering), status (`PENDING | SENT | FAILED`).
 
