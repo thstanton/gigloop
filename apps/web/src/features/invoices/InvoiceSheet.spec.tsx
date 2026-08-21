@@ -332,9 +332,9 @@ describe('InvoiceSheet — editing a series invoice (#845)', () => {
     });
   });
 
-  // Issue is still owner-routed — the nine transitions have not migrated (#853) — but the prefix
-  // must come from the invoice's own FK, not the bookingId prop, or this 404s for a series.
-  it('issues via the series transition route, not the booking one', async () => {
+  // Issue is owner-agnostic (#853, ADR-0069) — it addresses the invoice by its own id, not the
+  // bookingId prop the sheet happens to be mounted with, so this reaches a series invoice fine.
+  it('issues by the invoice id, not the bookingId prop', async () => {
     renderSheet(invoice());
     await waitFor(() => expect(descriptionFields()).toHaveLength(2));
 
@@ -342,7 +342,7 @@ describe('InvoiceSheet — editing a series invoice (#845)', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Issue invoice', hidden: false }));
 
     await waitFor(() => {
-      expect(vi.mocked(apiPost)).toHaveBeenCalledWith('/series/ser1/invoices/si1/issue', {});
+      expect(vi.mocked(apiPost)).toHaveBeenCalledWith('/invoices/si1/issue', {});
     });
   });
 });

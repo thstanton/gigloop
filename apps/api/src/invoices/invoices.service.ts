@@ -33,16 +33,10 @@ export class InvoicesService {
     return this.repo.findAll(userId, bookingId);
   }
 
-  async findOne(userId: string, bookingId: string, id: string) {
-    const invoice = await this.repo.findOne(userId, bookingId, id);
-    if (!invoice) throw new NotFoundException('Invoice not found');
-    return invoice;
-  }
-
-  // Owner-agnostic read (ADR-0069). Returns the same shape as the owner-scoped `findOne`,
-  // so a caller that does not know (or care) whether an invoice belongs to a booking or a
-  // series can resolve it. 404 covers both "no such invoice" and "another tenant's invoice" —
-  // the caller cannot tell them apart, which is the intent.
+  // Owner-agnostic read (ADR-0069). Every single-invoice read/write now resolves this way —
+  // the booking-scoped `findOne` this superseded was removed once its last caller (the nine
+  // transitions) migrated (#853). 404 covers both "no such invoice" and "another tenant's
+  // invoice" — the caller cannot tell them apart, which is the intent.
   async findById(userId: string, id: string) {
     const invoice = await this.repo.findById(userId, id);
     if (!invoice) throw new NotFoundException('Invoice not found');
@@ -73,12 +67,8 @@ export class InvoicesService {
     return result;
   }
 
-  async update(userId: string, bookingId: string, id: string, dto: UpdateInvoiceDto) {
-    return this.applyUpdate(userId, await this.findOne(userId, bookingId, id), dto);
-  }
-
-  // Owner-agnostic entry point (ADR-0069). Differs from `update` only in how the invoice is
-  // resolved; the rules below are shared, so a series invoice cannot drift from a booking one.
+  // Owner-agnostic write (ADR-0069). The booking-scoped `update` this superseded was removed
+  // once #853 finished migrating every other single-invoice route to the same resolution.
   async updateById(userId: string, id: string, dto: UpdateInvoiceDto) {
     return this.applyUpdate(userId, await this.findById(userId, id), dto);
   }
@@ -91,75 +81,81 @@ export class InvoicesService {
     return this.repo.update(invoice.id, dto);
   }
 
-  async delete(userId: string, bookingId: string, id: string) {
-    const invoice = await this.findOne(userId, bookingId, id);
-    if (!isDeletable(invoice)) throw new BadRequestException('Only draft invoices can be deleted — void an issued invoice instead');
-    return this.repo.delete(id);
-  }
-
-  async issue(userId: string, bookingId: string, id: string, dto: IssueInvoiceDto) {
-    const invoice = await this.findOne(userId, bookingId, id);
-    return this.transition.issueInvoice(userId, invoice, dto);
-  }
-
-  async send(userId: string, bookingId: string, id: string, dto: SendInvoiceDto) {
-    const invoice = await this.findOne(userId, bookingId, id);
-    await this.transition.send(userId, invoice, dto);
-  }
-
   previewInvoiceNumber(userId: string, bookingId: string, isDeposit: boolean) {
     return this.repo.previewBookingInvoiceNumber(userId, bookingId, isDeposit);
   }
 
-  async generatePreviewPdf(userId: string, bookingId: string, id: string): Promise<Buffer> {
-    const invoice = await this.findOne(userId, bookingId, id);
+  // ─── Owner-agnostic transitions (ADR-0069, #853) ───────────────────────────
+  //
+  // The nine duplicated booking/series transition routes converge here: each resolves the
+  // invoice by id alone (owner read off the row) and hands it to InvoiceTransitionService,
+  // which was already field-derived and owner-agnostic (ADR-0063) — only the resolution step
+  // ever differed between the two owners. `preview-number` is the one action that does NOT
+  // join this family: it previews the number a *not-yet-created* invoice would get, so there
+  // is no invoice id to resolve by (see `previewInvoiceNumber` above and its series twin).
+
+  async issueById(userId: string, id: string, dto: IssueInvoiceDto) {
+    const invoice = await this.findById(userId, id);
+    return this.transition.issueInvoice(userId, invoice, dto);
+  }
+
+  async sendById(userId: string, id: string, dto: SendInvoiceDto) {
+    const invoice = await this.findById(userId, id);
+    await this.transition.send(userId, invoice, dto);
+  }
+
+  async markSentById(userId: string, id: string, dto: MarkSentDto) {
+    const invoice = await this.findById(userId, id);
+    return this.transition.markSent(invoice, dto);
+  }
+
+  async markPaidById(userId: string, id: string, dto: MarkPaidDto) {
+    const invoice = await this.findById(userId, id);
+    return this.transition.markPaid(invoice, dto);
+  }
+
+  async correctPaymentById(userId: string, id: string, dto: MarkPaidDto) {
+    const invoice = await this.findById(userId, id);
+    return this.transition.correctPayment(invoice, dto);
+  }
+
+  async voidInvoiceById(userId: string, id: string) {
+    const invoice = await this.findById(userId, id);
+    return this.transition.voidInvoice(invoice);
+  }
+
+  async deleteById(userId: string, id: string) {
+    const invoice = await this.findById(userId, id);
+    if (!isDeletable(invoice)) throw new BadRequestException('Only draft invoices can be deleted — void an issued invoice instead');
+    return this.repo.delete(id);
+  }
+
+  async generatePreviewPdfById(userId: string, id: string): Promise<Buffer> {
+    const invoice = await this.findById(userId, id);
     // Drafts have no assigned number yet — render the preview with the provisional number
     // the invoice would receive on issue, so the PDF doesn't fail for its only use case.
     let previewNumber: string | undefined;
     if (!invoice.invoiceNumber) {
+      // Polymorphic invariant (ADR-0029): no seriesId ⇒ bookingId is set.
       const { invoiceNumber } = invoice.seriesId
         ? await this.repo.previewSeriesInvoiceNumber(userId, invoice.seriesId)
-        : await this.repo.previewBookingInvoiceNumber(userId, bookingId, invoice.isDeposit);
+        : await this.repo.previewBookingInvoiceNumber(userId, invoice.bookingId!, invoice.isDeposit);
       previewNumber = invoiceNumber;
     }
     return this.documents.generatePreviewPdf(userId, id, previewNumber);
   }
 
-  async markSent(userId: string, bookingId: string, id: string, dto: MarkSentDto) {
-    const invoice = await this.findOne(userId, bookingId, id);
-    return this.transition.markSent(invoice, dto);
-  }
-
-  async markPaid(userId: string, bookingId: string, id: string, dto: MarkPaidDto) {
-    const invoice = await this.findOne(userId, bookingId, id);
-    return this.transition.markPaid(invoice, dto);
-  }
-
-  async correctPayment(userId: string, bookingId: string, id: string, dto: MarkPaidDto) {
-    const invoice = await this.findOne(userId, bookingId, id);
-    return this.transition.correctPayment(invoice, dto);
-  }
-
-  async voidInvoice(userId: string, bookingId: string, id: string) {
-    const invoice = await this.findOne(userId, bookingId, id);
-    return this.transition.voidInvoice(invoice);
-  }
-
-  async addLineItem(userId: string, bookingId: string, id: string, dto: CreateLineItemDto) {
-    return this.applyAddLineItem(userId, await this.findOne(userId, bookingId, id), dto);
-  }
-
-  async updateLineItem(userId: string, bookingId: string, id: string, itemId: string, dto: UpdateLineItemDto) {
-    return this.applyUpdateLineItem(userId, await this.findOne(userId, bookingId, id), itemId, dto);
-  }
-
-  async deleteLineItem(userId: string, bookingId: string, id: string, itemId: string) {
-    return this.applyDeleteLineItem(userId, await this.findOne(userId, bookingId, id), itemId);
+  // The stored PDF document for an issued invoice (#830, generalised by #853). `findByInvoice`
+  // is already userId-scoped, so another tenant's invoice and "no document yet" both resolve to
+  // null here — the controller collapses both to the same 404, which is the existing behaviour.
+  getDocumentById(userId: string, id: string) {
+    return this.documents.findByInvoice(userId, id);
   }
 
   // Owner-agnostic line-item operations (ADR-0069). Until #845 these existed only under
   // /bookings/:bookingId/invoices, which is why a series invoice's lines had never been
-  // editable — and why ADR-0043's reconciler guard had been protecting an empty set.
+  // editable — and why ADR-0043's reconciler guard had been protecting an empty set. The
+  // booking-scoped trio this superseded was removed once #853 finished the migration.
   async addLineItemById(userId: string, id: string, dto: CreateLineItemDto) {
     return this.applyAddLineItem(userId, await this.findById(userId, id), dto);
   }

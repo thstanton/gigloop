@@ -59,7 +59,7 @@ function getStatusPrefix(isFailed: boolean, isPending: boolean): string {
 
 function AttachmentLink({ comm }: Readonly<{ comm: Communication }>) {
   if (!comm.document?.invoiceId) return null;
-  const pdfUrl = `${API_BASE_URL}/bookings/${comm.bookingId}/invoices/${comm.document.invoiceId}/preview.pdf`;
+  const pdfUrl = `${API_BASE_URL}/invoices/${comm.document.invoiceId}/preview.pdf`;
   return (
     <a
       href={pdfUrl}

@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@clerk/react';
 import { apiGetNullable } from '@/lib/api';
-import type { SeriesInvoiceDocument, Invoice } from '@/types/api';
+import type { InvoiceDocument, Invoice } from '@/types/api';
 
 /**
  * The stored PDF backing an issued series invoice (#830).
@@ -24,7 +24,7 @@ export function useSeriesInvoiceDocument(
   return useQuery({
     queryKey: ['seriesInvoiceDocument', seriesId, invoiceId],
     queryFn: () =>
-      apiGetNullable<SeriesInvoiceDocument>(`/series/${seriesId}/invoices/${invoiceId}/document`),
+      apiGetNullable<InvoiceDocument>(`/invoices/${invoiceId}/document`),
     enabled: isLoaded && !!seriesId && !!invoiceId && hasStoredPdf,
   });
 }

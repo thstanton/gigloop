@@ -33,7 +33,7 @@ export default function SeriesInvoiceCard({ seriesId, seriesLabel, onEdit, onSen
   // offers Download against the stored artifact instead, so the musician sees exactly what the
   // client received rather than a fresh render (#830).
   function handlePreview(inv: Invoice) {
-    openGeneratedPdf(`/series/${seriesId}/invoices/${inv.id}/preview.pdf`, () =>
+    openGeneratedPdf(`/invoices/${inv.id}/preview.pdf`, () =>
       toast({ title: 'Failed to open preview', variant: 'destructive' }),
     );
   }

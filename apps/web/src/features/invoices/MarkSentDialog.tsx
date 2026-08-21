@@ -48,7 +48,7 @@ export default function MarkSentDialog({
 
   const mutation = useMutation({
     mutationFn: () =>
-      apiPost<Invoice>(`/bookings/${bookingId}/invoices/${invoice.id}/mark-sent`, {
+      apiPost<Invoice>(`/invoices/${invoice.id}/mark-sent`, {
         issueDate,
         dueDate: dueDate || undefined,
       }),

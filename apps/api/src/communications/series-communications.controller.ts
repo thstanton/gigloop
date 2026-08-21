@@ -17,8 +17,8 @@ type AuthedRequest = Request & { userId: string };
  * (`MailService.buildSeriesContext`, #846) so `series_invoice_cover` renders the series label and
  * the dates covered.
  *
- * Only the *render* half lives here: sending is already owner-aware via
- * `POST /series/:id/invoices/:invoiceId/send`, and logging a communication against a series is
+ * Only the *render* half lives here: sending goes through the owner-agnostic
+ * `POST /invoices/:id/send` (#853, ADR-0069), and logging a communication against a series is
  * out of scope while `Communication.bookingId` is non-nullable.
  */
 @ApiTags('Communications')

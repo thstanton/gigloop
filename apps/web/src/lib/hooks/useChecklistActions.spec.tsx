@@ -123,7 +123,7 @@ describe('useChecklistActions — handleMarkDone opens the mark-paid dialog (#65
     // Confirming with a chosen date + reference records them against the SENT balance invoice.
     act(() => result.current.markPaidDialog.onConfirm('2026-08-18', 'BACS-4417'));
     await waitFor(() =>
-      expect(apiPost).toHaveBeenCalledWith('/bookings/b1/invoices/sb1/mark-paid', {
+      expect(apiPost).toHaveBeenCalledWith('/invoices/sb1/mark-paid', {
         paidAt: '2026-08-18',
         paymentReference: 'BACS-4417',
       }),
@@ -138,7 +138,7 @@ describe('useChecklistActions — handleMarkDone opens the mark-paid dialog (#65
 
     act(() => result.current.markPaidDialog.onConfirm('2026-08-18', ''));
     await waitFor(() =>
-      expect(apiPost).toHaveBeenCalledWith('/bookings/b1/invoices/sd1/mark-paid', {
+      expect(apiPost).toHaveBeenCalledWith('/invoices/sd1/mark-paid', {
         paidAt: '2026-08-18',
         paymentReference: undefined,
       }),

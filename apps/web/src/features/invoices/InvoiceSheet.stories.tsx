@@ -200,13 +200,13 @@ export const EditModeDraftIssueSavesEdits: Story = {
   parameters: {
     msw: {
       handlers: [
-        // Line-item writes are owner-agnostic since #845 (ADR-0069) — the invoice is addressed
-        // by its own id. Issue is still owner-routed; the nine transitions migrate in #853.
+        // Line-item writes and lifecycle transitions are all owner-agnostic since #845/#853
+        // (ADR-0069) — the invoice is addressed by its own id, not the booking it belongs to.
         http.patch('/api/invoices/i1/line-items/:lineId', () => {
           issueFlowCalls.push('save');
           return HttpResponse.json({});
         }),
-        http.post('/api/bookings/b1/invoices/i1/issue', () => {
+        http.post('/api/invoices/i1/issue', () => {
           issueFlowCalls.push('issue');
           return HttpResponse.json({ ...draftInvoice, status: 'ISSUED' });
         }),

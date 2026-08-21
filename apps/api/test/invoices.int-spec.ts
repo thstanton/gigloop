@@ -86,7 +86,7 @@ describe('Invoice flow (integration)', () => {
     // A draft with no line items can no longer be issued (ADR-0043, #851) —
     // give every invoice created via this helper a line so `issue` succeeds.
     const lineItemRes = await request(target.getHttpServer())
-      .post(`/api/bookings/${bookingId}/invoices/${invoiceId}/line-items`)
+      .post(`/api/invoices/${invoiceId}/line-items`)
       .send({ description: 'Performance fee', amount: 500 });
     expect(lineItemRes.status).toBe(201);
 
@@ -95,11 +95,11 @@ describe('Invoice flow (integration)', () => {
 
   async function sendInvoice(bookingId: string, invoiceId: string, target: INestApplication = app): Promise<void> {
     const issueRes = await request(target.getHttpServer())
-      .post(`/api/bookings/${bookingId}/invoices/${invoiceId}/issue`)
+      .post(`/api/invoices/${invoiceId}/issue`)
       .send({ issueDate: '2027-01-01', dueDate: '2027-01-15' });
-    expect(issueRes.status).toBe(201);
+    expect(issueRes.status).toBe(200);
     const res = await request(target.getHttpServer())
-      .post(`/api/bookings/${bookingId}/invoices/${invoiceId}/send`)
+      .post(`/api/invoices/${invoiceId}/send`)
       .send({
         to: 'client@example.com',
         contactId: customerId,
@@ -111,13 +111,13 @@ describe('Invoice flow (integration)', () => {
 
   async function markSent(bookingId: string, invoiceId: string): Promise<void> {
     const issueRes = await request(app.getHttpServer())
-      .post(`/api/bookings/${bookingId}/invoices/${invoiceId}/issue`)
+      .post(`/api/invoices/${invoiceId}/issue`)
       .send({ issueDate: '2027-01-01', dueDate: '2027-01-15' });
-    expect(issueRes.status).toBe(201);
+    expect(issueRes.status).toBe(200);
     const res = await request(app.getHttpServer())
-      .post(`/api/bookings/${bookingId}/invoices/${invoiceId}/mark-sent`)
+      .post(`/api/invoices/${invoiceId}/mark-sent`)
       .send({});
-    expect(res.status).toBe(201);
+    expect(res.status).toBe(200);
   }
 
   // Resolve a key to its goal (BookingChecklistItem) or step (BookingChecklistStep) row — ADR-0057
@@ -141,7 +141,7 @@ describe('Invoice flow (integration)', () => {
 
       const invoiceId = await createInvoice(bookingId, true);
       await request(app.getHttpServer())
-        .post(`/api/bookings/${bookingId}/invoices/${invoiceId}/issue`)
+        .post(`/api/invoices/${invoiceId}/issue`)
         .send({ issueDate: '2027-01-01', dueDate: '2027-01-15' });
 
       const item = await getChecklistItem(bookingId, 'create_deposit_invoice');
@@ -157,7 +157,7 @@ describe('Invoice flow (integration)', () => {
 
       const invoiceId = await createInvoice(bookingId, false);
       await request(app.getHttpServer())
-        .post(`/api/bookings/${bookingId}/invoices/${invoiceId}/issue`)
+        .post(`/api/invoices/${invoiceId}/issue`)
         .send({ issueDate: '2027-01-01', dueDate: '2027-01-15' });
 
       const item = await getChecklistItem(bookingId, 'create_balance_invoice');
@@ -223,9 +223,9 @@ describe('Invoice flow (integration)', () => {
       });
 
       const res = await request(app.getHttpServer())
-        .post(`/api/bookings/${bookingId}/invoices/${invoiceId}/mark-paid`)
+        .post(`/api/invoices/${invoiceId}/mark-paid`)
         .send({ paidAt: RECEIVED_ON, paymentReference: 'BACS-4417' });
-      expect(res.status).toBe(201);
+      expect(res.status).toBe(200);
 
       // ADR-0068: the date recorded is the one supplied, not the moment the button was tapped.
       expect(res.body.paidAt).toContain(RECEIVED_ON);
@@ -256,9 +256,9 @@ describe('Invoice flow (integration)', () => {
       expect(itemBeforeVoid?.state).toBe('COMPLETE');
 
       const voidRes = await request(app.getHttpServer())
-        .post(`/api/bookings/${bookingId}/invoices/${invoiceId}/void`)
+        .post(`/api/invoices/${invoiceId}/void`)
         .send({});
-      expect(voidRes.status).toBe(201);
+      expect(voidRes.status).toBe(200);
 
       const itemAfterVoid = await getChecklistItem(bookingId, 'create_deposit_invoice');
       expect(itemAfterVoid?.state).not.toBe('COMPLETE');
@@ -279,12 +279,12 @@ describe('Invoice flow (integration)', () => {
       await markSent(bookingId, firstId);
 
       await request(app.getHttpServer())
-        .post(`/api/bookings/${bookingId}/invoices/${firstId}/void`)
+        .post(`/api/invoices/${firstId}/void`)
         .send({});
 
       const secondId = await createInvoice(bookingId, true);
       await request(app.getHttpServer())
-        .post(`/api/bookings/${bookingId}/invoices/${secondId}/issue`)
+        .post(`/api/invoices/${secondId}/issue`)
         .send({ issueDate: '2027-01-01', dueDate: '2027-01-15' });
 
       const item = await getChecklistItem(bookingId, 'create_deposit_invoice');
@@ -375,7 +375,7 @@ describe('Invoice flow (integration)', () => {
 
       // Void it
       await request(app.getHttpServer())
-        .post(`/api/bookings/${bookingId}/invoices/${firstId}/void`)
+        .post(`/api/invoices/${firstId}/void`)
         .send({});
 
       // Create and send a new deposit invoice for the same booking
@@ -395,12 +395,12 @@ describe('Invoice flow (integration)', () => {
       const invoiceId = await createInvoice(bookingId, true);
 
       const addRes = await request(app.getHttpServer())
-        .post(`/api/bookings/${bookingId}/invoices/${invoiceId}/line-items`)
+        .post(`/api/invoices/${invoiceId}/line-items`)
         .send({ description: 'Performance fee', amount: 1500 });
       expect(addRes.status).toBe(201);
 
       const getRes = await request(app.getHttpServer())
-        .get(`/api/bookings/${bookingId}/invoices/${invoiceId}`);
+        .get(`/api/invoices/${invoiceId}`);
       expect(getRes.status).toBe(200);
       const found = (getRes.body.lineItems as Array<{ description: string }>).find(
         (li) => li.description === 'Performance fee',
@@ -415,12 +415,12 @@ describe('Invoice flow (integration)', () => {
       const invoiceId = await createInvoice(bookingId, true);
 
       const addRes = await request(app.getHttpServer())
-        .post(`/api/bookings/${bookingId}/invoices/${invoiceId}/line-items`)
+        .post(`/api/invoices/${invoiceId}/line-items`)
         .send({ description: 'Old description', amount: 500 });
       const itemId = addRes.body.id as string;
 
       const patchRes = await request(app.getHttpServer())
-        .patch(`/api/bookings/${bookingId}/invoices/${invoiceId}/line-items/${itemId}`)
+        .patch(`/api/invoices/${invoiceId}/line-items/${itemId}`)
         .send({ description: 'Updated description', amount: 750 });
       expect(patchRes.status).toBe(200);
       expect(patchRes.body.description).toBe('Updated description');
@@ -433,12 +433,12 @@ describe('Invoice flow (integration)', () => {
       const invoiceId = await createInvoice(bookingId, true);
 
       const addRes = await request(app.getHttpServer())
-        .post(`/api/bookings/${bookingId}/invoices/${invoiceId}/line-items`)
+        .post(`/api/invoices/${invoiceId}/line-items`)
         .send({ description: 'To be deleted', amount: 200 });
       const itemId = addRes.body.id as string;
 
       const delRes = await request(app.getHttpServer())
-        .delete(`/api/bookings/${bookingId}/invoices/${invoiceId}/line-items/${itemId}`);
+        .delete(`/api/invoices/${invoiceId}/line-items/${itemId}`);
       expect(delRes.status).toBe(204);
 
       const item = await prisma.invoiceLineItem.findUnique({ where: { id: itemId } });
@@ -456,7 +456,7 @@ describe('Invoice flow (integration)', () => {
       const invoiceId = await createInvoice(bookingId, true);
 
       const res = await request(app.getHttpServer())
-        .get(`/api/bookings/${bookingId}/invoices/${invoiceId}/preview.pdf`);
+        .get(`/api/invoices/${invoiceId}/preview.pdf`);
 
       expect(res.status).toBe(200);
       expect(res.headers['content-type']).toMatch(/application\/pdf/);
@@ -468,11 +468,11 @@ describe('Invoice flow (integration)', () => {
       const bookingId = await createBooking();
       const invoiceId = await createInvoice(bookingId, true);
       await request(app.getHttpServer())
-        .post(`/api/bookings/${bookingId}/invoices/${invoiceId}/issue`)
+        .post(`/api/invoices/${invoiceId}/issue`)
         .send({ issueDate: '2027-01-01', dueDate: '2027-01-15' });
 
       const res = await request(app.getHttpServer())
-        .get(`/api/bookings/${bookingId}/invoices/${invoiceId}/preview.pdf`);
+        .get(`/api/invoices/${invoiceId}/preview.pdf`);
 
       expect(res.status).toBe(200);
       expect(res.headers['content-type']).toMatch(/application\/pdf/);
@@ -514,7 +514,7 @@ describe('Invoice flow (integration)', () => {
 
       // A valid payment date, so the 400 proves the state guard rather than DTO validation.
       const res = await request(app.getHttpServer())
-        .post(`/api/bookings/${bookingId}/invoices/${invoiceId}/mark-paid`)
+        .post(`/api/invoices/${invoiceId}/mark-paid`)
         .send({ paidAt: RECEIVED_ON });
       expect(res.status).toBe(400);
 
@@ -526,7 +526,7 @@ describe('Invoice flow (integration)', () => {
       const invoiceId = await createInvoice(bookingId, true);
 
       const res = await request(app.getHttpServer())
-        .post(`/api/bookings/${bookingId}/invoices/${invoiceId}/void`)
+        .post(`/api/invoices/${invoiceId}/void`)
         .send({});
       expect(res.status).toBe(400);
 
@@ -539,11 +539,11 @@ describe('Invoice flow (integration)', () => {
       await markSent(bookingId, invoiceId);
 
       await request(app.getHttpServer())
-        .post(`/api/bookings/${bookingId}/invoices/${invoiceId}/void`)
+        .post(`/api/invoices/${invoiceId}/void`)
         .send({});
 
       const res = await request(app.getHttpServer())
-        .post(`/api/bookings/${bookingId}/invoices/${invoiceId}/void`)
+        .post(`/api/invoices/${invoiceId}/void`)
         .send({});
       expect(res.status).toBe(400);
 
@@ -555,7 +555,7 @@ describe('Invoice flow (integration)', () => {
       const invoiceId = await createInvoice(bookingId, true);
 
       const res = await request(app.getHttpServer())
-        .delete(`/api/bookings/${bookingId}/invoices/${invoiceId}`);
+        .delete(`/api/invoices/${invoiceId}`);
       expect(res.status).toBe(204);
 
       const deleted = await prisma.invoice.findUnique({ where: { id: invoiceId } });
@@ -570,7 +570,7 @@ describe('Invoice flow (integration)', () => {
       await markSent(bookingId, invoiceId);
 
       const res = await request(app.getHttpServer())
-        .post(`/api/bookings/${bookingId}/invoices/${invoiceId}/line-items`)
+        .post(`/api/invoices/${invoiceId}/line-items`)
         .send({ description: 'Extra', amount: 100 });
       expect(res.status).toBe(400);
 
@@ -582,14 +582,14 @@ describe('Invoice flow (integration)', () => {
       const invoiceId = await createInvoice(bookingId, true);
 
       const addRes = await request(app.getHttpServer())
-        .post(`/api/bookings/${bookingId}/invoices/${invoiceId}/line-items`)
+        .post(`/api/invoices/${invoiceId}/line-items`)
         .send({ description: 'Fee', amount: 1000 });
       const itemId = addRes.body.id as string;
 
       await markSent(bookingId, invoiceId);
 
       const res = await request(app.getHttpServer())
-        .patch(`/api/bookings/${bookingId}/invoices/${invoiceId}/line-items/${itemId}`)
+        .patch(`/api/invoices/${invoiceId}/line-items/${itemId}`)
         .send({ amount: 2000 });
       expect(res.status).toBe(400);
 
@@ -601,14 +601,14 @@ describe('Invoice flow (integration)', () => {
       const invoiceId = await createInvoice(bookingId, true);
 
       const addRes = await request(app.getHttpServer())
-        .post(`/api/bookings/${bookingId}/invoices/${invoiceId}/line-items`)
+        .post(`/api/invoices/${invoiceId}/line-items`)
         .send({ description: 'Fee', amount: 1000 });
       const itemId = addRes.body.id as string;
 
       await markSent(bookingId, invoiceId);
 
       const res = await request(app.getHttpServer())
-        .delete(`/api/bookings/${bookingId}/invoices/${invoiceId}/line-items/${itemId}`);
+        .delete(`/api/invoices/${invoiceId}/line-items/${itemId}`);
       expect(res.status).toBe(400);
 
       await prisma.booking.delete({ where: { id: bookingId } });
@@ -617,7 +617,7 @@ describe('Invoice flow (integration)', () => {
     it('invoice not found → 404', async () => {
       const bookingId = await createBooking();
       const res = await request(app.getHttpServer())
-        .get(`/api/bookings/${bookingId}/invoices/00000000-0000-0000-0000-000000000000`);
+        .get(`/api/invoices/00000000-0000-0000-0000-000000000000`);
       expect(res.status).toBe(404);
       await prisma.booking.delete({ where: { id: bookingId } });
     });
@@ -648,7 +648,7 @@ describe('Invoice flow (integration)', () => {
 
       const myBookingId = await createBooking();
       const res = await request(app.getHttpServer())
-        .get(`/api/bookings/${myBookingId}/invoices/${otherInvoice.id}`);
+        .get(`/api/invoices/${otherInvoice.id}`);
       expect(res.status).toBe(404);
 
       await prisma.booking.delete({ where: { id: otherBooking.id } });
