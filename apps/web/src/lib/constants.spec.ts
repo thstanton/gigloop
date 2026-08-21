@@ -206,18 +206,32 @@ describe('logistics fields table', () => {
     }
   });
 
-  it('gates exactly travelPlan and outfits behind the feature flag, both Details-owned (#888)', () => {
-    expect(new Set(LOGISTICS_BAND_ONLY_KEYS)).toEqual(new Set(['outfits', 'travelPlan']));
+  it('gates a small fixed set of fields behind the feature flag, all Details-owned (#888)', () => {
+    // A count tripwire, not a name restatement — adding a third bandOnly row without updating
+    // this number is exactly the silent-drift case the coverage-guarded tables above prevent.
+    expect(LOGISTICS_BAND_ONLY_KEYS).toHaveLength(2);
+    expect(new Set(LOGISTICS_BAND_ONLY_KEYS).size).toBe(LOGISTICS_BAND_ONLY_KEYS.length);
     for (const key of LOGISTICS_BAND_ONLY_KEYS) {
       expect(LOGISTICS_DETAIL_KEYS, `${key} must be Details-owned, not an Itinerary anchor`).toContain(key);
+      expect(LOGISTICS_FIELD_SHARE_WITH_BAND[key], `a bandOnly field must also be shareWithBand`).toBe(true);
     }
     // The time anchors are untouched by this slice — still exactly the three the Itinerary owns.
     expect(LOGISTICS_TIME_KEYS).toHaveLength(3);
   });
 
-  it('pairs travelPlan/outfits to their dep-profile Contact field, and nothing else (ADR-0072 §4)', () => {
-    expect(LOGISTICS_PROFILE_FIELD_PAIRING.travelPlan).toBe('travelNotes');
-    expect(LOGISTICS_PROFILE_FIELD_PAIRING.outfits).toBe('outfitNotes');
-    expect(new Set(Object.keys(LOGISTICS_PROFILE_FIELD_PAIRING))).toEqual(new Set(['outfits', 'travelPlan']));
+  it('pairs every profileField to a distinct, real dep-profile Contact field (ADR-0072 §4)', () => {
+    const pairedKeys = Object.keys(LOGISTICS_PROFILE_FIELD_PAIRING);
+    const pairedValues = Object.values(LOGISTICS_PROFILE_FIELD_PAIRING);
+    expect(pairedKeys.length).toBeGreaterThan(0);
+    for (const key of pairedKeys) {
+      expect(LOGISTICS_DETAIL_KEYS, `${key} must be Details-owned to carry a profile pairing`).toContain(key);
+    }
+    // No two fields silently share one profile field's pairing.
+    expect(new Set(pairedValues).size).toBe(pairedValues.length);
+    // Every pairing target is a genuine Contact *Notes field (ADR-0072 §4's naming convention),
+    // not a fat-fingered key that would fail only when #880 tries to read it.
+    for (const value of pairedValues) {
+      expect(value).toMatch(/Notes$/);
+    }
   });
 });

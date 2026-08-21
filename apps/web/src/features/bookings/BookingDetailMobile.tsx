@@ -2,7 +2,7 @@ import { useAuth } from '@clerk/react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Clock, ClipboardList, Info, MapPin, Pencil, Users } from 'lucide-react';
-import { LOGISTICS_DETAIL_KEYS, LOGISTICS_SYSTEM_KEYS } from '@/lib/constants';
+import { LOGISTICS_BAND_ONLY_KEYS, LOGISTICS_DETAIL_KEYS, LOGISTICS_SYSTEM_KEYS } from '@/lib/constants';
 import { isEnabled } from '@/lib/featureFlags';
 
 import { useBooking } from '@/lib/hooks/useBooking';
@@ -120,8 +120,14 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
     !logistics?.arrivalTime?.value &&
     !logistics?.soundCheckTime?.value &&
     !logistics?.finishTime?.value;
+  // With the flag off, a value already saved under travelPlan/outfits (e.g. the flag was on and
+  // is now rolled back) must not count — those fields are hidden, so the concern reads exactly
+  // as if they were never there (#888's "shareWithBand column is inert when off").
+  const visibleDetailKeys = bandMembersEnabled
+    ? LOGISTICS_DETAIL_KEYS
+    : LOGISTICS_DETAIL_KEYS.filter((k) => !LOGISTICS_BAND_ONLY_KEYS.includes(k));
   const detailsEmpty =
-    !LOGISTICS_DETAIL_KEYS.some((k) => !!(logistics ?? {})[k]?.value) &&
+    !visibleDetailKeys.some((k) => !!(logistics ?? {})[k]?.value) &&
     !Object.entries(logistics ?? {}).some(([k, e]) => !LOGISTICS_SYSTEM_KEY_SET.has(k) && !!e.value);
   const venueEmpty = !booking.venue;
   const musicOff = !booking.hasMusicFormConfig;
