@@ -90,6 +90,11 @@ export class CommunicationsService {
   ): Promise<void> {
     const { userId, seriesId, contactId, to, subject, body, templateId, attachments, documentId } = options;
     await this.contacts.assertOwned(userId, [contactId]);
+    // sendEmail's `!bookingId` branch is the only caller of this method, and its one caller
+    // (InvoiceTransitionService.send) always passes exactly one of bookingId/seriesId (ADR-0029's
+    // polymorphic invariant) — so seriesId is set here in every real path. Guarded rather than
+    // asserted: an absent seriesId still sends the email, just without an audit row, matching the
+    // pre-ADR-0080 behaviour instead of throwing on a caller bug this type can't fully prevent.
     const communication = seriesId
       ? await this.repo.createPendingForSeries(userId, seriesId, contactId, subject, body, templateId, documentId)
       : undefined;

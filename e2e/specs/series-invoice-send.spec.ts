@@ -104,5 +104,14 @@ test.describe('series invoice — issue and send', () => {
     await mobile.getByRole('tab', { name: 'Info' }).click();
     await expect(info.getByText('Series invoice email')).toBeVisible();
     await expect(info.getByText('Series', { exact: true })).toBeVisible();
+
+    // The series row belongs to no single booking, so it must show identically on the OTHER
+    // member booking's page too — not just the one the send was initiated from (ADR-0080).
+    await page.goto(`/admin/bookings/${fixture.secondBookingId}`);
+    const secondMobile = page.getByTestId('booking-detail-mobile');
+    await secondMobile.getByRole('tab', { name: 'Info' }).click();
+    const secondInfo = secondMobile.getByRole('tabpanel', { name: 'Info' });
+    await expect(secondInfo.getByText('Series invoice email')).toBeVisible();
+    await expect(secondInfo.getByText('Series', { exact: true })).toBeVisible();
   });
 });
