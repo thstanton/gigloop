@@ -394,13 +394,15 @@ export class InvoicesRepository {
 
   updateLineItem(itemId: string, dto: UpdateLineItemDto) {
     return this.prisma.invoiceLineItem.update({
-      where: { id: itemId },
+      where: { id: itemId }, // scoped-upstream: service loadLineItem's findLineItem(userId, ...) proved ownership (ADR-0061)
       data: dto,
     });
   }
 
   deleteLineItem(itemId: string) {
-    return this.prisma.invoiceLineItem.delete({ where: { id: itemId } });
+    return this.prisma.invoiceLineItem.delete({
+      where: { id: itemId }, // scoped-upstream: service loadLineItem's findLineItem(userId, ...) proved ownership (ADR-0061)
+    });
   }
 
   findDepositInvoice(bookingId: string, userId: string) {
