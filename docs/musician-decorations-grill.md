@@ -5,12 +5,18 @@
 > the governing rule, the asset spec, and the deliberately-rejected options, so
 > the reasoning survives the session and the build can be issued from it.
 >
+> **Amended 2026-08-21** — two of the decided points below (site count,
+> fixed-vs-random selection) were reopened and reversed after a `/prototype`
+> pass. The original reasoning is left in place rather than rewritten; see
+> **§Addendum (2026-08-21)** at the end for what changed and why, and #858 for
+> the tracking issue.
+>
 > **Relates:** CLAUDE.md (UI Rules — the decoration rule added by this session);
 > CONTEXT.md (`Musician decoration` glossary entry); ADR-0015 / CONTEXT.md:242
 > (portal hero images — the *other* imagery system, deliberately untouched);
 > ADR-0054 (portal visibility authority).
 >
-> **No ADR.** See §Why no ADR.
+> **No ADR.** See §Why no ADR — reassessed in the addendum too.
 
 ---
 
@@ -53,15 +59,19 @@ ornament**, and the printing metaphor decides placement, prominence and ink.
    different system in a different visual register and stay as they are.
 
 3. **Fixed selection, chosen by hand per site.** Not random. (Randomness was
-   explored and reversed — see §Rejected.)
+   explored and reversed — see §Rejected.) **Superseded 2026-08-21 — see
+   §Addendum.** Selection is now random, drawn from a uniform pool.
 
 4. **The governing rule: at most one musician visible at a time.** A figure may
    appear only where no second figure can share the viewport — a whole page, or
    a modal. This is a *rule*, not a whitelist: a contributor facing a surface
    nobody has considered can apply it unaided.
 
-5. **Three sites, by typographic role.** Prominence follows the role the
-   ornament plays on a printed score, not the shape of the slot:
+5. **Three sites, by typographic role.** **Superseded 2026-08-21 — see
+   §Addendum.** Only the stage-advance dialog ships initially; the other two
+   rows below are the design reference for whenever they're picked back up.
+   Prominence follows the role the ornament plays on a printed score, not the
+   shape of the slot:
 
    | Role | Site | Prominence |
    |---|---|---|
@@ -151,6 +161,14 @@ prop. Fixed selection dissolves all of it. **The detour was still worth it:** it
 surfaced the interchangeability constraint, which is only invisible *because*
 we chose fixed.
 
+**Revisited 2026-08-21 — reversed back to random.** See §Addendum. The
+interchangeability constraint this section identifies is exactly what got
+resolved: the pool is now being reprocessed to one uniform crop/size
+specifically so every figure *is* interchangeable, which was the one thing
+blocking random in the first place. The last-shown-ref / non-deterministic
+story / override-prop costs are real and now paid deliberately — the story
+override is written into #860's acceptance criteria.
+
 **Decorating empty states.** Adopted, then reversed on evidence. Two findings
 killed it:
 
@@ -221,3 +239,47 @@ Two of three, and the one that matters most is served better by CLAUDE.md. An
 ADR would be ceremony. If the decoration system later grows a genuinely
 hard-to-reverse commitment — theming the ink from a token, or a portal-facing
 variant — that is when it earns one.
+
+## Addendum (2026-08-21) — scope narrowed to one site, selection reversed to random
+
+A `/prototype` pass (see #858) placed `violinist.png` — a newer source image,
+already cut to transparency, still pure black — at all three approved sites
+with a live size switcher, so sizing could be judged against real parchment in
+the browser instead of guessed. The launch-screen vignette was confirmed live
+at 140–260px; the other two sites were wired but not visually confirmed (no
+authenticated session was available in the prototype environment). Having seen
+it, two decisions above changed:
+
+**Scope narrows to one site: the stage-advance dialog.** The launch-screen
+vignette and dashboard frontispiece (decided points 5's other two rows) are
+deferred, not abandoned — #861 (dashboard frontispiece) is closed as
+out-of-scope for this pass; the launch-screen half of #860 is dropped. Revisit
+both when there's reason to add a second site.
+
+**Selection reverses from fixed to random.** Decided point 3 and the
+§Rejected → Random selection entry explain why fixed won originally: the
+landscape pianist's 5:4 scene couldn't survive being cropped to match the
+other figures' 2:3 portrait, so random would have forced every figure into one
+shape or cost the pianist his piano. That specific blocker goes away once the
+whole pool shares one crop/size — which is happening anyway, now that the
+figure count is growing past the original four and needs a scalable spec
+regardless. With the pool uniform, random has no cost left to reject it for.
+
+**Consequences for the open items above:**
+- "Which figure goes to which site" — moot with one site; the figure is drawn
+  at random from the full pool each time the dialog opens.
+- The interchangeability constraint the §Rejected section identified is now a
+  *requirement* on asset prep (#859), not a reason to avoid random.
+- `DashboardPage.tsx:398`'s duplicate `EmptyState` implementation note still
+  stands, unaffected — it's now simply not being touched this pass.
+
+**Why no ADR, reassessed:** the three-part test still comes out the same way.
+Reversing to random and back to one site is still an afternoon's diff; the
+rule text still belongs in CLAUDE.md, not an ADR; the trade-off is real but
+this document already records it (now with the reversal alongside the
+original reasoning). No new ADR.
+
+CLAUDE.md's UI Rule text has been updated to match. `docs/agents/` and the
+tracking issue (#858) are the place to look for current sub-issue scope
+(#859/#860/#862); this document stays the design reference for the reasoning
+behind both the original and the amended shape.
