@@ -11,7 +11,6 @@ import {
 } from '@/components/ui/sheet';
 import { formatDate } from '@/lib/formatters';
 import { resolveApiBaseUrl } from '@/lib/apiBaseUrl';
-import { invoiceOwnerRoute } from '@/lib/invoiceActionRouting';
 import type { Communication } from '@/types/api';
 
 const API_BASE_URL = resolveApiBaseUrl(import.meta.env.VITE_API_BASE_URL);
@@ -61,12 +60,7 @@ function getStatusPrefix(isFailed: boolean, isPending: boolean): string {
 
 function AttachmentLink({ comm }: Readonly<{ comm: Communication }>) {
   if (!comm.document?.invoiceId) return null;
-  // ADR-0080: a series communication has no bookingId, so it needs the series-scoped preview
-  // route (#830) rather than the booking one. The owner-prefix decision already lives in
-  // invoiceOwnerRoute (one declaration per vocabulary, CLAUDE.md) — reuse it rather than
-  // re-deriving the same booking-vs-series branch here. `prefix` doesn't vary by action.
-  const { prefix } = invoiceOwnerRoute({ bookingId: comm.bookingId, seriesId: comm.seriesId }, 'edit');
-  const pdfUrl = `${API_BASE_URL}${prefix}/${comm.document.invoiceId}/preview.pdf`;
+  const pdfUrl = `${API_BASE_URL}/invoices/${comm.document.invoiceId}/preview.pdf`;
   return (
     <a
       href={pdfUrl}

@@ -123,11 +123,14 @@ async function main() {
   await prisma.invoiceLineItem.deleteMany({ where: { userId: USER_ID } });
   await prisma.invoice.deleteMany({ where: { userId: USER_ID } });
   await prisma.bookingChecklistItem.deleteMany({ where: { userId: USER_ID } });
+  await prisma.bookingBandChair.deleteMany({ where: { userId: USER_ID } });
+  await prisma.bookingBandMember.deleteMany({ where: { userId: USER_ID } });
   await prisma.performanceSet.deleteMany({ where: { userId: USER_ID } });
   await prisma.package.deleteMany({ where: { userId: USER_ID } });
   await prisma.booking.deleteMany({ where: { userId: USER_ID } });
   await prisma.bookingSeries.deleteMany({ where: { userId: USER_ID } });
   await prisma.packageTemplate.deleteMany({ where: { userId: USER_ID } });
+  await prisma.lineupTemplate.deleteMany({ where: { userId: USER_ID } });
   await prisma.contact.deleteMany({ where: { userId: USER_ID } });
   await prisma.song.deleteMany({ where: { userId: USER_ID } });
   await prisma.template.deleteMany({ where: { userId: USER_ID } });
@@ -1003,12 +1006,114 @@ async function main() {
     commBuiltInTypes: [],
   });
 
+  console.log('Seeding the band roster fixture...');
+
+  // Band members v1 (#879/#889, ADR-0072): one lineup template + one booking exercising all
+  // three chair states the musician actually looks at — a filled chair, a vacancy, and a
+  // filled-but-declined chair (DECLINED does not vacate the chair; only removal does). Applied
+  // to booking2's Wedding Ceremony package, mirroring what BookingsService.applyLineupTemplate
+  // (#884) would do by hand: chairs created, Package.lineupName snapshotted. Preprod runs on
+  // this seed and otherwise has no band to test the Band card / Itinerary / Copy Event against.
+  const [priya, jonah] = await Promise.all([
+    prisma.contact.create({
+      data: {
+        userId: USER_ID,
+        name: 'Priya Anand',
+        email: 'priya.anand@example.com',
+        phone: '07700 900501',
+        primaryRole: 'BAND_MEMBER',
+        primaryBandRole: 'Vocals',
+        instruments: ['Vocals'],
+        city: 'London',
+        postcode: 'N1 6DB',
+        country: 'GB',
+        notes: 'Dep vocalist — reliable, always early to soundcheck.',
+      },
+    }),
+    prisma.contact.create({
+      data: {
+        userId: USER_ID,
+        name: 'Jonah Pierce',
+        email: 'jonah.pierce@example.com',
+        phone: '07700 900502',
+        primaryRole: 'BAND_MEMBER',
+        primaryBandRole: 'Cello',
+        instruments: ['Cello'],
+        city: 'Reading',
+        postcode: 'RG1 2AB',
+        country: 'GB',
+        notes: 'Strings dep, based out near Reading.',
+      },
+    }),
+  ]);
+
+  const ceremonyTrio = await prisma.lineupTemplate.create({
+    data: {
+      userId: USER_ID,
+      label: 'Ceremony Trio',
+      slots: {
+        create: [
+          { userId: USER_ID, role: 'Vocals', order: 1 },
+          { userId: USER_ID, role: 'Piano', order: 2 },
+          { userId: USER_ID, role: 'Cello', order: 3 },
+        ],
+      },
+    },
+  });
+
+  await prisma.package.update({
+    where: { id: booking2Packages['Wedding Ceremony'] },
+    data: { lineupName: ceremonyTrio.label },
+  });
+
+  // Wires the "Wedding Ceremony" catalogue template to default to this lineup (ADR-0072 §3,
+  // #884), so the auto-apply-on-package-apply path is also hand-testable in preprod, not just
+  // the manual apply-a-lineup flow this booking already demonstrates.
+  await prisma.packageTemplate.updateMany({
+    where: { userId: USER_ID, label: 'Wedding Ceremony' },
+    data: { defaultLineupTemplateId: ceremonyTrio.id },
+  });
+
+  const priyaMember = await prisma.bookingBandMember.create({
+    data: {
+      userId: USER_ID,
+      bookingId: booking2.id,
+      contactId: priya.id,
+      status: 'CONFIRMED',
+      invitedAt: new Date('2026-05-12'),
+      respondedAt: new Date('2026-05-14'),
+    },
+  });
+  const jonahMember = await prisma.bookingBandMember.create({
+    data: {
+      userId: USER_ID,
+      bookingId: booking2.id,
+      contactId: jonah.id,
+      status: 'DECLINED',
+      invitedAt: new Date('2026-05-12'),
+      respondedAt: new Date('2026-05-15'),
+    },
+  });
+
+  await prisma.bookingBandChair.createMany({
+    data: [
+      // Filled — Priya has confirmed.
+      { userId: USER_ID, bookingId: booking2.id, packageId: booking2Packages['Wedding Ceremony'], role: 'Vocals', order: 1, memberId: priyaMember.id },
+      // Vacant — nobody assigned yet.
+      { userId: USER_ID, bookingId: booking2.id, packageId: booking2Packages['Wedding Ceremony'], role: 'Piano', order: 2, memberId: null },
+      // Filled but declined — Jonah is assigned and has said no; the chair stays occupied until
+      // the organiser vacates or replaces him.
+      { userId: USER_ID, bookingId: booking2.id, packageId: booking2Packages['Wedding Ceremony'], role: 'Cello', order: 3, memberId: jonahMember.id },
+    ],
+  });
+
   console.log('\n✓ Seed complete');
-  console.log(`  Contacts: 10 (including deletable venue ${kensingtonRoofGardens.name})`);
+  console.log(`  Contacts: 12 (including deletable venue ${kensingtonRoofGardens.name})`);
   console.log('  Songs: 33');
   console.log('  Templates: 7 built-in');
   console.log('  BookingSeries: 1 (Meridian quarterly socials, 2 bookings)');
   console.log('  Portal walkthrough: booking2 (Emma & James) — unsigned contract + published music form');
+  console.log('  Band roster: 1 lineup template (Ceremony Trio) on booking2 — filled chair, vacancy, declined chair');
   console.log('  Invoice states covered: DRAFT, ISSUED, SENT, PAID');
   console.log('  Bookings: 6 (Provisional, Confirmed ×2, Invoiced, Completed, Cancelled)');
 }

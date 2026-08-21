@@ -23,7 +23,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { InlineHint } from '@/components/common/InlineHint';
 import { useDismissibleHint } from '@/lib/hooks/useDismissibleHint';
-import { apiGet, apiPost, apiPatch, apiDelete } from '@/lib/api';
+import { ApiError, apiGet, apiPost, apiPatch, apiDelete } from '@/lib/api';
 import { invoiceOwnerRoute } from '@/lib/invoiceActionRouting';
 import { toast } from '@/lib/hooks/use-toast';
 import type { Invoice, InvoiceLineItem, InvoiceNumberPreview } from '@/types/api';
@@ -138,7 +138,7 @@ function useInvoiceAction<TResult>(opts: {
     mutationFn: opts.mutationFn,
     onSuccess: opts.onSuccess,
     onError: (error: unknown, variables: FormValues) => {
-      const is409 = error instanceof Response && error.status === 409;
+      const is409 = error instanceof ApiError && error.status === 409;
       const invoiceType = variables.isDeposit ? 'deposit' : 'balance';
       toast({
         title: is409
@@ -269,7 +269,7 @@ export default function InvoiceSheet({
   const createAndIssueMutation = useInvoiceAction({
     mutationFn: async (values) => {
       const draft = await apiPost<Invoice>(`/bookings/${bookingId}/invoices`, buildCreatePayload(values));
-      return apiPost<Invoice>(`/bookings/${bookingId}/invoices/${draft.id}/issue`, {});
+      return apiPost<Invoice>(`/invoices/${draft.id}/issue`, {});
     },
     fallbackErrorTitle: 'Failed to create invoice',
     onSuccess: (issuedInvoice) => {
@@ -312,11 +312,7 @@ export default function InvoiceSheet({
     mutationFn: async (values: FormValues) => {
       if (!invoice) throw new Error('No invoice to issue');
       await persistLineItemEdits(invoice, values);
-      // Issue is still owner-routed: the nine transitions have not migrated yet (#853). The
-      // prefix is derived from the invoice's own FK rather than the booking prop, so this
-      // reaches a series invoice's transition route instead of 404ing on a booking path.
-      const { prefix } = invoiceOwnerRoute(invoice, 'issue');
-      return apiPost<Invoice>(`${prefix}/${invoice.id}/issue`, {});
+      return apiPost<Invoice>(`/invoices/${invoice.id}/issue`, {});
     },
     onSuccess: (issuedInvoice) => {
       if (invoice) invalidateFor(invoice, 'issue');

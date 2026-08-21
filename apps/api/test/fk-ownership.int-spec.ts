@@ -122,7 +122,7 @@ describe('FK-ownership validation (integration)', () => {
       const invoiceId = created.body.id as string;
 
       const res = await request(app.getHttpServer())
-        .patch(`/api/bookings/${bookingId}/invoices/${invoiceId}`)
+        .patch(`/api/invoices/${invoiceId}`)
         .send({ billToContactId: foreignContactId });
       expect(res.status).toBe(404);
 

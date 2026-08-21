@@ -107,9 +107,9 @@ export const WithSeriesInvoiceAttachment: Story = {
     await expect(canvas.getByText('Series')).toBeVisible();
     const pdfLink = canvas.getByRole('link', { name: /Download attached invoice PDF/i });
     await expect(pdfLink).toBeVisible();
-    // ADR-0080: a series row resolves via the series-scoped preview route (#830), not the
-    // booking one — there is no bookingId to build a /bookings/... URL from.
-    await expect(pdfLink).toHaveAttribute('href', expect.stringContaining('/series/s1/invoices/inv2/preview.pdf'));
+    // #853, ADR-0069: invoice routes are owner-agnostic — a series row's PDF resolves through
+    // the same /invoices/:id path as a booking row's, with no owner prefix.
+    await expect(pdfLink).toHaveAttribute('href', expect.stringContaining('/invoices/inv2/preview.pdf'));
   },
 };
 

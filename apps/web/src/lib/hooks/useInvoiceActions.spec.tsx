@@ -45,7 +45,7 @@ describe('useInvoiceActions — mark-paid dialog (ADR-0068)', () => {
 
     act(() => result.current.markPaidDialog.onConfirm('2026-08-18', 'BACS-4417'));
     await waitFor(() =>
-      expect(apiPost).toHaveBeenCalledWith('/bookings/b1/invoices/i1/mark-paid', {
+      expect(apiPost).toHaveBeenCalledWith('/invoices/i1/mark-paid', {
         paidAt: '2026-08-18',
         paymentReference: 'BACS-4417',
       }),
@@ -68,7 +68,7 @@ describe('useInvoiceActions — correct payment dialog (TIM-46)', () => {
 
     act(() => result.current.markPaidDialog.onConfirm('2026-08-05', 'NEW-REF'));
     await waitFor(() =>
-      expect(apiPatch).toHaveBeenCalledWith('/bookings/b1/invoices/i1/payment', {
+      expect(apiPatch).toHaveBeenCalledWith('/invoices/i1/payment', {
         paidAt: '2026-08-05',
         paymentReference: 'NEW-REF',
       }),
@@ -84,21 +84,21 @@ describe('useInvoiceActions — correct payment dialog (TIM-46)', () => {
     act(() => result.current.requestCorrectPayment(paid));
     act(() => result.current.markPaidDialog.onConfirm('2026-08-02', ''));
     await waitFor(() =>
-      expect(apiPatch).toHaveBeenCalledWith('/bookings/b1/invoices/i1/payment', {
+      expect(apiPatch).toHaveBeenCalledWith('/invoices/i1/payment', {
         paidAt: '2026-08-02',
         paymentReference: undefined,
       }),
     );
   });
 
-  it('routes a series invoice correction to the series endpoint', async () => {
+  it('uses the same owner-agnostic endpoint for a series invoice correction', async () => {
     const { result } = setup();
     const paid = invoice({ id: 'si1', status: 'PAID', bookingId: null, seriesId: 's1', paidAt: '2026-08-02T00:00:00Z' });
 
     act(() => result.current.requestCorrectPayment(paid));
     act(() => result.current.markPaidDialog.onConfirm('2026-08-02', ''));
     await waitFor(() =>
-      expect(apiPatch).toHaveBeenCalledWith('/series/s1/invoices/si1/payment', expect.objectContaining({ paidAt: '2026-08-02' })),
+      expect(apiPatch).toHaveBeenCalledWith('/invoices/si1/payment', expect.objectContaining({ paidAt: '2026-08-02' })),
     );
   });
 });

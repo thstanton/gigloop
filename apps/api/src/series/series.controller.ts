@@ -1,18 +1,21 @@
-import { Body, Controller, Delete, Get, Header, HttpCode, NotFoundException, Param, Patch, Post, Req, Res } from '@nestjs/common';
+import { Controller, Get, NotFoundException, Param, Post, Req } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { SeriesService } from './series.service';
-import { SendInvoiceDto } from '../invoices/dto/send-invoice.dto';
-import { MarkSentDto } from '../invoices/dto/mark-sent.dto';
-import { MarkPaidDto } from '../invoices/dto/mark-paid.dto';
-import { IssueInvoiceDto } from '../invoices/dto/issue-invoice.dto';
 import { InvoiceResponseDto } from '../invoices/dto/invoice-response.dto';
-import { SeriesInvoiceDocumentResponseDto } from './dto/series-invoice-document-response.dto';
 import { CreateSeriesInvoiceResponseDto } from './dto/create-series-invoice-response.dto';
-import type { Request, Response } from 'express';
+import type { Request } from 'express';
 
 type AuthedRequest = Request & { userId: string };
-type AuthedResponse = Response;
 
+/**
+ * Series entity reads and invoice creation only (ADR-0069, #853). Every operation on a series
+ * invoice that already exists — GET/PATCH by id, line items, and all nine lifecycle transitions
+ * plus payment-correction — lives on `InvoiceOperationsController` (`/invoices/:id/...`), owner
+ * read off the invoice itself. `createInvoice` stays here because there is no invoice yet to
+ * derive an owner from; `previewInvoiceNumber` stays for the same reason, previewing the number
+ * a not-yet-created invoice would get; `getActiveInvoice` stays because it is how the client
+ * discovers a series invoice's id at all — the series has no list route, only a current one.
+ */
 @ApiTags('Series')
 @ApiBearerAuth('clerk-jwt')
 @Controller('series')
@@ -61,136 +64,5 @@ export class SeriesController {
     const invoice = await this.service.getActiveInvoice(req.userId, id);
     if (!invoice) throw new NotFoundException('No active series invoice');
     return invoice;
-  }
-
-  @ApiOperation({ summary: 'Issue a series draft invoice (assign number, lock line items, store PDF)' })
-  @ApiResponse({ status: 200, description: 'Invoice issued successfully', type: InvoiceResponseDto })
-  @ApiResponse({ status: 400, description: 'Invoice is not in DRAFT status, or the draft has no line items' })
-  @ApiResponse({ status: 404, description: 'Series or invoice not found' })
-  @Post(':id/invoices/:invoiceId/issue')
-  @HttpCode(200)
-  issueInvoice(
-    @Req() req: AuthedRequest,
-    @Param('id') id: string,
-    @Param('invoiceId') invoiceId: string,
-    @Body() dto: IssueInvoiceDto,
-  ) {
-    return this.service.issueInvoice(req.userId, id, invoiceId, dto);
-  }
-
-  @ApiOperation({ summary: 'Send a series invoice by email' })
-  @Post(':id/invoices/:invoiceId/send')
-  sendInvoice(
-    @Req() req: AuthedRequest,
-    @Param('id') id: string,
-    @Param('invoiceId') invoiceId: string,
-    @Body() dto: SendInvoiceDto,
-  ) {
-    return this.service.sendInvoice(req.userId, id, invoiceId, dto);
-  }
-
-  @ApiOperation({ summary: 'Mark a series invoice as sent without emailing' })
-  @ApiResponse({ status: 201, type: InvoiceResponseDto })
-  @Post(':id/invoices/:invoiceId/mark-sent')
-  markSentInvoice(
-    @Req() req: AuthedRequest,
-    @Param('id') id: string,
-    @Param('invoiceId') invoiceId: string,
-    @Body() dto: MarkSentDto,
-  ) {
-    return this.service.markSentInvoice(req.userId, id, invoiceId, dto);
-  }
-
-  @ApiOperation({ summary: 'Mark a series invoice as paid, recording the date received and an optional reference' })
-  @ApiResponse({ status: 200, type: InvoiceResponseDto })
-  @ApiResponse({ status: 400, description: 'Invoice is not sent, or the payment date is missing/unparseable' })
-  @Post(':id/invoices/:invoiceId/mark-paid')
-  @HttpCode(200)
-  markPaidInvoice(
-    @Req() req: AuthedRequest,
-    @Param('id') id: string,
-    @Param('invoiceId') invoiceId: string,
-    @Body() dto: MarkPaidDto,
-  ) {
-    return this.service.markPaidInvoice(req.userId, id, invoiceId, dto);
-  }
-
-  @ApiOperation({ summary: 'Correct the recorded payment (date + reference) on a paid series invoice' })
-  @ApiResponse({ status: 200, type: InvoiceResponseDto })
-  @ApiResponse({ status: 400, description: 'Invoice is not paid, or the payment date is missing/unparseable' })
-  @Patch(':id/invoices/:invoiceId/payment')
-  @HttpCode(200)
-  correctInvoicePayment(
-    @Req() req: AuthedRequest,
-    @Param('id') id: string,
-    @Param('invoiceId') invoiceId: string,
-    @Body() dto: MarkPaidDto,
-  ) {
-    return this.service.correctInvoicePayment(req.userId, id, invoiceId, dto);
-  }
-
-  @ApiOperation({ summary: 'Void a series invoice' })
-  @ApiResponse({ status: 200, type: InvoiceResponseDto })
-  @Post(':id/invoices/:invoiceId/void')
-  @HttpCode(200)
-  voidInvoice(
-    @Req() req: AuthedRequest,
-    @Param('id') id: string,
-    @Param('invoiceId') invoiceId: string,
-  ) {
-    return this.service.voidInvoice(req.userId, id, invoiceId);
-  }
-
-  @ApiOperation({
-    summary: 'Preview a series invoice PDF (regenerated from live data — for DRAFTs)',
-    description:
-      'Renders the invoice as it stands right now. Once issued, the stored PDF is the ' +
-      'authority — use the document endpoint so the musician sees exactly what the client got.',
-  })
-  @ApiResponse({ status: 200, description: 'PDF stream' })
-  @ApiResponse({ status: 404, description: 'Series or invoice not found' })
-  @Get(':id/invoices/:invoiceId/preview.pdf')
-  @Header('Content-Type', 'application/pdf')
-  @Header('Content-Disposition', 'inline; filename="series-invoice-preview.pdf"')
-  async previewInvoicePdf(
-    @Req() req: AuthedRequest,
-    @Param('id') id: string,
-    @Param('invoiceId') invoiceId: string,
-    @Res() res: AuthedResponse,
-  ) {
-    const buffer = await this.service.generateInvoicePreviewPdf(req.userId, id, invoiceId);
-    res.end(buffer);
-  }
-
-  @ApiOperation({
-    summary: 'Get the stored PDF document for an issued series invoice',
-    description:
-      'A series invoice document has no bookingId, so it appears in no booking document list ' +
-      '(#830). This is how the client discovers its id and the /documents/:id/download route.',
-  })
-  @ApiResponse({ status: 200, type: SeriesInvoiceDocumentResponseDto })
-  @ApiResponse({ status: 404, description: 'Series/invoice not found, or the invoice is still a DRAFT (no PDF yet)' })
-  @Get(':id/invoices/:invoiceId/document')
-  async getInvoiceDocument(
-    @Req() req: AuthedRequest,
-    @Param('id') id: string,
-    @Param('invoiceId') invoiceId: string,
-  ): Promise<SeriesInvoiceDocumentResponseDto> {
-    const doc = await this.service.getInvoiceDocument(req.userId, id, invoiceId);
-    // A DRAFT has no stored PDF yet. 404 (rather than a null body) so the client's
-    // apiGetNullable resolves it to null without a second shape to handle.
-    if (!doc) throw new NotFoundException('No stored PDF for this invoice');
-    return { id: doc.id, createdAt: doc.createdAt.toISOString(), url: doc.url };
-  }
-
-  @ApiOperation({ summary: 'Delete a DRAFT series invoice' })
-  @Delete(':id/invoices/:invoiceId')
-  @HttpCode(204)
-  deleteInvoice(
-    @Req() req: AuthedRequest,
-    @Param('id') id: string,
-    @Param('invoiceId') invoiceId: string,
-  ) {
-    return this.service.deleteInvoice(req.userId, id, invoiceId);
   }
 }

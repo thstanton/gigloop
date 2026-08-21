@@ -5,7 +5,7 @@ import Underline from '@tiptap/extension-underline';
 import Link_ from '@tiptap/extension-link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@clerk/react';
-import { apiGet, apiPostVoid } from '@/lib/api';
+import { ApiError, apiGet, apiPostVoid } from '@/lib/api';
 import { invoiceOwnerRoute } from '@/lib/invoiceActionRouting';
 import { toast } from '@/lib/hooks/use-toast';
 import {
@@ -262,7 +262,7 @@ export function useComposeEmail({
       // #631: the API rejects a music-form invite for an unpublished form with 409 — surface the
       // reason instead of the generic connectivity message.
       setSendError(
-        err instanceof Response && err.status === 409
+        err instanceof ApiError && err.status === 409
           ? 'Publish the music form before you can send its invite.'
           : 'Failed to send email. Check your internet connection and try again.',
       );

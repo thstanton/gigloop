@@ -7,8 +7,8 @@ const ALL_ACTIONS: InvoiceAction[] = ['issue', 'markSent', 'markPaid', 'void', '
 
 describe('invoiceOwnerRoute', () => {
   describe('booking invoice', () => {
-    it('routes to the booking invoices endpoint', () => {
-      expect(invoiceOwnerRoute(bookingInvoice, 'issue').prefix).toBe('/bookings/b1/invoices');
+    it('routes to the owner-agnostic invoices endpoint', () => {
+      expect(invoiceOwnerRoute(bookingInvoice, 'issue').prefix).toBe('/invoices');
     });
 
     it('invalidates invoices, documents and checklist on issue', () => {
@@ -39,8 +39,8 @@ describe('invoiceOwnerRoute', () => {
   });
 
   describe('series invoice', () => {
-    it('routes to the series invoices endpoint', () => {
-      expect(invoiceOwnerRoute(seriesInvoice, 'void').prefix).toBe('/series/s1/invoices');
+    it('routes to the same owner-agnostic invoices endpoint as a booking invoice', () => {
+      expect(invoiceOwnerRoute(seriesInvoice, 'void').prefix).toBe('/invoices');
     });
 
     // #830: the stored-document key mirrors the booking side's `bookingDocuments` on issue —

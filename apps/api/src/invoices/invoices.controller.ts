@@ -1,35 +1,30 @@
 import {
   Body,
   Controller,
-  Delete,
   Get,
-  Header,
-  HttpCode,
   Param,
-  Patch,
   Post,
   Query,
   Req,
-  Res,
 } from '@nestjs/common';
-import type { Response } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { InvoicesService } from './invoices.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
-import { UpdateInvoiceDto } from './dto/update-invoice.dto';
-import { IssueInvoiceDto } from './dto/issue-invoice.dto';
 import { PreviewInvoiceNumberQuery } from './dto/preview-invoice-number.query';
-import { SendInvoiceDto } from './dto/send-invoice.dto';
-import { MarkSentDto } from './dto/mark-sent.dto';
-import { MarkPaidDto } from './dto/mark-paid.dto';
-import { CreateLineItemDto } from './dto/create-line-item.dto';
-import { UpdateLineItemDto } from './dto/update-line-item.dto';
-import { InvoiceResponseDto, InvoiceLineItemResponseDto } from './dto/invoice-response.dto';
+import { InvoiceResponseDto } from './dto/invoice-response.dto';
 import type { Request } from 'express';
 
 type AuthedRequest = Request & { userId: string };
-type AuthedResponse = Response;
 
+/**
+ * Creation and booking-scoped reads only (ADR-0069, #853). Every operation on an invoice that
+ * already exists — GET/PATCH by id, line items, and all nine lifecycle transitions plus
+ * payment-correction — lives on `InvoiceOperationsController` (`/invoices/:id/...`), owner read
+ * off the invoice itself. What stays here genuinely needs the booking in the path: listing all
+ * of a booking's invoices, creating one (no invoice exists yet to derive an owner from), and
+ * previewing the number a not-yet-created invoice would get (also no invoice yet — see
+ * `InvoicesService.previewInvoiceNumber` and its series twin on `SeriesService`).
+ */
 @ApiTags('Invoices')
 @ApiBearerAuth('clerk-jwt')
 @Controller('bookings/:bookingId/invoices')
@@ -57,17 +52,6 @@ export class InvoicesController {
     return this.service.previewInvoiceNumber(req.userId, bookingId, query.isDeposit);
   }
 
-  @ApiOperation({ summary: 'Get an invoice by ID' })
-  @ApiResponse({ status: 200, type: InvoiceResponseDto })
-  @Get(':id')
-  findOne(
-    @Req() req: AuthedRequest,
-    @Param('bookingId') bookingId: string,
-    @Param('id') id: string,
-  ) {
-    return this.service.findOne(req.userId, bookingId, id);
-  }
-
   @ApiOperation({ summary: 'Create an invoice for a booking' })
   @ApiResponse({ status: 201, type: InvoiceResponseDto })
   @Post()
@@ -77,158 +61,5 @@ export class InvoicesController {
     @Body() dto: CreateInvoiceDto,
   ) {
     return this.service.create(req.userId, bookingId, dto);
-  }
-
-  @ApiOperation({ summary: 'Update an invoice' })
-  @ApiResponse({ status: 200, type: InvoiceResponseDto })
-  @Patch(':id')
-  update(
-    @Req() req: AuthedRequest,
-    @Param('bookingId') bookingId: string,
-    @Param('id') id: string,
-    @Body() dto: UpdateInvoiceDto,
-  ) {
-    return this.service.update(req.userId, bookingId, id, dto);
-  }
-
-  @ApiOperation({ summary: 'Issue a draft invoice: assign number, lock line items, store PDF' })
-  @ApiResponse({ status: 200, description: 'Invoice issued (ISSUED status)', type: InvoiceResponseDto })
-  @ApiResponse({ status: 400, description: 'Invoice is not a draft, or the draft has no line items' })
-  @Post(':id/issue')
-  issue(
-    @Req() req: AuthedRequest,
-    @Param('bookingId') bookingId: string,
-    @Param('id') id: string,
-    @Body() dto: IssueInvoiceDto,
-  ) {
-    return this.service.issue(req.userId, bookingId, id, dto);
-  }
-
-  @ApiOperation({ summary: 'Send an invoice email and mark it Sent' })
-  @ApiResponse({ status: 204, description: 'Invoice sent and marked Sent' })
-  @ApiResponse({ status: 400, description: 'Invoice is not issued (or draft for series)' })
-  @Post(':id/send')
-  @HttpCode(204)
-  send(
-    @Req() req: AuthedRequest,
-    @Param('bookingId') bookingId: string,
-    @Param('id') id: string,
-    @Body() dto: SendInvoiceDto,
-  ) {
-    return this.service.send(req.userId, bookingId, id, dto);
-  }
-
-  @ApiOperation({ summary: 'Mark an invoice as sent without emailing' })
-  @ApiResponse({ status: 200, description: 'Invoice marked Sent', type: InvoiceResponseDto })
-  @ApiResponse({ status: 400, description: 'Invoice is not a draft' })
-  @Post(':id/mark-sent')
-  markSent(
-    @Req() req: AuthedRequest,
-    @Param('bookingId') bookingId: string,
-    @Param('id') id: string,
-    @Body() dto: MarkSentDto,
-  ) {
-    return this.service.markSent(req.userId, bookingId, id, dto);
-  }
-
-  @ApiOperation({ summary: 'Void an invoice (SENT or PAID only; drafts must be deleted)' })
-  @ApiResponse({ status: 200, description: 'Invoice voided', type: InvoiceResponseDto })
-  @ApiResponse({ status: 400, description: 'Invoice is a draft or already void' })
-  @Post(':id/void')
-  voidInvoice(
-    @Req() req: AuthedRequest,
-    @Param('bookingId') bookingId: string,
-    @Param('id') id: string,
-  ) {
-    return this.service.voidInvoice(req.userId, bookingId, id);
-  }
-
-  @ApiOperation({ summary: 'Mark an invoice as paid, recording the date received and an optional reference' })
-  @ApiResponse({ status: 200, description: 'Invoice marked Paid; paidAt set to the received date. A paid deposit or balance invoice auto-completes its checklist received step', type: InvoiceResponseDto })
-  @ApiResponse({ status: 400, description: 'Invoice is not sent, or the payment date is missing/unparseable' })
-  @Post(':id/mark-paid')
-  markPaid(
-    @Req() req: AuthedRequest,
-    @Param('bookingId') bookingId: string,
-    @Param('id') id: string,
-    @Body() dto: MarkPaidDto,
-  ) {
-    return this.service.markPaid(req.userId, bookingId, id, dto);
-  }
-
-  @ApiOperation({ summary: 'Correct the recorded payment (date + reference) on a paid invoice' })
-  @ApiResponse({ status: 200, description: 'Payment corrected; invoice stays Paid, document unchanged', type: InvoiceResponseDto })
-  @ApiResponse({ status: 400, description: 'Invoice is not paid, or the payment date is missing/unparseable' })
-  @Patch(':id/payment')
-  correctPayment(
-    @Req() req: AuthedRequest,
-    @Param('bookingId') bookingId: string,
-    @Param('id') id: string,
-    @Body() dto: MarkPaidDto,
-  ) {
-    return this.service.correctPayment(req.userId, bookingId, id, dto);
-  }
-
-  @ApiOperation({ summary: 'Delete an invoice' })
-  @Delete(':id')
-  @HttpCode(204)
-  delete(
-    @Req() req: AuthedRequest,
-    @Param('bookingId') bookingId: string,
-    @Param('id') id: string,
-  ) {
-    return this.service.delete(req.userId, bookingId, id);
-  }
-
-  @ApiOperation({ summary: 'Add a line item to an invoice' })
-  @ApiResponse({ status: 201, type: InvoiceLineItemResponseDto })
-  @Post(':id/line-items')
-  addLineItem(
-    @Req() req: AuthedRequest,
-    @Param('bookingId') bookingId: string,
-    @Param('id') id: string,
-    @Body() dto: CreateLineItemDto,
-  ) {
-    return this.service.addLineItem(req.userId, bookingId, id, dto);
-  }
-
-  @ApiOperation({ summary: 'Update a line item' })
-  @ApiResponse({ status: 200, type: InvoiceLineItemResponseDto })
-  @Patch(':id/line-items/:itemId')
-  updateLineItem(
-    @Req() req: AuthedRequest,
-    @Param('bookingId') bookingId: string,
-    @Param('id') id: string,
-    @Param('itemId') itemId: string,
-    @Body() dto: UpdateLineItemDto,
-  ) {
-    return this.service.updateLineItem(req.userId, bookingId, id, itemId, dto);
-  }
-
-  @ApiOperation({ summary: 'Remove a line item from an invoice' })
-  @Delete(':id/line-items/:itemId')
-  @HttpCode(204)
-  deleteLineItem(
-    @Req() req: AuthedRequest,
-    @Param('bookingId') bookingId: string,
-    @Param('id') id: string,
-    @Param('itemId') itemId: string,
-  ) {
-    return this.service.deleteLineItem(req.userId, bookingId, id, itemId);
-  }
-
-  @ApiOperation({ summary: 'Preview invoice PDF' })
-  @ApiResponse({ status: 200, description: 'PDF stream' })
-  @Get(':id/preview.pdf')
-  @Header('Content-Type', 'application/pdf')
-  @Header('Content-Disposition', 'inline; filename="invoice-preview.pdf"')
-  async previewPdf(
-    @Req() req: AuthedRequest,
-    @Param('bookingId') bookingId: string,
-    @Param('id') id: string,
-    @Res() res: AuthedResponse,
-  ) {
-    const buffer = await this.service.generatePreviewPdf(req.userId, bookingId, id);
-    res.end(buffer);
   }
 }

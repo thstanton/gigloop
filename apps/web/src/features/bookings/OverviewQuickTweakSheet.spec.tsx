@@ -7,10 +7,14 @@ import { apiPatch } from '@/lib/api';
 
 vi.mock('@clerk/react', () => ({ useAuth: () => ({ isLoaded: true }) }));
 
-vi.mock('@/lib/api', () => ({
-  apiGet: vi.fn().mockResolvedValue([]),
-  apiPatch: vi.fn().mockResolvedValue({}),
-}));
+vi.mock('@/lib/api', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/api')>('@/lib/api');
+  return {
+    ApiError: actual.ApiError,
+    apiGet: vi.fn().mockResolvedValue([]),
+    apiPatch: vi.fn().mockResolvedValue({}),
+  };
+});
 
 function renderSheet() {
   const onOpenChange = vi.fn();

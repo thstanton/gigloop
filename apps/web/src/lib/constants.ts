@@ -390,14 +390,18 @@ export interface LogisticsFieldRow {
   icon: string;
   group: 'anchor' | 'detail';
   control: 'input' | 'select' | 'textarea';
-  /** Whether this fact is, by domain default, relevant to the band (ADR-0072 §4/§6). No badge is
-   *  ever shown for it here (ADR-0073 §7) — #880 is what reads this column, via BAND_PORTAL_FIELDS. */
+  /** Whether this FIELD TYPE is, by domain default, relevant to the band (ADR-0072 §4/§6) — a
+   *  table-level classification, distinct from `BookingLogisticsEntry.shareWithBand` (a per-entry,
+   *  organiser-toggled flag on the live value, currently always `false` with no UI to set it — see
+   *  `DetailsFields.entryFromBooking`). #880 is what reconciles the two, building
+   *  `BAND_PORTAL_FIELDS` from this column. No badge is ever shown for either (ADR-0073 §7). */
   shareWithBand: boolean;
   /** Present (true) only on a field gated behind Band members v1 (#888) — absent means always on,
    *  flag or no flag. */
   bandOnly?: true;
-  /** The dep-profile Contact field this logistics field prefills from (ADR-0072 §4), when a
-   *  pairing exists — declared as data so a future field can never be added half-paired. */
+  /** The dep-profile Contact field paired with this logistics field (ADR-0072 §4) — declared as
+   *  data so a future field can never be added half-paired. No prefill wiring exists yet; #880
+   *  is what reads this pairing. */
   profileField?: 'travelNotes' | 'outfitNotes';
 }
 
@@ -464,9 +468,10 @@ export const LOGISTICS_BAND_ONLY_KEYS: readonly LogisticsDetailKey[] = LOGISTICS
   .filter((row): row is DetailRow & { bandOnly: true } => 'bandOnly' in row && row.bandOnly === true)
   .map((row) => row.value);
 
-/** The dep-profile Contact field each paired logistics field prefills from (ADR-0072 §4) — declared
- *  as data so a future field can never be added half-paired. Absent (not `undefined`-valued) for
- *  an unpaired field, since `profileField` isn't a common key across every row. */
+/** The dep-profile Contact field paired with each logistics field (ADR-0072 §4) — declared as data
+ *  so a future field can never be added half-paired. No prefill wiring reads this yet (#880 does).
+ *  Absent (not `undefined`-valued) for an unpaired field, since `profileField` isn't a common key
+ *  across every row. */
 export const LOGISTICS_PROFILE_FIELD_PAIRING: Partial<Record<LogisticsDetailKey, 'travelNotes' | 'outfitNotes'>> =
   Object.fromEntries(
     LOGISTICS_FIELDS
