@@ -275,7 +275,7 @@ describe('ComposeEmailSheet — series invoice cover', () => {
 
     await waitFor(() =>
       expect(vi.mocked(apiPostVoid)).toHaveBeenCalledWith(
-        '/series/s1/invoices/ser-1/send',
+        '/invoices/ser-1/send',
         expect.objectContaining({ to: 'bookings@hotel.test', contactId: 'c-series', templateId: 'tpl-series' }),
       ),
     );

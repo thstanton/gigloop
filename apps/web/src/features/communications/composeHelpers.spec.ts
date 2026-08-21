@@ -523,7 +523,7 @@ describe('buildSendRequest', () => {
 
   it('routes invoice emails to the invoice-send endpoint', () => {
     const { url } = buildSendRequest({ ...base, invoice: bookingSendInvoice });
-    expect(url).toBe('/bookings/b1/invoices/inv-1/send');
+    expect(url).toBe('/invoices/inv-1/send');
   });
 
   it('includes issue/due dates for draft invoices only', () => {
@@ -709,13 +709,13 @@ describe('series compose target', () => {
       templateId: 'tpl-1',
     };
 
-    it('posts to the series send route, derived from the invoice rather than the host booking', () => {
-      expect(buildSendRequest({ ...base, invoice: seriesInvoice }).url).toBe('/series/s1/invoices/ser-1/send');
+    it('posts to the invoice-send endpoint using the invoice id, not the host booking', () => {
+      expect(buildSendRequest({ ...base, invoice: seriesInvoice }).url).toBe('/invoices/ser-1/send');
     });
 
-    it('still posts a booking-owned invoice to the booking route from the same sheet', () => {
+    it('still uses the invoice id (not the mounted bookingId) for a booking-owned invoice from the same sheet', () => {
       const bookingInvoice = makeInvoice({ id: 'bal-9', bookingId: 'b1', seriesId: null });
-      expect(buildSendRequest({ ...base, invoice: bookingInvoice }).url).toBe('/bookings/b1/invoices/bal-9/send');
+      expect(buildSendRequest({ ...base, invoice: bookingInvoice }).url).toBe('/invoices/bal-9/send');
     });
   });
 });

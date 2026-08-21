@@ -56,13 +56,6 @@ export class InvoicesRepository {
     });
   }
 
-  findOne(userId: string, bookingId: string, id: string) {
-    return this.prisma.invoice.findFirst({
-      where: { id, userId, bookingId },
-      include: invoiceIncludes,
-    });
-  }
-
   // Owner-agnostic read (ADR-0069): an invoice that already exists is found by its own id,
   // with the owner read off the row rather than off the path. Tenancy is unchanged — the
   // `userId` predicate is the same one the owner-scoped reads carry (ADR-0061); what is
@@ -374,7 +367,7 @@ export class InvoicesRepository {
   // never status or document fields.
   updatePaymentDetails(invoiceId: string, paidAt: Date, paymentReference: string | null) {
     return this.prisma.invoice.update({
-      where: { id: invoiceId }, // scoped-upstream: service findOne/findSeriesInvoiceById proved ownership (ADR-0061)
+      where: { id: invoiceId }, // scoped-upstream: service findById proved ownership (ADR-0061)
       data: { paidAt, paymentReference },
       include: invoiceIncludes,
     });
@@ -442,13 +435,6 @@ export class InvoicesRepository {
   findActiveSeriesInvoice(userId: string, seriesId: string) {
     return this.prisma.invoice.findFirst({
       where: { seriesId, userId, status: { not: 'VOID' } },
-      include: invoiceIncludes,
-    });
-  }
-
-  findSeriesInvoiceById(userId: string, seriesId: string, invoiceId: string) {
-    return this.prisma.invoice.findFirst({
-      where: { id: invoiceId, seriesId, userId },
       include: invoiceIncludes,
     });
   }

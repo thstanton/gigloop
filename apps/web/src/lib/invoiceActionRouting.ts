@@ -12,18 +12,20 @@ export type InvoiceAction = 'edit' | 'issue' | 'send' | 'markSent' | 'markPaid' 
  * are per-action (they were irregular in the two pre-#724 implementations and are
  * preserved exactly here).
  *
- * `edit` was added by #845, when editing an existing invoice became possible for a series
- * invoice at all. Note the *prefix* is only still owner-derived because the nine transitions
- * have yet to migrate (#853); the edit and line-item writes themselves now go to the
- * owner-agnostic `/invoices/:id` family, so only the cache keys here matter for `edit`.
+ * `prefix` is a constant, not derived from the owner (#853, ADR-0069): every operation on an
+ * invoice that already exists — the nine lifecycle transitions plus payment-correction, edit,
+ * and line-item writes — now goes to the owner-agnostic `/invoices/:id` family. Only the cache
+ * keys below still branch on owner.
  */
 export function invoiceOwnerRoute(
   invoice: Pick<Invoice, 'bookingId' | 'seriesId'>,
   action: InvoiceAction,
 ): { prefix: string; keys: (string | null)[][] } {
+  const prefix = '/invoices';
+
   if (invoice.seriesId) {
     return {
-      prefix: `/series/${invoice.seriesId}/invoices`,
+      prefix,
       // The document query is keyed [seriesInvoiceDocument, seriesId, invoiceId]; TanStack
       // matches by prefix, so the seriesId-only key invalidates it whatever the invoice id.
       keys: [['seriesInvoice', invoice.seriesId], ['seriesInvoiceDocument', invoice.seriesId]],
@@ -45,5 +47,5 @@ export function invoiceOwnerRoute(
     delete: [['bookingInvoices', b]],
   };
 
-  return { prefix: `/bookings/${b}/invoices`, keys: keys[action] };
+  return { prefix, keys: keys[action] };
 }

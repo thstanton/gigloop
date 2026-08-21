@@ -121,7 +121,7 @@ describe('InvoicesService.send (integration) — DRAFT guard', () => {
     const mockComms = { sendEmail: jest.fn() } as unknown as CommunicationsService;
 
     const mockInvoicesRepo = {
-      findOne: jest.fn().mockResolvedValue(draftInvoice),
+      findById: jest.fn().mockResolvedValue(draftInvoice),
       markSentById: jest.fn(),
       markPaidBase: jest.fn(),
       voidInvoice: jest.fn(),
@@ -133,7 +133,7 @@ describe('InvoicesService.send (integration) — DRAFT guard', () => {
 
   it('rejects with BadRequestException — DRAFT must be issued before sending', async () => {
     await expect(
-      service.send(userId, bookingId, invoiceId, {
+      service.sendById(userId, invoiceId, {
         to: 'client@example.com',
         contactId: 'c1',
         subject: 'Invoice',
@@ -164,7 +164,7 @@ describe('InvoicesService.send (integration) — ISSUED invoice', () => {
     jest.spyOn(shared.documents, 'getStoredInvoicePdfBuffer').mockResolvedValue({ buffer: storedPdfBuffer, documentId: 'doc-stored' });
 
     const mockInvoicesRepo = {
-      findOne: jest.fn().mockResolvedValue(issuedInvoice),
+      findById: jest.fn().mockResolvedValue(issuedInvoice),
       markSentById: jest.fn().mockResolvedValue({ ...issuedInvoice, status: 'SENT' }),
       markPaidBase: jest.fn(),
       voidInvoice: jest.fn(),
@@ -175,7 +175,7 @@ describe('InvoicesService.send (integration) — ISSUED invoice', () => {
   });
 
   it('sends the stored PDF without regenerating (putObject not called)', async () => {
-    await service.send(userId, bookingId, invoiceId, {
+    await service.sendById(userId, invoiceId, {
       // issueDate omitted — ISSUED invoices already have dates set at issue time
       to: 'client@example.com',
       contactId: 'c1',
@@ -196,7 +196,7 @@ describe('InvoicesService.send (integration) — ISSUED invoice', () => {
     // The communication record is created with documentId so the comms log can link to the PDF.
     // Document.userId = invoice sender's userId — cross-tenant access is structurally impossible
     // because Communication.userId + Document.userId are both scoped to the same user at creation.
-    await service.send(userId, bookingId, invoiceId, {
+    await service.sendById(userId, invoiceId, {
       to: 'client@example.com',
       contactId: 'c1',
       subject: 'Invoice INV-2026-001',
@@ -227,7 +227,7 @@ describe('InvoicesService.markSent (integration) — ISSUED invoice', () => {
 
     markSentByIdMock = jest.fn().mockResolvedValue({ ...issuedInvoice, status: 'SENT' });
     const mockInvoicesRepo = {
-      findOne: jest.fn().mockResolvedValue(issuedInvoice),
+      findById: jest.fn().mockResolvedValue(issuedInvoice),
       markSentById: markSentByIdMock,
       markPaidBase: jest.fn(),
       voidInvoice: jest.fn(),
@@ -239,7 +239,7 @@ describe('InvoicesService.markSent (integration) — ISSUED invoice', () => {
 
   it('transitions ISSUED to SENT without generating a new PDF', async () => {
     // Dates omitted — ISSUED invoice already has dates set at issue time
-    const result = await service.markSent(userId, bookingId, invoiceId, {});
+    const result = await service.markSentById(userId, invoiceId, {});
 
     expect(result.status).toBe('SENT');
     // PDF was stored at issue time — mark-sent must not generate or store another
@@ -261,7 +261,7 @@ describe('InvoicesService.issue (integration)', () => {
     const mockComms = { sendEmail: jest.fn() } as unknown as CommunicationsService;
 
     const mockInvoicesRepo = {
-      findOne: jest
+      findById: jest
         .fn()
         .mockResolvedValueOnce(draftInvoice)
         .mockResolvedValueOnce(issuedInvoice),
@@ -275,7 +275,7 @@ describe('InvoicesService.issue (integration)', () => {
   });
 
   it('generates a valid PDF and stores it to storage when issuing a draft invoice', async () => {
-    await service.issue(userId, bookingId, invoiceId, {
+    await service.issueById(userId, invoiceId, {
       issueDate: '2026-06-01',
       dueDate: '2026-06-15',
     });

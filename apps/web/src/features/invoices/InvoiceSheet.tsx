@@ -269,7 +269,7 @@ export default function InvoiceSheet({
   const createAndIssueMutation = useInvoiceAction({
     mutationFn: async (values) => {
       const draft = await apiPost<Invoice>(`/bookings/${bookingId}/invoices`, buildCreatePayload(values));
-      return apiPost<Invoice>(`/bookings/${bookingId}/invoices/${draft.id}/issue`, {});
+      return apiPost<Invoice>(`/invoices/${draft.id}/issue`, {});
     },
     fallbackErrorTitle: 'Failed to create invoice',
     onSuccess: (issuedInvoice) => {
@@ -312,11 +312,7 @@ export default function InvoiceSheet({
     mutationFn: async (values: FormValues) => {
       if (!invoice) throw new Error('No invoice to issue');
       await persistLineItemEdits(invoice, values);
-      // Issue is still owner-routed: the nine transitions have not migrated yet (#853). The
-      // prefix is derived from the invoice's own FK rather than the booking prop, so this
-      // reaches a series invoice's transition route instead of 404ing on a booking path.
-      const { prefix } = invoiceOwnerRoute(invoice, 'issue');
-      return apiPost<Invoice>(`${prefix}/${invoice.id}/issue`, {});
+      return apiPost<Invoice>(`/invoices/${invoice.id}/issue`, {});
     },
     onSuccess: (issuedInvoice) => {
       if (invoice) invalidateFor(invoice, 'issue');

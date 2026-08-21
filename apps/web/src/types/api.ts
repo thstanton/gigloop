@@ -657,13 +657,16 @@ export interface Document {
 }
 
 /**
- * The stored PDF backing an issued series invoice (#830).
+ * The stored PDF backing an issued invoice, whichever owner it has (#830, generalised by #853).
+ * Mirrors `InvoiceDocumentResponseDto`.
  *
  * Deliberately narrower than `Document`: it carries no `portalVisibility`, because that verdict
- * is a *booking* portal concern (ADR-0054) and a series invoice belongs to no single booking.
- * `url` is the same access-controlled app route — open it via `openDocument()`.
+ * is a *booking* portal concern (ADR-0054) — a series invoice belongs to no single booking, and
+ * a booking invoice reaches this shape only via the owner-agnostic `/invoices/:id/document`
+ * route, which advertises no such opinion either. `url` is the same access-controlled app
+ * route — open it via `openDocument()`.
  */
-export interface SeriesInvoiceDocument {
+export interface InvoiceDocument {
   id: string;
   createdAt: string;
   url: string;

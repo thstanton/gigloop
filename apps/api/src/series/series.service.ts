@@ -2,14 +2,7 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import { Prisma } from '@prisma/client';
 import { SeriesRepository } from './series.repository';
 import { InvoicesRepository } from '../invoices/invoices.repository';
-import { InvoiceTransitionService } from '../invoices/invoice-transition.service';
-import { DocumentsService } from '../documents/documents.service';
 import { computeJoinInsertion, reconcile } from '../invoices/series-line-reconciler';
-import { isDeletable } from '../invoices/invoice-transition-rules';
-import { SendInvoiceDto } from '../invoices/dto/send-invoice.dto';
-import { MarkSentDto } from '../invoices/dto/mark-sent.dto';
-import { MarkPaidDto } from '../invoices/dto/mark-paid.dto';
-import { IssueInvoiceDto } from '../invoices/dto/issue-invoice.dto';
 
 function buildLineItemDescription(date: Date, sets: Array<{ label: string | null; duration: number }>): string {
   const dateStr = date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -49,8 +42,6 @@ export class SeriesService {
   constructor(
     private repo: SeriesRepository,
     private invoicesRepo: InvoicesRepository,
-    private transition: InvoiceTransitionService,
-    private documents: DocumentsService,
   ) {}
 
   findAll(userId: string) {
@@ -127,85 +118,11 @@ export class SeriesService {
     return this.invoicesRepo.previewSeriesInvoiceNumber(userId, seriesId);
   }
 
-  async issueInvoice(userId: string, seriesId: string, invoiceId: string, dto: IssueInvoiceDto) {
-    const invoice = await this.invoicesRepo.findSeriesInvoiceById(userId, seriesId, invoiceId);
-    if (!invoice) throw new NotFoundException('Invoice not found');
-    return this.transition.issueInvoice(userId, invoice, dto);
-  }
-
-  async voidInvoice(userId: string, seriesId: string, invoiceId: string) {
-    const invoice = await this.invoicesRepo.findSeriesInvoiceById(userId, seriesId, invoiceId);
-    if (!invoice) throw new NotFoundException('Invoice not found');
-    return this.transition.voidInvoice(invoice);
-  }
-
-  async deleteInvoice(userId: string, seriesId: string, invoiceId: string) {
-    const invoice = await this.invoicesRepo.findSeriesInvoiceById(userId, seriesId, invoiceId);
-    if (!invoice) throw new NotFoundException('Invoice not found');
-    if (!isDeletable(invoice)) throw new BadRequestException('Only DRAFT invoices can be deleted');
-    return this.invoicesRepo.delete(invoiceId);
-  }
-
-  async sendInvoice(userId: string, seriesId: string, invoiceId: string, dto: SendInvoiceDto) {
-    const invoice = await this.invoicesRepo.findSeriesInvoiceById(userId, seriesId, invoiceId);
-    if (!invoice) throw new NotFoundException('Invoice not found');
-    return this.transition.send(userId, invoice, dto);
-  }
-
-  async markSentInvoice(userId: string, seriesId: string, invoiceId: string, dto: MarkSentDto) {
-    const invoice = await this.invoicesRepo.findSeriesInvoiceById(userId, seriesId, invoiceId);
-    if (!invoice) throw new NotFoundException('Invoice not found');
-    return this.transition.markSent(invoice, dto);
-  }
-
-  async markPaidInvoice(userId: string, seriesId: string, invoiceId: string, dto: MarkPaidDto) {
-    const invoice = await this.invoicesRepo.findSeriesInvoiceById(userId, seriesId, invoiceId);
-    if (!invoice) throw new NotFoundException('Invoice not found');
-    return this.transition.markPaid(invoice, dto);
-  }
-
-  async correctInvoicePayment(userId: string, seriesId: string, invoiceId: string, dto: MarkPaidDto) {
-    const invoice = await this.invoicesRepo.findSeriesInvoiceById(userId, seriesId, invoiceId);
-    if (!invoice) throw new NotFoundException('Invoice not found');
-    return this.transition.correctPayment(invoice, dto);
-  }
-
-  // ─── Invoice PDF access (#830) ─────────────────────────────────────────────
-  //
-  // A series invoice's PDF is generated and stored at issue time exactly like a booking
-  // invoice's, but its Document carries `bookingId: null` (it belongs to no single booking), so
-  // it appears in no booking's document list. Without these two reads the artifact exists and is
-  // emailed to the client, yet the musician has no route to it at all.
-
-  /**
-   * The PDF a musician can look at *before* issuing. Regenerated from live data, so it is
-   * DRAFT-only by contract: once issued, the *stored* artifact is the authority — what was
-   * previewed = what is in Documents = what the client received (InvoiceTransitionService.send).
-   * Issued invoices go through {@link getInvoiceDocument} instead.
-   */
-  async generateInvoicePreviewPdf(userId: string, seriesId: string, invoiceId: string): Promise<Buffer> {
-    const invoice = await this.invoicesRepo.findSeriesInvoiceById(userId, seriesId, invoiceId);
-    if (!invoice) throw new NotFoundException('Invoice not found');
-    // A draft has no number yet — render the provisional number it would receive on issue, so the
-    // preview doesn't show a placeholder for its only use case (mirrors the booking preview).
-    let previewNumber: string | undefined;
-    if (!invoice.invoiceNumber) {
-      const { invoiceNumber } = await this.invoicesRepo.previewSeriesInvoiceNumber(userId, seriesId);
-      previewNumber = invoiceNumber;
-    }
-    return this.documents.generatePreviewPdf(userId, invoiceId, previewNumber);
-  }
-
-  /**
-   * The stored PDF backing an issued series invoice — how the client discovers the document id,
-   * and from there the shared access-controlled `/documents/:id/download` route (ADR-0059).
-   * Null while the invoice is a DRAFT: no PDF exists until issue.
-   */
-  async getInvoiceDocument(userId: string, seriesId: string, invoiceId: string) {
-    const invoice = await this.invoicesRepo.findSeriesInvoiceById(userId, seriesId, invoiceId);
-    if (!invoice) throw new NotFoundException('Invoice not found');
-    return this.documents.findByInvoice(userId, invoiceId);
-  }
+  // The nine lifecycle transitions (issue/void/delete/send/mark-sent/mark-paid/payment-correction)
+  // plus the PDF-preview and stored-document reads that used to live here, each resolving via
+  // `findSeriesInvoiceById`, moved to `InvoicesService`'s owner-agnostic `*ById` methods and
+  // `InvoiceOperationsController` (#853, ADR-0069) — one route now serves a booking invoice and
+  // a series invoice alike, owner read off the invoice row rather than off this seriesId param.
 
   // ─── Series membership guard + sync ───────────────────────────────────────
 

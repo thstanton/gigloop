@@ -157,7 +157,7 @@ export default function InvoiceSection({ bookingId }: Readonly<InvoiceSectionPro
   const invoiceActions = useInvoiceActions();
 
   function openPreviewPdf(invoice: Invoice) {
-    openGeneratedPdf(`/bookings/${bookingId}/invoices/${invoice.id}/preview.pdf`, () =>
+    openGeneratedPdf(`/invoices/${invoice.id}/preview.pdf`, () =>
       toast({ title: 'Failed to open preview', variant: 'destructive' }),
     );
   }
