@@ -86,7 +86,13 @@ export default function BookingStatusDropdown({
     );
 
   const handleSelect = (s: BookingStatus) => {
-    if (s === currentStatus) return;
+    // Guard against `displayStatus`, the optimistic value this control is actually showing —
+    // not `currentStatus`, the server-confirmed prop. The parent only updates that prop once its
+    // query cache refetches post-mutation, which lags this component's own optimistic update. A
+    // user reopening the dropdown and re-selecting the pre-change status inside that lag would
+    // otherwise see `s === currentStatus` (still the stale pre-change value) and get silently
+    // no-op'd instead of reverted.
+    if (s === displayStatus) return;
     const outstanding = outstandingFor(s);
     if (outstanding.length > 0) {
       setPendingStatus(s);
@@ -117,7 +123,7 @@ export default function BookingStatusDropdown({
               <span className={cn('inline-flex items-center border-l-[3px] pl-2 pr-2.5 py-0.5 text-xs font-medium', pillClasses(s))}>
                 {BOOKING_STATUS_LABELS[s]}
               </span>
-              {s === currentStatus && <Check size={12} className="ml-auto" />}
+              {s === displayStatus && <Check size={12} className="ml-auto" />}
             </DropdownMenuItem>
           ))}
         </DropdownMenuContent>
