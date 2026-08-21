@@ -20,10 +20,14 @@ vi.mock('@tiptap/react', () => ({
   EditorContent: () => null,
 }));
 
-vi.mock('@/lib/api', () => ({
-  apiGet: vi.fn(),
-  apiPostVoid: vi.fn(),
-}));
+vi.mock('@/lib/api', async () => {
+  const { ApiError } = await vi.importActual<typeof import('@/lib/apiError')>('@/lib/apiError');
+  return {
+    ApiError,
+    apiGet: vi.fn(),
+    apiPostVoid: vi.fn(),
+  };
+});
 
 const mockContact = {
   id: 'c1',
@@ -146,10 +150,10 @@ describe('ComposeEmailSheet — mutation error recovery', () => {
 
   it('shows error and re-enables Send after failure, closes sheet on successful retry', async () => {
     const user = userEvent.setup();
-    const { apiPostVoid } = await import('@/lib/api');
+    const { apiPostVoid, ApiError } = await import('@/lib/api');
 
     vi.mocked(apiPostVoid)
-      .mockRejectedValueOnce(new Response('Internal Server Error', { status: 500 }))
+      .mockRejectedValueOnce(new ApiError(500, 'Internal Server Error'))
       .mockResolvedValueOnce(undefined);
 
     render(<Wrapper />);

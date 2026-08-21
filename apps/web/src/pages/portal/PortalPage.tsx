@@ -2,7 +2,7 @@ import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { PreviewBanner } from './PreviewBanner';
 import { useQuery } from '@tanstack/react-query';
 import { FileText, Download, CheckCircle, Clock, Music, ClipboardCheck, Mail, Phone } from 'lucide-react';
-import { getPortalData } from '../../lib/portalApi';
+import { ApiError, getPortalData } from '../../lib/portalApi';
 import { PortalLayout, getDisplayFontClass, isRomantic } from '../../layouts/PortalLayout';
 import { PACKAGE_ICON_MAP } from '../../lib/constants';
 import type { PortalData, PortalDocument, PortalPublicProfile, PortalBookingSet, PortalBookingFormat } from '../../types/api';
@@ -444,7 +444,7 @@ export default function PortalPage() {
   }
 
   if (isError || !data) {
-    const status = error instanceof Response ? error.status : 0;
+    const status = error instanceof ApiError ? error.status : 0;
     return (
       <div className="min-h-screen flex items-center justify-center bg-white px-6">
         <div className="text-center max-w-sm">

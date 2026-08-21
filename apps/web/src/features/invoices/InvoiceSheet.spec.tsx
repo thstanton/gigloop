@@ -20,12 +20,16 @@ vi.mock('@clerk/react', () => ({
   useAuth: () => ({ isLoaded: true }),
 }));
 
-vi.mock('@/lib/api', () => ({
-  apiGet: vi.fn().mockResolvedValue({ invoiceNumber: 'INV-2026-001', willReuse: false }),
-  apiPost: vi.fn().mockResolvedValue({ id: 'si1' }),
-  apiPatch: vi.fn().mockResolvedValue({}),
-  apiDelete: vi.fn().mockResolvedValue(undefined),
-}));
+vi.mock('@/lib/api', async () => {
+  const { ApiError } = await vi.importActual<typeof import('@/lib/apiError')>('@/lib/apiError');
+  return {
+    ApiError,
+    apiGet: vi.fn().mockResolvedValue({ invoiceNumber: 'INV-2026-001', willReuse: false }),
+    apiPost: vi.fn().mockResolvedValue({ id: 'si1' }),
+    apiPatch: vi.fn().mockResolvedValue({}),
+    apiDelete: vi.fn().mockResolvedValue(undefined),
+  };
+});
 
 vi.mock('@/lib/hooks/use-toast', () => ({ toast: vi.fn() }));
 

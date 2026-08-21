@@ -33,19 +33,23 @@ vi.mock('@/lib/hooks/use-toast', () => ({
   useToast: () => ({ toast: vi.fn(), dismiss: vi.fn(), toasts: [] }),
 }));
 
-vi.mock('@/lib/api', () => ({
-  apiGet: vi.fn(),
-  apiGetNullable: vi.fn().mockResolvedValue(null),
-  apiPost: vi.fn(),
-  apiPatch: vi.fn(),
-  apiPut: vi.fn(),
-  apiPostVoid: vi.fn(),
-  apiDelete: vi.fn(),
-  apiGetBlob: vi.fn(),
-  apiPostFormData: vi.fn(),
-  openGeneratedPdf: vi.fn(),
-  openDocument: vi.fn(),
-}));
+vi.mock('@/lib/api', async () => {
+  const { ApiError } = await vi.importActual<typeof import('@/lib/apiError')>('@/lib/apiError');
+  return {
+    ApiError,
+    apiGet: vi.fn(),
+    apiGetNullable: vi.fn().mockResolvedValue(null),
+    apiPost: vi.fn(),
+    apiPatch: vi.fn(),
+    apiPut: vi.fn(),
+    apiPostVoid: vi.fn(),
+    apiDelete: vi.fn(),
+    apiGetBlob: vi.fn(),
+    apiPostFormData: vi.fn(),
+    openGeneratedPdf: vi.fn(),
+    openDocument: vi.fn(),
+  };
+});
 
 const BOOKING_ID = 'b1';
 

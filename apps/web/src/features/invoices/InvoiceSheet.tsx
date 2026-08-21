@@ -23,7 +23,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { InlineHint } from '@/components/common/InlineHint';
 import { useDismissibleHint } from '@/lib/hooks/useDismissibleHint';
-import { apiGet, apiPost, apiPatch, apiDelete } from '@/lib/api';
+import { ApiError, apiGet, apiPost, apiPatch, apiDelete } from '@/lib/api';
 import { invoiceOwnerRoute } from '@/lib/invoiceActionRouting';
 import { toast } from '@/lib/hooks/use-toast';
 import type { Invoice, InvoiceLineItem, InvoiceNumberPreview } from '@/types/api';
@@ -138,7 +138,7 @@ function useInvoiceAction<TResult>(opts: {
     mutationFn: opts.mutationFn,
     onSuccess: opts.onSuccess,
     onError: (error: unknown, variables: FormValues) => {
-      const is409 = error instanceof Response && error.status === 409;
+      const is409 = error instanceof ApiError && error.status === 409;
       const invoiceType = variables.isDeposit ? 'deposit' : 'balance';
       toast({
         title: is409
