@@ -27,7 +27,7 @@ Sending a series invoice emails the client and transitions the invoice to `SENT`
 
 ## Consequences
 
-- `AttachmentLink` in `CommunicationsSection.tsx` currently builds its PDF link from `comm.bookingId` directly (`/bookings/${comm.bookingId}/invoices/...`) — this breaks for a series row (`bookingId` null) and must branch to the series document route established by #830 (`GET /series/:id/invoices/:invoiceId/document` → `/documents/:id/download`).
+- `AttachmentLink` in `CommunicationsSection.tsx` currently builds its PDF link from `comm.bookingId` directly (`/bookings/${comm.bookingId}/invoices/.../preview.pdf`) — this breaks for a series row (`bookingId` null). Fixed by branching to the series-scoped mirror of the same route (`GET /series/:id/invoices/:invoiceId/preview.pdf`, also from #830) rather than switching to the `/document` discovery-endpoint mechanism — the booking branch already used `preview.pdf`, so the series branch stays on the same mechanism instead of introducing a second one for this one link.
 - The `Communication` glossary entry in `CONTEXT.md` ("a log entry for a communication associated with a Booking") is now inaccurate and is updated alongside this ADR.
 - Acceptance criterion "a series send failure surfaces to the musician the same way a booking send failure does" is reworded: the toast/error surfacing already works today via the unhandled `mail.send` throw; what's new is that the failure is *persisted* as a `FAILED` Communication row (matching the booking path's `PENDING`→`SENT`/`FAILED` lifecycle).
 
