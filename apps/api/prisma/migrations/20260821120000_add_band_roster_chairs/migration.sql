@@ -1,4 +1,3 @@
-◇ injected env (14) from .env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
 -- CreateTable
 CREATE TABLE "BookingBandChair" (
     "id" TEXT NOT NULL,
