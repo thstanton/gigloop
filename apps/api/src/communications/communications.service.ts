@@ -71,7 +71,7 @@ export class CommunicationsService {
     if (template?.builtInType !== MUSIC_FORM_INVITE_TEMPLATE) return;
     const config = await this.repo.findMusicFormConfig(userId, bookingId);
     const visible =
-      resolveMusicFormVisibility(!!config, config?.publishedAt != null)?.visible ?? false;
+      resolveMusicFormVisibility(!!config, 'CLIENT', config?.publishedAt != null)?.visible ?? false;
     if (!visible) {
       throw new ConflictException('Publish the music form before sending its invite.');
     }
