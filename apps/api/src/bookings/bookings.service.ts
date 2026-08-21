@@ -356,11 +356,12 @@ export class BookingsService {
   }
 
   // Copy Event (#507 / ADR-0049): clone *this* booking into the same series on a new date.
-  // What the gig *is* carries (packages, sets, logistics, music form config); lifecycle
-  // state resets (status → CONFIRMED — a copied series gig is already committed — fresh
-  // portalToken, no invoices/documents/communications/music form response/deposit). Checklist
-  // items copy but their completion resets to pending and due dates recompute against the new
-  // date (reusing seedChecklistItems).
+  // What the gig *is* carries (packages, sets, logistics, music form config, band chairs +
+  // members — #889, ADR-0072); lifecycle state resets (status → CONFIRMED — a copied series
+  // gig is already committed — fresh portalToken, no invoices/documents/communications/music
+  // form response/deposit; band members likewise reset to ADDED with fresh bandPortalTokens, a
+  // copy has invited nobody). Checklist items copy but their completion resets to pending and
+  // due dates recompute against the new date (reusing seedChecklistItems).
   async copyBooking(userId: string, id: string, dto: CopyBookingDto): Promise<MappedBooking> {
     const source = await this.repo.findOneForClone(userId, id);
     if (!source) throw new NotFoundException('Booking not found');

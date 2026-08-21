@@ -10,3 +10,8 @@
 export const BAND_MEMBER_STATUSES = ['ADDED', 'INVITED', 'CONFIRMED', 'DECLINED'] as const;
 
 export type BandMemberStatus = (typeof BAND_MEMBER_STATUSES)[number];
+
+// The roster's start state — a newly-added member, or (Copy Event, #889) one that's just been
+// re-invited-by-implication onto a fresh booking. Derived, not hand-written, so it can never
+// drift from the table above.
+export const INITIAL_BAND_MEMBER_STATUS: BandMemberStatus = BAND_MEMBER_STATUSES[0];
