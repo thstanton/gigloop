@@ -295,10 +295,17 @@ describe('InvoiceTransitionService', () => {
       }));
     });
 
-    it('omits bookingId in sendEmail for series invoices', async () => {
+    it('omits bookingId and passes seriesId in sendEmail for series invoices (ADR-0080)', async () => {
       await service.send('u1', seriesIssued, sendDto);
       const [callArgs] = mockComms.sendEmail.mock.calls[0];
       expect(callArgs.bookingId).toBeUndefined();
+      expect(callArgs.seriesId).toBe('s1');
+    });
+
+    it('omits seriesId in sendEmail for booking invoices', async () => {
+      await service.send('u1', bookingIssued, sendDto);
+      const [callArgs] = mockComms.sendEmail.mock.calls[0];
+      expect(callArgs.seriesId).toBeUndefined();
     });
 
     it('throws BadRequestException when the ISSUED invoice has no stored PDF', async () => {

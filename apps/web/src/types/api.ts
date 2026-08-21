@@ -786,7 +786,9 @@ export interface Communication {
   subject: string;
   body: string;
   sentAt: string | null;
-  bookingId: string;
+  // Polymorphic ownership (ADR-0080): exactly one of bookingId/seriesId is set.
+  bookingId: string | null;
+  seriesId: string | null;
   contactId: string;
   contact: Contact;
   templateId: string | null;

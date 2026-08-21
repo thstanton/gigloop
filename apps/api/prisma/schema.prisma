@@ -504,8 +504,9 @@ model BookingSeries {
   customerId String
   customer   Contact @relation(fields: [customerId], references: [id], onDelete: Restrict)
 
-  bookings Booking[]
-  invoices Invoice[]
+  bookings       Booking[]
+  invoices       Invoice[]
+  communications Communication[]
 
   @@index([userId])
   @@index([customerId])
@@ -602,8 +603,13 @@ model Communication {
   body      String
   sentAt    DateTime?
 
-  bookingId String
-  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  // Polymorphic ownership (ADR-0080, mirrors Invoice/ADR-0029): exactly one of bookingId/seriesId
+  // is set, enforced at the application layer only — no DB CHECK constraint, matching Invoice.
+  bookingId String?
+  booking   Booking? @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  seriesId String?
+  series   BookingSeries? @relation(fields: [seriesId], references: [id], onDelete: Cascade)
 
   contactId String
   contact   Contact @relation(fields: [contactId], references: [id], onDelete: Restrict)
@@ -617,6 +623,7 @@ model Communication {
 
   @@index([userId])
   @@index([bookingId])
+  @@index([seriesId])
 }
 
 model Document {

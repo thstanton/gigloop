@@ -11,6 +11,7 @@ type MockRepo = {
   findMusicFormConfig: jest.Mock;
   create: jest.Mock;
   createPending: jest.Mock;
+  createPendingForSeries: jest.Mock;
   markSent: jest.Mock;
   markFailed: jest.Mock;
 };
@@ -25,6 +26,7 @@ function makeRepo(): MockRepo {
     findMusicFormConfig: jest.fn().mockResolvedValue(null),
     create: jest.fn(),
     createPending: jest.fn(),
+    createPendingForSeries: jest.fn(),
     markSent: jest.fn(),
     markFailed: jest.fn(),
   };
@@ -217,27 +219,48 @@ describe('CommunicationsService', () => {
       expect(calledUserId).toBe('u1');
     });
 
-    // #847: the series-invoice send (no bookingId). Reachable from the UI for the first time, so
-    // its guards must match the booking branch's rather than being skipped along with the row.
-    // #932: this branch also personalizes From/Reply-To.
-    describe('series path (no bookingId)', () => {
-      const seriesOptions = { ...options, bookingId: undefined };
+    // #847/#927: the series-invoice send (no bookingId, seriesId instead). Reachable from the UI
+    // since #847, so its guards must match the booking branch's rather than being skipped along
+    // with the row. #932: this branch also personalizes From/Reply-To.
+    describe('series path (no bookingId, seriesId set — ADR-0080)', () => {
+      const seriesOptions = { ...options, bookingId: undefined, seriesId: 's1' };
 
-      it('sends without a booking, and writes no Communication row', async () => {
+      beforeEach(() => {
+        repo.createPendingForSeries.mockResolvedValue({ id: 'comm-series-1' });
+      });
+
+      it('sends without a booking and never calls findBookingById', async () => {
         await service.sendEmail(seriesOptions);
         expect(mockMail.send).toHaveBeenCalledWith(
           expect.objectContaining({ to: 'jane@example.com', subject: 'Your invoice' }),
         );
-        // Communication.bookingId is non-nullable, and a series communication would appear in no
-        // booking's list — recording one needs a schema change plus a surface to read it on.
-        expect(repo.createPending).not.toHaveBeenCalled();
         expect(repo.findBookingById).not.toHaveBeenCalled();
+      });
+
+      it('creates a PENDING record scoped by seriesId, not bookingId, before sending', async () => {
+        await service.sendEmail(seriesOptions);
+        expect(repo.createPendingForSeries).toHaveBeenCalledWith(
+          'u1', 's1', 'ct1', 'Your invoice', '<p>Please find attached</p>', undefined, undefined,
+        );
+        expect(repo.createPending).not.toHaveBeenCalled();
+      });
+
+      it('marks the series communication SENT on success', async () => {
+        await service.sendEmail(seriesOptions);
+        expect(repo.markSent).toHaveBeenCalledWith('comm-series-1');
+      });
+
+      it('marks the series communication FAILED and rethrows when mail.send throws', async () => {
+        (mockMail.send as jest.Mock).mockRejectedValueOnce(new Error('Transport error'));
+        await expect(service.sendEmail(seriesOptions)).rejects.toThrow('Transport error');
+        expect(repo.markFailed).toHaveBeenCalledWith('comm-series-1');
       });
 
       it('rejects and never sends when the recipient contact is not owned by the caller', async () => {
         mockContacts.assertOwned.mockRejectedValue(new NotFoundException('Contact not found'));
         await expect(service.sendEmail(seriesOptions)).rejects.toThrow(NotFoundException);
         expect(mockMail.send).not.toHaveBeenCalled();
+        expect(repo.createPendingForSeries).not.toHaveBeenCalled();
       });
 
       it('resolves and passes the caller\'s senderIdentity to mail.send', async () => {

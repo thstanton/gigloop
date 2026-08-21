@@ -237,11 +237,15 @@ export function useComposeEmail({
       if (series) {
         // Derived from the invoice's owner FK rather than hand-written beside `invoiceOwnerRoute`,
         // which already declares what a mutation on a series invoice invalidates (CLAUDE.md →
-        // one declaration per vocabulary). A series send writes no Communication row and moves no
-        // booking checklist, so none of the booking-shaped caches has anything to re-read.
+        // one declaration per vocabulary).
         for (const queryKey of invoiceOwnerRoute(series.invoice, 'send').keys) {
           queryClient.invalidateQueries({ queryKey });
         }
+        // ADR-0080: a series send now writes a Communication row, merged into every member
+        // booking's list. Invalidating the bare key (no `exact`) is a prefix match — it covers
+        // this booking's own cache AND any sibling member booking's list already cached from an
+        // earlier visit, without needing the full member-booking-id list just for cache purposes.
+        queryClient.invalidateQueries({ queryKey: ['bookingCommunications'] });
       } else {
         queryClient.invalidateQueries({ queryKey: ['bookingCommunications', bookingId] });
         queryClient.invalidateQueries({ queryKey: ['bookingChecklist', bookingId] });
