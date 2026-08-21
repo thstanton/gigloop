@@ -25,7 +25,7 @@ import {
 } from '@/components/ui/responsive-dialog';
 import { useBooking } from '@/lib/hooks/useBooking';
 import { useBookingFields } from '@/lib/hooks/useBookingFields';
-import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from '@/lib/api';
+import { ApiError, apiDelete, apiGet, apiPatch, apiPost, apiPut } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
 import { OverviewAtom, type OverviewChanges, type SeriesChange } from '@/features/bookings/OverviewAtom';
 import { PeopleAtom, type PeopleSelection } from '@/features/bookings/PeopleAtom';
@@ -342,7 +342,7 @@ export default function BookingBuilderPage() {
       setSeriesError(null);
     },
     onError: (error) => {
-      const msg = error instanceof Response && error.status === 409
+      const msg = error instanceof ApiError && error.status === 409
         ? 'This booking has non-VOID invoices. Void or delete them before adding to a series.'
         : 'Failed to update series assignment. Please try again.';
       setSeriesError(msg);

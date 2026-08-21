@@ -3,7 +3,7 @@ import { useAuth } from '@clerk/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
+import { ApiError, apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
 import { isEnabled } from '@/lib/featureFlags';
 import type { CreatePackageInput, LineupTemplate, PackageTemplate, UpdatePackageInput } from '@/types/api';
 import { PackageIcon } from '@/components/common/PackageIcon';
@@ -22,13 +22,11 @@ import {
 
 export type PackageDrawerMode = { type: 'create' } | { type: 'edit'; pkg: PackageTemplate };
 
-// api.ts rejects with a `Response`, never an `Error`, and discards the API's JSON body on the way
-// (`throw new Response(res.statusText, …)`) — so `.message` is always undefined and the copy has to
-// be reconstructed from the status. Hand-rolling that per call site is a known wart, not a pattern
-// to copy: this is the 8th site to do it, and reading `.message` off a `Response` had already
-// produced one silent failure here. See #768 on giving api.ts a real error type.
+// Curated per-status copy stays worthwhile here — the API's own 409 wording isn't user-facing
+// prose. #768 made ApiError a real Error, so this branches on `.status` deliberately rather than
+// because `.message` is unusable.
 function apiErrorMessage(error: unknown, whenConflict: string, fallback: string): string {
-  return error instanceof Response && error.status === 409 ? whenConflict : fallback;
+  return error instanceof ApiError && error.status === 409 ? whenConflict : fallback;
 }
 
 // The edit-only delete footer: owns the confirm step, its error, and the delete mutation.

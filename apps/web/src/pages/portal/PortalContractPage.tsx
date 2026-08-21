@@ -7,7 +7,7 @@ import Link_ from '@tiptap/extension-link';
 import { VariableNode } from '../../features/templates/VariableNode';
 import { useRef, useState, useEffect } from 'react';
 import { FileText, PenLine, RotateCcw } from 'lucide-react';
-import { getPortalData, getContractContent, signContract } from '../../lib/portalApi';
+import { ApiError, getPortalData, getContractContent, signContract } from '../../lib/portalApi';
 import { PortalLayout, getDisplayFontClass } from '../../layouts/PortalLayout';
 
 // ─── Typed signature ─────────────────────────────────────────────────────────
@@ -305,10 +305,10 @@ export default function PortalContractPage() {
   const displayFont = getDisplayFontClass(profile?.portalTheme ?? null);
 
   const contractError = contractQuery.error;
-  const alreadySigned = contractError instanceof Response && contractError.status === 400;
+  const alreadySigned = contractError instanceof ApiError && contractError.status === 400;
   const notFound =
     portalQuery.isError ||
-    (contractError instanceof Response && contractError.status === 404);
+    (contractError instanceof ApiError && contractError.status === 404);
 
   // Redirect after already-signed detection — must be in effect, not render body
   useEffect(() => {

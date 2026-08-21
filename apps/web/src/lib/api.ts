@@ -1,4 +1,7 @@
 import { resolveApiBaseUrl } from './apiBaseUrl';
+import { toApiError } from './apiError';
+
+export { ApiError } from './apiError';
 
 // Clerk sets window.Clerk when ClerkProvider initialises. Loaders use this
 // to attach auth tokens without requiring React hooks.
@@ -28,13 +31,13 @@ async function authedFetch(path: string, init?: RequestInit): Promise<Response> 
 
 export async function apiGet<T>(path: string): Promise<T> {
   const res = await authedFetch(path);
-  if (!res.ok) throw new Response(res.statusText, { status: res.status });
+  if (!res.ok) throw await toApiError(res);
   return res.json() as Promise<T>;
 }
 
 export async function apiGetBlob(path: string): Promise<Blob> {
   const res = await authedFetch(path);
-  if (!res.ok) throw new Response(res.statusText, { status: res.status });
+  if (!res.ok) throw await toApiError(res);
   return res.blob();
 }
 
@@ -83,36 +86,36 @@ export function openDocument(appRoute: string, onError?: () => void): void {
 export async function apiGetNullable<T>(path: string): Promise<T | null> {
   const res = await authedFetch(path);
   if (res.status === 404) return null;
-  if (!res.ok) throw new Response(res.statusText, { status: res.status });
+  if (!res.ok) throw await toApiError(res);
   return res.json() as Promise<T>;
 }
 
 export async function apiPost<T>(path: string, body: unknown): Promise<T> {
   const res = await authedFetch(path, { method: 'POST', body: JSON.stringify(body) });
-  if (!res.ok) throw new Response(res.statusText, { status: res.status });
+  if (!res.ok) throw await toApiError(res);
   return res.json() as Promise<T>;
 }
 
 export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
   const res = await authedFetch(path, { method: 'PATCH', body: JSON.stringify(body) });
-  if (!res.ok) throw new Response(res.statusText, { status: res.status });
+  if (!res.ok) throw await toApiError(res);
   return res.json() as Promise<T>;
 }
 
 export async function apiPut<T>(path: string, body: unknown): Promise<T> {
   const res = await authedFetch(path, { method: 'PUT', body: JSON.stringify(body) });
-  if (!res.ok) throw new Response(res.statusText, { status: res.status });
+  if (!res.ok) throw await toApiError(res);
   return res.json() as Promise<T>;
 }
 
 export async function apiPostVoid(path: string, body: unknown): Promise<void> {
   const res = await authedFetch(path, { method: 'POST', body: JSON.stringify(body) });
-  if (!res.ok) throw new Response(res.statusText, { status: res.status });
+  if (!res.ok) throw await toApiError(res);
 }
 
 export async function apiDelete(path: string): Promise<void> {
   const res = await authedFetch(path, { method: 'DELETE' });
-  if (!res.ok) throw new Response(res.statusText, { status: res.status });
+  if (!res.ok) throw await toApiError(res);
 }
 
 export async function apiPostFormData<T>(path: string, formData: FormData): Promise<T> {
@@ -122,6 +125,6 @@ export async function apiPostFormData<T>(path: string, formData: FormData): Prom
     body: formData,
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
-  if (!res.ok) throw new Response(res.statusText, { status: res.status });
+  if (!res.ok) throw await toApiError(res);
   return res.json() as Promise<T>;
 }

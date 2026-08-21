@@ -13,11 +13,15 @@ vi.mock('react-router-dom', async (importOriginal) => {
   return { ...mod, useNavigate: () => mockNavigate };
 });
 
-vi.mock('@/lib/portalApi', () => ({
-  getPortalData: vi.fn(),
-  getMusicFormData: vi.fn(),
-  submitMusicForm: vi.fn(),
-}));
+vi.mock('@/lib/portalApi', async () => {
+  const { ApiError } = await vi.importActual<typeof import('@/lib/apiError')>('@/lib/apiError');
+  return {
+    ApiError,
+    getPortalData: vi.fn(),
+    getMusicFormData: vi.fn(),
+    submitMusicForm: vi.fn(),
+  };
+});
 
 const mockPortalData: PortalData = {
   booking: {
@@ -95,10 +99,10 @@ describe('PortalMusicPage — mutation error recovery', () => {
 
   it('shows error and re-enables Submit after failure, navigates away on successful retry', async () => {
     const user = userEvent.setup();
-    const { submitMusicForm } = await import('@/lib/portalApi');
+    const { submitMusicForm, ApiError } = await import('@/lib/portalApi');
 
     vi.mocked(submitMusicForm)
-      .mockRejectedValueOnce(new Response('Internal Server Error', { status: 500 }))
+      .mockRejectedValueOnce(new ApiError(500, 'Internal Server Error'))
       .mockResolvedValueOnce(undefined);
 
     renderPage();
