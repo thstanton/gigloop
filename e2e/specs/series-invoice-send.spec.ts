@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { InvoiceStatus } from '@prisma/client';
+import { InvoiceStatus, CommunicationStatus } from '@prisma/client';
 import { prisma } from '../support/prisma';
 import {
   seedSeriesWithDraftInvoice,
@@ -90,5 +90,28 @@ test.describe('series invoice — issue and send', () => {
     await expect
       .poll(async () => (await prisma.invoice.findUnique({ where: { id: fixture.invoiceId } }))?.status)
       .toBe(InvoiceStatus.SENT);
+
+    // ADR-0080/#927: the series send is now recorded as a Communication, scoped by seriesId
+    // (no bookingId) — the same audit trail a booking send already gets, and merged back into
+    // this member booking's own Communications section rather than left orphaned like #830.
+    await expect
+      .poll(async () => (await prisma.communication.findFirst({ where: { seriesId: fixture.seriesId } }))?.status)
+      .toBe(CommunicationStatus.SENT);
+    const communication = await prisma.communication.findFirst({ where: { seriesId: fixture.seriesId } });
+    expect(communication?.bookingId).toBeNull();
+
+    await page.reload();
+    await mobile.getByRole('tab', { name: 'Info' }).click();
+    await expect(info.getByText('Series invoice email')).toBeVisible();
+    await expect(info.getByText('Series', { exact: true })).toBeVisible();
+
+    // The series row belongs to no single booking, so it must show identically on the OTHER
+    // member booking's page too — not just the one the send was initiated from (ADR-0080).
+    await page.goto(`/admin/bookings/${fixture.secondBookingId}`);
+    const secondMobile = page.getByTestId('booking-detail-mobile');
+    await secondMobile.getByRole('tab', { name: 'Info' }).click();
+    const secondInfo = secondMobile.getByRole('tabpanel', { name: 'Info' });
+    await expect(secondInfo.getByText('Series invoice email')).toBeVisible();
+    await expect(secondInfo.getByText('Series', { exact: true })).toBeVisible();
   });
 });

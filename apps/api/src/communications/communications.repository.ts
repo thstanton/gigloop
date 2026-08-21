@@ -13,9 +13,18 @@ const include = {
 export class CommunicationsRepository {
   constructor(private prisma: PrismaService) {}
 
-  findAll(userId: string, bookingId: string) {
+  // ADR-0080: a series communication belongs to no single booking, so it's merged into every
+  // member booking's list here rather than read from a dedicated series surface. The `seriesId`
+  // leg of the OR is only added when this booking actually has a series — omitting that guard
+  // would match every communication with a null seriesId (i.e. every OTHER booking's history) on
+  // a non-series booking's page.
+  async findAll(userId: string, bookingId: string) {
+    const booking = await this.findBookingById(userId, bookingId);
     return this.prisma.communication.findMany({
-      where: { userId, bookingId },
+      where: {
+        userId,
+        OR: booking?.seriesId ? [{ bookingId }, { seriesId: booking.seriesId }] : [{ bookingId }],
+      },
       include,
       orderBy: { createdAt: 'desc' },
     });
@@ -38,7 +47,7 @@ export class CommunicationsRepository {
   findBookingById(userId: string, bookingId: string) {
     return this.prisma.booking.findFirst({
       where: { id: bookingId, userId },
-      select: { id: true },
+      select: { id: true, seriesId: true },
     });
   }
 
@@ -79,6 +88,29 @@ export class CommunicationsRepository {
       data: {
         userId,
         bookingId,
+        contactId,
+        subject,
+        body,
+        status: CommunicationStatus.PENDING,
+        ...(templateId ? { templateId } : {}),
+        ...(documentId ? { documentId } : {}),
+      },
+    });
+  }
+
+  createPendingForSeries(
+    userId: string,
+    seriesId: string,
+    contactId: string,
+    subject: string,
+    body: string,
+    templateId?: string,
+    documentId?: string,
+  ) {
+    return this.prisma.communication.create({
+      data: {
+        userId,
+        seriesId,
         contactId,
         subject,
         body,

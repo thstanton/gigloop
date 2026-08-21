@@ -38,8 +38,9 @@ export function invoiceOwnerRoute(
     edit: [['bookingInvoices', b]],
     issue: [['bookingInvoices', b], ['bookingDocuments', b], ['bookingChecklist', b]],
     // #847: emailing the invoice transitions it to SENT and logs a Communication against the
-    // booking. The series branch above needs no equivalent — a series send writes no
-    // Communication row (Communication.bookingId is non-nullable) and moves no booking checklist.
+    // booking. The series branch above invalidates `bookingCommunications` itself (ADR-0080,
+    // useComposeEmail) rather than through this table — a series send has no single bookingId
+    // to key a cache entry on, so it invalidates the bare-prefix key covering every booking.
     send: [['bookingInvoices', b], ['bookingDocuments', b], ['bookingChecklist', b], ['bookingCommunications', b]],
     markSent: [['bookingInvoices', b], ['bookingChecklist', b]],
     markPaid: [['bookingInvoices', b], ['booking', b], ['bookingChecklist', b]],

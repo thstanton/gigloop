@@ -18,8 +18,9 @@ type AuthedRequest = Request & { userId: string };
  * the dates covered.
  *
  * Only the *render* half lives here: sending goes through the owner-agnostic
- * `POST /invoices/:id/send` (#853, ADR-0069), and logging a communication against a series is
- * out of scope while `Communication.bookingId` is non-nullable.
+ * `POST /invoices/:id/send` (#853, ADR-0069), which logs the send as a `Communication` scoped by
+ * `seriesId` (ADR-0080) — read back merged into every member booking's Communications list, not
+ * through a route on this controller.
  */
 @ApiTags('Communications')
 @ApiBearerAuth('clerk-jwt')

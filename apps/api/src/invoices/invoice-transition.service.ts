@@ -153,6 +153,7 @@ export class InvoiceTransitionService {
     await this.comms.sendEmail({
       userId,
       bookingId: invoice.bookingId ?? undefined,
+      seriesId: invoice.seriesId ?? undefined,
       contactId: dto.contactId,
       to: dto.to,
       subject: dto.subject,

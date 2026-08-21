@@ -11,7 +11,7 @@ const sentEmail: Communication = {
   id: 'cm1', createdAt: '2030-04-02T10:00:00Z', updatedAt: '2030-04-02T10:00:00Z',
   direction: 'OUTBOUND', channel: 'EMAIL', status: 'SENT',
   subject: 'Confirmation of your booking', body: '<p>Dear Jane, your booking is confirmed.</p>',
-  sentAt: '2030-04-02T10:00:00Z', bookingId: 'b1', contactId: 'c1', contact,
+  sentAt: '2030-04-02T10:00:00Z', bookingId: 'b1', seriesId: null, contactId: 'c1', contact,
   templateId: null, template: null, document: null,
 };
 
@@ -19,7 +19,7 @@ const pendingEmail: Communication = {
   id: 'cm2', createdAt: '2030-04-03T09:00:00Z', updatedAt: '2030-04-03T09:00:00Z',
   direction: 'OUTBOUND', channel: 'EMAIL', status: 'PENDING',
   subject: 'Your invoice is attached', body: '<p>Please find your invoice attached.</p>',
-  sentAt: null, bookingId: 'b1', contactId: 'c1', contact,
+  sentAt: null, bookingId: 'b1', seriesId: null, contactId: 'c1', contact,
   templateId: null, template: null, document: null,
 };
 
@@ -27,7 +27,7 @@ const failedEmail: Communication = {
   id: 'cm3', createdAt: '2030-04-04T08:00:00Z', updatedAt: '2030-04-04T08:00:00Z',
   direction: 'OUTBOUND', channel: 'EMAIL', status: 'FAILED',
   subject: 'Thank you for a wonderful evening', body: '<p>It was a pleasure to perform for you.</p>',
-  sentAt: null, bookingId: 'b1', contactId: 'c1', contact,
+  sentAt: null, bookingId: 'b1', seriesId: null, contactId: 'c1', contact,
   templateId: null, template: null, document: null,
 };
 
@@ -36,9 +36,21 @@ const invoiceSentEmail: Communication = {
   direction: 'OUTBOUND', channel: 'EMAIL', status: 'SENT',
   subject: 'Your balance invoice — Stanton Strings',
   body: '<p>Dear Jane, please find your invoice attached.</p>',
-  sentAt: '2030-04-05T11:00:00Z', bookingId: 'b1', contactId: 'c1', contact,
+  sentAt: '2030-04-05T11:00:00Z', bookingId: 'b1', seriesId: null, contactId: 'c1', contact,
   templateId: 'tmpl1', template: { id: 'tmpl1', name: 'Balance invoice cover', content: {}, builtInType: 'balance_invoice_cover', createdAt: '2030-01-01T00:00:00Z', updatedAt: '2030-01-01T00:00:00Z' },
   document: { id: 'doc1', invoiceId: 'inv1' },
+};
+
+// ADR-0080: a series communication has no bookingId — it's merged into every member booking's
+// list via seriesId instead, and marked with the "Series" badge so it reads as series-level.
+const seriesInvoiceSentEmail: Communication = {
+  id: 'cm5', createdAt: '2030-04-06T12:00:00Z', updatedAt: '2030-04-06T12:00:00Z',
+  direction: 'OUTBOUND', channel: 'EMAIL', status: 'SENT',
+  subject: 'Your invoice — Hotel Intercontinental residency',
+  body: '<p>Dear Jane, please find your series invoice attached.</p>',
+  sentAt: '2030-04-06T12:00:00Z', bookingId: null, seriesId: 's1', contactId: 'c1', contact,
+  templateId: 'tmpl2', template: { id: 'tmpl2', name: 'Series invoice cover', content: {}, builtInType: 'series_invoice_cover', createdAt: '2030-01-01T00:00:00Z', updatedAt: '2030-01-01T00:00:00Z' },
+  document: { id: 'doc2', invoiceId: 'inv2' },
 };
 
 const meta = {
@@ -85,6 +97,19 @@ export const WithInvoiceAttachment: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Your balance invoice — Stanton Strings')).toBeVisible();
     await expect(canvas.getByRole('link', { name: /Download attached invoice PDF/i })).toBeVisible();
+  },
+};
+
+export const WithSeriesInvoiceAttachment: Story = {
+  args: { communications: [seriesInvoiceSentEmail] },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Your invoice — Hotel Intercontinental residency')).toBeVisible();
+    await expect(canvas.getByText('Series')).toBeVisible();
+    const pdfLink = canvas.getByRole('link', { name: /Download attached invoice PDF/i });
+    await expect(pdfLink).toBeVisible();
+    // #853, ADR-0069: invoice routes are owner-agnostic — a series row's PDF resolves through
+    // the same /invoices/:id path as a booking row's, with no owner prefix.
+    await expect(pdfLink).toHaveAttribute('href', expect.stringContaining('/invoices/inv2/preview.pdf'));
   },
 };
 

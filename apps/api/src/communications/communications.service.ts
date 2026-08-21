@@ -14,6 +14,7 @@ const MUSIC_FORM_INVITE_TEMPLATE = 'music_form_invite';
 export interface SendEmailOptions {
   userId: string;
   bookingId?: string;
+  seriesId?: string;
   contactId: string;
   to: string;
   subject: string;
@@ -76,24 +77,42 @@ export class CommunicationsService {
     }
   }
 
-  async sendEmail(options: SendEmailOptions): Promise<void> {
-    const { userId, bookingId, contactId, to, subject, body, templateId, attachments, documentId } = options;
-    if (!bookingId) {
-      // Series-invoice path: no booking to scope to. The invoice is already loaded under
-      // userId upstream (invoices/series service), and `to` is DTO-validated as an email.
-      // FK-ownership (#709/#681 M1): the recipient contact must still belong to the caller —
-      // parity with the booking branch below. #847 made this path reachable from the UI for the
-      // first time, so the two branches must not differ on who may be emailed.
-      await this.contacts.assertOwned(userId, [contactId]);
+  // Series-invoice path (ADR-0080): no single booking to scope to, so the Communication is
+  // recorded against seriesId instead — mirroring the booking branch's PENDING/SENT/FAILED
+  // lifecycle so a series send is no less auditable than a booking one. The invoice (and its
+  // seriesId) is already loaded under userId upstream (invoices/series service), and `to` is
+  // DTO-validated as an email. FK-ownership (#709/#681 M1): the recipient contact must still
+  // belong to the caller — parity with the booking branch below. #847 made this path reachable
+  // from the UI for the first time, so the two branches must not differ on who may be emailed.
+  // No ChecklistReevaluator call: series bookings have no series-scoped checklist (ADR-0078).
+  private async sendSeriesEmail(
+    options: Omit<SendEmailOptions, 'bookingId'>,
+  ): Promise<void> {
+    const { userId, seriesId, contactId, to, subject, body, templateId, attachments, documentId } = options;
+    await this.contacts.assertOwned(userId, [contactId]);
+    // sendEmail's `!bookingId` branch is the only caller of this method, and its one caller
+    // (InvoiceTransitionService.send) always passes exactly one of bookingId/seriesId (ADR-0029's
+    // polymorphic invariant) — so seriesId is set here in every real path. Guarded rather than
+    // asserted: an absent seriesId still sends the email, just without an audit row, matching the
+    // pre-ADR-0080 behaviour instead of throwing on a caller bug this type can't fully prevent.
+    const communication = seriesId
+      ? await this.repo.createPendingForSeries(userId, seriesId, contactId, subject, body, templateId, documentId)
+      : undefined;
+    try {
       // #932: client-facing correspondence — personalize From/Reply-To with the musician's
       // own identity so a client's reply reaches them, not a black hole.
       const senderIdentity = await this.mail.getSenderIdentity(userId);
       await this.mail.send({ to, subject, body, attachments, senderIdentity });
-      // No Communication row: `Communication.bookingId` is non-nullable, and a series
-      // communication would appear in no booking's list anyway — the same orphaning as #830's
-      // series Document. Recording it needs a schema change plus a surface to read it on.
-      return;
+      if (communication) await this.repo.markSent(communication.id);
+    } catch (err) {
+      if (communication) await this.repo.markFailed(communication.id);
+      throw err;
     }
+  }
+
+  async sendEmail(options: SendEmailOptions): Promise<void> {
+    const { userId, bookingId, contactId, to, subject, body, templateId, attachments, documentId } = options;
+    if (!bookingId) return this.sendSeriesEmail(options);
     // #681 (M1): verify the booking belongs to the caller before sending. Without this,
     // removing MailService's hardcoded recipient would turn this into an authenticated open
     // relay — any caller could POST an arbitrary `to` against any bookingId and have it sent.

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { AlertTriangle, FileText, Mail, Paperclip } from 'lucide-react';
 import { GhostButton } from '@/components/common/GhostButton';
+import { Badge } from '@/components/ui/badge';
 import {
   Sheet,
   SheetContent,
@@ -87,9 +88,14 @@ function CommunicationRow({ comm }: Readonly<{ comm: Communication }>) {
       <div className="min-w-0 flex items-start gap-2">
         {isFailed && <AlertTriangle size={14} className="text-status-cancelled flex-shrink-0 mt-0.5" />}
         <div className="min-w-0">
-          <p className={`text-sm truncate ${isFailed ? 'text-status-cancelled' : 'text-foreground'}`}>
-            {comm.subject}
-          </p>
+          <div className="flex items-center gap-1.5">
+            <p className={`text-sm truncate ${isFailed ? 'text-status-cancelled' : 'text-foreground'}`}>
+              {comm.subject}
+            </p>
+            {/* ADR-0080: a series communication is merged into every member booking's list —
+                the badge is the only thing marking it as series-level rather than this booking's own. */}
+            {comm.seriesId && <Badge variant="secondary" className="shrink-0">Series</Badge>}
+          </div>
           <p className="text-xs text-muted mt-0.5">{statusPrefix}{meta}</p>
           <AttachmentLink comm={comm} />
         </div>
