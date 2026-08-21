@@ -49,6 +49,8 @@ const meta = {
     chairs,
     members: [],
     packages,
+    venue: null,
+    instrumentVocabulary: ['Bass', 'Drums', 'Sax', 'Vocals'],
     lineupTemplates: lineups,
     lineupTemplatesLoading: false,
     onApplyLineup: fn(),

@@ -7,12 +7,13 @@ import {
 } from 'lucide-react';
 import type { BookingBandMemberStatus, BookingStatus, EventType, InvoiceStatus, PortalTheme, PortalVisibilityReason, ReminderConcern, SongGenre } from '@/types/api';
 
-export type ContactPrimaryRole = 'CUSTOMER' | 'VENUE' | 'BOOKING_AGENT';
+export type ContactPrimaryRole = 'CUSTOMER' | 'VENUE' | 'BOOKING_AGENT' | 'BAND_MEMBER';
 
 const PRIMARY_ROLES = [
   { value: 'CUSTOMER',      label: 'Customer'      },
   { value: 'VENUE',         label: 'Venue'         },
   { value: 'BOOKING_AGENT', label: 'Booking agent' },
+  { value: 'BAND_MEMBER',   label: 'Band member'   },
 ] as const satisfies readonly { value: ContactPrimaryRole; label: string }[];
 
 export type _PrimaryRoleCoverage = AssertNever<

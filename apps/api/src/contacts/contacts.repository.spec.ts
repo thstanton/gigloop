@@ -99,6 +99,9 @@ describe('ContactsRepository', () => {
         customerBookings: expected,
         venueBookings: expected,
         bookingAgentBookings: expected,
+        // Unconditional — must match countDeletionBlockers below, or the preventive delete UI
+        // could enable a button the API then 409s (#886).
+        _count: { select: { bandMemberships: true } },
       });
     });
 
@@ -134,11 +137,11 @@ describe('ContactsRepository', () => {
     });
   });
 
-  describe('countBookings', () => {
+  describe('countDeletionBlockers', () => {
     it('counts bookings for all three FK roles', async () => {
       prisma.booking.count.mockResolvedValue(2);
       prisma.bookingBandMember.count.mockResolvedValue(0);
-      const count = await repo.countBookings('u1', 'c1');
+      const result = await repo.countDeletionBlockers('u1', 'c1');
       expect(prisma.booking.count).toHaveBeenCalledWith({
         where: {
           userId: 'u1',
@@ -149,13 +152,13 @@ describe('ContactsRepository', () => {
           ],
         },
       });
-      expect(count).toBe(2);
+      expect(result.bookingCount).toBe(2);
     });
 
-    it('returns 0 when contact has no bookings and no band memberships', async () => {
+    it('returns zero counts when contact has no bookings and no band memberships', async () => {
       prisma.booking.count.mockResolvedValue(0);
       prisma.bookingBandMember.count.mockResolvedValue(0);
-      expect(await repo.countBookings('u1', 'c1')).toBe(0);
+      expect(await repo.countDeletionBlockers('u1', 'c1')).toEqual({ bookingCount: 0, bandRosterCount: 0 });
     });
 
     // ADR-0072 §1: a contact who is only on a booking's band roster (no customer/venue/agent FK)
@@ -163,16 +166,16 @@ describe('ContactsRepository', () => {
     it('counts band memberships even when the contact has no booking FK at all', async () => {
       prisma.booking.count.mockResolvedValue(0);
       prisma.bookingBandMember.count.mockResolvedValue(1);
-      expect(await repo.countBookings('u1', 'c1')).toBe(1);
+      expect(await repo.countDeletionBlockers('u1', 'c1')).toEqual({ bookingCount: 0, bandRosterCount: 1 });
       expect(prisma.bookingBandMember.count).toHaveBeenCalledWith({
         where: { userId: 'u1', contactId: 'c1' },
       });
     });
 
-    it('sums bookings and band memberships when a contact has both', async () => {
+    it('returns both counts, un-summed, when a contact has both (#886)', async () => {
       prisma.booking.count.mockResolvedValue(2);
       prisma.bookingBandMember.count.mockResolvedValue(3);
-      expect(await repo.countBookings('u1', 'c1')).toBe(5);
+      expect(await repo.countDeletionBlockers('u1', 'c1')).toEqual({ bookingCount: 2, bandRosterCount: 3 });
     });
   });
 

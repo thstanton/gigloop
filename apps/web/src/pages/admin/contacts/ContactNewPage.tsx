@@ -5,10 +5,12 @@ import type { ContactFormValues } from '@/features/contacts/ContactForm';
 import { apiPost } from '@/lib/api';
 import type { Contact } from '@/types/api';
 import { PageHeader } from '@/components/common/PageHeader';
+import { useRoleVocabulary } from '@/lib/hooks/useRoleVocabulary';
 
 export default function ContactNewPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const roleVocabulary = useRoleVocabulary();
 
   const mutation = useMutation({
     mutationFn: (values: ContactFormValues) =>
@@ -30,6 +32,7 @@ export default function ContactNewPage() {
         submitLabel="Create contact"
         onCancel={() => navigate('/admin/contacts')}
         autoSuggestGreetingName
+        roleVocabulary={roleVocabulary}
       />
     </div>
   );

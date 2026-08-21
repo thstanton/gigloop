@@ -1,7 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, IsUrl, ValidateIf } from 'class-validator';
-
-const PRIMARY_ROLES = ['CUSTOMER', 'VENUE', 'BOOKING_AGENT'] as const;
+import { IsArray, IsEmail, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, IsUrl, ValidateIf } from 'class-validator';
+import { PRIMARY_ROLES } from '../contact-roles';
 
 export class CreateContactDto {
   @ApiProperty({ example: 'Jane Smith' })
@@ -104,4 +103,36 @@ export class CreateContactDto {
   @ValidateIf((_, v) => v !== null)
   @IsIn(PRIMARY_ROLES)
   primaryRole?: string | null;
+
+  // Band roster — dep profile (#886, ADR-0072 §4). Shared-with-band, not organiser-private.
+  @ApiPropertyOptional({ example: 'Saxophone', description: 'Identity as a dep — the instrument they are known for (shared with band)' })
+  @IsOptional()
+  @IsString()
+  primaryBandRole?: string;
+
+  @ApiPropertyOptional({ type: [String], description: 'Declared capability — instruments/parts this dep can cover (shared with band)' })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  instruments?: string[];
+
+  @ApiPropertyOptional({ description: 'How this dep gets to a gig (shared with band)' })
+  @IsOptional()
+  @IsString()
+  travelNotes?: string;
+
+  @ApiPropertyOptional({ description: 'What this dep brings/needs (shared with band)' })
+  @IsOptional()
+  @IsString()
+  equipmentNotes?: string;
+
+  @ApiPropertyOptional({ description: 'Stage-wear notes for this dep (shared with band)' })
+  @IsOptional()
+  @IsString()
+  outfitNotes?: string;
+
+  @ApiPropertyOptional({ description: 'Free-text availability commentary (shared with band) — never structured, see ADR-0072 §4' })
+  @IsOptional()
+  @IsString()
+  availabilityNotes?: string;
 }

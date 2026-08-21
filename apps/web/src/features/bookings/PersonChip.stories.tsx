@@ -14,6 +14,8 @@ const baseContact: Omit<Contact, 'id' | 'name' | 'email' | 'phone' | 'commission
   latitude: null, longitude: null, placeId: null,
   travelTimeMinutes: null, travelDistanceMetres: null, travelTimeCalculatedAt: null, travelMode: null,
   parkingInfo: null, accessInfo: null, equipmentAvailable: null, website: null,
+  primaryBandRole: null, instruments: [], travelNotes: null, equipmentNotes: null,
+  outfitNotes: null, availabilityNotes: null,
 };
 
 const customerFull: Contact = {

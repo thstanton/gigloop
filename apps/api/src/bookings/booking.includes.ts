@@ -30,6 +30,12 @@ export const NESTED_CONTACT_SELECT = {
   website: true,
   commissionArrangement: true,
   primaryRole: true,
+  primaryBandRole: true,
+  instruments: true,
+  travelNotes: true,
+  equipmentNotes: true,
+  outfitNotes: true,
+  availabilityNotes: true,
 } as const;
 
 // The booking's most recent contract, narrowed to exactly what `BookingActiveContractDto` declares

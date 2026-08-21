@@ -3,19 +3,24 @@ import { FormField } from '@/components/common/FormField';
 import { GhostButton } from '@/components/common/GhostButton';
 import { IconButton } from '@/components/common/IconButton';
 import { Input } from '@/components/ui/input';
+import { useDatalistId } from '@/lib/hooks/useDatalistId';
 import type { LineupSlotInput } from '@/types/api';
 
-// Band members v1 (#879, ADR-0072 §3). A lineup slot is a free-text role and an order — roles
-// get type-ahead + soft matching in a later slice; this editor only owns add/remove/reorder/edit.
+// Band members v1 (#879, ADR-0072 §3). A lineup slot is a free-text role and an order — roles get
+// type-ahead (native <datalist>, soft matching not a hard filter) sourced from `vocabulary`, which
+// the container derives from existing slots and contact instruments (#886).
 export type LineupSlotDraft = LineupSlotInput & { key: string };
 
 export function LineupSlotEditor({
   slots,
   onChange,
+  vocabulary = [],
 }: {
   slots: LineupSlotDraft[];
   onChange: (slots: LineupSlotDraft[]) => void;
+  vocabulary?: string[];
 }) {
+  const datalistId = useDatalistId();
   function update(index: number, role: string) {
     const next = [...slots];
     next[index] = { ...next[index], role };
@@ -42,6 +47,7 @@ export function LineupSlotEditor({
                 value={slot.role}
                 onChange={(e) => update(i, e.target.value)}
                 placeholder="e.g. Saxophone"
+                list={datalistId}
               />
             </FormField>
             <IconButton label="Remove part" onClick={() => remove(i)} className="mb-0.5 hover:text-status-cancelled">
@@ -50,6 +56,11 @@ export function LineupSlotEditor({
           </div>
         ))}
       </div>
+      <datalist id={datalistId}>
+        {vocabulary.map((role) => (
+          <option key={role} value={role} />
+        ))}
+      </datalist>
       <GhostButton variant="primary" onClick={add} className="mt-2">
         + Add part
       </GhostButton>

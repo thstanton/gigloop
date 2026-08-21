@@ -29,6 +29,8 @@ const contact = (id: string, primaryRole: string): Contact => ({
   latitude: null, longitude: null, placeId: null, travelTimeMinutes: null, travelDistanceMetres: null,
   travelTimeCalculatedAt: null, travelMode: null, notes: null, parkingInfo: null, accessInfo: null,
   equipmentAvailable: null, commissionArrangement: null, primaryRole,
+  primaryBandRole: null, instruments: [], travelNotes: null, equipmentNotes: null,
+  outfitNotes: null, availabilityNotes: null,
   createdAt: '2030-01-01T00:00:00Z', updatedAt: '2030-01-01T00:00:00Z',
 });
 

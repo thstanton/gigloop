@@ -38,9 +38,16 @@ const baseContact: ContactDetail = {
   website: null,
   commissionArrangement: null,
   primaryRole: null,
+  primaryBandRole: null,
+  instruments: [],
+  travelNotes: null,
+  equipmentNotes: null,
+  outfitNotes: null,
+  availabilityNotes: null,
   customerBookings: [],
   venueBookings: [],
   bookingAgentBookings: [],
+  bandMemberCount: 0,
 };
 
 const bookingRef = {
@@ -97,5 +104,35 @@ describe('ContactEditDrawer — delete section', () => {
   it('uses singular "booking" when there is exactly one', () => {
     renderDrawer({ ...baseContact, customerBookings: [bookingRef] });
     expect(screen.getByText(/1 booking[^s]/i)).toBeInTheDocument();
+  });
+
+  // ADR-0072 §1 / #886: a contact who is only on a band roster (no customer/venue/agent FK)
+  // still blocks deletion — a fourth deletion-blocking case alongside the three booking FKs.
+  it('disables the delete button when the contact is only on a band roster', () => {
+    renderDrawer({ ...baseContact, bandMemberCount: 1 });
+    expect(screen.getByRole('button', { name: /delete contact/i })).toBeDisabled();
+  });
+
+  it('shows a roster-only message naming the band roster, not "booking"', () => {
+    renderDrawer({ ...baseContact, bandMemberCount: 1 });
+    expect(
+      screen.getByText('This contact is on the band roster for 1 booking and cannot be deleted.'),
+    ).toBeInTheDocument();
+  });
+
+  it('shows a booking-only message when only bookings block (no roster mention)', () => {
+    renderDrawer({ ...baseContact, customerBookings: [bookingRef] });
+    expect(
+      screen.getByText('This contact has 1 booking and cannot be deleted.'),
+    ).toBeInTheDocument();
+  });
+
+  it('shows a combined message naming both when bookings and a roster row block', () => {
+    renderDrawer({ ...baseContact, customerBookings: [bookingRef], bandMemberCount: 2 });
+    expect(
+      screen.getByText(
+        'This contact has 1 booking and is on the band roster for 2 bookings, and cannot be deleted.',
+      ),
+    ).toBeInTheDocument();
   });
 });

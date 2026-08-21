@@ -11,6 +11,8 @@ const customer: Contact = {
   latitude: null, longitude: null, placeId: null,
   travelTimeMinutes: null, travelDistanceMetres: null, travelTimeCalculatedAt: null, travelMode: null,
   notes: null, greetingName: 'Jane', primaryRole: 'CUSTOMER',
+  primaryBandRole: null, instruments: [], travelNotes: null, equipmentNotes: null,
+  outfitNotes: null, availabilityNotes: null,
   parkingInfo: null, accessInfo: null, equipmentAvailable: null, website: null,
   commissionArrangement: null, createdAt: '2030-01-01T00:00:00Z', updatedAt: '2030-01-01T00:00:00Z',
 };
@@ -21,6 +23,8 @@ const bookingAgent: Contact = {
   latitude: null, longitude: null, placeId: null,
   travelTimeMinutes: null, travelDistanceMetres: null, travelTimeCalculatedAt: null, travelMode: null,
   notes: null, greetingName: null, primaryRole: 'BOOKING_AGENT',
+  primaryBandRole: null, instruments: [], travelNotes: null, equipmentNotes: null,
+  outfitNotes: null, availabilityNotes: null,
   parkingInfo: null, accessInfo: null, equipmentAvailable: null, website: null,
   commissionArrangement: '15% of gross fee', createdAt: '2030-01-01T00:00:00Z', updatedAt: '2030-01-01T00:00:00Z',
 };

@@ -250,6 +250,7 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
         chairs={booking.band.chairs}
         members={booking.band.members}
         packages={booking.packages}
+        venue={booking.venue}
         // Absent with the flag off (#884) even if ?sheet=band is reached by hand — the entry
         // point is already flag-gated, this is defence in depth.
         open={sheet === 'band' && isEnabled('VITE_FEATURE_BAND_MEMBERS')}

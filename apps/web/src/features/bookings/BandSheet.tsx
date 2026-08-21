@@ -4,7 +4,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { apiGet } from '@/lib/api';
 import { BandAtom } from './BandAtom';
 import { useBandMutations } from './useBandMutations';
-import type { BookingBandChair, BookingBandMember, BookingPackageSummary, LineupTemplate } from '@/types/api';
+import { useRoleVocabulary } from '@/lib/hooks/useRoleVocabulary';
+import type { BookingBandChair, BookingBandMember, BookingPackageSummary, Contact, LineupTemplate } from '@/types/api';
 
 // Band members v1 (#879, ADR-0072 §6 / #885). Opened from the booking via ?sheet=band — the
 // "change something" surface. One row per member with segment chips, plus the unfilled-chair block
@@ -15,17 +16,19 @@ interface Props {
   chairs: BookingBandChair[];
   members: BookingBandMember[];
   packages: BookingPackageSummary[];
+  venue: Contact | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-export function BandSheet({ bookingId, chairs, members, packages, open, onOpenChange }: Props) {
+export function BandSheet({ bookingId, chairs, members, packages, venue, open, onOpenChange }: Props) {
   const { isLoaded } = useAuth();
   const { data: lineupTemplates = [], isLoading: lineupTemplatesLoading } = useQuery({
     queryKey: ['lineups'],
     queryFn: () => apiGet<LineupTemplate[]>('/lineups'),
     enabled: isLoaded && open,
   });
+  const instrumentVocabulary = useRoleVocabulary(open);
 
   const {
     applyLineup,
@@ -50,6 +53,8 @@ export function BandSheet({ bookingId, chairs, members, packages, open, onOpenCh
             chairs={chairs}
             members={members}
             packages={packages}
+            venue={venue}
+            instrumentVocabulary={instrumentVocabulary}
             lineupTemplates={lineupTemplates}
             lineupTemplatesLoading={lineupTemplatesLoading}
             onApplyLineup={(lineupTemplateId, packageId) => applyLineup.mutate({ lineupTemplateId, packageId })}

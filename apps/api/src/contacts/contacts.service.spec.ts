@@ -9,7 +9,7 @@ type MockRepo = {
   countOwned: jest.Mock;
   create: jest.Mock;
   update: jest.Mock;
-  countBookings: jest.Mock;
+  countDeletionBlockers: jest.Mock;
   findCustomerBookingIds: jest.Mock;
   delete: jest.Mock;
 };
@@ -21,13 +21,13 @@ function makeRepo(): MockRepo {
     countOwned: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
-    countBookings: jest.fn(),
+    countDeletionBlockers: jest.fn(),
     findCustomerBookingIds: jest.fn().mockResolvedValue([]),
     delete: jest.fn(),
   };
 }
 
-const contact = { id: 'c1', name: 'Alice', userId: 'u1' };
+const contact = { id: 'c1', name: 'Alice', userId: 'u1', _count: { bandMemberships: 0 } };
 
 describe('ContactsService', () => {
   let service: ContactsService;
@@ -77,11 +77,17 @@ describe('ContactsService', () => {
   });
 
   describe('findOne', () => {
-    it('returns the contact when found', async () => {
+    it('returns the contact with the roster count flattened out of _count', async () => {
       repo.findOne.mockResolvedValue(contact);
       const result = await service.findOne('u1', 'c1');
       expect(repo.findOne).toHaveBeenCalledWith('u1', 'c1');
-      expect(result).toBe(contact);
+      expect(result).toEqual({ id: 'c1', name: 'Alice', userId: 'u1', bandMemberCount: 0 });
+    });
+
+    it('surfaces a non-zero band roster count (#886)', async () => {
+      repo.findOne.mockResolvedValue({ ...contact, _count: { bandMemberships: 2 } });
+      const result = await service.findOne('u1', 'c1');
+      expect(result.bandMemberCount).toBe(2);
     });
 
     it('throws NotFoundException when repository returns null', async () => {
@@ -156,9 +162,9 @@ describe('ContactsService', () => {
   });
 
   describe('delete', () => {
-    it('deletes contact when it exists and has no bookings', async () => {
+    it('deletes contact when it exists and has no bookings or roster rows', async () => {
       repo.findOne.mockResolvedValue(contact);
-      repo.countBookings.mockResolvedValue(0);
+      repo.countDeletionBlockers.mockResolvedValue({ bookingCount: 0, bandRosterCount: 0 });
       repo.delete.mockResolvedValue(contact);
       await service.delete('u1', 'c1');
       expect(repo.delete).toHaveBeenCalledWith('c1');
@@ -167,25 +173,45 @@ describe('ContactsService', () => {
     it('throws NotFoundException when contact is not found', async () => {
       repo.findOne.mockResolvedValue(null);
       await expect(service.delete('u1', 'missing')).rejects.toThrow(NotFoundException);
-      expect(repo.countBookings).not.toHaveBeenCalled();
+      expect(repo.countDeletionBlockers).not.toHaveBeenCalled();
       expect(repo.delete).not.toHaveBeenCalled();
     });
 
-    it('throws ConflictException with the required message when contact has bookings', async () => {
+    it('throws ConflictException naming the booking count when only bookings block (booking-only)', async () => {
       repo.findOne.mockResolvedValue(contact);
-      repo.countBookings.mockResolvedValue(3);
+      repo.countDeletionBlockers.mockResolvedValue({ bookingCount: 3, bandRosterCount: 0 });
       await expect(service.delete('u1', 'c1')).rejects.toThrow(
-        new ConflictException('Contact has associated bookings and cannot be deleted'),
+        new ConflictException('Contact has 3 bookings and cannot be deleted'),
       );
       expect(repo.delete).not.toHaveBeenCalled();
     });
 
-    it('scopes the booking count check to the correct userId and contactId', async () => {
+    it('throws ConflictException naming the roster when only a roster row blocks (roster-only, #886)', async () => {
       repo.findOne.mockResolvedValue(contact);
-      repo.countBookings.mockResolvedValue(0);
+      repo.countDeletionBlockers.mockResolvedValue({ bookingCount: 0, bandRosterCount: 1 });
+      await expect(service.delete('u1', 'c1')).rejects.toThrow(
+        new ConflictException('Contact is on the band roster for 1 booking and cannot be deleted'),
+      );
+      expect(repo.delete).not.toHaveBeenCalled();
+    });
+
+    it('throws ConflictException naming both when bookings and a roster row block (both, #886)', async () => {
+      repo.findOne.mockResolvedValue(contact);
+      repo.countDeletionBlockers.mockResolvedValue({ bookingCount: 1, bandRosterCount: 2 });
+      await expect(service.delete('u1', 'c1')).rejects.toThrow(
+        new ConflictException(
+          'Contact has 1 booking and is on the band roster for 2 bookings, and cannot be deleted',
+        ),
+      );
+      expect(repo.delete).not.toHaveBeenCalled();
+    });
+
+    it('scopes the deletion-blocker check to the correct userId and contactId', async () => {
+      repo.findOne.mockResolvedValue(contact);
+      repo.countDeletionBlockers.mockResolvedValue({ bookingCount: 0, bandRosterCount: 0 });
       repo.delete.mockResolvedValue(contact);
       await service.delete('u1', 'c1');
-      expect(repo.countBookings).toHaveBeenCalledWith('u1', 'c1');
+      expect(repo.countDeletionBlockers).toHaveBeenCalledWith('u1', 'c1');
     });
   });
 });

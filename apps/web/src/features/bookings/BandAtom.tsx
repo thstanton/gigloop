@@ -10,7 +10,8 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import ContactPicker from './ContactPicker';
 import { BandMemberRow } from './BandMemberRow';
-import type { BookingBandChair, BookingBandMember, BookingBandMemberStatus, BookingPackageSummary, LineupTemplate } from '@/types/api';
+import { useDatalistId } from '@/lib/hooks/useDatalistId';
+import type { BookingBandChair, BookingBandMember, BookingBandMemberStatus, BookingPackageSummary, Contact, LineupTemplate } from '@/types/api';
 
 // Band members v1 (#879, ADR-0072 §2/§3/§5, #885). Presentational: no fetch, no mutation — the host
 // (BandSheet) wires every action via a callback. One row per member (segment chips for every chair
@@ -29,6 +30,11 @@ interface BandAtomProps {
   chairs: BookingBandChair[];
   members: BookingBandMember[];
   packages: BookingPackageSummary[];
+  /** For chair-fill proximity ranking (#886, ADR-0072 §4) — missing coordinates degrade silently. */
+  venue: Contact | null;
+  /** Type-ahead suggestions for the "Add chair" role field — existing slot roles + declared
+   *  instruments (#886, ADR-0072 §3). Soft matching, not a hard filter. */
+  instrumentVocabulary: string[];
   lineupTemplates: LineupTemplate[];
   lineupTemplatesLoading: boolean;
   onApplyLineup: (lineupTemplateId: string, packageId: string | null) => void;
@@ -77,6 +83,7 @@ function SegmentPicker({
 function ChairRow({
   chair,
   packages,
+  venue,
   onRemove,
   isRemoving,
   onMove,
@@ -87,6 +94,7 @@ function ChairRow({
 }: {
   chair: BookingBandChair;
   packages: BookingPackageSummary[];
+  venue: Contact | null;
   onRemove: () => void;
   isRemoving: boolean;
   onMove: (direction: 'up' | 'down') => void;
@@ -123,6 +131,8 @@ function ChairRow({
         onChange={onAssign}
         placeholder="Fill this chair..."
         label="member"
+        chairRole={chair.role}
+        venue={venue}
         disabled={isAssigning}
       />
     </div>
@@ -133,6 +143,8 @@ export function BandAtom({
   chairs,
   members,
   packages,
+  venue,
+  instrumentVocabulary,
   lineupTemplates,
   lineupTemplatesLoading,
   onApplyLineup,
@@ -154,6 +166,7 @@ export function BandAtom({
   const [segment, setSegment] = useState<string>(WHOLE_DAY);
   const [addingRole, setAddingRole] = useState('');
   const [addOpen, setAddOpen] = useState(false);
+  const roleDatalistId = useDatalistId();
 
   const targetPackageId = segment === WHOLE_DAY ? null : segment;
   const sortedChairs = [...chairs].sort((a, b) => a.order - b.order);
@@ -237,6 +250,7 @@ export function BandAtom({
                   key={chair.id}
                   chair={chair}
                   packages={packages}
+                  venue={venue}
                   onRemove={() => onRemoveChair(chair.id)}
                   isRemoving={removingChairId === chair.id}
                   onMove={(direction) => onMoveChair(chair.id, direction)}
@@ -264,8 +278,14 @@ export function BandAtom({
               value={addingRole}
               onChange={(e) => setAddingRole(e.target.value)}
               placeholder="e.g. Saxophone"
+              list={roleDatalistId}
               autoFocus
             />
+            <datalist id={roleDatalistId}>
+              {instrumentVocabulary.map((role) => (
+                <option key={role} value={role} />
+              ))}
+            </datalist>
           </FormField>
           <GhostButton
             variant="primary"

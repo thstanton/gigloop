@@ -37,9 +37,12 @@ export function lineupFormToPayload(v: LineupFormValues) {
 export function LineupForm({
   value,
   onChange,
+  roleVocabulary = [],
 }: {
   value: LineupFormValues;
   onChange: (patch: Partial<LineupFormValues>) => void;
+  /** Type-ahead suggestions for slot roles (#886) — existing slots + contact instruments. */
+  roleVocabulary?: string[];
 }) {
   return (
     <div className="space-y-5">
@@ -52,7 +55,7 @@ export function LineupForm({
         />
       </FormField>
 
-      <LineupSlotEditor slots={value.slots} onChange={(slots) => onChange({ slots })} />
+      <LineupSlotEditor slots={value.slots} onChange={(slots) => onChange({ slots })} vocabulary={roleVocabulary} />
     </div>
   );
 }

@@ -136,6 +136,19 @@ model Contact {
   website               String?
   commissionArrangement String?
 
+  // Band roster — dep profile fields (#879/#886, ADR-0072 §4). All six are shared-with-band: a
+  // dep's own attributes, meant to be visible to them once a portal projection exists (ADR-0073).
+  // Organiser-private commentary belongs in `notes` above, never here. `primaryBandRole` is
+  // identity ("Dave is a sax player"); `instruments` is declared capability — both feed the chair
+  // picker's soft match against a chair's free-text `role`. Location reuses the existing address
+  // block above; there is no separate band-specific address.
+  primaryBandRole   String?
+  instruments       String[] @default([])
+  travelNotes       String?
+  equipmentNotes    String?
+  outfitNotes       String?
+  availabilityNotes String?
+
   customerBookings     Booking[]           @relation("BookingCustomer")
   venueBookings        Booking[]           @relation("BookingVenue")
   bookingAgentBookings Booking[]           @relation("BookingAgent")

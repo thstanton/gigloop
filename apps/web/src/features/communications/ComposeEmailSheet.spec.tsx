@@ -53,6 +53,12 @@ const mockContact = {
   website: null,
   commissionArrangement: null,
   primaryRole: null,
+  primaryBandRole: null,
+  instruments: [],
+  travelNotes: null,
+  equipmentNotes: null,
+  outfitNotes: null,
+  availabilityNotes: null,
 };
 
 const mockBooking: BookingDetail = {

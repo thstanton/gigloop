@@ -16,9 +16,11 @@ import type { Contact, ContactDetail } from '@/types/api';
 
 interface Props {
   contact: ContactDetail;
+  /** Type-ahead suggestions for the band member fields (#886) — see ContactForm's roleVocabulary. */
+  roleVocabulary?: string[];
 }
 
-export default function ContactEditDrawer({ contact }: Props) {
+export default function ContactEditDrawer({ contact, roleVocabulary = [] }: Props) {
   const [searchParams, setSearchParams] = useSearchParams();
   const isOpen = searchParams.get('edit') === 'true';
   const navigate = useNavigate();
@@ -67,7 +69,21 @@ export default function ContactEditDrawer({ contact }: Props) {
     contact.customerBookings.length +
     contact.venueBookings.length +
     contact.bookingAgentBookings.length;
-  const bookingSuffix = totalBookings === 1 ? '' : 's';
+  const bandMemberCount = contact.bandMemberCount;
+  const blocked = totalBookings > 0 || bandMemberCount > 0;
+
+  // Mirrors ContactsService.delete's ConflictException copy (#886) — keep the two in sync.
+  function deleteBlockedMessage(): string {
+    const booking = `${totalBookings} booking${totalBookings === 1 ? '' : 's'}`;
+    const roster = `the band roster for ${bandMemberCount} booking${bandMemberCount === 1 ? '' : 's'}`;
+    if (totalBookings > 0 && bandMemberCount > 0) {
+      return `This contact has ${booking} and is on ${roster}, and cannot be deleted.`;
+    }
+    if (bandMemberCount > 0) {
+      return `This contact is on ${roster} and cannot be deleted.`;
+    }
+    return `This contact has ${booking} and cannot be deleted.`;
+  }
 
   return (
     <Sheet open={isOpen} onOpenChange={(open) => { if (!open) close(); }}>
@@ -89,15 +105,14 @@ export default function ContactEditDrawer({ contact }: Props) {
             isError={saveMutation.isError}
             submitLabel="Save changes"
             onCancel={close}
+            roleVocabulary={roleVocabulary}
           />
 
           {/* Delete section */}
           <div className="border-t border-border mt-10 pt-8">
             <p className="text-sm font-medium text-foreground mb-1">Delete contact</p>
             <p className="text-sm text-muted mb-4">
-              {totalBookings > 0
-                ? `This contact has ${totalBookings} booking${bookingSuffix} and cannot be deleted.`
-                : 'Permanently removes this contact. This cannot be undone.'}
+              {blocked ? deleteBlockedMessage() : 'Permanently removes this contact. This cannot be undone.'}
             </p>
             {deleteConfirm ? (
               <Button
@@ -112,7 +127,7 @@ export default function ContactEditDrawer({ contact }: Props) {
               <Button
                 size="sm"
                 variant="destructiveOutline"
-                disabled={totalBookings > 0}
+                disabled={blocked}
                 onClick={() => setDeleteConfirm(true)}
               >
                 Delete contact

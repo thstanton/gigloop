@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { apiDelete, apiPatch, apiPost } from '@/lib/api';
+import { useRoleVocabulary } from '@/lib/hooks/useRoleVocabulary';
 import type { CreateLineupInput, LineupTemplate, UpdateLineupInput } from '@/types/api';
 import {
   LineupForm,
@@ -70,6 +71,7 @@ interface LineupDrawerProps {
 
 export function LineupDrawer({ mode, open, onClose }: LineupDrawerProps) {
   const qc = useQueryClient();
+  const roleVocabulary = useRoleVocabulary();
   const isEdit = mode.type === 'edit';
   const existing = isEdit ? mode.lineup : null;
 
@@ -106,7 +108,11 @@ export function LineupDrawer({ mode, open, onClose }: LineupDrawerProps) {
         </SheetHeader>
 
         <div className="flex-1 overflow-y-auto px-5 py-5">
-          <LineupForm value={form} onChange={(patch) => setForm((f) => ({ ...f, ...patch }))} />
+          <LineupForm
+            value={form}
+            onChange={(patch) => setForm((f) => ({ ...f, ...patch }))}
+            roleVocabulary={roleVocabulary}
+          />
         </div>
 
         <div className="border-t border-border px-5 py-4 flex-shrink-0 space-y-3">

@@ -67,6 +67,13 @@ export interface Contact {
   website: string | null;
   commissionArrangement: string | null;
   primaryRole: string | null;
+  // Band roster — dep profile (#886, ADR-0072 §4). Shared-with-band, not organiser-private.
+  primaryBandRole: string | null;
+  instruments: string[];
+  travelNotes: string | null;
+  equipmentNotes: string | null;
+  outfitNotes: string | null;
+  availabilityNotes: string | null;
 }
 
 export interface BookingRef {
@@ -81,6 +88,9 @@ export interface ContactDetail extends Contact {
   customerBookings: BookingRef[];
   venueBookings: BookingRef[];
   bookingAgentBookings: BookingRef[];
+  /** Every BookingBandMember row for this contact, removed ones included (#886) — a contact on a
+   *  roster and on no bookings still blocks deletion. */
+  bandMemberCount: number;
 }
 
 export interface CreateContactInput {
@@ -104,6 +114,12 @@ export interface CreateContactInput {
   website?: string;
   commissionArrangement?: string;
   primaryRole?: string | null;
+  primaryBandRole?: string;
+  instruments?: string[];
+  travelNotes?: string;
+  equipmentNotes?: string;
+  outfitNotes?: string;
+  availabilityNotes?: string;
 }
 
 export interface UpdateContactInput {
@@ -127,6 +143,12 @@ export interface UpdateContactInput {
   website?: string | null;
   commissionArrangement?: string | null;
   primaryRole?: string | null;
+  primaryBandRole?: string | null;
+  instruments?: string[];
+  travelNotes?: string | null;
+  equipmentNotes?: string | null;
+  outfitNotes?: string | null;
+  availabilityNotes?: string | null;
 }
 
 // ─────────────────────────────────────────

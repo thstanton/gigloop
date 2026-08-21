@@ -196,6 +196,53 @@ export async function seedContactWithBooking(
   return { contactId: contact.id, bookingId: booking.id };
 }
 
+export interface ContactOnBandRoster extends ContactWithBooking {
+  /** The booking's customer — a second contact the fixture owns, cleaned up separately. */
+  customerId: string;
+}
+
+// Roster-only fixture (ADR-0072 §1 / #886): a contact who is NOT the customer/venue/agent of any
+// booking, but IS on a booking's band roster — the fourth deletion-blocking case `countBookings`
+// added in #885. Needs a separate customer contact, since `Booking.customerId` is required.
+export async function seedContactOnBandRoster(
+  userId: string = E2E_TEST_USER_ID,
+): Promise<ContactOnBandRoster> {
+  const customer = await prisma.contact.create({
+    data: {
+      userId,
+      name: 'E2E Roster-Booking Customer',
+      email: 'roster-booking-customer@e2e.test',
+      primaryRole: 'CUSTOMER',
+    },
+  });
+
+  const booking = await prisma.booking.create({
+    data: {
+      userId,
+      status: BookingStatus.PROVISIONAL,
+      eventType: 'Wedding',
+      title: 'E2E Roster Delete-Block Booking',
+      date: new Date('2099-10-02T18:00:00.000Z'),
+      customerId: customer.id,
+    },
+  });
+
+  const dep = await prisma.contact.create({
+    data: {
+      userId,
+      name: 'E2E Undeletable Roster Contact',
+      email: 'undeletable-roster@e2e.test',
+      primaryRole: 'BAND_MEMBER',
+    },
+  });
+
+  await prisma.bookingBandMember.create({
+    data: { userId, bookingId: booking.id, contactId: dep.id },
+  });
+
+  return { contactId: dep.id, bookingId: booking.id, customerId: customer.id };
+}
+
 export interface BookingWithSentContract {
   bookingId: string;
   contractId: string;
