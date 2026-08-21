@@ -21,7 +21,7 @@ const baseBooking: BookingDetail = {
   activeContract: null, portalToken: 'tok_abc',
   hasMusicFormConfig: false, hasMusicFormResponse: false,
   portalVisibility: { contract: null, musicForm: null },
-  band: { chairs: [] },
+  band: { chairs: [], members: [] },
   seriesId: null, series: null,
   logistics: null,
 };

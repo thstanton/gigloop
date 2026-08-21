@@ -170,10 +170,10 @@ export interface BookingPackageSummary {
   icon: string;
 }
 
-// A seat in a segment (ADR-0072 §2, #884). `memberId` stays null throughout Band members v1's
-// first slice — a vacancy is `memberId = null`, a first-class thing the musician looks at, not an
-// absence. `callTime` is derived server-side from the segment's earliest PerformanceSet.startTime;
-// absent (null), not zero, when that segment has no start time.
+// A seat in a segment (ADR-0072 §2, #884). A vacancy is `memberId = null`, a first-class thing the
+// musician looks at, not an absence — assignment (#885) never creates or destroys a chair row, it
+// sets this field. `callTime` is derived server-side from the segment's earliest
+// PerformanceSet.startTime; absent (null), not zero, when that segment has no start time.
 export interface BookingBandChair {
   id: string;
   role: string;
@@ -183,9 +183,31 @@ export interface BookingBandChair {
   callTime: string | null;
 }
 
-// The band roster (ADR-0072/0073 §6). `chairs` only in this slice; `members` arrives in #885.
+// ADR-0072 §5: ADDED -> INVITED -> CONFIRMED | DECLINED. ADDED -> CONFIRMED is legal — confirming
+// on someone's behalf must not fabricate an INVITED that never happened. Declared once in
+// lib/constants.ts (BAND_MEMBER_STATUSES) with a compile-time coverage check against this union.
+export type BookingBandMemberStatus = 'ADDED' | 'INVITED' | 'CONFIRMED' | 'DECLINED';
+
+// A person on this gig (ADR-0072 §2/§5, #885) — reused across every chair the same contact fills,
+// so one member row carries one token, one fee, one confirmation however many segments they play.
+// Removed members never reach this shape — the booking response excludes them entirely.
+export interface BookingBandMember {
+  id: string;
+  contactId: string;
+  contact: ContactSummary;
+  bandPortalToken: string;
+  status: BookingBandMemberStatus;
+  /** Marks this member as the musician themself (ADR-0072 §3) — optional, does not fill a chair on its own. */
+  isSelf: boolean;
+  sessionFee: string | null; // Decimal serialises as string over JSON
+  invitedAt: string | null;
+  respondedAt: string | null;
+}
+
+// The band roster (ADR-0072/0073 §6): chairs (seats) and members (people), removed members excluded.
 export interface BookingBand {
   chairs: BookingBandChair[];
+  members: BookingBandMember[];
 }
 
 export interface KeyMoment {

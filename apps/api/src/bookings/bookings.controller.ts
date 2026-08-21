@@ -27,6 +27,8 @@ import { ApplyPackageTemplateDto } from './dto/apply-package-template.dto';
 import { UpdateBookingPackageDto } from './dto/update-booking-package.dto';
 import { CreateChairDto } from './dto/create-chair.dto';
 import { UpdateChairDto } from './dto/update-chair.dto';
+import { AssignChairDto } from './dto/assign-chair.dto';
+import { UpdateBandMemberDto } from './dto/update-band-member.dto';
 import { ApplyLineupTemplateDto } from './dto/apply-lineup-template.dto';
 import { UpsertMusicFormConfigDto } from './dto/upsert-music-form-config.dto';
 import { UpdateContractDto } from './dto/update-contract.dto';
@@ -396,6 +398,44 @@ export class BookingsController {
   ) {
     assertBandMembersEnabled();
     return this.service.deleteChair(req.userId, id, chairId);
+  }
+
+  @ApiOperation({ summary: 'Fill or vacate a chair — assignment sets a field, never creates or destroys the chair row' })
+  @ApiResponse({ status: 404, description: 'Booking, chair, or contact not found.' })
+  @Patch(':id/chairs/:chairId/assign')
+  assignChair(
+    @Req() req: AuthedRequest,
+    @Param('id') id: string,
+    @Param('chairId') chairId: string,
+    @Body() dto: AssignChairDto,
+  ) {
+    assertBandMembersEnabled();
+    return this.service.assignChair(req.userId, id, chairId, dto);
+  }
+
+  @ApiOperation({ summary: 'Update a band member — status, session fee, or the isSelf flag' })
+  @ApiResponse({ status: 404, description: 'Booking or band member not found.' })
+  @Patch(':id/band-members/:memberId')
+  updateBandMember(
+    @Req() req: AuthedRequest,
+    @Param('id') id: string,
+    @Param('memberId') memberId: string,
+    @Body() dto: UpdateBandMemberDto,
+  ) {
+    assertBandMembersEnabled();
+    return this.service.updateBandMember(req.userId, id, memberId, dto);
+  }
+
+  @ApiOperation({ summary: 'Soft-remove a band member — vacates their chairs, does not delete the roster row' })
+  @Delete(':id/band-members/:memberId')
+  @HttpCode(204)
+  removeBandMember(
+    @Req() req: AuthedRequest,
+    @Param('id') id: string,
+    @Param('memberId') memberId: string,
+  ) {
+    assertBandMembersEnabled();
+    return this.service.removeBandMember(req.userId, id, memberId);
   }
 
   @ApiOperation({ summary: 'Add a performance set to a booking' })

@@ -17,6 +17,8 @@ import { UpdateSetDto } from './dto/update-set.dto';
 import { UpdateBookingPackageDto } from './dto/update-booking-package.dto';
 import { CreateChairDto } from './dto/create-chair.dto';
 import { UpdateChairDto } from './dto/update-chair.dto';
+import { AssignChairDto } from './dto/assign-chair.dto';
+import { UpdateBandMemberDto } from './dto/update-band-member.dto';
 import { ApplyLineupTemplateDto } from './dto/apply-lineup-template.dto';
 import { UpsertMusicFormConfigDto } from './dto/upsert-music-form-config.dto';
 import { MailService } from '../mail/mail.service';
@@ -55,13 +57,18 @@ export type BookingPortalVisibility = {
 // computed in `mapBooking` from the chair's `packageId` against the booking's `sets`.
 export type BandChair = BookingDetailRow['bandChairs'][number] & { callTime: string | null };
 
+// A person on this gig (ADR-0072 §2/§5 / #885) — the row shape the query's `bandMembers` filter
+// (`removedAt: null`) already guarantees is never a removed one.
+export type BandMember = BookingDetailRow['bandMembers'][number];
+
 export type BookingBand = {
   chairs: BandChair[];
+  members: BandMember[];
 };
 
 export type MappedBooking = Omit<
   BookingDetailRow,
-  'musicFormConfig' | 'musicFormResponse' | 'contracts' | 'bandChairs'
+  'musicFormConfig' | 'musicFormResponse' | 'contracts' | 'bandChairs' | 'bandMembers'
 > & {
   hasMusicFormConfig: boolean;
   hasMusicFormResponse: boolean;
@@ -645,10 +652,55 @@ export class BookingsService {
     return this.repo.deleteChair(chairId);
   }
 
+  // Assignment never creates or destroys a chair row, it sets a field (ADR-0072 §2). Filling a
+  // chair reuses the contact's existing member row on this booking if one exists — one token, one
+  // fee, one status however many chairs they fill — and creates one on first assignment.
+  // `contactId: null` vacates the chair without touching the member row it held.
+  async assignChair(userId: string, bookingId: string, chairId: string, dto: AssignChairDto) {
+    await this.assertOwnership(userId, bookingId);
+    const chair = await this.repo.findChair(userId, bookingId, chairId);
+    if (!chair) throw new NotFoundException('Chair not found');
+
+    if (dto.contactId == null) {
+      return this.repo.setChairMember(chairId, null);
+    }
+
+    await this.contacts.assertOwned(userId, [dto.contactId]);
+    const existing = await this.repo.findActiveMemberByContact(userId, bookingId, dto.contactId);
+    const member = existing ?? (await this.repo.createMember(userId, bookingId, dto.contactId));
+    return this.repo.setChairMember(chairId, member.id);
+  }
+
+  // Every transition in this slice is organiser-driven from the Band sheet (ADR-0072 §5) — no
+  // transition graph to enforce, just the lifecycle timestamps a status change implies. Stamped
+  // unconditionally on each qualifying transition so it always reflects the most recent one (e.g.
+  // re-confirming after a decline updates `respondedAt` again).
+  async updateBandMember(userId: string, bookingId: string, memberId: string, dto: UpdateBandMemberDto) {
+    await this.assertOwnership(userId, bookingId);
+    const member = await this.repo.findMember(userId, bookingId, memberId);
+    if (!member) throw new NotFoundException('Band member not found');
+
+    const data: Prisma.BookingBandMemberUpdateInput = { ...dto };
+    if (dto.status === 'INVITED') data.invitedAt = new Date();
+    if (dto.status === 'CONFIRMED' || dto.status === 'DECLINED') data.respondedAt = new Date();
+
+    return this.repo.updateMember(memberId, data);
+  }
+
+  // Soft removal (ADR-0072 §5): the person's answer and what the organiser did to the roster are
+  // separate facts, so there is no REPLACED status — `removeMember` freezes `status` and stamps
+  // `removedAt`, vacating every chair this member held. A re-invite is a fresh member row.
+  async removeBandMember(userId: string, bookingId: string, memberId: string) {
+    await this.assertOwnership(userId, bookingId);
+    const member = await this.repo.findMember(userId, bookingId, memberId);
+    if (!member) throw new NotFoundException('Band member not found');
+    return this.repo.removeMember(memberId);
+  }
+
   // The single place the booking response shape is constructed (ADR-0071). Every read and write
   // method funnels its `bookingDetailSelect`-shaped row through here rather than re-deriving the shape.
   private mapBooking(booking: BookingDetailRow): MappedBooking {
-    const { musicFormConfig, musicFormResponse, contracts, bandChairs, ...rest } = booking;
+    const { musicFormConfig, musicFormResponse, contracts, bandChairs, bandMembers, ...rest } = booking;
     const callTimes = deriveCallTimes(booking.sets ?? []);
     return {
       ...rest,
@@ -661,9 +713,10 @@ export class BookingsService {
         booking.status,
         musicFormConfig?.publishedAt != null,
       ),
-      // ADR-0073 §6: the organiser read path. `members` arrives in #885.
+      // ADR-0073 §6: the organiser read path. Removed members are already excluded by the query.
       band: {
         chairs: (bandChairs ?? []).map((chair) => ({ ...chair, callTime: callTimes.get(chair.packageId) ?? null })),
+        members: bandMembers ?? [],
       },
     };
   }

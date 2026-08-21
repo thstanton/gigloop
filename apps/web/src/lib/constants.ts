@@ -5,7 +5,7 @@ import {
   LayoutDashboard, CalendarDays, FileText, Settings, Package,
   CalendarPlus, UserPlus,
 } from 'lucide-react';
-import type { BookingStatus, EventType, InvoiceStatus, PortalTheme, PortalVisibilityReason, ReminderConcern, SongGenre } from '@/types/api';
+import type { BookingBandMemberStatus, BookingStatus, EventType, InvoiceStatus, PortalTheme, PortalVisibilityReason, ReminderConcern, SongGenre } from '@/types/api';
 
 export type ContactPrimaryRole = 'CUSTOMER' | 'VENUE' | 'BOOKING_AGENT';
 
@@ -323,6 +323,44 @@ export const INVOICE_OVERDUE_TOKENS: { label: string } & InvoiceStatusTokens = {
   text: 'text-status-cancelled',
   borderL: 'border-l-status-cancelled',
 };
+
+// ─── Band member lifecycle (ADR-0072 §5) ────────────────────────────────────
+// ADDED -> INVITED -> CONFIRMED | DECLINED, declared once (CLAUDE.md: one declaration per
+// vocabulary) — mirrors the booking/invoice status tables' shape. Every transition is
+// organiser-driven from the Band sheet in this slice (no portal actor until #880), so there is no
+// separate "legal next status" list here — ADDED -> CONFIRMED is deliberately reachable directly.
+export interface BandMemberStatusRow {
+  value: BookingBandMemberStatus;
+  label: string;
+  tint: string;
+  text: string;
+  borderL: string;
+}
+
+const BAND_MEMBER_STATUSES = [
+  { value: 'ADDED',     label: 'Added',     tint: 'bg-status-enquiry/15',     text: 'text-status-enquiry',     borderL: 'border-l-status-enquiry'     },
+  { value: 'INVITED',   label: 'Invited',   tint: 'bg-status-provisional/15', text: 'text-status-provisional', borderL: 'border-l-status-provisional' },
+  { value: 'CONFIRMED', label: 'Confirmed', tint: 'bg-status-confirmed/15',   text: 'text-status-confirmed',   borderL: 'border-l-status-confirmed'   },
+  { value: 'DECLINED',  label: 'Declined',  tint: 'bg-status-cancelled/15',   text: 'text-status-cancelled',   borderL: 'border-l-status-cancelled'   },
+] as const satisfies readonly BandMemberStatusRow[];
+
+export type _BandMemberStatusCoverage = AssertNever<
+  Exclude<BookingBandMemberStatus, (typeof BAND_MEMBER_STATUSES)[number]['value']>
+>;
+
+export const BAND_MEMBER_STATUS_ORDER: BookingBandMemberStatus[] = BAND_MEMBER_STATUSES.map((row) => row.value);
+
+export const BAND_MEMBER_STATUS_LABELS = column(BAND_MEMBER_STATUSES, 'label');
+
+export interface BandMemberStatusTokens {
+  tint: string;
+  text: string;
+  borderL: string;
+}
+
+export const BAND_MEMBER_STATUS_TOKENS: Record<BookingBandMemberStatus, BandMemberStatusTokens> = Object.fromEntries(
+  BAND_MEMBER_STATUSES.map(({ value, tint, text, borderL }) => [value, { tint, text, borderL }]),
+) as Record<BookingBandMemberStatus, BandMemberStatusTokens>;
 
 // ─── Logistics fields ────────────────────────────────────────────────────────
 // The system fields inside a booking's free-form `logistics` blob, declared once. The

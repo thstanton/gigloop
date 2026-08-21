@@ -1,18 +1,34 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, screen, userEvent, within } from 'storybook/test';
 import { BandAtom } from './BandAtom';
-import { lineupTemplate } from '@/test/factories';
+import { bandMember, lineupTemplate } from '@/test/factories';
 import type { BookingBandChair, BookingPackageSummary } from '@/types/api';
 
 // The Band atom is presentational: it owns no mutation and no fetch. The host (BandSheet) passes
-// the chairs/packages/lineup templates and signals every edit via a callback. This slice's Band
-// sheet renders the unfilled-chair block only — every chair here is vacant (#884).
+// the chairs/members/packages/lineup templates and signals every edit via a callback. One row per
+// member (segment chips for every chair they fill), plus the unfilled-chair block from #884 (#885).
 
 const packages: BookingPackageSummary[] = [{ id: 'pkg-evening', order: 1, label: 'Evening', icon: 'guitar' }];
 
 const chairs: BookingBandChair[] = [
   { id: 'ch1', role: 'Saxophone', order: 1, packageId: 'pkg-evening', memberId: null, callTime: '19:30' },
   { id: 'ch2', role: 'Drums', order: 2, packageId: null, memberId: null, callTime: null },
+];
+
+const filledChairs: BookingBandChair[] = [
+  { id: 'ch3', role: 'Vocals', order: 1, packageId: 'pkg-evening', memberId: 'm1', callTime: '19:30' },
+  { id: 'ch4', role: 'Guitar', order: 2, packageId: null, memberId: 'm1', callTime: null },
+  { id: 'ch5', role: 'Drums', order: 3, packageId: null, memberId: null, callTime: null },
+];
+
+const members = [
+  bandMember({
+    id: 'm1',
+    contactId: 'c1',
+    contact: { id: 'c1', name: 'Dave Chambers', email: 'dave@example.com' },
+    status: 'CONFIRMED',
+    sessionFee: '150.00',
+  }),
 ];
 
 const lineups = [
@@ -31,6 +47,7 @@ const meta = {
   tags: ['ai-generated'],
   args: {
     chairs,
+    members: [],
     packages,
     lineupTemplates: lineups,
     lineupTemplatesLoading: false,
@@ -41,6 +58,14 @@ const meta = {
     onRemoveChair: fn(),
     removingChairId: null,
     onMoveChair: fn(),
+    onAssignChair: fn(),
+    assigningChairId: null,
+    onChangeMemberStatus: fn(),
+    changingStatusMemberId: null,
+    onSaveMemberFee: fn(),
+    savingFeeMemberId: null,
+    onRemoveMember: fn(),
+    removingMemberId: null,
   },
 } satisfies Meta<typeof BandAtom>;
 
@@ -94,5 +119,55 @@ export const Empty: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByText('No band yet')).toBeVisible();
     await expect(canvas.getByText('Apply a lineup, or add chairs one at a time.')).toBeVisible();
+  },
+};
+
+// #885: one member row, segment-chip per chair they fill, plus the remaining vacant chair still
+// showing in "Chairs to fill" — the split at the heart of this slice.
+export const WithMembers: Story = {
+  name: 'One member row with segment chips, alongside a still-vacant chair',
+  args: { chairs: filledChairs, members },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText('Band')).toBeVisible();
+    await expect(canvas.getByText('Dave Chambers')).toBeVisible();
+    // "Confirmed" appears twice: the read-only StatusPill and the status Select's current value.
+    await expect(canvas.getAllByText('Confirmed')).toHaveLength(2);
+    await expect(canvas.getByText('Vocals · Evening')).toBeVisible();
+    await expect(canvas.getByText('Guitar · Whole day')).toBeVisible();
+    await expect(canvas.getByText('£150.00')).toBeVisible();
+    await expect(canvas.getByText('Chairs to fill')).toBeVisible();
+    await expect(canvas.getByText('Drums')).toBeVisible();
+  },
+};
+
+// Story task before the component build (issue #885): assigning a contact to a vacant chair.
+export const AssignContactToChair: Story = {
+  name: 'Picking a contact from the ContactPicker on a vacant chair assigns it',
+  args: { chairs: [{ id: 'ch1', role: 'Saxophone', order: 1, packageId: null, memberId: null, callTime: null }] },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('combobox', { name: 'Fill this chair...' }));
+    await userEvent.click(await screen.findByRole('option', { name: /Sophie Hartley/i }));
+    await expect(args.onAssignChair).toHaveBeenCalledWith('ch1', 'c2');
+  },
+};
+
+export const UnassignFromMemberRow: Story = {
+  name: 'Removing a segment chip vacates that chair',
+  args: { chairs: filledChairs, members },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByLabelText('Unassign Vocals'));
+    await expect(args.onAssignChair).toHaveBeenCalledWith('ch3', null);
+  },
+};
+
+export const RemoveMember: Story = {
+  args: { chairs: filledChairs, members },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByLabelText('Remove member'));
+    await expect(args.onRemoveMember).toHaveBeenCalledWith('m1');
   },
 };

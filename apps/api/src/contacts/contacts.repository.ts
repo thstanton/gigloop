@@ -89,13 +89,22 @@ export class ContactsRepository {
     });
   }
 
+  // Roster rows join the three existing FKs that block contact deletion (ADR-0072 §1): a contact
+  // who is only on a booking's band roster still cannot be deleted, so `countBookings` returns a
+  // 409 for them too. Every `BookingBandMember` row counts, removed ones included — its FK to
+  // Contact is `onDelete: Restrict` regardless of `removedAt`, so the DB would reject the delete
+  // either way; this keeps the friendly 409 in front of that.
   async countBookings(userId: string, id: string): Promise<number> {
-    return this.prisma.booking.count({
-      where: {
-        userId,
-        OR: [{ customerId: id }, { venueId: id }, { bookingAgentId: id }],
-      },
-    });
+    const [bookingCount, bandMemberCount] = await Promise.all([
+      this.prisma.booking.count({
+        where: {
+          userId,
+          OR: [{ customerId: id }, { venueId: id }, { bookingAgentId: id }],
+        },
+      }),
+      this.prisma.bookingBandMember.count({ where: { userId, contactId: id } }),
+    ]);
+    return bookingCount + bandMemberCount;
   }
 
   // The IDs of bookings this contact is the CUSTOMER of — the bookings whose checklist email

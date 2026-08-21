@@ -5,7 +5,7 @@
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from '../app.module';
-import { bookingDetailSelect, setSelect, packageSelect, bandChairSelect } from './bookings.repository';
+import { bookingDetailSelect, setSelect, packageSelect, bandChairSelect, bandMemberSelect } from './bookings.repository';
 import { NESTED_CONTACT_SELECT, CONTRACT_INCLUDE } from './booking.includes';
 
 const sortKeys = (keys: string[]): string[] => [...keys].sort((a, b) => a.localeCompare(b));
@@ -47,6 +47,16 @@ describe('Booking detail select matches its response DTOs (#873)', () => {
     expect(sortKeys(Object.keys(NESTED_CONTACT_SELECT))).toEqual(dtoKeys('ContactResponseDto'));
   });
 
+  // #885: removed members never reach the select (filtered at the query, not in mapBooking), so
+  // unlike BookingBandChairDto's derived callTime, this select matches its DTO with no extras.
+  it('BookingBandMemberDto matches bandMemberSelect exactly', () => {
+    expect(sortKeys(Object.keys(bandMemberSelect))).toEqual(dtoKeys('BookingBandMemberDto'));
+  });
+
+  it('BookingBandMemberContactDto matches the nested member-contact select exactly', () => {
+    expect(sortKeys(Object.keys(bandMemberSelect.contact.select))).toEqual(dtoKeys('BookingBandMemberContactDto'));
+  });
+
   it('BookingActiveContractDto matches the nested contract select exactly', () => {
     expect(sortKeys(Object.keys(CONTRACT_INCLUDE.select))).toEqual(dtoKeys('BookingActiveContractDto'));
   });
@@ -60,7 +70,7 @@ describe('Booking detail select matches its response DTOs (#873)', () => {
   // `activeContract`, and adds `portalVisibility`. Every other selected field passes straight
   // through — that subset must match BookingResponseDto's non-derived fields exactly.
   it('the passthrough fields of the booking select match BookingResponseDto (excluding mapBooking-derived fields)', () => {
-    const TRANSFORMED_RELATIONS = new Set(['musicFormConfig', 'musicFormResponse', 'contracts', 'bandChairs']);
+    const TRANSFORMED_RELATIONS = new Set(['musicFormConfig', 'musicFormResponse', 'contracts', 'bandChairs', 'bandMembers']);
     const DERIVED_DTO_FIELDS = new Set([
       'hasMusicFormConfig',
       'hasMusicFormResponse',

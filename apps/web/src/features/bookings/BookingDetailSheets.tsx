@@ -248,6 +248,7 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
       <BandSheet
         bookingId={bookingId}
         chairs={booking.band.chairs}
+        members={booking.band.members}
         packages={booking.packages}
         // Absent with the flag off (#884) even if ?sheet=band is reached by hand — the entry
         // point is already flag-gated, this is defence in depth.

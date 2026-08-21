@@ -136,12 +136,13 @@ model Contact {
   website               String?
   commissionArrangement String?
 
-  customerBookings     Booking[]       @relation("BookingCustomer")
-  venueBookings        Booking[]       @relation("BookingVenue")
-  bookingAgentBookings Booking[]       @relation("BookingAgent")
+  customerBookings     Booking[]           @relation("BookingCustomer")
+  venueBookings        Booking[]           @relation("BookingVenue")
+  bookingAgentBookings Booking[]           @relation("BookingAgent")
   invoices             Invoice[]
   communications       Communication[]
   series               BookingSeries[]
+  bandMemberships      BookingBandMember[]
 
   @@index([userId])
 }
@@ -187,6 +188,7 @@ model Booking {
   checklistItems    BookingChecklistItem[]
   invoiceLineItems  InvoiceLineItem[]
   bandChairs        BookingBandChair[]
+  bandMembers       BookingBandMember[]
 
   @@index([userId])
   @@index([customerId])
@@ -407,9 +409,8 @@ model Package {
 
 // Band members v1 (#879, ADR-0072 §2): a seat in a segment. `memberId` is nullable throughout this
 // slice — a vacancy is `memberId = null`, a first-class thing the musician looks at, not an
-// absence. No FK on `memberId` yet; `BookingBandMember` (and the constraint) arrives in #885.
-// `packageId` null means a package-less/whole-day chair — one code path, no special case, exactly
-// like PerformanceSet.packageId.
+// absence. `packageId` null means a package-less/whole-day chair — one code path, no special case,
+// exactly like PerformanceSet.packageId.
 model BookingBandChair {
   id        String   @id @default(uuid())
   userId    String
@@ -425,11 +426,58 @@ model BookingBandChair {
   packageId String?
   package   Package? @relation(fields: [packageId], references: [id], onDelete: SetNull)
 
+  // #885: assignment never creates or destroys a chair row, it sets this field — filling a chair
+  // sets memberId, vacating nulls it. SetNull (not Restrict/Cascade) because a member is never
+  // hard-deleted (removal is soft, `removedAt`); this only guards the FK if that ever changes.
   memberId String?
+  member   BookingBandMember? @relation(fields: [memberId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([bookingId])
   @@index([packageId])
+  @@index([memberId])
+}
+
+// Band members v1 (#879, ADR-0072 §2/§5): a person on this gig — reused across every chair the
+// same contact fills, so a re-assignment is a field write on the chair, not a new roster row.
+// Lifecycle: ADDED -> INVITED -> CONFIRMED | DECLINED, declared once as a coverage-guarded
+// `as const satisfies` table in band-member-status.ts (CLAUDE.md's one-declaration rule) — `status`
+// stays String per the #787 String-over-enum convention, exactly like BookingChecklistStep.kind.
+// `ADDED -> CONFIRMED` is legal: confirming on someone's behalf must not fabricate an INVITED that
+// never happened. Removal is soft — `removedAt` plus a frozen `status` — there is no REPLACED
+// status; "replaced" is derived from a fresh row for the same chair, never stored.
+model BookingBandMember {
+  id        String   @id @default(uuid())
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  bookingId String
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  contactId String
+  contact   Contact @relation(fields: [contactId], references: [id], onDelete: Restrict)
+
+  // Matches Booking.portalToken exactly (ADR-0072 §2) — the #880 portal's one-shot link.
+  bandPortalToken String @unique @default(uuid())
+
+  status String @default("ADDED")
+
+  // An optional row for the musician themself, so a five-piece yields four vacancies, not five
+  // (ADR-0072 §3) — optional because a leader may send out a band they do not play in.
+  isSelf Boolean @default(false)
+
+  sessionFee Decimal? @db.Decimal(10, 2)
+
+  invitedAt   DateTime?
+  respondedAt DateTime?
+  removedAt   DateTime?
+
+  chairs BookingBandChair[]
+
+  @@index([userId])
+  @@index([bookingId])
+  @@index([contactId])
 }
 
 model BookingSeries {

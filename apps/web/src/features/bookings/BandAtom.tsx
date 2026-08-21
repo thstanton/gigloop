@@ -8,21 +8,26 @@ import { FormField } from '@/components/common/FormField';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import type { BookingBandChair, BookingPackageSummary, LineupTemplate } from '@/types/api';
+import ContactPicker from './ContactPicker';
+import { BandMemberRow } from './BandMemberRow';
+import type { BookingBandChair, BookingBandMember, BookingBandMemberStatus, BookingPackageSummary, LineupTemplate } from '@/types/api';
 
-// Band members v1 (#879, ADR-0072 §2/§3, #884). Presentational: no fetch, no mutation — the host
-// (BandSheet) wires every action via a callback. This slice's Band sheet renders the unfilled-chair
-// block only; per-member rows arrive in #885.
+// Band members v1 (#879, ADR-0072 §2/§3/§5, #885). Presentational: no fetch, no mutation — the host
+// (BandSheet) wires every action via a callback. One row per member (segment chips for every chair
+// they fill, via BandMemberRow), plus the unfilled-chair block from #884 — each vacant chair gets a
+// ContactPicker to fill it.
 
 const WHOLE_DAY = '__whole_day__';
 
-function segmentLabel(chair: BookingBandChair, packages: BookingPackageSummary[]): string {
+/** Shared with BandMemberRow — a chair's segment display name, "Whole day" when package-less. */
+export function segmentLabel(chair: BookingBandChair, packages: BookingPackageSummary[]): string {
   if (!chair.packageId) return 'Whole day';
   return packages.find((p) => p.id === chair.packageId)?.label ?? 'Whole day';
 }
 
 interface BandAtomProps {
   chairs: BookingBandChair[];
+  members: BookingBandMember[];
   packages: BookingPackageSummary[];
   lineupTemplates: LineupTemplate[];
   lineupTemplatesLoading: boolean;
@@ -33,6 +38,14 @@ interface BandAtomProps {
   onRemoveChair: (chairId: string) => void;
   removingChairId: string | null;
   onMoveChair: (chairId: string, direction: 'up' | 'down') => void;
+  onAssignChair: (chairId: string, contactId: string | null) => void;
+  assigningChairId: string | null;
+  onChangeMemberStatus: (memberId: string, status: BookingBandMemberStatus) => void;
+  changingStatusMemberId: string | null;
+  onSaveMemberFee: (memberId: string, sessionFee: number | null) => void;
+  savingFeeMemberId: string | null;
+  onRemoveMember: (memberId: string) => void;
+  removingMemberId: string | null;
 }
 
 function SegmentPicker({
@@ -69,6 +82,8 @@ function ChairRow({
   onMove,
   canMoveUp,
   canMoveDown,
+  onAssign,
+  isAssigning,
 }: {
   chair: BookingBandChair;
   packages: BookingPackageSummary[];
@@ -77,34 +92,46 @@ function ChairRow({
   onMove: (direction: 'up' | 'down') => void;
   canMoveUp: boolean;
   canMoveDown: boolean;
+  onAssign: (contactId: string | null) => void;
+  isAssigning: boolean;
 }) {
   return (
-    <div className="flex items-center gap-2 py-2 border-b border-border last:border-b-0">
-      <div className="flex flex-col">
-        <IconButton label="Move up" onClick={() => onMove('up')} disabled={!canMoveUp} className="min-h-0 min-w-0 h-4">
-          <ChevronUp size={14} />
-        </IconButton>
-        <IconButton label="Move down" onClick={() => onMove('down')} disabled={!canMoveDown} className="min-h-0 min-w-0 h-4">
-          <ChevronDown size={14} />
+    <div className="py-2 border-b border-border last:border-b-0 space-y-2">
+      <div className="flex items-center gap-2">
+        <div className="flex flex-col">
+          <IconButton label="Move up" onClick={() => onMove('up')} disabled={!canMoveUp} className="min-h-0 min-w-0 h-4">
+            <ChevronUp size={14} />
+          </IconButton>
+          <IconButton label="Move down" onClick={() => onMove('down')} disabled={!canMoveDown} className="min-h-0 min-w-0 h-4">
+            <ChevronDown size={14} />
+          </IconButton>
+        </div>
+        <Badge variant="outline">{chair.role}</Badge>
+        <span className="flex-1 text-sm text-muted">{segmentLabel(chair, packages)}</span>
+        {chair.callTime && <span className="text-sm tabular-nums text-muted">{chair.callTime}</span>}
+        <IconButton
+          label="Remove chair"
+          onClick={onRemove}
+          disabled={isRemoving}
+          className="hover:text-status-cancelled"
+        >
+          <X size={16} />
         </IconButton>
       </div>
-      <Badge variant="outline">{chair.role}</Badge>
-      <span className="flex-1 text-sm text-muted">{segmentLabel(chair, packages)}</span>
-      {chair.callTime && <span className="text-sm tabular-nums text-muted">{chair.callTime}</span>}
-      <IconButton
-        label="Remove chair"
-        onClick={onRemove}
-        disabled={isRemoving}
-        className="hover:text-status-cancelled"
-      >
-        <X size={16} />
-      </IconButton>
+      <ContactPicker
+        value={null}
+        onChange={onAssign}
+        placeholder="Fill this chair..."
+        label="member"
+        disabled={isAssigning}
+      />
     </div>
   );
 }
 
 export function BandAtom({
   chairs,
+  members,
   packages,
   lineupTemplates,
   lineupTemplatesLoading,
@@ -115,6 +142,14 @@ export function BandAtom({
   onRemoveChair,
   removingChairId,
   onMoveChair,
+  onAssignChair,
+  assigningChairId,
+  onChangeMemberStatus,
+  changingStatusMemberId,
+  onSaveMemberFee,
+  savingFeeMemberId,
+  onRemoveMember,
+  removingMemberId,
 }: BandAtomProps) {
   const [segment, setSegment] = useState<string>(WHOLE_DAY);
   const [addingRole, setAddingRole] = useState('');
@@ -122,6 +157,7 @@ export function BandAtom({
 
   const targetPackageId = segment === WHOLE_DAY ? null : segment;
   const sortedChairs = [...chairs].sort((a, b) => a.order - b.order);
+  const vacantChairs = sortedChairs.filter((c) => c.memberId == null);
 
   function submitAddChair() {
     if (!addingRole.trim()) return;
@@ -154,7 +190,7 @@ export function BandAtom({
       )}
       {lineupTemplatesLoading && <p className="text-sm text-muted">Loading lineups…</p>}
 
-      {sortedChairs.length === 0 && !addOpen && (
+      {members.length === 0 && vacantChairs.length === 0 && !addOpen && (
         <EmptyState
           icon={<Users size={24} />}
           heading="No band yet"
@@ -167,26 +203,55 @@ export function BandAtom({
         />
       )}
 
-      {sortedChairs.length > 0 && (
-        <Card title="Chairs to fill">
+      {members.length > 0 && (
+        <Card title="Band">
           <div>
-            {sortedChairs.map((chair, i) => (
-              <ChairRow
-                key={chair.id}
-                chair={chair}
+            {members.map((member) => (
+              <BandMemberRow
+                key={member.id}
+                member={member}
+                chairs={sortedChairs.filter((c) => c.memberId === member.id)}
                 packages={packages}
-                onRemove={() => onRemoveChair(chair.id)}
-                isRemoving={removingChairId === chair.id}
-                onMove={(direction) => onMoveChair(chair.id, direction)}
-                canMoveUp={i > 0}
-                canMoveDown={i < sortedChairs.length - 1}
+                onUnassignChair={(chairId) => onAssignChair(chairId, null)}
+                onChangeStatus={(status) => onChangeMemberStatus(member.id, status)}
+                isChangingStatus={changingStatusMemberId === member.id}
+                onSaveFee={(fee) => onSaveMemberFee(member.id, fee)}
+                isSavingFee={savingFeeMemberId === member.id}
+                onRemove={() => onRemoveMember(member.id)}
+                isRemoving={removingMemberId === member.id}
               />
             ))}
           </div>
         </Card>
       )}
 
-      {sortedChairs.length > 0 && !addOpen && (
+      {vacantChairs.length > 0 && (
+        <Card title="Chairs to fill">
+          <div>
+            {vacantChairs.map((chair) => {
+              // Position within the FULL order (not just among vacant chairs) — moveChair swaps
+              // order with whichever chair is adjacent, filled or not.
+              const fullIndex = sortedChairs.indexOf(chair);
+              return (
+                <ChairRow
+                  key={chair.id}
+                  chair={chair}
+                  packages={packages}
+                  onRemove={() => onRemoveChair(chair.id)}
+                  isRemoving={removingChairId === chair.id}
+                  onMove={(direction) => onMoveChair(chair.id, direction)}
+                  canMoveUp={fullIndex > 0}
+                  canMoveDown={fullIndex < sortedChairs.length - 1}
+                  onAssign={(contactId) => onAssignChair(chair.id, contactId)}
+                  isAssigning={assigningChairId === chair.id}
+                />
+              );
+            })}
+          </div>
+        </Card>
+      )}
+
+      {(members.length > 0 || vacantChairs.length > 0) && !addOpen && (
         <GhostButton variant="primary" size="xs" onClick={() => setAddOpen(true)}>
           + Add chair
         </GhostButton>

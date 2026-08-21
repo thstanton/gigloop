@@ -70,6 +70,24 @@ export const bandChairSelect = {
   memberId: true,
 } as const;
 
+// Narrowed to exactly what `BookingBandMemberDto` declares (ADR-0072 §2/§5 / #885) — no `userId`,
+// `removedAt` excluded from the wire entirely (see the query's `where` below). `contact` mirrors
+// the inline id/name/email shape `listSelect` already nests for customer/venue/bookingAgent.
+export const bandMemberSelect = {
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  bookingId: true,
+  contactId: true,
+  contact: { select: { id: true, name: true, email: true } },
+  bandPortalToken: true,
+  status: true,
+  isSelf: true,
+  sessionFee: true,
+  invitedAt: true,
+  respondedAt: true,
+} as const;
+
 // The shape every read and write method below returns (ADR-0071 / #873): an explicit `select`
 // mirroring `BookingResponseDto` field-for-field — `userId` excluded at every level (top-level
 // booking, nested contacts, sets, packages). Every method that returns a booking uses
@@ -98,6 +116,9 @@ export const bookingDetailSelect = {
   sets: { select: setSelect, orderBy: { order: 'asc' as const } },
   packages: { select: packageSelect, orderBy: { order: 'asc' as const } },
   bandChairs: { select: bandChairSelect, orderBy: { order: 'asc' as const } },
+  // Removed rows never reach the wire (ADR-0072 §5) — filtered at the query, not in mapBooking, so
+  // the DTO's `select` contract (booking-select-contract.spec.ts) stays exact.
+  bandMembers: { where: { removedAt: null }, select: bandMemberSelect, orderBy: { createdAt: 'asc' as const } },
   musicFormConfig: { select: { id: true, publishedAt: true } },
   musicFormResponse: { select: { id: true } },
   contracts: CONTRACT_INCLUDE,
@@ -512,6 +533,53 @@ export class BookingsRepository {
   deleteChair(chairId: string) {
     return this.prisma.bookingBandChair.delete({
       where: { id: chairId }, // scoped-upstream: service.deleteChair calls findChair(userId, bookingId, chairId) first, already proving ownership (ADR-0061)
+    });
+  }
+
+  // The reuse lookup at the heart of ADR-0072 §2: a contact already on this booking's roster (not
+  // soft-removed) gets its existing member row, never a second one.
+  findActiveMemberByContact(userId: string, bookingId: string, contactId: string) {
+    return this.prisma.bookingBandMember.findFirst({
+      where: { userId, bookingId, contactId, removedAt: null },
+    });
+  }
+
+  createMember(userId: string, bookingId: string, contactId: string) {
+    return this.prisma.bookingBandMember.create({
+      data: { userId, bookingId, contactId },
+    });
+  }
+
+  setChairMember(chairId: string, memberId: string | null) {
+    return this.prisma.bookingBandChair.update({
+      where: { id: chairId }, // scoped-upstream: service.assignChair calls findChair(userId, bookingId, chairId) first, already proving ownership (ADR-0061)
+      data: { memberId },
+    });
+  }
+
+  findMember(userId: string, bookingId: string, memberId: string) {
+    return this.prisma.bookingBandMember.findFirst({
+      where: { id: memberId, bookingId, userId, removedAt: null },
+    });
+  }
+
+  updateMember(memberId: string, data: Prisma.BookingBandMemberUpdateInput) {
+    return this.prisma.bookingBandMember.update({
+      where: { id: memberId }, // scoped-upstream: service.updateBandMember calls findMember(userId, bookingId, memberId) first, already proving ownership (ADR-0061)
+      data,
+    });
+  }
+
+  // Soft removal (ADR-0072 §5): freezes `status` as-is and stamps `removedAt`, and vacates every
+  // chair this member held — the seats they leave behind become vacancies again, not orphans
+  // pointing at an excluded member. One transaction so a booking is never left half-degraded.
+  async removeMember(memberId: string) {
+    await this.prisma.$transaction(async (tx) => {
+      await tx.bookingBandChair.updateMany({ where: { memberId }, data: { memberId: null } });
+      await tx.bookingBandMember.update({
+        where: { id: memberId }, // scoped-upstream: service.removeBandMember calls findMember(userId, bookingId, memberId) first, already proving ownership (ADR-0061)
+        data: { removedAt: new Date() },
+      });
     });
   }
 

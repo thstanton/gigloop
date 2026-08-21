@@ -13,6 +13,9 @@ type MockPrisma = {
   booking: {
     count: jest.Mock;
   };
+  bookingBandMember: {
+    count: jest.Mock;
+  };
 };
 
 function makePrisma(): MockPrisma {
@@ -26,6 +29,9 @@ function makePrisma(): MockPrisma {
       delete: jest.fn(),
     },
     booking: {
+      count: jest.fn(),
+    },
+    bookingBandMember: {
       count: jest.fn(),
     },
   };
@@ -131,6 +137,7 @@ describe('ContactsRepository', () => {
   describe('countBookings', () => {
     it('counts bookings for all three FK roles', async () => {
       prisma.booking.count.mockResolvedValue(2);
+      prisma.bookingBandMember.count.mockResolvedValue(0);
       const count = await repo.countBookings('u1', 'c1');
       expect(prisma.booking.count).toHaveBeenCalledWith({
         where: {
@@ -145,9 +152,27 @@ describe('ContactsRepository', () => {
       expect(count).toBe(2);
     });
 
-    it('returns 0 when contact has no bookings', async () => {
+    it('returns 0 when contact has no bookings and no band memberships', async () => {
       prisma.booking.count.mockResolvedValue(0);
+      prisma.bookingBandMember.count.mockResolvedValue(0);
       expect(await repo.countBookings('u1', 'c1')).toBe(0);
+    });
+
+    // ADR-0072 §1: a contact who is only on a booking's band roster (no customer/venue/agent FK)
+    // still blocks deletion — this is the "roster rows join the three existing FKs" case #885 adds.
+    it('counts band memberships even when the contact has no booking FK at all', async () => {
+      prisma.booking.count.mockResolvedValue(0);
+      prisma.bookingBandMember.count.mockResolvedValue(1);
+      expect(await repo.countBookings('u1', 'c1')).toBe(1);
+      expect(prisma.bookingBandMember.count).toHaveBeenCalledWith({
+        where: { userId: 'u1', contactId: 'c1' },
+      });
+    });
+
+    it('sums bookings and band memberships when a contact has both', async () => {
+      prisma.booking.count.mockResolvedValue(2);
+      prisma.bookingBandMember.count.mockResolvedValue(3);
+      expect(await repo.countBookings('u1', 'c1')).toBe(5);
     });
   });
 

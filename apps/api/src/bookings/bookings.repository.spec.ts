@@ -34,6 +34,12 @@ type MockPrisma = {
     update: jest.Mock;
     delete: jest.Mock;
     deleteMany: jest.Mock;
+    updateMany: jest.Mock;
+  };
+  bookingBandMember: {
+    findFirst: jest.Mock;
+    create: jest.Mock;
+    update: jest.Mock;
   };
   musicFormConfig: {
     create: jest.Mock;
@@ -76,6 +82,12 @@ function makePrisma(): MockPrisma {
       update: jest.fn(),
       delete: jest.fn(),
       deleteMany: jest.fn(),
+      updateMany: jest.fn(),
+    },
+    bookingBandMember: {
+      findFirst: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
     },
     musicFormConfig: {
       create: jest.fn(),
@@ -729,6 +741,99 @@ describe('BookingsRepository', () => {
       const result = await repo.deleteChair('ch1');
       expect(prisma.bookingBandChair.delete).toHaveBeenCalledWith({ where: { id: 'ch1' } });
       expect(result).toBe(deleted);
+    });
+  });
+
+  describe('findActiveMemberByContact', () => {
+    it('queries by contactId, bookingId, userId, and excludes removed rows', async () => {
+      prisma.bookingBandMember.findFirst.mockResolvedValue(null);
+      await repo.findActiveMemberByContact('u1', 'b1', 'c1');
+      expect(prisma.bookingBandMember.findFirst).toHaveBeenCalledWith({
+        where: { userId: 'u1', bookingId: 'b1', contactId: 'c1', removedAt: null },
+      });
+    });
+  });
+
+  describe('createMember', () => {
+    it('creates a member row with userId, bookingId, and contactId', async () => {
+      const member = { id: 'm1' };
+      prisma.bookingBandMember.create.mockResolvedValue(member);
+      const result = await repo.createMember('u1', 'b1', 'c1');
+      expect(prisma.bookingBandMember.create).toHaveBeenCalledWith({
+        data: { userId: 'u1', bookingId: 'b1', contactId: 'c1' },
+      });
+      expect(result).toBe(member);
+    });
+  });
+
+  describe('setChairMember', () => {
+    it('sets memberId on the chair', async () => {
+      const chair = { id: 'ch1', memberId: 'm1' };
+      prisma.bookingBandChair.update.mockResolvedValue(chair);
+      const result = await repo.setChairMember('ch1', 'm1');
+      expect(prisma.bookingBandChair.update).toHaveBeenCalledWith({
+        where: { id: 'ch1' },
+        data: { memberId: 'm1' },
+      });
+      expect(result).toBe(chair);
+    });
+
+    it('nulls memberId to vacate', async () => {
+      prisma.bookingBandChair.update.mockResolvedValue({ id: 'ch1', memberId: null });
+      await repo.setChairMember('ch1', null);
+      expect(prisma.bookingBandChair.update).toHaveBeenCalledWith({
+        where: { id: 'ch1' },
+        data: { memberId: null },
+      });
+    });
+  });
+
+  describe('findMember', () => {
+    it('queries by memberId, bookingId, userId, and excludes removed rows', async () => {
+      prisma.bookingBandMember.findFirst.mockResolvedValue(null);
+      await repo.findMember('u1', 'b1', 'm1');
+      expect(prisma.bookingBandMember.findFirst).toHaveBeenCalledWith({
+        where: { id: 'm1', bookingId: 'b1', userId: 'u1', removedAt: null },
+      });
+    });
+  });
+
+  describe('updateMember', () => {
+    it('updates the member row by id', async () => {
+      const updated = { id: 'm1', status: 'CONFIRMED' };
+      prisma.bookingBandMember.update.mockResolvedValue(updated);
+      const result = await repo.updateMember('m1', { status: 'CONFIRMED' });
+      expect(prisma.bookingBandMember.update).toHaveBeenCalledWith({
+        where: { id: 'm1' },
+        data: { status: 'CONFIRMED' },
+      });
+      expect(result).toBe(updated);
+    });
+  });
+
+  describe('removeMember', () => {
+    it('vacates every chair held by the member, then stamps removedAt', async () => {
+      const order: string[] = [];
+      prisma.bookingBandChair.updateMany.mockImplementation(() => {
+        order.push('vacate');
+        return Promise.resolve({ count: 2 });
+      });
+      prisma.bookingBandMember.update.mockImplementation(() => {
+        order.push('remove');
+        return Promise.resolve({ id: 'm1' });
+      });
+
+      await repo.removeMember('m1');
+
+      expect(prisma.bookingBandChair.updateMany).toHaveBeenCalledWith({
+        where: { memberId: 'm1' },
+        data: { memberId: null },
+      });
+      expect(prisma.bookingBandMember.update).toHaveBeenCalledWith({
+        where: { id: 'm1' },
+        data: { removedAt: expect.any(Date) },
+      });
+      expect(order).toEqual(['vacate', 'remove']);
     });
   });
 
