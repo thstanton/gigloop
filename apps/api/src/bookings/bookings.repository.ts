@@ -10,6 +10,7 @@ import { CreateChairDto } from './dto/create-chair.dto';
 import { UpdateChairDto } from './dto/update-chair.dto';
 import { CONTRACT_INCLUDE, NESTED_CONTACT_SELECT } from './booking.includes';
 import { buildBookingSearchWhere } from './booking-search';
+import { INITIAL_BAND_MEMBER_STATUS } from './band-member-status';
 
 // Band members v1 (#879, ADR-0072 §3): carries the default lineup so applyPackageTemplate (#884)
 // can auto-apply it alongside the sets — null when the template has none. Only the apply-to-an-
@@ -183,13 +184,17 @@ export class BookingsRepository {
   // Loads everything Copy Event clones (#507): the full booking-owned Packages + their
   // PerformanceSets, the music form config (not the response), and the checklist. SKIPPED
   // items are dropped — they mirror the original gig's "not needed here" decision, and the
-  // copy starts from the checklist the musician actually sees (ADR-0049).
+  // copy starts from the checklist the musician actually sees (ADR-0049). Band members v1
+  // (#879, #889): bandChairs + bandMembers join the same clone, mirroring bookingDetailSelect's
+  // `removedAt: null` filter on members — a soft-removed member is never a candidate to copy.
   findOneForClone(userId: string, id: string) {
     return this.prisma.booking.findFirst({
       where: { id, userId },
       include: {
         packages: { orderBy: { order: 'asc' } },
         sets: { orderBy: { order: 'asc' } },
+        bandChairs: { orderBy: { order: 'asc' } },
+        bandMembers: { where: { removedAt: null }, orderBy: { createdAt: 'asc' } },
         musicFormConfig: true,
         checklistItems: { where: { state: { not: 'SKIPPED' } }, orderBy: { order: 'asc' } },
       },
@@ -229,11 +234,13 @@ export class BookingsRepository {
       },
     });
 
-    // Clone Packages first, mapping old id -> new id so cloned sets can re-point at them.
+    // Clone Packages first, mapping old id -> new id so cloned sets (and band chairs) can
+    // re-point at them. `lineupName` carries — it is a severed-provenance snapshot exactly like
+    // `label`/`icon` (ADR-0072 §3, #889), not a live reference that needs re-deriving.
     const packageIdMap = new Map<string, string>();
     for (const pkg of source.packages) {
       const created = await db.package.create({
-        data: { userId, bookingId: booking.id, label: pkg.label, icon: pkg.icon, order: pkg.order },
+        data: { userId, bookingId: booking.id, label: pkg.label, icon: pkg.icon, order: pkg.order, lineupName: pkg.lineupName },
       });
       packageIdMap.set(pkg.id, created.id);
     }
@@ -253,6 +260,10 @@ export class BookingsRepository {
       });
     }
 
+    // Clone the band roster (#889, ADR-0072 §5) — members before chairs, so chairs can re-point
+    // at the cloned member ids.
+    await this.cloneBandRoster(db, userId, booking.id, source, packageIdMap);
+
     if (source.musicFormConfig) {
       await db.musicFormConfig.create({
         data: {
@@ -265,6 +276,49 @@ export class BookingsRepository {
     }
 
     return db.booking.findFirstOrThrow({ where: { id: booking.id }, select: bookingDetailSelect });
+  }
+
+  // Clones a source booking's band roster onto the newly-created clone (#889, ADR-0072 §5).
+  // `source.bandMembers` already excludes soft-removed rows (findOneForClone's `removedAt: null`
+  // filter) — a copy invites nobody, so status resets to ADDED and the invite/response timestamps
+  // stay null; a fresh `bandPortalToken` comes from Prisma's `@default(uuid())` (omitted here) so
+  // no token is ever shared with the source gig. `sessionFee`/`isSelf` carry across untouched. A
+  // chair whose member was soft-removed (so absent from the id map) comes across as a vacancy, not
+  // a dangling reference — the seat survives, the occupant does not.
+  private async cloneBandRoster(
+    db: Prisma.TransactionClient | PrismaService,
+    userId: string,
+    newBookingId: string,
+    source: BookingForClone,
+    packageIdMap: Map<string, string>,
+  ) {
+    const memberIdMap = new Map<string, string>();
+    for (const member of source.bandMembers) {
+      const created = await db.bookingBandMember.create({
+        data: {
+          userId,
+          bookingId: newBookingId,
+          contactId: member.contactId,
+          status: INITIAL_BAND_MEMBER_STATUS,
+          isSelf: member.isSelf,
+          ...(member.sessionFee != null ? { sessionFee: member.sessionFee } : {}),
+        },
+      });
+      memberIdMap.set(member.id, created.id);
+    }
+
+    if (source.bandChairs.length > 0) {
+      await db.bookingBandChair.createMany({
+        data: source.bandChairs.map((chair) => ({
+          userId,
+          bookingId: newBookingId,
+          role: chair.role,
+          order: chair.order,
+          packageId: chair.packageId ? (packageIdMap.get(chair.packageId) ?? null) : null,
+          memberId: chair.memberId ? (memberIdMap.get(chair.memberId) ?? null) : null,
+        })),
+      });
+    }
   }
 
   async create(

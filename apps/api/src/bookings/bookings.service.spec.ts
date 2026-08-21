@@ -626,10 +626,11 @@ describe('BookingsService', () => {
       expect(result).toMatchObject({ id: 'copy1', status: BookingStatus.CONFIRMED });
     });
 
-    // Copy Event does NOT carry the roster in this slice — #889 (tracking #879) owns that later.
-    // cloneBookingCore never creates BookingBandChair rows, so the cloned booking comes back with
-    // an empty band block via mapBooking's `bandChairs ?? []` fallback, not an undefined crash.
-    it('does not carry the band roster — the copy comes back with an empty band block', async () => {
+    // The actual chair/member cloning lives in cloneBookingCore (repo.cloneBookingCore is mocked
+    // here — see bookings.repository.spec.ts's 'cloneBookingCore (Copy Event)' describe for that
+    // coverage). This only proves mapBooking's `bandChairs ?? []` / `bandMembers ?? []` fallback
+    // doesn't crash when a mocked repo response omits the band relations (e.g. a bandless source).
+    it('falls back to an empty band block when the cloned booking carries no band relations', async () => {
       repo.findOneForClone.mockResolvedValue(sourceForClone({ seriesId: null }));
       repo.cloneBookingCore.mockResolvedValue({ ...newBooking, seriesId: null });
       const result = await service.copyBooking('u1', 'src', { date: '2026-09-15' });
