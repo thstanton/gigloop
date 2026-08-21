@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { FormField } from '@/components/common/FormField';
 import {
+  LOGISTICS_BAND_ONLY_KEYS,
   LOGISTICS_DETAIL_FIELDS,
   LOGISTICS_FIELD_ICONS,
   LOGISTICS_SYSTEM_KEYS,
@@ -45,14 +46,14 @@ export type DetailsLogistics = Record<string, BookingLogisticsEntry>;
 
 type LocalState = Record<LogisticsDetailKey, LocalEntry>;
 
+// Derived from LOGISTICS_DETAIL_FIELDS rather than hand-listing each key — a table with a fixed
+// column count but a growing row count (#888 added travelPlan/outfits) must not force a matching
+// hand-written enumeration here, or this becomes exactly the "second hand-written list" the table
+// exists to prevent.
 function buildInitialState(logistics: BookingDetail['logistics']): LocalState {
-  return {
-    dressCode:         entryFromBooking(logistics, 'dressCode'),
-    performanceSpace:  entryFromBooking(logistics, 'performanceSpace'),
-    foodProvided:      entryFromBooking(logistics, 'foodProvided'),
-    greenRoom:         entryFromBooking(logistics, 'greenRoom'),
-    equipmentRequired: entryFromBooking(logistics, 'equipmentRequired'),
-  };
+  return Object.fromEntries(
+    LOGISTICS_DETAIL_FIELDS.map(({ key }) => [key, entryFromBooking(logistics, key)]),
+  ) as LocalState;
 }
 
 /** The detail + custom slice, ready to merge over the preserved time keys. Empty fields drop out. */
@@ -75,9 +76,19 @@ interface DetailsAtomProps {
   isSaving: boolean;
   saved: boolean;
   saveError: string | null;
+  /** Gates the two Band members v1 fields (#888) — travelPlan and outfits — off entirely when
+   *  false, the host's read of VITE_FEATURE_BAND_MEMBERS. */
+  bandMembersEnabled?: boolean;
 }
 
-export function DetailsAtom({ initialLogistics, onSave, isSaving, saved, saveError }: DetailsAtomProps) {
+export function DetailsAtom({
+  initialLogistics,
+  onSave,
+  isSaving,
+  saved,
+  saveError,
+  bandMembersEnabled = false,
+}: DetailsAtomProps) {
   // Self-initialized once (Venue/People style): the post-save ['booking'] refetch must not stomp
   // an in-progress edit while the self-saving shell stays open.
   const [fields, setFields] = useState<LocalState>(() => buildInitialState(initialLogistics));
@@ -116,9 +127,13 @@ export function DetailsAtom({ initialLogistics, onSave, isSaving, saved, saveErr
     setCustomFields((prev) => prev.filter((f) => f.key !== key));
   }
 
+  const visibleFields = LOGISTICS_DETAIL_FIELDS.filter(
+    ({ key }) => bandMembersEnabled || !LOGISTICS_BAND_ONLY_KEYS.includes(key),
+  );
+
   return (
     <div className="space-y-5">
-      {LOGISTICS_DETAIL_FIELDS.map(({ key, label, control }) => {
+      {visibleFields.map(({ key, label, control }) => {
         const entry = fields[key];
         return (
           <FormField key={key} label={label}>

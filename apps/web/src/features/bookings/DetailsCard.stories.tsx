@@ -89,3 +89,30 @@ export const Empty: Story = {
     await expect(canvas.getByRole('button', { name: 'Add details' })).toBeVisible();
   },
 };
+
+const withBandFields: Record<string, BookingLogisticsEntry> = {
+  dressCode: entry('Black tie'),
+  travelPlan: entry('Emily by train, Mike collects Phil'),
+  outfits: entry('Black suits, no ties'),
+};
+
+export const BandFieldsHiddenByDefault: Story = {
+  name: 'Travel plan and Outfits stay hidden with the flag off, even with saved values (#888)',
+  args: { logistics: withBandFields },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Dress code')).toBeVisible();
+    await expect(canvas.queryByText('Travel plan')).toBeNull();
+    await expect(canvas.queryByText('Outfits')).toBeNull();
+  },
+};
+
+export const BandFieldsVisibleWhenEnabled: Story = {
+  name: 'Travel plan and Outfits render once the flag is on (#888)',
+  args: { logistics: withBandFields, bandMembersEnabled: true },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Travel plan')).toBeVisible();
+    await expect(canvas.getByText('Emily by train, Mike collects Phil')).toBeVisible();
+    await expect(canvas.getByText('Outfits')).toBeVisible();
+    await expect(canvas.getByText('Black suits, no ties')).toBeVisible();
+  },
+};

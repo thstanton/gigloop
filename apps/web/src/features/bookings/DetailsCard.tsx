@@ -4,6 +4,7 @@ import { Card } from '@/components/common/Card';
 import { GhostButton } from '@/components/common/GhostButton';
 import { EmptyState } from '@/components/common/EmptyState';
 import {
+  LOGISTICS_BAND_ONLY_KEYS,
   LOGISTICS_DETAIL_KEYS,
   LOGISTICS_FIELD_ICONS,
   LOGISTICS_FIELD_LABELS,
@@ -17,12 +18,14 @@ const ALL_SYSTEM_KEYS = new Set<string>(LOGISTICS_SYSTEM_KEYS);
 interface DetailsCardProps {
   logistics: Record<string, BookingLogisticsEntry> | null;
   hideWhenEmpty?: boolean;
+  /** Hides the two Band members v1 fields (#888) — travelPlan and outfits — entirely when false. */
+  bandMembersEnabled?: boolean;
 }
 
-export default function DetailsCard({ logistics, hideWhenEmpty = false }: DetailsCardProps) {
+export default function DetailsCard({ logistics, hideWhenEmpty = false, bandMembersEnabled = false }: DetailsCardProps) {
   const [, setSearchParams] = useSearchParams();
   const systemEntries = LOGISTICS_DETAIL_KEYS
-    .filter(key => logistics?.[key]?.value)
+    .filter(key => logistics?.[key]?.value && (bandMembersEnabled || !LOGISTICS_BAND_ONLY_KEYS.includes(key)))
     .map(key => ({
       key,
       label: LOGISTICS_FIELD_LABELS[key],

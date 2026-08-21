@@ -173,6 +173,7 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
             <DetailsCard
               logistics={booking.logistics}
               hideWhenEmpty
+              bandMembersEnabled={bandMembersEnabled}
             />
           </div>
           <BookingVenueMapWidget

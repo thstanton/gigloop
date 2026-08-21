@@ -118,6 +118,7 @@ export function BookingDetailDesktop({ bookingId }: BookingDetailDesktopProps) {
               />
               <DetailsCard
                 logistics={booking.logistics}
+                bandMembersEnabled={bandMembersEnabled}
               />
             </div>
             <BookingVenueMapWidget

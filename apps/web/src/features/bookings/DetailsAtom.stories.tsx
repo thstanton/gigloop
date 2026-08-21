@@ -92,3 +92,30 @@ export const ErrorState: Story = {
     await expect(canvas.getByText(/failed to save details/i)).toBeVisible();
   },
 };
+
+export const BandFieldsHiddenByDefault: Story = {
+  name: 'Travel plan and Outfits are absent with the flag off (#888)',
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.queryByLabelText('Travel plan')).toBeNull();
+    await expect(canvas.queryByLabelText('Outfits')).toBeNull();
+    // Everything else is unaffected.
+    await expect(canvas.getByLabelText('Dress code')).toBeVisible();
+  },
+};
+
+export const BandFieldsVisibleWhenEnabled: Story = {
+  name: 'Travel plan and Outfits render, and save, once the flag is on (#888)',
+  args: { bandMembersEnabled: true },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    const travelPlan = canvas.getByLabelText('Travel plan');
+    await userEvent.type(travelPlan, 'Emily by train, Mike collects Phil');
+
+    await userEvent.click(canvas.getByRole('button', { name: /^save$/i }));
+
+    await expect(args.onSave).toHaveBeenCalledWith({
+      travelPlan: { value: 'Emily by train, Mike collects Phil', shareWithBand: false, shareWithClient: false },
+    });
+  },
+};

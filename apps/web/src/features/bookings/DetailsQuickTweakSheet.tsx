@@ -9,6 +9,7 @@ import { apiPatch } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
 import { DetailsAtom, type DetailsLogistics } from './DetailsAtom';
 import { LOGISTICS_TIME_KEYS } from '@/lib/constants';
+import { isEnabled } from '@/lib/featureFlags';
 import type { BookingDetail } from '@/types/api';
 
 // PRD #511 Module B — the quick-tweak shell for the Details atom. Editing a booking's details is a
@@ -74,6 +75,7 @@ export function DetailsQuickTweakSheet({ bookingId, currentLogistics, open, onOp
             isSaving={saveMutation.isPending}
             saved={false}
             saveError={null}
+            bandMembersEnabled={isEnabled('VITE_FEATURE_BAND_MEMBERS')}
           />
         </div>
       </SheetContent>

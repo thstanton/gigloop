@@ -47,6 +47,7 @@ import { NO_PACKAGE } from '@/features/bookings/ItineraryFields';
 import { useItineraryMutations } from '@/features/bookings/useItineraryMutations';
 import { PackagePicker } from '@/features/bookings/PackagePicker';
 import { DEFAULT_ENABLED_GENRES } from '@/lib/constants';
+import { isEnabled } from '@/lib/featureFlags';
 import type {
   ApplyPackageTemplateResponse,
   BookingDetail,
@@ -800,6 +801,7 @@ export default function BookingBuilderPage() {
               isSaving={detailsSave.isPending}
               saved={detailsSave.isSuccess}
               saveError={detailsSave.isError ? 'Failed to save details. Please try again.' : null}
+              bandMembersEnabled={isEnabled('VITE_FEATURE_BAND_MEMBERS')}
             />
           </BuilderSection>
 
