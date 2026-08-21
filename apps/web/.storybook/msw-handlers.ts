@@ -261,6 +261,7 @@ const baseDetail = {
   seriesId: null, series: null,
   logistics: null,
   portalVisibility: { contract: null, musicForm: null },
+  band: { chairs: [] },
 };
 
 const sentContract = {

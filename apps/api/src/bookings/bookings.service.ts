@@ -15,6 +15,9 @@ import { UpdateContractDto } from './dto/update-contract.dto';
 import { CreateSetDto } from './dto/create-set.dto';
 import { UpdateSetDto } from './dto/update-set.dto';
 import { UpdateBookingPackageDto } from './dto/update-booking-package.dto';
+import { CreateChairDto } from './dto/create-chair.dto';
+import { UpdateChairDto } from './dto/update-chair.dto';
+import { ApplyLineupTemplateDto } from './dto/apply-lineup-template.dto';
 import { UpsertMusicFormConfigDto } from './dto/upsert-music-form-config.dto';
 import { MailService } from '../mail/mail.service';
 import { substituteTiptapVariables } from '../mail/tiptap-substitute';
@@ -28,6 +31,7 @@ import {
 } from '../checklist/checklist-reminders';
 import { ReminderConcern } from '../checklist/checklist-concerns';
 import { resolveContractVisibility, resolveMusicFormVisibility, type ContractStatus } from '../portal/portal-visibility';
+import { LineupsService } from '../lineups/lineups.service';
 
 // The single mapped shape every booking read and write returns (ADR-0071): `bookingDetailSelect`'
 // relations collapsed to `has*` flags / `activeContract` / `portalVisibility`. Derived from
@@ -47,12 +51,54 @@ export type BookingPortalVisibility = {
   musicForm: ReturnType<typeof resolveMusicFormVisibility>;
 };
 
-export type MappedBooking = Omit<BookingDetailRow, 'musicFormConfig' | 'musicFormResponse' | 'contracts'> & {
+// A chair with its derived `callTime` folded in (ADR-0072 §2 / #884) — never selected from the DB,
+// computed in `mapBooking` from the chair's `packageId` against the booking's `sets`.
+export type BandChair = BookingDetailRow['bandChairs'][number] & { callTime: string | null };
+
+export type BookingBand = {
+  chairs: BandChair[];
+};
+
+export type MappedBooking = Omit<
+  BookingDetailRow,
+  'musicFormConfig' | 'musicFormResponse' | 'contracts' | 'bandChairs'
+> & {
   hasMusicFormConfig: boolean;
   hasMusicFormResponse: boolean;
   activeContract: NormalisedContract | null;
   portalVisibility: BookingPortalVisibility;
+  band: BookingBand;
 };
+
+/** "HH:mm" → minutes since midnight, or null when unset/unparseable. Mirrors ItineraryCard.tsx. */
+function startMinutes(startTime: string | null): number | null {
+  if (!startTime) return null;
+  const m = /^(\d{1,2}):(\d{2})$/.exec(startTime.trim());
+  if (!m) return null;
+  return Number(m[1]) * 60 + Number(m[2]);
+}
+
+// Call times are derived, never stored (ADR-0072 §2): each segment's earliest
+// PerformanceSet.startTime. A segment is a `packageId` — including `null`, which groups every
+// package-less set into one segment, so a package-less booking's chairs get a call time too via
+// the same lookup (one code path, no special case). A segment with no timed set has no entry, so
+// its chairs' call time is absent (undefined → mapped to null), never zero or a placeholder.
+function deriveCallTimes(
+  sets: Array<{ packageId: string | null; startTime: string | null }>,
+): Map<string | null, string> {
+  const earliest = new Map<string | null, { startTime: string; minutes: number }>();
+  for (const set of sets) {
+    const minutes = startMinutes(set.startTime);
+    if (minutes == null || !set.startTime) continue;
+    const current = earliest.get(set.packageId);
+    if (!current || minutes < current.minutes) {
+      earliest.set(set.packageId, { startTime: set.startTime, minutes });
+    }
+  }
+  const result = new Map<string | null, string>();
+  for (const [packageId, entry] of earliest) result.set(packageId, entry.startTime);
+  return result;
+}
 
 const VALID_STATUSES = new Set<string>(Object.values(BookingStatus));
 
@@ -142,6 +188,7 @@ export class BookingsService {
     private contractRepo: ContractRepository,
     private musicFormRepo: MusicFormConfigRepository,
     private contacts: ContactsService,
+    private lineups: LineupsService,
     // Injected solely to open the atomic-create transaction (bounded exception
     // to the repository-pattern rule — see ADR-0047).
     private prisma: PrismaService,
@@ -550,10 +597,59 @@ export class BookingsService {
     return this.mapBooking(booking!);
   }
 
+  // Applies a lineup template as chairs (ADR-0072 §3, #884) — exactly as applyPackageTemplate
+  // produces PerformanceSet rows. `packageId` targets a segment; omitted, the chairs are
+  // package-less/whole-day (one code path, no special case).
+  async applyLineupTemplate(userId: string, bookingId: string, dto: ApplyLineupTemplateDto) {
+    await this.assertOwnership(userId, bookingId);
+    const lineup = await this.lineups.findOne(userId, dto.lineupTemplateId);
+    if (!lineup) throw new NotFoundException('Lineup template not found');
+    if (dto.packageId) {
+      const pkg = await this.repo.findBookingPackage(userId, bookingId, dto.packageId);
+      if (!pkg) throw new NotFoundException('Package not found');
+    }
+    const booking = await this.repo.applyLineupTemplate(
+      userId,
+      bookingId,
+      { label: lineup.label, slots: lineup.slots.map((s) => ({ role: s.role, order: s.order })) },
+      dto.packageId ?? null,
+    );
+    // ADR-0071: a write returns the same mapped shape a read of the same resource would.
+    return this.mapBooking(booking!);
+  }
+
+  async addChair(userId: string, bookingId: string, dto: CreateChairDto) {
+    await this.assertOwnership(userId, bookingId);
+    if (dto.packageId) {
+      const pkg = await this.repo.findBookingPackage(userId, bookingId, dto.packageId);
+      if (!pkg) throw new NotFoundException('Package not found');
+    }
+    return this.repo.addChair(userId, bookingId, dto);
+  }
+
+  async updateChair(userId: string, bookingId: string, chairId: string, dto: UpdateChairDto) {
+    await this.assertOwnership(userId, bookingId);
+    const chair = await this.repo.findChair(userId, bookingId, chairId);
+    if (!chair) throw new NotFoundException('Chair not found');
+    if (dto.packageId) {
+      const pkg = await this.repo.findBookingPackage(userId, bookingId, dto.packageId);
+      if (!pkg) throw new NotFoundException('Package not found');
+    }
+    return this.repo.updateChair(chairId, dto);
+  }
+
+  async deleteChair(userId: string, bookingId: string, chairId: string) {
+    await this.assertOwnership(userId, bookingId);
+    const chair = await this.repo.findChair(userId, bookingId, chairId);
+    if (!chair) throw new NotFoundException('Chair not found');
+    return this.repo.deleteChair(chairId);
+  }
+
   // The single place the booking response shape is constructed (ADR-0071). Every read and write
   // method funnels its `bookingDetailSelect`-shaped row through here rather than re-deriving the shape.
   private mapBooking(booking: BookingDetailRow): MappedBooking {
-    const { musicFormConfig, musicFormResponse, contracts, ...rest } = booking;
+    const { musicFormConfig, musicFormResponse, contracts, bandChairs, ...rest } = booking;
+    const callTimes = deriveCallTimes(booking.sets ?? []);
     return {
       ...rest,
       hasMusicFormConfig: !!musicFormConfig,
@@ -565,6 +661,10 @@ export class BookingsService {
         booking.status,
         musicFormConfig?.publishedAt != null,
       ),
+      // ADR-0073 §6: the organiser read path. `members` arrives in #885.
+      band: {
+        chairs: (bandChairs ?? []).map((chair) => ({ ...chair, callTime: callTimes.get(chair.packageId) ?? null })),
+      },
     };
   }
 

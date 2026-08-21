@@ -1,8 +1,9 @@
 import { useAuth } from '@clerk/react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Clock, ClipboardList, Info, MapPin, Pencil } from 'lucide-react';
+import { Clock, ClipboardList, Info, MapPin, Pencil, Users } from 'lucide-react';
 import { LOGISTICS_DETAIL_KEYS, LOGISTICS_SYSTEM_KEYS } from '@/lib/constants';
+import { isEnabled } from '@/lib/featureFlags';
 
 import { useBooking } from '@/lib/hooks/useBooking';
 import { useBookingChecklist } from '@/lib/hooks/useBookingChecklist';
@@ -97,6 +98,7 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
 
   const title = booking.title || `Booking ${bookingId.slice(0, 8)}`;
   const backState = { from: `/admin/bookings/${bookingId}`, label: title };
+  const bandMembersEnabled = isEnabled('VITE_FEATURE_BAND_MEMBERS');
   // #756: key off the deposit invoice, not a checklist item — see BookingDetailDesktop for the full
   // rationale (goals-only checklist made the old `deposit_received` check permanently false).
   const contractShortcutType = contractCoverTemplateFor(invoices);
@@ -170,6 +172,18 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
             bookingId={bookingId}
             contactHref={`/admin/contacts/${booking.venue?.id ?? ''}`}
           />
+          {bandMembersEnabled && (
+            <div className="flex justify-end">
+              <GhostButton
+                variant="primary"
+                size="xs"
+                icon={<Users size={13} />}
+                onClick={() => setSearchParams({ sheet: 'band' })}
+              >
+                {booking.band.chairs.length > 0 ? `Band (${booking.band.chairs.length})` : 'Add band'}
+              </GhostButton>
+            </div>
+          )}
           <AddToTheDayCard concerns={missingConcerns} />
           <MusicFormSection
             booking={booking}

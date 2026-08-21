@@ -30,6 +30,7 @@ const booking: BookingDetail = {
   sets: [], packages: [], activeContract: null,
   portalToken: 'tok1', hasMusicFormConfig: false, hasMusicFormResponse: false,
   portalVisibility: { contract: null, musicForm: null },
+  band: { chairs: [] },
   seriesId: null, series: null, logistics: null,
 } as unknown as BookingDetail;
 

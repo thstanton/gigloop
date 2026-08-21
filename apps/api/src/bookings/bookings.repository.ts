@@ -6,9 +6,15 @@ import { UpdateBookingDto } from './dto/update-booking.dto';
 import { CreateSetDto } from './dto/create-set.dto';
 import { UpdateSetDto } from './dto/update-set.dto';
 import { UpdateBookingPackageDto } from './dto/update-booking-package.dto';
+import { CreateChairDto } from './dto/create-chair.dto';
+import { UpdateChairDto } from './dto/update-chair.dto';
 import { CONTRACT_INCLUDE, NESTED_CONTACT_SELECT } from './booking.includes';
 import { buildBookingSearchWhere } from './booking-search';
 
+// Band members v1 (#879, ADR-0072 §3): carries the default lineup so applyPackageTemplate (#884)
+// can auto-apply it alongside the sets — null when the template has none. Only the apply-to-an-
+// existing-booking path reads this; createWithPackageTemplates (New Booking) never creates chairs
+// (ADR-0072 §6 / ADR-0066 create-mode exclusion), so it simply ignores the extra field.
 type PackageTemplateWithSlots = {
   id: string;
   label: string;
@@ -16,6 +22,7 @@ type PackageTemplateWithSlots = {
   keyMoments: string[];
   defaultGenreSelection: string[];
   slots: Array<{ label: string | null; duration: number; order: number }>;
+  defaultLineupTemplate: { id: string; label: string; slots: Array<{ role: string; order: number }> } | null;
 };
 
 // The shape Copy Event clones from — the source booking loaded with the relations
@@ -48,6 +55,21 @@ export const packageSelect = {
   order: true,
 } as const;
 
+// Narrowed to exactly what `BookingBandChairDto` declares minus its one derived field, `callTime`
+// (ADR-0072 §2 / #884) — no `userId`. `callTime` is never selected: it is computed in
+// BookingsService.mapBooking from this chair's `packageId` against the booking's `sets`, never
+// stored (a stored copy drifts the first time a set moves).
+export const bandChairSelect = {
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  bookingId: true,
+  role: true,
+  order: true,
+  packageId: true,
+  memberId: true,
+} as const;
+
 // The shape every read and write method below returns (ADR-0071 / #873): an explicit `select`
 // mirroring `BookingResponseDto` field-for-field — `userId` excluded at every level (top-level
 // booking, nested contacts, sets, packages). Every method that returns a booking uses
@@ -75,6 +97,7 @@ export const bookingDetailSelect = {
   series: { select: { id: true, label: true } },
   sets: { select: setSelect, orderBy: { order: 'asc' as const } },
   packages: { select: packageSelect, orderBy: { order: 'asc' as const } },
+  bandChairs: { select: bandChairSelect, orderBy: { order: 'asc' as const } },
   musicFormConfig: { select: { id: true, publishedAt: true } },
   musicFormResponse: { select: { id: true } },
   contracts: CONTRACT_INCLUDE,
@@ -254,7 +277,10 @@ export class BookingsRepository {
   findPackageTemplates(userId: string, ids: string[]) {
     return this.prisma.packageTemplate.findMany({
       where: { id: { in: ids }, userId },
-      include: { slots: { orderBy: { order: 'asc' } } },
+      include: {
+        slots: { orderBy: { order: 'asc' } },
+        defaultLineupTemplate: { include: { slots: { orderBy: { order: 'asc' } } } },
+      },
     });
   }
 
@@ -402,9 +428,10 @@ export class BookingsRepository {
   }
 
   async applyPackageTemplate(userId: string, bookingId: string, template: PackageTemplateWithSlots) {
-    const [existingPackages, existingSets] = await Promise.all([
+    const [existingPackages, existingSets, existingChairs] = await Promise.all([
       this.prisma.package.findMany({ where: { bookingId }, select: { order: true } }),
       this.prisma.performanceSet.findMany({ where: { bookingId }, select: { order: true } }),
+      this.prisma.bookingBandChair.findMany({ where: { bookingId }, select: { order: true } }),
     ]);
     const nextPackageOrder = existingPackages.length
       ? Math.max(...existingPackages.map((p) => p.order)) + 1
@@ -412,11 +439,24 @@ export class BookingsRepository {
     const nextSetOrder = existingSets.length
       ? Math.max(...existingSets.map((s) => s.order)) + 1
       : 1;
+    const nextChairOrder = existingChairs.length
+      ? Math.max(...existingChairs.map((c) => c.order)) + 1
+      : 1;
 
-    // Create booking-owned Package + sets atomically
+    // Create booking-owned Package + sets atomically, auto-applying the template's default
+    // lineup (ADR-0072 §3, #884) as chairs on the new package/segment. The lineup is applied
+    // exactly as an explicit apply would be — its name snapshotted onto the Package the same
+    // way the template's own label/icon are.
     await this.prisma.$transaction(async (tx) => {
       const bookingPackage = await tx.package.create({
-        data: { userId, bookingId, order: nextPackageOrder, label: template.label, icon: template.icon },
+        data: {
+          userId,
+          bookingId,
+          order: nextPackageOrder,
+          label: template.label,
+          icon: template.icon,
+          ...(template.defaultLineupTemplate ? { lineupName: template.defaultLineupTemplate.label } : {}),
+        },
       });
       for (let i = 0; i < template.slots.length; i++) {
         const slot = template.slots[i];
@@ -429,6 +469,83 @@ export class BookingsRepository {
             label: slot.label ?? undefined,
             packageId: bookingPackage.id,
           },
+        });
+      }
+      if (template.defaultLineupTemplate) {
+        const slots = template.defaultLineupTemplate.slots;
+        for (let i = 0; i < slots.length; i++) {
+          await tx.bookingBandChair.create({
+            data: {
+              userId,
+              bookingId,
+              order: nextChairOrder + i,
+              role: slots[i].role,
+              packageId: bookingPackage.id,
+            },
+          });
+        }
+      }
+    });
+
+    return this.prisma.booking.findFirst({ where: { id: bookingId }, select: bookingDetailSelect });
+  }
+
+  findChair(userId: string, bookingId: string, chairId: string) {
+    return this.prisma.bookingBandChair.findFirst({
+      where: { id: chairId, bookingId, userId },
+    });
+  }
+
+  addChair(userId: string, bookingId: string, dto: CreateChairDto) {
+    return this.prisma.bookingBandChair.create({
+      data: { userId, bookingId, ...dto },
+    });
+  }
+
+  updateChair(chairId: string, dto: UpdateChairDto) {
+    return this.prisma.bookingBandChair.update({
+      where: { id: chairId }, // scoped-upstream: service.updateChair calls findChair(userId, bookingId, chairId) first, already proving ownership (ADR-0061)
+      data: dto,
+    });
+  }
+
+  deleteChair(chairId: string) {
+    return this.prisma.bookingBandChair.delete({
+      where: { id: chairId }, // scoped-upstream: service.deleteChair calls findChair(userId, bookingId, chairId) first, already proving ownership (ADR-0061)
+    });
+  }
+
+  // Applies a lineup template as chairs (ADR-0072 §3, #884) — exactly as applying a package
+  // produces PerformanceSet rows: the lineup's slots become chairs, provenance severed. `packageId`
+  // null degenerates to a package-less/whole-day chair — one code path, no special case. When a
+  // package is targeted, its `lineupName` is snapshotted so a later LineupTemplate delete never
+  // changes the booking.
+  async applyLineupTemplate(
+    userId: string,
+    bookingId: string,
+    lineup: { label: string; slots: Array<{ role: string; order: number }> },
+    packageId: string | null,
+  ) {
+    await this.prisma.$transaction(async (tx) => {
+      // Re-applying replaces this segment's chairs rather than appending: "the musician can pick
+      // a different [lineup]" (#884) means the new pick swaps the seats, it doesn't stack on top
+      // of the last one — which would also leave the package's `lineupName` snapshot lying about
+      // what's actually seated. `packageId: null` is itself a segment (the package-less/whole-day
+      // one), so this is the one code path for both.
+      await tx.bookingBandChair.deleteMany({ where: { bookingId, packageId } });
+
+      const remaining = await tx.bookingBandChair.findMany({ where: { bookingId }, select: { order: true } });
+      const nextOrder = remaining.length ? Math.max(...remaining.map((c) => c.order)) + 1 : 1;
+
+      for (let i = 0; i < lineup.slots.length; i++) {
+        await tx.bookingBandChair.create({
+          data: { userId, bookingId, order: nextOrder + i, role: lineup.slots[i].role, packageId },
+        });
+      }
+      if (packageId) {
+        await tx.package.update({
+          where: { id: packageId }, // scoped-upstream: service.applyLineupTemplate calls findBookingPackage(userId, bookingId, packageId) first, already proving ownership (ADR-0061)
+          data: { lineupName: lineup.label },
         });
       }
     });

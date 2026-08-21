@@ -170,6 +170,24 @@ export interface BookingPackageSummary {
   icon: string;
 }
 
+// A seat in a segment (ADR-0072 §2, #884). `memberId` stays null throughout Band members v1's
+// first slice — a vacancy is `memberId = null`, a first-class thing the musician looks at, not an
+// absence. `callTime` is derived server-side from the segment's earliest PerformanceSet.startTime;
+// absent (null), not zero, when that segment has no start time.
+export interface BookingBandChair {
+  id: string;
+  role: string;
+  order: number;
+  packageId: string | null;
+  memberId: string | null;
+  callTime: string | null;
+}
+
+// The band roster (ADR-0072/0073 §6). `chairs` only in this slice; `members` arrives in #885.
+export interface BookingBand {
+  chairs: BookingBandChair[];
+}
+
 export interface KeyMoment {
   label: string;
   section: string;
@@ -351,6 +369,7 @@ export interface BookingDetail extends Omit<BookingListItem, 'customer' | 'venue
   // Per-concern portal-visibility verdicts, computed by the single backend authority (ADR-0054).
   // A null verdict means the concern is not a live portal concern (no contract yet / music form off).
   portalVisibility: BookingPortalVisibility;
+  band: BookingBand;
 }
 
 // Portal-visibility verdict (ADR-0054). The API returns a stable ReasonCode, never English —

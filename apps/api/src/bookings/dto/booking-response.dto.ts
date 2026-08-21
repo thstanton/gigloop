@@ -138,6 +138,44 @@ export class BookingSeriesRefDto {
   @ApiProperty() label: string;
 }
 
+// A seat in a segment (ADR-0072 §2 / #884). `memberId` is nullable throughout Band members v1's
+// first slice — a vacancy is `memberId = null`, a first-class thing the musician looks at, not an
+// absence. `callTime` is derived (never stored) from the earliest `PerformanceSet.startTime` in
+// this chair's segment (`packageId`), and is absent — not zero, not a placeholder — when that
+// segment has no start time.
+export class BookingBandChairDto {
+  @ApiProperty() id: string;
+  @ApiProperty({ description: 'ISO 8601 timestamp' }) createdAt: string;
+  @ApiProperty({ description: 'ISO 8601 timestamp' }) updatedAt: string;
+  @ApiProperty() bookingId: string;
+
+  @ApiProperty() role: string;
+  @ApiProperty({ description: 'Position among this booking\'s chairs (ascending).' }) order: number;
+
+  @ApiProperty({
+    nullable: true,
+    type: String,
+    description: 'Owning booking-level Package (segment); null for a package-less chair.',
+  })
+  packageId: string | null;
+
+  @ApiProperty({ nullable: true, type: String, description: 'Null = vacant.' })
+  memberId: string | null;
+
+  @ApiProperty({
+    nullable: true,
+    type: String,
+    description: 'Derived from the segment\'s earliest PerformanceSet.startTime (HH:mm); null when unset.',
+  })
+  callTime: string | null;
+}
+
+// ADR-0073 §6: the organiser read path. Chairs and (from #885) members, removed members excluded.
+export class BookingBandDto {
+  @ApiProperty({ type: [BookingBandChairDto] })
+  chairs: BookingBandChairDto[];
+}
+
 export class BookingResponseDto {
   @ApiProperty() id: string;
   @ApiProperty({ description: 'ISO 8601 timestamp' }) createdAt: string;
@@ -219,4 +257,10 @@ export class BookingResponseDto {
     description: 'Per-concern portal-visibility verdicts (ADR-0054).',
   })
   portalVisibility: BookingPortalVisibilityDto;
+
+  @ApiProperty({
+    type: BookingBandDto,
+    description: 'The band roster (ADR-0072/0073 §6). `chairs` only in this slice; `members` arrives in #885.',
+  })
+  band: BookingBandDto;
 }

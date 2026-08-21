@@ -27,8 +27,9 @@ import { InlineVenueAdd } from '@/features/bookings/InlineVenueAdd';
 import { BookingVenueMapWidget } from '@/features/bookings/BookingVenueMapWidget';
 import { SectionHeader } from '@/components/common/SectionHeader';
 import { GhostButton } from '@/components/common/GhostButton';
-import { Pencil } from 'lucide-react';
+import { Pencil, Users } from 'lucide-react';
 import { apiGet } from '@/lib/api';
+import { isEnabled } from '@/lib/featureFlags';
 import { EVENT_TYPE_LABELS } from '@/lib/constants';
 import type {
   Invoice,
@@ -62,6 +63,7 @@ export function BookingDetailDesktop({ bookingId }: BookingDetailDesktopProps) {
 
   if (!booking) return null;
 
+  const bandMembersEnabled = isEnabled('VITE_FEATURE_BAND_MEMBERS');
   const title = booking.title ?? EVENT_TYPE_LABELS[booking.eventType];
   const backState = { from: `/admin/bookings/${bookingId}`, label: title };
   // #756: key off the deposit invoice, not a checklist item. Post-ADR-0057 `checklist` is goals-only
@@ -85,7 +87,21 @@ export function BookingDetailDesktop({ bookingId }: BookingDetailDesktopProps) {
 
         {/* For the day */}
         <section>
-          <SectionHeader label="For the day" />
+          <SectionHeader
+            label="For the day"
+            action={
+              bandMembersEnabled ? (
+                <GhostButton
+                  variant="primary"
+                  size="xs"
+                  icon={<Users size={13} />}
+                  onClick={() => setSearchParams({ sheet: 'band' })}
+                >
+                  {booking.band.chairs.length > 0 ? `Band (${booking.band.chairs.length})` : 'Add band'}
+                </GhostButton>
+              ) : undefined
+            }
+          />
           <div className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <ItineraryCard

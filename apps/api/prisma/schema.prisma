@@ -186,6 +186,7 @@ model Booking {
   contracts         Contract[]
   checklistItems    BookingChecklistItem[]
   invoiceLineItems  InvoiceLineItem[]
+  bandChairs        BookingBandChair[]
 
   @@index([userId])
   @@index([customerId])
@@ -390,17 +391,45 @@ model Package {
   order Int
 
   // Band members v1 (#879, ADR-0072 §3): the applied lineup's name, snapshotted — provenance is
-  // severed the same way a Package severs provenance from its PackageTemplate. Unpopulated until
-  // a later sub-issue (#884) actually applies a lineup to a booking.
+  // severed the same way a Package severs provenance from its PackageTemplate. Populated when a
+  // lineup is applied to this package (#884); stays untouched by later LineupTemplate deletes.
   lineupName String?
 
   bookingId String
   booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 
-  sets PerformanceSet[]
+  sets       PerformanceSet[]
+  bandChairs BookingBandChair[]
 
   @@index([userId])
   @@index([bookingId])
+}
+
+// Band members v1 (#879, ADR-0072 §2): a seat in a segment. `memberId` is nullable throughout this
+// slice — a vacancy is `memberId = null`, a first-class thing the musician looks at, not an
+// absence. No FK on `memberId` yet; `BookingBandMember` (and the constraint) arrives in #885.
+// `packageId` null means a package-less/whole-day chair — one code path, no special case, exactly
+// like PerformanceSet.packageId.
+model BookingBandChair {
+  id        String   @id @default(uuid())
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  role  String
+  order Int
+
+  bookingId String
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  packageId String?
+  package   Package? @relation(fields: [packageId], references: [id], onDelete: SetNull)
+
+  memberId String?
+
+  @@index([userId])
+  @@index([bookingId])
+  @@index([packageId])
 }
 
 model BookingSeries {

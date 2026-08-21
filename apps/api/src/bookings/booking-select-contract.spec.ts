@@ -5,7 +5,7 @@
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from '../app.module';
-import { bookingDetailSelect, setSelect, packageSelect } from './bookings.repository';
+import { bookingDetailSelect, setSelect, packageSelect, bandChairSelect } from './bookings.repository';
 import { NESTED_CONTACT_SELECT, CONTRACT_INCLUDE } from './booking.includes';
 
 const sortKeys = (keys: string[]): string[] => [...keys].sort((a, b) => a.localeCompare(b));
@@ -36,6 +36,13 @@ describe('Booking detail select matches its response DTOs (#873)', () => {
     expect(sortKeys(Object.keys(packageSelect))).toEqual(dtoKeys('BookingPackageDto'));
   });
 
+  // BookingBandChairDto carries one field the select never names: `callTime`, derived in
+  // mapBooking from the booking's `sets` (ADR-0072 §2) and never selected from the DB — this test
+  // declares that one derived field explicitly rather than leaving it untested.
+  it('BookingBandChairDto matches bandChairSelect plus the derived callTime', () => {
+    expect(sortKeys([...Object.keys(bandChairSelect), 'callTime'])).toEqual(dtoKeys('BookingBandChairDto'));
+  });
+
   it('ContactResponseDto matches the nested contact select exactly (customer/venue/bookingAgent)', () => {
     expect(sortKeys(Object.keys(NESTED_CONTACT_SELECT))).toEqual(dtoKeys('ContactResponseDto'));
   });
@@ -53,8 +60,14 @@ describe('Booking detail select matches its response DTOs (#873)', () => {
   // `activeContract`, and adds `portalVisibility`. Every other selected field passes straight
   // through — that subset must match BookingResponseDto's non-derived fields exactly.
   it('the passthrough fields of the booking select match BookingResponseDto (excluding mapBooking-derived fields)', () => {
-    const TRANSFORMED_RELATIONS = new Set(['musicFormConfig', 'musicFormResponse', 'contracts']);
-    const DERIVED_DTO_FIELDS = new Set(['hasMusicFormConfig', 'hasMusicFormResponse', 'activeContract', 'portalVisibility']);
+    const TRANSFORMED_RELATIONS = new Set(['musicFormConfig', 'musicFormResponse', 'contracts', 'bandChairs']);
+    const DERIVED_DTO_FIELDS = new Set([
+      'hasMusicFormConfig',
+      'hasMusicFormResponse',
+      'activeContract',
+      'portalVisibility',
+      'band',
+    ]);
 
     const passthroughSelectKeys = sortKeys(
       Object.keys(bookingDetailSelect).filter((key) => !TRANSFORMED_RELATIONS.has(key)),

@@ -11,6 +11,7 @@ import { SeriesService } from '../series/series.service';
 import { MailService } from '../mail/mail.service';
 import { ChecklistReevaluator } from '../checklist/checklist-reevaluator.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { LineupsService } from '../lineups/lineups.service';
 import type { EmailContext } from '../mail/mail.service';
 
 // Tagged sentinel handed to the $transaction callback as `tx`. Asserting each write
@@ -30,6 +31,11 @@ type MockRepo = {
   applyPackageTemplate: jest.Mock;
   updatePackage: jest.Mock;
   removePackage: jest.Mock;
+  applyLineupTemplate: jest.Mock;
+  findChair: jest.Mock;
+  addChair: jest.Mock;
+  updateChair: jest.Mock;
+  deleteChair: jest.Mock;
   update: jest.Mock;
   cancel: jest.Mock;
   findSet: jest.Mock;
@@ -91,6 +97,11 @@ function makeRepo(): MockRepo {
     applyPackageTemplate: jest.fn(),
     updatePackage: jest.fn(),
     removePackage: jest.fn(),
+    applyLineupTemplate: jest.fn(),
+    findChair: jest.fn(),
+    addChair: jest.fn(),
+    updateChair: jest.fn(),
+    deleteChair: jest.fn(),
     update: jest.fn(),
     cancel: jest.fn(),
     findSet: jest.fn(),
@@ -178,6 +189,12 @@ function makeContacts(): MockContacts {
   return { assertOwned: jest.fn().mockResolvedValue(undefined) };
 }
 
+type MockLineups = { findOne: jest.Mock };
+
+function makeLineups(): MockLineups {
+  return { findOne: jest.fn() };
+}
+
 const booking = { id: 'b1', userId: 'u1', status: BookingStatus.CONFIRMED };
 const set = { id: 's1', bookingId: 'b1', userId: 'u1' };
 
@@ -192,6 +209,7 @@ function withNoContractOrMusicForm<T extends object>(raw: T) {
     hasMusicFormResponse: false,
     activeContract: null,
     portalVisibility: { contract: null, musicForm: null },
+    band: { chairs: [] },
   };
 }
 
@@ -221,6 +239,7 @@ describe('BookingsService', () => {
   let contractRepo: MockContractRepo;
   let musicFormRepo: MockMusicFormRepo;
   let contacts: MockContacts;
+  let lineups: MockLineups;
   let prisma: MockPrisma;
 
   beforeEach(() => {
@@ -233,6 +252,7 @@ describe('BookingsService', () => {
     contractRepo = makeContractRepo();
     musicFormRepo = makeMusicFormRepo();
     contacts = makeContacts();
+    lineups = makeLineups();
     prisma = makePrisma();
     service = new BookingsService(
       repo as unknown as BookingsRepository,
@@ -244,6 +264,7 @@ describe('BookingsService', () => {
       contractRepo as unknown as ContractRepository,
       musicFormRepo as unknown as MusicFormConfigRepository,
       contacts as unknown as ContactsService,
+      lineups as unknown as LineupsService,
       prisma as unknown as PrismaService,
     );
   });
@@ -593,6 +614,16 @@ describe('BookingsService', () => {
       expect(result).toMatchObject({ id: 'copy1', status: BookingStatus.CONFIRMED });
     });
 
+    // Copy Event does NOT carry the roster in this slice — #889 (tracking #879) owns that later.
+    // cloneBookingCore never creates BookingBandChair rows, so the cloned booking comes back with
+    // an empty band block via mapBooking's `bandChairs ?? []` fallback, not an undefined crash.
+    it('does not carry the band roster — the copy comes back with an empty band block', async () => {
+      repo.findOneForClone.mockResolvedValue(sourceForClone({ seriesId: null }));
+      repo.cloneBookingCore.mockResolvedValue({ ...newBooking, seriesId: null });
+      const result = await service.copyBooking('u1', 'src', { date: '2026-09-15' });
+      expect(result.band).toEqual({ chairs: [] });
+    });
+
     it('reseeds the checklist with completion + due dates reset against the new booking', async () => {
       repo.findOneForClone.mockResolvedValue(sourceForClone({ seriesId: null }));
       repo.cloneBookingCore.mockResolvedValue({ ...newBooking, seriesId: null });
@@ -931,6 +962,171 @@ describe('BookingsService', () => {
       repo.findBookingPackage.mockResolvedValue(null);
       await expect(service.updatePackage('u1', 'b1', 'pkg1', { label: 'X' })).rejects.toThrow(NotFoundException);
       expect(repo.updatePackage).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('applyLineupTemplate', () => {
+    const rawBooking = { ...booking, musicFormConfig: null, musicFormResponse: null, packages: [] };
+    const lineup = { id: 'lt1', label: 'My five-piece', slots: [{ id: 'ls1', role: 'Sax', order: 1 }] };
+
+    it('applies a lineup when booking and lineup both exist, package-less', async () => {
+      lineups.findOne.mockResolvedValue(lineup);
+      repo.applyLineupTemplate.mockResolvedValue(rawBooking);
+      await service.applyLineupTemplate('u1', 'b1', { lineupTemplateId: 'lt1' });
+      expect(lineups.findOne).toHaveBeenCalledWith('u1', 'lt1');
+      expect(repo.applyLineupTemplate).toHaveBeenCalledWith(
+        'u1',
+        'b1',
+        { label: 'My five-piece', slots: [{ role: 'Sax', order: 1 }] },
+        null,
+      );
+      expect(repo.findBookingPackage).not.toHaveBeenCalled();
+    });
+
+    it('proves package ownership before targeting it', async () => {
+      lineups.findOne.mockResolvedValue(lineup);
+      repo.findBookingPackage.mockResolvedValue({ id: 'pkg1', label: 'Evening', icon: 'music', order: 1 });
+      repo.applyLineupTemplate.mockResolvedValue(rawBooking);
+      await service.applyLineupTemplate('u1', 'b1', { lineupTemplateId: 'lt1', packageId: 'pkg1' });
+      expect(repo.findBookingPackage).toHaveBeenCalledWith('u1', 'b1', 'pkg1');
+      expect(repo.applyLineupTemplate).toHaveBeenCalledWith('u1', 'b1', expect.anything(), 'pkg1');
+    });
+
+    it('throws NotFoundException when the lineup template is not found (never touches a foreign tenant\'s lineup)', async () => {
+      lineups.findOne.mockResolvedValue(null);
+      await expect(service.applyLineupTemplate('u1', 'b1', { lineupTemplateId: 'bad-id' })).rejects.toThrow(NotFoundException);
+      expect(repo.applyLineupTemplate).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException when the targeted package is not found', async () => {
+      lineups.findOne.mockResolvedValue(lineup);
+      repo.findBookingPackage.mockResolvedValue(null);
+      await expect(
+        service.applyLineupTemplate('u1', 'b1', { lineupTemplateId: 'lt1', packageId: 'bad-pkg' }),
+      ).rejects.toThrow(NotFoundException);
+      expect(repo.applyLineupTemplate).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException when booking is not found', async () => {
+      repo.findForOwnership.mockResolvedValue(null);
+      await expect(service.applyLineupTemplate('u1', 'missing', { lineupTemplateId: 'lt1' })).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+  });
+
+  describe('addChair', () => {
+    const chair = { id: 'ch1', bookingId: 'b1', role: 'Sax', order: 1, packageId: null, memberId: null };
+
+    it('adds a chair when the booking exists, package-less', async () => {
+      repo.addChair.mockResolvedValue(chair);
+      const dto = { role: 'Sax', order: 1 };
+      const result = await service.addChair('u1', 'b1', dto);
+      expect(repo.addChair).toHaveBeenCalledWith('u1', 'b1', dto);
+      expect(repo.findBookingPackage).not.toHaveBeenCalled();
+      expect(result).toBe(chair);
+    });
+
+    it('proves package ownership before adding a chair targeting it', async () => {
+      repo.findBookingPackage.mockResolvedValue({ id: 'pkg1', label: 'Evening', icon: 'music', order: 1 });
+      repo.addChair.mockResolvedValue({ ...chair, packageId: 'pkg1' });
+      await service.addChair('u1', 'b1', { role: 'Sax', order: 1, packageId: 'pkg1' });
+      expect(repo.findBookingPackage).toHaveBeenCalledWith('u1', 'b1', 'pkg1');
+    });
+
+    it('throws NotFoundException when the targeted package is not found', async () => {
+      repo.findBookingPackage.mockResolvedValue(null);
+      await expect(
+        service.addChair('u1', 'b1', { role: 'Sax', order: 1, packageId: 'bad-pkg' }),
+      ).rejects.toThrow(NotFoundException);
+      expect(repo.addChair).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException without adding when booking is not found', async () => {
+      repo.findForOwnership.mockResolvedValue(null);
+      await expect(service.addChair('u1', 'missing', { role: 'Sax', order: 1 })).rejects.toThrow(NotFoundException);
+      expect(repo.addChair).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('updateChair', () => {
+    const chair = { id: 'ch1', bookingId: 'b1', role: 'Sax', order: 1, packageId: null, memberId: null };
+
+    it('updates a chair when booking and chair both exist', async () => {
+      repo.findChair.mockResolvedValue(chair);
+      repo.updateChair.mockResolvedValue({ ...chair, role: 'Trumpet' });
+      const result = await service.updateChair('u1', 'b1', 'ch1', { role: 'Trumpet' });
+      expect(repo.findChair).toHaveBeenCalledWith('u1', 'b1', 'ch1');
+      expect(repo.updateChair).toHaveBeenCalledWith('ch1', { role: 'Trumpet' });
+      expect(result).toEqual({ ...chair, role: 'Trumpet' });
+    });
+
+    it('throws NotFoundException when the chair is not found', async () => {
+      repo.findChair.mockResolvedValue(null);
+      await expect(service.updateChair('u1', 'b1', 'bad-id', { role: 'Trumpet' })).rejects.toThrow(NotFoundException);
+      expect(repo.updateChair).not.toHaveBeenCalled();
+    });
+
+    it('proves ownership of a re-parent target package before updating', async () => {
+      repo.findChair.mockResolvedValue(chair);
+      repo.findBookingPackage.mockResolvedValue(null);
+      await expect(
+        service.updateChair('u1', 'b1', 'ch1', { packageId: 'bad-pkg' }),
+      ).rejects.toThrow(NotFoundException);
+      expect(repo.updateChair).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('deleteChair', () => {
+    const chair = { id: 'ch1', bookingId: 'b1', role: 'Sax', order: 1, packageId: null, memberId: null };
+
+    it('deletes a chair when booking and chair both exist', async () => {
+      repo.findChair.mockResolvedValue(chair);
+      repo.deleteChair.mockResolvedValue(chair);
+      await service.deleteChair('u1', 'b1', 'ch1');
+      expect(repo.deleteChair).toHaveBeenCalledWith('ch1');
+    });
+
+    it('throws NotFoundException when the chair is not found', async () => {
+      repo.findChair.mockResolvedValue(null);
+      await expect(service.deleteChair('u1', 'b1', 'bad-id')).rejects.toThrow(NotFoundException);
+      expect(repo.deleteChair).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('mapBooking band block (ADR-0072/0073 §6)', () => {
+    it('derives each chair\'s callTime from its segment\'s earliest set start time', async () => {
+      const raw = {
+        ...booking,
+        musicFormConfig: null,
+        musicFormResponse: null,
+        packages: [],
+        sets: [
+          { id: 's1', packageId: 'pkg1', startTime: '18:00', order: 1 },
+          { id: 's2', packageId: 'pkg1', startTime: '9:30', order: 2 },
+          { id: 's3', packageId: null, startTime: '17:00', order: 3 },
+        ],
+        bandChairs: [
+          { id: 'ch1', bookingId: 'b1', role: 'Sax', order: 1, packageId: 'pkg1', memberId: null },
+          { id: 'ch2', bookingId: 'b1', role: 'Drums', order: 2, packageId: null, memberId: null },
+          { id: 'ch3', bookingId: 'b1', role: 'Vocals', order: 3, packageId: 'pkg-no-sets', memberId: null },
+        ],
+      };
+      repo.findOne.mockResolvedValue(raw);
+      const result = await service.findOne('u1', 'b1');
+      // Earliest of 18:00/9:30 is 9:30 — a lexical string comparison would have picked 18:00.
+      expect(result.band.chairs.find((c) => c.id === 'ch1')?.callTime).toBe('9:30');
+      // Package-less chair reads the package-less (packageId: null) segment's earliest set.
+      expect(result.band.chairs.find((c) => c.id === 'ch2')?.callTime).toBe('17:00');
+      // A segment with no timed set (indeed no sets at all) leaves callTime absent, not zero.
+      expect(result.band.chairs.find((c) => c.id === 'ch3')?.callTime).toBeNull();
+    });
+
+    it('is an empty array when the booking has no chairs', async () => {
+      const raw = { ...booking, musicFormConfig: null, musicFormResponse: null, packages: [], sets: [], bandChairs: [] };
+      repo.findOne.mockResolvedValue(raw);
+      const result = await service.findOne('u1', 'b1');
+      expect(result.band).toEqual({ chairs: [] });
     });
   });
 
