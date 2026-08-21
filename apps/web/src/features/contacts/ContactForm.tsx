@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -131,6 +131,35 @@ export function contactToFormValues(c: Contact): ContactFormValues {
 // ─── Form ─────────────────────────────────────────────────────────────────────
 
 type RoleKey = 'CUSTOMER' | 'VENUE' | 'BOOKING_AGENT' | 'BAND_MEMBER';
+type DisclosureRole = Exclude<RoleKey, 'CUSTOMER'>;
+
+// One shared shape for the role-specific disclosures (#964) — a toggle button
+// ("Show/Hide <label>") gating a content block, auto-opened/closed together on role change.
+interface RoleDisclosureProps {
+  label: string;
+  open: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}
+
+function RoleDisclosure({ label, open, onToggle, children }: RoleDisclosureProps) {
+  return (
+    <div className="space-y-4">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+      >
+        {open ? (
+          <><ChevronUp className="h-4 w-4" aria-hidden="true" />Hide {label}</>
+        ) : (
+          <><ChevronDown className="h-4 w-4" aria-hidden="true" />Show {label}</>
+        )}
+      </button>
+      {open && children}
+    </div>
+  );
+}
 
 interface ContactFormProps {
   defaultValues?: ContactFormValues;
@@ -264,9 +293,11 @@ export default function ContactForm({
   // reachable with the flag off.
   const bandMembersEnabled = isEnabled('VITE_FEATURE_BAND_MEMBERS');
   const isBandMember = bandMembersEnabled && (embedded ? embeddedRole === 'BAND_MEMBER' : selectedRole === 'BAND_MEMBER');
-  const [venueOpen, setVenueOpen] = useState(isVenue);
-  const [agentOpen, setAgentOpen] = useState(isAgent);
-  const [bandOpen, setBandOpen] = useState(isBandMember);
+  const [openRoles, setOpenRoles] = useState<Record<DisclosureRole, boolean>>({
+    VENUE: isVenue,
+    BOOKING_AGENT: isAgent,
+    BAND_MEMBER: isBandMember,
+  });
   const [detailsOpen, setDetailsOpen] = useState(false);
   const prevRoleRef = useRef(selectedRole);
 
@@ -274,10 +305,15 @@ export default function ContactForm({
   useEffect(() => {
     if (prevRoleRef.current === selectedRole) return;
     prevRoleRef.current = selectedRole;
-    setVenueOpen(selectedRole === 'VENUE');
-    setAgentOpen(selectedRole === 'BOOKING_AGENT');
-    setBandOpen(selectedRole === 'BAND_MEMBER');
+    setOpenRoles({
+      VENUE: selectedRole === 'VENUE',
+      BOOKING_AGENT: selectedRole === 'BOOKING_AGENT',
+      BAND_MEMBER: selectedRole === 'BAND_MEMBER',
+    });
   }, [selectedRole]);
+
+  const toggleRoleDisclosure = (role: DisclosureRole) =>
+    setOpenRoles((prev) => ({ ...prev, [role]: !prev[role] }));
 
   // Field fragments — placed differently by mode. In embedded mode Address/Notes and
   // the role block fold behind one disclosure; the full editor keeps them inline with
@@ -358,6 +394,14 @@ export default function ContactForm({
     </div>
   );
 
+  // Full-editor disclosures — venue/agent always offered; band member gated behind
+  // VITE_FEATURE_BAND_MEMBERS (#879) so nothing band-related renders with the flag off.
+  const roleDisclosures: { role: DisclosureRole; label: string; content: ReactNode; enabled: boolean }[] = [
+    { role: 'VENUE', label: 'venue fields', content: venueFieldsContent, enabled: true },
+    { role: 'BOOKING_AGENT', label: 'agent fields', content: agentFieldsContent, enabled: true },
+    { role: 'BAND_MEMBER', label: 'band member fields', content: bandFieldsContent, enabled: bandMembersEnabled },
+  ];
+
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
 
@@ -437,55 +481,18 @@ export default function ContactForm({
         </div>
       ) : (
         <>
-          {/* Venue-specific fields */}
-          <div className="space-y-4">
-            <button
-              type="button"
-              onClick={() => setVenueOpen((o) => !o)}
-              className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              {venueOpen ? (
-                <><ChevronUp className="h-4 w-4" aria-hidden="true" />Hide venue fields</>
-              ) : (
-                <><ChevronDown className="h-4 w-4" aria-hidden="true" />Show venue fields</>
-              )}
-            </button>
-            {venueOpen && venueFieldsContent}
-          </div>
-
-          {/* Agent-specific fields */}
-          <div className="space-y-4">
-            <button
-              type="button"
-              onClick={() => setAgentOpen((o) => !o)}
-              className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              {agentOpen ? (
-                <><ChevronUp className="h-4 w-4" aria-hidden="true" />Hide agent fields</>
-              ) : (
-                <><ChevronDown className="h-4 w-4" aria-hidden="true" />Show agent fields</>
-              )}
-            </button>
-            {agentOpen && agentFieldsContent}
-          </div>
-
-          {/* Band roster — dep profile fields (#886). Ships dark behind VITE_FEATURE_BAND_MEMBERS. */}
-          {bandMembersEnabled && (
-            <div className="space-y-4">
-              <button
-                type="button"
-                onClick={() => setBandOpen((o) => !o)}
-                className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          {roleDisclosures
+            .filter((d) => d.enabled)
+            .map((d) => (
+              <RoleDisclosure
+                key={d.role}
+                label={d.label}
+                open={openRoles[d.role]}
+                onToggle={() => toggleRoleDisclosure(d.role)}
               >
-                {bandOpen ? (
-                  <><ChevronUp className="h-4 w-4" aria-hidden="true" />Hide band member fields</>
-                ) : (
-                  <><ChevronDown className="h-4 w-4" aria-hidden="true" />Show band member fields</>
-                )}
-              </button>
-              {bandOpen && bandFieldsContent}
-            </div>
-          )}
+                {d.content}
+              </RoleDisclosure>
+            ))}
         </>
       )}
 
