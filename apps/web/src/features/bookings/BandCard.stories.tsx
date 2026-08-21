@@ -17,6 +17,7 @@ const chairs: BookingBandChair[] = [
   { id: 'ch3', role: 'Guitar', order: 2, packageId: 'pkg-evening', memberId: 'm-invited', callTime: '19:30' },
   { id: 'ch4', role: 'Drums', order: 3, packageId: 'pkg-evening', memberId: 'm-added', callTime: '19:30' },
   { id: 'ch5', role: 'Keys', order: 4, packageId: null, memberId: null, callTime: null },
+  { id: 'ch6', role: 'Cello', order: 5, packageId: 'pkg-evening', memberId: 'm-declined', callTime: '19:30' },
 ];
 
 const band: BookingBand = {
@@ -39,6 +40,12 @@ const band: BookingBand = {
       contactId: 'c3',
       contact: { id: 'c3', name: 'Leo Novak', email: null },
       status: 'ADDED',
+    }),
+    bandMember({
+      id: 'm-declined',
+      contactId: 'c5',
+      contact: { id: 'c5', name: 'Amir Osei', email: null },
+      status: 'DECLINED',
     }),
     bandMember({
       id: 'm-self',
@@ -80,6 +87,11 @@ export const GroupedByAnswer: Story = {
     await expect(canvas.getByText('Priya Shah')).toBeVisible();
     await expect(canvas.getByText('Leo Novak')).toBeVisible();
     await expect(canvas.getByText('Guitar')).toBeVisible();
+
+    // Declined shares "Still to sort" with never-invited members, but a badge keeps their answer
+    // legible rather than flattening both into the same look.
+    await expect(canvas.getByText('Amir Osei')).toBeVisible();
+    await expect(canvas.getByText('Declined')).toBeVisible();
 
     // The isSelf member, filling no chair, reads plain "You".
     await expect(canvas.getByText('You')).toBeVisible();

@@ -7,31 +7,21 @@ import { SubLabel } from '@/components/common/SubLabel';
 import { Badge } from '@/components/ui/badge';
 import PersonChip from './PersonChip';
 import { segmentLabel } from './BandAtom';
-import type {
-  BookingBand,
-  BookingBandChair,
-  BookingBandMember,
-  BookingBandMemberStatus,
-  BookingPackageSummary,
-} from '@/types/api';
+import {
+  BAND_MEMBER_ANSWER_GROUP,
+  BAND_MEMBER_ANSWER_GROUP_ORDER,
+  BAND_MEMBER_STATUS_LABELS,
+  type BandMemberAnswerGroup,
+} from '@/lib/constants';
+import type { BookingBand, BookingBandChair, BookingBandMember, BookingPackageSummary } from '@/types/api';
 
 // Band members v1 (#879, ADR-0072 §6, #887): the Info tab's *directory* — who these people are,
 // how to reach them, who has answered. Availability is the structure (grouped by answer), not a
 // badge on a flat list. Tapping a player reuses PersonChip's existing popover — no new one.
 // Presentational: reads only the `band` block the host already holds, issues no fetch of its own.
-
-type BandGroupKey = 'Confirmed' | 'Waiting on' | 'Still to sort';
-
-const GROUP_ORDER: BandGroupKey[] = ['Confirmed', 'Waiting on', 'Still to sort'];
-
-// ADDED/DECLINED both still need the organiser's attention — invite, or find a replacement —
-// so both land in "Still to sort"; only an answered-and-accepted member is "Confirmed".
-const STATUS_TO_GROUP: Record<BookingBandMemberStatus, BandGroupKey> = {
-  ADDED: 'Still to sort',
-  INVITED: 'Waiting on',
-  CONFIRMED: 'Confirmed',
-  DECLINED: 'Still to sort',
-};
+//
+// The answer-group each status belongs to is declared once, in lib/constants.ts's
+// BAND_MEMBER_STATUSES table (CLAUDE.md: one declaration per vocabulary) — never redeclared here.
 
 /** A member's role text for the chip: every distinct chair role they fill, "You" appended for isSelf. */
 function memberRoleLabel(member: BookingBandMember, chairs: BookingBandChair[]): string {
@@ -75,12 +65,12 @@ export default function BandCard({ band, packages, hasLineupTemplates, linkState
     );
   }
 
-  const groups: Record<BandGroupKey, BookingBandMember[]> = {
+  const groups: Record<BandMemberAnswerGroup, BookingBandMember[]> = {
     Confirmed: [],
     'Waiting on': [],
     'Still to sort': [],
   };
-  for (const member of band.members) groups[STATUS_TO_GROUP[member.status]].push(member);
+  for (const member of band.members) groups[BAND_MEMBER_ANSWER_GROUP[member.status]].push(member);
 
   const vacantChairs = band.chairs.filter((c) => c.memberId == null);
 
@@ -94,17 +84,17 @@ export default function BandCard({ band, packages, hasLineupTemplates, linkState
       }
     >
       <div className="space-y-4">
-        {GROUP_ORDER.filter((key) => groups[key].length > 0).map((key) => (
+        {BAND_MEMBER_ANSWER_GROUP_ORDER.filter((key) => groups[key].length > 0).map((key) => (
           <div key={key} className="space-y-2">
             <SubLabel>{key}</SubLabel>
             <div className="flex flex-col gap-2">
               {groups[key].map((member) => (
-                <PersonChip
-                  key={member.id}
-                  role={memberRoleLabel(member, band.chairs)}
-                  contact={member.contact}
-                  linkState={linkState}
-                />
+                <div key={member.id} className="flex items-center gap-2">
+                  <PersonChip role={memberRoleLabel(member, band.chairs)} contact={member.contact} linkState={linkState} />
+                  {/* "Still to sort" holds both never-invited and declined members — a badge keeps
+                      "who has answered" legible instead of flattening the two into one look. */}
+                  {member.status === 'DECLINED' && <Badge variant="outline">{BAND_MEMBER_STATUS_LABELS.DECLINED}</Badge>}
+                </div>
               ))}
             </div>
           </div>

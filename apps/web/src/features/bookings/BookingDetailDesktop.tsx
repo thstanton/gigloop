@@ -11,6 +11,7 @@ import { useBookingCommunications } from '@/lib/hooks/useBookingCommunications';
 import { useBookingDocuments } from '@/lib/hooks/useBookingDocuments';
 import { useSeriesBookings } from '@/lib/hooks/useSeriesBookings';
 import { useConfigureMusicForm } from '@/lib/hooks/useConfigureMusicForm';
+import { useLineupTemplates } from '@/lib/hooks/useLineupTemplates';
 import SeriesInvoiceCard from '@/features/bookings/SeriesInvoiceCard';
 import { SeriesEventsCard } from '@/features/bookings/SeriesEventsCard';
 import ContractCard from '@/features/bookings/ContractCard';
@@ -34,7 +35,6 @@ import { isEnabled } from '@/lib/featureFlags';
 import { EVENT_TYPE_LABELS } from '@/lib/constants';
 import type {
   Invoice,
-  LineupTemplate,
   MusicFormConfig,
 } from '@/types/api';
 
@@ -65,11 +65,7 @@ export function BookingDetailDesktop({ bookingId }: BookingDetailDesktopProps) {
   const bandMembersEnabled = isEnabled('VITE_FEATURE_BAND_MEMBERS');
   // The Band card's "has a multi-person lineup" signal (ADR-0073 §6) — deliberately kept off the
   // booking response, so it's derived here from the same query the Band sheet already uses.
-  const { data: lineupTemplates = [] } = useQuery({
-    queryKey: ['lineups'],
-    queryFn: () => apiGet<LineupTemplate[]>('/lineups'),
-    enabled: isLoaded && bandMembersEnabled,
-  });
+  const { data: lineupTemplates = [] } = useLineupTemplates(bandMembersEnabled);
 
   if (!booking) return null;
 

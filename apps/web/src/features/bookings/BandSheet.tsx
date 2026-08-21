@@ -1,11 +1,9 @@
-import { useAuth } from '@clerk/react';
-import { useQuery } from '@tanstack/react-query';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { apiGet } from '@/lib/api';
 import { BandAtom } from './BandAtom';
 import { useBandMutations } from './useBandMutations';
+import { useLineupTemplates } from '@/lib/hooks/useLineupTemplates';
 import { useRoleVocabulary } from '@/lib/hooks/useRoleVocabulary';
-import type { BookingBandChair, BookingBandMember, BookingPackageSummary, Contact, LineupTemplate } from '@/types/api';
+import type { BookingBandChair, BookingBandMember, BookingPackageSummary, Contact } from '@/types/api';
 
 // Band members v1 (#879, ADR-0072 §6 / #885). Opened from the booking via ?sheet=band — the
 // "change something" surface. One row per member with segment chips, plus the unfilled-chair block
@@ -22,12 +20,7 @@ interface Props {
 }
 
 export function BandSheet({ bookingId, chairs, members, packages, venue, open, onOpenChange }: Props) {
-  const { isLoaded } = useAuth();
-  const { data: lineupTemplates = [], isLoading: lineupTemplatesLoading } = useQuery({
-    queryKey: ['lineups'],
-    queryFn: () => apiGet<LineupTemplate[]>('/lineups'),
-    enabled: isLoaded && open,
-  });
+  const { data: lineupTemplates = [], isLoading: lineupTemplatesLoading } = useLineupTemplates(open);
   const instrumentVocabulary = useRoleVocabulary(open);
 
   const {

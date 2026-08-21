@@ -14,6 +14,7 @@ import { useBookingCommunications } from '@/lib/hooks/useBookingCommunications';
 import { useBookingDocuments } from '@/lib/hooks/useBookingDocuments';
 import { useSeriesBookings } from '@/lib/hooks/useSeriesBookings';
 import { useConfigureMusicForm } from '@/lib/hooks/useConfigureMusicForm';
+import { useLineupTemplates } from '@/lib/hooks/useLineupTemplates';
 import BookingDetailTabs from '@/features/bookings/BookingDetailTabs';
 import ChecklistSection, { clientDisplayName } from '@/features/bookings/ChecklistSection';
 import ItineraryCard from '@/features/bookings/ItineraryCard';
@@ -36,7 +37,6 @@ import { GhostButton } from '@/components/common/GhostButton';
 import { apiGet } from '@/lib/api';
 import type {
   Invoice,
-  LineupTemplate,
   MusicFormConfig,
 } from '@/types/api';
 
@@ -97,11 +97,7 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
   const bandMembersEnabled = isEnabled('VITE_FEATURE_BAND_MEMBERS');
   // The Band card's "has a multi-person lineup" signal (ADR-0073 §6) — deliberately kept off the
   // booking response, so it's derived here from the same query the Band sheet already uses.
-  const { data: lineupTemplates = [] } = useQuery({
-    queryKey: ['lineups'],
-    queryFn: () => apiGet<LineupTemplate[]>('/lineups'),
-    enabled: isLoaded && bandMembersEnabled,
-  });
+  const { data: lineupTemplates = [] } = useLineupTemplates(bandMembersEnabled);
 
   if (isLoading) return <MobileTabsSkeleton />;
   if (!booking) return null;

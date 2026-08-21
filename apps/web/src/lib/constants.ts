@@ -330,19 +330,25 @@ export const INVOICE_OVERDUE_TOKENS: { label: string } & InvoiceStatusTokens = {
 // vocabulary) — mirrors the booking/invoice status tables' shape. Every transition is
 // organiser-driven from the Band sheet in this slice (no portal actor until #880), so there is no
 // separate "legal next status" list here — ADDED -> CONFIRMED is deliberately reachable directly.
+// The Band card's directory grouping (#887, ADR-0072 §6) — "who has answered" bucketed into
+// Confirmed / Waiting on / Still to sort. ADDED and DECLINED both still need the organiser's
+// attention (invite, or find a replacement), so both land under "Still to sort".
+export type BandMemberAnswerGroup = 'Confirmed' | 'Waiting on' | 'Still to sort';
+
 export interface BandMemberStatusRow {
   value: BookingBandMemberStatus;
   label: string;
   tint: string;
   text: string;
   borderL: string;
+  answerGroup: BandMemberAnswerGroup;
 }
 
 const BAND_MEMBER_STATUSES = [
-  { value: 'ADDED',     label: 'Added',     tint: 'bg-status-enquiry/15',     text: 'text-status-enquiry',     borderL: 'border-l-status-enquiry'     },
-  { value: 'INVITED',   label: 'Invited',   tint: 'bg-status-provisional/15', text: 'text-status-provisional', borderL: 'border-l-status-provisional' },
-  { value: 'CONFIRMED', label: 'Confirmed', tint: 'bg-status-confirmed/15',   text: 'text-status-confirmed',   borderL: 'border-l-status-confirmed'   },
-  { value: 'DECLINED',  label: 'Declined',  tint: 'bg-status-cancelled/15',   text: 'text-status-cancelled',   borderL: 'border-l-status-cancelled'   },
+  { value: 'ADDED',     label: 'Added',     tint: 'bg-status-enquiry/15',     text: 'text-status-enquiry',     borderL: 'border-l-status-enquiry',     answerGroup: 'Still to sort' },
+  { value: 'INVITED',   label: 'Invited',   tint: 'bg-status-provisional/15', text: 'text-status-provisional', borderL: 'border-l-status-provisional', answerGroup: 'Waiting on'    },
+  { value: 'CONFIRMED', label: 'Confirmed', tint: 'bg-status-confirmed/15',   text: 'text-status-confirmed',   borderL: 'border-l-status-confirmed',   answerGroup: 'Confirmed'     },
+  { value: 'DECLINED',  label: 'Declined',  tint: 'bg-status-cancelled/15',   text: 'text-status-cancelled',   borderL: 'border-l-status-cancelled',   answerGroup: 'Still to sort' },
 ] as const satisfies readonly BandMemberStatusRow[];
 
 export type _BandMemberStatusCoverage = AssertNever<
@@ -352,6 +358,13 @@ export type _BandMemberStatusCoverage = AssertNever<
 export const BAND_MEMBER_STATUS_ORDER: BookingBandMemberStatus[] = BAND_MEMBER_STATUSES.map((row) => row.value);
 
 export const BAND_MEMBER_STATUS_LABELS = column(BAND_MEMBER_STATUSES, 'label');
+
+export const BAND_MEMBER_ANSWER_GROUP = column(BAND_MEMBER_STATUSES, 'answerGroup');
+
+// Order the Band card's groups appear in, each occurring once, first-seen in table order.
+export const BAND_MEMBER_ANSWER_GROUP_ORDER: BandMemberAnswerGroup[] = [
+  ...new Set(BAND_MEMBER_STATUSES.map((row) => row.answerGroup)),
+];
 
 export interface BandMemberStatusTokens {
   tint: string;
