@@ -19,8 +19,9 @@ import { PortalModule } from './portal/portal.module';
 import { SeriesModule } from './series/series.module';
 import { DigestModule } from './digest/digest.module';
 import { SearchModule } from './search/search.module';
+import { LineupsModule } from './lineups/lineups.module';
 
 @Module({
-  imports: [ScheduleModule.forRoot(), PrismaModule, AuthModule, HealthModule, StorageModule, MailModule, UserProfileModule, ContactsModule, BookingsModule, ChecklistModule, SongsModule, InvoicesModule, TemplatesModule, CommunicationsModule, DocumentsModule, PortalModule, PackagesModule, SeriesModule, DigestModule, SearchModule],
+  imports: [ScheduleModule.forRoot(), PrismaModule, AuthModule, HealthModule, StorageModule, MailModule, UserProfileModule, ContactsModule, BookingsModule, ChecklistModule, SongsModule, InvoicesModule, TemplatesModule, CommunicationsModule, DocumentsModule, PortalModule, PackagesModule, SeriesModule, DigestModule, SearchModule, LineupsModule],
 })
 export class AppModule {}

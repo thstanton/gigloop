@@ -53,6 +53,12 @@ const mockContact = {
   website: null,
   commissionArrangement: null,
   primaryRole: null,
+  primaryBandRole: null,
+  instruments: [],
+  travelNotes: null,
+  equipmentNotes: null,
+  outfitNotes: null,
+  availabilityNotes: null,
 };
 
 const mockBooking: BookingDetail = {
@@ -79,6 +85,7 @@ const mockBooking: BookingDetail = {
   hasMusicFormConfig: false,
   hasMusicFormResponse: false,
   portalVisibility: { contract: null, musicForm: null },
+  band: { chairs: [], members: [] },
   logistics: null,
   activeContract: null,
 };

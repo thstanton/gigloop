@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   HttpCode,
+  NotFoundException,
   Param,
   Patch,
   Post,
@@ -15,6 +16,7 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { BookingStatus } from '@prisma/client';
+import { isEnabled } from '../common/featureFlags';
 import { BookingsService } from './bookings.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
@@ -23,6 +25,11 @@ import { CreateSetDto } from './dto/create-set.dto';
 import { UpdateSetDto } from './dto/update-set.dto';
 import { ApplyPackageTemplateDto } from './dto/apply-package-template.dto';
 import { UpdateBookingPackageDto } from './dto/update-booking-package.dto';
+import { CreateChairDto } from './dto/create-chair.dto';
+import { UpdateChairDto } from './dto/update-chair.dto';
+import { AssignChairDto } from './dto/assign-chair.dto';
+import { UpdateBandMemberDto } from './dto/update-band-member.dto';
+import { ApplyLineupTemplateDto } from './dto/apply-lineup-template.dto';
 import { UpsertMusicFormConfigDto } from './dto/upsert-music-form-config.dto';
 import { UpdateContractDto } from './dto/update-contract.dto';
 import { UpdateChecklistItemDto } from './dto/update-checklist-item.dto';
@@ -37,6 +44,14 @@ import { BookingResponseDto } from './dto/booking-response.dto';
 import type { Request } from 'express';
 
 type AuthedRequest = Request & { userId: string };
+
+// Band members v1 (#879). Gated on FEATURE_BAND_MEMBERS, default-off — matches lineups.controller.ts:
+// every band-roster route 404s with the flag off, so chairs are unreachable until the feature goes
+// live (ADR-0072). Only the band-specific endpoints below call this; the rest of the booking API is
+// untouched by the flag.
+function assertBandMembersEnabled() {
+  if (!isEnabled('FEATURE_BAND_MEMBERS')) throw new NotFoundException();
+}
 
 @ApiTags('Bookings')
 @ApiBearerAuth('clerk-jwt')
@@ -335,6 +350,92 @@ export class BookingsController {
     @Param('packageId') packageId: string,
   ) {
     return this.service.removePackage(req.userId, id, packageId);
+  }
+
+  @ApiOperation({ summary: 'Apply a lineup template to a booking (creates chairs); optionally targets a segment' })
+  @ApiResponse({ status: 201, type: BookingResponseDto, description: 'Updated booking' })
+  @ApiResponse({ status: 404, description: 'Booking, lineup template, or package not found.' })
+  @Post(':id/lineups')
+  applyLineupTemplate(
+    @Req() req: AuthedRequest,
+    @Param('id') id: string,
+    @Body() dto: ApplyLineupTemplateDto,
+  ) {
+    assertBandMembersEnabled();
+    return this.service.applyLineupTemplate(req.userId, id, dto);
+  }
+
+  @ApiOperation({ summary: 'Add a chair (a vacant seat in a segment) to a booking' })
+  @Post(':id/chairs')
+  addChair(
+    @Req() req: AuthedRequest,
+    @Param('id') id: string,
+    @Body() dto: CreateChairDto,
+  ) {
+    assertBandMembersEnabled();
+    return this.service.addChair(req.userId, id, dto);
+  }
+
+  @ApiOperation({ summary: 'Update a chair (role, order, or re-parent to a different segment)' })
+  @Patch(':id/chairs/:chairId')
+  updateChair(
+    @Req() req: AuthedRequest,
+    @Param('id') id: string,
+    @Param('chairId') chairId: string,
+    @Body() dto: UpdateChairDto,
+  ) {
+    assertBandMembersEnabled();
+    return this.service.updateChair(req.userId, id, chairId, dto);
+  }
+
+  @ApiOperation({ summary: 'Remove a chair from a booking' })
+  @Delete(':id/chairs/:chairId')
+  @HttpCode(204)
+  removeChair(
+    @Req() req: AuthedRequest,
+    @Param('id') id: string,
+    @Param('chairId') chairId: string,
+  ) {
+    assertBandMembersEnabled();
+    return this.service.deleteChair(req.userId, id, chairId);
+  }
+
+  @ApiOperation({ summary: 'Fill or vacate a chair — assignment sets a field, never creates or destroys the chair row' })
+  @ApiResponse({ status: 404, description: 'Booking, chair, or contact not found.' })
+  @Patch(':id/chairs/:chairId/assign')
+  assignChair(
+    @Req() req: AuthedRequest,
+    @Param('id') id: string,
+    @Param('chairId') chairId: string,
+    @Body() dto: AssignChairDto,
+  ) {
+    assertBandMembersEnabled();
+    return this.service.assignChair(req.userId, id, chairId, dto);
+  }
+
+  @ApiOperation({ summary: 'Update a band member — status, session fee, or the isSelf flag' })
+  @ApiResponse({ status: 404, description: 'Booking or band member not found.' })
+  @Patch(':id/band-members/:memberId')
+  updateBandMember(
+    @Req() req: AuthedRequest,
+    @Param('id') id: string,
+    @Param('memberId') memberId: string,
+    @Body() dto: UpdateBandMemberDto,
+  ) {
+    assertBandMembersEnabled();
+    return this.service.updateBandMember(req.userId, id, memberId, dto);
+  }
+
+  @ApiOperation({ summary: 'Soft-remove a band member — vacates their chairs, does not delete the roster row' })
+  @Delete(':id/band-members/:memberId')
+  @HttpCode(204)
+  removeBandMember(
+    @Req() req: AuthedRequest,
+    @Param('id') id: string,
+    @Param('memberId') memberId: string,
+  ) {
+    assertBandMembersEnabled();
+    return this.service.removeBandMember(req.userId, id, memberId);
   }
 
   @ApiOperation({ summary: 'Add a performance set to a booking' })

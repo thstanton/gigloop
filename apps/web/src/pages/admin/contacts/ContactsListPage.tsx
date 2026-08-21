@@ -8,6 +8,7 @@ import { useContacts } from '@/lib/hooks/useContacts';
 import type { Contact } from '@/types/api';
 import { EmptyState } from '@/components/common/EmptyState';
 import { PRIMARY_ROLE_LABELS, PRIMARY_ROLE_ORDER, type ContactPrimaryRole } from '@/lib/constants';
+import { isEnabled } from '@/lib/featureFlags';
 
 // ─── Empty state ──────────────────────────────────────────────────────────────
 
@@ -232,7 +233,9 @@ export default function ContactsListPage() {
 
       {/* Role filter row */}
       <div className="flex gap-1 mb-4 border-b border-border">
-        {([null, ...PRIMARY_ROLE_ORDER] as Array<ContactPrimaryRole | null>).map((role) => {
+        {(
+          [null, ...PRIMARY_ROLE_ORDER.filter((r) => r !== 'BAND_MEMBER' || isEnabled('VITE_FEATURE_BAND_MEMBERS'))] as Array<ContactPrimaryRole | null>
+        ).map((role) => {
           const label = role ? PRIMARY_ROLE_LABELS[role] : 'All';
           const isActive = !searchActive && role === roleFilter;
           return (

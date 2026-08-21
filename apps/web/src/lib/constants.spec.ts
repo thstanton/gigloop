@@ -7,6 +7,17 @@ import {
   INVOICE_STATUS_LABELS,
   INVOICE_STATUS_ORDER,
   INVOICE_STATUS_TOKENS,
+  LOGISTICS_ANCHOR_FIELDS,
+  LOGISTICS_BAND_ONLY_KEYS,
+  LOGISTICS_DETAIL_FIELDS,
+  LOGISTICS_DETAIL_KEYS,
+  LOGISTICS_FIELD_ICONS,
+  LOGISTICS_FIELD_LABELS,
+  LOGISTICS_FIELD_SHARE_WITH_BAND,
+  LOGISTICS_PROFILE_FIELD_PAIRING,
+  LOGISTICS_SYSTEM_KEYS,
+  LOGISTICS_TIME_KEYS,
+  PACKAGE_ICON_MAP,
   STATUS_ACCENT_BG,
   STATUS_DESCRIPTIONS,
   STATUS_ORDER,
@@ -163,5 +174,50 @@ describe('invoice status table', () => {
     }
     const stems = tokens.map((t) => t.replace(/^(bg|text|border-l)-/, '').split('/')[0]);
     expect(new Set(stems).size).toBe(1);
+  });
+});
+
+// Shape, never values (same rationale as above): the table's job is to be the single place a
+// logistics field is declared, so these tests assert its structure — every row carries every
+// column, keys are unique, derived exports are total — never a field's label or icon copy.
+describe('logistics fields table', () => {
+  it('covers ten system keys exactly once, split three anchors to seven details', () => {
+    expect(LOGISTICS_SYSTEM_KEYS).toHaveLength(10);
+    expect(new Set(LOGISTICS_SYSTEM_KEYS).size).toBe(LOGISTICS_SYSTEM_KEYS.length);
+    expect(LOGISTICS_ANCHOR_FIELDS).toHaveLength(3);
+    expect(LOGISTICS_DETAIL_FIELDS).toHaveLength(7);
+    expect(LOGISTICS_ANCHOR_FIELDS.length + LOGISTICS_DETAIL_FIELDS.length).toBe(LOGISTICS_SYSTEM_KEYS.length);
+  });
+
+  it('derives a total, non-empty map of labels and icons', () => {
+    for (const key of LOGISTICS_SYSTEM_KEYS) {
+      expect(LOGISTICS_FIELD_LABELS[key]?.trim(), `${key} has no label`).toBeTruthy();
+      expect(LOGISTICS_FIELD_ICONS[key], `${key} has no icon`).toBeTruthy();
+      // Guards a fat-fingered icon key the same way the status tests guard Tailwind tokens —
+      // a key absent from PACKAGE_ICON_MAP type-checks fine but silently renders nothing.
+      expect(PACKAGE_ICON_MAP, `${key}'s icon "${LOGISTICS_FIELD_ICONS[key]}" isn't in PACKAGE_ICON_MAP`)
+        .toHaveProperty(LOGISTICS_FIELD_ICONS[key]);
+    }
+  });
+
+  it('declares shareWithBand as a real boolean on every row (#888)', () => {
+    for (const key of LOGISTICS_SYSTEM_KEYS) {
+      expect(typeof LOGISTICS_FIELD_SHARE_WITH_BAND[key], `${key}.shareWithBand`).toBe('boolean');
+    }
+  });
+
+  it('gates exactly travelPlan and outfits behind the feature flag, both Details-owned (#888)', () => {
+    expect(new Set(LOGISTICS_BAND_ONLY_KEYS)).toEqual(new Set(['outfits', 'travelPlan']));
+    for (const key of LOGISTICS_BAND_ONLY_KEYS) {
+      expect(LOGISTICS_DETAIL_KEYS, `${key} must be Details-owned, not an Itinerary anchor`).toContain(key);
+    }
+    // The time anchors are untouched by this slice — still exactly the three the Itinerary owns.
+    expect(LOGISTICS_TIME_KEYS).toHaveLength(3);
+  });
+
+  it('pairs travelPlan/outfits to their dep-profile Contact field, and nothing else (ADR-0072 §4)', () => {
+    expect(LOGISTICS_PROFILE_FIELD_PAIRING.travelPlan).toBe('travelNotes');
+    expect(LOGISTICS_PROFILE_FIELD_PAIRING.outfits).toBe('outfitNotes');
+    expect(new Set(Object.keys(LOGISTICS_PROFILE_FIELD_PAIRING))).toEqual(new Set(['outfits', 'travelPlan']));
   });
 });

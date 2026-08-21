@@ -11,6 +11,7 @@ import { useBookingCommunications } from '@/lib/hooks/useBookingCommunications';
 import { useBookingDocuments } from '@/lib/hooks/useBookingDocuments';
 import { useSeriesBookings } from '@/lib/hooks/useSeriesBookings';
 import { useConfigureMusicForm } from '@/lib/hooks/useConfigureMusicForm';
+import { useLineupTemplates } from '@/lib/hooks/useLineupTemplates';
 import SeriesInvoiceCard from '@/features/bookings/SeriesInvoiceCard';
 import { SeriesEventsCard } from '@/features/bookings/SeriesEventsCard';
 import ContractCard from '@/features/bookings/ContractCard';
@@ -22,13 +23,15 @@ import InlineNotes from '@/features/bookings/InlineNotes';
 import CommunicationsSection from '@/features/bookings/CommunicationsSection';
 import ItineraryCard from '@/features/bookings/ItineraryCard';
 import DetailsCard from '@/features/bookings/DetailsCard';
+import BandCard from '@/features/bookings/BandCard';
 import MusicFormSection from '@/features/bookings/MusicFormSection';
 import { InlineVenueAdd } from '@/features/bookings/InlineVenueAdd';
 import { BookingVenueMapWidget } from '@/features/bookings/BookingVenueMapWidget';
 import { SectionHeader } from '@/components/common/SectionHeader';
 import { GhostButton } from '@/components/common/GhostButton';
-import { Pencil } from 'lucide-react';
+import { Pencil, Users } from 'lucide-react';
 import { apiGet } from '@/lib/api';
+import { isEnabled } from '@/lib/featureFlags';
 import { EVENT_TYPE_LABELS } from '@/lib/constants';
 import type {
   Invoice,
@@ -59,6 +62,10 @@ export function BookingDetailDesktop({ bookingId }: BookingDetailDesktopProps) {
   const fields = useBookingFields(bookingId);
   const { checklist, checklistLoading, toggleItem, addItem, isAddingItem } = useBookingChecklist(bookingId, booking, isLoaded);
   const { data: invoices = [] } = useBookingInvoices(bookingId);
+  const bandMembersEnabled = isEnabled('VITE_FEATURE_BAND_MEMBERS');
+  // The Band card's "has a multi-person lineup" signal (ADR-0073 §6) — deliberately kept off the
+  // booking response, so it's derived here from the same query the Band sheet already uses.
+  const { data: lineupTemplates = [] } = useLineupTemplates(bandMembersEnabled);
 
   if (!booking) return null;
 
@@ -85,16 +92,33 @@ export function BookingDetailDesktop({ bookingId }: BookingDetailDesktopProps) {
 
         {/* For the day */}
         <section>
-          <SectionHeader label="For the day" />
+          <SectionHeader
+            label="For the day"
+            action={
+              bandMembersEnabled ? (
+                <GhostButton
+                  variant="primary"
+                  size="xs"
+                  icon={<Users size={13} />}
+                  onClick={() => setSearchParams({ sheet: 'band' })}
+                >
+                  {booking.band.chairs.length > 0 ? `Band (${booking.band.chairs.length})` : 'Add band'}
+                </GhostButton>
+              ) : undefined
+            }
+          />
           <div className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <ItineraryCard
                 logistics={booking.logistics}
                 sets={booking.sets}
                 packages={booking.packages}
+                bandChairs={bandMembersEnabled ? booking.band.chairs : []}
+                bandMembers={bandMembersEnabled ? booking.band.members : []}
               />
               <DetailsCard
                 logistics={booking.logistics}
+                bandMembersEnabled={bandMembersEnabled}
               />
             </div>
             <BookingVenueMapWidget
@@ -169,6 +193,16 @@ export function BookingDetailDesktop({ bookingId }: BookingDetailDesktopProps) {
             )}
           </div>
         </section>
+
+        {/* Band */}
+        {bandMembersEnabled && (
+          <BandCard
+            band={booking.band}
+            packages={booking.packages}
+            hasLineupTemplates={lineupTemplates.length > 0}
+            linkState={backState}
+          />
+        )}
 
         {/* Series events */}
         {booking.series && (

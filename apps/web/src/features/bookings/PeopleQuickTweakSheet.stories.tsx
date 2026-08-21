@@ -14,6 +14,8 @@ const customer: Contact = {
   latitude: null, longitude: null, placeId: null, travelTimeMinutes: null, travelDistanceMetres: null,
   travelTimeCalculatedAt: null, travelMode: null, notes: null, parkingInfo: null, accessInfo: null,
   equipmentAvailable: null, commissionArrangement: null, primaryRole: 'CUSTOMER',
+  primaryBandRole: null, instruments: [], travelNotes: null, equipmentNotes: null,
+  outfitNotes: null, availabilityNotes: null,
   createdAt: '2030-06-01T00:00:00Z', updatedAt: '2030-06-01T00:00:00Z',
 };
 

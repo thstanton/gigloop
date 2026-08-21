@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { IconPicker } from '@/components/common/IconPicker';
 import { GENRE_LABELS, PACKAGE_CATEGORY_LABELS } from '@/lib/constants';
-import type { PackageCatalogueItem, PackageTemplate, SlotInput, SongGenre } from '@/types/api';
+import type { LineupTemplate, PackageCatalogueItem, PackageTemplate, SlotInput, SongGenre } from '@/types/api';
 
 // ─── Form value shape + conversions ──────────────────────────────────────────
 // PackageForm is presentational and fully controlled: the container owns the value and
@@ -17,11 +17,23 @@ export interface PackageFormValues {
   notes: string;
   keyMoments: string[];
   defaultGenreSelection: string[];
+  // Band members v1 (#879, ADR-0072 §3): '' means "none" — kept a plain string so the <select>
+  // below stays uncontrolled-value-free; converted to null/omitted at the payload boundary.
+  defaultLineupTemplateId: string;
   slots: SlotDraft[];
 }
 
 export function emptyPackageFormValues(): PackageFormValues {
-  return { label: '', icon: 'music', category: '', notes: '', keyMoments: [], defaultGenreSelection: [], slots: [] };
+  return {
+    label: '',
+    icon: 'music',
+    category: '',
+    notes: '',
+    keyMoments: [],
+    defaultGenreSelection: [],
+    defaultLineupTemplateId: '',
+    slots: [],
+  };
 }
 
 export function packageToFormValues(pkg: PackageTemplate): PackageFormValues {
@@ -32,6 +44,7 @@ export function packageToFormValues(pkg: PackageTemplate): PackageFormValues {
     notes: pkg.notes ?? '',
     keyMoments: pkg.keyMoments ?? [],
     defaultGenreSelection: pkg.defaultGenreSelection ?? [],
+    defaultLineupTemplateId: pkg.defaultLineupTemplateId ?? '',
     slots: pkg.slots.map((s) => ({ ...s, label: s.label ?? undefined, key: s.id })),
   };
 }
@@ -45,11 +58,14 @@ export function catalogueToFormValues(item: PackageCatalogueItem): PackageFormVa
     notes: '',
     keyMoments: item.keyMoments,
     defaultGenreSelection: item.defaultGenreSelection,
+    defaultLineupTemplateId: '',
     slots: item.slots.map((s) => ({ label: s.label, duration: s.duration, order: s.order, key: crypto.randomUUID() })),
   };
 }
 
-// The create/update payload (both endpoints share this shape).
+// The create/update payload (both endpoints share this shape). `defaultLineupTemplateId` sends
+// `null` (never `undefined`) when cleared — UpdatePackageDto's `@IsOptional()` accepts null, and
+// the usual `|| undefined` idiom would silently no-op a clear on PATCH.
 export function packageFormToPayload(v: PackageFormValues) {
   return {
     label: v.label.trim(),
@@ -58,6 +74,7 @@ export function packageFormToPayload(v: PackageFormValues) {
     notes: v.notes.trim() || undefined,
     keyMoments: v.keyMoments,
     defaultGenreSelection: v.defaultGenreSelection,
+    defaultLineupTemplateId: v.defaultLineupTemplateId || null,
     slots: v.slots.map((s, i) => ({
       id: s.id,
       label: s.label?.trim() || undefined,
@@ -257,10 +274,18 @@ export function PackageForm({
   value,
   onChange,
   hints,
+  lineups,
 }: {
   value: PackageFormValues;
   onChange: (patch: Partial<PackageFormValues>) => void;
   hints?: PackageFormHints;
+  /**
+   * Band members v1 (#879, ADR-0072 §3): the musician's lineup library, for the optional
+   * "default lineup" picker. Omitted (rather than fetched here — PackageForm stays a fetch-free
+   * presentational component) when the feature flag is off or the caller has no lineups to offer;
+   * the picker renders only when this is passed, so every existing caller is unaffected.
+   */
+  lineups?: LineupTemplate[];
 }) {
   return (
     <div className="space-y-5">
@@ -294,6 +319,24 @@ export function PackageForm({
           ))}
         </select>
       </div>
+
+      {/* Default lineup (#879, ADR-0072 §3) — applying this package auto-applies the chosen
+          lineup; only rendered when the caller supplies a lineup library to pick from. */}
+      {lineups && (
+        <div>
+          <label className="block text-sm font-medium text-foreground mb-1">Default lineup</label>
+          <select
+            value={value.defaultLineupTemplateId}
+            onChange={(e) => onChange({ defaultLineupTemplateId: e.target.value })}
+            className="w-full border border-border rounded px-3 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+          >
+            <option value="">None</option>
+            {lineups.map((lineup) => (
+              <option key={lineup.id} value={lineup.id}>{lineup.label}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {/* Sets */}
       <SlotEditor slots={value.slots} onChange={(slots) => onChange({ slots })} hint={hints?.slots} />

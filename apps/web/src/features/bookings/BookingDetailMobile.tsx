@@ -1,8 +1,9 @@
 import { useAuth } from '@clerk/react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Clock, ClipboardList, Info, MapPin, Pencil } from 'lucide-react';
+import { Clock, ClipboardList, Info, MapPin, Pencil, Users } from 'lucide-react';
 import { LOGISTICS_DETAIL_KEYS, LOGISTICS_SYSTEM_KEYS } from '@/lib/constants';
+import { isEnabled } from '@/lib/featureFlags';
 
 import { useBooking } from '@/lib/hooks/useBooking';
 import { useBookingChecklist } from '@/lib/hooks/useBookingChecklist';
@@ -13,10 +14,12 @@ import { useBookingCommunications } from '@/lib/hooks/useBookingCommunications';
 import { useBookingDocuments } from '@/lib/hooks/useBookingDocuments';
 import { useSeriesBookings } from '@/lib/hooks/useSeriesBookings';
 import { useConfigureMusicForm } from '@/lib/hooks/useConfigureMusicForm';
+import { useLineupTemplates } from '@/lib/hooks/useLineupTemplates';
 import BookingDetailTabs from '@/features/bookings/BookingDetailTabs';
 import ChecklistSection, { clientDisplayName } from '@/features/bookings/ChecklistSection';
 import ItineraryCard from '@/features/bookings/ItineraryCard';
 import DetailsCard from '@/features/bookings/DetailsCard';
+import BandCard from '@/features/bookings/BandCard';
 import { BookingVenueMapWidget } from '@/features/bookings/BookingVenueMapWidget';
 import InlineNotes from '@/features/bookings/InlineNotes';
 import PersonChip from '@/features/bookings/PersonChip';
@@ -91,6 +94,10 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
     isAddingItem,
   } = useBookingChecklist(bookingId, booking, isLoaded);
   const { data: invoices = [] } = useBookingInvoices(bookingId);
+  const bandMembersEnabled = isEnabled('VITE_FEATURE_BAND_MEMBERS');
+  // The Band card's "has a multi-person lineup" signal (ADR-0073 §6) — deliberately kept off the
+  // booking response, so it's derived here from the same query the Band sheet already uses.
+  const { data: lineupTemplates = [] } = useLineupTemplates(bandMembersEnabled);
 
   if (isLoading) return <MobileTabsSkeleton />;
   if (!booking) return null;
@@ -160,16 +167,31 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
               sets={booking.sets}
               packages={booking.packages}
               hideWhenEmpty
+              bandChairs={bandMembersEnabled ? booking.band.chairs : []}
+              bandMembers={bandMembersEnabled ? booking.band.members : []}
             />
             <DetailsCard
               logistics={booking.logistics}
               hideWhenEmpty
+              bandMembersEnabled={bandMembersEnabled}
             />
           </div>
           <BookingVenueMapWidget
             bookingId={bookingId}
             contactHref={`/admin/contacts/${booking.venue?.id ?? ''}`}
           />
+          {bandMembersEnabled && (
+            <div className="flex justify-end">
+              <GhostButton
+                variant="primary"
+                size="xs"
+                icon={<Users size={13} />}
+                onClick={() => setSearchParams({ sheet: 'band' })}
+              >
+                {booking.band.chairs.length > 0 ? `Band (${booking.band.chairs.length})` : 'Add band'}
+              </GhostButton>
+            </div>
+          )}
           <AddToTheDayCard concerns={missingConcerns} />
           <MusicFormSection
             booking={booking}
@@ -215,6 +237,15 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
               )}
             </div>
           </section>
+
+          {bandMembersEnabled && (
+            <BandCard
+              band={booking.band}
+              packages={booking.packages}
+              hasLineupTemplates={lineupTemplates.length > 0}
+              linkState={backState}
+            />
+          )}
 
           {booking.series && (
             <section>

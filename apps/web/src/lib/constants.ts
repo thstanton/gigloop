@@ -1,18 +1,19 @@
 import {
   Music, Mic2, Guitar, Piano, Drum, Church, Cake, Wine, Star, Heart,
   GlassWater, Utensils, Moon, Briefcase, Music2, Sparkles, Radio, Headphones,
-  Volume2, Users, Clock, Shirt, Sofa, type LucideIcon,
+  Volume2, Users, Clock, Shirt, Sofa, Car, type LucideIcon,
   LayoutDashboard, CalendarDays, FileText, Settings, Package,
   CalendarPlus, UserPlus,
 } from 'lucide-react';
-import type { BookingStatus, EventType, InvoiceStatus, PortalTheme, PortalVisibilityReason, ReminderConcern, SongGenre } from '@/types/api';
+import type { BookingBandMemberStatus, BookingStatus, EventType, InvoiceStatus, PortalTheme, PortalVisibilityReason, ReminderConcern, SongGenre } from '@/types/api';
 
-export type ContactPrimaryRole = 'CUSTOMER' | 'VENUE' | 'BOOKING_AGENT';
+export type ContactPrimaryRole = 'CUSTOMER' | 'VENUE' | 'BOOKING_AGENT' | 'BAND_MEMBER';
 
 const PRIMARY_ROLES = [
   { value: 'CUSTOMER',      label: 'Customer'      },
   { value: 'VENUE',         label: 'Venue'         },
   { value: 'BOOKING_AGENT', label: 'Booking agent' },
+  { value: 'BAND_MEMBER',   label: 'Band member'   },
 ] as const satisfies readonly { value: ContactPrimaryRole; label: string }[];
 
 export type _PrimaryRoleCoverage = AssertNever<
@@ -324,6 +325,57 @@ export const INVOICE_OVERDUE_TOKENS: { label: string } & InvoiceStatusTokens = {
   borderL: 'border-l-status-cancelled',
 };
 
+// ─── Band member lifecycle (ADR-0072 §5) ────────────────────────────────────
+// ADDED -> INVITED -> CONFIRMED | DECLINED, declared once (CLAUDE.md: one declaration per
+// vocabulary) — mirrors the booking/invoice status tables' shape. Every transition is
+// organiser-driven from the Band sheet in this slice (no portal actor until #880), so there is no
+// separate "legal next status" list here — ADDED -> CONFIRMED is deliberately reachable directly.
+// The Band card's directory grouping (#887, ADR-0072 §6) — "who has answered" bucketed into
+// Confirmed / Waiting on / Still to sort. ADDED and DECLINED both still need the organiser's
+// attention (invite, or find a replacement), so both land under "Still to sort".
+export type BandMemberAnswerGroup = 'Confirmed' | 'Waiting on' | 'Still to sort';
+
+export interface BandMemberStatusRow {
+  value: BookingBandMemberStatus;
+  label: string;
+  tint: string;
+  text: string;
+  borderL: string;
+  answerGroup: BandMemberAnswerGroup;
+}
+
+const BAND_MEMBER_STATUSES = [
+  { value: 'ADDED',     label: 'Added',     tint: 'bg-status-enquiry/15',     text: 'text-status-enquiry',     borderL: 'border-l-status-enquiry',     answerGroup: 'Still to sort' },
+  { value: 'INVITED',   label: 'Invited',   tint: 'bg-status-provisional/15', text: 'text-status-provisional', borderL: 'border-l-status-provisional', answerGroup: 'Waiting on'    },
+  { value: 'CONFIRMED', label: 'Confirmed', tint: 'bg-status-confirmed/15',   text: 'text-status-confirmed',   borderL: 'border-l-status-confirmed',   answerGroup: 'Confirmed'     },
+  { value: 'DECLINED',  label: 'Declined',  tint: 'bg-status-cancelled/15',   text: 'text-status-cancelled',   borderL: 'border-l-status-cancelled',   answerGroup: 'Still to sort' },
+] as const satisfies readonly BandMemberStatusRow[];
+
+export type _BandMemberStatusCoverage = AssertNever<
+  Exclude<BookingBandMemberStatus, (typeof BAND_MEMBER_STATUSES)[number]['value']>
+>;
+
+export const BAND_MEMBER_STATUS_ORDER: BookingBandMemberStatus[] = BAND_MEMBER_STATUSES.map((row) => row.value);
+
+export const BAND_MEMBER_STATUS_LABELS = column(BAND_MEMBER_STATUSES, 'label');
+
+export const BAND_MEMBER_ANSWER_GROUP = column(BAND_MEMBER_STATUSES, 'answerGroup');
+
+// Order the Band card's groups appear in, each occurring once, first-seen in table order.
+export const BAND_MEMBER_ANSWER_GROUP_ORDER: BandMemberAnswerGroup[] = [
+  ...new Set(BAND_MEMBER_STATUSES.map((row) => row.answerGroup)),
+];
+
+export interface BandMemberStatusTokens {
+  tint: string;
+  text: string;
+  borderL: string;
+}
+
+export const BAND_MEMBER_STATUS_TOKENS: Record<BookingBandMemberStatus, BandMemberStatusTokens> = Object.fromEntries(
+  BAND_MEMBER_STATUSES.map(({ value, tint, text, borderL }) => [value, { tint, text, borderL }]),
+) as Record<BookingBandMemberStatus, BandMemberStatusTokens>;
+
 // ─── Logistics fields ────────────────────────────────────────────────────────
 // The system fields inside a booking's free-form `logistics` blob, declared once. The
 // `group` column carries a real structural split, not a display grouping: ANCHORS are
@@ -338,17 +390,36 @@ export interface LogisticsFieldRow {
   icon: string;
   group: 'anchor' | 'detail';
   control: 'input' | 'select' | 'textarea';
+  /** Whether this fact is, by domain default, relevant to the band (ADR-0072 §4/§6). No badge is
+   *  ever shown for it here (ADR-0073 §7) — #880 is what reads this column, via BAND_PORTAL_FIELDS. */
+  shareWithBand: boolean;
+  /** Present (true) only on a field gated behind Band members v1 (#888) — absent means always on,
+   *  flag or no flag. */
+  bandOnly?: true;
+  /** The dep-profile Contact field this logistics field prefills from (ADR-0072 §4), when a
+   *  pairing exists — declared as data so a future field can never be added half-paired. */
+  profileField?: 'travelNotes' | 'outfitNotes';
 }
 
 const LOGISTICS_FIELDS = [
-  { value: 'arrivalTime',       label: 'Arrival time',       icon: 'clock',    group: 'anchor', control: 'input'    },
-  { value: 'soundCheckTime',    label: 'Soundcheck time',    icon: 'music',    group: 'anchor', control: 'input'    },
-  { value: 'finishTime',        label: 'Finish time',        icon: 'moon',     group: 'anchor', control: 'input'    },
-  { value: 'dressCode',         label: 'Dress code',         icon: 'shirt',    group: 'detail', control: 'select'   },
-  { value: 'performanceSpace',  label: 'Performance space',  icon: 'mic-2',    group: 'detail', control: 'textarea' },
-  { value: 'foodProvided',      label: 'Food provided',      icon: 'utensils', group: 'detail', control: 'textarea' },
-  { value: 'greenRoom',         label: 'Green room',         icon: 'sofa',     group: 'detail', control: 'textarea' },
-  { value: 'equipmentRequired', label: 'Equipment required', icon: 'volume-2', group: 'detail', control: 'textarea' },
+  { value: 'arrivalTime',       label: 'Arrival time',       icon: 'clock',    group: 'anchor', control: 'input',    shareWithBand: true  },
+  { value: 'soundCheckTime',    label: 'Soundcheck time',    icon: 'music',    group: 'anchor', control: 'input',    shareWithBand: true  },
+  { value: 'finishTime',        label: 'Finish time',        icon: 'moon',     group: 'anchor', control: 'input',    shareWithBand: true  },
+  // The client's dress-code SPEC — not shared with the band as-is; `outfits` below is the
+  // leader's own IMPLEMENTATION of it, in the leader's words (ADR-0072 §4).
+  { value: 'dressCode',         label: 'Dress code',         icon: 'shirt',    group: 'detail', control: 'select',   shareWithBand: false },
+  { value: 'performanceSpace',  label: 'Performance space',  icon: 'mic-2',    group: 'detail', control: 'textarea', shareWithBand: true  },
+  { value: 'foodProvided',      label: 'Food provided',      icon: 'utensils', group: 'detail', control: 'textarea', shareWithBand: true  },
+  { value: 'greenRoom',         label: 'Green room',         icon: 'sofa',     group: 'detail', control: 'textarea', shareWithBand: true  },
+  { value: 'equipmentRequired', label: 'Equipment required', icon: 'volume-2', group: 'detail', control: 'textarea', shareWithBand: true  },
+  {
+    value: 'travelPlan', label: 'Travel plan', icon: 'car', group: 'detail', control: 'textarea',
+    shareWithBand: true, bandOnly: true, profileField: 'travelNotes',
+  },
+  {
+    value: 'outfits', label: 'Outfits', icon: 'shirt', group: 'detail', control: 'textarea',
+    shareWithBand: true, bandOnly: true, profileField: 'outfitNotes',
+  },
 ] as const satisfies readonly LogisticsFieldRow[];
 
 type LogisticsRow = (typeof LOGISTICS_FIELDS)[number];
@@ -383,6 +454,26 @@ export const LOGISTICS_SYSTEM_KEYS: readonly string[] = LOGISTICS_FIELDS.map((ro
 
 export const LOGISTICS_FIELD_LABELS = column(LOGISTICS_FIELDS, 'label');
 
+/** Whether a system field is, by domain default, relevant to the band (#888). Not yet consumed —
+ *  #880 reads this to build BAND_PORTAL_FIELDS. */
+export const LOGISTICS_FIELD_SHARE_WITH_BAND = column(LOGISTICS_FIELDS, 'shareWithBand');
+
+/** Fields gone entirely with VITE_FEATURE_BAND_MEMBERS off (#888) — derived from the table so no
+ *  consuming component hardcodes 'travelPlan'/'outfits' itself. */
+export const LOGISTICS_BAND_ONLY_KEYS: readonly LogisticsDetailKey[] = LOGISTICS_FIELDS
+  .filter((row): row is DetailRow & { bandOnly: true } => 'bandOnly' in row && row.bandOnly === true)
+  .map((row) => row.value);
+
+/** The dep-profile Contact field each paired logistics field prefills from (ADR-0072 §4) — declared
+ *  as data so a future field can never be added half-paired. Absent (not `undefined`-valued) for
+ *  an unpaired field, since `profileField` isn't a common key across every row. */
+export const LOGISTICS_PROFILE_FIELD_PAIRING: Partial<Record<LogisticsDetailKey, 'travelNotes' | 'outfitNotes'>> =
+  Object.fromEntries(
+    LOGISTICS_FIELDS
+      .filter((row): row is DetailRow & { profileField: 'travelNotes' | 'outfitNotes' } => 'profileField' in row)
+      .map((row) => [row.value, row.profileField]),
+  );
+
 export const PACKAGE_ICON_MAP: Record<string, LucideIcon> = {
   clock: Clock,
   music: Music,
@@ -407,6 +498,7 @@ export const PACKAGE_ICON_MAP: Record<string, LucideIcon> = {
   users: Users,
   shirt: Shirt,
   sofa: Sofa,
+  car: Car,
 };
 
 export const PACKAGE_ICON_OPTIONS = Object.keys(PACKAGE_ICON_MAP);

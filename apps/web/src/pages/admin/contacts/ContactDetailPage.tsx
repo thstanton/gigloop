@@ -8,6 +8,7 @@ import { VenueMapWidget } from '@/components/common/VenueMapWidget';
 import { Button } from '@/components/ui/button';
 import BookingStatusPill from '@/components/common/BookingStatusPill';
 import { useContact } from '@/lib/hooks/useContact';
+import { useRoleVocabulary } from '@/lib/hooks/useRoleVocabulary';
 import { contactToRecent, recordRecentlyViewed } from '@/lib/recentlyViewed';
 import { apiGet } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
@@ -112,6 +113,7 @@ export default function ContactDetailPage() {
 
   const queryClient = useQueryClient();
   const { data: contact, isLoading, isError } = useContact(id!);
+  const roleVocabulary = useRoleVocabulary();
 
   // Feed the command palette's "Recent" list as the musician opens contacts (ADR-0067 §7).
   useEffect(() => {
@@ -226,7 +228,7 @@ export default function ContactDetailPage() {
 
       </div>
 
-      <ContactEditDrawer contact={contact} />
+      <ContactEditDrawer contact={contact} roleVocabulary={roleVocabulary} />
     </div>
   );
 }

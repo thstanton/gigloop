@@ -8,9 +8,10 @@ import { MailModule } from '../mail/mail.module';
 import { ChecklistModule } from '../checklist/checklist.module';
 import { SeriesModule } from '../series/series.module';
 import { ContactsModule } from '../contacts/contacts.module';
+import { LineupsModule } from '../lineups/lineups.module';
 
 @Module({
-  imports: [MailModule, ChecklistModule, SeriesModule, ContactsModule],
+  imports: [MailModule, ChecklistModule, SeriesModule, ContactsModule, LineupsModule],
   controllers: [BookingsController],
   providers: [BookingsService, BookingsRepository, ContractRepository, MusicFormConfigRepository],
   exports: [BookingsRepository, ContractRepository, MusicFormConfigRepository],

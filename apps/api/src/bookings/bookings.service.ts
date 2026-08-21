@@ -15,6 +15,11 @@ import { UpdateContractDto } from './dto/update-contract.dto';
 import { CreateSetDto } from './dto/create-set.dto';
 import { UpdateSetDto } from './dto/update-set.dto';
 import { UpdateBookingPackageDto } from './dto/update-booking-package.dto';
+import { CreateChairDto } from './dto/create-chair.dto';
+import { UpdateChairDto } from './dto/update-chair.dto';
+import { AssignChairDto } from './dto/assign-chair.dto';
+import { UpdateBandMemberDto } from './dto/update-band-member.dto';
+import { ApplyLineupTemplateDto } from './dto/apply-lineup-template.dto';
 import { UpsertMusicFormConfigDto } from './dto/upsert-music-form-config.dto';
 import { MailService } from '../mail/mail.service';
 import { substituteTiptapVariables } from '../mail/tiptap-substitute';
@@ -28,6 +33,7 @@ import {
 } from '../checklist/checklist-reminders';
 import { ReminderConcern } from '../checklist/checklist-concerns';
 import { resolveContractVisibility, resolveMusicFormVisibility, type ContractStatus } from '../portal/portal-visibility';
+import { LineupsService } from '../lineups/lineups.service';
 
 // The single mapped shape every booking read and write returns (ADR-0071): `bookingDetailSelect`'
 // relations collapsed to `has*` flags / `activeContract` / `portalVisibility`. Derived from
@@ -47,12 +53,59 @@ export type BookingPortalVisibility = {
   musicForm: ReturnType<typeof resolveMusicFormVisibility>;
 };
 
-export type MappedBooking = Omit<BookingDetailRow, 'musicFormConfig' | 'musicFormResponse' | 'contracts'> & {
+// A chair with its derived `callTime` folded in (ADR-0072 §2 / #884) — never selected from the DB,
+// computed in `mapBooking` from the chair's `packageId` against the booking's `sets`.
+export type BandChair = BookingDetailRow['bandChairs'][number] & { callTime: string | null };
+
+// A person on this gig (ADR-0072 §2/§5 / #885) — the row shape the query's `bandMembers` filter
+// (`removedAt: null`) already guarantees is never a removed one.
+export type BandMember = BookingDetailRow['bandMembers'][number];
+
+export type BookingBand = {
+  chairs: BandChair[];
+  members: BandMember[];
+};
+
+export type MappedBooking = Omit<
+  BookingDetailRow,
+  'musicFormConfig' | 'musicFormResponse' | 'contracts' | 'bandChairs' | 'bandMembers'
+> & {
   hasMusicFormConfig: boolean;
   hasMusicFormResponse: boolean;
   activeContract: NormalisedContract | null;
   portalVisibility: BookingPortalVisibility;
+  band: BookingBand;
 };
+
+/** "HH:mm" → minutes since midnight, or null when unset/unparseable. Mirrors ItineraryCard.tsx. */
+function startMinutes(startTime: string | null): number | null {
+  if (!startTime) return null;
+  const m = /^(\d{1,2}):(\d{2})$/.exec(startTime.trim());
+  if (!m) return null;
+  return Number(m[1]) * 60 + Number(m[2]);
+}
+
+// Call times are derived, never stored (ADR-0072 §2): each segment's earliest
+// PerformanceSet.startTime. A segment is a `packageId` — including `null`, which groups every
+// package-less set into one segment, so a package-less booking's chairs get a call time too via
+// the same lookup (one code path, no special case). A segment with no timed set has no entry, so
+// its chairs' call time is absent (undefined → mapped to null), never zero or a placeholder.
+function deriveCallTimes(
+  sets: Array<{ packageId: string | null; startTime: string | null }>,
+): Map<string | null, string> {
+  const earliest = new Map<string | null, { startTime: string; minutes: number }>();
+  for (const set of sets) {
+    const minutes = startMinutes(set.startTime);
+    if (minutes == null || !set.startTime) continue;
+    const current = earliest.get(set.packageId);
+    if (!current || minutes < current.minutes) {
+      earliest.set(set.packageId, { startTime: set.startTime, minutes });
+    }
+  }
+  const result = new Map<string | null, string>();
+  for (const [packageId, entry] of earliest) result.set(packageId, entry.startTime);
+  return result;
+}
 
 const VALID_STATUSES = new Set<string>(Object.values(BookingStatus));
 
@@ -142,6 +195,7 @@ export class BookingsService {
     private contractRepo: ContractRepository,
     private musicFormRepo: MusicFormConfigRepository,
     private contacts: ContactsService,
+    private lineups: LineupsService,
     // Injected solely to open the atomic-create transaction (bounded exception
     // to the repository-pattern rule — see ADR-0047).
     private prisma: PrismaService,
@@ -550,10 +604,104 @@ export class BookingsService {
     return this.mapBooking(booking!);
   }
 
+  // Applies a lineup template as chairs (ADR-0072 §3, #884) — exactly as applyPackageTemplate
+  // produces PerformanceSet rows. `packageId` targets a segment; omitted, the chairs are
+  // package-less/whole-day (one code path, no special case).
+  async applyLineupTemplate(userId: string, bookingId: string, dto: ApplyLineupTemplateDto) {
+    await this.assertOwnership(userId, bookingId);
+    const lineup = await this.lineups.findOne(userId, dto.lineupTemplateId);
+    if (!lineup) throw new NotFoundException('Lineup template not found');
+    if (dto.packageId) {
+      const pkg = await this.repo.findBookingPackage(userId, bookingId, dto.packageId);
+      if (!pkg) throw new NotFoundException('Package not found');
+    }
+    const booking = await this.repo.applyLineupTemplate(
+      userId,
+      bookingId,
+      { label: lineup.label, slots: lineup.slots.map((s) => ({ role: s.role, order: s.order })) },
+      dto.packageId ?? null,
+    );
+    // ADR-0071: a write returns the same mapped shape a read of the same resource would.
+    return this.mapBooking(booking!);
+  }
+
+  async addChair(userId: string, bookingId: string, dto: CreateChairDto) {
+    await this.assertOwnership(userId, bookingId);
+    if (dto.packageId) {
+      const pkg = await this.repo.findBookingPackage(userId, bookingId, dto.packageId);
+      if (!pkg) throw new NotFoundException('Package not found');
+    }
+    return this.repo.addChair(userId, bookingId, dto);
+  }
+
+  async updateChair(userId: string, bookingId: string, chairId: string, dto: UpdateChairDto) {
+    await this.assertOwnership(userId, bookingId);
+    const chair = await this.repo.findChair(userId, bookingId, chairId);
+    if (!chair) throw new NotFoundException('Chair not found');
+    if (dto.packageId) {
+      const pkg = await this.repo.findBookingPackage(userId, bookingId, dto.packageId);
+      if (!pkg) throw new NotFoundException('Package not found');
+    }
+    return this.repo.updateChair(chairId, dto);
+  }
+
+  async deleteChair(userId: string, bookingId: string, chairId: string) {
+    await this.assertOwnership(userId, bookingId);
+    const chair = await this.repo.findChair(userId, bookingId, chairId);
+    if (!chair) throw new NotFoundException('Chair not found');
+    return this.repo.deleteChair(chairId);
+  }
+
+  // Assignment never creates or destroys a chair row, it sets a field (ADR-0072 §2). Filling a
+  // chair reuses the contact's existing member row on this booking if one exists — one token, one
+  // fee, one status however many chairs they fill — and creates one on first assignment.
+  // `contactId: null` vacates the chair without touching the member row it held.
+  async assignChair(userId: string, bookingId: string, chairId: string, dto: AssignChairDto) {
+    await this.assertOwnership(userId, bookingId);
+    const chair = await this.repo.findChair(userId, bookingId, chairId);
+    if (!chair) throw new NotFoundException('Chair not found');
+
+    if (dto.contactId == null) {
+      return this.repo.setChairMember(chairId, null);
+    }
+
+    await this.contacts.assertOwned(userId, [dto.contactId]);
+    const existing = await this.repo.findActiveMemberByContact(userId, bookingId, dto.contactId);
+    const member = existing ?? (await this.repo.createMember(userId, bookingId, dto.contactId));
+    return this.repo.setChairMember(chairId, member.id);
+  }
+
+  // Every transition in this slice is organiser-driven from the Band sheet (ADR-0072 §5) — no
+  // transition graph to enforce, just the lifecycle timestamps a status change implies. Stamped
+  // unconditionally on each qualifying transition so it always reflects the most recent one (e.g.
+  // re-confirming after a decline updates `respondedAt` again).
+  async updateBandMember(userId: string, bookingId: string, memberId: string, dto: UpdateBandMemberDto) {
+    await this.assertOwnership(userId, bookingId);
+    const member = await this.repo.findMember(userId, bookingId, memberId);
+    if (!member) throw new NotFoundException('Band member not found');
+
+    const data: Prisma.BookingBandMemberUpdateInput = { ...dto };
+    if (dto.status === 'INVITED') data.invitedAt = new Date();
+    if (dto.status === 'CONFIRMED' || dto.status === 'DECLINED') data.respondedAt = new Date();
+
+    return this.repo.updateMember(memberId, data);
+  }
+
+  // Soft removal (ADR-0072 §5): the person's answer and what the organiser did to the roster are
+  // separate facts, so there is no REPLACED status — `removeMember` freezes `status` and stamps
+  // `removedAt`, vacating every chair this member held. A re-invite is a fresh member row.
+  async removeBandMember(userId: string, bookingId: string, memberId: string) {
+    await this.assertOwnership(userId, bookingId);
+    const member = await this.repo.findMember(userId, bookingId, memberId);
+    if (!member) throw new NotFoundException('Band member not found');
+    return this.repo.removeMember(memberId);
+  }
+
   // The single place the booking response shape is constructed (ADR-0071). Every read and write
   // method funnels its `bookingDetailSelect`-shaped row through here rather than re-deriving the shape.
   private mapBooking(booking: BookingDetailRow): MappedBooking {
-    const { musicFormConfig, musicFormResponse, contracts, ...rest } = booking;
+    const { musicFormConfig, musicFormResponse, contracts, bandChairs, bandMembers, ...rest } = booking;
+    const callTimes = deriveCallTimes(booking.sets ?? []);
     return {
       ...rest,
       hasMusicFormConfig: !!musicFormConfig,
@@ -565,6 +713,11 @@ export class BookingsService {
         booking.status,
         musicFormConfig?.publishedAt != null,
       ),
+      // ADR-0073 §6: the organiser read path. Removed members are already excluded by the query.
+      band: {
+        chairs: (bandChairs ?? []).map((chair) => ({ ...chair, callTime: callTimes.get(chair.packageId) ?? null })),
+        members: bandMembers ?? [],
+      },
     };
   }
 

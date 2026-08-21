@@ -36,4 +36,12 @@ export class ContactResponseDto {
   @ApiPropertyOptional({ nullable: true, type: String }) website: string | null;
   @ApiPropertyOptional({ nullable: true, type: String }) commissionArrangement: string | null;
   @ApiPropertyOptional({ nullable: true, type: String }) primaryRole: string | null;
+
+  // Band roster — dep profile (#886, ADR-0072 §4). Shared-with-band, not organiser-private.
+  @ApiPropertyOptional({ nullable: true, type: String, description: 'Shared with band' }) primaryBandRole: string | null;
+  @ApiProperty({ type: [String], description: 'Shared with band' }) instruments: string[];
+  @ApiPropertyOptional({ nullable: true, type: String, description: 'Shared with band' }) travelNotes: string | null;
+  @ApiPropertyOptional({ nullable: true, type: String, description: 'Shared with band' }) equipmentNotes: string | null;
+  @ApiPropertyOptional({ nullable: true, type: String, description: 'Shared with band' }) outfitNotes: string | null;
+  @ApiPropertyOptional({ nullable: true, type: String, description: 'Shared with band' }) availabilityNotes: string | null;
 }

@@ -4,11 +4,23 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { LabelValue } from '@/components/common/LabelValue';
 import { SubLabel } from '@/components/common/SubLabel';
 import { cn } from '@/lib/utils';
-import type { Contact } from '@/types/api';
+
+// The narrowest contact shape PersonChip actually reads. Widened (#887, ADR-0072 §6) so the Band
+// card can pass a `BookingBandMember.contact` — id/name/email only, no phone or commission — and
+// still get a working chip; the popover's Call row simply omits itself when phone is absent.
+export interface PersonChipContact {
+  id: string;
+  name: string;
+  email?: string | null;
+  phone?: string | null;
+  commissionArrangement?: string | null;
+}
 
 export interface PersonChipProps {
-  role: 'Customer' | 'Booking agent';
-  contact: Contact;
+  /** 'Customer' | 'Booking agent' plus any free-text chair role (#887, ADR-0072 §3) — a band
+   *  member's role(s) on this gig. */
+  role: string;
+  contact: PersonChipContact;
   linkState?: Record<string, string>;
   /** Optional per-chip edit action. Omitted in the booking People section, whose single
    *  edit affordance lives on the section header. */

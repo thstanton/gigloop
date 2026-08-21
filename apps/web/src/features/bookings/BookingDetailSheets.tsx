@@ -26,6 +26,7 @@ import { VenueQuickTweakSheet } from '@/features/bookings/VenueQuickTweakSheet';
 import { PeopleQuickTweakSheet } from '@/features/bookings/PeopleQuickTweakSheet';
 import { DetailsQuickTweakSheet } from '@/features/bookings/DetailsQuickTweakSheet';
 import { ItineraryQuickTweakSheet } from '@/features/bookings/ItineraryQuickTweakSheet';
+import { BandSheet } from '@/features/bookings/BandSheet';
 import { OverviewQuickTweakSheet } from '@/features/bookings/OverviewQuickTweakSheet';
 import { MusicQuickTweakSheet } from '@/features/bookings/MusicQuickTweakSheet';
 import ComposeEmailSheet from '@/features/communications/ComposeEmailSheet';
@@ -33,6 +34,7 @@ import type { SeriesComposeTarget } from '@/features/communications/composeHelpe
 import InvoiceSheet from '@/features/invoices/InvoiceSheet';
 import MarkSentDialog from '@/features/invoices/MarkSentDialog';
 import { apiGet } from '@/lib/api';
+import { isEnabled } from '@/lib/featureFlags';
 import { toast } from '@/lib/hooks/use-toast';
 import type {
   BookingDetail,
@@ -241,6 +243,17 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
         packages={booking.packages}
         currentLogistics={booking.logistics}
         open={sheet === 'itineraryTweak'}
+        onOpenChange={(open) => { if (!open) setSearchParams({}); }}
+      />
+      <BandSheet
+        bookingId={bookingId}
+        chairs={booking.band.chairs}
+        members={booking.band.members}
+        packages={booking.packages}
+        venue={booking.venue}
+        // Absent with the flag off (#884) even if ?sheet=band is reached by hand — the entry
+        // point is already flag-gated, this is defence in depth.
+        open={sheet === 'band' && isEnabled('VITE_FEATURE_BAND_MEMBERS')}
         onOpenChange={(open) => { if (!open) setSearchParams({}); }}
       />
       <OverviewQuickTweakSheet

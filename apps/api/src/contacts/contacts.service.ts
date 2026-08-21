@@ -30,7 +30,8 @@ export class ContactsService {
   async findOne(userId: string, id: string) {
     const contact = await this.repo.findOne(userId, id);
     if (!contact) throw new NotFoundException('Contact not found');
-    return contact;
+    const { _count, ...rest } = contact;
+    return { ...rest, bandMemberCount: _count.bandMemberships };
   }
 
   // FK-ownership guard (#709 / ADR-0061): reject a write that references a Contact the caller
@@ -66,17 +67,29 @@ export class ContactsService {
 
   async delete(userId: string, id: string) {
     await this.findOne(userId, id);
-    const bookingCount = await this.repo.countBookings(userId, id);
-    if (bookingCount > 0) {
+    const { bookingCount, bandRosterCount } = await this.repo.countDeletionBlockers(userId, id);
+    if (bookingCount > 0 || bandRosterCount > 0) {
       // TODO: GDPR limitation — contacts with any booking history (including
       // CANCELLED) cannot currently be deleted. The correct solution is to
       // anonymise the contact (scrub PII, keep FK intact) so that booking and
       // invoice financial records remain structurally valid while honouring a
       // right-to-erasure request. Anonymisation is deferred to P2.
-      throw new ConflictException(
-        'Contact has associated bookings and cannot be deleted',
-      );
+      throw new ConflictException(deletionBlockedMessage(bookingCount, bandRosterCount));
     }
     return this.repo.delete(id);
   }
+}
+
+// Mirrored in ContactEditDrawer.tsx's preventive UI copy (#886) — keep the two in sync, since a
+// mismatch means the 409 a direct API call gets doesn't match what the Delete button already said.
+function deletionBlockedMessage(bookingCount: number, bandRosterCount: number): string {
+  const booking = `${bookingCount} booking${bookingCount === 1 ? '' : 's'}`;
+  const roster = `the band roster for ${bandRosterCount} booking${bandRosterCount === 1 ? '' : 's'}`;
+  if (bookingCount > 0 && bandRosterCount > 0) {
+    return `Contact has ${booking} and is on ${roster}, and cannot be deleted`;
+  }
+  if (bandRosterCount > 0) {
+    return `Contact is on ${roster} and cannot be deleted`;
+  }
+  return `Contact has ${booking} and cannot be deleted`;
 }

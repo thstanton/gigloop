@@ -1,6 +1,11 @@
 import { test, expect } from '@playwright/test';
 import { prisma } from '../support/prisma';
-import { seedContactWithBooking, type ContactWithBooking } from '../support/seed';
+import {
+  seedContactWithBooking,
+  seedContactOnBandRoster,
+  type ContactWithBooking,
+  type ContactOnBandRoster,
+} from '../support/seed';
 
 // The contact-deletion hard rule (CLAUDE.md; ADR-0048 §7, slice 4): a contact
 // with associated bookings cannot be deleted. The UI enforces this *preventively*
@@ -45,6 +50,40 @@ test.describe('contact delete blocked by bookings', () => {
     await expect(drawer.getByRole('button', { name: 'Delete contact' })).toBeDisabled();
 
     // The contact survives the blocked attempt.
+    const contact = await prisma.contact.findUnique({ where: { id: fixture.contactId } });
+    expect(contact).not.toBeNull();
+  });
+});
+
+// Roster-only case (ADR-0072 §1 / #886): a contact with no customer/venue/agent booking, but on a
+// band roster, still blocks deletion — the fourth deletion-blocking FK `countBookings` counts.
+test.describe('contact delete blocked by band roster only', () => {
+  let fixture: ContactOnBandRoster;
+
+  test.beforeEach(async () => {
+    fixture = await seedContactOnBandRoster();
+  });
+
+  test.afterEach(async () => {
+    await prisma.booking.deleteMany({ where: { id: fixture.bookingId } });
+    await prisma.contact.deleteMany({ where: { id: { in: [fixture.contactId, fixture.customerId] } } });
+  });
+
+  test.afterAll(async () => {
+    await prisma.$disconnect();
+  });
+
+  test('delete is blocked and names the roster, not a booking', async ({ page }) => {
+    await page.goto(`/admin/contacts/${fixture.contactId}`);
+
+    await page.getByRole('button', { name: 'Edit' }).click();
+    const drawer = page.getByRole('dialog', { name: 'Edit contact' });
+
+    await expect(
+      drawer.getByText('This contact is on the band roster for 1 booking and cannot be deleted.'),
+    ).toBeVisible();
+    await expect(drawer.getByRole('button', { name: 'Delete contact' })).toBeDisabled();
+
     const contact = await prisma.contact.findUnique({ where: { id: fixture.contactId } });
     expect(contact).not.toBeNull();
   });

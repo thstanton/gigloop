@@ -11,6 +11,7 @@ import { SeriesService } from '../series/series.service';
 import { MailService } from '../mail/mail.service';
 import { ChecklistReevaluator } from '../checklist/checklist-reevaluator.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { LineupsService } from '../lineups/lineups.service';
 import type { EmailContext } from '../mail/mail.service';
 
 // Tagged sentinel handed to the $transaction callback as `tx`. Asserting each write
@@ -30,6 +31,17 @@ type MockRepo = {
   applyPackageTemplate: jest.Mock;
   updatePackage: jest.Mock;
   removePackage: jest.Mock;
+  applyLineupTemplate: jest.Mock;
+  findChair: jest.Mock;
+  addChair: jest.Mock;
+  updateChair: jest.Mock;
+  deleteChair: jest.Mock;
+  findActiveMemberByContact: jest.Mock;
+  createMember: jest.Mock;
+  setChairMember: jest.Mock;
+  findMember: jest.Mock;
+  updateMember: jest.Mock;
+  removeMember: jest.Mock;
   update: jest.Mock;
   cancel: jest.Mock;
   findSet: jest.Mock;
@@ -91,6 +103,17 @@ function makeRepo(): MockRepo {
     applyPackageTemplate: jest.fn(),
     updatePackage: jest.fn(),
     removePackage: jest.fn(),
+    applyLineupTemplate: jest.fn(),
+    findChair: jest.fn(),
+    addChair: jest.fn(),
+    updateChair: jest.fn(),
+    deleteChair: jest.fn(),
+    findActiveMemberByContact: jest.fn(),
+    createMember: jest.fn(),
+    setChairMember: jest.fn(),
+    findMember: jest.fn(),
+    updateMember: jest.fn(),
+    removeMember: jest.fn(),
     update: jest.fn(),
     cancel: jest.fn(),
     findSet: jest.fn(),
@@ -178,6 +201,12 @@ function makeContacts(): MockContacts {
   return { assertOwned: jest.fn().mockResolvedValue(undefined) };
 }
 
+type MockLineups = { findOne: jest.Mock };
+
+function makeLineups(): MockLineups {
+  return { findOne: jest.fn() };
+}
+
 const booking = { id: 'b1', userId: 'u1', status: BookingStatus.CONFIRMED };
 const set = { id: 's1', bookingId: 'b1', userId: 'u1' };
 
@@ -192,6 +221,7 @@ function withNoContractOrMusicForm<T extends object>(raw: T) {
     hasMusicFormResponse: false,
     activeContract: null,
     portalVisibility: { contract: null, musicForm: null },
+    band: { chairs: [], members: [] },
   };
 }
 
@@ -221,6 +251,7 @@ describe('BookingsService', () => {
   let contractRepo: MockContractRepo;
   let musicFormRepo: MockMusicFormRepo;
   let contacts: MockContacts;
+  let lineups: MockLineups;
   let prisma: MockPrisma;
 
   beforeEach(() => {
@@ -233,6 +264,7 @@ describe('BookingsService', () => {
     contractRepo = makeContractRepo();
     musicFormRepo = makeMusicFormRepo();
     contacts = makeContacts();
+    lineups = makeLineups();
     prisma = makePrisma();
     service = new BookingsService(
       repo as unknown as BookingsRepository,
@@ -244,6 +276,7 @@ describe('BookingsService', () => {
       contractRepo as unknown as ContractRepository,
       musicFormRepo as unknown as MusicFormConfigRepository,
       contacts as unknown as ContactsService,
+      lineups as unknown as LineupsService,
       prisma as unknown as PrismaService,
     );
   });
@@ -593,6 +626,16 @@ describe('BookingsService', () => {
       expect(result).toMatchObject({ id: 'copy1', status: BookingStatus.CONFIRMED });
     });
 
+    // Copy Event does NOT carry the roster in this slice — #889 (tracking #879) owns that later.
+    // cloneBookingCore never creates BookingBandChair rows, so the cloned booking comes back with
+    // an empty band block via mapBooking's `bandChairs ?? []` fallback, not an undefined crash.
+    it('does not carry the band roster — the copy comes back with an empty band block', async () => {
+      repo.findOneForClone.mockResolvedValue(sourceForClone({ seriesId: null }));
+      repo.cloneBookingCore.mockResolvedValue({ ...newBooking, seriesId: null });
+      const result = await service.copyBooking('u1', 'src', { date: '2026-09-15' });
+      expect(result.band).toEqual({ chairs: [], members: [] });
+    });
+
     it('reseeds the checklist with completion + due dates reset against the new booking', async () => {
       repo.findOneForClone.mockResolvedValue(sourceForClone({ seriesId: null }));
       repo.cloneBookingCore.mockResolvedValue({ ...newBooking, seriesId: null });
@@ -931,6 +974,318 @@ describe('BookingsService', () => {
       repo.findBookingPackage.mockResolvedValue(null);
       await expect(service.updatePackage('u1', 'b1', 'pkg1', { label: 'X' })).rejects.toThrow(NotFoundException);
       expect(repo.updatePackage).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('applyLineupTemplate', () => {
+    const rawBooking = { ...booking, musicFormConfig: null, musicFormResponse: null, packages: [] };
+    const lineup = { id: 'lt1', label: 'My five-piece', slots: [{ id: 'ls1', role: 'Sax', order: 1 }] };
+
+    it('applies a lineup when booking and lineup both exist, package-less', async () => {
+      lineups.findOne.mockResolvedValue(lineup);
+      repo.applyLineupTemplate.mockResolvedValue(rawBooking);
+      await service.applyLineupTemplate('u1', 'b1', { lineupTemplateId: 'lt1' });
+      expect(lineups.findOne).toHaveBeenCalledWith('u1', 'lt1');
+      expect(repo.applyLineupTemplate).toHaveBeenCalledWith(
+        'u1',
+        'b1',
+        { label: 'My five-piece', slots: [{ role: 'Sax', order: 1 }] },
+        null,
+      );
+      expect(repo.findBookingPackage).not.toHaveBeenCalled();
+    });
+
+    it('proves package ownership before targeting it', async () => {
+      lineups.findOne.mockResolvedValue(lineup);
+      repo.findBookingPackage.mockResolvedValue({ id: 'pkg1', label: 'Evening', icon: 'music', order: 1 });
+      repo.applyLineupTemplate.mockResolvedValue(rawBooking);
+      await service.applyLineupTemplate('u1', 'b1', { lineupTemplateId: 'lt1', packageId: 'pkg1' });
+      expect(repo.findBookingPackage).toHaveBeenCalledWith('u1', 'b1', 'pkg1');
+      expect(repo.applyLineupTemplate).toHaveBeenCalledWith('u1', 'b1', expect.anything(), 'pkg1');
+    });
+
+    it('throws NotFoundException when the lineup template is not found (never touches a foreign tenant\'s lineup)', async () => {
+      lineups.findOne.mockResolvedValue(null);
+      await expect(service.applyLineupTemplate('u1', 'b1', { lineupTemplateId: 'bad-id' })).rejects.toThrow(NotFoundException);
+      expect(repo.applyLineupTemplate).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException when the targeted package is not found', async () => {
+      lineups.findOne.mockResolvedValue(lineup);
+      repo.findBookingPackage.mockResolvedValue(null);
+      await expect(
+        service.applyLineupTemplate('u1', 'b1', { lineupTemplateId: 'lt1', packageId: 'bad-pkg' }),
+      ).rejects.toThrow(NotFoundException);
+      expect(repo.applyLineupTemplate).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException when booking is not found', async () => {
+      repo.findForOwnership.mockResolvedValue(null);
+      await expect(service.applyLineupTemplate('u1', 'missing', { lineupTemplateId: 'lt1' })).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+  });
+
+  describe('addChair', () => {
+    const chair = { id: 'ch1', bookingId: 'b1', role: 'Sax', order: 1, packageId: null, memberId: null };
+
+    it('adds a chair when the booking exists, package-less', async () => {
+      repo.addChair.mockResolvedValue(chair);
+      const dto = { role: 'Sax', order: 1 };
+      const result = await service.addChair('u1', 'b1', dto);
+      expect(repo.addChair).toHaveBeenCalledWith('u1', 'b1', dto);
+      expect(repo.findBookingPackage).not.toHaveBeenCalled();
+      expect(result).toBe(chair);
+    });
+
+    it('proves package ownership before adding a chair targeting it', async () => {
+      repo.findBookingPackage.mockResolvedValue({ id: 'pkg1', label: 'Evening', icon: 'music', order: 1 });
+      repo.addChair.mockResolvedValue({ ...chair, packageId: 'pkg1' });
+      await service.addChair('u1', 'b1', { role: 'Sax', order: 1, packageId: 'pkg1' });
+      expect(repo.findBookingPackage).toHaveBeenCalledWith('u1', 'b1', 'pkg1');
+    });
+
+    it('throws NotFoundException when the targeted package is not found', async () => {
+      repo.findBookingPackage.mockResolvedValue(null);
+      await expect(
+        service.addChair('u1', 'b1', { role: 'Sax', order: 1, packageId: 'bad-pkg' }),
+      ).rejects.toThrow(NotFoundException);
+      expect(repo.addChair).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException without adding when booking is not found', async () => {
+      repo.findForOwnership.mockResolvedValue(null);
+      await expect(service.addChair('u1', 'missing', { role: 'Sax', order: 1 })).rejects.toThrow(NotFoundException);
+      expect(repo.addChair).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('updateChair', () => {
+    const chair = { id: 'ch1', bookingId: 'b1', role: 'Sax', order: 1, packageId: null, memberId: null };
+
+    it('updates a chair when booking and chair both exist', async () => {
+      repo.findChair.mockResolvedValue(chair);
+      repo.updateChair.mockResolvedValue({ ...chair, role: 'Trumpet' });
+      const result = await service.updateChair('u1', 'b1', 'ch1', { role: 'Trumpet' });
+      expect(repo.findChair).toHaveBeenCalledWith('u1', 'b1', 'ch1');
+      expect(repo.updateChair).toHaveBeenCalledWith('ch1', { role: 'Trumpet' });
+      expect(result).toEqual({ ...chair, role: 'Trumpet' });
+    });
+
+    it('throws NotFoundException when the chair is not found', async () => {
+      repo.findChair.mockResolvedValue(null);
+      await expect(service.updateChair('u1', 'b1', 'bad-id', { role: 'Trumpet' })).rejects.toThrow(NotFoundException);
+      expect(repo.updateChair).not.toHaveBeenCalled();
+    });
+
+    it('proves ownership of a re-parent target package before updating', async () => {
+      repo.findChair.mockResolvedValue(chair);
+      repo.findBookingPackage.mockResolvedValue(null);
+      await expect(
+        service.updateChair('u1', 'b1', 'ch1', { packageId: 'bad-pkg' }),
+      ).rejects.toThrow(NotFoundException);
+      expect(repo.updateChair).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('deleteChair', () => {
+    const chair = { id: 'ch1', bookingId: 'b1', role: 'Sax', order: 1, packageId: null, memberId: null };
+
+    it('deletes a chair when booking and chair both exist', async () => {
+      repo.findChair.mockResolvedValue(chair);
+      repo.deleteChair.mockResolvedValue(chair);
+      await service.deleteChair('u1', 'b1', 'ch1');
+      expect(repo.deleteChair).toHaveBeenCalledWith('ch1');
+    });
+
+    it('throws NotFoundException when the chair is not found', async () => {
+      repo.findChair.mockResolvedValue(null);
+      await expect(service.deleteChair('u1', 'b1', 'bad-id')).rejects.toThrow(NotFoundException);
+      expect(repo.deleteChair).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('assignChair (ADR-0072 §2, #885)', () => {
+    const chair = { id: 'ch1', bookingId: 'b1', role: 'Sax', order: 1, packageId: null, memberId: null };
+
+    it('reuses the contact\'s existing member row on this booking rather than creating a second one', async () => {
+      repo.findChair.mockResolvedValue(chair);
+      const existing = { id: 'm1', contactId: 'c1' };
+      repo.findActiveMemberByContact.mockResolvedValue(existing);
+      repo.setChairMember.mockResolvedValue({ ...chair, memberId: 'm1' });
+
+      await service.assignChair('u1', 'b1', 'ch1', { contactId: 'c1' });
+
+      expect(contacts.assertOwned).toHaveBeenCalledWith('u1', ['c1']);
+      expect(repo.findActiveMemberByContact).toHaveBeenCalledWith('u1', 'b1', 'c1');
+      expect(repo.createMember).not.toHaveBeenCalled();
+      expect(repo.setChairMember).toHaveBeenCalledWith('ch1', 'm1');
+    });
+
+    it('creates a member row on first assignment of a contact to this booking', async () => {
+      repo.findChair.mockResolvedValue(chair);
+      repo.findActiveMemberByContact.mockResolvedValue(null);
+      repo.createMember.mockResolvedValue({ id: 'm2', contactId: 'c2' });
+      repo.setChairMember.mockResolvedValue({ ...chair, memberId: 'm2' });
+
+      await service.assignChair('u1', 'b1', 'ch1', { contactId: 'c2' });
+
+      expect(repo.createMember).toHaveBeenCalledWith('u1', 'b1', 'c2');
+      expect(repo.setChairMember).toHaveBeenCalledWith('ch1', 'm2');
+    });
+
+    it('vacates the chair when contactId is null, without touching the member row', async () => {
+      repo.findChair.mockResolvedValue({ ...chair, memberId: 'm1' });
+      repo.setChairMember.mockResolvedValue({ ...chair, memberId: null });
+
+      await service.assignChair('u1', 'b1', 'ch1', { contactId: null });
+
+      expect(contacts.assertOwned).not.toHaveBeenCalled();
+      expect(repo.findActiveMemberByContact).not.toHaveBeenCalled();
+      expect(repo.setChairMember).toHaveBeenCalledWith('ch1', null);
+    });
+
+    it('throws NotFoundException when the chair is not found', async () => {
+      repo.findChair.mockResolvedValue(null);
+      await expect(service.assignChair('u1', 'b1', 'bad-id', { contactId: 'c1' })).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(repo.setChairMember).not.toHaveBeenCalled();
+    });
+
+    it('proves contact ownership before assigning', async () => {
+      repo.findChair.mockResolvedValue(chair);
+      contacts.assertOwned.mockRejectedValue(new NotFoundException('Contact not found'));
+      await expect(service.assignChair('u1', 'b1', 'ch1', { contactId: 'foreign' })).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(repo.setChairMember).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('updateBandMember (ADR-0072 §5, #885)', () => {
+    const member = { id: 'm1', bookingId: 'b1', contactId: 'c1', status: 'ADDED', invitedAt: null, respondedAt: null };
+
+    it('updates status, sessionFee, and isSelf', async () => {
+      repo.findMember.mockResolvedValue(member);
+      repo.updateMember.mockResolvedValue({ ...member, sessionFee: 150, isSelf: true });
+
+      await service.updateBandMember('u1', 'b1', 'm1', { sessionFee: 150, isSelf: true });
+
+      expect(repo.updateMember).toHaveBeenCalledWith('m1', { sessionFee: 150, isSelf: true });
+    });
+
+    // ADDED -> CONFIRMED is legal — confirming on someone's behalf must not fabricate an INVITED
+    // that never happened (ADR-0072 §5's decisive acceptance criterion).
+    it('allows ADDED -> CONFIRMED directly, stamping respondedAt but not invitedAt', async () => {
+      repo.findMember.mockResolvedValue(member);
+      repo.updateMember.mockResolvedValue({ ...member, status: 'CONFIRMED' });
+
+      await service.updateBandMember('u1', 'b1', 'm1', { status: 'CONFIRMED' });
+
+      const data = repo.updateMember.mock.calls[0][1];
+      expect(data.status).toBe('CONFIRMED');
+      expect(data.respondedAt).toBeInstanceOf(Date);
+      expect(data.invitedAt).toBeUndefined();
+    });
+
+    it('stamps invitedAt when the status transitions to INVITED', async () => {
+      repo.findMember.mockResolvedValue(member);
+      repo.updateMember.mockResolvedValue({ ...member, status: 'INVITED' });
+
+      await service.updateBandMember('u1', 'b1', 'm1', { status: 'INVITED' });
+
+      const data = repo.updateMember.mock.calls[0][1];
+      expect(data.invitedAt).toBeInstanceOf(Date);
+      expect(data.respondedAt).toBeUndefined();
+    });
+
+    it('stamps respondedAt when the status transitions to DECLINED', async () => {
+      repo.findMember.mockResolvedValue(member);
+      repo.updateMember.mockResolvedValue({ ...member, status: 'DECLINED' });
+
+      await service.updateBandMember('u1', 'b1', 'm1', { status: 'DECLINED' });
+
+      const data = repo.updateMember.mock.calls[0][1];
+      expect(data.respondedAt).toBeInstanceOf(Date);
+    });
+
+    it('throws NotFoundException when the member is not found', async () => {
+      repo.findMember.mockResolvedValue(null);
+      await expect(service.updateBandMember('u1', 'b1', 'bad-id', { status: 'CONFIRMED' })).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(repo.updateMember).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('removeBandMember (soft removal, ADR-0072 §5, #885)', () => {
+    const member = { id: 'm1', bookingId: 'b1', contactId: 'c1', status: 'CONFIRMED' };
+
+    it('removes the member when booking and member both exist', async () => {
+      repo.findMember.mockResolvedValue(member);
+      repo.removeMember.mockResolvedValue(undefined);
+      await service.removeBandMember('u1', 'b1', 'm1');
+      expect(repo.removeMember).toHaveBeenCalledWith('m1');
+    });
+
+    it('throws NotFoundException when the member is not found', async () => {
+      repo.findMember.mockResolvedValue(null);
+      await expect(service.removeBandMember('u1', 'b1', 'bad-id')).rejects.toThrow(NotFoundException);
+      expect(repo.removeMember).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('mapBooking band block (ADR-0072/0073 §6)', () => {
+    it('derives each chair\'s callTime from its segment\'s earliest set start time', async () => {
+      const raw = {
+        ...booking,
+        musicFormConfig: null,
+        musicFormResponse: null,
+        packages: [],
+        sets: [
+          { id: 's1', packageId: 'pkg1', startTime: '18:00', order: 1 },
+          { id: 's2', packageId: 'pkg1', startTime: '9:30', order: 2 },
+          { id: 's3', packageId: null, startTime: '17:00', order: 3 },
+        ],
+        bandChairs: [
+          { id: 'ch1', bookingId: 'b1', role: 'Sax', order: 1, packageId: 'pkg1', memberId: null },
+          { id: 'ch2', bookingId: 'b1', role: 'Drums', order: 2, packageId: null, memberId: null },
+          { id: 'ch3', bookingId: 'b1', role: 'Vocals', order: 3, packageId: 'pkg-no-sets', memberId: null },
+        ],
+      };
+      repo.findOne.mockResolvedValue(raw);
+      const result = await service.findOne('u1', 'b1');
+      // Earliest of 18:00/9:30 is 9:30 — a lexical string comparison would have picked 18:00.
+      expect(result.band.chairs.find((c) => c.id === 'ch1')?.callTime).toBe('9:30');
+      // Package-less chair reads the package-less (packageId: null) segment's earliest set.
+      expect(result.band.chairs.find((c) => c.id === 'ch2')?.callTime).toBe('17:00');
+      // A segment with no timed set (indeed no sets at all) leaves callTime absent, not zero.
+      expect(result.band.chairs.find((c) => c.id === 'ch3')?.callTime).toBeNull();
+    });
+
+    it('is an empty array when the booking has no chairs', async () => {
+      const raw = { ...booking, musicFormConfig: null, musicFormResponse: null, packages: [], sets: [], bandChairs: [] };
+      repo.findOne.mockResolvedValue(raw);
+      const result = await service.findOne('u1', 'b1');
+      expect(result.band).toEqual({ chairs: [], members: [] });
+    });
+
+    it('passes bandMembers straight through — removed rows are already excluded by the query', async () => {
+      const member = { id: 'm1', bookingId: 'b1', contactId: 'c1', status: 'CONFIRMED' };
+      const raw = {
+        ...booking,
+        musicFormConfig: null,
+        musicFormResponse: null,
+        packages: [],
+        sets: [],
+        bandChairs: [],
+        bandMembers: [member],
+      };
+      repo.findOne.mockResolvedValue(raw);
+      const result = await service.findOne('u1', 'b1');
+      expect(result.band.members).toEqual([member]);
     });
   });
 

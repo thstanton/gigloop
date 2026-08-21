@@ -16,6 +16,10 @@ import {
 import { FormField } from '@/components/common/FormField';
 import { AddressAutocomplete } from '@/components/common/AddressAutocomplete';
 import { VenuePlaceSearch, type VenuePlaceValue } from '@/components/common/VenuePlaceSearch';
+import { InstrumentsInput } from './InstrumentsInput';
+import { isEnabled } from '@/lib/featureFlags';
+import { useDatalistId } from '@/lib/hooks/useDatalistId';
+import { PRIMARY_ROLE_LABELS, PRIMARY_ROLE_ORDER } from '@/lib/constants';
 import type { Contact, CreateContactInput, UpdateContactInput } from '@/types/api';
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
@@ -40,10 +44,25 @@ const schema = z.object({
   accessInfo: z.string(),
   equipmentAvailable: z.string(),
   commissionArrangement: z.string(),
-  primaryRole: z.enum(['CUSTOMER', 'VENUE', 'BOOKING_AGENT', '']),
+  primaryRole: z.enum(['CUSTOMER', 'VENUE', 'BOOKING_AGENT', 'BAND_MEMBER', '']),
+  primaryBandRole: z.string(),
+  instruments: z.array(z.string()),
+  travelNotes: z.string(),
+  equipmentNotes: z.string(),
+  outfitNotes: z.string(),
+  availabilityNotes: z.string(),
 });
 
 export type ContactFormValues = z.infer<typeof schema>;
+
+// The four freeform dep-notes fields (#886) — identical FormField+Textarea shape, differing only
+// in field name and label.
+const BAND_NOTES_FIELDS: { name: 'travelNotes' | 'equipmentNotes' | 'outfitNotes' | 'availabilityNotes'; label: string }[] = [
+  { name: 'travelNotes', label: 'Travel notes' },
+  { name: 'equipmentNotes', label: 'Equipment notes' },
+  { name: 'outfitNotes', label: 'Outfit notes' },
+  { name: 'availabilityNotes', label: 'Availability notes' },
+];
 
 export function toContactPayload(
   values: ContactFormValues,
@@ -69,6 +88,12 @@ export function toContactPayload(
     equipmentAvailable: values.equipmentAvailable || null,
     commissionArrangement: values.commissionArrangement || null,
     primaryRole: values.primaryRole || null,
+    primaryBandRole: values.primaryBandRole || null,
+    instruments: values.instruments,
+    travelNotes: values.travelNotes || null,
+    equipmentNotes: values.equipmentNotes || null,
+    outfitNotes: values.outfitNotes || null,
+    availabilityNotes: values.availabilityNotes || null,
   };
 }
 
@@ -94,12 +119,18 @@ export function contactToFormValues(c: Contact): ContactFormValues {
     equipmentAvailable: c.equipmentAvailable ?? '',
     commissionArrangement: c.commissionArrangement ?? '',
     primaryRole: (c.primaryRole as ContactFormValues['primaryRole']) ?? '',
+    primaryBandRole: c.primaryBandRole ?? '',
+    instruments: c.instruments,
+    travelNotes: c.travelNotes ?? '',
+    equipmentNotes: c.equipmentNotes ?? '',
+    outfitNotes: c.outfitNotes ?? '',
+    availabilityNotes: c.availabilityNotes ?? '',
   };
 }
 
 // ─── Form ─────────────────────────────────────────────────────────────────────
 
-type RoleKey = 'CUSTOMER' | 'VENUE' | 'BOOKING_AGENT';
+type RoleKey = 'CUSTOMER' | 'VENUE' | 'BOOKING_AGENT' | 'BAND_MEMBER';
 
 interface ContactFormProps {
   defaultValues?: ContactFormValues;
@@ -125,6 +156,13 @@ interface ContactFormProps {
    * the change signal #762 needs and ContactForm previously didn't expose.
    */
   onDirtyChange?: (dirty: boolean) => void;
+  /**
+   * Type-ahead suggestions for the band member's identity/instruments fields (#886,
+   * ADR-0072 §3/§4) — every role used in an existing lineup slot, plus every contact's declared
+   * instruments and primaryBandRole. Presentational: the container fetches via
+   * `useRoleVocabulary()` and passes the result down, so ContactForm itself ships no fetch.
+   */
+  roleVocabulary?: string[];
 }
 
 export default function ContactForm({
@@ -139,6 +177,7 @@ export default function ContactForm({
   embedded = false,
   saved = false,
   onDirtyChange,
+  roleVocabulary = [],
 }: ContactFormProps) {
   const {
     register,
@@ -155,8 +194,12 @@ export default function ContactForm({
       postcode: '', country: 'GB', latitude: null, longitude: null, placeId: null,
       notes: '', parkingInfo: '', accessInfo: '', equipmentAvailable: '',
       commissionArrangement: '', primaryRole: contextRole ?? '',
+      primaryBandRole: '', instruments: [], travelNotes: '', equipmentNotes: '',
+      outfitNotes: '', availabilityNotes: '',
     },
   });
+
+  const bandRoleDatalistId = useDatalistId();
 
   // Surface dirty transitions to a container (saved-clear + discard-confirm). Gated on isDirty so
   // it fires on change, not every render; on mount reports the clean baseline (false).
@@ -217,17 +260,23 @@ export default function ContactForm({
   const embeddedRole = contextRole ?? selectedRole;
   const isVenue = embedded ? embeddedRole === 'VENUE' : selectedRole === 'VENUE';
   const isAgent = embedded ? embeddedRole === 'BOOKING_AGENT' : selectedRole === 'BOOKING_AGENT';
+  // Band roster ships dark behind VITE_FEATURE_BAND_MEMBERS (#879) — nothing band-related is
+  // reachable with the flag off.
+  const bandMembersEnabled = isEnabled('VITE_FEATURE_BAND_MEMBERS');
+  const isBandMember = bandMembersEnabled && (embedded ? embeddedRole === 'BAND_MEMBER' : selectedRole === 'BAND_MEMBER');
   const [venueOpen, setVenueOpen] = useState(isVenue);
   const [agentOpen, setAgentOpen] = useState(isAgent);
+  const [bandOpen, setBandOpen] = useState(isBandMember);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const prevRoleRef = useRef(selectedRole);
 
-  // When Contact Type changes, auto-open the matching disclosure and close the other.
+  // When Contact Type changes, auto-open the matching disclosure and close the others.
   useEffect(() => {
     if (prevRoleRef.current === selectedRole) return;
     prevRoleRef.current = selectedRole;
     setVenueOpen(selectedRole === 'VENUE');
     setAgentOpen(selectedRole === 'BOOKING_AGENT');
+    setBandOpen(selectedRole === 'BAND_MEMBER');
   }, [selectedRole]);
 
   // Field fragments — placed differently by mode. In embedded mode Address/Notes and
@@ -280,6 +329,35 @@ export default function ContactForm({
     </div>
   );
 
+  // Band roster — dep profile (#886, ADR-0072 §4). All six fields are shared-with-band, not
+  // organiser-private commentary (that stays in the Notes field above).
+  const bandFieldsContent = (
+    <div className="space-y-4">
+      <FormField label="Identity — the instrument they're known for" error={errors.primaryBandRole?.message}>
+        <Input {...register('primaryBandRole')} placeholder="e.g. Saxophone" list={bandRoleDatalistId} />
+      </FormField>
+      <datalist id={bandRoleDatalistId}>
+        {roleVocabulary.map((role) => (
+          <option key={role} value={role} />
+        ))}
+      </datalist>
+      <FormField label="Declared instruments — everything they can cover">
+        <Controller
+          name="instruments"
+          control={control}
+          render={({ field }) => (
+            <InstrumentsInput value={field.value} onChange={field.onChange} vocabulary={roleVocabulary} />
+          )}
+        />
+      </FormField>
+      {BAND_NOTES_FIELDS.map(({ name, label }) => (
+        <FormField key={name} label={label} error={errors[name]?.message}>
+          <Textarea {...register(name)} rows={2} />
+        </FormField>
+      ))}
+    </div>
+  );
+
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
 
@@ -297,9 +375,11 @@ export default function ContactForm({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="NONE">No contact type</SelectItem>
-                  <SelectItem value="CUSTOMER">Customer</SelectItem>
-                  <SelectItem value="VENUE">Venue</SelectItem>
-                  <SelectItem value="BOOKING_AGENT">Booking agent</SelectItem>
+                  {PRIMARY_ROLE_ORDER
+                    .filter((role) => role !== 'BAND_MEMBER' || bandMembersEnabled)
+                    .map((role) => (
+                      <SelectItem key={role} value={role}>{PRIMARY_ROLE_LABELS[role]}</SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             )}
@@ -351,6 +431,7 @@ export default function ContactForm({
               {notesField}
               {isVenue && venueFieldsContent}
               {isAgent && agentFieldsContent}
+              {isBandMember && bandFieldsContent}
             </div>
           )}
         </div>
@@ -387,6 +468,24 @@ export default function ContactForm({
             </button>
             {agentOpen && agentFieldsContent}
           </div>
+
+          {/* Band roster — dep profile fields (#886). Ships dark behind VITE_FEATURE_BAND_MEMBERS. */}
+          {bandMembersEnabled && (
+            <div className="space-y-4">
+              <button
+                type="button"
+                onClick={() => setBandOpen((o) => !o)}
+                className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {bandOpen ? (
+                  <><ChevronUp className="h-4 w-4" aria-hidden="true" />Hide band member fields</>
+                ) : (
+                  <><ChevronDown className="h-4 w-4" aria-hidden="true" />Show band member fields</>
+                )}
+              </button>
+              {bandOpen && bandFieldsContent}
+            </div>
+          )}
         </>
       )}
 

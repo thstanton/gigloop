@@ -94,6 +94,7 @@ const booking = {
   seriesId: 'ser1',
   hasMusicFormConfig: false,
   activeContract: null,
+  band: { chairs: [], members: [] },
 };
 
 // Routes the container's reads by path, so the test exercises the real wiring rather than a

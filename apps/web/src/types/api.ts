@@ -67,6 +67,13 @@ export interface Contact {
   website: string | null;
   commissionArrangement: string | null;
   primaryRole: string | null;
+  // Band roster — dep profile (#886, ADR-0072 §4). Shared-with-band, not organiser-private.
+  primaryBandRole: string | null;
+  instruments: string[];
+  travelNotes: string | null;
+  equipmentNotes: string | null;
+  outfitNotes: string | null;
+  availabilityNotes: string | null;
 }
 
 export interface BookingRef {
@@ -81,6 +88,9 @@ export interface ContactDetail extends Contact {
   customerBookings: BookingRef[];
   venueBookings: BookingRef[];
   bookingAgentBookings: BookingRef[];
+  /** Every BookingBandMember row for this contact, removed ones included (#886) — a contact on a
+   *  roster and on no bookings still blocks deletion. */
+  bandMemberCount: number;
 }
 
 export interface CreateContactInput {
@@ -104,6 +114,12 @@ export interface CreateContactInput {
   website?: string;
   commissionArrangement?: string;
   primaryRole?: string | null;
+  primaryBandRole?: string;
+  instruments?: string[];
+  travelNotes?: string;
+  equipmentNotes?: string;
+  outfitNotes?: string;
+  availabilityNotes?: string;
 }
 
 export interface UpdateContactInput {
@@ -127,6 +143,12 @@ export interface UpdateContactInput {
   website?: string | null;
   commissionArrangement?: string | null;
   primaryRole?: string | null;
+  primaryBandRole?: string | null;
+  instruments?: string[];
+  travelNotes?: string | null;
+  equipmentNotes?: string | null;
+  outfitNotes?: string | null;
+  availabilityNotes?: string | null;
 }
 
 // ─────────────────────────────────────────
@@ -168,6 +190,46 @@ export interface BookingPackageSummary {
   order: number;
   label: string;
   icon: string;
+}
+
+// A seat in a segment (ADR-0072 §2, #884). A vacancy is `memberId = null`, a first-class thing the
+// musician looks at, not an absence — assignment (#885) never creates or destroys a chair row, it
+// sets this field. `callTime` is derived server-side from the segment's earliest
+// PerformanceSet.startTime; absent (null), not zero, when that segment has no start time.
+export interface BookingBandChair {
+  id: string;
+  role: string;
+  order: number;
+  packageId: string | null;
+  memberId: string | null;
+  callTime: string | null;
+}
+
+// ADR-0072 §5: ADDED -> INVITED -> CONFIRMED | DECLINED. ADDED -> CONFIRMED is legal — confirming
+// on someone's behalf must not fabricate an INVITED that never happened. Declared once in
+// lib/constants.ts (BAND_MEMBER_STATUSES) with a compile-time coverage check against this union.
+export type BookingBandMemberStatus = 'ADDED' | 'INVITED' | 'CONFIRMED' | 'DECLINED';
+
+// A person on this gig (ADR-0072 §2/§5, #885) — reused across every chair the same contact fills,
+// so one member row carries one token, one fee, one confirmation however many segments they play.
+// Removed members never reach this shape — the booking response excludes them entirely.
+export interface BookingBandMember {
+  id: string;
+  contactId: string;
+  contact: ContactSummary;
+  bandPortalToken: string;
+  status: BookingBandMemberStatus;
+  /** Marks this member as the musician themself (ADR-0072 §3) — optional, does not fill a chair on its own. */
+  isSelf: boolean;
+  sessionFee: string | null; // Decimal serialises as string over JSON
+  invitedAt: string | null;
+  respondedAt: string | null;
+}
+
+// The band roster (ADR-0072/0073 §6): chairs (seats) and members (people), removed members excluded.
+export interface BookingBand {
+  chairs: BookingBandChair[];
+  members: BookingBandMember[];
 }
 
 export interface KeyMoment {
@@ -351,6 +413,7 @@ export interface BookingDetail extends Omit<BookingListItem, 'customer' | 'venue
   // Per-concern portal-visibility verdicts, computed by the single backend authority (ADR-0054).
   // A null verdict means the concern is not a live portal concern (no contract yet / music form off).
   portalVisibility: BookingPortalVisibility;
+  band: BookingBand;
 }
 
 // Portal-visibility verdict (ADR-0054). The API returns a stable ReasonCode, never English —
@@ -579,6 +642,8 @@ export interface PackageTemplate {
   notes: string | null;
   isSystemDefault: boolean;
   enabled: boolean;
+  // Band members v1 (#879, ADR-0072 §3): applying this package auto-applies this lineup, if set.
+  defaultLineupTemplateId: string | null;
   slots: PackageTemplateSlot[];
 }
 
@@ -616,6 +681,7 @@ export interface CreatePackageInput {
   keyMoments?: string[];
   defaultGenreSelection?: string[];
   enabled?: boolean;
+  defaultLineupTemplateId?: string;
   slots?: SlotInput[];
 }
 
@@ -627,7 +693,42 @@ export interface UpdatePackageInput {
   keyMoments?: string[];
   defaultGenreSelection?: string[];
   enabled?: boolean;
+  defaultLineupTemplateId?: string | null;
   slots?: SlotInput[];
+}
+
+// ─────────────────────────────────────────
+// Lineup Templates (band members v1, #879, ADR-0072)
+// ─────────────────────────────────────────
+
+export interface LineupTemplateSlot {
+  id: string;
+  role: string;
+  order: number;
+}
+
+export interface LineupTemplate {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  label: string;
+  slots: LineupTemplateSlot[];
+}
+
+export interface LineupSlotInput {
+  id?: string;
+  role: string;
+  order: number;
+}
+
+export interface CreateLineupInput {
+  label: string;
+  slots?: LineupSlotInput[];
+}
+
+export interface UpdateLineupInput {
+  label?: string;
+  slots?: LineupSlotInput[];
 }
 
 // ─────────────────────────────────────────

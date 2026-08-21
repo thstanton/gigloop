@@ -53,6 +53,7 @@ const { CREATED_TEMPLATE } = vi.hoisted(() => ({
     notes: null,
     isSystemDefault: false,
     enabled: true,
+    defaultLineupTemplateId: null,
     createdAt: '2030-01-01T00:00:00Z',
     updatedAt: '2030-01-01T00:00:00Z',
   },

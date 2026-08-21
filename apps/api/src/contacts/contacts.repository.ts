@@ -40,6 +40,10 @@ export class ContactsRepository {
     });
   }
 
+  // `_count.bandMemberships` has no `where` — it must match `countDeletionBlockers`'s
+  // unconditional count below (every roster row blocks deletion, `removedAt` irrelevant, since
+  // its FK to Contact is `onDelete: Restrict` regardless). A filtered count here would let the
+  // preventive delete UI enable a button the API then rejects.
   findOne(userId: string, id: string) {
     return this.prisma.contact.findFirst({
       where: { id, userId },
@@ -47,6 +51,7 @@ export class ContactsRepository {
         customerBookings: CONTACT_BOOKING_REF,
         venueBookings: CONTACT_BOOKING_REF,
         bookingAgentBookings: CONTACT_BOOKING_REF,
+        _count: { select: { bandMemberships: true } },
       },
     });
   }
@@ -89,13 +94,26 @@ export class ContactsRepository {
     });
   }
 
-  async countBookings(userId: string, id: string): Promise<number> {
-    return this.prisma.booking.count({
-      where: {
-        userId,
-        OR: [{ customerId: id }, { venueId: id }, { bookingAgentId: id }],
-      },
-    });
+  // Roster rows join the three existing FKs that block contact deletion (ADR-0072 §1): a contact
+  // who is only on a booking's band roster still cannot be deleted. Kept as two counts (not
+  // summed) so the service can build a 409 message that names which kind of association blocks
+  // the delete (#886). Every `BookingBandMember` row counts, removed ones included — its FK to
+  // Contact is `onDelete: Restrict` regardless of `removedAt`, so the DB would reject the delete
+  // either way; this keeps the friendly 409 in front of that.
+  async countDeletionBlockers(
+    userId: string,
+    id: string,
+  ): Promise<{ bookingCount: number; bandRosterCount: number }> {
+    const [bookingCount, bandRosterCount] = await Promise.all([
+      this.prisma.booking.count({
+        where: {
+          userId,
+          OR: [{ customerId: id }, { venueId: id }, { bookingAgentId: id }],
+        },
+      }),
+      this.prisma.bookingBandMember.count({ where: { userId, contactId: id } }),
+    ]);
+    return { bookingCount, bandRosterCount };
   }
 
   // The IDs of bookings this contact is the CUSTOMER of — the bookings whose checklist email

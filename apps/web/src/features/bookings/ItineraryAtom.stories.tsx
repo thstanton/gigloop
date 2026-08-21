@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import { ItineraryAtom } from './ItineraryAtom';
+import { packageTemplate } from '@/test/factories';
 import type { BookingPackageSummary, PackageTemplate, PerformanceSet } from '@/types/api';
 
 // The Itinerary atom is presentational: it owns no mutation and no fetch. The host passes the
@@ -16,14 +17,8 @@ const sets: PerformanceSet[] = [
 ];
 
 const templates: PackageTemplate[] = [
-  {
-    id: 'tmpl-wedding', createdAt: '', updatedAt: '', label: 'Wedding set', category: 'WEDDING', icon: 'heart',
-    keyMoments: [], defaultGenreSelection: [], notes: null, isSystemDefault: false, enabled: true, slots: [],
-  },
-  {
-    id: 'tmpl-corporate', createdAt: '', updatedAt: '', label: 'Corporate set', category: 'CORPORATE', icon: 'briefcase',
-    keyMoments: [], defaultGenreSelection: [], notes: null, isSystemDefault: false, enabled: true, slots: [],
-  },
+  packageTemplate({ id: 'tmpl-wedding', label: 'Wedding set', category: 'WEDDING', icon: 'heart', slots: [] }),
+  packageTemplate({ id: 'tmpl-corporate', label: 'Corporate set', category: 'CORPORATE', icon: 'briefcase', slots: [] }),
 ];
 
 const meta = {

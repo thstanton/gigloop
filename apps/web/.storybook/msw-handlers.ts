@@ -28,6 +28,12 @@ const contacts = [
     accessInfo: 'Stage entrance on Ambassadors Court. Security desk staffed from 14:00.',
     equipmentAvailable: 'Grand piano, full PA system, LED lighting rig.',
     commissionArrangement: null,
+    primaryBandRole: null,
+    instruments: [],
+    travelNotes: null,
+    equipmentNotes: null,
+    outfitNotes: null,
+    availabilityNotes: null,
     createdAt: '2024-01-15T10:00:00Z',
     updatedAt: '2024-01-15T10:00:00Z',
   },
@@ -58,6 +64,12 @@ const contacts = [
     accessInfo: null,
     equipmentAvailable: null,
     commissionArrangement: null,
+    primaryBandRole: null,
+    instruments: [],
+    travelNotes: null,
+    equipmentNotes: null,
+    outfitNotes: null,
+    availabilityNotes: null,
     createdAt: '2024-02-01T09:00:00Z',
     updatedAt: '2024-02-01T09:00:00Z',
   },
@@ -88,6 +100,12 @@ const contacts = [
     accessInfo: null,
     equipmentAvailable: null,
     commissionArrangement: '15%',
+    primaryBandRole: null,
+    instruments: [],
+    travelNotes: null,
+    equipmentNotes: null,
+    outfitNotes: null,
+    availabilityNotes: null,
     createdAt: '2024-03-10T14:00:00Z',
     updatedAt: '2024-03-10T14:00:00Z',
   },
@@ -198,6 +216,18 @@ const packageCatalogue = [
   },
 ];
 
+// Band members v1 (#879, ADR-0072 §3).
+const lineups = [
+  {
+    id: 'lineup1', createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z',
+    label: 'My five-piece',
+    slots: [
+      { id: 'lsl1', role: 'Saxophone', order: 0 },
+      { id: 'lsl2', role: 'Drums', order: 1 },
+    ],
+  },
+];
+
 const templates = [
   {
     id: 't1', createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z',
@@ -249,6 +279,7 @@ const baseDetail = {
   seriesId: null, series: null,
   logistics: null,
   portalVisibility: { contract: null, musicForm: null },
+  band: { chairs: [] },
 };
 
 const sentContract = {
@@ -512,6 +543,16 @@ export const mswHandlers = {
       );
     }),
   ],
+  lineups: [
+    http.get('/api/lineups', () => HttpResponse.json(lineups)),
+    http.post('/api/lineups', async ({ request }) => {
+      const body = (await request.json()) as Record<string, unknown>;
+      return HttpResponse.json(
+        { id: 'new-lineup', createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z', ...body },
+        { status: 201 },
+      );
+    }),
+  ],
   templates: [
     http.get('/api/templates', () => HttpResponse.json(templates)),
   ],
@@ -523,6 +564,7 @@ export const allHandlers = [
   ...mswHandlers.songs,
   ...mswHandlers.dashboard,
   ...mswHandlers.packages,
+  ...mswHandlers.lineups,
   ...mswHandlers.templates,
   ...mswHandlers.me,
 ];

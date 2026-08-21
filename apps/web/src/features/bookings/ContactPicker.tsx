@@ -1,4 +1,4 @@
-import { useState, useRef, useId } from 'react';
+import { useState, useRef, useId, useMemo } from 'react';
 import { Search, X, ChevronDown, Plus } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -11,9 +11,11 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import ContactForm, { toContactPayload } from '@/features/contacts/ContactForm';
 import type { ContactFormValues } from '@/features/contacts/ContactForm';
 import { useContacts } from '@/lib/hooks/useContacts';
+import { useRoleVocabulary } from '@/lib/hooks/useRoleVocabulary';
 import { apiPost } from '@/lib/api';
 import type { Contact } from '@/types/api';
 import { cn } from '@/lib/utils';
+import { rankContactsForChair, type GeoPoint } from '@/lib/bandMatch';
 
 interface ContactPickerProps {
   value: string | null;
@@ -21,6 +23,14 @@ interface ContactPickerProps {
   placeholder?: string;
   label?: string;
   preferredRole?: string;
+  /**
+   * Fill-a-chair mode (#886, ADR-0072 §4): ranks contacts by soft role/instrument match against
+   * this chair's free-text role, then by haversine distance to `venue` when both have
+   * coordinates. Takes over from `preferredRole`'s exact-match sort when set.
+   */
+  chairRole?: string;
+  /** The booking's venue, for chair-fill proximity ranking. Missing coordinates degrade silently. */
+  venue?: GeoPoint | null;
   disabled?: boolean;
   disableCreate?: boolean;
 }
@@ -31,6 +41,8 @@ export default function ContactPicker({
   placeholder = 'Select contact...',
   label = 'contact',
   preferredRole,
+  chairRole,
+  venue,
   disabled = false,
   disableCreate = false,
 }: ContactPickerProps) {
@@ -43,24 +55,26 @@ export default function ContactPicker({
   const listRef = useRef<HTMLDivElement>(null);
 
   const { data: contacts = [] } = useContacts();
+  const roleVocabulary = useRoleVocabulary();
   const queryClient = useQueryClient();
 
   const selected = contacts.find((c) => c.id === value) ?? null;
 
-  const sortByRole = (list: Contact[]) => {
-    if (!preferredRole) return list;
-    return [...list].sort((a, b) => {
+  // Every vacant chair on a booking mounts its own ContactPicker, each ranking the full contacts
+  // list independently (haversine + soft-match in rankContactsForChair) — memoized so that
+  // re-renders unrelated to search/contacts/ranking inputs don't redo the sort (#886).
+  const filtered = useMemo(() => {
+    const searched = search
+      ? contacts.filter((c) => c.name.toLowerCase().includes(search.toLowerCase()))
+      : contacts;
+    if (chairRole !== undefined) return rankContactsForChair(searched, chairRole, venue);
+    if (!preferredRole) return searched;
+    return [...searched].sort((a, b) => {
       const aMatch = a.primaryRole === preferredRole ? 0 : 1;
       const bMatch = b.primaryRole === preferredRole ? 0 : 1;
       return aMatch - bMatch;
     });
-  };
-
-  const filtered = sortByRole(
-    search
-      ? contacts.filter((c) => c.name.toLowerCase().includes(search.toLowerCase()))
-      : contacts,
-  );
+  }, [contacts, search, chairRole, venue, preferredRole]);
 
   const hasExactMatch = contacts.some(
     (c) => c.name.toLowerCase() === search.toLowerCase()
@@ -246,10 +260,13 @@ export default function ContactPicker({
                 postcode: '', country: 'GB', latitude: null, longitude: null, placeId: null,
                 notes: '', parkingInfo: '',
                 accessInfo: '', equipmentAvailable: '', commissionArrangement: '', primaryRole: '',
+                primaryBandRole: '', instruments: [], travelNotes: '', equipmentNotes: '',
+                outfitNotes: '', availabilityNotes: '',
               }}
               onSubmit={(values) => createMutation.mutate(values)}
               isPending={createMutation.isPending}
               isError={createMutation.isError}
+              roleVocabulary={roleVocabulary}
               submitLabel="Create"
               onCancel={() => setCreateOpen(false)}
               autoSuggestGreetingName

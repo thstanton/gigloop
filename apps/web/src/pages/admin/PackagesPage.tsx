@@ -4,15 +4,22 @@ import { useAuth } from '@clerk/react';
 import { Music } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { apiGet, apiPatch } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
+import { isEnabled } from '@/lib/featureFlags';
 import { PACKAGE_CATEGORY_LABELS, PACKAGE_CATEGORY_ORDER } from '@/lib/constants';
-import type { PackageTemplate, UpdatePackageInput } from '@/types/api';
+import type { LineupTemplate, PackageTemplate, UpdatePackageInput } from '@/types/api';
 import { Card } from '@/components/common/Card';
 import { EmptyState } from '@/components/common/EmptyState';
+import { PageSection } from '@/components/common/PageSection';
 import { PackageIcon } from '@/components/common/PackageIcon';
 import { PackageMusicSummary } from '@/features/packages/PackageMusicSummary';
 import { PackageDrawer, type PackageDrawerMode } from '@/features/packages/PackageDrawer';
+import { LineupList } from '@/features/packages/LineupList';
+import { LineupDrawer, type LineupDrawerMode } from '@/features/packages/LineupDrawer';
+
+const BAND_MEMBERS_FLAG = 'VITE_FEATURE_BAND_MEMBERS';
 
 // ─── Package card ─────────────────────────────────────────────────────────────
 
@@ -109,11 +116,51 @@ function CategoryGroup({
   );
 }
 
+// ─── Lineups tab ────────────────────────────────────────────────────────────
+
+function LineupsTab() {
+  const { isLoaded } = useAuth();
+  const [drawerMode, setDrawerMode] = useState<LineupDrawerMode | null>(null);
+
+  const { data: lineups = [], isLoading } = useQuery({
+    queryKey: ['lineups'],
+    queryFn: () => apiGet<LineupTemplate[]>('/lineups'),
+    enabled: isLoaded,
+  });
+
+  return (
+    <div className="space-y-6">
+      <PageSection title="Lineups">
+        <Button onClick={() => setDrawerMode({ type: 'create' })}>+ New lineup</Button>
+      </PageSection>
+
+      {isLoading ? (
+        <div className="space-y-3">
+          {[1, 2].map((i) => (
+            <div key={i} className="h-24 bg-surface rounded-lg animate-pulse" />
+          ))}
+        </div>
+      ) : (
+        <LineupList
+          lineups={lineups}
+          onEdit={(lineup) => setDrawerMode({ type: 'edit', lineup })}
+          onCreate={() => setDrawerMode({ type: 'create' })}
+        />
+      )}
+
+      {drawerMode && (
+        <LineupDrawer mode={drawerMode} open={drawerMode != null} onClose={() => setDrawerMode(null)} />
+      )}
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function PackagesPage() {
   const { isLoaded } = useAuth();
   const [drawerMode, setDrawerMode] = useState<PackageDrawerMode | null>(null);
+  const bandMembersEnabled = isEnabled(BAND_MEMBERS_FLAG);
 
   const { data: packages = [], isLoading } = useQuery({
     queryKey: ['packages'],
@@ -127,8 +174,8 @@ export default function PackagesPage() {
   }, {});
   const uncategorised = packages.filter((p) => !p.category);
 
-  return (
-    <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
+  const packagesPanel = (
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-foreground">Package Templates</h1>
         <Button onClick={() => setDrawerMode({ type: 'create' })}>+ New package</Button>
@@ -167,6 +214,23 @@ export default function PackagesPage() {
             onEdit={(pkg) => setDrawerMode({ type: 'edit', pkg })}
           />
         </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
+      {bandMembersEnabled ? (
+        <Tabs defaultValue="packages">
+          <TabsList>
+            <TabsTrigger value="packages">Packages</TabsTrigger>
+            <TabsTrigger value="lineups">Lineups</TabsTrigger>
+          </TabsList>
+          <TabsContent value="packages" className="pt-4">{packagesPanel}</TabsContent>
+          <TabsContent value="lineups" className="pt-4"><LineupsTab /></TabsContent>
+        </Tabs>
+      ) : (
+        packagesPanel
       )}
 
       {drawerMode && (

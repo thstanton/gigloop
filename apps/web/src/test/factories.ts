@@ -4,7 +4,7 @@
 // other 10 per fixture meant four independent literals that all had to be edited whenever the type
 // gained a required field — and they had already drifted apart. One factory, overrides for what the
 // test is actually about.
-import type { PackageTemplate } from '@/types/api';
+import type { BookingBandMember, LineupTemplate, PackageTemplate } from '@/types/api';
 
 export function packageTemplate(
   over: Partial<PackageTemplate> & { id: string; label: string },
@@ -19,7 +19,33 @@ export function packageTemplate(
     notes: null,
     isSystemDefault: false,
     enabled: true,
+    defaultLineupTemplateId: null,
     slots: [{ id: `${over.id}-s1`, label: 'Set 1', duration: 45, order: 0 }],
+    ...over,
+  };
+}
+
+export function lineupTemplate(
+  over: Partial<LineupTemplate> & { id: string; label: string },
+): LineupTemplate {
+  return {
+    createdAt: '2030-01-01T00:00:00Z',
+    updatedAt: '2030-01-01T00:00:00Z',
+    slots: [{ id: `${over.id}-s1`, role: 'Vocals', order: 0 }],
+    ...over,
+  };
+}
+
+export function bandMember(
+  over: Partial<BookingBandMember> & { id: string; contactId: string; contact: BookingBandMember['contact'] },
+): BookingBandMember {
+  return {
+    bandPortalToken: `${over.id}-token`,
+    status: 'ADDED',
+    isSelf: false,
+    sessionFee: null,
+    invitedAt: null,
+    respondedAt: null,
     ...over,
   };
 }

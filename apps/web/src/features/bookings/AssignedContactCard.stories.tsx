@@ -31,6 +31,12 @@ const customer: Contact = {
   website: '',
   commissionArrangement: '',
   primaryRole: 'CUSTOMER',
+  primaryBandRole: null,
+  instruments: [],
+  travelNotes: null,
+  equipmentNotes: null,
+  outfitNotes: null,
+  availabilityNotes: null,
 };
 
 const venue: Contact = {

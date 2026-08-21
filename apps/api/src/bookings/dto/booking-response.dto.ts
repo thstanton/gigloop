@@ -8,6 +8,7 @@ import {
   type ContractStatus,
   type PortalVisibilityReason,
 } from '../../portal/portal-visibility';
+import { BAND_MEMBER_STATUSES, type BandMemberStatus } from '../band-member-status';
 
 // The wire shape of a single booking, as constructed by `BookingsService.mapBooking` — the one
 // place every read and write method builds this shape (ADR-0071 / #872). `mapBooking` carries a
@@ -138,6 +139,96 @@ export class BookingSeriesRefDto {
   @ApiProperty() label: string;
 }
 
+// A seat in a segment (ADR-0072 §2 / #884). `memberId` is nullable throughout Band members v1's
+// first slice — a vacancy is `memberId = null`, a first-class thing the musician looks at, not an
+// absence. `callTime` is derived (never stored) from the earliest `PerformanceSet.startTime` in
+// this chair's segment (`packageId`), and is absent — not zero, not a placeholder — when that
+// segment has no start time.
+export class BookingBandChairDto {
+  @ApiProperty() id: string;
+  @ApiProperty({ description: 'ISO 8601 timestamp' }) createdAt: string;
+  @ApiProperty({ description: 'ISO 8601 timestamp' }) updatedAt: string;
+  @ApiProperty() bookingId: string;
+
+  @ApiProperty() role: string;
+  @ApiProperty({ description: 'Position among this booking\'s chairs (ascending).' }) order: number;
+
+  @ApiProperty({
+    nullable: true,
+    type: String,
+    description: 'Owning booking-level Package (segment); null for a package-less chair.',
+  })
+  packageId: string | null;
+
+  @ApiProperty({ nullable: true, type: String, description: 'Null = vacant.' })
+  memberId: string | null;
+
+  @ApiProperty({
+    nullable: true,
+    type: String,
+    description: 'Derived from the segment\'s earliest PerformanceSet.startTime (HH:mm); null when unset.',
+  })
+  callTime: string | null;
+}
+
+// The narrow contact shape a band member row nests (#885) — id/name/email only, mirroring the
+// inline shape the booking-list select already uses for customer/venue/bookingAgent. Not the full
+// `ContactResponseDto`: a member row shows who someone is, not their address or notes.
+export class BookingBandMemberContactDto {
+  @ApiProperty() id: string;
+  @ApiProperty() name: string;
+  @ApiProperty({ nullable: true, type: String }) email: string | null;
+}
+
+// A person on this gig (ADR-0072 §2/§5, #885) — reused across every chair the same contact fills,
+// so one member row carries one token, one fee, one confirmation however many segments they play.
+// Only non-removed rows are ever selected (`bandMemberSelect`'s query filters `removedAt: null`),
+// so `removedAt` itself is never on the wire — a removed member simply never appears here.
+export class BookingBandMemberDto {
+  @ApiProperty() id: string;
+  @ApiProperty({ description: 'ISO 8601 timestamp' }) createdAt: string;
+  @ApiProperty({ description: 'ISO 8601 timestamp' }) updatedAt: string;
+  @ApiProperty() bookingId: string;
+
+  @ApiProperty() contactId: string;
+  @ApiProperty({ type: BookingBandMemberContactDto }) contact: BookingBandMemberContactDto;
+
+  @ApiProperty({
+    description: 'Opaque token for the (#880) band-member portal link. Treat as a secret.',
+  })
+  bandPortalToken: string;
+
+  @ApiProperty({ enum: [...BAND_MEMBER_STATUSES] }) status: BandMemberStatus;
+
+  @ApiProperty({
+    description: 'Marks this member as the musician themself (ADR-0072 §3) — optional, does not fill a chair on its own.',
+  })
+  isSelf: boolean;
+
+  @ApiProperty({
+    nullable: true,
+    type: String,
+    description: 'Prisma Decimal(10,2) — serialises as a string over JSON.',
+  })
+  sessionFee: string | null;
+
+  @ApiProperty({ nullable: true, type: String, description: 'ISO 8601 timestamp; null until invited.' })
+  invitedAt: string | null;
+
+  @ApiProperty({ nullable: true, type: String, description: 'ISO 8601 timestamp; null until answered.' })
+  respondedAt: string | null;
+}
+
+// ADR-0073 §6: the organiser read path. Removed members are excluded — "replaced" is derived from
+// a fresh member row on the same chair, never stored (ADR-0072 §5).
+export class BookingBandDto {
+  @ApiProperty({ type: [BookingBandChairDto] })
+  chairs: BookingBandChairDto[];
+
+  @ApiProperty({ type: [BookingBandMemberDto] })
+  members: BookingBandMemberDto[];
+}
+
 export class BookingResponseDto {
   @ApiProperty() id: string;
   @ApiProperty({ description: 'ISO 8601 timestamp' }) createdAt: string;
@@ -219,4 +310,10 @@ export class BookingResponseDto {
     description: 'Per-concern portal-visibility verdicts (ADR-0054).',
   })
   portalVisibility: BookingPortalVisibilityDto;
+
+  @ApiProperty({
+    type: BookingBandDto,
+    description: 'The band roster (ADR-0072/0073 §6): chairs (seats) and members (people), removed members excluded.',
+  })
+  band: BookingBandDto;
 }

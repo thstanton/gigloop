@@ -1,6 +1,7 @@
 import { NotFoundException } from '@nestjs/common';
 import { PackagesService } from './packages.service';
 import { PackagesRepository } from './packages.repository';
+import { LineupsService } from '../lineups/lineups.service';
 import { CreatePackageDto } from './dto/create-package.dto';
 
 type MockRepo = {
@@ -26,10 +27,12 @@ const pkg = { id: 'p1', label: 'Wedding Ceremony', slots: [] };
 describe('PackagesService', () => {
   let service: PackagesService;
   let repo: MockRepo;
+  let lineups: { findOne: jest.Mock };
 
   beforeEach(() => {
     repo = makeRepo();
-    service = new PackagesService(repo as unknown as PackagesRepository);
+    lineups = { findOne: jest.fn() };
+    service = new PackagesService(repo as unknown as PackagesRepository, lineups as unknown as LineupsService);
   });
 
   describe('findAll', () => {
@@ -75,6 +78,35 @@ describe('PackagesService', () => {
       expect(repo.create).toHaveBeenCalledWith('u1', dto);
       expect(result.label).toBe('Custom');
     });
+
+    it('skips the lineup ownership check when no defaultLineupTemplateId is given', async () => {
+      const dto = { label: 'Custom', icon: 'music', slots: [] };
+      repo.create.mockResolvedValue({ ...pkg, ...dto });
+
+      await service.create('u1', dto as CreatePackageDto);
+
+      expect(lineups.findOne).not.toHaveBeenCalled();
+    });
+
+    it('throws 404 when defaultLineupTemplateId does not belong to this user (#879, ADR-0061)', async () => {
+      lineups.findOne.mockResolvedValue(null);
+      const dto = { label: 'Custom', icon: 'music', defaultLineupTemplateId: 'other-tenants-lineup' };
+
+      await expect(service.create('u1', dto as CreatePackageDto)).rejects.toThrow(NotFoundException);
+      expect(lineups.findOne).toHaveBeenCalledWith('u1', 'other-tenants-lineup');
+      expect(repo.create).not.toHaveBeenCalled();
+    });
+
+    it('creates once the defaultLineupTemplateId is proven to belong to this user', async () => {
+      lineups.findOne.mockResolvedValue({ id: 'l1' });
+      const dto = { label: 'Custom', icon: 'music', defaultLineupTemplateId: 'l1' };
+      repo.create.mockResolvedValue({ ...pkg, ...dto });
+
+      const result = await service.create('u1', dto as CreatePackageDto);
+
+      expect(repo.create).toHaveBeenCalledWith('u1', dto);
+      expect(result.defaultLineupTemplateId).toBe('l1');
+    });
   });
 
   describe('update', () => {
@@ -92,6 +124,26 @@ describe('PackagesService', () => {
 
       expect(repo.update).toHaveBeenCalledWith('u1', 'p1', { label: 'Updated' });
       expect(result.label).toBe('Updated');
+    });
+
+    it('clearing defaultLineupTemplateId (null) never touches the ownership check', async () => {
+      repo.findOne.mockResolvedValue(pkg);
+      repo.update.mockResolvedValue({ ...pkg, defaultLineupTemplateId: null });
+
+      await service.update('u1', 'p1', { defaultLineupTemplateId: null });
+
+      expect(lineups.findOne).not.toHaveBeenCalled();
+      expect(repo.update).toHaveBeenCalledWith('u1', 'p1', { defaultLineupTemplateId: null });
+    });
+
+    it('throws 404 when the update tries to set another tenant\'s lineup', async () => {
+      repo.findOne.mockResolvedValue(pkg);
+      lineups.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.update('u1', 'p1', { defaultLineupTemplateId: 'other-tenants-lineup' }),
+      ).rejects.toThrow(NotFoundException);
+      expect(repo.update).not.toHaveBeenCalled();
     });
   });
 

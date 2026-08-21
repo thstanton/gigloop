@@ -1,7 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, IsUrl, ValidateIf } from 'class-validator';
-
-const PRIMARY_ROLES = ['CUSTOMER', 'VENUE', 'BOOKING_AGENT'] as const;
+import { IsArray, IsEmail, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, IsUrl, ValidateIf } from 'class-validator';
+import { PRIMARY_ROLES } from '../contact-roles';
 
 export class UpdateContactDto {
   @ApiPropertyOptional({ example: 'Jane Smith' })
@@ -123,4 +122,41 @@ export class UpdateContactDto {
   @ValidateIf((_, v) => v !== null)
   @IsIn(PRIMARY_ROLES)
   primaryRole?: string | null;
+
+  // Band roster — dep profile (#886, ADR-0072 §4). Shared-with-band, not organiser-private.
+  @ApiPropertyOptional({ example: 'Saxophone', nullable: true, type: String, description: 'Identity as a dep — the instrument they are known for (shared with band)' })
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsString()
+  primaryBandRole?: string | null;
+
+  @ApiPropertyOptional({ type: [String], description: 'Declared capability — instruments/parts this dep can cover (shared with band)' })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  instruments?: string[];
+
+  @ApiPropertyOptional({ nullable: true, type: String, description: 'How this dep gets to a gig (shared with band)' })
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsString()
+  travelNotes?: string | null;
+
+  @ApiPropertyOptional({ nullable: true, type: String, description: 'What this dep brings/needs (shared with band)' })
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsString()
+  equipmentNotes?: string | null;
+
+  @ApiPropertyOptional({ nullable: true, type: String, description: 'Stage-wear notes for this dep (shared with band)' })
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsString()
+  outfitNotes?: string | null;
+
+  @ApiPropertyOptional({ nullable: true, type: String, description: 'Free-text availability commentary (shared with band) — never structured, see ADR-0072 §4' })
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsString()
+  availabilityNotes?: string | null;
 }

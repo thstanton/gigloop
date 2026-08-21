@@ -73,6 +73,15 @@ export class UpdatePackageDto {
   @IsBoolean()
   enabled?: boolean;
 
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'Lineup template to auto-apply when this package is applied (#879, ADR-0072 §3); null clears it',
+  })
+  @IsOptional()
+  @IsUUID()
+  defaultLineupTemplateId?: string | null;
+
   @ApiPropertyOptional({ type: [SlotUpsertDto], description: 'Full slot list; slots without ID are created, existing IDs updated, absent IDs deleted' })
   @IsOptional()
   @IsArray()

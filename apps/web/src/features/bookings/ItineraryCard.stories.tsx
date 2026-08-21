@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect } from 'storybook/test';
 import { MemoryRouter } from 'react-router-dom';
 import ItineraryCard from './ItineraryCard';
-import type { BookingLogisticsEntry, BookingPackageSummary, PerformanceSet } from '@/types/api';
+import type { BookingBandMember, BookingLogisticsEntry, BookingPackageSummary, PerformanceSet } from '@/types/api';
 
 const fullLogistics: Record<string, BookingLogisticsEntry> = {
   arrivalTime: { value: '14:00', shareWithBand: true, shareWithClient: false },
@@ -118,6 +118,61 @@ export const Empty: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByText('No itinerary yet')).toBeVisible();
     await expect(canvas.getByRole('button', { name: 'Add itinerary' })).toBeVisible();
+  },
+};
+
+const rosterMembers: BookingBandMember[] = [
+  {
+    id: 'm1',
+    contactId: 'c1',
+    contact: { id: 'c1', name: 'Dave Chambers', email: 'dave@example.com' },
+    bandPortalToken: 'm1-token',
+    status: 'CONFIRMED',
+    isSelf: false,
+    sessionFee: null,
+    invitedAt: null,
+    respondedAt: null,
+  },
+];
+
+export const WithBandRoster: Story = {
+  name: 'Band roster renders inline under the package header (#887)',
+  args: {
+    logistics: fullLogistics,
+    sets: setsWithStartTimes,
+    packages,
+    bandChairs: [
+      { id: 'ch1', role: 'Vocals', order: 0, packageId: 'pkg1', memberId: 'm1', callTime: '15:30' },
+      { id: 'ch2', role: 'Sax', order: 1, packageId: 'pkg1', memberId: null, callTime: '15:30' },
+    ],
+    bandMembers: rosterMembers,
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Gold')).toBeVisible();
+    await expect(canvas.getByText('Vocals')).toBeVisible();
+    await expect(canvas.getByText('Dave Chambers')).toBeVisible();
+    await expect(canvas.getByText('Sax')).toBeVisible();
+    await expect(canvas.getByText('Vacant')).toBeVisible();
+    // Nothing in the roster is clickable — no button role for a chair or a member.
+    await expect(canvas.queryByRole('button', { name: 'Dave Chambers' })).not.toBeInTheDocument();
+  },
+};
+
+export const RosterOnAPackagelessBooking: Story = {
+  name: 'A package-less booking still renders its chairs, under "Whole day" (#887)',
+  args: {
+    logistics: null,
+    sets: [],
+    packages: [],
+    bandChairs: [{ id: 'ch1', role: 'MC', order: 0, packageId: null, memberId: null, callTime: null }],
+    bandMembers: [],
+  },
+  play: async ({ canvas }) => {
+    // The roster bypasses the "No itinerary yet" empty state entirely.
+    await expect(canvas.queryByText('No itinerary yet')).not.toBeInTheDocument();
+    await expect(canvas.getByText('Whole day')).toBeVisible();
+    await expect(canvas.getByText('MC')).toBeVisible();
+    await expect(canvas.getByText('Vacant')).toBeVisible();
   },
 };
 

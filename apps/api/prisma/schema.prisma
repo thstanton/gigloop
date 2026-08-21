@@ -52,16 +52,16 @@ model PublicProfile {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  businessName        String  @default("")
-  displayName         String?
-  bio                 String?
-  email               String?
-  phone               String?
-  logoUrl             String?
-  photo               String?
-  website             String?
-  socials             Json?
-  clientPortalConfig  Json    @default("{}")
+  businessName       String  @default("")
+  displayName        String?
+  bio                String?
+  email              String?
+  phone              String?
+  logoUrl            String?
+  photo              String?
+  website            String?
+  socials            Json?
+  clientPortalConfig Json    @default("{}")
 
   @@index([userId])
 }
@@ -90,8 +90,8 @@ model UserProfile {
   invoiceSequenceYear     Int     @default(0)
   depositPercentage       Int?
 
-  digestEmailEnabled         Boolean @default(true)
-  songRequestFormEnabled     Boolean @default(true)
+  digestEmailEnabled     Boolean @default(true)
+  songRequestFormEnabled Boolean @default(true)
 
   preferences           Json      @default("{}")
   onboardingCompletedAt DateTime?
@@ -116,7 +116,7 @@ model Contact {
   city         String?
   county       String?
   postcode     String?
-  country      String?  @default("GB")
+  country      String? @default("GB")
   latitude     Float?
   longitude    Float?
   placeId      String?
@@ -136,12 +136,26 @@ model Contact {
   website               String?
   commissionArrangement String?
 
-  customerBookings     Booking[]       @relation("BookingCustomer")
-  venueBookings        Booking[]       @relation("BookingVenue")
-  bookingAgentBookings Booking[]       @relation("BookingAgent")
-  invoices         Invoice[]
-  communications   Communication[]
-  series           BookingSeries[]
+  // Band roster — dep profile fields (#879/#886, ADR-0072 §4). All six are shared-with-band: a
+  // dep's own attributes, meant to be visible to them once a portal projection exists (ADR-0073).
+  // Organiser-private commentary belongs in `notes` above, never here. `primaryBandRole` is
+  // identity ("Dave is a sax player"); `instruments` is declared capability — both feed the chair
+  // picker's soft match against a chair's free-text `role`. Location reuses the existing address
+  // block above; there is no separate band-specific address.
+  primaryBandRole   String?
+  instruments       String[] @default([])
+  travelNotes       String?
+  equipmentNotes    String?
+  outfitNotes       String?
+  availabilityNotes String?
+
+  customerBookings     Booking[]           @relation("BookingCustomer")
+  venueBookings        Booking[]           @relation("BookingVenue")
+  bookingAgentBookings Booking[]           @relation("BookingAgent")
+  invoices             Invoice[]
+  communications       Communication[]
+  series               BookingSeries[]
+  bandMemberships      BookingBandMember[]
 
   @@index([userId])
 }
@@ -152,14 +166,14 @@ model Booking {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  status      BookingStatus @default(ENQUIRY)
-  eventType   String
-  date        DateTime
-  title       String?
-  fee         Decimal?      @db.Decimal(10, 2)
-  notes               String?
-  portalToken         String    @unique @default(uuid())
-  depositReceivedAt     DateTime?
+  status            BookingStatus @default(ENQUIRY)
+  eventType         String
+  date              DateTime
+  title             String?
+  fee               Decimal?      @db.Decimal(10, 2)
+  notes             String?
+  portalToken       String        @unique @default(uuid())
+  depositReceivedAt DateTime?
 
   customerId String
   customer   Contact @relation("BookingCustomer", fields: [customerId], references: [id], onDelete: Restrict)
@@ -176,9 +190,9 @@ model Booking {
   travelMode String?
   logistics  Json?
 
-  sets     PerformanceSet[]
-  packages Package[]
-  invoices Invoice[]
+  sets              PerformanceSet[]
+  packages          Package[]
+  invoices          Invoice[]
   communications    Communication[]
   documents         Document[]
   musicFormConfig   MusicFormConfig?
@@ -186,6 +200,8 @@ model Booking {
   contracts         Contract[]
   checklistItems    BookingChecklistItem[]
   invoiceLineItems  InvoiceLineItem[]
+  bandChairs        BookingBandChair[]
+  bandMembers       BookingBandMember[]
 
   @@index([userId])
   @@index([customerId])
@@ -203,26 +219,26 @@ model BookingChecklistItem {
   bookingId String
   booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 
-  key              String?
-  label            String
-  completedBy      String    @default("USER")
-  state            String    @default("PENDING")
-  order            Int
-  dependsOn        String[]
-  autoCompleteRule Json?
+  key               String?
+  label             String
+  completedBy       String    @default("USER")
+  state             String    @default("PENDING")
+  order             Int
+  dependsOn         String[]
+  autoCompleteRule  Json?
   requiredForStatus String?
-  completedAt      DateTime?
-  dueDate          DateTime?
-  dueDateRule      Json?
+  completedAt       DateTime?
+  dueDate           DateTime?
+  dueDateRule       Json?
   // Per-concern reminder grouping (ADR-0052). System items resolve their concern
   // from the static concern map; custom items store a user-chosen concern here.
   // Null = a concern-less custom item that lives only on the Checklist card.
-  concern          String?
+  concern           String?
 
   // ADR-0057: BookingChecklistItem is the GOAL. A multi-step (system) goal owns
   // its child steps; an atomic goal has none and keeps its own autoCompleteRule.
   // No column is added to this table — `steps` is a virtual relation field.
-  steps            BookingChecklistStep[]
+  steps BookingChecklistStep[]
 
   @@index([userId])
   @@index([bookingId])
@@ -247,9 +263,9 @@ model BookingChecklistStep {
   label            String
   order            Int
   kind             String    @default("MILESTONE") // MILESTONE | PRECONDITION | FOLLOWUP
-  completeMode     String    @default("ACTION")    // ACTION | AWAITED
-  state            String    @default("PENDING")   // PENDING | COMPLETE | FAILED
-  completedBy      String    @default("USER")      // USER | CUSTOMER | BAND_MEMBER
+  completeMode     String    @default("ACTION") // ACTION | AWAITED
+  state            String    @default("PENDING") // PENDING | COMPLETE | FAILED
+  completedBy      String    @default("USER") // USER | CUSTOMER | BAND_MEMBER
   completedAt      DateTime?
   autoCompleteRule Json?
   dueDateRule      Json?
@@ -265,17 +281,17 @@ model Contract {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  bookingId        String
-  booking          Booking    @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  bookingId String
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 
-  status           String     @default("DRAFT")
+  status           String    @default("DRAFT")
   content          Json
   signedAt         DateTime?
   signedFromIp     String?
   signatureDataUrl String?
   voidedAt         DateTime?
 
-  documents        Document[]
+  documents Document[]
 
   @@index([userId])
   @@index([bookingId])
@@ -318,9 +334,14 @@ model PackageTemplate {
   isSystemDefault       Boolean  @default(false)
   enabled               Boolean  @default(true)
 
+  // Band members v1 (#879, ADR-0072 §3): applying this package auto-applies its lineup, if set.
+  defaultLineupTemplateId String?
+  defaultLineupTemplate   LineupTemplate? @relation(fields: [defaultLineupTemplateId], references: [id], onDelete: SetNull)
+
   slots PackageTemplateSlot[]
 
   @@index([userId])
+  @@index([defaultLineupTemplateId])
 }
 
 model PackageTemplateSlot {
@@ -340,6 +361,40 @@ model PackageTemplateSlot {
   @@index([packageTemplateId])
 }
 
+// Band members v1 (#879, ADR-0072 §3): a reusable lineup — "my five-piece". Symmetric with
+// PackageTemplate → PackageTemplateSlot. Neither isSystemDefault nor enabled: a lineup is more
+// personal than a package category, so a seeded "system" lineup would be deleted rather than used
+// (decision taken at slicing — #883, see ADR-0072 §3).
+model LineupTemplate {
+  id        String   @id @default(uuid())
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  label String
+
+  slots             LineupTemplateSlot[]
+  defaultOnPackages PackageTemplate[]
+
+  @@index([userId])
+}
+
+model LineupTemplateSlot {
+  id        String   @id @default(uuid())
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  role  String
+  order Int
+
+  lineupTemplateId String
+  lineupTemplate   LineupTemplate @relation(fields: [lineupTemplateId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([lineupTemplateId])
+}
+
 model Package {
   id        String   @id @default(uuid())
   userId    String
@@ -350,13 +405,92 @@ model Package {
   icon  String
   order Int
 
+  // Band members v1 (#879, ADR-0072 §3): the applied lineup's name, snapshotted — provenance is
+  // severed the same way a Package severs provenance from its PackageTemplate. Populated when a
+  // lineup is applied to this package (#884); stays untouched by later LineupTemplate deletes.
+  lineupName String?
+
   bookingId String
   booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 
-  sets PerformanceSet[]
+  sets       PerformanceSet[]
+  bandChairs BookingBandChair[]
 
   @@index([userId])
   @@index([bookingId])
+}
+
+// Band members v1 (#879, ADR-0072 §2): a seat in a segment. `memberId` is nullable throughout this
+// slice — a vacancy is `memberId = null`, a first-class thing the musician looks at, not an
+// absence. `packageId` null means a package-less/whole-day chair — one code path, no special case,
+// exactly like PerformanceSet.packageId.
+model BookingBandChair {
+  id        String   @id @default(uuid())
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  role  String
+  order Int
+
+  bookingId String
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  packageId String?
+  package   Package? @relation(fields: [packageId], references: [id], onDelete: SetNull)
+
+  // #885: assignment never creates or destroys a chair row, it sets this field — filling a chair
+  // sets memberId, vacating nulls it. SetNull (not Restrict/Cascade) because a member is never
+  // hard-deleted (removal is soft, `removedAt`); this only guards the FK if that ever changes.
+  memberId String?
+  member   BookingBandMember? @relation(fields: [memberId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([bookingId])
+  @@index([packageId])
+  @@index([memberId])
+}
+
+// Band members v1 (#879, ADR-0072 §2/§5): a person on this gig — reused across every chair the
+// same contact fills, so a re-assignment is a field write on the chair, not a new roster row.
+// Lifecycle: ADDED -> INVITED -> CONFIRMED | DECLINED, declared once as a coverage-guarded
+// `as const satisfies` table in band-member-status.ts (CLAUDE.md's one-declaration rule) — `status`
+// stays String per the #787 String-over-enum convention, exactly like BookingChecklistStep.kind.
+// `ADDED -> CONFIRMED` is legal: confirming on someone's behalf must not fabricate an INVITED that
+// never happened. Removal is soft — `removedAt` plus a frozen `status` — there is no REPLACED
+// status; "replaced" is derived from a fresh row for the same chair, never stored.
+model BookingBandMember {
+  id        String   @id @default(uuid())
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  bookingId String
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  contactId String
+  contact   Contact @relation(fields: [contactId], references: [id], onDelete: Restrict)
+
+  // Matches Booking.portalToken exactly (ADR-0072 §2) — the #880 portal's one-shot link.
+  bandPortalToken String @unique @default(uuid())
+
+  status String @default("ADDED")
+
+  // An optional row for the musician themself, so a five-piece yields four vacancies, not five
+  // (ADR-0072 §3) — optional because a leader may send out a band they do not play in.
+  isSelf Boolean @default(false)
+
+  sessionFee Decimal? @db.Decimal(10, 2)
+
+  invitedAt   DateTime?
+  respondedAt DateTime?
+  removedAt   DateTime?
+
+  chairs BookingBandChair[]
+
+  @@index([userId])
+  @@index([bookingId])
+  @@index([contactId])
 }
 
 model BookingSeries {
@@ -391,14 +525,14 @@ model Invoice {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  status        InvoiceStatus @default(DRAFT)
-  isDeposit     Boolean       @default(false)
-  invoiceNumber String?
-  issueDate     DateTime?
-  dueDate       DateTime?
+  status           InvoiceStatus @default(DRAFT)
+  isDeposit        Boolean       @default(false)
+  invoiceNumber    String?
+  issueDate        DateTime?
+  dueDate          DateTime?
   // paidAt is the date the payment was *received* — chosen by the musician, defaulting to today,
   // captured in the mark-paid dialog and correctable — not the moment the button was tapped (ADR-0068).
-  paidAt        DateTime?
+  paidAt           DateTime?
   // Optional payment reference (e.g. a bank reference), captured alongside paidAt when known.
   paymentReference String?
 
@@ -500,7 +634,7 @@ model Document {
 
   // null for non-INVOICE documents; set for INVOICE documents
   invoiceId String?
-  invoice   Invoice?  @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  invoice   Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
 
   // null for non-CONTRACT documents; set when a signed contract PDF is generated
   contractId String?
@@ -526,7 +660,7 @@ model Song {
   title  String
   artist String?
   genre  String
-  active Boolean   @default(true)
+  active Boolean  @default(true)
   tags   String[]
 
   @@index([userId])

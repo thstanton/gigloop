@@ -11,6 +11,8 @@ const minimalVenue: Contact = {
   latitude: null, longitude: null, placeId: null,
   travelTimeMinutes: null, travelDistanceMetres: null, travelTimeCalculatedAt: null, travelMode: null,
   notes: null, greetingName: null, primaryRole: 'VENUE',
+  primaryBandRole: null, instruments: [], travelNotes: null, equipmentNotes: null,
+  outfitNotes: null, availabilityNotes: null,
   parkingInfo: null, accessInfo: null, equipmentAvailable: null,
   website: null, commissionArrangement: null, createdAt: '2030-01-01T00:00:00Z', updatedAt: '2030-01-01T00:00:00Z',
 };
@@ -21,6 +23,8 @@ const fullVenue: Contact = {
   latitude: null, longitude: null, placeId: null,
   travelTimeMinutes: null, travelDistanceMetres: null, travelTimeCalculatedAt: null, travelMode: null,
   notes: null, greetingName: null, primaryRole: 'VENUE',
+  primaryBandRole: null, instruments: [], travelNotes: null, equipmentNotes: null,
+  outfitNotes: null, availabilityNotes: null,
   parkingInfo: 'Use Kensington Road car park. Mention the event for free entry.',
   accessInfo: 'Side entrance on Palace Gate. Knock three times.',
   equipmentAvailable: 'Grand piano, PA system, lectern.',
