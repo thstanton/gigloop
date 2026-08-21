@@ -220,7 +220,9 @@ The `quote` template is optional — in current practice quotes are sent externa
 Available variables: `{{customerName}}`, `{{bookingDate}}`, `{{venueName}}`, `{{bookingFee}}`, `{{setsSchedule}}`, `{{musicianName}}`, `{{musicianEmail}}`, `{{portalLink}}`, `{{invoiceTotal}}`, `{{invoiceDueDate}}`. `{{portalLink}}` always points to `/booking/:token` (the main portal page) — there is no separate `{{contractLink}}` variable. Contract template copy should guide the client to sign from there; this orientation is intentional for first-time portal visitors.
 
 ### Communication
-A log entry for a communication associated with a Booking. For MVP: outbound only (sent emails). Modelled generically to accommodate inbound messages (email ingestion) in a future release without schema changes.
+A log entry for an outbound email associated with a [[Booking]] or a [[BookingSeries]]. For MVP: outbound only (sent emails). Modelled generically to accommodate inbound messages (email ingestion) in a future release without schema changes.
+
+**Ownership:** a Communication belongs to either a Booking (`bookingId` set, `seriesId` null) or a BookingSeries (`seriesId` set, `bookingId` null). Exactly one must be set — enforced at the application layer, mirroring [[Invoice]]. See ADR-0079. A series Communication is read on every member Booking's Communications list (not a dedicated series surface) — the same duplication [[Invoice]] already accepts for the series invoice shown via each member Booking.
 
 **Fields:** direction (`OUTBOUND` — MVP only), channel (`EMAIL`), contactId, sentAt (nullable — set only when status is `SENT`), subject, body (rendered HTML), templateId (FK — nullable; records which template seeded the draft, but the body field is authoritative — it stores the exact HTML that was sent, which may have been edited by the musician after template rendering), status (`PENDING | SENT | FAILED`).
 
