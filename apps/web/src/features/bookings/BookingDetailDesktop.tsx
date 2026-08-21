@@ -22,6 +22,7 @@ import InlineNotes from '@/features/bookings/InlineNotes';
 import CommunicationsSection from '@/features/bookings/CommunicationsSection';
 import ItineraryCard from '@/features/bookings/ItineraryCard';
 import DetailsCard from '@/features/bookings/DetailsCard';
+import BandCard from '@/features/bookings/BandCard';
 import MusicFormSection from '@/features/bookings/MusicFormSection';
 import { InlineVenueAdd } from '@/features/bookings/InlineVenueAdd';
 import { BookingVenueMapWidget } from '@/features/bookings/BookingVenueMapWidget';
@@ -33,6 +34,7 @@ import { isEnabled } from '@/lib/featureFlags';
 import { EVENT_TYPE_LABELS } from '@/lib/constants';
 import type {
   Invoice,
+  LineupTemplate,
   MusicFormConfig,
 } from '@/types/api';
 
@@ -60,10 +62,17 @@ export function BookingDetailDesktop({ bookingId }: BookingDetailDesktopProps) {
   const fields = useBookingFields(bookingId);
   const { checklist, checklistLoading, toggleItem, addItem, isAddingItem } = useBookingChecklist(bookingId, booking, isLoaded);
   const { data: invoices = [] } = useBookingInvoices(bookingId);
+  const bandMembersEnabled = isEnabled('VITE_FEATURE_BAND_MEMBERS');
+  // The Band card's "has a multi-person lineup" signal (ADR-0073 §6) — deliberately kept off the
+  // booking response, so it's derived here from the same query the Band sheet already uses.
+  const { data: lineupTemplates = [] } = useQuery({
+    queryKey: ['lineups'],
+    queryFn: () => apiGet<LineupTemplate[]>('/lineups'),
+    enabled: isLoaded && bandMembersEnabled,
+  });
 
   if (!booking) return null;
 
-  const bandMembersEnabled = isEnabled('VITE_FEATURE_BAND_MEMBERS');
   const title = booking.title ?? EVENT_TYPE_LABELS[booking.eventType];
   const backState = { from: `/admin/bookings/${bookingId}`, label: title };
   // #756: key off the deposit invoice, not a checklist item. Post-ADR-0057 `checklist` is goals-only
@@ -108,6 +117,8 @@ export function BookingDetailDesktop({ bookingId }: BookingDetailDesktopProps) {
                 logistics={booking.logistics}
                 sets={booking.sets}
                 packages={booking.packages}
+                bandChairs={bandMembersEnabled ? booking.band.chairs : []}
+                bandMembers={bandMembersEnabled ? booking.band.members : []}
               />
               <DetailsCard
                 logistics={booking.logistics}
@@ -185,6 +196,16 @@ export function BookingDetailDesktop({ bookingId }: BookingDetailDesktopProps) {
             )}
           </div>
         </section>
+
+        {/* Band */}
+        {bandMembersEnabled && (
+          <BandCard
+            band={booking.band}
+            packages={booking.packages}
+            hasLineupTemplates={lineupTemplates.length > 0}
+            linkState={backState}
+          />
+        )}
 
         {/* Series events */}
         {booking.series && (

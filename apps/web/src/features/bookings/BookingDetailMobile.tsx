@@ -18,6 +18,7 @@ import BookingDetailTabs from '@/features/bookings/BookingDetailTabs';
 import ChecklistSection, { clientDisplayName } from '@/features/bookings/ChecklistSection';
 import ItineraryCard from '@/features/bookings/ItineraryCard';
 import DetailsCard from '@/features/bookings/DetailsCard';
+import BandCard from '@/features/bookings/BandCard';
 import { BookingVenueMapWidget } from '@/features/bookings/BookingVenueMapWidget';
 import InlineNotes from '@/features/bookings/InlineNotes';
 import PersonChip from '@/features/bookings/PersonChip';
@@ -35,6 +36,7 @@ import { GhostButton } from '@/components/common/GhostButton';
 import { apiGet } from '@/lib/api';
 import type {
   Invoice,
+  LineupTemplate,
   MusicFormConfig,
 } from '@/types/api';
 
@@ -92,13 +94,20 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
     isAddingItem,
   } = useBookingChecklist(bookingId, booking, isLoaded);
   const { data: invoices = [] } = useBookingInvoices(bookingId);
+  const bandMembersEnabled = isEnabled('VITE_FEATURE_BAND_MEMBERS');
+  // The Band card's "has a multi-person lineup" signal (ADR-0073 §6) — deliberately kept off the
+  // booking response, so it's derived here from the same query the Band sheet already uses.
+  const { data: lineupTemplates = [] } = useQuery({
+    queryKey: ['lineups'],
+    queryFn: () => apiGet<LineupTemplate[]>('/lineups'),
+    enabled: isLoaded && bandMembersEnabled,
+  });
 
   if (isLoading) return <MobileTabsSkeleton />;
   if (!booking) return null;
 
   const title = booking.title || `Booking ${bookingId.slice(0, 8)}`;
   const backState = { from: `/admin/bookings/${bookingId}`, label: title };
-  const bandMembersEnabled = isEnabled('VITE_FEATURE_BAND_MEMBERS');
   // #756: key off the deposit invoice, not a checklist item — see BookingDetailDesktop for the full
   // rationale (goals-only checklist made the old `deposit_received` check permanently false).
   const contractShortcutType = contractCoverTemplateFor(invoices);
@@ -162,6 +171,8 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
               sets={booking.sets}
               packages={booking.packages}
               hideWhenEmpty
+              bandChairs={bandMembersEnabled ? booking.band.chairs : []}
+              bandMembers={bandMembersEnabled ? booking.band.members : []}
             />
             <DetailsCard
               logistics={booking.logistics}
@@ -229,6 +240,15 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
               )}
             </div>
           </section>
+
+          {bandMembersEnabled && (
+            <BandCard
+              band={booking.band}
+              packages={booking.packages}
+              hasLineupTemplates={lineupTemplates.length > 0}
+              linkState={backState}
+            />
+          )}
 
           {booking.series && (
             <section>
