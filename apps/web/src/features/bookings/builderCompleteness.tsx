@@ -2,11 +2,11 @@ import { CheckCircle2, Circle, MinusCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // Shared Booking Builder completeness vocabulary (PRD #511 Module C).
-// Kept feature-local so the desktop CompletenessRail and the mobile
+// Kept feature-local so the desktop BuilderCompletenessRail and the mobile
 // MobileBuilderStepper render the *same* status glyphs and can never drift.
-// The spine layout and the buildCompletenessMap predicate stay in
-// BookingBuilderPage — the page computes status and passes it down, so the
-// only thing that genuinely needs sharing is the status → icon mapping.
+// The spine layout lives in builderSpine.ts and the buildCompletenessMap
+// predicate in builderHelpers.ts (#992) — BookingBuilderPage computes status
+// and passes it down; this file only owns the status → icon mapping.
 
 export type SpineId =
   | 'overview'
