@@ -647,7 +647,7 @@ A Lineup is to a [[Lineup Template]] exactly what a [[Package]] is to a [[Packag
 ### Band roster
 The set of [[Lineup]]s, [[Chair]]s and [[Band member]]s on a [[Booking]] — "who is playing this gig, and what". Available at **any lifecycle stage with no implied order**. The lineup is *chosen* wherever package templates are picked — the new-booking form and the [[Booking Builder]] alike, each selected template offering its default lineup or "Decide later"; the roster is *filled* on the Band sheet and in the Builder's Band section (ADR-0081, reversing ADR-0072 §6's Builder exclusion).
 
-Read on three surfaces, divided by question: the **Itinerary** (*who plays what, and when* — inline under each package header), the **Band card** in the Info tab (*who these people are and how to reach them* — a directory grouped by answer), and the **Band sheet** (*change something*). All three derive from one `band` block on the booking response. See ADR-0072.
+Read on four surfaces, divided by question: the **Itinerary** (*who plays what, and when* — inline under each package header), the **Band card** in the Info tab (*who these people are and how to reach them* — a directory grouped by answer), the **Band sheet** (*change something*, reached from that card), and the Builder's **Band section** (*the same atom as the sheet, gathered with every other concern*). All four derive from one `band` block on the booking response, which carries the [[Lineup]]s, their segments and their [[Chair]]s. See ADR-0072 and ADR-0081.
 
 Roster rows **block [[Contact]] deletion** (409), alongside the three existing booking FKs.
 
