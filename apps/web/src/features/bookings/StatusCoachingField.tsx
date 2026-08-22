@@ -48,7 +48,7 @@ export function StatusCoachingField({ value, onChange }: StatusCoachingFieldProp
           })}
         </div>
         <div className={cn('rounded-lg p-3', STATUS_TOKENS[value].tint)}>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-muted">
             <span className={cn('font-semibold', STATUS_TOKENS[value].text)}>{BOOKING_STATUS_LABELS[value]} · </span>
             {STATUS_DESCRIPTIONS[value]}
           </p>

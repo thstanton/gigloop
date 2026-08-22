@@ -227,7 +227,7 @@ export function AddressAutocomplete({ value, onChange }: AddressAutocompleteProp
   return (
     <div ref={containerRef} className="space-y-3">
       <div className="relative">
-        <MapPin size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+        <MapPin size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
         <Input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -260,7 +260,7 @@ export function AddressAutocomplete({ value, onChange }: AddressAutocompleteProp
               <li key={i} id={`addr-suggestion-${i}`} role="option" aria-selected={i === activeIndex}>
                 <button
                   type="button"
-                  className={`w-full text-left px-3 py-2 text-sm transition-colors ${i === activeIndex ? 'bg-muted' : 'hover:bg-muted'}`}
+                  className={`w-full text-left px-3 py-2 text-sm transition-colors ${i === activeIndex ? 'bg-accent' : 'hover:bg-accent'}`}
                   onPointerDown={(e) => {
                     e.preventDefault(); // prevent input blur before selection
                     void selectSuggestion(s);

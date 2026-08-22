@@ -64,7 +64,7 @@ export function AssignedContactCard({
   return (
     <div className="border border-border rounded-md p-4 space-y-3">
       <div className="flex items-center gap-1.5">
-        <Icon size={16} className="text-muted-foreground" aria-hidden="true" />
+        <Icon size={16} className="text-muted" aria-hidden="true" />
         <p className="text-sm font-semibold">{roleLabel}</p>
       </div>
 
@@ -84,7 +84,7 @@ export function AssignedContactCard({
 
       {confirming ? (
         <div className="space-y-2">
-          <p className="text-sm text-muted-foreground">Discard changes and pick someone else?</p>
+          <p className="text-sm text-muted">Discard changes and pick someone else?</p>
           <div className="flex items-center gap-3">
             <Button
               variant="outline"

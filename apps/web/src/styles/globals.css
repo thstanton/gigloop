@@ -9,8 +9,12 @@
     --surface: 38 25% 95%;
     --border: 35 18% 87%;
     --border-strong: 35 14% 77%;
-    --muted: 30 8% 48%;
-    --muted-foreground: 30 8% 48%;
+    /* De-emphasised TEXT only — never a background. There is no background
+       utility on this stem (scripts/check-muted-tokens.mjs enforces it); a
+       subtle neutral surface is --accent. Darkened from 48% to 40% so the token
+       clears WCAG AA for normal text on --accent (4.75:1) and on white
+       (5.64:1); see ADR-0039. */
+    --muted: 30 8% 40%;
     --foreground: 25 25% 11%;
 
     /* Primary — deep forest green */
@@ -113,7 +117,7 @@
   border-radius: 2px;
   padding: 1rem;
   text-align: center;
-  color: hsl(var(--muted-foreground));
+  color: hsl(var(--muted));
   font-size: 0.875rem;
   margin: 0.5rem 0;
 }

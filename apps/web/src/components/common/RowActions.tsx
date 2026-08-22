@@ -145,12 +145,12 @@ export function RowActions({ actions, label, sublabel }: Props) {
             {label ?? 'Actions'}
           </SheetTitle>
           {label && sublabel && (
-            <p className="text-sm text-muted-foreground">{sublabel}</p>
+            <p className="text-sm text-muted">{sublabel}</p>
           )}
           {confirmingAction ? (
             <div className={`space-y-4 pb-2${label ? ' mt-3' : ''}`}>
               <p className="font-semibold">{confirmingAction.confirmation!.title}</p>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-muted">
                 {confirmingAction.confirmation!.description}
               </p>
               <div className="flex gap-2">

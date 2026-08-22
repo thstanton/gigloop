@@ -152,10 +152,10 @@ export function RoleField({
   const Icon = variant === 'agent' ? Briefcase : User;
   const header = (
     <div className="flex items-center gap-1.5">
-      <Icon size={16} className="text-muted-foreground" aria-hidden="true" />
+      <Icon size={16} className="text-muted" aria-hidden="true" />
       <p className="text-sm font-semibold">
         {label}
-        {!required && <span className="font-normal text-muted-foreground"> (optional)</span>}
+        {!required && <span className="font-normal text-muted"> (optional)</span>}
       </p>
     </div>
   );
@@ -207,7 +207,7 @@ export function RoleField({
           <button
             type="button"
             onClick={() => setShowMore((o) => !o)}
-            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            className="flex items-center gap-1 text-sm text-muted hover:text-foreground transition-colors"
           >
             {showMore ? (
               <><ChevronUp className="h-4 w-4" aria-hidden="true" />Hide contact details</>
@@ -224,7 +224,7 @@ export function RoleField({
                   onChange={(e) => { setGreetingName(e.target.value); setGreetingEdited(true); reportNew({ greetingName: e.target.value }); }}
                   placeholder="e.g. Jane"
                 />
-                <p className="text-sm text-muted-foreground mt-1">Used in emails and letters to this contact</p>
+                <p className="text-sm text-muted mt-1">Used in emails and letters to this contact</p>
               </FormField>
               <FormField label="Email">
                 <Input

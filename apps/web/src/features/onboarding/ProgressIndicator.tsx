@@ -7,7 +7,7 @@ const BASE_STEP_CIRCLE =
 function stepCircleClass(isActive: boolean, isDone: boolean): string {
   if (isActive) return cn(BASE_STEP_CIRCLE, 'bg-primary text-primary-foreground');
   if (isDone) return cn(BASE_STEP_CIRCLE, 'bg-primary/20 text-primary');
-  return cn(BASE_STEP_CIRCLE, 'bg-muted text-muted-foreground');
+  return cn(BASE_STEP_CIRCLE, 'bg-accent text-muted');
 }
 
 /**

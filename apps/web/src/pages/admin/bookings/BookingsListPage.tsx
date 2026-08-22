@@ -158,7 +158,7 @@ function FiltersSheet({
                 onClick={() => { onEventTypeChange(null); setOpen(false); }}
                 className={cn(
                   'w-full text-left px-3 py-2 rounded-md text-base',
-                  !eventType ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted',
+                  !eventType ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-accent',
                 )}
               >
                 All types
@@ -169,7 +169,7 @@ function FiltersSheet({
                   onClick={() => { onEventTypeChange(value); setOpen(false); }}
                   className={cn(
                     'w-full text-left px-3 py-2 rounded-md text-base',
-                    eventType === value ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted',
+                    eventType === value ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-accent',
                   )}
                 >
                   {label}
@@ -186,7 +186,7 @@ function FiltersSheet({
                 onClick={() => { onDatePresetChange(null); setOpen(false); }}
                 className={cn(
                   'w-full text-left px-3 py-2 rounded-md text-base',
-                  !datePreset ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted',
+                  !datePreset ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-accent',
                 )}
               >
                 Any date
@@ -200,7 +200,7 @@ function FiltersSheet({
                   }}
                   className={cn(
                     'w-full text-left px-3 py-2 rounded-md text-base',
-                    datePreset === value ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted',
+                    datePreset === value ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-accent',
                   )}
                 >
                   {label}

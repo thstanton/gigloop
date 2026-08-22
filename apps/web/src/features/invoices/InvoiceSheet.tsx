@@ -469,7 +469,7 @@ export default function InvoiceSheet({
 
             {/* Invoice number preview (create mode only) */}
             {!isEdit && numberPreview && (
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-muted">
                 {numberPreview.willReuse
                   ? `Invoice number ${numberPreview.invoiceNumber} (from a voided invoice) will be re-used`
                   : `When issued, this will be invoice ${numberPreview.invoiceNumber}`}
@@ -487,7 +487,7 @@ export default function InvoiceSheet({
                 >
                   {issueDraftMutation.isPending ? 'Issuing…' : 'Issue invoice'}
                 </Button>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-muted">
                   Generates the PDF ready to send to your client. You won&apos;t be able to edit it
                   after it&apos;s issued.
                 </p>
@@ -527,7 +527,7 @@ export default function InvoiceSheet({
                 >
                   {createAndIssueMutation.isPending ? 'Issuing…' : 'Issue invoice'}
                 </Button>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-muted">
                   Generates the PDF ready to send to your client. You won&apos;t be able to edit it
                   after it&apos;s issued.
                 </p>

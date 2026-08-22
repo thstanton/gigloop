@@ -148,7 +148,7 @@ function RoleDisclosure({ label, open, onToggle, children }: RoleDisclosureProps
       <button
         type="button"
         onClick={onToggle}
-        className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        className="flex items-center gap-1 text-sm text-muted hover:text-foreground transition-colors"
       >
         {open ? (
           <><ChevronUp className="h-4 w-4" aria-hidden="true" />Hide {label}</>
@@ -461,7 +461,7 @@ export default function ContactForm({
           <button
             type="button"
             onClick={() => setDetailsOpen((o) => !o)}
-            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            className="flex items-center gap-1 text-sm text-muted hover:text-foreground transition-colors"
           >
             {detailsOpen ? (
               <><ChevronUp className="h-4 w-4" aria-hidden="true" />Hide contact details</>

@@ -274,7 +274,7 @@ function DressCodeField({ value, onChange }: { value: string; onChange: (v: stri
                 variant="ghost"
                 onClick={() => deleteMutation.mutate(value)}
                 disabled={deleteMutation.isPending}
-                className="h-10 w-10 shrink-0 text-muted-foreground hover:text-destructive"
+                className="h-10 w-10 shrink-0 text-muted hover:text-destructive"
                 aria-label="Delete custom option"
               >
                 <Trash2 size={16} />

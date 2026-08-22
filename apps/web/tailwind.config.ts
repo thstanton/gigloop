@@ -35,9 +35,11 @@ const config: Config = {
         surface: 'hsl(var(--surface))',
         border: 'hsl(var(--border))',
         'border-strong': 'hsl(var(--border-strong))',
+        // Text token. `DEFAULT` stays so the deliberate translucent washes
+        // (`bg-muted/20`…`/50`) keep resolving; there is no `foreground`
+        // sub-key, because `muted` IS the foreground.
         muted: {
           DEFAULT: 'hsl(var(--muted))',
-          foreground: 'hsl(var(--muted-foreground))',
         },
         foreground: 'hsl(var(--foreground))',
         primary: {
