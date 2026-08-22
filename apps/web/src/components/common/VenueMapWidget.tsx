@@ -104,13 +104,13 @@ export function travelTimeRefreshVisible(status: TravelTimeStatus): boolean {
 function TravelTimeStatusText({ status }: { status: TravelTimeStatus }): ReactNode {
   switch (status.kind) {
     case 'loading':
-      return <RefreshCw size={14} className="animate-spin text-muted-foreground" />;
+      return <RefreshCw size={14} className="animate-spin text-muted" />;
     case 'known':
       return <span className="text-sm text-foreground">{status.label}</span>;
     case 'add-home-address':
       return <InlineHint actionLabel="Add your home address to see travel time" href="/admin/settings" />;
     case 'unavailable':
-      return <span className="text-sm text-muted-foreground">Travel time unavailable</span>;
+      return <span className="text-sm text-muted">Travel time unavailable</span>;
   }
 }
 
@@ -136,7 +136,7 @@ function MapContent({ status, mapDivRef }: { status: MapStatus; mapDivRef: React
       );
     case 'failed':
       return (
-        <div className="h-full flex items-center justify-center text-sm text-muted-foreground p-4 text-center">
+        <div className="h-full flex items-center justify-center text-sm text-muted p-4 text-center">
           Map unavailable
         </div>
       );
@@ -245,7 +245,7 @@ export function VenueMapWidget({
                 rel="noopener noreferrer"
                 className="flex items-start gap-1.5 text-sm text-foreground hover:underline mt-1"
               >
-                <MapPin size={14} className="text-muted-foreground flex-shrink-0 mt-0.5" />
+                <MapPin size={14} className="text-muted flex-shrink-0 mt-0.5" />
                 <span>{formattedAddress}</span>
               </a>
               {onRefreshTravelTime !== undefined && (
@@ -297,7 +297,7 @@ export function VenueMapWidget({
 
         </div>
 
-        <div className={`md:w-64 h-48 rounded-md overflow-hidden flex-shrink-0 ${hasCoords ? 'bg-muted' : 'bg-surface border border-border'}`}>
+        <div className={`md:w-64 h-48 rounded-md overflow-hidden flex-shrink-0 ${hasCoords ? 'bg-accent' : 'bg-surface border border-border'}`}>
           <MapContent status={mapStatus} mapDivRef={mapDivRef} />
         </div>
       </div>

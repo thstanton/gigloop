@@ -35,7 +35,7 @@ export default function PersonCard({
   const avatarClass =
     role === 'Customer'
       ? 'bg-primary text-primary-foreground'
-      : 'bg-muted text-muted-foreground';
+      : 'bg-accent text-muted';
 
   return (
     <div className="py-4 border-b border-border last:border-0 md:flex md:items-center md:gap-3">

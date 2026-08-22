@@ -36,6 +36,46 @@ Decorative Lucide icons in the navigation (`AppShell.tsx`) and the select chevro
 ### Contrast
 `text-muted-foreground` (`hsl(30 8% 48%)`) is 4.20:1 against white — fails AA for normal text but passes the 3:1 threshold for UI components. The only failing interactive text element was the back link in `PageHeader`, which was changed from `text-muted-foreground` to a value that passes 4.5:1. The global token was left unchanged to avoid a design-system-wide colour shift outside the scope of this pass.
 
+> **Amended by #977 (2026-08-22) — the deferred colour shift has now happened.**
+>
+> `--muted-foreground` was a duplicate alias of `--muted` (identical HSL), which
+> made every `bg-muted` + `text-muted-foreground` pairing render invisible text.
+> Fixing that root cause required moving de-emphasised text onto the `--accent`
+> surface (`hsl(35 18% 92%)`), where the old 48% lightness measured only
+> **3.52:1** — worse than the 4.20:1 recorded above. The token was therefore
+> darkened rather than left alone:
+>
+> - `--muted-foreground` is **deleted**; the sole token is `--muted`, and the
+>   sole utility is `text-muted`. There is no `bg-muted` (a guard enforces it).
+> - `--muted` is now `hsl(30 8% 40%)`.
+>
+> Measured against every **opaque** surface `text-muted` is used on:
+>
+> | Background | 40% (now) | 48% (before) |
+> |---|---|---|
+> | white | 5.64:1 | 4.18:1 |
+> | `--background` | 5.42:1 | 4.02:1 |
+> | `--surface` | 5.09:1 | 3.78:1 |
+> | `--accent` | 4.75:1 | 3.52:1 |
+> | `--dashboard-surface` | 4.69:1 | 3.48:1 |
+>
+> All clear AA for normal text, so on opaque surfaces the gap this section
+> deliberately left open is closed, and the `PageHeader` back-link special case
+> is no longer the only compliant use of the token.
+>
+> **A narrower gap remains, and is knowingly left open.** `text-muted` is also
+> used on translucent washes of itself (`bg-muted/20`…`/50`, e.g. the VOID
+> contract row and the VOID invoice pill). Composited over `--surface` these
+> measure 3.93:1, 3.41:1, 2.94:1 and 2.52:1 — every one improved by the
+> darkening, none reaching 4.5:1, and the `/40` and `/50` cases fall below even
+> the 3:1 UI-component threshold. Restyling the VOID treatment is a design
+> decision, not a token change, so it was left out of #977's scope rather than
+> resolved silently. Do not read this amendment as blanket AA compliance for
+> `text-muted`.
+>
+> `--status-complete` retains the original `hsl(30 8% 48%)` and is now a
+> separate value; that decoupling is intended.
+
 ## Consequences
 
 - All high and medium WCAG 2.1 AA gaps in the admin app are resolved.

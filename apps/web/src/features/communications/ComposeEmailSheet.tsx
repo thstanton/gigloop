@@ -171,7 +171,7 @@ function SubjectField({
       <p className="text-xs text-muted mb-1">Subject</p>
       {rendering ? (
         <div className="h-9 rounded-md border border-border bg-background px-3 py-2 flex items-center">
-          <div className="animate-pulse h-3 w-2/3 rounded bg-muted" />
+          <div className="animate-pulse h-3 w-2/3 rounded bg-accent" />
         </div>
       ) : (
         <input
@@ -192,13 +192,13 @@ function BodyField({ rendering, editor }: { rendering: boolean; editor: Editor |
       <div className="rounded-md border border-border bg-background px-3 py-2 tiptap-content">
         {rendering ? (
           <div className="animate-pulse space-y-2 min-h-48 py-1">
-            <div className="h-3 rounded bg-muted w-full" />
-            <div className="h-3 rounded bg-muted w-5/6" />
-            <div className="h-3 rounded bg-muted w-4/6" />
-            <div className="h-3 rounded bg-muted w-full mt-4" />
-            <div className="h-3 rounded bg-muted w-3/4" />
-            <div className="h-3 rounded bg-muted w-full" />
-            <div className="h-3 rounded bg-muted w-2/3" />
+            <div className="h-3 rounded bg-accent w-full" />
+            <div className="h-3 rounded bg-accent w-5/6" />
+            <div className="h-3 rounded bg-accent w-4/6" />
+            <div className="h-3 rounded bg-accent w-full mt-4" />
+            <div className="h-3 rounded bg-accent w-3/4" />
+            <div className="h-3 rounded bg-accent w-full" />
+            <div className="h-3 rounded bg-accent w-2/3" />
           </div>
         ) : (
           <EditorContent editor={editor} />

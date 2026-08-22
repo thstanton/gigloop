@@ -76,6 +76,9 @@ jobs:
       - name: Story presence (ADR-0030)
         if: needs.detect-changes.outputs.web == 'true'
         run: node scripts/check-stories.mjs
+      - name: Muted-token guard (#977)
+        if: needs.detect-changes.outputs.web == 'true'
+        run: node scripts/check-muted-tokens.mjs
 
   test:
     name: Test
@@ -122,6 +125,9 @@ jobs:
       - name: Prod API host guard unit tests (#865)
         if: needs.detect-changes.outputs.web == 'true'
         run: node --test scripts/verify-prod-api-host.test.mjs
+      - name: Muted-token guard unit tests (#977)
+        if: needs.detect-changes.outputs.web == 'true'
+        run: node --test scripts/check-muted-tokens.test.mjs
 
   build:
     name: Build

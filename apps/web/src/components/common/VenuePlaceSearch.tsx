@@ -187,7 +187,7 @@ export function VenuePlaceSearch({ value, onChange, searchOnly = false }: VenueP
         <div className="relative">
           <MapPin
             size={16}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none"
           />
           <Input
             value={value.name}
@@ -217,7 +217,7 @@ export function VenuePlaceSearch({ value, onChange, searchOnly = false }: VenueP
       <div className="relative">
         <MapPin
           size={16}
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none"
         />
         <Input
           value={value.name}
@@ -257,7 +257,7 @@ export function VenuePlaceSearch({ value, onChange, searchOnly = false }: VenueP
               <li key={i} id={`venue-suggestion-${i}`} role="option" aria-selected={i === activeIndex}>
                 <button
                   type="button"
-                  className={`w-full text-left px-3 py-2 text-sm transition-colors ${i === activeIndex ? 'bg-muted' : 'hover:bg-muted'}`}
+                  className={`w-full text-left px-3 py-2 text-sm transition-colors ${i === activeIndex ? 'bg-accent' : 'hover:bg-accent'}`}
                   onPointerDown={(e) => {
                     e.preventDefault();
                     void selectSuggestion(s);

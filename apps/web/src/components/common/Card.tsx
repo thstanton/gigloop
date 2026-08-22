@@ -40,7 +40,7 @@ function MenuItemLabel({ item }: { item: CardMenuItem }) {
   return (
     <span className="flex flex-col gap-0.5">
       <span>{item.label}</span>
-      <span className="text-xs font-normal text-muted-foreground">{item.description}</span>
+      <span className="text-xs font-normal text-muted">{item.description}</span>
     </span>
   );
 }

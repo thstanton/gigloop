@@ -197,7 +197,7 @@ export function AddSongField({
       <button
         type="button"
         onClick={() => setShowManual((o) => !o)}
-        className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        className="flex items-center gap-1 text-sm text-muted hover:text-foreground transition-colors"
       >
         {showManual ? (
           <><ChevronUp className="h-4 w-4" aria-hidden="true" />Hide manual entry</>

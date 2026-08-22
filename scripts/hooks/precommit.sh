@@ -18,6 +18,10 @@ if printf '%s\n' "$staged" | grep -q '^apps/api/'; then
 fi
 if printf '%s\n' "$staged" | grep -q '^apps/web/'; then
   (cd apps/web && npm run lint) || status=1
+  # Muted-token guard (#977): `muted` is a text token, never a background.
+  # Runs at commit because the dead classes spread by copy-paste from
+  # neighbouring files — catching them at review is too late.
+  node "$ROOT/scripts/check-muted-tokens.mjs" || status=1
 fi
 
 exit $status

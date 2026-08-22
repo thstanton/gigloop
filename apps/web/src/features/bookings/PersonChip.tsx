@@ -42,7 +42,7 @@ export default function PersonChip({ role, contact, linkState, onEdit }: PersonC
   const avatarClass =
     role === 'Customer'
       ? 'bg-primary text-primary-foreground'
-      : 'bg-muted text-muted-foreground';
+      : 'bg-accent text-muted';
 
   return (
     <Popover>
@@ -80,7 +80,7 @@ export default function PersonChip({ role, contact, linkState, onEdit }: PersonC
             <button
               type="button"
               onClick={onEdit}
-              className="flex items-center gap-2.5 rounded px-2 py-1.5 text-sm hover:bg-muted transition-colors text-left"
+              className="flex items-center gap-2.5 rounded px-2 py-1.5 text-sm hover:bg-accent transition-colors text-left"
             >
               <Pencil size={14} className="flex-shrink-0" />
               Edit
@@ -89,7 +89,7 @@ export default function PersonChip({ role, contact, linkState, onEdit }: PersonC
           {contact.phone && (
             <a
               href={`tel:${contact.phone}`}
-              className="flex items-center gap-2.5 rounded px-2 py-1.5 text-sm hover:bg-muted transition-colors"
+              className="flex items-center gap-2.5 rounded px-2 py-1.5 text-sm hover:bg-accent transition-colors"
             >
               <Phone size={14} className="flex-shrink-0" />
               Call
@@ -98,7 +98,7 @@ export default function PersonChip({ role, contact, linkState, onEdit }: PersonC
           {contact.email && (
             <a
               href={`mailto:${contact.email}`}
-              className="flex items-center gap-2.5 rounded px-2 py-1.5 text-sm hover:bg-muted transition-colors"
+              className="flex items-center gap-2.5 rounded px-2 py-1.5 text-sm hover:bg-accent transition-colors"
             >
               <Mail size={14} className="flex-shrink-0" />
               Email
@@ -107,7 +107,7 @@ export default function PersonChip({ role, contact, linkState, onEdit }: PersonC
           <Link
             to={`/admin/contacts/${contact.id}`}
             state={linkState}
-            className="flex items-center gap-2.5 rounded px-2 py-1.5 text-sm hover:bg-muted transition-colors"
+            className="flex items-center gap-2.5 rounded px-2 py-1.5 text-sm hover:bg-accent transition-colors"
           >
             <ExternalLink size={14} className="flex-shrink-0" />
             View contact

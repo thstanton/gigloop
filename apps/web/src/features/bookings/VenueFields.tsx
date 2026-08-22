@@ -142,9 +142,9 @@ export function VenueFields({ initialVenueId, onChange }: VenueFieldsProps) {
 
   const header = (
     <div className="flex items-center gap-1.5">
-      <MapPin size={16} className="text-muted-foreground" aria-hidden="true" />
+      <MapPin size={16} className="text-muted" aria-hidden="true" />
       <p className="text-sm font-semibold">
-        Venue <span className="font-normal text-muted-foreground">(optional)</span>
+        Venue <span className="font-normal text-muted">(optional)</span>
       </p>
     </div>
   );
@@ -192,7 +192,7 @@ export function VenueFields({ initialVenueId, onChange }: VenueFieldsProps) {
         <button
           type="button"
           onClick={() => setShowMore((o) => !o)}
-          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          className="flex items-center gap-1 text-sm text-muted hover:text-foreground transition-colors"
         >
           {showMore ? (
             <><ChevronUp className="h-4 w-4" aria-hidden="true" />Hide venue details</>
