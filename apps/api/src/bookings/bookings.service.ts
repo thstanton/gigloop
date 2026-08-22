@@ -138,8 +138,9 @@ function earliestAcrossSegments(
   let best: { startTime: string; minutes: number } | null = null;
   for (const segment of segments) {
     const startTime = callTimesByPackage.get(segment);
-    const minutes = startTime ? startMinutes(startTime) : null;
-    if (startTime == null || minutes == null) continue;
+    if (startTime == null) continue;
+    const minutes = startMinutes(startTime);
+    if (minutes == null) continue;
     if (!best || minutes < best.minutes) best = { startTime, minutes };
   }
   return best?.startTime ?? null;

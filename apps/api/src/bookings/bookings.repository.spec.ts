@@ -1077,26 +1077,14 @@ describe('BookingsRepository', () => {
     // #884, per advisor review: re-applying a different lineup to the same segment must not stack
     // on top of the first apply — "the musician can pick a different one" means the pick REPLACES
     // the whole band playing that segment, not append to it (ADR-0081 §4).
-    it('replaces the Lineup already playing the targeted segment rather than appending', async () => {
-      prisma.lineup.findMany.mockResolvedValue([{ id: 'oldLu' }]);
+    it.each<[string, string | null, Record<string, unknown>]>([
+      ['the targeted segment', 'pkg1', { bookingId: 'b1', packages: { some: { packageId: 'pkg1' } } }],
+      ['the package-less segment', null, { bookingId: 'b1', packages: { none: {} } }],
+    ])('replaces the Lineup already playing %s rather than appending', async (_label, packageId, where) => {
       primeChain();
       prisma.lineup.findMany.mockResolvedValue([{ id: 'oldLu' }]);
-      await repo.applyLineupTemplate('u1', 'b1', lineup, 'pkg1');
-      expect(prisma.lineup.findMany).toHaveBeenCalledWith({
-        where: { bookingId: 'b1', packages: { some: { packageId: 'pkg1' } } },
-        select: { id: true },
-      });
-      expect(prisma.lineup.deleteMany).toHaveBeenCalledWith({ where: { id: { in: ['oldLu'] } } });
-    });
-
-    it('replaces the Lineup already playing the package-less segment rather than appending', async () => {
-      primeChain();
-      prisma.lineup.findMany.mockResolvedValue([{ id: 'oldLu' }]);
-      await repo.applyLineupTemplate('u1', 'b1', lineup, null);
-      expect(prisma.lineup.findMany).toHaveBeenCalledWith({
-        where: { bookingId: 'b1', packages: { none: {} } },
-        select: { id: true },
-      });
+      await repo.applyLineupTemplate('u1', 'b1', lineup, packageId);
+      expect(prisma.lineup.findMany).toHaveBeenCalledWith({ where, select: { id: true } });
       expect(prisma.lineup.deleteMany).toHaveBeenCalledWith({ where: { id: { in: ['oldLu'] } } });
     });
 
