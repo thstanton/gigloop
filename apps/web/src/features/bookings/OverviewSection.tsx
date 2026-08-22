@@ -1,7 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { BuilderSection } from '@/features/bookings/BuilderSection';
 import { OverviewAtom } from '@/features/bookings/OverviewAtom';
-import { RemindMeAboutContainer } from '@/features/bookings/RemindMeAboutContainer';
 import type { BookingDetail, BookingSeries } from '@/types/api';
 import type { useBookingBuilderMutations } from '@/features/bookings/useBookingBuilderMutations';
 
@@ -20,7 +19,12 @@ export function OverviewSection({
 }) {
   const { overviewSave, seriesSave, seriesConfirmation, setSeriesConfirmation, seriesError, handleOverviewSave } = mutations;
   return (
-    <BuilderSection id="overview" title="Overview" refCallback={refCallback}>
+    <BuilderSection
+      id="overview"
+      title="Overview"
+      refCallback={refCallback}
+      remind={{ bookingId, concern: 'overview', currentStatus: booking.status }}
+    >
       <OverviewAtom
         initialEventType={booking.eventType}
         initialDate={booking.date.slice(0, 10)}
@@ -54,9 +58,6 @@ export function OverviewSection({
           </div>
         </div>
       )}
-      <div className="mt-6">
-        <RemindMeAboutContainer bookingId={bookingId} concern="overview" currentStatus={booking.status} />
-      </div>
     </BuilderSection>
   );
 }

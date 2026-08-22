@@ -1,6 +1,5 @@
 import { BuilderSection } from '@/features/bookings/BuilderSection';
 import { ItineraryAtom } from '@/features/bookings/ItineraryAtom';
-import { RemindMeAboutContainer } from '@/features/bookings/RemindMeAboutContainer';
 import { NO_PACKAGE } from '@/features/bookings/ItineraryFields';
 import type { BookingDetail, BookingLogisticsEntry, PackageTemplate } from '@/types/api';
 import type { useBookingBuilderMutations } from '@/features/bookings/useBookingBuilderMutations';
@@ -26,7 +25,12 @@ export function ItinerarySection({
   } = mutations;
   const addingKey = addSet.isPending ? (addSet.variables?.packageId ?? NO_PACKAGE) : null;
   return (
-    <BuilderSection id="itinerary" title="Itinerary" refCallback={refCallback}>
+    <BuilderSection
+      id="itinerary"
+      title="Itinerary"
+      refCallback={refCallback}
+      remind={{ bookingId, concern: 'itinerary', currentStatus: booking.status }}
+    >
       <ItineraryAtom
         sets={booking.sets}
         packages={booking.packages}
@@ -52,9 +56,6 @@ export function ItinerarySection({
         anchorsSaved={saveAnchors.isSuccess}
         anchorsError={saveAnchors.isError ? 'Failed to save times. Please try again.' : null}
       />
-      <div className="mt-6">
-        <RemindMeAboutContainer bookingId={bookingId} concern="itinerary" currentStatus={booking.status} />
-      </div>
     </BuilderSection>
   );
 }

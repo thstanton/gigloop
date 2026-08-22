@@ -1,6 +1,5 @@
 import { BuilderSection } from '@/features/bookings/BuilderSection';
 import { MusicAtom } from '@/features/bookings/MusicAtom';
-import { RemindMeAboutContainer } from '@/features/bookings/RemindMeAboutContainer';
 import type { BookingDetail, MusicFormConfig } from '@/types/api';
 import type { useBookingBuilderMutations } from '@/features/bookings/useBookingBuilderMutations';
 
@@ -21,7 +20,12 @@ export function MusicSection({
 }) {
   const { musicSave, musicPublish, musicUnpublish, musicTurnOn, musicTurnOff } = mutations;
   return (
-    <BuilderSection id="music" title="Music" refCallback={refCallback}>
+    <BuilderSection
+      id="music"
+      title="Music"
+      refCallback={refCallback}
+      remind={{ bookingId, concern: 'music', currentStatus: booking.status }}
+    >
       {/* Only mount the atom after the config query settles so its state initialises
           from the loaded config rather than from a null placeholder. */}
       {booking.hasMusicFormConfig && musicConfigLoading ? (
@@ -46,9 +50,6 @@ export function MusicSection({
           isTurningOff={musicTurnOff.isPending}
         />
       )}
-      <div className="mt-6">
-        <RemindMeAboutContainer bookingId={bookingId} concern="music" currentStatus={booking.status} />
-      </div>
     </BuilderSection>
   );
 }

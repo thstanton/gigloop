@@ -1,6 +1,5 @@
 import { BuilderSection } from '@/features/bookings/BuilderSection';
 import { PeopleAtom, type PeopleSelection } from '@/features/bookings/PeopleAtom';
-import { RemindMeAboutContainer } from '@/features/bookings/RemindMeAboutContainer';
 import type { BookingDetail } from '@/types/api';
 import type { useBookingBuilderMutations } from '@/features/bookings/useBookingBuilderMutations';
 
@@ -16,7 +15,12 @@ export function PeopleSection({
   refCallback?: React.RefCallback<HTMLElement>;
 }) {
   return (
-    <BuilderSection id="people" title="People" refCallback={refCallback}>
+    <BuilderSection
+      id="people"
+      title="People"
+      refCallback={refCallback}
+      remind={{ bookingId, concern: 'people', currentStatus: booking.status }}
+    >
       <PeopleAtom
         customer={booking.customer ?? null}
         agent={booking.bookingAgent ?? null}
@@ -25,9 +29,6 @@ export function PeopleSection({
         saved={peopleSave.isSuccess}
         saveError={peopleSave.isError ? 'Failed to save. Please try again.' : null}
       />
-      <div className="mt-6">
-        <RemindMeAboutContainer bookingId={bookingId} concern="people" currentStatus={booking.status} />
-      </div>
     </BuilderSection>
   );
 }
