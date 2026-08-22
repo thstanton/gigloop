@@ -94,7 +94,11 @@ function CommunicationRow({ comm }: Readonly<{ comm: Communication }>) {
             </p>
             {/* ADR-0080: a series communication is merged into every member booking's list —
                 the badge is the only thing marking it as series-level rather than this booking's own. */}
-            {comm.seriesId && <Badge variant="secondary" className="shrink-0">Series</Badge>}
+            {comm.seriesId && (
+              <Badge variant="secondary" className="shrink-0" data-testid="communication-series-badge">
+                Series
+              </Badge>
+            )}
           </div>
           <p className="text-xs text-muted mt-0.5">{statusPrefix}{meta}</p>
           <AttachmentLink comm={comm} />
