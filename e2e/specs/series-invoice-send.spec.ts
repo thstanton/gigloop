@@ -103,7 +103,10 @@ test.describe('series invoice — issue and send', () => {
     await page.reload();
     await mobile.getByRole('tab', { name: 'Info' }).click();
     await expect(info.getByText('Series invoice email')).toBeVisible();
-    await expect(info.getByText('Series', { exact: true })).toBeVisible();
+    // Scoped to the communication row's own badge — the Info tab also has an unrelated
+    // "Series" section heading (SectionHeader), which an unscoped getByText('Series') collides
+    // with (#1005: this collision made the assertion fail on every run since #927 landed).
+    await expect(info.getByTestId('communication-series-badge')).toBeVisible();
 
     // The series row belongs to no single booking, so it must show identically on the OTHER
     // member booking's page too — not just the one the send was initiated from (ADR-0080).
@@ -112,6 +115,6 @@ test.describe('series invoice — issue and send', () => {
     await secondMobile.getByRole('tab', { name: 'Info' }).click();
     const secondInfo = secondMobile.getByRole('tabpanel', { name: 'Info' });
     await expect(secondInfo.getByText('Series invoice email')).toBeVisible();
-    await expect(secondInfo.getByText('Series', { exact: true })).toBeVisible();
+    await expect(secondInfo.getByTestId('communication-series-badge')).toBeVisible();
   });
 });
