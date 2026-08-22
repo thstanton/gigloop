@@ -24,6 +24,29 @@ export const PRIMARY_ROLE_LABELS = column(PRIMARY_ROLES, 'label');
 
 export const PRIMARY_ROLE_ORDER: ContactPrimaryRole[] = PRIMARY_ROLES.map((row) => row.value);
 
+// The four freeform dep-notes fields on a band-member Contact (#886, ADR-0072 §4). All four are
+// shared-with-band — organiser-private commentary belongs in `Contact.notes`, never here. They are
+// declared together because they are identical in every dimension: same type, same edit control
+// (Textarea), same read rendering. `primaryBandRole` and `instruments` are deliberately NOT in this
+// table — they differ in type, control and rendering, so folding them in would only relocate the
+// special-casing into a switch with one branch per row.
+export type BandNotesField = 'travelNotes' | 'equipmentNotes' | 'outfitNotes' | 'availabilityNotes';
+
+const BAND_NOTES = [
+  { value: 'travelNotes',       label: 'Travel notes'       },
+  { value: 'equipmentNotes',    label: 'Equipment notes'    },
+  { value: 'outfitNotes',       label: 'Outfit notes'       },
+  { value: 'availabilityNotes', label: 'Availability notes' },
+] as const satisfies readonly { value: BandNotesField; label: string }[];
+
+export type _BandNotesCoverage = AssertNever<
+  Exclude<BandNotesField, (typeof BAND_NOTES)[number]['value']>
+>;
+
+/** Both the contact form (write) and the contact detail page (read) derive their rows from this —
+ *  neither re-lists the labels. */
+export const BAND_NOTES_FIELDS: readonly { value: BandNotesField; label: string }[] = BAND_NOTES;
+
 export const GENRE_LABELS: Record<SongGenre, string> = {
   CONTEMPORARY:    'Contemporary',
   CLASSICAL:       'Classical',

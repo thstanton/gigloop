@@ -19,7 +19,7 @@ import { VenuePlaceSearch, type VenuePlaceValue } from '@/components/common/Venu
 import { InstrumentsInput } from './InstrumentsInput';
 import { isEnabled } from '@/lib/featureFlags';
 import { useDatalistId } from '@/lib/hooks/useDatalistId';
-import { PRIMARY_ROLE_LABELS, PRIMARY_ROLE_ORDER } from '@/lib/constants';
+import { BAND_NOTES_FIELDS, PRIMARY_ROLE_LABELS, PRIMARY_ROLE_ORDER } from '@/lib/constants';
 import type { Contact, CreateContactInput, UpdateContactInput } from '@/types/api';
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
@@ -54,15 +54,6 @@ const schema = z.object({
 });
 
 export type ContactFormValues = z.infer<typeof schema>;
-
-// The four freeform dep-notes fields (#886) — identical FormField+Textarea shape, differing only
-// in field name and label.
-const BAND_NOTES_FIELDS: { name: 'travelNotes' | 'equipmentNotes' | 'outfitNotes' | 'availabilityNotes'; label: string }[] = [
-  { name: 'travelNotes', label: 'Travel notes' },
-  { name: 'equipmentNotes', label: 'Equipment notes' },
-  { name: 'outfitNotes', label: 'Outfit notes' },
-  { name: 'availabilityNotes', label: 'Availability notes' },
-];
 
 export function toContactPayload(
   values: ContactFormValues,
@@ -386,9 +377,9 @@ export default function ContactForm({
           )}
         />
       </FormField>
-      {BAND_NOTES_FIELDS.map(({ name, label }) => (
-        <FormField key={name} label={label} error={errors[name]?.message}>
-          <Textarea {...register(name)} rows={2} />
+      {BAND_NOTES_FIELDS.map(({ value, label }) => (
+        <FormField key={value} label={label} error={errors[value]?.message}>
+          <Textarea {...register(value)} rows={2} />
         </FormField>
       ))}
     </div>

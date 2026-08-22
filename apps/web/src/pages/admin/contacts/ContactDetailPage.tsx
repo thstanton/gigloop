@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, Plus } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -13,7 +13,8 @@ import { contactToRecent, recordRecentlyViewed } from '@/lib/recentlyViewed';
 import { apiGet } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
 import { formatDate } from '@/lib/formatters';
-import { EVENT_TYPE_LABELS, PRIMARY_ROLE_LABELS, type ContactPrimaryRole } from '@/lib/constants';
+import { BAND_NOTES_FIELDS, EVENT_TYPE_LABELS, PRIMARY_ROLE_LABELS, type ContactPrimaryRole } from '@/lib/constants';
+import { isEnabled } from '@/lib/featureFlags';
 import ContactEditDrawer from '@/features/contacts/ContactEditDrawer';
 import type { BookingRef, BookingStatus, ContactDetail as ContactDetailType, TravelTimeResponse } from '@/types/api';
 
@@ -37,6 +38,61 @@ function InfoRow({ label, value, href }: { label: string; value: string | null |
         : <span className="whitespace-pre-wrap">{value}</span>
       }
     </LabelValue>
+  );
+}
+
+// ─── Band profile ─────────────────────────────────────────────────────────────
+
+/**
+ * The dep profile of a band-member contact (#886, ADR-0072 §4) — the read counterpart to the
+ * contact form's band section, mirroring how the venue-only block works. All six fields are
+ * shared-with-band; organiser-private commentary stays in `notes` above.
+ *
+ * Owns its own applicability, so the page body renders it unconditionally: it draws nothing
+ * unless the band-members flag is on (#879), the contact is filed as a band member, and at least
+ * one field is set — a band member with an empty profile shows no empty section. `enabled` is a
+ * prop rather than a flag read here so the page keeps the single flag lookup.
+ */
+function BandProfile({ contact, enabled }: { contact: ContactDetailType; enabled: boolean }) {
+  if (!enabled || contact.primaryRole !== 'BAND_MEMBER') return null;
+
+  // One uniform row list: identity, the instrument chips, then the notes. Built by filtering on
+  // presence, so `rows.length` is both the emptiness test and what gets drawn — a separate
+  // "is anything set" predicate would restate the same per-field check.
+  const textNode = (value: string | null) =>
+    value ? <span className="whitespace-pre-wrap">{value}</span> : null;
+
+  const rows: { key: string; label: string; node: ReactNode }[] = [
+    { key: 'primaryBandRole', label: 'Identity', node: textNode(contact.primaryBandRole) },
+    {
+      key: 'instruments',
+      label: 'Instruments',
+      node: contact.instruments.length > 0 ? (
+        <span className="flex flex-wrap gap-1.5">
+          {contact.instruments.map((instrument) => (
+            <Badge key={instrument} variant="secondary">{instrument}</Badge>
+          ))}
+        </span>
+      ) : null,
+    },
+    ...BAND_NOTES_FIELDS.map(({ value, label }) => ({
+      key: value,
+      label,
+      node: textNode(contact[value]),
+    })),
+  ].filter((row) => row.node !== null);
+
+  if (rows.length === 0) return null;
+
+  return (
+    <div className="mb-8">
+      <h2 className="text-sm font-semibold text-foreground mb-1">Band member details</h2>
+      <div className="border-t border-border">
+        {rows.map((row) => (
+          <LabelValue key={row.key} label={row.label}>{row.node}</LabelValue>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -137,6 +193,9 @@ export default function ContactDetailPage() {
     );
   }
 
+  // Band roster ships dark behind VITE_FEATURE_BAND_MEMBERS (#879).
+  const bandMembersEnabled = isEnabled('VITE_FEATURE_BAND_MEMBERS');
+
   const bookings = mergeBookings(
     contact.customerBookings,
     contact.venueBookings,
@@ -213,6 +272,8 @@ export default function ContactDetailPage() {
               />
             </div>
           )}
+
+          <BandProfile contact={contact} enabled={bandMembersEnabled} />
         </div>
 
         {/* ─── Right column ─── */}
