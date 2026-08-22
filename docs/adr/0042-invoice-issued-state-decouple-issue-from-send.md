@@ -1,7 +1,7 @@
 # ADR-0042: Invoice `Issued` state — decouple issuing from sending
 
 ## Status
-Accepted (2026-06-14). **Supersedes [ADR-0008](0008-invoice-dates-and-number-assigned-at-send-time.md).** Builds on ADR-0028 (number slot reuse on void), ADR-0006 (template types encode deposit vs balance), ADR-0029 (series as billing grouping).
+Accepted (2026-06-14). **Supersedes [ADR-0008](0008-invoice-dates-and-number-assigned-at-send-time.md).** Builds on ADR-0028 (number slot reuse on void), ADR-0006 (template types encode deposit vs balance), ADR-0029 (series as billing grouping). **Amended (2026-08-22): Send is no longer a one-way door — see Addendum below.**
 
 ## Context
 
@@ -63,8 +63,8 @@ When an invoice is sent, the attachment `Document` is **linked to the `Communica
 - **New-invoice sheet:** **Save draft** (→ Draft), **Create invoice** (→ Issued), **Create & send** (→ Issued, then opens the send composer pre-filled with the cover template; on confirm emails the stored PDF and marks Sent).
 - **Draft row:** Create invoice, Create & send, **Preview** (ephemeral, watermarked "DRAFT — no number assigned"), Edit, Delete.
 - **Issued row:** Send, Mark as sent, Download, Void.
-- **Sent row:** Mark as paid, Download, Void (+ send-audit line).
-- **Paid row:** Download, Void.
+- **Sent row:** Mark as paid, Download, Resend, Void (+ send-audit line). *(Resend added 2026-08-22, see Addendum.)*
+- **Paid row:** Download, Resend, Void. *(Resend added 2026-08-22, see Addendum.)*
 
 The verb **"Send" only ever appears on an already-Issued invoice**. On a draft the equivalent is **"Create & send"** (issue, then deliver) — honest about the fact that it creates the real document and then sends it. Both route through the same send composer, so the composed email and attached PDF are always visible before anything leaves.
 
@@ -98,3 +98,16 @@ The committed state is **`Issued`** (pill set: Draft · Issued · Sent · Paid �
 - **Draft preview** renders via the existing ephemeral `generatePreviewPdf`, watermarked and explicitly marked "no number assigned" so it cannot be mistaken for the issued artifact.
 - **Lifecycle unification is its own slice.** Per CLAUDE.md ("refactoring is its own deliberate work"), when this is sliced into issues the booking/series lifecycle unification is a **dedicated first slice/commit**, sequenced before the behavioural slices that build on the unified path — not smeared across feature commits.
 - Series membership-sync and block-when-issued are covered separately in **ADR-0043**.
+
+## Addendum (2026-08-22): Resend is allowed on Sent and Paid
+
+Surfaced from a real support case: a musician reopened the "Contract & deposit" compose sheet on a booking whose deposit invoice was already `SENT` (e.g. the client's address was wrong, or they said they never received it) and got a hard `400 "Only issued invoices can be sent"` with no usable error surfaced in the UI. Investigating it exposed that **no resend affordance existed anywhere** — `send`'s guard (`isSendable`) accepted `ISSUED` only, so once `Sent`, the email step was a true one-way door, and the only escape was for the musician to re-deliver the PDF themselves outside GigLoop, off the record.
+
+That was an oversight, not a deliberate constraint this ADR intended. This addendum reverses it:
+
+- **`Send`'s guard broadens to `ISSUED | SENT | PAID`.** A resend delivers the same stored `Issued` `Document` — never regenerated, per the "Send delivers the stored PDF" rule above, which is unchanged and now explicitly covers resends too.
+- **No side effects fire on a resend.** `markSentById` (number/status transition) only fires when the invoice was `ISSUED` going in; calling send again on an already-`SENT` or `PAID` invoice leaves status, `paidAt`, checklist state, and documents untouched. A resend is purely "deliver this artifact again," not a transition.
+- **Every resend is still audited.** `CommunicationsService.sendEmail` already creates a fresh `Communication` row (`PENDING → SENT/FAILED`) on every call regardless of invoice status, so a resend gets the same "Sent to jane@example.com on 14 Jun" audit trail as any other send — no new plumbing needed.
+- **`Draft` and `Void` remain non-sendable.** Neither has a stored PDF (draft) or a document that should still be delivered (void) — the guard change is additive, not a general relaxation.
+- **API surface unchanged.** This reuses `POST /invoices/:id/send` rather than adding a `/resend` endpoint — same DTO, same delivery logic, just a broader precondition. The UI is what distinguishes first-send from resend (button reads "Resend", an inline note explains why) — it is not a different backend operation.
+- **The contract-shortcut's implicit bundling is tightened to match.** Before this addendum, `resolveContractTemplate` (API) and `contractCoverTemplateFor` (frontend) pre-selected `contract_and_deposit_cover` whenever a deposit invoice/goal existed **at all**, regardless of status — harmless while resend was impossible (it just meant a 400), but a live silent-resend risk now that send succeeds on `SENT`/`PAID`. Both are tightened to bundle the deposit only while it has **not yet** been sent (`DRAFT`/`ISSUED`, or no deposit at all); once the deposit is `SENT` or `PAID`, "Send Contract" (from either the checklist step or `ContractCard`) opens `contract_cover` only. A deliberate deposit resend is something the musician now does explicitly — via the invoice's own Resend action, or by manually picking the combined template in the compose sheet, where an inline indicator makes clear a resend is about to happen.
