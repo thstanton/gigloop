@@ -115,10 +115,28 @@ that is wrong in at least one direction (a musician who plays weddings as a five
 gigs solo wants *no* lineup on the restaurant template; a fallback would read that as "unset, so use
 my usual").
 
-But **a default you can only override by undoing is not a default — it is an assertion.** So each
-selected package template in the New Booking form carries a lineup select — the musician's lineups
-plus **"Decide later"** — pre-filled from the template. Journeys that want the default tap nothing;
-the negotiating musician taps once; nobody keeps a duplicate template.
+But **a default you can only override by undoing is not a default — it is an assertion.** So the
+lineup is choosable at booking time, pre-filled from the template, with **"Decide later"** among the
+options. Journeys that want the default tap nothing; the negotiating musician taps once; nobody keeps
+a duplicate template.
+
+**The requirement, layout left open.** Three constraints bind whatever the create surface looks like;
+the arrangement itself is a design question (see the prototyping issues), and the persisted shape
+already admits every answer:
+
+1. **A lineup is choosable with *or without* package templates.** A musician who plays the same gig
+   every time and never builds an itinerary still needs to say "this one's the four-piece" — for
+   them it is the *only* create-time fact that varies. Hanging the control off a package chip would
+   leave exactly that musician without one.
+2. **Packages and lineups are orthogonal, linked explicitly where they co-exist.** The control may
+   *influence* and be influenced by template selection — a package template's default pre-selects the
+   lineup — but the lineup is never modelled as a property *of* a package. Whatever the surface, it
+   must read as a link, not as containment.
+3. **Story 39 is protected by relevance, not omission.** The control is offered only to musicians who
+   have lineup templates at all, so a soloist (ADR-0072 §3's `isSelf`, #903's "Just me") and anyone
+   who has not built one never meet it, and the lean enquiry-capture path is unchanged for them.
+
+The create DTO's wire shape follows from that design and is deliberately not fixed here.
 
 Templates that select the same lineup share **one** `Lineup` instance linked to both segments. That
 is the direct expression of "same band, both segments", not a heuristic.
