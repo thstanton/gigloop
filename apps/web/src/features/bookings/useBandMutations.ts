@@ -3,13 +3,10 @@ import { apiDelete, apiPatch, apiPost } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
 import type { BookingBandChair, BookingBandMemberStatus, BookingDetail } from '@/types/api';
 
-// Band members v1 (#879, ADR-0072 §2/§3/§5, #884/#885). Mirrors useItineraryMutations: the shell
-// that drives the Band atom (BandSheet) owns these mutations; the atom stays presentational.
-// Chair CRUD + lineups are #884; assignChair/updateMemberStatus/saveMemberFee/removeMember are #885.
-
-function nextOrder(chairs: BookingBandChair[]): number {
-  return Math.max(0, ...chairs.map((c) => c.order)) + 1;
-}
+// Band members v1 (#879, ADR-0072 §2/§3/§5, #884/#885; re-pointed by ADR-0081). Mirrors
+// useItineraryMutations: the shell that drives the Band atom (BandSheet) owns these mutations; the
+// atom stays presentational. Chair CRUD + lineups are #884; assignChair/updateMemberStatus/
+// saveMemberFee/removeMember are #885.
 
 type Rollback = { prev?: BookingDetail };
 
@@ -43,11 +40,12 @@ export function useBandMutations(bookingId: string, chairs: BookingBandChair[]) 
     onError: () => toast({ title: 'Failed to apply lineup. Please try again.', variant: 'destructive' }),
   });
 
+  // `order` is server-computed (ADR-0081): it's the chair's position within its Lineup, and the
+  // target Lineup may not exist yet (a segment with no band yet joins or starts one server-side).
   const addChair = useMutation({
     mutationFn: ({ role, packageId }: { role: string; packageId: string | null }) =>
       apiPost(`/bookings/${bookingId}/chairs`, {
         role,
-        order: nextOrder(chairs),
         ...(packageId ? { packageId } : {}),
       }),
     onSuccess: invalidateBooking,
@@ -82,13 +80,16 @@ export function useBandMutations(bookingId: string, chairs: BookingBandChair[]) 
     onSettled: invalidateBooking,
   });
 
-  // Reorders by swapping the `order` of two adjacent chairs (sorted by current order): one
-  // synchronous optimistic write up front for the whole swap, then two independent PATCHes.
+  // Reorders by swapping the `order` of two adjacent chairs *within the same Lineup* (ADR-0081:
+  // order is per-Lineup, not booking-wide — two different bands' chairs can share an order value).
+  // One synchronous optimistic write up front for the whole swap, then two independent PATCHes.
   // Without the synchronous pre-swap, each PATCH's own optimistic `onMutate` (which awaits
   // cancelQueries) could interleave and momentarily show a half-swapped order; writing the final
   // state here first means both PATCHes' own optimistic edits just redundantly confirm it.
   function moveChair(chairId: string, direction: 'up' | 'down') {
-    const sorted = [...chairs].sort((a, b) => a.order - b.order);
+    const moving = chairs.find((c) => c.id === chairId);
+    if (!moving) return;
+    const sorted = chairs.filter((c) => c.lineupId === moving.lineupId).sort((a, b) => a.order - b.order);
     const index = sorted.findIndex((c) => c.id === chairId);
     const swapIndex = direction === 'up' ? index - 1 : index + 1;
     if (index === -1 || swapIndex < 0 || swapIndex >= sorted.length) return;

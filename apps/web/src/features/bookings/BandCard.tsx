@@ -106,7 +106,7 @@ export default function BandCard({ band, packages, hasLineupTemplates, linkState
             <div className="flex flex-wrap gap-1.5">
               {vacantChairs.map((chair) => (
                 <Badge key={chair.id} variant="outline">
-                  {chair.role} · {segmentLabel(chair, packages)}
+                  {chair.role} · {segmentLabel(chair, band.lineups, packages)}
                 </Badge>
               ))}
             </div>

@@ -28,7 +28,7 @@ const baseBooking: BookingDetail = {
   hasMusicFormConfig: false,
   hasMusicFormResponse: false,
   portalVisibility: { contract: null, musicForm: null },
-  band: { chairs: [], members: [] },
+  band: { lineups: [], chairs: [], members: [] },
   seriesId: null,
   series: null,
   logistics: null,

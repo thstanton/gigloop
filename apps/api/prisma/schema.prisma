@@ -202,6 +202,7 @@ model Booking {
   invoiceLineItems  InvoiceLineItem[]
   bandChairs        BookingBandChair[]
   bandMembers       BookingBandMember[]
+  lineups           Lineup[]
 
   @@index([userId])
   @@index([customerId])
@@ -405,25 +406,64 @@ model Package {
   icon  String
   order Int
 
-  // Band members v1 (#879, ADR-0072 §3): the applied lineup's name, snapshotted — provenance is
-  // severed the same way a Package severs provenance from its PackageTemplate. Populated when a
-  // lineup is applied to this package (#884); stays untouched by later LineupTemplate deletes.
-  lineupName String?
-
   bookingId String
   booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 
-  sets       PerformanceSet[]
-  bandChairs BookingBandChair[]
+  sets        PerformanceSet[]
+  lineupLinks LineupPackage[]
 
   @@index([userId])
   @@index([bookingId])
 }
 
-// Band members v1 (#879, ADR-0072 §2): a seat in a segment. `memberId` is nullable throughout this
-// slice — a vacancy is `memberId = null`, a first-class thing the musician looks at, not an
-// absence. `packageId` null means a package-less/whole-day chair — one code path, no special case,
-// exactly like PerformanceSet.packageId.
+// ADR-0081: the booking-owned instance a LineupTemplate becomes when applied — the object
+// PackageTemplate -> Package already models (ADR-0046). Chairs hang off it (§3); the segments it
+// plays are a many-to-many via LineupPackage (§4) — zero links is itself a segment (package-less/
+// whole-day), the same rule as a null-package chair used to be, not a nullable sentinel. Retires
+// `Package.lineupName`, which was this row's label with nowhere else to live.
+model Lineup {
+  id        String   @id @default(uuid())
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Severed-provenance snapshot of the source LineupTemplate's label (ADR-0046) — nullable because
+  // a chair added one at a time (#884), with no template involved, has no label to snapshot.
+  label String?
+
+  bookingId String
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  packages LineupPackage[]
+  chairs   BookingBandChair[]
+
+  @@index([userId])
+  @@index([bookingId])
+}
+
+// The Lineup <-> Package many-to-many (ADR-0081 §4). A row means "this Lineup plays this segment";
+// deleting the Package cascades the link only, never the Lineup or its chairs — the band a segment
+// loses still exists, just linked to one fewer (or zero) segments.
+model LineupPackage {
+  id        String   @id @default(uuid())
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lineupId String
+  lineup   Lineup @relation(fields: [lineupId], references: [id], onDelete: Cascade)
+
+  packageId String
+  package   Package @relation(fields: [packageId], references: [id], onDelete: Cascade)
+
+  @@unique([lineupId, packageId])
+  @@index([userId])
+  @@index([packageId])
+}
+
+// Band members v1 (#879, ADR-0072 §2), re-pointed by ADR-0081 §3: a seat in a Lineup. `memberId` is
+// nullable throughout this slice — a vacancy is `memberId = null`, a first-class thing the musician
+// looks at, not an absence. `order` is per-Lineup (position within the band), not booking-wide.
 model BookingBandChair {
   id        String   @id @default(uuid())
   userId    String
@@ -436,8 +476,8 @@ model BookingBandChair {
   bookingId String
   booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 
-  packageId String?
-  package   Package? @relation(fields: [packageId], references: [id], onDelete: SetNull)
+  lineupId String
+  lineup   Lineup @relation(fields: [lineupId], references: [id], onDelete: Cascade)
 
   // #885: assignment never creates or destroys a chair row, it sets this field — filling a chair
   // sets memberId, vacating nulls it. SetNull (not Restrict/Cascade) because a member is never
@@ -447,7 +487,7 @@ model BookingBandChair {
 
   @@index([userId])
   @@index([bookingId])
-  @@index([packageId])
+  @@index([lineupId])
   @@index([memberId])
 }
 

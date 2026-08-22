@@ -3,7 +3,7 @@ import { BandAtom } from './BandAtom';
 import { useBandMutations } from './useBandMutations';
 import { useLineupTemplates } from '@/lib/hooks/useLineupTemplates';
 import { useRoleVocabulary } from '@/lib/hooks/useRoleVocabulary';
-import type { BookingBandChair, BookingBandMember, BookingPackageSummary, Contact } from '@/types/api';
+import type { BookingBandChair, BookingBandMember, BookingLineup, BookingPackageSummary, Contact } from '@/types/api';
 
 // Band members v1 (#879, ADR-0072 §6 / #885). Opened from the booking via ?sheet=band — the
 // "change something" surface. One row per member with segment chips, plus the unfilled-chair block
@@ -11,6 +11,7 @@ import type { BookingBandChair, BookingBandMember, BookingPackageSummary, Contac
 
 interface Props {
   bookingId: string;
+  lineups: BookingLineup[];
   chairs: BookingBandChair[];
   members: BookingBandMember[];
   packages: BookingPackageSummary[];
@@ -19,7 +20,7 @@ interface Props {
   onOpenChange: (open: boolean) => void;
 }
 
-export function BandSheet({ bookingId, chairs, members, packages, venue, open, onOpenChange }: Props) {
+export function BandSheet({ bookingId, lineups, chairs, members, packages, venue, open, onOpenChange }: Props) {
   const { data: lineupTemplates = [], isLoading: lineupTemplatesLoading } = useLineupTemplates(open);
   const instrumentVocabulary = useRoleVocabulary(open);
 
@@ -43,6 +44,7 @@ export function BandSheet({ bookingId, chairs, members, packages, venue, open, o
 
         <div className="mt-4">
           <BandAtom
+            lineups={lineups}
             chairs={chairs}
             members={members}
             packages={packages}

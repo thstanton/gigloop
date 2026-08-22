@@ -139,11 +139,35 @@ export class BookingSeriesRefDto {
   @ApiProperty() label: string;
 }
 
-// A seat in a segment (ADR-0072 §2 / #884). `memberId` is nullable throughout Band members v1's
-// first slice — a vacancy is `memberId = null`, a first-class thing the musician looks at, not an
-// absence. `callTime` is derived (never stored) from the earliest `PerformanceSet.startTime` in
-// this chair's segment (`packageId`), and is absent — not zero, not a placeholder — when that
-// segment has no start time.
+// The booking-owned instance a LineupTemplate becomes when applied (ADR-0081 §2), mirroring
+// PackageTemplate -> Package (ADR-0046). `packageIds` is derived from the Lineup <-> Package join
+// table, never a stored column — empty means package-less/whole-day (ADR-0081 §4), the same rule
+// as a linked segment, not a nullable sentinel.
+export class BookingLineupDto {
+  @ApiProperty() id: string;
+  @ApiProperty({ description: 'ISO 8601 timestamp' }) createdAt: string;
+  @ApiProperty({ description: 'ISO 8601 timestamp' }) updatedAt: string;
+  @ApiProperty() bookingId: string;
+
+  @ApiProperty({
+    nullable: true,
+    type: String,
+    description: 'Snapshotted from the source LineupTemplate; null for a Lineup built one chair at a time.',
+  })
+  label: string | null;
+
+  @ApiProperty({
+    type: [String],
+    description: 'Segments (booking-level Package ids) this Lineup plays; empty for package-less/whole-day.',
+  })
+  packageIds: string[];
+}
+
+// A seat in a Lineup (ADR-0072 §2 / #884, re-pointed by ADR-0081 §3). `memberId` is nullable
+// throughout Band members v1's first slice — a vacancy is `memberId = null`, a first-class thing
+// the musician looks at, not an absence. `callTime` is derived (never stored) from the earliest
+// `PerformanceSet.startTime` across the chair's Lineup's segments, and is absent — not zero, not a
+// placeholder — when none of them has a start time.
 export class BookingBandChairDto {
   @ApiProperty() id: string;
   @ApiProperty({ description: 'ISO 8601 timestamp' }) createdAt: string;
@@ -151,14 +175,10 @@ export class BookingBandChairDto {
   @ApiProperty() bookingId: string;
 
   @ApiProperty() role: string;
-  @ApiProperty({ description: 'Position among this booking\'s chairs (ascending).' }) order: number;
+  @ApiProperty({ description: "Position within this chair's Lineup (ascending)." }) order: number;
 
-  @ApiProperty({
-    nullable: true,
-    type: String,
-    description: 'Owning booking-level Package (segment); null for a package-less chair.',
-  })
-  packageId: string | null;
+  @ApiProperty({ description: 'Owning Lineup — every chair belongs to exactly one (ADR-0081).' })
+  lineupId: string;
 
   @ApiProperty({ nullable: true, type: String, description: 'Null = vacant.' })
   memberId: string | null;
@@ -166,7 +186,7 @@ export class BookingBandChairDto {
   @ApiProperty({
     nullable: true,
     type: String,
-    description: 'Derived from the segment\'s earliest PerformanceSet.startTime (HH:mm); null when unset.',
+    description: "Derived from the Lineup's segments' earliest PerformanceSet.startTime (HH:mm); null when unset.",
   })
   callTime: string | null;
 }
@@ -222,6 +242,9 @@ export class BookingBandMemberDto {
 // ADR-0073 §6: the organiser read path. Removed members are excluded — "replaced" is derived from
 // a fresh member row on the same chair, never stored (ADR-0072 §5).
 export class BookingBandDto {
+  @ApiProperty({ type: [BookingLineupDto] })
+  lineups: BookingLineupDto[];
+
   @ApiProperty({ type: [BookingBandChairDto] })
   chairs: BookingBandChairDto[];
 

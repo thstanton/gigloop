@@ -192,15 +192,24 @@ export interface BookingPackageSummary {
   icon: string;
 }
 
-// A seat in a segment (ADR-0072 §2, #884). A vacancy is `memberId = null`, a first-class thing the
-// musician looks at, not an absence — assignment (#885) never creates or destroys a chair row, it
-// sets this field. `callTime` is derived server-side from the segment's earliest
-// PerformanceSet.startTime; absent (null), not zero, when that segment has no start time.
+// The booking-owned instance a LineupTemplate becomes when applied (ADR-0081), mirroring
+// PackageTemplate -> Package. `packageIds` is the segments this Lineup plays — empty means
+// package-less/whole-day (the same rule as a linked segment, not a nullable sentinel).
+export interface BookingLineup {
+  id: string;
+  label: string | null;
+  packageIds: string[];
+}
+
+// A seat in a Lineup (ADR-0072 §2, #884; re-pointed by ADR-0081 §3). A vacancy is `memberId =
+// null`, a first-class thing the musician looks at, not an absence — assignment (#885) never
+// creates or destroys a chair row, it sets this field. `callTime` is derived server-side from the
+// Lineup's segments' earliest PerformanceSet.startTime; absent (null), not zero, when none has one.
 export interface BookingBandChair {
   id: string;
   role: string;
   order: number;
-  packageId: string | null;
+  lineupId: string;
   memberId: string | null;
   callTime: string | null;
 }
@@ -226,8 +235,10 @@ export interface BookingBandMember {
   respondedAt: string | null;
 }
 
-// The band roster (ADR-0072/0073 §6): chairs (seats) and members (people), removed members excluded.
+// The band roster (ADR-0072/0073 §6): lineups (bands), chairs (seats) and members (people),
+// removed members excluded.
 export interface BookingBand {
+  lineups: BookingLineup[];
   chairs: BookingBandChair[];
   members: BookingBandMember[];
 }

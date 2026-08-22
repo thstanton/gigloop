@@ -1008,12 +1008,13 @@ async function main() {
 
   console.log('Seeding the band roster fixture...');
 
-  // Band members v1 (#879/#889, ADR-0072): one lineup template + one booking exercising all
-  // three chair states the musician actually looks at — a filled chair, a vacancy, and a
-  // filled-but-declined chair (DECLINED does not vacate the chair; only removal does). Applied
-  // to booking2's Wedding Ceremony package, mirroring what BookingsService.applyLineupTemplate
-  // (#884) would do by hand: chairs created, Package.lineupName snapshotted. Preprod runs on
-  // this seed and otherwise has no band to test the Band card / Itinerary / Copy Event against.
+  // Band members v1 (#879/#889, ADR-0072; Lineup per ADR-0081): one lineup template + one booking
+  // exercising all three chair states the musician actually looks at — a filled chair, a vacancy,
+  // and a filled-but-declined chair (DECLINED does not vacate the chair; only removal does).
+  // Applied to booking2's Wedding Ceremony package, mirroring what
+  // BookingsService.applyLineupTemplate (#884) would do by hand: a Lineup created, linked to the
+  // package, its label snapshotted. Preprod runs on this seed and otherwise has no band to test
+  // the Band card / Itinerary / Copy Event against.
   const [priya, jonah] = await Promise.all([
     prisma.contact.create({
       data: {
@@ -1061,9 +1062,11 @@ async function main() {
     },
   });
 
-  await prisma.package.update({
-    where: { id: booking2Packages['Wedding Ceremony'] },
-    data: { lineupName: ceremonyTrio.label },
+  const ceremonyLineup = await prisma.lineup.create({
+    data: { userId: USER_ID, bookingId: booking2.id, label: ceremonyTrio.label },
+  });
+  await prisma.lineupPackage.create({
+    data: { userId: USER_ID, lineupId: ceremonyLineup.id, packageId: booking2Packages['Wedding Ceremony'] },
   });
 
   // Wires the "Wedding Ceremony" catalogue template to default to this lineup (ADR-0072 §3,
@@ -1098,12 +1101,12 @@ async function main() {
   await prisma.bookingBandChair.createMany({
     data: [
       // Filled — Priya has confirmed.
-      { userId: USER_ID, bookingId: booking2.id, packageId: booking2Packages['Wedding Ceremony'], role: 'Vocals', order: 1, memberId: priyaMember.id },
+      { userId: USER_ID, bookingId: booking2.id, lineupId: ceremonyLineup.id, role: 'Vocals', order: 1, memberId: priyaMember.id },
       // Vacant — nobody assigned yet.
-      { userId: USER_ID, bookingId: booking2.id, packageId: booking2Packages['Wedding Ceremony'], role: 'Piano', order: 2, memberId: null },
+      { userId: USER_ID, bookingId: booking2.id, lineupId: ceremonyLineup.id, role: 'Piano', order: 2, memberId: null },
       // Filled but declined — Jonah is assigned and has said no; the chair stays occupied until
       // the organiser vacates or replaces him.
-      { userId: USER_ID, bookingId: booking2.id, packageId: booking2Packages['Wedding Ceremony'], role: 'Cello', order: 3, memberId: jonahMember.id },
+      { userId: USER_ID, bookingId: booking2.id, lineupId: ceremonyLineup.id, role: 'Cello', order: 3, memberId: jonahMember.id },
     ],
   });
 

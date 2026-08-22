@@ -30,6 +30,7 @@ type MockPrisma = {
   bookingBandChair: {
     findFirst: jest.Mock;
     findMany: jest.Mock;
+    count: jest.Mock;
     create: jest.Mock;
     createMany: jest.Mock;
     update: jest.Mock;
@@ -41,6 +42,16 @@ type MockPrisma = {
     findFirst: jest.Mock;
     create: jest.Mock;
     update: jest.Mock;
+  };
+  lineup: {
+    findFirst: jest.Mock;
+    findMany: jest.Mock;
+    create: jest.Mock;
+    delete: jest.Mock;
+    deleteMany: jest.Mock;
+  };
+  lineupPackage: {
+    create: jest.Mock;
   };
   musicFormConfig: {
     create: jest.Mock;
@@ -79,6 +90,7 @@ function makePrisma(): MockPrisma {
     bookingBandChair: {
       findFirst: jest.fn(),
       findMany: jest.fn(),
+      count: jest.fn(),
       create: jest.fn(),
       createMany: jest.fn(),
       update: jest.fn(),
@@ -90,6 +102,16 @@ function makePrisma(): MockPrisma {
       findFirst: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+    },
+    lineup: {
+      findFirst: jest.fn(),
+      findMany: jest.fn(),
+      create: jest.fn(),
+      delete: jest.fn(),
+      deleteMany: jest.fn(),
+    },
+    lineupPackage: {
+      create: jest.fn(),
     },
     musicFormConfig: {
       create: jest.fn(),
@@ -392,6 +414,7 @@ describe('BookingsRepository', () => {
       expect(call.include.bandMembers.where).toEqual({ removedAt: null });
       expect(call.include.bandChairs).toBeDefined();
       expect(call.include.bandChairs.where).toBeUndefined();
+      expect(call.include.lineups.include.packages).toBe(true);
     });
   });
 
@@ -417,8 +440,8 @@ describe('BookingsRepository', () => {
         bookingAgentId: 'agent1',
         seriesId: 'series1',
         packages: [
-          { id: 'p1', label: 'Ceremony', icon: 'heart', order: 1, lineupName: 'Trio' },
-          { id: 'p2', label: 'Reception', icon: 'music', order: 2, lineupName: null },
+          { id: 'p1', label: 'Ceremony', icon: 'heart', order: 1 },
+          { id: 'p2', label: 'Reception', icon: 'music', order: 2 },
         ],
         sets: [
           { id: 's1', order: 1, duration: 30, startTime: '14:00', label: 'Vows', packageId: 'p1' },
@@ -426,6 +449,7 @@ describe('BookingsRepository', () => {
         ],
         // No band on the default fixture — see #889's own describe block below for a
         // fully-populated roster.
+        lineups: [],
         bandChairs: [],
         bandMembers: [],
         musicFormConfig: { id: 'mfc', enabledGenres: ['JAZZ'], keyMoments: [{ label: 'First Dance', section: 'Reception' }] },
@@ -478,16 +502,16 @@ describe('BookingsRepository', () => {
       expect(data.status).toBe('CONFIRMED');
     });
 
-    it('clones each package (carrying lineupName) and re-points cloned sets at the new package ids', async () => {
+    it('clones each package and re-points cloned sets at the new package ids', async () => {
       primeCloneChain();
       await repo.cloneBookingCore('u1', sourceBooking(), new Date('2026-09-15'));
       expect(prisma.package.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ bookingId: 'new1', label: 'Ceremony', icon: 'heart', order: 1, lineupName: 'Trio' }),
+          data: expect.objectContaining({ bookingId: 'new1', label: 'Ceremony', icon: 'heart', order: 1 }),
         }),
       );
       expect(prisma.package.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ label: 'Reception', lineupName: null }) }),
+        expect.objectContaining({ data: expect.objectContaining({ label: 'Reception' }) }),
       );
       // The packaged set must reference the CLONED package id, not the source 'p1'.
       expect(prisma.performanceSet.create).toHaveBeenCalledWith(
@@ -523,27 +547,38 @@ describe('BookingsRepository', () => {
       expect(prisma.musicFormConfig.create).not.toHaveBeenCalled();
     });
 
-    // Band members v1 (#879), fourth slice: the roster copies (#889, ADR-0072). A bandless
-    // source (the default fixture above) creates no band rows at all — proven by the assertions
-    // in the tests above never touching bookingBandChair/bookingBandMember.
+    // Band members v1 (#879), fourth slice: the roster copies (#889, ADR-0072; Lineups per
+    // ADR-0081). A bandless source (the default fixture above) creates no band rows at all —
+    // proven by the assertions in the tests above never touching bookingBandChair/bandMember/Lineup.
     describe('with a band roster', () => {
       function sourceWithBand(overrides: Record<string, unknown> = {}) {
         return sourceBooking({
+          lineups: [
+            { id: 'lu1', label: 'Trio', bookingId: 'src', packages: [{ packageId: 'p1' }] },
+            { id: 'lu2', label: null, bookingId: 'src', packages: [] },
+          ],
           bandMembers: [
             { id: 'm1', contactId: 'contact-filled', status: 'CONFIRMED', isSelf: false, sessionFee: '150.00', invitedAt: new Date('2026-01-02'), respondedAt: new Date('2026-01-03'), removedAt: null },
             { id: 'm2', contactId: 'contact-self', status: 'ADDED', isSelf: true, sessionFee: null, invitedAt: null, respondedAt: null, removedAt: null },
           ],
           bandChairs: [
-            { id: 'ch1', role: 'Vocals', order: 1, packageId: 'p1', memberId: 'm1' },
-            { id: 'ch2', role: 'Drums', order: 2, packageId: 'p1', memberId: null },
-            { id: 'ch3', role: 'Bass', order: 3, packageId: null, memberId: 'removed-member' },
+            { id: 'ch1', role: 'Vocals', order: 1, lineupId: 'lu1', memberId: 'm1' },
+            { id: 'ch2', role: 'Drums', order: 2, lineupId: 'lu1', memberId: null },
+            { id: 'ch3', role: 'Bass', order: 3, lineupId: 'lu2', memberId: 'removed-member' },
           ],
           ...overrides,
         });
       }
 
-      it('clones each non-removed member with status reset to ADDED and no invite/response/removal timestamps', async () => {
+      function primeCloneChainWithLineups() {
         primeCloneChain();
+        prisma.lineup.create
+          .mockResolvedValueOnce({ id: 'newLu1' })
+          .mockResolvedValueOnce({ id: 'newLu2' });
+      }
+
+      it('clones each non-removed member with status reset to ADDED and no invite/response/removal timestamps', async () => {
+        primeCloneChainWithLineups();
         await repo.cloneBookingCore('u1', sourceWithBand(), new Date('2026-09-15'));
         expect(prisma.bookingBandMember.create).toHaveBeenCalledWith({
           data: { userId: 'u1', bookingId: 'new1', contactId: 'contact-filled', status: 'ADDED', isSelf: false, sessionFee: '150.00' },
@@ -556,36 +591,49 @@ describe('BookingsRepository', () => {
       });
 
       it('carries isSelf and omits sessionFee when the source has none', async () => {
-        primeCloneChain();
+        primeCloneChainWithLineups();
         await repo.cloneBookingCore('u1', sourceWithBand(), new Date('2026-09-15'));
         expect(prisma.bookingBandMember.create).toHaveBeenCalledWith({
           data: { userId: 'u1', bookingId: 'new1', contactId: 'contact-self', status: 'ADDED', isSelf: true },
         });
       });
 
-      it('clones chairs with role, order and segment (packageId) association intact, re-pointed at cloned ids', async () => {
-        primeCloneChain();
+      it('clones each Lineup with its label and re-points its segment links at cloned package ids', async () => {
+        primeCloneChainWithLineups();
+        await repo.cloneBookingCore('u1', sourceWithBand(), new Date('2026-09-15'));
+        expect(prisma.lineup.create).toHaveBeenCalledWith({ data: { userId: 'u1', bookingId: 'new1', label: 'Trio' } });
+        expect(prisma.lineup.create).toHaveBeenCalledWith({ data: { userId: 'u1', bookingId: 'new1', label: null } });
+        expect(prisma.lineupPackage.create).toHaveBeenCalledWith({
+          data: { userId: 'u1', lineupId: 'newLu1', packageId: 'newP1' },
+        });
+        // The package-less Lineup gets no link.
+        expect(prisma.lineupPackage.create).toHaveBeenCalledTimes(1);
+      });
+
+      it('clones chairs with role, order and Lineup association intact, re-pointed at cloned ids', async () => {
+        primeCloneChainWithLineups();
         await repo.cloneBookingCore('u1', sourceWithBand(), new Date('2026-09-15'));
         const data = prisma.bookingBandChair.createMany.mock.calls[0][0].data;
-        expect(data).toContainEqual({ userId: 'u1', bookingId: 'new1', role: 'Vocals', order: 1, packageId: 'newP1', memberId: 'newM1' });
-        expect(data).toContainEqual({ userId: 'u1', bookingId: 'new1', role: 'Drums', order: 2, packageId: 'newP1', memberId: null });
+        expect(data).toContainEqual({ userId: 'u1', bookingId: 'new1', role: 'Vocals', order: 1, lineupId: 'newLu1', memberId: 'newM1' });
+        expect(data).toContainEqual({ userId: 'u1', bookingId: 'new1', role: 'Drums', order: 2, lineupId: 'newLu1', memberId: null });
       });
 
       it('does not create a member row for a soft-removed member; the chair they held comes across as a vacancy', async () => {
-        primeCloneChain();
+        primeCloneChainWithLineups();
         await repo.cloneBookingCore('u1', sourceWithBand(), new Date('2026-09-15'));
         // Only the two non-removed source members are cloned — 'removed-member' was never in
         // source.bandMembers (findOneForClone already filters removedAt: null at the query).
         expect(prisma.bookingBandMember.create).toHaveBeenCalledTimes(2);
         // The chair that pointed at the (excluded) removed member comes back as a vacancy.
         const data = prisma.bookingBandChair.createMany.mock.calls[0][0].data;
-        expect(data).toContainEqual({ userId: 'u1', bookingId: 'new1', role: 'Bass', order: 3, packageId: null, memberId: null });
+        expect(data).toContainEqual({ userId: 'u1', bookingId: 'new1', role: 'Bass', order: 3, lineupId: 'newLu2', memberId: null });
       });
 
       it('creates no band rows when the source has no roster', async () => {
         primeCloneChain();
         await repo.cloneBookingCore('u1', sourceBooking(), new Date('2026-09-15'));
         expect(prisma.bookingBandMember.create).not.toHaveBeenCalled();
+        expect(prisma.lineup.create).not.toHaveBeenCalled();
         expect(prisma.bookingBandChair.createMany).not.toHaveBeenCalled();
       });
     });
@@ -614,10 +662,11 @@ describe('BookingsRepository', () => {
     function primeApplyChain() {
       prisma.package.findMany.mockResolvedValue([]);
       prisma.performanceSet.findMany.mockResolvedValue([]);
-      prisma.bookingBandChair.findMany.mockResolvedValue([]);
       prisma.package.create.mockResolvedValue({ id: 'pkg1' });
       prisma.performanceSet.create.mockResolvedValue({ id: 's1' });
-      prisma.bookingBandChair.create.mockResolvedValue({ id: 'ch1' });
+      prisma.lineup.create.mockResolvedValue({ id: 'lu1' });
+      prisma.lineupPackage.create.mockResolvedValue({ id: 'lp1' });
+      prisma.bookingBandChair.createMany.mockResolvedValue({ count: 0 });
       prisma.booking.findFirst.mockResolvedValue({ id: 'b1' });
     }
 
@@ -641,41 +690,27 @@ describe('BookingsRepository', () => {
       expect(prisma.musicFormConfig.update).not.toHaveBeenCalled();
     });
 
-    it('creates no chairs when the template has no default lineup', async () => {
+    it('creates no chairs or Lineup when the template has no default lineup', async () => {
       primeApplyChain();
       await repo.applyPackageTemplate('u1', 'b1', tmpl);
-      expect(prisma.bookingBandChair.create).not.toHaveBeenCalled();
+      expect(prisma.lineup.create).not.toHaveBeenCalled();
+      expect(prisma.bookingBandChair.createMany).not.toHaveBeenCalled();
     });
 
-    // ADR-0072 §3 / #884: applying a package whose template declares a default lineup
-    // auto-applies it as chairs on the newly created package/segment.
-    it('auto-applies the default lineup as chairs, snapshotting lineupName onto the package', async () => {
+    // ADR-0072 §3 / #884, re-pointed by ADR-0081: applying a package whose template declares a
+    // default lineup auto-applies it as a fresh Lineup linked to the new package/segment.
+    it('auto-applies the default lineup as a fresh Lineup linked to the new package, order starting at 1', async () => {
       primeApplyChain();
       await repo.applyPackageTemplate('u1', 'b1', tmplWithLineup);
-      expect(prisma.package.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ lineupName: 'My five-piece' }) }),
-      );
-      expect(prisma.bookingBandChair.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ role: 'Sax', packageId: 'pkg1', order: 1 }) }),
-      );
-      expect(prisma.bookingBandChair.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ role: 'Drums', packageId: 'pkg1', order: 2 }) }),
-      );
-    });
-
-    it('offsets chair order past any chairs already on the booking', async () => {
-      prisma.package.findMany.mockResolvedValue([]);
-      prisma.performanceSet.findMany.mockResolvedValue([]);
-      prisma.bookingBandChair.findMany.mockResolvedValue([{ order: 3 }]);
-      prisma.package.create.mockResolvedValue({ id: 'pkg1' });
-      prisma.performanceSet.create.mockResolvedValue({ id: 's1' });
-      prisma.bookingBandChair.create.mockResolvedValue({ id: 'ch1' });
-      prisma.booking.findFirst.mockResolvedValue({ id: 'b1' });
-
-      await repo.applyPackageTemplate('u1', 'b1', tmplWithLineup);
-      expect(prisma.bookingBandChair.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ role: 'Sax', order: 4 }) }),
-      );
+      expect(prisma.lineup.create).toHaveBeenCalledWith({
+        data: { userId: 'u1', bookingId: 'b1', label: 'My five-piece' },
+      });
+      expect(prisma.lineupPackage.create).toHaveBeenCalledWith({
+        data: { userId: 'u1', lineupId: 'lu1', packageId: 'pkg1' },
+      });
+      const data = prisma.bookingBandChair.createMany.mock.calls[0][0].data;
+      expect(data).toContainEqual({ userId: 'u1', bookingId: 'b1', lineupId: 'lu1', order: 1, role: 'Sax' });
+      expect(data).toContainEqual({ userId: 'u1', bookingId: 'b1', lineupId: 'lu1', order: 2, role: 'Drums' });
     });
   });
 
@@ -805,14 +840,47 @@ describe('BookingsRepository', () => {
   });
 
   describe('addChair', () => {
-    it('creates a chair with userId and bookingId', async () => {
+    it('joins the Lineup already playing the given segment, appending at the end', async () => {
       const chair = { id: 'ch1' };
+      prisma.lineup.findFirst.mockResolvedValue({ id: 'lu1' });
+      prisma.bookingBandChair.count.mockResolvedValue(2);
       prisma.bookingBandChair.create.mockResolvedValue(chair);
-      const result = await repo.addChair('u1', 'b1', { role: 'Sax', order: 1 });
+      const result = await repo.addChair('u1', 'b1', { role: 'Sax', packageId: 'pkg1' });
+      expect(prisma.lineup.findFirst).toHaveBeenCalledWith({
+        where: { bookingId: 'b1', packages: { some: { packageId: 'pkg1' } } },
+        select: { id: true },
+      });
       expect(prisma.bookingBandChair.create).toHaveBeenCalledWith({
-        data: { userId: 'u1', bookingId: 'b1', role: 'Sax', order: 1 },
+        data: { userId: 'u1', bookingId: 'b1', lineupId: 'lu1', role: 'Sax', order: 3 },
       });
       expect(result).toBe(chair);
+    });
+
+    it('starts a new Lineup when none plays the given segment yet', async () => {
+      prisma.lineup.findFirst.mockResolvedValue(null);
+      prisma.lineup.create.mockResolvedValue({ id: 'lu2' });
+      prisma.bookingBandChair.count.mockResolvedValue(0);
+      prisma.bookingBandChair.create.mockResolvedValue({ id: 'ch1' });
+      await repo.addChair('u1', 'b1', { role: 'Sax', packageId: 'pkg1' });
+      expect(prisma.lineup.create).toHaveBeenCalledWith({ data: { userId: 'u1', bookingId: 'b1' } });
+      expect(prisma.lineupPackage.create).toHaveBeenCalledWith({
+        data: { userId: 'u1', lineupId: 'lu2', packageId: 'pkg1' },
+      });
+      expect(prisma.bookingBandChair.create).toHaveBeenCalledWith({
+        data: { userId: 'u1', bookingId: 'b1', lineupId: 'lu2', role: 'Sax', order: 1 },
+      });
+    });
+
+    it('resolves the package-less/whole-day Lineup (no segment links) when packageId is omitted', async () => {
+      prisma.lineup.findFirst.mockResolvedValue({ id: 'lu3' });
+      prisma.bookingBandChair.count.mockResolvedValue(0);
+      prisma.bookingBandChair.create.mockResolvedValue({ id: 'ch1' });
+      await repo.addChair('u1', 'b1', { role: 'Sax' });
+      expect(prisma.lineup.findFirst).toHaveBeenCalledWith({
+        where: { bookingId: 'b1', packages: { none: {} } },
+        select: { id: true },
+      });
+      expect(prisma.lineupPackage.create).not.toHaveBeenCalled();
     });
   });
 
@@ -830,12 +898,24 @@ describe('BookingsRepository', () => {
   });
 
   describe('deleteChair', () => {
-    it('deletes chair by id', async () => {
+    it('deletes the chair and leaves the Lineup alone when other chairs remain', async () => {
       const deleted = { id: 'ch1' };
       prisma.bookingBandChair.delete.mockResolvedValue(deleted);
-      const result = await repo.deleteChair('ch1');
+      prisma.bookingBandChair.count.mockResolvedValue(1);
+      const result = await repo.deleteChair('ch1', 'lu1');
       expect(prisma.bookingBandChair.delete).toHaveBeenCalledWith({ where: { id: 'ch1' } });
+      expect(prisma.bookingBandChair.count).toHaveBeenCalledWith({ where: { lineupId: 'lu1' } });
+      expect(prisma.lineup.deleteMany).not.toHaveBeenCalled();
       expect(result).toBe(deleted);
+    });
+
+    // deleteMany, not delete: two concurrent removals of a 2-chair Lineup can both see count() ===
+    // 0 and race to GC it — deleteMany is idempotent where delete would throw P2025 on the loser.
+    it('garbage-collects the Lineup when it held the last chair', async () => {
+      prisma.bookingBandChair.delete.mockResolvedValue({ id: 'ch1' });
+      prisma.bookingBandChair.count.mockResolvedValue(0);
+      await repo.deleteChair('ch1', 'lu1');
+      expect(prisma.lineup.deleteMany).toHaveBeenCalledWith({ where: { id: 'lu1' } });
     });
   });
 
@@ -936,91 +1016,89 @@ describe('BookingsRepository', () => {
     const lineup = { label: 'My five-piece', slots: [{ role: 'Sax', order: 1 }, { role: 'Drums', order: 2 }] };
 
     function primeChain() {
-      prisma.bookingBandChair.deleteMany.mockResolvedValue({ count: 0 });
-      prisma.bookingBandChair.findMany.mockResolvedValue([]);
-      prisma.bookingBandChair.create.mockResolvedValue({ id: 'ch1' });
-      prisma.package.update.mockResolvedValue({ id: 'pkg1' });
+      prisma.lineup.findMany.mockResolvedValue([]);
+      prisma.lineup.deleteMany.mockResolvedValue({ count: 0 });
+      prisma.lineup.create.mockResolvedValue({ id: 'newLu' });
+      prisma.lineupPackage.create.mockResolvedValue({ id: 'lp1' });
+      prisma.bookingBandChair.createMany.mockResolvedValue({ count: 2 });
       prisma.booking.findFirst.mockResolvedValue({ id: 'b1' });
     }
 
-    it('creates one chair per lineup slot, preserving role and order', async () => {
+    it('creates a fresh Lineup with the template label', async () => {
       primeChain();
       await repo.applyLineupTemplate('u1', 'b1', lineup, null);
-      expect(prisma.bookingBandChair.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ role: 'Sax', order: 1, packageId: null }) }),
-      );
-      expect(prisma.bookingBandChair.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ role: 'Drums', order: 2, packageId: null }) }),
-      );
+      expect(prisma.lineup.create).toHaveBeenCalledWith({ data: { userId: 'u1', bookingId: 'b1', label: 'My five-piece' } });
     });
 
-    it('offsets order past any chairs remaining on the booking after the replace', async () => {
-      prisma.bookingBandChair.deleteMany.mockResolvedValue({ count: 0 });
-      prisma.bookingBandChair.findMany.mockResolvedValue([{ order: 5 }]);
-      prisma.bookingBandChair.create.mockResolvedValue({ id: 'ch1' });
-      prisma.package.update.mockResolvedValue({ id: 'pkg1' });
-      prisma.booking.findFirst.mockResolvedValue({ id: 'b1' });
-
+    it('creates one chair per lineup slot, order starting at 1, preserving role', async () => {
+      primeChain();
       await repo.applyLineupTemplate('u1', 'b1', lineup, null);
-      expect(prisma.bookingBandChair.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ role: 'Sax', order: 6 }) }),
-      );
+      const data = prisma.bookingBandChair.createMany.mock.calls[0][0].data;
+      expect(data).toContainEqual({ userId: 'u1', bookingId: 'b1', lineupId: 'newLu', order: 1, role: 'Sax' });
+      expect(data).toContainEqual({ userId: 'u1', bookingId: 'b1', lineupId: 'newLu', order: 2, role: 'Drums' });
     });
 
-    it('targets the given package on every created chair', async () => {
+    it('links the new Lineup to the given package', async () => {
       primeChain();
       await repo.applyLineupTemplate('u1', 'b1', lineup, 'pkg1');
-      expect(prisma.bookingBandChair.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ packageId: 'pkg1' }) }),
-      );
+      expect(prisma.lineupPackage.create).toHaveBeenCalledWith({ data: { userId: 'u1', lineupId: 'newLu', packageId: 'pkg1' } });
     });
 
-    it('snapshots lineupName onto the targeted package', async () => {
-      primeChain();
-      await repo.applyLineupTemplate('u1', 'b1', lineup, 'pkg1');
-      expect(prisma.package.update).toHaveBeenCalledWith({
-        where: { id: 'pkg1' },
-        data: { lineupName: 'My five-piece' },
-      });
-    });
-
-    it('does not touch any package when applied package-less', async () => {
+    it('creates no segment link when applied package-less', async () => {
       primeChain();
       await repo.applyLineupTemplate('u1', 'b1', lineup, null);
-      expect(prisma.package.update).not.toHaveBeenCalled();
+      expect(prisma.lineupPackage.create).not.toHaveBeenCalled();
     });
 
     // #884, per advisor review: re-applying a different lineup to the same segment must not stack
     // on top of the first apply — "the musician can pick a different one" means the pick REPLACES
-    // what's seated in that segment (and keeps the package's lineupName snapshot honest).
-    it('replaces the existing chairs in the targeted segment rather than appending', async () => {
+    // the whole band playing that segment, not append to it (ADR-0081 §4).
+    it('replaces the Lineup already playing the targeted segment rather than appending', async () => {
+      prisma.lineup.findMany.mockResolvedValue([{ id: 'oldLu' }]);
+      primeChain();
+      prisma.lineup.findMany.mockResolvedValue([{ id: 'oldLu' }]);
+      await repo.applyLineupTemplate('u1', 'b1', lineup, 'pkg1');
+      expect(prisma.lineup.findMany).toHaveBeenCalledWith({
+        where: { bookingId: 'b1', packages: { some: { packageId: 'pkg1' } } },
+        select: { id: true },
+      });
+      expect(prisma.lineup.deleteMany).toHaveBeenCalledWith({ where: { id: { in: ['oldLu'] } } });
+    });
+
+    it('replaces the Lineup already playing the package-less segment rather than appending', async () => {
+      primeChain();
+      prisma.lineup.findMany.mockResolvedValue([{ id: 'oldLu' }]);
+      await repo.applyLineupTemplate('u1', 'b1', lineup, null);
+      expect(prisma.lineup.findMany).toHaveBeenCalledWith({
+        where: { bookingId: 'b1', packages: { none: {} } },
+        select: { id: true },
+      });
+      expect(prisma.lineup.deleteMany).toHaveBeenCalledWith({ where: { id: { in: ['oldLu'] } } });
+    });
+
+    it('does not delete anything when no Lineup already plays the targeted segment', async () => {
       primeChain();
       await repo.applyLineupTemplate('u1', 'b1', lineup, 'pkg1');
-      expect(prisma.bookingBandChair.deleteMany).toHaveBeenCalledWith({ where: { bookingId: 'b1', packageId: 'pkg1' } });
+      expect(prisma.lineup.deleteMany).not.toHaveBeenCalled();
     });
 
-    it('replaces the existing chairs in the package-less segment rather than appending', async () => {
-      primeChain();
-      await repo.applyLineupTemplate('u1', 'b1', lineup, null);
-      expect(prisma.bookingBandChair.deleteMany).toHaveBeenCalledWith({ where: { bookingId: 'b1', packageId: null } });
-    });
-
-    it('deletes the old segment chairs before creating the new ones', async () => {
+    it('deletes the old Lineup before creating the new one', async () => {
       const order: string[] = [];
-      prisma.bookingBandChair.deleteMany.mockImplementation(() => {
+      prisma.lineup.findMany.mockResolvedValue([{ id: 'oldLu' }]);
+      prisma.lineup.deleteMany.mockImplementation(() => {
         order.push('delete');
-        return Promise.resolve({ count: 2 });
+        return Promise.resolve({ count: 1 });
       });
-      prisma.bookingBandChair.create.mockImplementation(() => {
+      prisma.lineup.create.mockImplementation(() => {
         order.push('create');
-        return Promise.resolve({ id: 'ch1' });
+        return Promise.resolve({ id: 'newLu' });
       });
-      prisma.bookingBandChair.findMany.mockResolvedValue([]);
-      prisma.package.update.mockResolvedValue({ id: 'pkg1' });
+      prisma.lineupPackage.create.mockResolvedValue({ id: 'lp1' });
+      prisma.bookingBandChair.createMany.mockResolvedValue({ count: 2 });
       prisma.booking.findFirst.mockResolvedValue({ id: 'b1' });
 
       await repo.applyLineupTemplate('u1', 'b1', lineup, 'pkg1');
-      expect(order).toEqual(['delete', 'create', 'create']);
+      expect(order).toEqual(['delete', 'create']);
     });
   });
 });

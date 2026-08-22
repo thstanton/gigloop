@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Min } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString, IsUUID } from 'class-validator';
 
 export class CreateChairDto {
   @ApiProperty({ example: 'Saxophone', description: 'Free-text seat role.' })
@@ -7,13 +7,11 @@ export class CreateChairDto {
   @IsNotEmpty()
   role!: string;
 
-  @ApiProperty({ example: 1, description: 'Position among this booking\'s chairs (1-indexed)' })
-  @IsInt()
-  @Min(1)
-  order!: number;
-
   @ApiPropertyOptional({
-    description: 'Associate this chair with a booking-owned package (segment); omit for a package-less chair.',
+    description:
+      'Segment to seat this chair in; omit for a package-less/whole-day chair. Joins the Lineup ' +
+      'already playing this segment, or starts a new one — `order` (position within that Lineup) ' +
+      'is computed server-side, since the target Lineup may not exist yet (ADR-0081).',
   })
   @IsOptional()
   @IsUUID()

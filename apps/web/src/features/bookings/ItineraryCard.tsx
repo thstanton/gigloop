@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 import FormatIcon from './FormatIcon';
 import { segmentLabel } from './BandAtom';
 import { LOGISTICS_FIELD_ICONS } from '@/lib/constants';
-import type { BookingBandChair, BookingBandMember, BookingLogisticsEntry, BookingPackageSummary, PerformanceSet } from '@/types/api';
+import type { BookingBandChair, BookingBandMember, BookingLineup, BookingLogisticsEntry, BookingPackageSummary, PerformanceSet } from '@/types/api';
 
 type TimelineRow =
   | { kind: 'time'; rowKey: string; label: string; time: string; notes?: string; group: string }
@@ -20,9 +20,11 @@ interface ItineraryCardProps {
   sets: PerformanceSet[];
   packages: BookingPackageSummary[];
   hideWhenEmpty?: boolean;
-  /** The band roster (#887, ADR-0072 §6) — rendered inline under each package header, read-only.
-   *  Presentational: this card issues no fetch of its own, so the host passes `[]` when the band
-   *  members flag is off, which keeps the roster absent with no other branching here. */
+  /** The band roster (#887, ADR-0072 §6; re-pointed by ADR-0081) — rendered inline under each
+   *  package header, read-only. Presentational: this card issues no fetch of its own, so the host
+   *  passes `[]` when the band members flag is off, which keeps the roster absent with no other
+   *  branching here. */
+  bandLineups?: BookingLineup[];
   bandChairs?: BookingBandChair[];
   bandMembers?: BookingBandMember[];
 }
@@ -141,6 +143,7 @@ export default function ItineraryCard({
   sets,
   packages,
   hideWhenEmpty = false,
+  bandLineups = [],
   bandChairs = [],
   bandMembers = [],
 }: ItineraryCardProps) {
@@ -167,12 +170,16 @@ export default function ItineraryCard({
   }
 
   const memberById = new Map(bandMembers.map((m) => [m.id, m] as const));
+  const lineupById = new Map(bandLineups.map((l) => [l.id, l] as const));
+  // A chair's segment is its Lineup's first (at this slice, only) segment link — empty means
+  // package-less/whole-day (ADR-0081 §4), the same rule a null packageId used to encode directly.
   const chairsByPackageId = new Map<string, BookingBandChair[]>();
   const wholeDayChairs: BookingBandChair[] = [];
   for (const chair of bandChairs) {
-    if (chair.packageId) {
-      if (!chairsByPackageId.has(chair.packageId)) chairsByPackageId.set(chair.packageId, []);
-      chairsByPackageId.get(chair.packageId)!.push(chair);
+    const packageId = lineupById.get(chair.lineupId)?.packageIds[0];
+    if (packageId) {
+      if (!chairsByPackageId.has(packageId)) chairsByPackageId.set(packageId, []);
+      chairsByPackageId.get(packageId)!.push(chair);
     } else {
       wholeDayChairs.push(chair);
     }
@@ -252,7 +259,7 @@ export default function ItineraryCard({
             §6, even for a package-less booking whose chairs are all "Whole day". */}
         {wholeDayChairs.length > 0 && (
           <>
-            <div className="pb-1 pt-2 text-xs font-medium text-muted">{segmentLabel(wholeDayChairs[0], packages)}</div>
+            <div className="pb-1 pt-2 text-xs font-medium text-muted">{segmentLabel(wholeDayChairs[0], bandLineups, packages)}</div>
             <PackageRoster chairs={wholeDayChairs} memberById={memberById} />
           </>
         )}
