@@ -8,7 +8,7 @@ import type { VenueSelection } from '@/features/bookings/VenueAtom';
 import type { DetailsLogistics } from '@/features/bookings/DetailsAtom';
 import { useItineraryMutations } from '@/features/bookings/useItineraryMutations';
 import { DEFAULT_ENABLED_GENRES } from '@/lib/constants';
-import { nonAnchorKeys, preservedTimeKeys, pluralPackages, isConfirmationRequired } from '@/features/bookings/builderHelpers';
+import { nonAnchorKeys, preservedTimeKeys, pluralPackages, isConfirmationRequired, hasSuggestionContent } from '@/features/bookings/builderHelpers';
 import type {
   ApplyPackageTemplateResponse,
   BookingDetail,
@@ -38,6 +38,12 @@ export function useBookingBuilderMutations({ id, booking }: { id: string; bookin
   function invalidateBooking() {
     queryClient.invalidateQueries({ queryKey: ['booking', id] });
     queryClient.invalidateQueries({ queryKey: ['bookings'] });
+  }
+
+  function syncMusicFormConfig(data: MusicFormConfig) {
+    queryClient.setQueryData(['booking-music-form-config', id], data);
+    queryClient.invalidateQueries({ queryKey: ['booking-music-form-config', id] });
+    queryClient.invalidateQueries({ queryKey: ['booking', id] });
   }
 
   // ── Overview mutations ─────────────────────────────────────────────────────
@@ -84,25 +90,34 @@ export function useBookingBuilderMutations({ id, booking }: { id: string; bookin
 
   // ── People mutations ───────────────────────────────────────────────────────
 
+  // Customer is a required role: an 'existing' selection only patches when a
+  // contact was actually picked (a null contactId is a no-op, not a clear).
+  async function resolveCustomerPatch(customer: PeopleSelection['customer']): Promise<{ customerId?: string }> {
+    if (!customer) return {};
+    if (customer.kind === 'new') {
+      const c = await apiPost<Contact>('/contacts', { ...customer.contact, primaryRole: 'CUSTOMER' });
+      return { customerId: c.id };
+    }
+    return customer.contactId ? { customerId: customer.contactId } : {};
+  }
+
+  // Booking agent is optional: an 'existing' selection always patches, since a
+  // null contactId here is a deliberate "unassign the agent".
+  async function resolveAgentPatch(agent: PeopleSelection['agent']): Promise<{ bookingAgentId?: string | null }> {
+    if (!agent) return {};
+    if (agent.kind === 'new') {
+      const c = await apiPost<Contact>('/contacts', { ...agent.contact, primaryRole: 'BOOKING_AGENT' });
+      return { bookingAgentId: c.id };
+    }
+    return { bookingAgentId: agent.contactId };
+  }
+
   const peopleSave = useMutation({
     mutationFn: async (selection: PeopleSelection): Promise<void> => {
-      const patch: { customerId?: string; bookingAgentId?: string | null } = {};
-      if (selection.customer) {
-        if (selection.customer.kind === 'new') {
-          const c = await apiPost<Contact>('/contacts', { ...selection.customer.contact, primaryRole: 'CUSTOMER' });
-          patch.customerId = c.id;
-        } else if (selection.customer.contactId) {
-          patch.customerId = selection.customer.contactId;
-        }
-      }
-      if (selection.agent) {
-        if (selection.agent.kind === 'new') {
-          const c = await apiPost<Contact>('/contacts', { ...selection.agent.contact, primaryRole: 'BOOKING_AGENT' });
-          patch.bookingAgentId = c.id;
-        } else {
-          patch.bookingAgentId = selection.agent.contactId;
-        }
-      }
+      const patch = {
+        ...(await resolveCustomerPatch(selection.customer)),
+        ...(await resolveAgentPatch(selection.agent)),
+      };
       await apiPatch(`/bookings/${id}`, patch);
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['contacts'] }); invalidateBooking(); },
@@ -160,7 +175,7 @@ export function useBookingBuilderMutations({ id, booking }: { id: string; bookin
         try {
           const data = await apiPost<ApplyPackageTemplateResponse>(`/bookings/${id}/packages`, { packageTemplateId });
           const s = data.suggestion;
-          if (s && (s.keyMoments.length || s.genres.length)) {
+          if (s && hasSuggestionContent(s)) {
             merged = merged
               ? { genres: [...new Set([...merged.genres, ...s.genres])], keyMoments: [...merged.keyMoments, ...s.keyMoments] }
               : s;
@@ -187,7 +202,7 @@ export function useBookingBuilderMutations({ id, booking }: { id: string; bookin
     onSuccess: (data) => {
       invalidateBooking();
       const s = data.suggestion;
-      if (s && (s.keyMoments.length || s.genres.length)) setPendingSuggestion(s);
+      if (s && hasSuggestionContent(s)) setPendingSuggestion(s);
     },
     onError: () => toast({ title: 'Failed to add package. Please try again.', variant: 'destructive' }),
   });
@@ -227,21 +242,13 @@ export function useBookingBuilderMutations({ id, booking }: { id: string; bookin
   const musicPublish = useMutation({
     mutationFn: (payload: { keyMoments: KeyMoment[]; enabledGenres: string[] }) =>
       apiPost<MusicFormConfig>(`/bookings/${id}/music-form-config/publish`, payload),
-    onSuccess: (data) => {
-      queryClient.setQueryData(['booking-music-form-config', id], data);
-      queryClient.invalidateQueries({ queryKey: ['booking-music-form-config', id] });
-      queryClient.invalidateQueries({ queryKey: ['booking', id] });
-    },
+    onSuccess: syncMusicFormConfig,
     onError: () => toast({ title: 'Failed to publish music form. Please try again.', variant: 'destructive' }),
   });
 
   const musicUnpublish = useMutation({
     mutationFn: () => apiPost<MusicFormConfig>(`/bookings/${id}/music-form-config/unpublish`, {}),
-    onSuccess: (data) => {
-      queryClient.setQueryData(['booking-music-form-config', id], data);
-      queryClient.invalidateQueries({ queryKey: ['booking-music-form-config', id] });
-      queryClient.invalidateQueries({ queryKey: ['booking', id] });
-    },
+    onSuccess: syncMusicFormConfig,
     onError: () => toast({ title: 'Failed to un-publish music form. Please try again.', variant: 'destructive' }),
   });
 

@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { BuilderSection } from '@/features/bookings/BuilderSection';
+import { MusicFormSuggestionBanner } from '@/features/bookings/MusicFormSuggestionBanner';
 import { PackagePicker } from '@/features/bookings/PackagePicker';
 import { pluralPackages } from '@/features/bookings/builderHelpers';
 import type { BookingDetail, PackageTemplate } from '@/types/api';
@@ -37,31 +38,12 @@ export function TemplatesSection({
         </div>
       )}
       {pendingSuggestion && (
-        <div className="mb-4 rounded border border-border bg-primary/5 p-3 space-y-2">
-          <p className="text-sm">
-            This package suggests{' '}
-            {pendingSuggestion.keyMoments.length > 0 && (
-              <span className="font-medium">{pendingSuggestion.keyMoments.length} special request{pendingSuggestion.keyMoments.length === 1 ? '' : 's'}</span>
-            )}
-            {pendingSuggestion.keyMoments.length > 0 && pendingSuggestion.genres.length > 0 && ' and '}
-            {pendingSuggestion.genres.length > 0 && (
-              <span className="font-medium">{pendingSuggestion.genres.length} genre{pendingSuggestion.genres.length === 1 ? '' : 's'}</span>
-            )}{' '}
-            for the music form.
-          </p>
-          <div className="flex items-center gap-3">
-            <Button size="sm" onClick={() => acceptSuggestion.mutate(pendingSuggestion)} disabled={acceptSuggestion.isPending}>
-              {acceptSuggestion.isPending ? 'Adding…' : 'Add to music form'}
-            </Button>
-            <button
-              type="button"
-              onClick={() => setPendingSuggestion(null)}
-              className="text-sm text-muted transition-colors hover:text-foreground"
-            >
-              Not now
-            </button>
-          </div>
-        </div>
+        <MusicFormSuggestionBanner
+          suggestion={pendingSuggestion}
+          onAccept={() => acceptSuggestion.mutate(pendingSuggestion)}
+          onDismiss={() => setPendingSuggestion(null)}
+          isAccepting={acceptSuggestion.isPending}
+        />
       )}
       <PackagePicker
         templates={templates}

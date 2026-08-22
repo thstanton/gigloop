@@ -8,7 +8,7 @@ import { CompletenessStatusIcon, type CompletenessStatus, type SpineId } from '.
 // completeness glyphs as the desktop CompletenessRail; the other five render as
 // plain position dots (they make no completeness claim). The active node is
 // highlighted and its label shown as text. Tapping a node jumps to that section.
-// Presentational only — scroll-spy and section refs live in BookingBuilderPage.
+// Presentational only — scroll-spy and section refs live in useBuilderScroll.
 
 export interface StepperSection {
   id: SpineId;

@@ -1,6 +1,7 @@
 import { BuilderSection } from '@/features/bookings/BuilderSection';
 import { ItineraryAtom } from '@/features/bookings/ItineraryAtom';
 import { NO_PACKAGE } from '@/features/bookings/ItineraryFields';
+import { pendingVariable } from '@/features/bookings/builderHelpers';
 import type { BookingDetail, BookingLogisticsEntry, PackageTemplate } from '@/types/api';
 import type { useBookingBuilderMutations } from '@/features/bookings/useBookingBuilderMutations';
 
@@ -23,7 +24,7 @@ export function ItinerarySection({
     addSet, updateSet, deleteSet, moveSet, updatePackage, removePackage,
     itineraryApplyTemplate, saveAnchors,
   } = mutations;
-  const addingKey = addSet.isPending ? (addSet.variables?.packageId ?? NO_PACKAGE) : null;
+  const addingKey = pendingVariable(addSet, (v) => v.packageId ?? NO_PACKAGE);
   return (
     <BuilderSection
       id="itinerary"
@@ -46,12 +47,12 @@ export function ItinerarySection({
         onUpdatePackage={(packageId, dto) => updatePackage.mutate({ packageId, dto })}
         onRemovePackage={(packageId) => removePackage.mutate(packageId)}
         onSaveAnchors={(anchors: Record<string, BookingLogisticsEntry>) => saveAnchors.mutate(anchors)}
-        savingSetId={updateSet.isPending ? updateSet.variables?.setId ?? null : null}
-        deletingSetId={deleteSet.isPending ? deleteSet.variables ?? null : null}
-        movingSetId={moveSet.isPending ? moveSet.variables?.setId ?? null : null}
+        savingSetId={pendingVariable(updateSet, (v) => v.setId)}
+        deletingSetId={pendingVariable(deleteSet, (v) => v)}
+        movingSetId={pendingVariable(moveSet, (v) => v.setId)}
         addingKey={addingKey}
         isApplyingTemplate={itineraryApplyTemplate.isPending}
-        removingPackageId={removePackage.isPending ? removePackage.variables ?? null : null}
+        removingPackageId={pendingVariable(removePackage, (v) => v)}
         anchorsSaving={saveAnchors.isPending}
         anchorsSaved={saveAnchors.isSuccess}
         anchorsError={saveAnchors.isError ? 'Failed to save times. Please try again.' : null}
