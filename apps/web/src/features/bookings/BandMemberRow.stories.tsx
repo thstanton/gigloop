@@ -2,16 +2,21 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, screen, userEvent, within } from 'storybook/test';
 import { BandMemberRow } from './BandMemberRow';
 import { bandMember } from '@/test/factories';
-import type { BookingBandChair, BookingPackageSummary } from '@/types/api';
+import type { BookingBandChair, BookingLineup, BookingPackageSummary } from '@/types/api';
 
 // One row per person on this gig (ADR-0072 §2/§5, #885): segment chips for every chair they fill,
 // status, and their per-person fee. Presentational — the host (BandAtom) wires every edit.
 
 const packages: BookingPackageSummary[] = [{ id: 'pkg-evening', order: 1, label: 'Evening', icon: 'guitar' }];
 
+const lineups: BookingLineup[] = [
+  { id: 'lu-evening', label: null, packageIds: ['pkg-evening'] },
+  { id: 'lu-whole-day', label: null, packageIds: [] },
+];
+
 const chairs: BookingBandChair[] = [
-  { id: 'ch3', role: 'Vocals', order: 1, packageId: 'pkg-evening', memberId: 'm1', callTime: '19:30' },
-  { id: 'ch4', role: 'Guitar', order: 2, packageId: null, memberId: 'm1', callTime: null },
+  { id: 'ch3', role: 'Vocals', order: 1, lineupId: 'lu-evening', memberId: 'm1', callTime: '19:30' },
+  { id: 'ch4', role: 'Guitar', order: 1, lineupId: 'lu-whole-day', memberId: 'm1', callTime: null },
 ];
 
 const member = bandMember({
@@ -28,6 +33,7 @@ const meta = {
   args: {
     member,
     chairs,
+    lineups,
     packages,
     onUnassignChair: fn(),
     onChangeStatus: fn(),
@@ -43,6 +49,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
+  args: { lineups },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Dave Chambers')).toBeVisible();
     await expect(canvas.getByText('Vocals · Evening')).toBeVisible();

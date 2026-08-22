@@ -53,22 +53,28 @@ export type BookingPortalVisibility = {
   musicForm: ReturnType<typeof resolveMusicFormVisibility>;
 };
 
-// A chair with its derived `callTime` folded in (ADR-0072 §2 / #884) — never selected from the DB,
-// computed in `mapBooking` from the chair's `packageId` against the booking's `sets`.
+// A chair with its derived `callTime` folded in (ADR-0072 §2 / #884, re-pointed by ADR-0081 §3) —
+// never selected from the DB, computed in `mapBooking` from the chair's Lineup's segments against
+// the booking's `sets`.
 export type BandChair = BookingDetailRow['bandChairs'][number] & { callTime: string | null };
 
 // A person on this gig (ADR-0072 §2/§5 / #885) — the row shape the query's `bandMembers` filter
 // (`removedAt: null`) already guarantees is never a removed one.
 export type BandMember = BookingDetailRow['bandMembers'][number];
 
+// The booking-owned instance a LineupTemplate becomes when applied (ADR-0081 §2), with its segment
+// links collapsed to `packageIds` — the wire never carries the `LineupPackage` join-row shape.
+export type BandLineup = Omit<BookingDetailRow['lineups'][number], 'packages'> & { packageIds: string[] };
+
 export type BookingBand = {
+  lineups: BandLineup[];
   chairs: BandChair[];
   members: BandMember[];
 };
 
 export type MappedBooking = Omit<
   BookingDetailRow,
-  'musicFormConfig' | 'musicFormResponse' | 'contracts' | 'bandChairs' | 'bandMembers'
+  'musicFormConfig' | 'musicFormResponse' | 'contracts' | 'bandChairs' | 'bandMembers' | 'lineups'
 > & {
   hasMusicFormConfig: boolean;
   hasMusicFormResponse: boolean;
@@ -105,6 +111,39 @@ function deriveCallTimes(
   const result = new Map<string | null, string>();
   for (const [packageId, entry] of earliest) result.set(packageId, entry.startTime);
   return result;
+}
+
+// A Lineup's call time is the earliest across the segments it plays (ADR-0081 §4) — at this slice
+// every Lineup plays at most one segment, so this reduces to `deriveCallTimes`' per-package lookup;
+// the union generalises unchanged once #987 lets a Lineup play several.
+function deriveLineupCallTimes(
+  lineups: Array<{ id: string; packageIds: string[] }>,
+  callTimesByPackage: Map<string | null, string>,
+): Map<string, string> {
+  const result = new Map<string, string>();
+  for (const lineup of lineups) {
+    const callTime = earliestAcrossSegments(lineup.packageIds, callTimesByPackage);
+    if (callTime != null) result.set(lineup.id, callTime);
+  }
+  return result;
+}
+
+// A package-less Lineup (`packageIds` empty) looks up the same `null`-keyed bucket a package-less
+// chair used to — one code path, no special case (ADR-0081 §4).
+function earliestAcrossSegments(
+  packageIds: string[],
+  callTimesByPackage: Map<string | null, string>,
+): string | null {
+  const segments: Array<string | null> = packageIds.length ? packageIds : [null];
+  let best: { startTime: string; minutes: number } | null = null;
+  for (const segment of segments) {
+    const startTime = callTimesByPackage.get(segment);
+    if (startTime == null) continue;
+    const minutes = startMinutes(startTime);
+    if (minutes == null) continue;
+    if (!best || minutes < best.minutes) best = { startTime, minutes };
+  }
+  return best?.startTime ?? null;
 }
 
 const VALID_STATUSES = new Set<string>(Object.values(BookingStatus));
@@ -639,18 +678,18 @@ export class BookingsService {
     await this.assertOwnership(userId, bookingId);
     const chair = await this.repo.findChair(userId, bookingId, chairId);
     if (!chair) throw new NotFoundException('Chair not found');
-    if (dto.packageId) {
-      const pkg = await this.repo.findBookingPackage(userId, bookingId, dto.packageId);
-      if (!pkg) throw new NotFoundException('Package not found');
+    if (dto.lineupId) {
+      const lineup = await this.repo.findLineup(userId, bookingId, dto.lineupId);
+      if (!lineup) throw new NotFoundException('Lineup not found');
     }
-    return this.repo.updateChair(chairId, dto);
+    return this.repo.updateChair(chairId, dto, chair.lineupId);
   }
 
   async deleteChair(userId: string, bookingId: string, chairId: string) {
     await this.assertOwnership(userId, bookingId);
     const chair = await this.repo.findChair(userId, bookingId, chairId);
     if (!chair) throw new NotFoundException('Chair not found');
-    return this.repo.deleteChair(chairId);
+    return this.repo.deleteChair(chairId, chair.lineupId);
   }
 
   // Assignment never creates or destroys a chair row, it sets a field (ADR-0072 §2). Filling a
@@ -701,8 +740,9 @@ export class BookingsService {
   // The single place the booking response shape is constructed (ADR-0071). Every read and write
   // method funnels its `bookingDetailSelect`-shaped row through here rather than re-deriving the shape.
   private mapBooking(booking: BookingDetailRow): MappedBooking {
-    const { musicFormConfig, musicFormResponse, contracts, bandChairs, bandMembers, ...rest } = booking;
-    const callTimes = deriveCallTimes(booking.sets ?? []);
+    const { musicFormConfig, musicFormResponse, contracts, bandChairs, bandMembers, lineups, ...rest } = booking;
+    const bandLineups = this.mapBandLineups(lineups);
+    const callTimesByLineup = deriveLineupCallTimes(bandLineups, deriveCallTimes(booking.sets ?? []));
     return {
       ...rest,
       hasMusicFormConfig: !!musicFormConfig,
@@ -716,10 +756,27 @@ export class BookingsService {
       ),
       // ADR-0073 §6: the organiser read path. Removed members are already excluded by the query.
       band: {
-        chairs: (bandChairs ?? []).map((chair) => ({ ...chair, callTime: callTimes.get(chair.packageId) ?? null })),
+        lineups: bandLineups,
+        chairs: this.mapBandChairs(bandChairs, callTimesByLineup),
         members: bandMembers ?? [],
       },
     };
+  }
+
+  // The `packages` join rows collapse to `packageIds` (ADR-0081 §4) — the wire never carries the
+  // LineupPackage join-row shape.
+  private mapBandLineups(lineups: BookingDetailRow['lineups']): BandLineup[] {
+    return (lineups ?? []).map(({ packages, ...lineup }) => ({
+      ...lineup,
+      packageIds: packages.map((p) => p.packageId),
+    }));
+  }
+
+  private mapBandChairs(
+    chairs: BookingDetailRow['bandChairs'],
+    callTimesByLineup: Map<string, string>,
+  ): BandChair[] {
+    return (chairs ?? []).map((chair) => ({ ...chair, callTime: callTimesByLineup.get(chair.lineupId) ?? null }));
   }
 
   private normaliseContract(

@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Min, ValidateIf } from 'class-validator';
+import { IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Min } from 'class-validator';
 
 export class UpdateChairDto {
   @ApiPropertyOptional({ example: 'Saxophone' })
@@ -8,19 +8,16 @@ export class UpdateChairDto {
   @IsNotEmpty()
   role?: string;
 
-  @ApiPropertyOptional({ example: 1 })
+  @ApiPropertyOptional({ example: 1, description: "Position within the chair's Lineup (ADR-0081)." })
   @IsOptional()
   @IsInt()
   @Min(1)
   order?: number;
 
   @ApiPropertyOptional({
-    nullable: true,
-    type: String,
-    description: 'Re-parent the chair to this booking-owned package (segment); null moves it to package-less.',
+    description: 'Re-parent the chair to this existing Lineup (ADR-0081 §1: only an instance can be pointed at).',
   })
   @IsOptional()
-  @ValidateIf((_, v) => v !== null)
   @IsUUID()
-  packageId?: string | null;
+  lineupId?: string;
 }

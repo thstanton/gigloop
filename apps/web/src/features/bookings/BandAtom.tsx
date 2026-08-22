@@ -11,22 +11,33 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import ContactPicker from './ContactPicker';
 import { BandMemberRow } from './BandMemberRow';
 import { useDatalistId } from '@/lib/hooks/useDatalistId';
-import type { BookingBandChair, BookingBandMember, BookingBandMemberStatus, BookingPackageSummary, Contact, LineupTemplate } from '@/types/api';
+import type { BookingBandChair, BookingBandMember, BookingBandMemberStatus, BookingLineup, BookingPackageSummary, Contact, LineupTemplate } from '@/types/api';
 
-// Band members v1 (#879, ADR-0072 §2/§3/§5, #885). Presentational: no fetch, no mutation — the host
-// (BandSheet) wires every action via a callback. One row per member (segment chips for every chair
-// they fill, via BandMemberRow), plus the unfilled-chair block from #884 — each vacant chair gets a
-// ContactPicker to fill it.
+// Band members v1 (#879, ADR-0072 §2/§3/§5, #885; re-pointed by ADR-0081). Presentational: no
+// fetch, no mutation — the host (BandSheet) wires every action via a callback. One row per member
+// (segment chips for every chair they fill, via BandMemberRow), plus the unfilled-chair block from
+// #884 — each vacant chair gets a ContactPicker to fill it.
 
 const WHOLE_DAY = '__whole_day__';
 
-/** Shared with BandMemberRow — a chair's segment display name, "Whole day" when package-less. */
-export function segmentLabel(chair: BookingBandChair, packages: BookingPackageSummary[]): string {
-  if (!chair.packageId) return 'Whole day';
-  return packages.find((p) => p.id === chair.packageId)?.label ?? 'Whole day';
+/** Shared with ItineraryCard — the segment (booking-level Package id) a chair's Lineup plays, via
+ *  its first segment link; undefined for a package-less Lineup (no links). At this slice a Lineup
+ *  plays at most one segment (#987 makes many-to-many a UI reality), so the first link is the
+ *  whole story. */
+export function chairPackageId(chair: BookingBandChair, lineups: BookingLineup[]): string | undefined {
+  return lineups.find((l) => l.id === chair.lineupId)?.packageIds[0];
+}
+
+/** Shared with BandCard/BandMemberRow — a chair's segment display name, "Whole day" when its
+ *  Lineup is package-less. */
+export function segmentLabel(chair: BookingBandChair, lineups: BookingLineup[], packages: BookingPackageSummary[]): string {
+  const packageId = chairPackageId(chair, lineups);
+  if (!packageId) return 'Whole day';
+  return packages.find((p) => p.id === packageId)?.label ?? 'Whole day';
 }
 
 interface BandAtomProps {
+  lineups: BookingLineup[];
   chairs: BookingBandChair[];
   members: BookingBandMember[];
   packages: BookingPackageSummary[];
@@ -82,6 +93,7 @@ function SegmentPicker({
 
 function ChairRow({
   chair,
+  lineups,
   packages,
   venue,
   onRemove,
@@ -93,6 +105,7 @@ function ChairRow({
   isAssigning,
 }: {
   chair: BookingBandChair;
+  lineups: BookingLineup[];
   packages: BookingPackageSummary[];
   venue: Contact | null;
   onRemove: () => void;
@@ -115,7 +128,7 @@ function ChairRow({
           </IconButton>
         </div>
         <Badge variant="outline">{chair.role}</Badge>
-        <span className="flex-1 text-sm text-muted">{segmentLabel(chair, packages)}</span>
+        <span className="flex-1 text-sm text-muted">{segmentLabel(chair, lineups, packages)}</span>
         {chair.callTime && <span className="text-sm tabular-nums text-muted">{chair.callTime}</span>}
         <IconButton
           label="Remove chair"
@@ -140,6 +153,7 @@ function ChairRow({
 }
 
 export function BandAtom({
+  lineups,
   chairs,
   members,
   packages,
@@ -171,6 +185,12 @@ export function BandAtom({
   const targetPackageId = segment === WHOLE_DAY ? null : segment;
   const sortedChairs = [...chairs].sort((a, b) => a.order - b.order);
   const vacantChairs = sortedChairs.filter((c) => c.memberId == null);
+
+  // Order is per-Lineup (ADR-0081) — moveChair swaps within the same Lineup only, so "adjacent"
+  // is computed within each chair's own Lineup, not across the whole booking.
+  function lineupChairsFor(chair: BookingBandChair): BookingBandChair[] {
+    return sortedChairs.filter((c) => c.lineupId === chair.lineupId);
+  }
 
   function submitAddChair() {
     if (!addingRole.trim()) return;
@@ -224,6 +244,7 @@ export function BandAtom({
                 key={member.id}
                 member={member}
                 chairs={sortedChairs.filter((c) => c.memberId === member.id)}
+                lineups={lineups}
                 packages={packages}
                 onUnassignChair={(chairId) => onAssignChair(chairId, null)}
                 onChangeStatus={(status) => onChangeMemberStatus(member.id, status)}
@@ -242,20 +263,23 @@ export function BandAtom({
         <Card title="Chairs to fill">
           <div>
             {vacantChairs.map((chair) => {
-              // Position within the FULL order (not just among vacant chairs) — moveChair swaps
-              // order with whichever chair is adjacent, filled or not.
-              const fullIndex = sortedChairs.indexOf(chair);
+              // Position within the chair's own Lineup (not just among vacant chairs, and not
+              // the whole booking) — moveChair swaps order with whichever chair is adjacent
+              // *in the same Lineup*, filled or not (ADR-0081: order is per-Lineup).
+              const lineupChairs = lineupChairsFor(chair);
+              const indexInLineup = lineupChairs.indexOf(chair);
               return (
                 <ChairRow
                   key={chair.id}
                   chair={chair}
+                  lineups={lineups}
                   packages={packages}
                   venue={venue}
                   onRemove={() => onRemoveChair(chair.id)}
                   isRemoving={removingChairId === chair.id}
                   onMove={(direction) => onMoveChair(chair.id, direction)}
-                  canMoveUp={fullIndex > 0}
-                  canMoveDown={fullIndex < sortedChairs.length - 1}
+                  canMoveUp={indexInLineup > 0}
+                  canMoveDown={indexInLineup < lineupChairs.length - 1}
                   onAssign={(contactId) => onAssignChair(chair.id, contactId)}
                   isAssigning={assigningChairId === chair.id}
                 />

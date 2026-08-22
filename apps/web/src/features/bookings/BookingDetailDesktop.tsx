@@ -113,6 +113,7 @@ export function BookingDetailDesktop({ bookingId }: BookingDetailDesktopProps) {
                 logistics={booking.logistics}
                 sets={booking.sets}
                 packages={booking.packages}
+                bandLineups={bandMembersEnabled ? booking.band.lineups : []}
                 bandChairs={bandMembersEnabled ? booking.band.chairs : []}
                 bandMembers={bandMembersEnabled ? booking.band.members : []}
               />

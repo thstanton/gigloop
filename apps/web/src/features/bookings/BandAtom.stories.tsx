@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, screen, userEvent, within } from 'storybook/test';
 import { BandAtom } from './BandAtom';
 import { bandMember, lineupTemplate } from '@/test/factories';
-import type { BookingBandChair, BookingPackageSummary } from '@/types/api';
+import type { BookingBandChair, BookingLineup, BookingPackageSummary } from '@/types/api';
 
 // The Band atom is presentational: it owns no mutation and no fetch. The host (BandSheet) passes
 // the chairs/members/packages/lineup templates and signals every edit via a callback. One row per
@@ -10,15 +10,20 @@ import type { BookingBandChair, BookingPackageSummary } from '@/types/api';
 
 const packages: BookingPackageSummary[] = [{ id: 'pkg-evening', order: 1, label: 'Evening', icon: 'guitar' }];
 
+const bandLineups: BookingLineup[] = [
+  { id: 'lu-evening', label: null, packageIds: ['pkg-evening'] },
+  { id: 'lu-whole-day', label: null, packageIds: [] },
+];
+
 const chairs: BookingBandChair[] = [
-  { id: 'ch1', role: 'Saxophone', order: 1, packageId: 'pkg-evening', memberId: null, callTime: '19:30' },
-  { id: 'ch2', role: 'Drums', order: 2, packageId: null, memberId: null, callTime: null },
+  { id: 'ch1', role: 'Saxophone', order: 1, lineupId: 'lu-evening', memberId: null, callTime: '19:30' },
+  { id: 'ch2', role: 'Drums', order: 1, lineupId: 'lu-whole-day', memberId: null, callTime: null },
 ];
 
 const filledChairs: BookingBandChair[] = [
-  { id: 'ch3', role: 'Vocals', order: 1, packageId: 'pkg-evening', memberId: 'm1', callTime: '19:30' },
-  { id: 'ch4', role: 'Guitar', order: 2, packageId: null, memberId: 'm1', callTime: null },
-  { id: 'ch5', role: 'Drums', order: 3, packageId: null, memberId: null, callTime: null },
+  { id: 'ch3', role: 'Vocals', order: 1, lineupId: 'lu-evening', memberId: 'm1', callTime: '19:30' },
+  { id: 'ch4', role: 'Guitar', order: 1, lineupId: 'lu-whole-day', memberId: 'm1', callTime: null },
+  { id: 'ch5', role: 'Drums', order: 2, lineupId: 'lu-whole-day', memberId: null, callTime: null },
 ];
 
 const members = [
@@ -46,6 +51,7 @@ const meta = {
   component: BandAtom,
   tags: ['ai-generated'],
   args: {
+    lineups: bandLineups,
     chairs,
     members: [],
     packages,
@@ -76,6 +82,7 @@ type Story = StoryObj<typeof meta>;
 
 export const WithChairs: Story = {
   name: 'Chairs to fill, with a call time derived on one and absent on the package-less one',
+  args: { lineups: bandLineups },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByText('Chairs to fill')).toBeVisible();
@@ -146,7 +153,7 @@ export const WithMembers: Story = {
 // Story task before the component build (issue #885): assigning a contact to a vacant chair.
 export const AssignContactToChair: Story = {
   name: 'Picking a contact from the ContactPicker on a vacant chair assigns it',
-  args: { chairs: [{ id: 'ch1', role: 'Saxophone', order: 1, packageId: null, memberId: null, callTime: null }] },
+  args: { chairs: [{ id: 'ch1', role: 'Saxophone', order: 1, lineupId: 'lu-whole-day', memberId: null, callTime: null }] },
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('combobox', { name: 'Fill this chair...' }));

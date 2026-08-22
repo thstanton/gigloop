@@ -12,15 +12,19 @@ import type { BookingBand, BookingBandChair, BookingPackageSummary } from '@/typ
 const packages: BookingPackageSummary[] = [{ id: 'pkg-evening', order: 0, label: 'Evening', icon: 'guitar' }];
 
 const chairs: BookingBandChair[] = [
-  { id: 'ch1', role: 'Vocals', order: 0, packageId: 'pkg-evening', memberId: 'm-confirmed', callTime: '19:30' },
-  { id: 'ch2', role: 'Sax', order: 1, packageId: 'pkg-evening', memberId: 'm-confirmed', callTime: '19:30' },
-  { id: 'ch3', role: 'Guitar', order: 2, packageId: 'pkg-evening', memberId: 'm-invited', callTime: '19:30' },
-  { id: 'ch4', role: 'Drums', order: 3, packageId: 'pkg-evening', memberId: 'm-added', callTime: '19:30' },
-  { id: 'ch5', role: 'Keys', order: 4, packageId: null, memberId: null, callTime: null },
-  { id: 'ch6', role: 'Cello', order: 5, packageId: 'pkg-evening', memberId: 'm-declined', callTime: '19:30' },
+  { id: 'ch1', role: 'Vocals', order: 1, lineupId: 'lu-evening', memberId: 'm-confirmed', callTime: '19:30' },
+  { id: 'ch2', role: 'Sax', order: 2, lineupId: 'lu-evening', memberId: 'm-confirmed', callTime: '19:30' },
+  { id: 'ch3', role: 'Guitar', order: 3, lineupId: 'lu-evening', memberId: 'm-invited', callTime: '19:30' },
+  { id: 'ch4', role: 'Drums', order: 4, lineupId: 'lu-evening', memberId: 'm-added', callTime: '19:30' },
+  { id: 'ch5', role: 'Keys', order: 1, lineupId: 'lu-whole-day', memberId: null, callTime: null },
+  { id: 'ch6', role: 'Cello', order: 5, lineupId: 'lu-evening', memberId: 'm-declined', callTime: '19:30' },
 ];
 
 const band: BookingBand = {
+  lineups: [
+    { id: 'lu-evening', label: null, packageIds: ['pkg-evening'] },
+    { id: 'lu-whole-day', label: null, packageIds: [] },
+  ],
   chairs,
   members: [
     bandMember({
@@ -103,7 +107,7 @@ export const GroupedByAnswer: Story = {
 
 export const NoBandYet: Story = {
   args: {
-    band: { chairs: [], members: [] },
+    band: { lineups: [], chairs: [], members: [] },
     hasLineupTemplates: false,
   },
   play: async ({ canvas }) => {
@@ -116,7 +120,7 @@ export const NoBandYet: Story = {
 export const NoBandYetWithLineups: Story = {
   name: 'Empty state offers a lineup when one exists',
   args: {
-    band: { chairs: [], members: [] },
+    band: { lineups: [], chairs: [], members: [] },
     hasLineupTemplates: true,
   },
   play: async ({ canvas }) => {

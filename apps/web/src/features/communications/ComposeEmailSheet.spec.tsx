@@ -89,7 +89,7 @@ const mockBooking: BookingDetail = {
   hasMusicFormConfig: false,
   hasMusicFormResponse: false,
   portalVisibility: { contract: null, musicForm: null },
-  band: { chairs: [], members: [] },
+  band: { lineups: [], chairs: [], members: [] },
   logistics: null,
   activeContract: null,
 };

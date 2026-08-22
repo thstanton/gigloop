@@ -57,9 +57,9 @@ export const packageSelect = {
 } as const;
 
 // Narrowed to exactly what `BookingBandChairDto` declares minus its one derived field, `callTime`
-// (ADR-0072 §2 / #884) — no `userId`. `callTime` is never selected: it is computed in
-// BookingsService.mapBooking from this chair's `packageId` against the booking's `sets`, never
-// stored (a stored copy drifts the first time a set moves).
+// (ADR-0072 §2 / #884, re-pointed by ADR-0081 §3) — no `userId`. `callTime` is never selected: it
+// is computed in BookingsService.mapBooking from this chair's Lineup's segments against the
+// booking's `sets`, never stored (a stored copy drifts the first time a set moves).
 export const bandChairSelect = {
   id: true,
   createdAt: true,
@@ -67,8 +67,27 @@ export const bandChairSelect = {
   bookingId: true,
   role: true,
   order: true,
-  packageId: true,
+  lineupId: true,
   memberId: true,
+} as const;
+
+// `order` is per-Lineup (ADR-0081) — chairs in different Lineups routinely tie on it (both start
+// at 1), so `createdAt` breaks the tie deterministically. Without it, Postgres gives no guarantee
+// on tied rows' relative order, and the vacant-chair list could visibly reshuffle between refetches.
+// Declared outside the `as const` selects below so it stays a mutable array Prisma's `orderBy` accepts.
+const bandChairOrderBy: Prisma.BookingBandChairOrderByWithRelationInput[] = [{ order: 'asc' }, { createdAt: 'asc' }];
+
+// Narrowed to exactly what `BookingLineupDto` declares minus its one derived field, `packageIds`
+// (ADR-0081 §4) — no `userId`. `packageIds` is never selected as a flat column: it is mapped in
+// BookingsService.mapBooking from the `packages` join rows below, which the wire never carries
+// as-is (a join-row shape leaks the `LineupPackage` implementation detail).
+export const lineupSelect = {
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  bookingId: true,
+  label: true,
+  packages: { select: { packageId: true } },
 } as const;
 
 // Narrowed to exactly what `BookingBandMemberDto` declares (ADR-0072 §2/§5 / #885) — no `userId`,
@@ -116,7 +135,8 @@ export const bookingDetailSelect = {
   series: { select: { id: true, label: true } },
   sets: { select: setSelect, orderBy: { order: 'asc' as const } },
   packages: { select: packageSelect, orderBy: { order: 'asc' as const } },
-  bandChairs: { select: bandChairSelect, orderBy: { order: 'asc' as const } },
+  lineups: { select: lineupSelect, orderBy: { createdAt: 'asc' as const } },
+  bandChairs: { select: bandChairSelect, orderBy: bandChairOrderBy },
   // Removed rows never reach the wire (ADR-0072 §5) — filtered at the query, not in mapBooking, so
   // the DTO's `select` contract (booking-select-contract.spec.ts) stays exact.
   bandMembers: { where: { removedAt: null }, select: bandMemberSelect, orderBy: { createdAt: 'asc' as const } },
@@ -185,15 +205,17 @@ export class BookingsRepository {
   // PerformanceSets, the music form config (not the response), and the checklist. SKIPPED
   // items are dropped — they mirror the original gig's "not needed here" decision, and the
   // copy starts from the checklist the musician actually sees (ADR-0049). Band members v1
-  // (#879, #889): bandChairs + bandMembers join the same clone, mirroring bookingDetailSelect's
-  // `removedAt: null` filter on members — a soft-removed member is never a candidate to copy.
+  // (#879, #889): lineups + bandChairs + bandMembers join the same clone, mirroring
+  // bookingDetailSelect's `removedAt: null` filter on members — a soft-removed member is never a
+  // candidate to copy. `lineups.packages` carries each Lineup's segment links (ADR-0081 §4).
   findOneForClone(userId: string, id: string) {
     return this.prisma.booking.findFirst({
       where: { id, userId },
       include: {
         packages: { orderBy: { order: 'asc' } },
         sets: { orderBy: { order: 'asc' } },
-        bandChairs: { orderBy: { order: 'asc' } },
+        lineups: { include: { packages: true }, orderBy: { createdAt: 'asc' } },
+        bandChairs: { orderBy: bandChairOrderBy },
         bandMembers: { where: { removedAt: null }, orderBy: { createdAt: 'asc' } },
         musicFormConfig: true,
         checklistItems: { where: { state: { not: 'SKIPPED' } }, orderBy: { order: 'asc' } },
@@ -234,13 +256,12 @@ export class BookingsRepository {
       },
     });
 
-    // Clone Packages first, mapping old id -> new id so cloned sets (and band chairs) can
-    // re-point at them. `lineupName` carries — it is a severed-provenance snapshot exactly like
-    // `label`/`icon` (ADR-0072 §3, #889), not a live reference that needs re-deriving.
+    // Clone Packages first, mapping old id -> new id so cloned sets, Lineup links and band chairs
+    // can re-point at them.
     const packageIdMap = new Map<string, string>();
     for (const pkg of source.packages) {
       const created = await db.package.create({
-        data: { userId, bookingId: booking.id, label: pkg.label, icon: pkg.icon, order: pkg.order, lineupName: pkg.lineupName },
+        data: { userId, bookingId: booking.id, label: pkg.label, icon: pkg.icon, order: pkg.order },
       });
       packageIdMap.set(pkg.id, created.id);
     }
@@ -278,13 +299,15 @@ export class BookingsRepository {
     return db.booking.findFirstOrThrow({ where: { id: booking.id }, select: bookingDetailSelect });
   }
 
-  // Clones a source booking's band roster onto the newly-created clone (#889, ADR-0072 §5).
-  // `source.bandMembers` already excludes soft-removed rows (findOneForClone's `removedAt: null`
-  // filter) — a copy invites nobody, so status resets to ADDED and the invite/response timestamps
-  // stay null; a fresh `bandPortalToken` comes from Prisma's `@default(uuid())` (omitted here) so
-  // no token is ever shared with the source gig. `sessionFee`/`isSelf` carry across untouched. A
-  // chair whose member was soft-removed (so absent from the id map) comes across as a vacancy, not
-  // a dangling reference — the seat survives, the occupant does not.
+  // Clones a source booking's band roster onto the newly-created clone (#889, ADR-0072 §5; Lineups
+  // per ADR-0081). `source.bandMembers` already excludes soft-removed rows (findOneForClone's
+  // `removedAt: null` filter) — a copy invites nobody, so status resets to ADDED and the
+  // invite/response timestamps stay null; a fresh `bandPortalToken` comes from Prisma's
+  // `@default(uuid())` (omitted here) so no token is ever shared with the source gig.
+  // `sessionFee`/`isSelf` carry across untouched. A chair whose member was soft-removed (so absent
+  // from the id map) comes across as a vacancy, not a dangling reference — the seat survives, the
+  // occupant does not. Lineups clone before chairs, mapping old id -> new id so chairs can
+  // re-point; each Lineup's segment links re-point at the cloned Package ids.
   private async cloneBandRoster(
     db: Prisma.TransactionClient | PrismaService,
     userId: string,
@@ -307,6 +330,20 @@ export class BookingsRepository {
       memberIdMap.set(member.id, created.id);
     }
 
+    const lineupIdMap = new Map<string, string>();
+    for (const lineup of source.lineups) {
+      const created = await db.lineup.create({
+        data: { userId, bookingId: newBookingId, label: lineup.label },
+      });
+      lineupIdMap.set(lineup.id, created.id);
+      for (const link of lineup.packages) {
+        const newPackageId = packageIdMap.get(link.packageId);
+        if (newPackageId) {
+          await db.lineupPackage.create({ data: { userId, lineupId: created.id, packageId: newPackageId } });
+        }
+      }
+    }
+
     if (source.bandChairs.length > 0) {
       await db.bookingBandChair.createMany({
         data: source.bandChairs.map((chair) => ({
@@ -314,7 +351,7 @@ export class BookingsRepository {
           bookingId: newBookingId,
           role: chair.role,
           order: chair.order,
-          packageId: chair.packageId ? (packageIdMap.get(chair.packageId) ?? null) : null,
+          lineupId: lineupIdMap.get(chair.lineupId)!,
           memberId: chair.memberId ? (memberIdMap.get(chair.memberId) ?? null) : null,
         })),
       });
@@ -503,10 +540,9 @@ export class BookingsRepository {
   }
 
   async applyPackageTemplate(userId: string, bookingId: string, template: PackageTemplateWithSlots) {
-    const [existingPackages, existingSets, existingChairs] = await Promise.all([
+    const [existingPackages, existingSets] = await Promise.all([
       this.prisma.package.findMany({ where: { bookingId }, select: { order: true } }),
       this.prisma.performanceSet.findMany({ where: { bookingId }, select: { order: true } }),
-      this.prisma.bookingBandChair.findMany({ where: { bookingId }, select: { order: true } }),
     ]);
     const nextPackageOrder = existingPackages.length
       ? Math.max(...existingPackages.map((p) => p.order)) + 1
@@ -514,24 +550,14 @@ export class BookingsRepository {
     const nextSetOrder = existingSets.length
       ? Math.max(...existingSets.map((s) => s.order)) + 1
       : 1;
-    const nextChairOrder = existingChairs.length
-      ? Math.max(...existingChairs.map((c) => c.order)) + 1
-      : 1;
 
     // Create booking-owned Package + sets atomically, auto-applying the template's default
-    // lineup (ADR-0072 §3, #884) as chairs on the new package/segment. The lineup is applied
-    // exactly as an explicit apply would be — its name snapshotted onto the Package the same
-    // way the template's own label/icon are.
+    // lineup (ADR-0072 §3, #884) as a fresh Lineup linked to the new package/segment (ADR-0081 §2)
+    // — its label snapshotted exactly as the template's own label/icon are onto the Package. Chair
+    // `order` is per-Lineup (ADR-0081), so a brand-new Lineup always starts at 1.
     await this.prisma.$transaction(async (tx) => {
       const bookingPackage = await tx.package.create({
-        data: {
-          userId,
-          bookingId,
-          order: nextPackageOrder,
-          label: template.label,
-          icon: template.icon,
-          ...(template.defaultLineupTemplate ? { lineupName: template.defaultLineupTemplate.label } : {}),
-        },
+        data: { userId, bookingId, order: nextPackageOrder, label: template.label, icon: template.icon },
       });
       for (let i = 0; i < template.slots.length; i++) {
         const slot = template.slots[i];
@@ -547,18 +573,14 @@ export class BookingsRepository {
         });
       }
       if (template.defaultLineupTemplate) {
+        const lineup = await tx.lineup.create({
+          data: { userId, bookingId, label: template.defaultLineupTemplate.label },
+        });
+        await tx.lineupPackage.create({ data: { userId, lineupId: lineup.id, packageId: bookingPackage.id } });
         const slots = template.defaultLineupTemplate.slots;
-        for (let i = 0; i < slots.length; i++) {
-          await tx.bookingBandChair.create({
-            data: {
-              userId,
-              bookingId,
-              order: nextChairOrder + i,
-              role: slots[i].role,
-              packageId: bookingPackage.id,
-            },
-          });
-        }
+        await tx.bookingBandChair.createMany({
+          data: slots.map((slot, i) => ({ userId, bookingId, lineupId: lineup.id, order: i + 1, role: slot.role })),
+        });
       }
     });
 
@@ -571,23 +593,81 @@ export class BookingsRepository {
     });
   }
 
-  addChair(userId: string, bookingId: string, dto: CreateChairDto) {
-    return this.prisma.bookingBandChair.create({
-      data: { userId, bookingId, ...dto },
+  findLineup(userId: string, bookingId: string, lineupId: string) {
+    return this.prisma.lineup.findFirst({
+      where: { id: lineupId, bookingId, userId },
     });
   }
 
-  updateChair(chairId: string, dto: UpdateChairDto) {
-    return this.prisma.bookingBandChair.update({
+  // ADR-0081 §1: the only place a Lineup is looked up by segment rather than by id — adding one
+  // chair at a time (#884) offers the musician a segment, not a Lineup. Every Lineup this slice
+  // creates plays at most one segment (#987 makes many-to-many a UI reality), so the lookup is
+  // unambiguous today; #987 must replace this once a Lineup can play several segments at once, or
+  // "add a chair to Drinks" could silently seat someone in a band that also plays Reception.
+  private async findOrCreateLineupForSegment(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    bookingId: string,
+    packageId: string | null,
+  ): Promise<string> {
+    const existing = packageId
+      ? await tx.lineup.findFirst({ where: { bookingId, packages: { some: { packageId } } }, select: { id: true } })
+      : await tx.lineup.findFirst({ where: { bookingId, packages: { none: {} } }, select: { id: true } });
+    if (existing) return existing.id;
+
+    const created = await tx.lineup.create({ data: { userId, bookingId } });
+    if (packageId) {
+      await tx.lineupPackage.create({ data: { userId, lineupId: created.id, packageId } });
+    }
+    return created.id;
+  }
+
+  addChair(userId: string, bookingId: string, dto: CreateChairDto) {
+    return this.prisma.$transaction(async (tx) => {
+      const lineupId = await this.findOrCreateLineupForSegment(tx, userId, bookingId, dto.packageId ?? null);
+      const chairCount = await tx.bookingBandChair.count({ where: { lineupId } });
+      return tx.bookingBandChair.create({
+        data: { userId, bookingId, lineupId, role: dto.role, order: chairCount + 1 },
+      });
+    });
+  }
+
+  // `previousLineupId` (the chair's lineup before this update, from the caller's prior findChair)
+  // is only used to garbage-collect a re-parent's source Lineup if it's now empty — symmetric with
+  // deleteChair below, so "an empty Lineup is clutter" holds on every path that can vacate one.
+  async updateChair(chairId: string, dto: UpdateChairDto, previousLineupId: string) {
+    const updated = await this.prisma.bookingBandChair.update({
       where: { id: chairId }, // scoped-upstream: service.updateChair calls findChair(userId, bookingId, chairId) first, already proving ownership (ADR-0061)
       data: dto,
     });
+    if (dto.lineupId && dto.lineupId !== previousLineupId) {
+      await this.gcLineupIfEmpty(previousLineupId);
+    }
+    return updated;
   }
 
-  deleteChair(chairId: string) {
-    return this.prisma.bookingBandChair.delete({
+  // Deletes the chair, then garbage-collects its Lineup if that was the last chair it held — an
+  // empty Lineup is clutter, not a band (ADR-0081). `lineupId` comes from the caller's prior
+  // findChair, already proving ownership.
+  async deleteChair(chairId: string, lineupId: string) {
+    const deleted = await this.prisma.bookingBandChair.delete({
       where: { id: chairId }, // scoped-upstream: service.deleteChair calls findChair(userId, bookingId, chairId) first, already proving ownership (ADR-0061)
     });
+    await this.gcLineupIfEmpty(lineupId);
+    return deleted;
+  }
+
+  // Shared by deleteChair and updateChair's re-parent path. `lineupId` is always caller-supplied
+  // from a chair the caller already owns (ADR-0061) — never derived from unvalidated input here.
+  private async gcLineupIfEmpty(lineupId: string): Promise<void> {
+    const remaining = await this.prisma.bookingBandChair.count({ where: { lineupId } });
+    if (remaining === 0) {
+      // deleteMany, not delete: two rapid vacates of a 2-chair lineup can both observe count() ===
+      // 0 and race to delete the same Lineup — deleteMany is idempotent where delete would P2025.
+      await this.prisma.lineup.deleteMany({
+        where: { id: lineupId }, // scoped-upstream: lineupId is the caller's own already-owned chair's field (ADR-0061)
+      });
+    }
   }
 
   // The reuse lookup at the heart of ADR-0072 §2: a contact already on this booking's roster (not
@@ -637,11 +717,10 @@ export class BookingsRepository {
     });
   }
 
-  // Applies a lineup template as chairs (ADR-0072 §3, #884) — exactly as applying a package
-  // produces PerformanceSet rows: the lineup's slots become chairs, provenance severed. `packageId`
-  // null degenerates to a package-less/whole-day chair — one code path, no special case. When a
-  // package is targeted, its `lineupName` is snapshotted so a later LineupTemplate delete never
-  // changes the booking.
+  // Applies a lineup template as a fresh booking-owned Lineup (ADR-0072 §3, #884; ADR-0081 §2) —
+  // exactly as applying a package produces a Package + PerformanceSet rows: the template's label
+  // and slots snapshot onto the new instance, provenance severed. `packageId` null degenerates to
+  // a package-less/whole-day Lineup (no segment links) — one code path, no special case.
   async applyLineupTemplate(
     userId: string,
     bookingId: string,
@@ -649,27 +728,28 @@ export class BookingsRepository {
     packageId: string | null,
   ) {
     await this.prisma.$transaction(async (tx) => {
-      // Re-applying replaces this segment's chairs rather than appending: "the musician can pick
-      // a different [lineup]" (#884) means the new pick swaps the seats, it doesn't stack on top
-      // of the last one — which would also leave the package's `lineupName` snapshot lying about
-      // what's actually seated. `packageId: null` is itself a segment (the package-less/whole-day
-      // one), so this is the one code path for both.
-      await tx.bookingBandChair.deleteMany({ where: { bookingId, packageId } });
-
-      const remaining = await tx.bookingBandChair.findMany({ where: { bookingId }, select: { order: true } });
-      const nextOrder = remaining.length ? Math.max(...remaining.map((c) => c.order)) + 1 : 1;
-
-      for (let i = 0; i < lineup.slots.length; i++) {
-        await tx.bookingBandChair.create({
-          data: { userId, bookingId, order: nextOrder + i, role: lineup.slots[i].role, packageId },
+      // Re-applying replaces the band playing this segment rather than adding a second one:
+      // "the musician can pick a different lineup" (#884) means the new pick swaps the whole band,
+      // it doesn't stack on top of the last one. Deleting the Lineup cascades its chairs and
+      // segment links. `packageId: null` is itself a segment (the package-less/whole-day one, i.e.
+      // a Lineup with no links) — one code path for both (ADR-0081 §4).
+      const existing = packageId
+        ? await tx.lineup.findMany({ where: { bookingId, packages: { some: { packageId } } }, select: { id: true } })
+        : await tx.lineup.findMany({ where: { bookingId, packages: { none: {} } }, select: { id: true } });
+      if (existing.length) {
+        await tx.lineup.deleteMany({
+          where: { id: { in: existing.map((l) => l.id) } }, // scoped-upstream: ids came from the query above, itself scoped to this bookingId — ownership already proven by service.applyLineupTemplate's assertOwnership (ADR-0061)
         });
       }
+
+      const created = await tx.lineup.create({ data: { userId, bookingId, label: lineup.label } });
       if (packageId) {
-        await tx.package.update({
-          where: { id: packageId }, // scoped-upstream: service.applyLineupTemplate calls findBookingPackage(userId, bookingId, packageId) first, already proving ownership (ADR-0061)
-          data: { lineupName: lineup.label },
-        });
+        await tx.lineupPackage.create({ data: { userId, lineupId: created.id, packageId } });
       }
+      // Chair `order` is per-Lineup (ADR-0081) — a brand-new Lineup always starts at 1.
+      await tx.bookingBandChair.createMany({
+        data: lineup.slots.map((slot, i) => ({ userId, bookingId, lineupId: created.id, order: i + 1, role: slot.role })),
+      });
     });
 
     return this.prisma.booking.findFirst({ where: { id: bookingId }, select: bookingDetailSelect });

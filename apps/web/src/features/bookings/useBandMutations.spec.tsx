@@ -15,8 +15,8 @@ vi.mock('@/lib/api', () => ({
 }));
 vi.mock('@/lib/hooks/use-toast', () => ({ toast: vi.fn() }));
 
-const CHAIR_A: BookingBandChair = { id: 'ch-a', role: 'Sax', order: 1, packageId: null, memberId: null, callTime: null };
-const CHAIR_B: BookingBandChair = { id: 'ch-b', role: 'Drums', order: 2, packageId: null, memberId: null, callTime: null };
+const CHAIR_A: BookingBandChair = { id: 'ch-a', role: 'Sax', order: 1, lineupId: 'lu1', memberId: null, callTime: null };
+const CHAIR_B: BookingBandChair = { id: 'ch-b', role: 'Drums', order: 2, lineupId: 'lu1', memberId: null, callTime: null };
 
 const MEMBER_A = bandMember({ id: 'm-a', contactId: 'c-a', contact: { id: 'c-a', name: 'Dave' } });
 

@@ -173,6 +173,7 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
               sets={booking.sets}
               packages={booking.packages}
               hideWhenEmpty
+              bandLineups={bandMembersEnabled ? booking.band.lineups : []}
               bandChairs={bandMembersEnabled ? booking.band.chairs : []}
               bandMembers={bandMembersEnabled ? booking.band.members : []}
             />

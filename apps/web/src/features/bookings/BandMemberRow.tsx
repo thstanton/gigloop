@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { BAND_MEMBER_STATUS_LABELS, BAND_MEMBER_STATUS_ORDER, BAND_MEMBER_STATUS_TOKENS } from '@/lib/constants';
 import { formatFee } from '@/lib/formatters';
 import { segmentLabel } from './BandAtom';
-import type { BookingBandChair, BookingBandMember, BookingBandMemberStatus, BookingPackageSummary } from '@/types/api';
+import type { BookingBandChair, BookingBandMember, BookingBandMemberStatus, BookingLineup, BookingPackageSummary } from '@/types/api';
 
 // Band members v1 (#879, ADR-0072 §2/§3/§5, #885): one row per person on this gig — segment chips
 // for every chair they fill, status, and their per-person fee. Presentational, same discipline as
@@ -19,6 +19,7 @@ import type { BookingBandChair, BookingBandMember, BookingBandMemberStatus, Book
 interface BandMemberRowProps {
   member: BookingBandMember;
   chairs: BookingBandChair[];
+  lineups: BookingLineup[];
   packages: BookingPackageSummary[];
   onUnassignChair: (chairId: string) => void;
   onChangeStatus: (status: BookingBandMemberStatus) => void;
@@ -32,6 +33,7 @@ interface BandMemberRowProps {
 export function BandMemberRow({
   member,
   chairs,
+  lineups,
   packages,
   onUnassignChair,
   onChangeStatus,
@@ -83,7 +85,7 @@ export function BandMemberRow({
         <div className="flex flex-wrap items-center gap-1.5">
           {chairs.map((chair) => (
             <Badge key={chair.id} variant="outline" className="gap-1">
-              {chair.role} · {segmentLabel(chair, packages)}
+              {chair.role} · {segmentLabel(chair, lineups, packages)}
               <button
                 type="button"
                 aria-label={`Unassign ${chair.role}`}

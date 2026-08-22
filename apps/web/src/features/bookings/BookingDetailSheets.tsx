@@ -247,6 +247,7 @@ export function BookingDetailSheets({ bookingId }: BookingDetailSheetsProps) {
       />
       <BandSheet
         bookingId={bookingId}
+        lineups={booking.band.lineups}
         chairs={booking.band.chairs}
         members={booking.band.members}
         packages={booking.packages}

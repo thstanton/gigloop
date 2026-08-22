@@ -141,9 +141,10 @@ export const WithBandRoster: Story = {
     logistics: fullLogistics,
     sets: setsWithStartTimes,
     packages,
+    bandLineups: [{ id: 'lu1', label: null, packageIds: ['pkg1'] }],
     bandChairs: [
-      { id: 'ch1', role: 'Vocals', order: 0, packageId: 'pkg1', memberId: 'm1', callTime: '15:30' },
-      { id: 'ch2', role: 'Sax', order: 1, packageId: 'pkg1', memberId: null, callTime: '15:30' },
+      { id: 'ch1', role: 'Vocals', order: 1, lineupId: 'lu1', memberId: 'm1', callTime: '15:30' },
+      { id: 'ch2', role: 'Sax', order: 2, lineupId: 'lu1', memberId: null, callTime: '15:30' },
     ],
     bandMembers: rosterMembers,
   },
@@ -164,7 +165,8 @@ export const RosterOnAPackagelessBooking: Story = {
     logistics: null,
     sets: [],
     packages: [],
-    bandChairs: [{ id: 'ch1', role: 'MC', order: 0, packageId: null, memberId: null, callTime: null }],
+    bandLineups: [{ id: 'lu1', label: null, packageIds: [] }],
+    bandChairs: [{ id: 'ch1', role: 'MC', order: 1, lineupId: 'lu1', memberId: null, callTime: null }],
     bandMembers: [],
   },
   play: async ({ canvas }) => {
