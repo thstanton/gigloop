@@ -7,10 +7,15 @@ export type InvoiceAction = 'edit' | 'issue' | 'send' | 'markSent' | 'markPaid' 
  * `invoice`, derived from its owner FK (ADR-0063: one polymorphic Invoice — exactly
  * one of `seriesId`/`bookingId` is set). A series invoice invalidates its own cache
  * and its stored-document cache — the mirror of the booking side's `bookingDocuments`
- * (#830: issue creates the PDF, void/delete retire it). The rest of a booking invoice's
- * checklist fan-out never fires for a series invoice, by construction. Booking key sets
- * are per-action (they were irregular in the two pre-#724 implementations and are
- * preserved exactly here).
+ * (#830: issue creates the PDF, void/delete retire it). It also invalidates the bare
+ * `bookingDocuments` key (no bookingId): the series invoice's document has no owning
+ * booking of its own, and is unioned into every member booking's Documents list at
+ * read time, so there's no single bookingId to target. TanStack matches by key-prefix,
+ * so the bare key refreshes every member booking's already-cached list in one call —
+ * the same treatment `bookingCommunications` gets for a series send (ADR-0080, #976).
+ * The rest of a booking invoice's checklist fan-out never fires for a series invoice,
+ * by construction. Booking key sets are per-action (they were irregular in the two
+ * pre-#724 implementations and are preserved exactly here).
  *
  * `prefix` is a constant, not derived from the owner (#853, ADR-0069): every operation on an
  * invoice that already exists — the nine lifecycle transitions plus payment-correction, edit,
@@ -28,7 +33,11 @@ export function invoiceOwnerRoute(
       prefix,
       // The document query is keyed [seriesInvoiceDocument, seriesId, invoiceId]; TanStack
       // matches by prefix, so the seriesId-only key invalidates it whatever the invoice id.
-      keys: [['seriesInvoice', invoice.seriesId], ['seriesInvoiceDocument', invoice.seriesId]],
+      keys: [
+        ['seriesInvoice', invoice.seriesId],
+        ['seriesInvoiceDocument', invoice.seriesId],
+        ['bookingDocuments'],
+      ],
     };
   }
 
