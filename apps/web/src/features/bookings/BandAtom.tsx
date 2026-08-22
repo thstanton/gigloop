@@ -20,11 +20,18 @@ import type { BookingBandChair, BookingBandMember, BookingBandMemberStatus, Book
 
 const WHOLE_DAY = '__whole_day__';
 
-/** Shared with BandCard/BandMemberRow — a chair's segment display name via its Lineup's segments,
- *  "Whole day" for a package-less Lineup (no links). At this slice a Lineup plays at most one
- *  segment (#987 makes many-to-many a UI reality), so the first link is the whole story. */
+/** Shared with ItineraryCard — the segment (booking-level Package id) a chair's Lineup plays, via
+ *  its first segment link; undefined for a package-less Lineup (no links). At this slice a Lineup
+ *  plays at most one segment (#987 makes many-to-many a UI reality), so the first link is the
+ *  whole story. */
+export function chairPackageId(chair: BookingBandChair, lineups: BookingLineup[]): string | undefined {
+  return lineups.find((l) => l.id === chair.lineupId)?.packageIds[0];
+}
+
+/** Shared with BandCard/BandMemberRow — a chair's segment display name, "Whole day" when its
+ *  Lineup is package-less. */
 export function segmentLabel(chair: BookingBandChair, lineups: BookingLineup[], packages: BookingPackageSummary[]): string {
-  const packageId = lineups.find((l) => l.id === chair.lineupId)?.packageIds[0];
+  const packageId = chairPackageId(chair, lineups);
   if (!packageId) return 'Whole day';
   return packages.find((p) => p.id === packageId)?.label ?? 'Whole day';
 }

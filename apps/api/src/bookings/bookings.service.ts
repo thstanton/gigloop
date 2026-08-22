@@ -681,7 +681,7 @@ export class BookingsService {
       const lineup = await this.repo.findLineup(userId, bookingId, dto.lineupId);
       if (!lineup) throw new NotFoundException('Lineup not found');
     }
-    return this.repo.updateChair(chairId, dto);
+    return this.repo.updateChair(chairId, dto, chair.lineupId);
   }
 
   async deleteChair(userId: string, bookingId: string, chairId: string) {

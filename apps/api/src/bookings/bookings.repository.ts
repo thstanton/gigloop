@@ -71,6 +71,12 @@ export const bandChairSelect = {
   memberId: true,
 } as const;
 
+// `order` is per-Lineup (ADR-0081) — chairs in different Lineups routinely tie on it (both start
+// at 1), so `createdAt` breaks the tie deterministically. Without it, Postgres gives no guarantee
+// on tied rows' relative order, and the vacant-chair list could visibly reshuffle between refetches.
+// Declared outside the `as const` selects below so it stays a mutable array Prisma's `orderBy` accepts.
+const bandChairOrderBy: Prisma.BookingBandChairOrderByWithRelationInput[] = [{ order: 'asc' }, { createdAt: 'asc' }];
+
 // Narrowed to exactly what `BookingLineupDto` declares minus its one derived field, `packageIds`
 // (ADR-0081 §4) — no `userId`. `packageIds` is never selected as a flat column: it is mapped in
 // BookingsService.mapBooking from the `packages` join rows below, which the wire never carries
@@ -130,7 +136,7 @@ export const bookingDetailSelect = {
   sets: { select: setSelect, orderBy: { order: 'asc' as const } },
   packages: { select: packageSelect, orderBy: { order: 'asc' as const } },
   lineups: { select: lineupSelect, orderBy: { createdAt: 'asc' as const } },
-  bandChairs: { select: bandChairSelect, orderBy: { order: 'asc' as const } },
+  bandChairs: { select: bandChairSelect, orderBy: bandChairOrderBy },
   // Removed rows never reach the wire (ADR-0072 §5) — filtered at the query, not in mapBooking, so
   // the DTO's `select` contract (booking-select-contract.spec.ts) stays exact.
   bandMembers: { where: { removedAt: null }, select: bandMemberSelect, orderBy: { createdAt: 'asc' as const } },
@@ -209,7 +215,7 @@ export class BookingsRepository {
         packages: { orderBy: { order: 'asc' } },
         sets: { orderBy: { order: 'asc' } },
         lineups: { include: { packages: true }, orderBy: { createdAt: 'asc' } },
-        bandChairs: { orderBy: { order: 'asc' } },
+        bandChairs: { orderBy: bandChairOrderBy },
         bandMembers: { where: { removedAt: null }, orderBy: { createdAt: 'asc' } },
         musicFormConfig: true,
         checklistItems: { where: { state: { not: 'SKIPPED' } }, orderBy: { order: 'asc' } },
@@ -626,11 +632,18 @@ export class BookingsRepository {
     });
   }
 
-  updateChair(chairId: string, dto: UpdateChairDto) {
-    return this.prisma.bookingBandChair.update({
+  // `previousLineupId` (the chair's lineup before this update, from the caller's prior findChair)
+  // is only used to garbage-collect a re-parent's source Lineup if it's now empty — symmetric with
+  // deleteChair below, so "an empty Lineup is clutter" holds on every path that can vacate one.
+  async updateChair(chairId: string, dto: UpdateChairDto, previousLineupId: string) {
+    const updated = await this.prisma.bookingBandChair.update({
       where: { id: chairId }, // scoped-upstream: service.updateChair calls findChair(userId, bookingId, chairId) first, already proving ownership (ADR-0061)
       data: dto,
     });
+    if (dto.lineupId && dto.lineupId !== previousLineupId) {
+      await this.gcLineupIfEmpty(previousLineupId);
+    }
+    return updated;
   }
 
   // Deletes the chair, then garbage-collects its Lineup if that was the last chair it held — an
@@ -640,15 +653,21 @@ export class BookingsRepository {
     const deleted = await this.prisma.bookingBandChair.delete({
       where: { id: chairId }, // scoped-upstream: service.deleteChair calls findChair(userId, bookingId, chairId) first, already proving ownership (ADR-0061)
     });
+    await this.gcLineupIfEmpty(lineupId);
+    return deleted;
+  }
+
+  // Shared by deleteChair and updateChair's re-parent path. `lineupId` is always caller-supplied
+  // from a chair the caller already owns (ADR-0061) — never derived from unvalidated input here.
+  private async gcLineupIfEmpty(lineupId: string): Promise<void> {
     const remaining = await this.prisma.bookingBandChair.count({ where: { lineupId } });
     if (remaining === 0) {
-      // deleteMany, not delete: two rapid removals of a 2-chair lineup can both observe count() ===
+      // deleteMany, not delete: two rapid vacates of a 2-chair lineup can both observe count() ===
       // 0 and race to delete the same Lineup — deleteMany is idempotent where delete would P2025.
       await this.prisma.lineup.deleteMany({
-        where: { id: lineupId }, // scoped-upstream: lineupId is the just-deleted chair's own field, from the caller's findChair (ADR-0061)
+        where: { id: lineupId }, // scoped-upstream: lineupId is the caller's own already-owned chair's field (ADR-0061)
       });
     }
-    return deleted;
   }
 
   // The reuse lookup at the heart of ADR-0072 §2: a contact already on this booking's roster (not

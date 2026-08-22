@@ -888,12 +888,36 @@ describe('BookingsRepository', () => {
     it('updates chair by id', async () => {
       const updated = { id: 'ch1', role: 'Drums' };
       prisma.bookingBandChair.update.mockResolvedValue(updated);
-      const result = await repo.updateChair('ch1', { role: 'Drums' });
+      const result = await repo.updateChair('ch1', { role: 'Drums' }, 'lu1');
       expect(prisma.bookingBandChair.update).toHaveBeenCalledWith({
         where: { id: 'ch1' },
         data: { role: 'Drums' },
       });
       expect(result).toBe(updated);
+    });
+
+    it('does not garbage-collect anything when the chair is not re-parented', async () => {
+      prisma.bookingBandChair.update.mockResolvedValue({ id: 'ch1' });
+      await repo.updateChair('ch1', { role: 'Drums' }, 'lu1');
+      expect(prisma.bookingBandChair.count).not.toHaveBeenCalled();
+      expect(prisma.lineup.deleteMany).not.toHaveBeenCalled();
+    });
+
+    // Symmetric with deleteChair: re-parenting a chair away from a Lineup can leave it empty too —
+    // "an empty Lineup is clutter" (ADR-0081) must hold on every path that can vacate one.
+    it('garbage-collects the source Lineup when re-parenting leaves it empty', async () => {
+      prisma.bookingBandChair.update.mockResolvedValue({ id: 'ch1', lineupId: 'lu2' });
+      prisma.bookingBandChair.count.mockResolvedValue(0);
+      await repo.updateChair('ch1', { lineupId: 'lu2' }, 'lu1');
+      expect(prisma.bookingBandChair.count).toHaveBeenCalledWith({ where: { lineupId: 'lu1' } });
+      expect(prisma.lineup.deleteMany).toHaveBeenCalledWith({ where: { id: 'lu1' } });
+    });
+
+    it('does not garbage-collect the source Lineup when it still holds other chairs', async () => {
+      prisma.bookingBandChair.update.mockResolvedValue({ id: 'ch1', lineupId: 'lu2' });
+      prisma.bookingBandChair.count.mockResolvedValue(1);
+      await repo.updateChair('ch1', { lineupId: 'lu2' }, 'lu1');
+      expect(prisma.lineup.deleteMany).not.toHaveBeenCalled();
     });
   });
 

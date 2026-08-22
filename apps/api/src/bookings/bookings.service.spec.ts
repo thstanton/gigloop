@@ -1073,7 +1073,7 @@ describe('BookingsService', () => {
       repo.updateChair.mockResolvedValue({ ...chair, role: 'Trumpet' });
       const result = await service.updateChair('u1', 'b1', 'ch1', { role: 'Trumpet' });
       expect(repo.findChair).toHaveBeenCalledWith('u1', 'b1', 'ch1');
-      expect(repo.updateChair).toHaveBeenCalledWith('ch1', { role: 'Trumpet' });
+      expect(repo.updateChair).toHaveBeenCalledWith('ch1', { role: 'Trumpet' }, 'lu1');
       expect(result).toEqual({ ...chair, role: 'Trumpet' });
     });
 

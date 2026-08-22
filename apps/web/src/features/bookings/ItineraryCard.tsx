@@ -7,7 +7,7 @@ import { EmptyState } from '@/components/common/EmptyState';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import FormatIcon from './FormatIcon';
-import { segmentLabel } from './BandAtom';
+import { chairPackageId, segmentLabel } from './BandAtom';
 import { LOGISTICS_FIELD_ICONS } from '@/lib/constants';
 import type { BookingBandChair, BookingBandMember, BookingLineup, BookingLogisticsEntry, BookingPackageSummary, PerformanceSet } from '@/types/api';
 
@@ -170,13 +170,12 @@ export default function ItineraryCard({
   }
 
   const memberById = new Map(bandMembers.map((m) => [m.id, m] as const));
-  const lineupById = new Map(bandLineups.map((l) => [l.id, l] as const));
   // A chair's segment is its Lineup's first (at this slice, only) segment link — empty means
   // package-less/whole-day (ADR-0081 §4), the same rule a null packageId used to encode directly.
   const chairsByPackageId = new Map<string, BookingBandChair[]>();
   const wholeDayChairs: BookingBandChair[] = [];
   for (const chair of bandChairs) {
-    const packageId = lineupById.get(chair.lineupId)?.packageIds[0];
+    const packageId = chairPackageId(chair, bandLineups);
     if (packageId) {
       if (!chairsByPackageId.has(packageId)) chairsByPackageId.set(packageId, []);
       chairsByPackageId.get(packageId)!.push(chair);
