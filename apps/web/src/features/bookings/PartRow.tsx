@@ -3,8 +3,8 @@ import { LabelValue } from '@/components/common/LabelValue';
 import { cn } from '@/lib/utils';
 
 // #983's resolution — the **part** shape, used for a part and nothing else. Role in a fixed narrow
-// left column, then its call time (and its band, only when the booking has more than one), then one
-// action. A filled part and an empty one are the SAME row: that is how the vacancy/member symmetry
+// left column, then its call times — one per segment it is called to — (and its band, only when
+// the booking has more than one), then one action. A filled part and an empty one are the SAME row: that is how the vacancy/member symmetry
 // is answered — one component used twice, not two blocks made to resemble each other.
 //
 // This is LabelValue at a narrower column, not a copy of it. `cn` is twMerge, so the grid override
@@ -16,14 +16,13 @@ import { cn } from '@/lib/utils';
 
 interface PartRowProps {
   role: string;
-  /** Derived server-side from the band's segments' earliest set start (#987 AC 5); absent, not zero. */
-  callTime: string | null;
   /**
-   * The segment (booking-level Package) that produced `callTime` — e.g. "Wedding Ceremony" —
-   * derived server-side alongside it (#991 preprod follow-up). Null for a package-less/whole-day
-   * segment, in which case the row falls back to the bare time, as before.
+   * One phrase per segment the part is called to — "18:00 Drinks Reception" — already worded by
+   * `callTimeParts`, which owns the package-less bucket's two readings. A part called to two
+   * segments carries two: showing only the earliest hid the second call entirely. Empty means no
+   * segment the band plays has a timed set — absent, not zero.
    */
-  segmentLabel?: string | null;
+  callTimes: string[];
   /** The band's name — pass only when the booking has more than one (see `shouldNameBand`). */
   bandName?: string;
   /** One action: fill it, or empty it. */
@@ -37,18 +36,29 @@ interface PartRowProps {
   bordered?: boolean;
 }
 
-export function PartRow({ role, callTime, segmentLabel, bandName, action, bordered = true }: PartRowProps) {
-  const timeText = [segmentLabel, callTime].filter(Boolean).join(' ') || 'No call time';
+export function PartRow({ role, callTimes, bandName, action, bordered = true }: PartRowProps) {
   return (
     <LabelValue label={role} className={cn('grid-cols-[84px_1fr] gap-3 py-2', !bordered && 'border-b-0')}>
       {/* items-start, not items-center: the label has no flex wrapper of its own so it top-aligns
-          by default — this row must match it, or the two drift apart the moment the value wraps
-          onto a second line (the label stays pinned to the top of the now-taller grid row while a
-          centered flex line slides down to the middle). */}
-      <span className="flex flex-wrap items-start gap-x-2 gap-y-0.5">
-        <span className="text-base text-foreground">{timeText}</span>
-        {bandName && <span className="text-sm text-muted">{bandName}</span>}
-        {action && <span className="ml-auto flex items-center">{action}</span>}
+          by default — this row must match it, or the two drift apart the moment the value column
+          runs to more than one line (which a part called to two segments always does). */}
+      <span className="flex items-start gap-2">
+        <span className="flex min-w-0 flex-1 flex-col gap-y-0.5">
+          {/* One call per line, not a wrapped run: two calls are two separate facts about the day,
+              and running them together on one line made the second read as a continuation of the
+              first rather than a second time the player has to be somewhere. */}
+          {callTimes.length === 0 ? (
+            <span className="text-base text-foreground">No call time</span>
+          ) : (
+            // Keyed by position: two segments can legitimately share a label (a package rename is
+            // free) and a start time, so the phrase itself is not a unique key.
+            callTimes.map((call, i) => (
+              <span key={i} className="text-base text-foreground">{call}</span>
+            ))
+          )}
+          {bandName && <span className="text-sm text-muted">{bandName}</span>}
+        </span>
+        {action && <span className="flex items-center">{action}</span>}
       </span>
     </LabelValue>
   );

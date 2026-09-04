@@ -143,8 +143,8 @@ export const WithBandRoster: Story = {
     packages,
     bandLineups: [{ id: 'lu1', label: null, packageIds: ['pkg1'] }],
     bandChairs: [
-      { id: 'ch1', role: 'Vocals', order: 1, lineupId: 'lu1', memberId: 'm1', callTime: '15:30', segmentLabel: 'Gold' },
-      { id: 'ch2', role: 'Sax', order: 2, lineupId: 'lu1', memberId: null, callTime: '15:30', segmentLabel: 'Gold' },
+      { id: 'ch1', role: 'Vocals', order: 1, lineupId: 'lu1', memberId: 'm1', callTimes: [{ segmentId: 'pkg1', segmentLabel: 'Gold', startTime: '15:30' }] },
+      { id: 'ch2', role: 'Sax', order: 2, lineupId: 'lu1', memberId: null, callTimes: [{ segmentId: 'pkg1', segmentLabel: 'Gold', startTime: '15:30' }] },
     ],
     bandMembers: rosterMembers,
   },
@@ -166,7 +166,7 @@ export const RosterOnAPackagelessBooking: Story = {
     sets: [],
     packages: [],
     bandLineups: [{ id: 'lu1', label: null, packageIds: [] }],
-    bandChairs: [{ id: 'ch1', role: 'MC', order: 1, lineupId: 'lu1', memberId: null, callTime: null, segmentLabel: null }],
+    bandChairs: [{ id: 'ch1', role: 'MC', order: 1, lineupId: 'lu1', memberId: null, callTimes: [] }],
     bandMembers: [],
   },
   play: async ({ canvas }) => {

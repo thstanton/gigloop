@@ -53,21 +53,34 @@ interface ItineraryCardProps {
   bandMembers?: BookingBandMember[];
 }
 
-/** One package's (or "Whole day"'s) roster: role, who (or "Vacant"), and the derived call time —
- *  no click, this surface only answers "who plays what and when" (ADR-0072 §6). */
-function PackageRoster({ chairs, memberById }: { chairs: BookingBandChair[]; memberById: Map<string, BookingBandMember> }) {
+/** One package's (or the package-less bucket's) roster: role, who (or "Vacant"), and the derived
+ *  call time — no click, this surface only answers "who plays what and when" (ADR-0072 §6).
+ *
+ *  `segmentId` is the segment this block renders under, and it selects which of the chair's call
+ *  times to show. A part called to two segments carries one time for each, so a roster that showed
+ *  the first (or the earliest) put the drinks call time under the Evening Party heading. */
+function PackageRoster({
+  chairs,
+  memberById,
+  segmentId,
+}: {
+  chairs: BookingBandChair[];
+  memberById: Map<string, BookingBandMember>;
+  segmentId: string | null;
+}) {
   const sorted = [...chairs].sort((a, b) => a.order - b.order);
   return (
     <div className="mb-2 flex flex-col gap-1 rounded-md border border-border bg-surface px-2 py-1.5">
       {sorted.map((chair) => {
         const member = chair.memberId ? memberById.get(chair.memberId) : undefined;
+        const callTime = chair.callTimes.find((ct) => ct.segmentId === segmentId)?.startTime;
         return (
           <div key={chair.id} className="flex items-center gap-2 text-xs">
             <Badge variant="outline" className="flex-shrink-0">{chair.role}</Badge>
             <span className={cn('flex-1 truncate', member ? 'text-foreground' : 'italic text-muted')}>
               {member ? member.contact.name : 'Vacant'}
             </span>
-            {chair.callTime && <span className="flex-shrink-0 tabular-nums text-muted">{chair.callTime}</span>}
+            {callTime && <span className="flex-shrink-0 tabular-nums text-muted">{callTime}</span>}
           </div>
         );
       })}
@@ -230,7 +243,9 @@ export default function ItineraryCard({
                   {row.pkg.label}
                 </div>
               )}
-              {packageRoster && <PackageRoster chairs={packageRoster} memberById={memberById} />}
+              {packageRoster && row.kind === 'set' && row.pkg && (
+                <PackageRoster chairs={packageRoster} memberById={memberById} segmentId={row.pkg.id} />
+              )}
               <div
                 className={`flex gap-3 py-1.5${(row.kind === 'time' && row.notes) ? ' items-start' : ' items-center'}${showBorder ? ' border-b border-border' : ''}`}
               >
@@ -262,7 +277,7 @@ export default function ItineraryCard({
               <FormatIcon icon={pkg.icon} size={14} />
               {pkg.label}
             </div>
-            <PackageRoster chairs={chairsByPackageId.get(pkg.id)!} memberById={memberById} />
+            <PackageRoster chairs={chairsByPackageId.get(pkg.id)!} memberById={memberById} segmentId={pkg.id} />
           </Fragment>
         ))}
 
@@ -274,7 +289,7 @@ export default function ItineraryCard({
             <div className="pb-1 pt-2 text-xs font-medium text-muted">
               {packages.length ? 'Not playing a set yet' : 'The whole gig'}
             </div>
-            <PackageRoster chairs={wholeDayChairs} memberById={memberById} />
+            <PackageRoster chairs={wholeDayChairs} memberById={memberById} segmentId={null} />
           </>
         )}
       </div>

@@ -36,12 +36,11 @@ describe('Booking detail select matches its response DTOs (#873)', () => {
     expect(sortKeys(Object.keys(packageSelect))).toEqual(dtoKeys('BookingPackageDto'));
   });
 
-  // BookingBandChairDto carries two fields the select never names: `callTime`, derived in
-  // mapBooking from the booking's `sets` (ADR-0072 §2), and `segmentLabel`, the Package that
-  // produced it (#991 preprod follow-up) — neither is ever selected from the DB. This test
-  // declares both derived fields explicitly rather than leaving them untested.
-  it('BookingBandChairDto matches bandChairSelect plus the derived callTime and segmentLabel', () => {
-    expect(sortKeys([...Object.keys(bandChairSelect), 'callTime', 'segmentLabel'])).toEqual(dtoKeys('BookingBandChairDto'));
+  // BookingBandChairDto carries one field the select never names: `callTimes`, derived in
+  // mapBooking from the booking's `sets` and `packages` (ADR-0072 §2) and never selected from the
+  // DB. This test declares that derived field explicitly rather than leaving it untested.
+  it('BookingBandChairDto matches bandChairSelect plus the derived callTimes', () => {
+    expect(sortKeys([...Object.keys(bandChairSelect), 'callTimes'])).toEqual(dtoKeys('BookingBandChairDto'));
   });
 
   // BookingLineupDto carries one field lineupSelect never names as a flat column: `packageIds`,
@@ -57,7 +56,7 @@ describe('Booking detail select matches its response DTOs (#873)', () => {
   });
 
   // #885: removed members never reach the select (filtered at the query, not in mapBooking), so
-  // unlike BookingBandChairDto's derived callTime, this select matches its DTO with no extras.
+  // unlike BookingBandChairDto's derived callTimes, this select matches its DTO with no extras.
   it('BookingBandMemberDto matches bandMemberSelect exactly', () => {
     expect(sortKeys(Object.keys(bandMemberSelect))).toEqual(dtoKeys('BookingBandMemberDto'));
   });

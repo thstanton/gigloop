@@ -163,13 +163,28 @@ export class BookingLineupDto {
   packageIds: string[];
 }
 
+// One segment a chair is called to, and when (#983/#991). `segmentId`/`segmentLabel` are null for
+// the package-less bucket — on a booking with no packages that is the whole gig, on one with
+// packages a Lineup parked with nothing to play yet (ADR-0081 §4); the reader tells them apart the
+// same way `segmentsLine` does, from whether the booking has packages at all.
+export class BookingChairCallTimeDto {
+  @ApiProperty({ nullable: true, type: String, description: 'The booking-level Package, or null for the package-less bucket.' })
+  segmentId: string | null;
+
+  @ApiProperty({ nullable: true, type: String, description: 'That Package\'s label, e.g. "Drinks Reception"; null for the package-less bucket.' })
+  segmentLabel: string | null;
+
+  @ApiProperty({ description: "The segment's earliest PerformanceSet.startTime (HH:mm)." })
+  startTime: string;
+}
+
 // A seat in a Lineup (ADR-0072 §2 / #884, re-pointed by ADR-0081 §3). `memberId` is nullable
 // throughout Band members v1's first slice — a vacancy is `memberId = null`, a first-class thing
-// the musician looks at, not an absence. `callTime` is derived (never stored) from the earliest
-// `PerformanceSet.startTime` across the chair's Lineup's segments, and is absent — not zero, not a
-// placeholder — when none of them has a start time. `segmentLabel` is the booking-level Package
-// that produced it (e.g. "Wedding Ceremony"), derived alongside it; null for a package-less/whole-
-// day segment, where the UI falls back to the bare time.
+// the musician looks at, not an absence. `callTimes` is derived (never stored): one entry per
+// segment the chair's Lineup plays that has a timed set, in the booking's package order. A part
+// called to two segments carries two entries — the collapse to a single earliest time hid from the
+// reader that the band plays twice. A segment with no timed set contributes no entry, so an
+// absence stays absent rather than becoming zero or a placeholder.
 export class BookingBandChairDto {
   @ApiProperty() id: string;
   @ApiProperty({ description: 'ISO 8601 timestamp' }) createdAt: string;
@@ -186,18 +201,10 @@ export class BookingBandChairDto {
   memberId: string | null;
 
   @ApiProperty({
-    nullable: true,
-    type: String,
-    description: "Derived from the Lineup's segments' earliest PerformanceSet.startTime (HH:mm); null when unset.",
+    type: () => [BookingChairCallTimeDto],
+    description: "One entry per segment the chair's Lineup plays that has a timed set, in the booking's package order.",
   })
-  callTime: string | null;
-
-  @ApiProperty({
-    nullable: true,
-    type: String,
-    description: 'The Package whose segment produced callTime (e.g. "Wedding Ceremony"); null when package-less.',
-  })
-  segmentLabel: string | null;
+  callTimes: BookingChairCallTimeDto[];
 }
 
 // The narrow contact shape a band member row nests (#885) — id/name/email only, mirroring the

@@ -1439,12 +1439,15 @@ describe('BookingsService', () => {
     // scenarios #884 originally covered per-packageId — an earliest-of-two-sets segment, the
     // package-less/whole-day segment, and a segment with no timed set — now expressed as each
     // chair's Lineup carrying that segment as its one `packages` link (or none, for whole-day).
-    it("derives each chair's callTime from its Lineup's segments' earliest set start time", async () => {
+    it("derives each chair's call time from its Lineup's segments' earliest set start time", async () => {
       const raw = {
         ...booking,
         musicFormConfig: null,
         musicFormResponse: null,
-        packages: [],
+        packages: [
+          { id: 'pkg1', label: 'Wedding Ceremony', icon: 'music', order: 1 },
+          { id: 'pkg-no-sets', label: 'Evening Party', icon: 'music', order: 2 },
+        ],
         sets: [
           { id: 's1', packageId: 'pkg1', startTime: '18:00', order: 1 },
           { id: 's2', packageId: 'pkg1', startTime: '9:30', order: 2 },
@@ -1464,11 +1467,16 @@ describe('BookingsService', () => {
       repo.findOne.mockResolvedValue(raw);
       const result = await service.findOne('u1', 'b1');
       // Earliest of 18:00/9:30 is 9:30 — a lexical string comparison would have picked 18:00.
-      expect(result.band.chairs.find((c) => c.id === 'ch1')?.callTime).toBe('9:30');
-      // Package-less Lineup (no segment links) reads the package-less (packageId: null) segment.
-      expect(result.band.chairs.find((c) => c.id === 'ch2')?.callTime).toBe('17:00');
-      // A segment with no timed set (indeed no sets at all) leaves callTime absent, not zero.
-      expect(result.band.chairs.find((c) => c.id === 'ch3')?.callTime).toBeNull();
+      expect(result.band.chairs.find((c) => c.id === 'ch1')?.callTimes).toEqual([
+        { segmentId: 'pkg1', segmentLabel: 'Wedding Ceremony', startTime: '9:30' },
+      ]);
+      // Package-less Lineup (no segment links) reads the package-less (packageId: null) segment,
+      // which has no Package row to name it.
+      expect(result.band.chairs.find((c) => c.id === 'ch2')?.callTimes).toEqual([
+        { segmentId: null, segmentLabel: null, startTime: '17:00' },
+      ]);
+      // A segment with no timed set (indeed no sets at all) contributes no entry — absent, not zero.
+      expect(result.band.chairs.find((c) => c.id === 'ch3')?.callTimes).toEqual([]);
       // The Lineup summaries themselves carry their derived packageIds.
       expect(result.band.lineups).toEqual([
         { id: 'lu1', label: null, bookingId: 'b1', packageIds: ['pkg1'] },
@@ -1478,15 +1486,18 @@ describe('BookingsService', () => {
     });
 
     // ═══ #987 AC 5 — call times derive across the union of a Lineup's segments ═══
-    // "A player on drinks and reception is called for the drinks." The derivation already folded
-    // across the whole segment set (#985 built it that way); this is the assertion that says so,
-    // and that pins it now that a Lineup can actually play more than one segment.
-    it('calls a band playing two segments for the earlier of them', async () => {
+    // A part plays every segment its band plays, so it is called to every one of them. #983's
+    // design shows all of them ("18:00 Drinks Reception", "20:30 Evening Party"): collapsing them
+    // to the earliest hid from the reader that the band is called twice.
+    it('gives a band playing two segments a call time for each, in the booking\'s package order', async () => {
       const raw = {
         ...booking,
         musicFormConfig: null,
         musicFormResponse: null,
-        packages: [],
+        packages: [
+          { id: 'drinks', label: 'Drinks Reception', icon: 'music', order: 1 },
+          { id: 'reception', label: 'Evening Party', icon: 'music', order: 2 },
+        ],
         sets: [
           { id: 's1', packageId: 'reception', startTime: '20:30', order: 2 },
           { id: 's2', packageId: 'drinks', startTime: '18:00', order: 1 },
@@ -1496,6 +1507,8 @@ describe('BookingsService', () => {
             id: 'fourPiece',
             label: 'My four-piece',
             bookingId: 'b1',
+            // Link order is reception-then-drinks precisely so that link order cannot be what
+            // makes the package-order assertion below pass.
             packages: [{ packageId: 'reception' }, { packageId: 'drinks' }],
           },
         ],
@@ -1506,43 +1519,45 @@ describe('BookingsService', () => {
       };
       repo.findOne.mockResolvedValue(raw);
       const result = await service.findOne('u1', 'b1');
-      // 18:00 (drinks), not 20:30 (reception) — and not the first link's segment either, which is
-      // reception here precisely so that link order cannot be what makes this pass.
-      expect(result.band.chairs.map((c) => c.callTime)).toEqual(['18:00', '18:00']);
+      const expected = [
+        { segmentId: 'drinks', segmentLabel: 'Drinks Reception', startTime: '18:00' },
+        { segmentId: 'reception', segmentLabel: 'Evening Party', startTime: '20:30' },
+      ];
+      expect(result.band.chairs.map((c) => c.callTimes)).toEqual([expected, expected]);
       expect(result.band.lineups[0].packageIds).toEqual(['reception', 'drinks']);
     });
 
-    it("resolves segmentLabel from the Package that produced the winning call time (#991 preprod follow-up)", async () => {
+    // A segment the band plays but which carries no timed set drops out of the list rather than
+    // appearing with a placeholder — the band is still called to the one segment that has a time.
+    it('omits a played segment that has no timed set', async () => {
       const raw = {
         ...booking,
         musicFormConfig: null,
         musicFormResponse: null,
-        packages: [{ id: 'pkg1', label: 'Wedding Ceremony', icon: 'music', order: 1 }],
-        sets: [
-          { id: 's1', packageId: 'pkg1', startTime: '11:30', order: 1 },
-          { id: 's2', packageId: null, startTime: '17:00', order: 2 },
+        packages: [
+          { id: 'drinks', label: 'Drinks Reception', icon: 'music', order: 1 },
+          { id: 'evening', label: 'Evening Party', icon: 'music', order: 2 },
         ],
+        sets: [{ id: 's1', packageId: 'drinks', startTime: '18:00', order: 1 }],
         lineups: [
-          { id: 'lu1', label: null, bookingId: 'b1', packages: [{ packageId: 'pkg1' }] },
-          { id: 'lu2', label: null, bookingId: 'b1', packages: [] },
+          {
+            id: 'lu1',
+            label: 'My four-piece',
+            bookingId: 'b1',
+            packages: [{ packageId: 'drinks' }, { packageId: 'evening' }],
+          },
         ],
-        bandChairs: [
-          { id: 'ch1', bookingId: 'b1', role: 'Sax', order: 1, lineupId: 'lu1', memberId: null },
-          { id: 'ch2', bookingId: 'b1', role: 'Drums', order: 2, lineupId: 'lu2', memberId: null },
-        ],
+        bandChairs: [{ id: 'ch1', bookingId: 'b1', role: 'Bass', order: 1, lineupId: 'lu1', memberId: null }],
       };
       repo.findOne.mockResolvedValue(raw);
       const result = await service.findOne('u1', 'b1');
-      expect(result.band.chairs.find((c) => c.id === 'ch1')).toMatchObject({
-        callTime: '11:30',
-        segmentLabel: 'Wedding Ceremony',
-      });
-      // The package-less segment (packageId: null) has no Package row to label — falls back to the
-      // bare time, as before this field existed.
-      expect(result.band.chairs.find((c) => c.id === 'ch2')).toMatchObject({
-        callTime: '17:00',
-        segmentLabel: null,
-      });
+      expect(result.band.chairs[0].callTimes).toEqual([
+        { segmentId: 'drinks', segmentLabel: 'Drinks Reception', startTime: '18:00' },
+      ]);
+      // The band still PLAYS both — the untimed segment drops out of the call times only. These
+      // are two derivations off the same links and must not be confused: a segment with no time
+      // yet is not a segment the band has stopped playing.
+      expect(result.band.lineups[0].packageIds).toEqual(['drinks', 'evening']);
     });
 
     it('is an empty array when the booking has no chairs or lineups', async () => {
