@@ -229,11 +229,14 @@ export default function ItineraryCard({
           const showBorder = !!rows[i + 1] && rows[i + 1].group !== row.group;
           const timeCol = row.kind === 'time' ? row.time : (row.set.startTime ?? formatDuration(row.set.duration));
           const labelCol = row.kind === 'time' ? row.label : setLabel(row.set);
+          // The roster carries the segment it renders under, so the JSX below neither re-narrows
+          // `row` nor re-reads `row.pkg` — the one place that knows which package this is says so
+          // once, and both the render and the shown-set bookkeeping read it from here.
           const packageRoster =
             row.kind === 'set' && row.startsRun && row.pkg && chairsByPackageId.has(row.pkg.id) && !rosterShownForPackageId.has(row.pkg.id)
-              ? chairsByPackageId.get(row.pkg.id)!
+              ? { segmentId: row.pkg.id, chairs: chairsByPackageId.get(row.pkg.id)! }
               : null;
-          if (packageRoster && row.kind === 'set' && row.pkg) rosterShownForPackageId.add(row.pkg.id);
+          if (packageRoster) rosterShownForPackageId.add(packageRoster.segmentId);
           return (
             <Fragment key={row.rowKey}>
               {/* Package name leads each contiguous run of its sets. */}
@@ -243,8 +246,12 @@ export default function ItineraryCard({
                   {row.pkg.label}
                 </div>
               )}
-              {packageRoster && row.kind === 'set' && row.pkg && (
-                <PackageRoster chairs={packageRoster} memberById={memberById} segmentId={row.pkg.id} />
+              {packageRoster && (
+                <PackageRoster
+                  chairs={packageRoster.chairs}
+                  memberById={memberById}
+                  segmentId={packageRoster.segmentId}
+                />
               )}
               <div
                 className={`flex gap-3 py-1.5${(row.kind === 'time' && row.notes) ? ' items-start' : ' items-center'}${showBorder ? ' border-b border-border' : ''}`}
