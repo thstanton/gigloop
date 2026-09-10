@@ -24,8 +24,9 @@ name: Release
 # un/partly-migrated prod database. Contrast with migration-rehearsal.yml,
 # which uses continue-on-error because it always deletes its branch
 # regardless of outcome; this workflow's Neon branch is the opposite of
-# that — a durable rollback target that must survive the run, so there is
-# no delete step here.
+# that — a durable rollback target that must survive the run, so it is
+# never deleted by the run that created it. Older snapshots ARE pruned, by
+# a step that runs before the snapshot; see its comment.
 #
 # Prerequisites this workflow depends on but does not itself configure.
 # Branch auto-deploy is now DISABLED on both prod services (confirmed
@@ -80,6 +81,52 @@ jobs:
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lockb') }}
       - run: bun install --frozen-lockfile
         if: steps.cache.outputs.cache-hit != 'true'
+
+      - name: Prune old pre-release Neon branches
+        # The prod Neon project has a hard cap on branch count and nothing
+        # here ever removed one, so every release added a branch until the
+        # v0.9.0 run hit the ceiling and create-branch-action failed with a
+        # bare `422` (the action discards the response body, so the log gave
+        # no reason). Keep the most recent KEEP snapshots as rollback targets
+        # and delete the rest, so the create below always has room. KEEP is
+        # set two below the cap on purpose: migration-rehearsal.yml creates
+        # its scratch branch in this same project, so a rehearsal running
+        # near a release transiently occupies a slot, and a prune that freed
+        # exactly one would fail the release intermittently.
+        #
+        # Deliberately no `continue-on-error` (see the header note): a prune
+        # failure must halt the run, and it does so before any step touches
+        # the prod database.
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          PROJECT_ID: ${{ vars.NEON_PROD_PROJECT_ID }}
+          KEEP: '3'
+        run: |
+          set -euo pipefail
+          api() { curl -fsS -H "Authorization: Bearer $NEON_API_KEY" "$@"; }
+          base="https://console.neon.tech/api/v2/projects/$PROJECT_ID/branches"
+
+          # Ordered by created_at, never by name: a name sort breaks the
+          # moment v0.10.0 exists (lexically it precedes v0.9.0) and the
+          # prune would then delete the newest snapshot instead of the oldest.
+          doomed="$(api "$base" | jq -r --argjson keep "$KEEP" '
+            [ .branches[]
+              | select(.name | startswith("pre-release-"))
+              | select(.default != true) ]
+            | sort_by(.created_at)
+            | (length - $keep) as $excess
+            | (if $excess <= 0 then [] else .[0:$excess] end)
+            | .[] | "\(.id) \(.name)"')"
+
+          if [ -z "$doomed" ]; then
+            echo "Nothing to prune — at most $KEEP pre-release branches exist."
+            exit 0
+          fi
+
+          while read -r id name; do
+            echo "Deleting $name ($id)"
+            api -X DELETE "$base/$id" > /dev/null
+          done <<< "$doomed"
 
       - name: Snapshot prod — create durable pre-release Neon branch
         id: neon
