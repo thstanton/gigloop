@@ -201,17 +201,28 @@ export interface BookingLineup {
   packageIds: string[];
 }
 
+// One segment a chair is called to, and when. `segmentId`/`segmentLabel` are null for the
+// package-less bucket, which reads as the whole gig on a booking with no packages and as a Lineup
+// parked with nothing to play yet on one with packages (ADR-0081 §4) — `callTimeParts` in
+// bandParts.ts owns that wording, as `segmentsLine` does for the Lineups card.
+export interface BookingChairCallTime {
+  segmentId: string | null;
+  segmentLabel: string | null;
+  startTime: string;
+}
+
 // A seat in a Lineup (ADR-0072 §2, #884; re-pointed by ADR-0081 §3). A vacancy is `memberId =
 // null`, a first-class thing the musician looks at, not an absence — assignment (#885) never
-// creates or destroys a chair row, it sets this field. `callTime` is derived server-side from the
-// Lineup's segments' earliest PerformanceSet.startTime; absent (null), not zero, when none has one.
+// creates or destroys a chair row, it sets this field. `callTimes` is derived server-side: one
+// entry per segment the chair's Lineup plays that has a timed set, in the booking's package order.
+// A part called to two segments carries two — absent entirely, not zero, for a segment with none.
 export interface BookingBandChair {
   id: string;
   role: string;
   order: number;
   lineupId: string;
   memberId: string | null;
-  callTime: string | null;
+  callTimes: BookingChairCallTime[];
 }
 
 // ADR-0072 §5: ADDED -> INVITED -> CONFIRMED | DECLINED. ADDED -> CONFIRMED is legal — confirming

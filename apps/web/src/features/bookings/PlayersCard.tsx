@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { BandMemberStatusDropdown } from './BandMemberStatusDropdown';
 import InlineFeeAdd from './InlineFeeAdd';
 import { PartRow } from './PartRow';
-import { lineupName, rendersAsPlayer, shouldNameBand } from './bandParts';
+import { callTimeParts, lineupName, rendersAsPlayer, shouldNameBand } from './bandParts';
 import type {
   BookingBandChair,
   BookingBandMember,
@@ -29,6 +29,9 @@ interface PlayersCardProps {
   members: BookingBandMember[];
   chairs: BookingBandChair[];
   lineups: BookingLineup[];
+  /** Whether the booking has any packages — `callTimeParts`' discriminator for the package-less
+   *  bucket ("Whole gig" versus a band parked with nothing to play yet, ADR-0081 §4). */
+  hasPackages: boolean;
   onUnassignChair: (chairId: string) => void;
   onChangeStatus: (memberId: string, status: BookingBandMemberStatus) => void;
   changingStatusMemberId: string | null;
@@ -40,6 +43,7 @@ export function PlayersCard({
   members,
   chairs,
   lineups,
+  hasPackages,
   onUnassignChair,
   onChangeStatus,
   changingStatusMemberId,
@@ -97,7 +101,7 @@ export function PlayersCard({
                   <PartRow
                     key={chair.id}
                     role={chair.role}
-                    callTime={chair.callTime}
+                    callTimes={callTimeParts(chair, hasPackages)}
                     bandName={nameBands ? lineupLabel(chair.lineupId) : undefined}
                     action={
                       <IconButton

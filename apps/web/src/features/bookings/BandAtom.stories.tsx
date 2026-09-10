@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, screen, userEvent, within } from 'storybook/test';
 import { BandAtom } from './BandAtom';
 import { bandMember, lineupTemplate } from '@/test/factories';
-import type { BookingBandChair, BookingPackageSummary } from '@/types/api';
+import type { BookingBandChair, BookingChairCallTime, BookingPackageSummary } from '@/types/api';
 
 // The Band atom is presentational: it owns no mutation and no fetch. The host (BandSheet) passes
 // the lineups/chairs/members/packages and signals every edit via a callback.
@@ -21,15 +21,29 @@ const twoSegments: BookingPackageSummary[] = [
 
 const fourPieceRoles = ['Vocals', 'Guitar', 'Bass', 'Drums'];
 
+// The server derives one call time per segment a band plays, in the booking's package order — a
+// band on both sets is called twice, and the part row shows both. These fixtures mirror that:
+// a story whose Lineup plays one segment must pass that segment's call alone, or the row claims a
+// call the booking does not have.
+const DRINKS_CALL: BookingChairCallTime = { segmentId: DRINKS, segmentLabel: 'Drinks Reception', startTime: '18:00' };
+const EVENING_CALL: BookingChairCallTime = { segmentId: EVENING, segmentLabel: 'Evening Party', startTime: '20:30' };
+const BOTH_CALLS = [DRINKS_CALL, EVENING_CALL];
+/** The package-less bucket: no Package names it, so `callTimeParts` says "Whole gig" instead. */
+const WHOLE_GIG_CALL: BookingChairCallTime = { segmentId: null, segmentLabel: null, startTime: '18:00' };
+
 /** Four parts in ONE band — the collapse ADR-0081 exists for. */
-const fourPieceChairs = (lineupId: string, memberIds: Array<string | null> = [null, null, null, null]): BookingBandChair[] =>
+const fourPieceChairs = (
+  lineupId: string,
+  memberIds: Array<string | null> = [null, null, null, null],
+  callTimes: BookingChairCallTime[] = BOTH_CALLS,
+): BookingBandChair[] =>
   fourPieceRoles.map((role, i) => ({
     id: `ch-${lineupId}-${i}`,
     role,
     order: i + 1,
     lineupId,
     memberId: memberIds[i] ?? null,
-    callTime: '18:00',
+    callTimes,
   }));
 
 const sam = bandMember({
@@ -96,7 +110,7 @@ export const OneLineupWholeGig: Story = {
   args: {
     packages: [],
     lineups: [{ id: 'lu-1', label: 'My four-piece', packageIds: [] }],
-    chairs: fourPieceChairs('lu-1'),
+    chairs: fourPieceChairs('lu-1', undefined, [WHOLE_GIG_CALL]),
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -136,9 +150,9 @@ export const TwoLineups: Story = {
       { id: 'lu-seven', label: 'My seven-piece', packageIds: [EVENING] },
     ],
     chairs: [
-      { id: 'ch-piano', role: 'Piano', order: 1, lineupId: 'lu-solo', memberId: 'm-sam', callTime: '13:00' },
-      { id: 'ch-keys', role: 'Keys', order: 1, lineupId: 'lu-seven', memberId: 'm-sam', callTime: '19:30' },
-      { id: 'ch-bass', role: 'Bass', order: 2, lineupId: 'lu-seven', memberId: null, callTime: '19:30' },
+      { id: 'ch-piano', role: 'Piano', order: 1, lineupId: 'lu-solo', memberId: 'm-sam', callTimes: [DRINKS_CALL] },
+      { id: 'ch-keys', role: 'Keys', order: 1, lineupId: 'lu-seven', memberId: 'm-sam', callTimes: [EVENING_CALL] },
+      { id: 'ch-bass', role: 'Bass', order: 2, lineupId: 'lu-seven', memberId: null, callTimes: [EVENING_CALL] },
     ],
     members: [sam],
   },
@@ -201,7 +215,7 @@ export const UnnamedLineup: Story = {
   args: {
     packages: [],
     lineups: [{ id: 'lu-1', label: null, packageIds: [] }],
-    chairs: [{ id: 'ch1', role: 'Saxophone', order: 1, lineupId: 'lu-1', memberId: null, callTime: null }],
+    chairs: [{ id: 'ch1', role: 'Saxophone', order: 1, lineupId: 'lu-1', memberId: null, callTimes: [] }],
     lineupTemplates: [],
   },
   play: async ({ canvasElement }) => {
@@ -217,13 +231,16 @@ export const LineupPlayingNothing: Story = {
   name: '7. A band on a packaged booking with no sets linked — "Plays nothing yet", in the warning tone',
   args: {
     lineups: [{ id: 'lu-1', label: 'My four-piece', packageIds: [] }],
-    chairs: fourPieceChairs('lu-1'),
+    // A band playing nothing is called to nothing — its parts read "No call time", they do not
+    // borrow the whole-gig reading that the same empty `packageIds` earns in story 1.
+    chairs: fourPieceChairs('lu-1', undefined, []),
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     // The same empty `packageIds` that reads "Plays the whole gig" in story 1 — the booking having
     // packages is what makes it mean something else (ADR-0081 §4).
     await expect(canvas.getByText('Plays nothing yet')).toBeVisible();
+    await expect(canvas.getAllByText('No call time')).toHaveLength(4);
   },
 };
 
@@ -251,6 +268,14 @@ export const ChangeStatus: Story = {
     // Their other parts are untouched — the status is on the person, not the seat.
     await expect(canvas.getByText('Vocals')).toBeVisible();
     await expect(canvas.getByText('Guitar')).toBeVisible();
+
+    // #1039's preprod regression: this band plays BOTH sets, so each of Sam's parts is called
+    // twice and says so. It previously showed one bare "18:00" — the earliest of the two — which
+    // left the reader with no sign the evening call existed at all.
+    // Four rows carry the pair, not two: Sam's two parts under Players, and the band's two vacant
+    // parts under Parts to fill — the same PartRow, which is the point of it being one component.
+    await expect(canvas.getAllByText('18:00 Drinks Reception')).toHaveLength(4);
+    await expect(canvas.getAllByText('20:30 Evening Party')).toHaveLength(4);
   },
 };
 
@@ -259,7 +284,7 @@ export const SetFee: Story = {
   name: '9. The session fee is on the person — + Add fee opens, commits, and cancels cleanly',
   args: {
     lineups: [{ id: 'lu-1', label: 'My four-piece', packageIds: [DRINKS] }],
-    chairs: fourPieceChairs('lu-1', ['m-ana', null, null, null]),
+    chairs: fourPieceChairs('lu-1', ['m-ana', null, null, null], [DRINKS_CALL]),
     members: [ana],
   },
   play: async ({ canvasElement, args }) => {
@@ -283,7 +308,7 @@ export const FillAPart: Story = {
   name: '10. Filling a vacant part hands the chair id and the contact id up',
   args: {
     lineups: [{ id: 'lu-1', label: 'My four-piece', packageIds: [DRINKS] }],
-    chairs: fourPieceChairs('lu-1'),
+    chairs: fourPieceChairs('lu-1', undefined, [DRINKS_CALL]),
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -362,7 +387,7 @@ export const MemberWithNoPartsIsNotAPlayer: Story = {
   name: 'Someone holding no parts does not render as a player — unless they are you',
   args: {
     lineups: [{ id: 'lu-1', label: 'My four-piece', packageIds: [DRINKS] }],
-    chairs: fourPieceChairs('lu-1', ['m-sam', null, null, null]),
+    chairs: fourPieceChairs('lu-1', ['m-sam', null, null, null], [DRINKS_CALL]),
     members: [sam, ana],
   },
   play: async ({ canvasElement }) => {
