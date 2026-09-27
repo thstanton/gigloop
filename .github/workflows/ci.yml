@@ -107,6 +107,11 @@ jobs:
         if: needs.detect-changes.outputs.api == 'true'
       - run: cd apps/web && bun run test
         if: needs.detect-changes.outputs.web == 'true'
+      - name: Test band-chair contact creation with band members enabled
+        if: needs.detect-changes.outputs.web == 'true'
+        run: cd apps/web && bun run test --project=storybook src/features/bookings/ContactPicker.stories.tsx -t "Creating from a band chair preselects Band member"
+        env:
+          VITE_FEATURE_BAND_MEMBERS: 'true'
       - name: Shortcut-detector unit tests (ADR-0030)
         if: needs.detect-changes.outputs.web == 'true'
         run: node --test scripts/shortcut-detector.test.mjs

@@ -2,6 +2,8 @@ import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, screen, userEvent, within } from 'storybook/test';
 import { http, HttpResponse } from 'msw';
+import { isEnabled } from '@/lib/featureFlags';
+import { BAND_NOTES_FIELDS } from '@/lib/constants';
 import ContactPicker from './ContactPicker';
 import type { Contact } from '@/types/api';
 
@@ -38,6 +40,13 @@ const meta = {
 
 export default meta;
 type Story = StoryObj<typeof meta>;
+
+let createRequestBody: unknown;
+
+const createContactHandler = http.post('/api/contacts', async ({ request }) => {
+  createRequestBody = await request.json();
+  return HttpResponse.json({ id: 'c-created' }, { status: 201 });
+});
 
 export const Empty: Story = {
   play: async ({ canvas }) => {
@@ -138,5 +147,41 @@ export const AddYourselfRacedCreate409: Story = {
     await userEvent.click(await screen.findByRole('button', { name: /Create/i }));
     await expect(args.onChange).toHaveBeenCalledWith('c-self');
     await expect(screen.queryByRole('heading', { name: /Add yourself/i })).not.toBeInTheDocument();
+  },
+};
+
+export const CreateBandMember: Story = {
+  name: 'Creating from a band chair preselects Band member',
+  args: {
+    createRole: 'BAND_MEMBER',
+  },
+  parameters: {
+    msw: { handlers: [createContactHandler] },
+  },
+  play: async ({ args, canvasElement }) => {
+    createRequestBody = undefined;
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('combobox'));
+    await userEvent.type(await screen.findByPlaceholderText(/Search or create new/i), 'New Dep');
+    await userEvent.click(await screen.findByRole('option', { name: /Create "New Dep"/i }));
+
+    await expect(await screen.findByRole('heading', { name: 'New band member' })).toBeVisible();
+    const dialog = within(screen.getByRole('dialog'));
+
+    // The band-member UI is dark behind VITE_FEATURE_BAND_MEMBERS. When enabled, assert the
+    // selected type is reflected in both the select and the initially-open field disclosure.
+    if (isEnabled('VITE_FEATURE_BAND_MEMBERS')) {
+      await expect(dialog.getByText('Band member', { selector: 'span', exact: true })).toBeVisible();
+      await expect(dialog.getByRole('button', { name: 'Hide band member fields' })).toBeVisible();
+      await expect(dialog.getByLabelText('Identity — the instrument they\'re known for')).toBeVisible();
+      await expect(dialog.getByText('Declared instruments — everything they can cover')).toBeVisible();
+      for (const { label } of BAND_NOTES_FIELDS) {
+        await expect(dialog.getByLabelText(label)).toBeVisible();
+      }
+    }
+
+    await userEvent.click(dialog.getByRole('button', { name: 'Create' }));
+    await expect(args.onChange).toHaveBeenCalledWith('c-created');
+    await expect(createRequestBody).toMatchObject({ name: 'New Dep', primaryRole: 'BAND_MEMBER' });
   },
 };

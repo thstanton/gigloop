@@ -15,6 +15,7 @@ import { useContacts } from '@/lib/hooks/useContacts';
 import { useRoleVocabulary } from '@/lib/hooks/useRoleVocabulary';
 import { ApiError, apiPost } from '@/lib/api';
 import type { Contact } from '@/types/api';
+import { PRIMARY_ROLE_LABELS, type ContactPrimaryRole } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 import { rankContactsForChair, type GeoPoint } from '@/lib/bandMatch';
 
@@ -41,6 +42,8 @@ interface ContactPickerProps {
    * the signed-in Clerk identity. Default `false` — only the chair-filling picker opts in.
    */
   allowSelf?: boolean;
+  /** The contact type implied by this picker when creating a new contact inline. */
+  createRole?: ContactPrimaryRole;
 }
 
 export default function ContactPicker({
@@ -54,6 +57,7 @@ export default function ContactPicker({
   disabled = false,
   disableCreate = false,
   allowSelf = false,
+  createRole,
 }: ContactPickerProps) {
   const [open, setOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
@@ -159,6 +163,12 @@ export default function ContactPicker({
     setOpen(false);
     setSearch('');
     setCreateOpen(true);
+  }
+
+  function getCreateSheetTitle() {
+    if (creatingSelf) return 'Add yourself';
+    if (createRole) return `New ${PRIMARY_ROLE_LABELS[createRole].toLowerCase()}`;
+    return `New ${label}`;
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -311,7 +321,7 @@ export default function ContactPicker({
         >
           <SheetContent side="bottom" className="max-h-[90vh] overflow-y-auto" aria-describedby={undefined}>
             <SheetHeader>
-              <SheetTitle>{creatingSelf ? 'Add yourself' : `New ${label}`}</SheetTitle>
+              <SheetTitle>{getCreateSheetTitle()}</SheetTitle>
             </SheetHeader>
             <ContactForm
               defaultValues={{
@@ -324,7 +334,7 @@ export default function ContactPicker({
                 addressLine1: '', addressLine2: '', city: '', county: '',
                 postcode: '', country: 'GB', latitude: null, longitude: null, placeId: null,
                 notes: '', parkingInfo: '',
-                accessInfo: '', equipmentAvailable: '', commissionArrangement: '', primaryRole: '',
+                accessInfo: '', equipmentAvailable: '', commissionArrangement: '', primaryRole: createRole ?? '',
                 primaryBandRole: '', instruments: [], travelNotes: '', equipmentNotes: '',
                 outfitNotes: '', availabilityNotes: '',
               }}
