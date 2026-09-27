@@ -106,11 +106,24 @@ model UserProfile {
   onboardingCompletedAt DateTime?
 }
 
+// A partial unique index — `Contact_userId_accountOwner_key`, on (userId) WHERE
+// isAccountOwner = true — backs the "at most one account-owner Contact per tenant" invariant
+// (#1035, ADR-0083). Prisma's schema DSL can't express a filtered unique index, so it isn't
+// declared below as `@@unique`; it exists only in migrations/20260927130000_contact_account_owner
+// and in the live database. Do not add a matching `@@unique([userId])` here — unlike the partial
+// index, an unfiltered unique constraint would apply to every row, forbidding a tenant from ever
+// having more than one Contact at all.
 model Contact {
   id        String   @id @default(uuid())
   userId    String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // The Contact that "is me" — the account owner adding themselves to a band roster (#1035,
+  // ADR-0083). Settable only via the "Add yourself" flow (#1036), never on the general
+  // ContactForm. Distinct from booking-scoped `BookingBandMember.isSelf`, which is derived from
+  // this field at chair-assignment time.
+  isAccountOwner Boolean @default(false)
 
   name         String
   greetingName String?

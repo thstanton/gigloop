@@ -44,4 +44,7 @@ export class ContactResponseDto {
   @ApiPropertyOptional({ nullable: true, type: String, description: 'Shared with band' }) equipmentNotes: string | null;
   @ApiPropertyOptional({ nullable: true, type: String, description: 'Shared with band' }) outfitNotes: string | null;
   @ApiPropertyOptional({ nullable: true, type: String, description: 'Shared with band' }) availabilityNotes: string | null;
+
+  // Tenant-singleton "this Contact is me" flag (#1035, ADR-0083).
+  @ApiProperty({ description: 'Whether this Contact is the account owner' }) isAccountOwner: boolean;
 }

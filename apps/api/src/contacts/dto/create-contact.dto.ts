@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsArray, IsEmail, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, IsUrl, ValidateIf } from 'class-validator';
+import { IsArray, IsBoolean, IsEmail, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, IsUrl, ValidateIf } from 'class-validator';
 import { PRIMARY_ROLES } from '../contact-roles';
 
 export class CreateContactDto {
@@ -135,4 +135,11 @@ export class CreateContactDto {
   @IsOptional()
   @IsString()
   availabilityNotes?: string;
+
+  // Tenant-singleton "this Contact is me" flag (#1035, ADR-0083). Only ever set by the "Add
+  // yourself" flow — never a field on the general ContactForm.
+  @ApiPropertyOptional({ description: 'Whether this Contact is the account owner — enforced tenant-singleton (409 on conflict)' })
+  @IsOptional()
+  @IsBoolean()
+  isAccountOwner?: boolean;
 }

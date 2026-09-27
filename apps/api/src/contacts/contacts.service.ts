@@ -1,8 +1,22 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { ContactsRepository } from './contacts.repository';
 import { CreateContactDto } from './dto/create-contact.dto';
 import { UpdateContactDto } from './dto/update-contact.dto';
 import { ChecklistReevaluator } from '../checklist/checklist-reevaluator.service';
+
+const ACCOUNT_OWNER_CONFLICT_MESSAGE = 'Another Contact is already the account owner';
+
+// True for a P2002 raised by `Contact_userId_accountOwner_key` (#1035, ADR-0083) — the partial
+// unique index backing the "at most one account-owner Contact per tenant" invariant.
+function isAccountOwnerViolation(err: unknown): boolean {
+  return (
+    err instanceof Prisma.PrismaClientKnownRequestError &&
+    err.code === 'P2002' &&
+    Array.isArray(err.meta?.target) &&
+    (err.meta.target as unknown[]).includes('userId')
+  );
+}
 
 const TRAVEL_TIME_CLEAR = {
   travelTimeMinutes: null,
@@ -45,15 +59,26 @@ export class ContactsService {
     if (owned !== wanted.length) throw new NotFoundException('Contact not found');
   }
 
-  create(userId: string, dto: CreateContactDto) {
-    return this.repo.create(userId, dto);
+  async create(userId: string, dto: CreateContactDto) {
+    try {
+      return await this.repo.create(userId, dto);
+    } catch (err) {
+      if (isAccountOwnerViolation(err)) throw new ConflictException(ACCOUNT_OWNER_CONFLICT_MESSAGE);
+      throw err;
+    }
   }
 
   async update(userId: string, id: string, dto: UpdateContactDto) {
     await this.findOne(userId, id);
     const hasAddressChange = Object.keys(dto).some((k) => CONTACT_ADDRESS_FIELDS.has(k));
     const data = hasAddressChange ? { ...dto, ...TRAVEL_TIME_CLEAR } : dto;
-    const updated = await this.repo.update(id, data);
+    let updated: Awaited<ReturnType<ContactsRepository['update']>>;
+    try {
+      updated = await this.repo.update(id, data);
+    } catch (err) {
+      if (isAccountOwnerViolation(err)) throw new ConflictException(ACCOUNT_OWNER_CONFLICT_MESSAGE);
+      throw err;
+    }
 
     // #618: the email precondition reads this contact's email. When it changes, re-evaluate the
     // checklists of the bookings this contact is the customer of, so the precondition resolves (or
@@ -66,7 +91,12 @@ export class ContactsService {
   }
 
   async delete(userId: string, id: string) {
-    await this.findOne(userId, id);
+    const contact = await this.findOne(userId, id);
+    // Independent of and in addition to the booking/roster check below (#1035) — the account
+    // owner must never be deletable, even for a Contact with no booking history at all.
+    if (contact.isAccountOwner) {
+      throw new ConflictException('The account-owner Contact cannot be deleted');
+    }
     const { bookingCount, bandRosterCount } = await this.repo.countDeletionBlockers(userId, id);
     if (bookingCount > 0 || bandRosterCount > 0) {
       // TODO: GDPR limitation — contacts with any booking history (including

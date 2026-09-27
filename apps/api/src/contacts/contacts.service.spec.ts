@@ -1,7 +1,16 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { ContactsService } from './contacts.service';
 import { ContactsRepository } from './contacts.repository';
 import { ChecklistReevaluator } from '../checklist/checklist-reevaluator.service';
+
+function accountOwnerViolation(): Prisma.PrismaClientKnownRequestError {
+  return new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+    code: 'P2002',
+    clientVersion: '6.19.3',
+    meta: { modelName: 'Contact', target: ['userId'] },
+  });
+}
 
 type MockRepo = {
   findAll: jest.Mock;
@@ -104,6 +113,19 @@ describe('ContactsService', () => {
       expect(repo.create).toHaveBeenCalledWith('u1', dto);
       expect(result).toBe(contact);
     });
+
+    it('maps a P2002 violation on Contact_userId_accountOwner_key to a 409 (#1035)', async () => {
+      repo.create.mockRejectedValue(accountOwnerViolation());
+      await expect(service.create('u1', { name: 'Alice', isAccountOwner: true })).rejects.toThrow(
+        ConflictException,
+      );
+    });
+
+    it('rethrows an unrelated error unchanged', async () => {
+      const otherError = new Error('boom');
+      repo.create.mockRejectedValue(otherError);
+      await expect(service.create('u1', { name: 'Alice' })).rejects.toBe(otherError);
+    });
   });
 
   describe('update', () => {
@@ -159,6 +181,14 @@ describe('ContactsService', () => {
       expect(repo.findCustomerBookingIds).not.toHaveBeenCalled();
       expect(evaluator.onBookingChanged).not.toHaveBeenCalled();
     });
+
+    it('maps a P2002 violation on Contact_userId_accountOwner_key to a 409 (#1035)', async () => {
+      repo.findOne.mockResolvedValue(contact);
+      repo.update.mockRejectedValue(accountOwnerViolation());
+      await expect(service.update('u1', 'c1', { isAccountOwner: true })).rejects.toThrow(
+        ConflictException,
+      );
+    });
   });
 
   describe('delete', () => {
@@ -212,6 +242,13 @@ describe('ContactsService', () => {
       repo.delete.mockResolvedValue(contact);
       await service.delete('u1', 'c1');
       expect(repo.countDeletionBlockers).toHaveBeenCalledWith('u1', 'c1');
+    });
+
+    it('throws ConflictException for the account-owner Contact, independent of booking/roster history (#1035)', async () => {
+      repo.findOne.mockResolvedValue({ ...contact, isAccountOwner: true });
+      await expect(service.delete('u1', 'c1')).rejects.toThrow(ConflictException);
+      expect(repo.countDeletionBlockers).not.toHaveBeenCalled();
+      expect(repo.delete).not.toHaveBeenCalled();
     });
   });
 });

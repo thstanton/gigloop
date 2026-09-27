@@ -36,6 +36,7 @@ export const NESTED_CONTACT_SELECT = {
   equipmentNotes: true,
   outfitNotes: true,
   availabilityNotes: true,
+  isAccountOwner: true,
 } as const;
 
 // The booking's most recent contract, narrowed to exactly what `BookingActiveContractDto` declares
