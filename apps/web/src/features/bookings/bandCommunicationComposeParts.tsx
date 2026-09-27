@@ -76,7 +76,7 @@ interface ClipboardFallbackOptions {
   text: string;
   id: string;
   ariaLabel: string;
-  ref: RefObject<HTMLTextAreaElement | null>;
+  ref: RefObject<HTMLTextAreaElement>;
   isSaving: boolean;
   onSelect: () => void;
   onMarkSent: () => void;

@@ -58,7 +58,10 @@ interface DesktopBookingContentData {
   musicFormConfig: MusicFormConfig | null | undefined;
   musicFormConfigLoading: boolean;
   turnOnMusicForm: ReturnType<typeof useConfigureMusicForm>;
-  checklist: ReturnType<typeof useBookingChecklist>;
+  checklist: Pick<
+    ReturnType<typeof useBookingChecklist>,
+    'checklist' | 'checklistLoading' | 'toggleItem' | 'addItem' | 'isAddingItem'
+  >;
   lineupTemplates: LineupTemplate[];
   contractActions: ReturnType<typeof useContractActions>;
   fields: ReturnType<typeof useBookingFields>;

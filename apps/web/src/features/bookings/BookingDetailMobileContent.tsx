@@ -75,7 +75,8 @@ interface MobileBookingContentProps {
 
 function MobileOnTheDay({ data, actions }: Readonly<Pick<MobileBookingContentProps, 'data' | 'actions'>>) {
   const { booking, bookingId, bandData, documents, musicFormConfig, musicFormConfigLoading, missingConcerns } = data;
-  const { fields, onTurnOnMusicForm, onEditMusicForm, setSearchParams } = actions;
+  const { fields } = data;
+  const { onTurnOnMusicForm, onEditMusicForm, setSearchParams } = actions;
 
   return (
     <div className="space-y-4 pt-2">
