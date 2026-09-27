@@ -150,6 +150,7 @@ export function BandAtom({
         members={members}
         chairs={chairs}
         lineups={lineups}
+        hasPackages={packages.length > 0}
         onUnassignChair={(chairId) => onAssignChair(chairId, null)}
         onChangeStatus={onChangeMemberStatus}
         changingStatusMemberId={changingStatusMemberId}
@@ -160,6 +161,7 @@ export function BandAtom({
       <PartsToFillCard
         vacantChairs={vacantChairs}
         lineups={lineups}
+        hasPackages={packages.length > 0}
         venue={venue}
         instrumentVocabulary={instrumentVocabulary}
         onAssignChair={onAssignChair}

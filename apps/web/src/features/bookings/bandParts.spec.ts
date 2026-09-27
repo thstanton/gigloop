@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { joinSegments, playsLine, segmentsLine } from './bandParts';
-import type { BookingLineup, BookingPackageSummary } from '@/types/api';
+import { callTimeParts, joinSegments, playsLine, segmentsLine } from './bandParts';
+import type { BookingBandChair, BookingChairCallTime, BookingLineup, BookingPackageSummary } from '@/types/api';
 
 describe('joinSegments', () => {
   it('returns the single label unchanged', () => {
@@ -37,6 +37,41 @@ describe('segmentsLine', () => {
 
   it('reads "Plays the whole gig" with no warning when there are no packages at all', () => {
     expect(segmentsLine([], false)).toEqual({ text: 'Plays the whole gig', warning: false });
+  });
+});
+
+// #1039 follow-up: a part plays every segment its band plays, so it is called to every one of
+// them. The row showed only the earliest, which hid the second call entirely.
+describe('callTimeParts', () => {
+  const chair = (callTimes: BookingChairCallTime[]): BookingBandChair =>
+    ({ id: 'ch1', role: 'Bass', order: 1, lineupId: 'lu1', memberId: null, callTimes }) as BookingBandChair;
+
+  it('names the segment beside each call, one per segment the band plays', () => {
+    expect(
+      callTimeParts(
+        chair([
+          { segmentId: 'p1', segmentLabel: 'Drinks Reception', startTime: '18:00' },
+          { segmentId: 'p2', segmentLabel: 'Evening Party', startTime: '20:30' },
+        ]),
+        true,
+      ),
+    ).toEqual(['18:00 Drinks Reception', '20:30 Evening Party']);
+  });
+
+  it('reads the package-less bucket as "Whole gig" on a booking with no packages', () => {
+    expect(callTimeParts(chair([{ segmentId: null, segmentLabel: null, startTime: '18:00' }]), false)).toEqual([
+      '18:00 Whole gig',
+    ]);
+  });
+
+  // The same null bucket on a booking that HAS packages is a band parked with nothing to play yet
+  // (ADR-0081 §4) — naming a segment there would be a lie, so the bare time stands alone.
+  it('leaves the package-less bucket bare on a booking that has packages', () => {
+    expect(callTimeParts(chair([{ segmentId: null, segmentLabel: null, startTime: '18:00' }]), true)).toEqual(['18:00']);
+  });
+
+  it('is empty when no segment the band plays has a timed set — absent, not zero', () => {
+    expect(callTimeParts(chair([]), true)).toEqual([]);
   });
 });
 

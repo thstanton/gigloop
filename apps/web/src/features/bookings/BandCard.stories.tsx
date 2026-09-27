@@ -10,12 +10,12 @@ import type { BookingBand, BookingBandChair } from '@/types/api';
 // than a flat list. Confirmed · Waiting on · Still to sort · Parts to fill, empty groups omitted.
 
 const chairs: BookingBandChair[] = [
-  { id: 'ch1', role: 'Vocals', order: 1, lineupId: 'lu-evening', memberId: 'm-confirmed', callTime: '19:30' },
-  { id: 'ch2', role: 'Sax', order: 2, lineupId: 'lu-evening', memberId: 'm-confirmed', callTime: '19:30' },
-  { id: 'ch3', role: 'Guitar', order: 3, lineupId: 'lu-evening', memberId: 'm-invited', callTime: '19:30' },
-  { id: 'ch4', role: 'Drums', order: 4, lineupId: 'lu-evening', memberId: 'm-added', callTime: '19:30' },
-  { id: 'ch5', role: 'Keys', order: 5, lineupId: 'lu-evening', memberId: null, callTime: '19:30' },
-  { id: 'ch6', role: 'Cello', order: 5, lineupId: 'lu-evening', memberId: 'm-declined', callTime: '19:30' },
+  { id: 'ch1', role: 'Vocals', order: 1, lineupId: 'lu-evening', memberId: 'm-confirmed', callTimes: [{ segmentId: 'pkg-evening', segmentLabel: 'Evening Party', startTime: '19:30' }] },
+  { id: 'ch2', role: 'Sax', order: 2, lineupId: 'lu-evening', memberId: 'm-confirmed', callTimes: [{ segmentId: 'pkg-evening', segmentLabel: 'Evening Party', startTime: '19:30' }] },
+  { id: 'ch3', role: 'Guitar', order: 3, lineupId: 'lu-evening', memberId: 'm-invited', callTimes: [{ segmentId: 'pkg-evening', segmentLabel: 'Evening Party', startTime: '19:30' }] },
+  { id: 'ch4', role: 'Drums', order: 4, lineupId: 'lu-evening', memberId: 'm-added', callTimes: [{ segmentId: 'pkg-evening', segmentLabel: 'Evening Party', startTime: '19:30' }] },
+  { id: 'ch5', role: 'Keys', order: 5, lineupId: 'lu-evening', memberId: null, callTimes: [{ segmentId: 'pkg-evening', segmentLabel: 'Evening Party', startTime: '19:30' }] },
+  { id: 'ch6', role: 'Cello', order: 5, lineupId: 'lu-evening', memberId: 'm-declined', callTimes: [{ segmentId: 'pkg-evening', segmentLabel: 'Evening Party', startTime: '19:30' }] },
 ];
 
 const band: BookingBand = {
@@ -139,8 +139,8 @@ export const TwoBandsNameTheirParts: Story = {
         { id: 'lu-six', label: 'My six-piece', packageIds: ['pkg-evening'] },
       ],
       chairs: [
-        { id: 'ch-piano', role: 'Piano', order: 1, lineupId: 'lu-solo', memberId: null, callTime: '13:00' },
-        { id: 'ch-keys', role: 'Keys', order: 1, lineupId: 'lu-six', memberId: null, callTime: '19:30' },
+        { id: 'ch-piano', role: 'Piano', order: 1, lineupId: 'lu-solo', memberId: null, callTimes: [{ segmentId: 'pkg-ceremony', segmentLabel: 'Ceremony', startTime: '13:00' }] },
+        { id: 'ch-keys', role: 'Keys', order: 1, lineupId: 'lu-six', memberId: null, callTimes: [{ segmentId: 'pkg-evening', segmentLabel: 'Evening Party', startTime: '19:30' }] },
       ],
       members: [],
     },

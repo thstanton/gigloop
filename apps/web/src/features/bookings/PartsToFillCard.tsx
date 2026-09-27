@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useDatalistId } from '@/lib/hooks/useDatalistId';
 import ContactPicker from './ContactPicker';
 import { PartRow } from './PartRow';
-import { lineupName, shouldNameBand } from './bandParts';
+import { callTimeParts, lineupName, shouldNameBand } from './bandParts';
 import type { BookingBandChair, BookingLineup, Contact } from '@/types/api';
 
 // #983's resolution, card 3 of 3. The SAME part row as the Players card — identical markup — which
@@ -20,6 +20,9 @@ import type { BookingBandChair, BookingLineup, Contact } from '@/types/api';
 interface PartsToFillCardProps {
   vacantChairs: BookingBandChair[];
   lineups: BookingLineup[];
+  /** Whether the booking has any packages — `callTimeParts`' discriminator for the package-less
+   *  bucket ("Whole gig" versus a band parked with nothing to play yet, ADR-0081 §4). */
+  hasPackages: boolean;
   venue: Contact | null;
   instrumentVocabulary: string[];
   onAssignChair: (chairId: string, contactId: string | null) => void;
@@ -109,6 +112,7 @@ export function AddPartFooter({
 export function PartsToFillCard({
   vacantChairs,
   lineups,
+  hasPackages,
   venue,
   instrumentVocabulary,
   onAssignChair,
@@ -132,11 +136,15 @@ export function PartsToFillCard({
       ) : (
         <div>
           {vacantChairs.map((chair) => (
-            <div key={chair.id} className="pb-2 last:pb-0">
+            // The divider belongs below the picker, not between the row and its own picker — a
+            // vacant part and its "fill this" control are one unit, so PartRow's own border (from
+            // LabelValue) is switched off here and moved to this wrapper instead.
+            <div key={chair.id} className="pb-3 border-b border-border last:border-0 last:pb-0">
               <PartRow
                 role={chair.role}
-                callTime={chair.callTime}
+                callTimes={callTimeParts(chair, hasPackages)}
                 bandName={nameBands ? lineupLabel(chair.lineupId) : undefined}
+                bordered={false}
                 action={
                   <IconButton
                     label={`Remove the ${chair.role} part`}

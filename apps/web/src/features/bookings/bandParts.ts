@@ -66,6 +66,25 @@ export function playsLine(
   return segmentsLine(lineupSegmentLabels(lineup, packages), packages.length > 0);
 }
 
+/**
+ * What a part's call times read as: one "18:00 Drinks Reception" per segment the part's band plays
+ * that has a timed set, in the booking's package order (the server derives and orders them).
+ *
+ * The package-less bucket carries no label, and — exactly as `segmentsLine` does two cards above —
+ * the caller's `hasPackages` is what tells its two readings apart: on a booking with no packages
+ * that bucket IS the whole gig and says so; on a booking with packages it is a band parked with
+ * nothing to play yet, where naming a segment would be a lie, so the bare time stands alone.
+ *
+ * An empty result means no segment the band plays has a timed set — absent, not zero. PartRow says
+ * "No call time" rather than showing a placeholder.
+ */
+export function callTimeParts(chair: BookingBandChair, hasPackages: boolean): string[] {
+  return chair.callTimes.map(({ segmentLabel, startTime }) => {
+    const label = segmentLabel ?? (hasPackages ? null : 'Whole gig');
+    return label ? `${startTime} ${label}` : startTime;
+  });
+}
+
 /** A band's parts, in seat order. `order` is per-Lineup (ADR-0081), never booking-wide. */
 export function partsOf(lineupId: string, chairs: BookingBandChair[]): BookingBandChair[] {
   return chairs.filter((c) => c.lineupId === lineupId).sort((a, b) => a.order - b.order);
