@@ -35,6 +35,7 @@ export function BandSection({
   return (
     <BuilderSection id="band" title="Band" refCallback={refCallback}>
       <BandAtom
+        bookingId={bookingId}
         lineups={booking.band.lineups}
         chairs={booking.band.chairs}
         members={booking.band.members}

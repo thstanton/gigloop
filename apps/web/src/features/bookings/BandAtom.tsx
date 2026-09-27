@@ -32,6 +32,7 @@ import type {
 // (`playsLine` in bandParts.ts).
 
 interface BandAtomProps {
+  bookingId: string;
   lineups: BookingLineup[];
   chairs: BookingBandChair[];
   members: BookingBandMember[];
@@ -61,6 +62,7 @@ interface BandAtomProps {
 }
 
 export function BandAtom({
+  bookingId,
   lineups,
   chairs,
   members,
@@ -147,6 +149,7 @@ export function BandAtom({
       )}
 
       <PlayersCard
+        bookingId={bookingId}
         members={members}
         chairs={chairs}
         lineups={lineups}

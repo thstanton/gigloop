@@ -160,27 +160,27 @@ function resolveInvoiceDocumentVisibility(
 }
 
 /**
- * A local mirror of Prisma's `DocumentType` enum members, declared as a plain string union so
- * this module can stay Prisma-free (see the module comment above) — the same boundary
- * `apps/web/src/types/api.ts`'s own `DocumentType` mirror crosses for the frontend. Keep in sync
- * with `schema.prisma`'s `DocumentType` enum by hand; `CALL_SHEET` joins this list in #892/#893
- * once ADR-0072 §8's enum→TEXT migration lands.
+ * A local mirror of the `DocumentType` vocabulary (`apps/api/src/documents/document-type.ts`),
+ * declared as a plain string union so this module can stay Prisma-free (see the module comment
+ * above) — the same boundary `apps/web/src/types/api.ts`'s own `DocumentType` mirror crosses for
+ * the frontend. Keep in sync with `document-type.ts`'s `DOCUMENT_TYPES` by hand.
  */
-type DocumentTypeValue = 'CONTRACT' | 'INVOICE' | 'SONG_LIST' | 'UPLOAD';
+type DocumentTypeValue = 'CONTRACT' | 'INVOICE' | 'SONG_LIST' | 'UPLOAD' | 'CALL_SHEET';
 
 /**
- * Band document visibility (ADR-0073 §3) — a total, fail-closed mapping by type, defaulting
- * hidden. `Record<DocumentTypeValue, boolean>` is exhaustive over every currently-known type by
- * construction: a member missing from this object fails to typecheck, so a new `DocumentType`
- * cannot be half-added. Only the call sheet crosses; every type mapped here today stays hidden —
- * #892 adds `CALL_SHEET`'s row once it exists. No `ReasonCode`: ADR-0073 §7 rejected widening the
- * vocabulary for this, so a hidden BAND document verdict carries no reason.
+ * Band document visibility (ADR-0073 §3/§4, #893) — a total, fail-closed mapping by type,
+ * defaulting hidden. `Record<DocumentTypeValue, boolean>` is exhaustive over every currently-known
+ * type by construction: a member missing from this object fails to typecheck, so a new
+ * `DocumentType` cannot be half-added. Only the call sheet crosses; every other type stays hidden.
+ * No `ReasonCode`: ADR-0073 §7 rejected widening the vocabulary for this, so a hidden BAND
+ * document verdict carries no reason.
  */
 const BAND_DOCUMENT_VISIBILITY: Record<DocumentTypeValue, boolean> = {
   CONTRACT: false,
   INVOICE: false,
   SONG_LIST: false,
   UPLOAD: false,
+  CALL_SHEET: true,
 };
 
 /**
@@ -209,6 +209,8 @@ const BAND_DOCUMENT_VISIBILITY: Record<DocumentTypeValue, boolean> = {
  *   outermost among the state gates — #579).
  * - INVOICE → gated on the backing invoice's delivery status (SENT/PAID visible; ISSUED unsent →
  *   `until_sent`; VOID → `voided`).
+ * - CALL_SHEET → never a CLIENT concern (`not_shared`, ADR-0073 §4) — it is BAND-only; the caller
+ *   is responsible for asking with `audience: 'BAND'` for a CALL_SHEET row in the first place.
  * - everything else (SONG_LIST) → visible.
  *
  * The narrowed return type is the enforcement point for #750: it makes the reachable reasons a
@@ -236,6 +238,8 @@ export function resolveDocumentVisibility(
         : { visible: false, reason: 'voided' };
     case 'INVOICE':
       return resolveInvoiceDocumentVisibility(doc.invoice?.status);
+    case 'CALL_SHEET':
+      return { visible: false, reason: 'not_shared' };
     default:
       return { visible: true };
   }

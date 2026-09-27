@@ -1,12 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import { DocumentType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import type { DocumentTypeValue } from './document-type';
 
 @Injectable()
 export class DocumentsRepository {
   constructor(private prisma: PrismaService) {}
 
-  create(userId: string, bookingId: string | undefined, type: DocumentType, storageKey: string, invoiceId?: string, contractId?: string, name?: string) {
+  create(userId: string, bookingId: string | undefined, type: DocumentTypeValue, storageKey: string, invoiceId?: string, contractId?: string, name?: string) {
     return this.prisma.document.create({
       data: { userId, bookingId: bookingId ?? null, type, storageKey, invoiceId, contractId, name },
     });

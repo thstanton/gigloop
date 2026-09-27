@@ -286,6 +286,54 @@ export async function seedContactOnBandRoster(
   return { contactId: dep.id, bookingId: booking.id, customerId: customer.id };
 }
 
+export interface BandMemberWithPortalToken {
+  bookingId: string;
+  memberId: string;
+  contactId: string;
+  customerId: string;
+  bandPortalToken: string;
+}
+
+// Per-test fixture (#892): a booking with one band member in INVITED status and a known
+// `bandPortalToken` — the dep's bearer credential for `/band/:token`, bypassing Clerk exactly as
+// `portalToken` does for `/booking/:token`. INVITED (not the default ADDED) matches the real
+// journey this spec drives: the leader has already sent the invite, and the dep is answering it
+// for the first time.
+export async function seedBandMemberWithPortalToken(
+  userId: string = E2E_TEST_USER_ID,
+): Promise<BandMemberWithPortalToken> {
+  const customer = await prisma.contact.create({
+    data: { userId, name: 'E2E Band Portal Customer', email: 'band-portal-customer@e2e.test' },
+  });
+
+  const booking = await prisma.booking.create({
+    data: {
+      userId,
+      status: BookingStatus.CONFIRMED,
+      eventType: 'Wedding',
+      title: 'E2E Band Portal Confirm Booking',
+      date: new Date('2099-11-08T18:00:00.000Z'),
+      customerId: customer.id,
+    },
+  });
+
+  const dep = await prisma.contact.create({
+    data: { userId, name: 'E2E Band Portal Dep', email: 'band-portal-dep@e2e.test', primaryRole: 'BAND_MEMBER' },
+  });
+
+  const member = await prisma.bookingBandMember.create({
+    data: { userId, bookingId: booking.id, contactId: dep.id, status: 'INVITED', invitedAt: new Date() },
+  });
+
+  return {
+    bookingId: booking.id,
+    memberId: member.id,
+    contactId: dep.id,
+    customerId: customer.id,
+    bandPortalToken: member.bandPortalToken,
+  };
+}
+
 export interface BookingWithSentContract {
   bookingId: string;
   contractId: string;

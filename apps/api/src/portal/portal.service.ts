@@ -19,7 +19,9 @@ import {
 import type { Request } from 'express';
 import type { SubmitMusicFormDto } from './dto/submit-music-form.dto';
 
-const PORTAL_CONFIG_DEFAULTS = {
+// Exported so the band portal (#891) can default the same `theme`/`brandColour` for its own
+// `PortalLayout` reuse, without a second pair of hand-typed literal defaults drifting from these.
+export const PORTAL_CONFIG_DEFAULTS = {
   theme: 'LIGHT_MODERN',
   brandColour: '#1a1a1a',
   heroImage: null,

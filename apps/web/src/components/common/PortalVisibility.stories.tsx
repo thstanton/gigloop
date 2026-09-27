@@ -19,6 +19,15 @@ export const HiddenVoided: Story = { args: { visible: false, reason: 'voided' } 
 
 export const HiddenNotShared: Story = { args: { visible: false, reason: 'not_shared' } };
 
+/** ADR-0073 §7: the band-portal call-sheet row reuses this component with an overridden label. */
+export const VisibleOnBandPortal: Story = {
+  args: { visible: true, label: 'Visible on Band Portal' },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText('Visible on Band Portal')).toBeInTheDocument();
+  },
+};
+
 /** Primary use case: the visible badge and the muted hidden hint render the right copy. */
 export const VisibleAndHidden: Story = {
   render: () => (

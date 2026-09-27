@@ -1,7 +1,11 @@
 import type { PortalPublicProfile } from '../types/api';
 
 interface PortalLayoutProps {
-  profile: PortalPublicProfile;
+  // Narrowed to exactly what this shell reads — the header/business identity — rather than the
+  // full client-portal profile shape, so the band portal (#891) can pass its own `BandPortalBranding`
+  // (a structurally-compatible subset) without inventing values for fields it doesn't have, like
+  // `showContactPhoto`.
+  profile: Pick<PortalPublicProfile, 'businessName' | 'logoUrl' | 'portalTheme' | 'brandColour'>;
   children: React.ReactNode;
   wide?: boolean;
   hero?: React.ReactNode;

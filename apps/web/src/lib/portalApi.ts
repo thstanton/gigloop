@@ -1,4 +1,4 @@
-import type { PortalData, PortalContractData, PortalMusicFormData, SubmitMusicFormInput } from '../types/api';
+import type { PortalData, PortalContractData, PortalMusicFormData, SubmitMusicFormInput, BandPortalData } from '../types/api';
 import { resolveApiBaseUrl } from './apiBaseUrl';
 import { toApiError } from './apiError';
 
@@ -30,6 +30,24 @@ export async function portalPost<T>(path: string, body: unknown): Promise<T> {
 
 export function getPortalData(token: string): Promise<PortalData> {
   return portalGet<PortalData>(`/booking/${token}`);
+}
+
+export function getBandPortalData(token: string): Promise<BandPortalData> {
+  return portalGet<BandPortalData>(`/band/${token}`);
+}
+
+export function respondToBandInvite(
+  token: string,
+  response: 'CONFIRMED' | 'DECLINED',
+): Promise<BandPortalData> {
+  return portalPost<BandPortalData>(`/band/${token}/respond`, { response });
+}
+
+// The call sheet (#893, ADR-0073 §4) is generated on demand and streamed directly — a plain link,
+// not a fetch-then-blob dance, because the route is `@Public()` (the token in the path is the
+// auth) and there is no stored object to resolve first.
+export function getBandCallSheetUrl(token: string): string {
+  return `${API_BASE_URL}/band/${token}/call-sheet`;
 }
 
 export function getContractContent(token: string): Promise<PortalContractData> {

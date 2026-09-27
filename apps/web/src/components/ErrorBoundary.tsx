@@ -13,7 +13,9 @@ interface State {
 }
 
 export function variantForPathname(pathname: string): 'default' | 'portal' {
-  return pathname.startsWith('/booking/') ? 'portal' : 'default';
+  // The band portal (#891) is the same unauthenticated-token-route class as the client portal —
+  // a stray crash there must not leak a stack trace to a dep either.
+  return pathname.startsWith('/booking/') || pathname.startsWith('/band/') ? 'portal' : 'default';
 }
 
 export default class ErrorBoundary extends Component<Props, State> {

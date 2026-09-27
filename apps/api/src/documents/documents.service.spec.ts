@@ -87,6 +87,7 @@ describe('DocumentsService.findByBooking (portal visibility wiring)', () => {
         doc({ id: 'invoice-void', type: 'INVOICE', invoice: { status: 'VOID' } }),
         doc({ id: 'song-list', type: 'SONG_LIST' }),
         doc({ id: 'upload', type: 'UPLOAD' }),
+        doc({ id: 'call-sheet', type: 'CALL_SHEET' }),
       ],
       { status: 'CONFIRMED', contracts: [{ id: activeContractId }] },
     );
@@ -101,6 +102,23 @@ describe('DocumentsService.findByBooking (portal visibility wiring)', () => {
     expect(byId['invoice-void']).toEqual({ visible: false, reason: 'voided' });
     expect(byId['song-list']).toEqual({ visible: true });
     expect(byId['upload']).toEqual({ visible: false, reason: 'not_shared' });
+    // #893: a CALL_SHEET row asks the authority with `audience: 'BAND'`, not `CLIENT` — it's the
+    // one admin-list document that is always visible-on-band, never visible-on-client.
+    expect(byId['call-sheet']).toEqual({ visible: true });
+  });
+
+  // #893, ADR-0073 §7: the admin-side call-sheet row reuses PortalVisibility with "Visible on Band
+  // Portal" — proving the wiring actually asks with `audience: 'BAND'` for this one type, not just
+  // that the verdict happens to come out visible (which a CLIENT-audience default could also give).
+  it('asks the authority for CALL_SHEET with audience BAND, not CLIENT', async () => {
+    const { service } = makeService(
+      [doc({ id: 'call-sheet', type: 'CALL_SHEET' })],
+      { status: 'CONFIRMED', contracts: [] },
+    );
+    await service.findByBooking(userId, bookingId);
+    const mockedResolve = resolveDocumentVisibility as jest.Mock;
+    const callSheetCall = mockedResolve.mock.calls.find(([d]) => d.type === 'CALL_SHEET');
+    expect(callSheetCall?.[2]).toBe('BAND');
   });
 
   it('applies the cancelled gate to contract documents only, leaving invoices payable', async () => {
@@ -383,5 +401,76 @@ describe('DocumentsService.generateAndStoreSongListPdf (logo → data URL, #769)
     // ...and a real PDF was produced and stored, rather than the whole path throwing.
     expect(buffer.subarray(0, 4).toString()).toBe('%PDF');
     expect(storage.putDocument).toHaveBeenCalledWith('song-lists/u1/b1.pdf', buffer, 'application/pdf');
+  });
+});
+
+// #893, ADR-0073 §4: the call sheet is generated on demand, never versioned — a download produces
+// no `Document` row, and a send (the row-on-send capability this issue creates for #881) creates
+// exactly one, with no replace-existing (unlike the invoice/song-list generators above).
+describe('DocumentsService.generateCallSheetPdfBuffer / generateAndStoreCallSheetPdf (#893)', () => {
+  const booking = {
+    title: 'The Hartley Wedding',
+    date: new Date('2027-06-12T00:00:00Z'),
+    venue: null,
+    sets: [],
+    packages: [],
+    lineups: [],
+    bandChairs: [
+      { id: 'chair-1', role: 'Vocals', lineupId: 'l1', memberId: 'm1', member: { contact: { name: 'Dave' } } },
+      { id: 'chair-2', role: 'Bass', lineupId: 'l1', memberId: null, member: null },
+    ],
+  };
+  const publicProfile = {
+    businessName: 'Test Musician',
+    displayName: null,
+    email: 'test@example.com',
+    phone: null,
+    logoUrl: null,
+    clientPortalConfig: null,
+  };
+
+  function makeService() {
+    const prisma = {
+      booking: { findFirst: jest.fn().mockResolvedValue(booking) },
+      publicProfile: { findUnique: jest.fn().mockResolvedValue(publicProfile) },
+    } as unknown as PrismaService;
+    const repo = {
+      create: jest.fn().mockResolvedValue({ id: 'doc-call-sheet' }),
+    } as unknown as DocumentsRepository;
+    const storage = {
+      putDocument: jest.fn().mockResolvedValue(undefined),
+    } as unknown as StorageService;
+    return { service: new DocumentsService(prisma, repo, storage), prisma, repo, storage };
+  }
+
+  it('generates a valid PDF, scoped to the caller\'s own booking, without storing anything', async () => {
+    const { service, prisma, repo, storage } = makeService();
+    const buffer = await service.generateCallSheetPdfBuffer('u1', 'b1');
+
+    expect(buffer.subarray(0, 4).toString()).toBe('%PDF');
+    expect(prisma.booking.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'b1', userId: 'u1' } }),
+    );
+    // The band-portal download creates no `Document` row (ADR-0073 §4: "generated on demand,
+    // never versioned" — the link is current by construction, not a stored snapshot).
+    expect(storage.putDocument).not.toHaveBeenCalled();
+    expect(repo.create).not.toHaveBeenCalled();
+  });
+
+  it('stores the PDF and creates exactly one CALL_SHEET Document on send, with no replace-existing', async () => {
+    const { service, repo, storage } = makeService();
+    const { buffer, documentId } = await service.generateAndStoreCallSheetPdf('u1', 'b1');
+
+    expect(buffer.subarray(0, 4).toString()).toBe('%PDF');
+    expect(storage.putDocument).toHaveBeenCalledTimes(1);
+    expect(repo.create).toHaveBeenCalledTimes(1);
+    expect(repo.create).toHaveBeenCalledWith('u1', 'b1', 'CALL_SHEET', expect.any(String));
+    expect(documentId).toBe('doc-call-sheet');
+  });
+
+  it('404s when the booking does not belong to the caller', async () => {
+    const { service, prisma } = makeService();
+    (prisma.booking.findFirst as jest.Mock).mockResolvedValue(null);
+    await expect(service.generateCallSheetPdfBuffer('u1', 'b1')).rejects.toThrow('Booking not found');
   });
 });

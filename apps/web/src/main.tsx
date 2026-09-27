@@ -33,6 +33,7 @@ import TemplateEditPage from './pages/admin/TemplateEditPage';
 import PortalPage from './pages/portal/PortalPage';
 import PortalContractPage from './pages/portal/PortalContractPage';
 import PortalMusicPage from './pages/portal/PortalMusicPage';
+import BandPortalPage from './pages/portal/BandPortalPage';
 import PortalPreviewPage from './pages/admin/PortalPreviewPage';
 import PackagesPage from './pages/admin/PackagesPage';
 import OnboardingProfilePage from './pages/onboarding/OnboardingProfilePage';
@@ -98,6 +99,10 @@ const router = createBrowserRouter([
   {
     path: '/booking/:token/music',
     element: <PortalMusicPage />,
+  },
+  {
+    path: '/band/:token',
+    element: <BandPortalPage />,
   },
   {
     path: '/admin/portal-preview',
