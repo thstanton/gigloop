@@ -6,26 +6,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 GigLoop — a CRM for musicians. Greenfield monorepo. The living sources of truth are this file (**CLAUDE.md** — hard rules + working conventions) and **CONTEXT.md** (the domain model: booking lifecycle, entities, design principles). `SPEC.md` is a historical, pre-MVP reference only — where it disagrees with CLAUDE.md or CONTEXT.md, they win (its booking lifecycle and several entity fields have drifted from current reality). For where the product is heading next, see `docs/north-star.md` — the directional (non-binding) statement of the Wave 2 (P2) feature direction.
 
-## Stack
-
-- **Frontend:** React + Vite + React Router v7 (`apps/web`)
-- **Backend:** NestJS (TypeScript) + Prisma + Neon (serverless Postgres) (`apps/api`)
-- **Auth:** Clerk (never implement custom auth)
-- **File storage:** Cloudflare R2 (never write uploads to local filesystem)
-- **Email:** Resend
-- **PDF:** @react-pdf/renderer (executed in the API, streamed to client)
-- **Monorepo:** npm workspaces
-
 ## Commands
 
-Once set up, expected commands from repo root:
+Not guessable from `package.json` — run a single API test file:
 
 ```bash
-bun run dev          # start both apps in dev mode
-bun run build        # build all workspaces
-bun run lint         # lint all workspaces
-bun run test         # run all tests
-bun --filter @gigloop/api run test -- --testPathPattern=<file>  # run single test file
+bun --filter @gigloop/api run test -- --testPathPattern=<file>
 ```
 
 ## Hard Rules (never violate)
@@ -42,9 +28,7 @@ bun --filter @gigloop/api run test -- --testPathPattern=<file>  # run single tes
 
 ## Architecture Notes
 
-The NestJS API uses a global `AuthGuard` applied to all routes except portal routes (`/booking/:token`) and health checks. The guard injects `userId` from the Clerk JWT into the request context, which all service-layer methods must use to scope their Prisma queries.
-
-PDF generation runs in the API process using `@react-pdf/renderer` and the result is streamed directly to the client — do not generate PDFs in the frontend.
+PDF generation runs in the API process (`pdfmake`) and the result is streamed directly to the client — never generate PDFs in the frontend.
 
 ## Before Every Session
 - Read CONTEXT.md before writing any code
@@ -94,17 +78,6 @@ imports, Prisma `Decimal` appears as `string`, `DateTime` as `string`.
 **Update this file whenever an API DTO changes.**
 Frontend pages import types from here rather than declaring local interfaces.
 
-## API Documentation
-- Every DTO property must have an `@ApiProperty()` (or `@ApiPropertyOptional()`) decorator so Scalar stays accurate
-- Update these decorators whenever a DTO field is added, removed, renamed, or changes type
-- Controller methods must use `@ApiResponse()` (or the typed variants) to document all possible response shapes
-
-## Validation
-- All input validation belongs in DTOs using `class-validator` decorators (e.g. `@IsString()`, `@IsUUID()`, `@IsOptional()`)
-- All type coercion/transformation belongs in DTOs using `class-transformer` decorators (e.g. `@Type(() => Number)`)
-- Services must not re-validate fields already declared in DTOs — trust the DTO
-- The global `ValidationPipe` (with `whitelist: true`, `forbidNonWhitelisted: true`, `transform: true`) strips undeclared properties and rejects invalid payloads before they reach the service
-
 ## Code Conventions
 - TypeScript strict mode in both apps
 - NestJS: one module per feature (contacts, bookings, songs, etc.)
@@ -116,14 +89,9 @@ Frontend pages import types from here rather than declaring local interfaces.
 - **Shared constants:** Label maps and lookup constants (status labels, category labels, ordered enum lists) belong in `apps/web/src/lib/constants.ts`. Never define a label map inside a component or page file if it may be needed elsewhere. Never import shared values from a page file — move them to `lib/constants` first.
 - **One declaration per vocabulary:** a domain vocabulary (booking status, event type, reminder concern…) is declared **exactly once**, as an ordered `as const satisfies` array of records — one row per member, one column per attribute (label, description, colour tokens, flags) — guarded by a compile-time coverage check so a new member cannot be half-added. Every ordered list, `Record<Enum, …>` map and option array is **derived** from that table, never hand-written alongside it. A second hand-written list of the same members is the bug, even when it currently matches: booking status was once declared 13 times and one copy silently lost `PROVISIONAL`. Colour/class columns hold **literal** Tailwind strings (`bg-status-enquiry`) — never `` `bg-status-${slug}` ``, which the Tailwind scanner cannot see and will purge. Tests assert the table's **shape** (columns present, token pattern, key counts, order), never restate its values — a value spec is just one more declaration to drift.
 
-## Repository Pattern
-Every feature module uses three layers:
-- **Controller** (`*.controller.ts`) — request/response handling only; no business logic, no Prisma calls
-- **Service** (`*.service.ts`) — business logic and orchestration only; no input validation (that belongs in DTOs)
-- **Repository** (`*.repository.ts`) — all direct Prisma calls; no business logic
-
-The service depends on the repository; the controller depends on the service.
-All three are declared as providers in the feature module.
+### Conventions that load with the API
+API conventions (DTO/OpenAPI decorators, validation, the controller/service/repository layers)
+live in `apps/api/CLAUDE.md` — loaded when working under `apps/api`.
 
 ## Branching Strategy
 
@@ -206,36 +174,18 @@ The rules a session must obey:
 
 ### Inventory pass — happens at issue authoring, not at coding time
 
-The "which existing component do I use?" decision is made **when the issue is written**, not while coding (per `docs/agents/issue-authoring.md`). UI issues name the components to reuse so the human can catch a missed component at planning. At coding time, **build what the issue specifies.** This list is the reference for the planning-time inventory pass:
+The "which existing component do I use?" decision is made **when the issue is written**, not while coding (per `docs/agents/issue-authoring.md`). UI issues name the components to reuse so the human can catch a missed component at planning. At coding time, **build what the issue specifies.**
 
-1. **`components/ui/`** primitives: `Button` (default/outline/ghost/destructive variants), `Input`, `Textarea`, `Select`, `Switch`, `Label`, `Badge`, `Separator`, `Sheet`, `Dialog`, `Tabs`, `Tooltip`, `Toast`
-2. **`components/common/`** patterns:
-   - `PageHeader` — page title + optional back link + optional subheading + optional action
-   - `PageSection` — section heading (h2-level) within a page
-   - `Card` — bordered container with optional title
-   - `FormField` — label + input slot + error message
-   - `EmptyState` — icon + heading + paragraph + CTA
-   - `GhostButton` — small text-only action button
-   - `IconButton` — icon-only action button
-   - `LabelValue` — read-only label + value pair
-   - `SubLabel` — de-emphasised label text
-   - `BookingStatusPill` / `InvoiceStatusPill` / `StatusPill` — status badges
-3. **Only write raw `className`** if no existing component covers the pattern (and the issue agrees). **Never replicate a component's styling** with raw Tailwind — use the component.
+The inventory for that planning-time pass is `apps/web/src/components/ui/` (primitives) and `apps/web/src/components/common/` (patterns) — read the directories rather than a list here, which drifts.
+
+**Only write raw `className`** if no existing component covers the pattern (and the issue agrees). **Never replicate a component's styling** with raw Tailwind — use the component.
 
 ### Creating new shared components
 Creating a new file in `components/common/` or `components/ui/` requires approval — flag it in the issue at planning time, or stop and ask if it emerges mid-build. Explain what the new component does and why no existing component covers the case. Do not proceed without confirmation.
 
-### Story requirement
-A new page or component is not done until it has a `.stories.tsx` (presence is enforced by a CI scan — a component without a story fails CI). Story *tasks* are written into UI issues explicitly and sequenced **before** the component build, so the story is a review checkpoint (see `docs/agents/issue-authoring.md` and ADR-0023). Story *quality* follows the ADR-0024 tiers below.
-
-### Story testing tiers (see ADR-0024)
-- `components/ui/` — smoke: story renders, key elements visible
-- `components/common/` — smoke + one `play` function covering the primary use case
-- Feature presentational components — interaction `play` covering the primary happy path
-- Page stories — smoke only
-
-### Development sequence
-For feature components, always build the presentational layer + story before the container (per ADR-0023). This ensures every new UI is reviewable in Storybook before logic is wired up.
+### Conventions that load with the frontend
+UI conventions (mobile-first layout, UI rules, loading/feedback tiers, data fetching, story tiers)
+live in `apps/web/CLAUDE.md` — loaded when working under `apps/web`.
 
 ## Session Behaviour
 - Build only what the current session specifies. Do not begin the next feature unprompted.
@@ -260,73 +210,6 @@ The feature branch persists across sessions; my context does not. "Too big" mean
 - Any decisions made that weren't in the spec
 - Anything to review before the next session
 - **Promotion candidates:** repeated `className`/JSX patterns that may warrant extraction to `components/common/`
-
-## Data Fetching
-- Use TanStack Query (`useQuery`, `useMutation`) for all data fetching. Never fetch in raw `useEffect`.
-- Always gate queries with `enabled: isLoaded` (from Clerk's `useAuth()`) to avoid race conditions on page refresh where Clerk hasn't initialised yet.
-- `queryFn` calls use `apiGet`/`apiPost`/etc. from `src/lib/api.ts`.
-- Query keys are arrays: `['bookings']`, `['bookings', filter]`, `['contact', id]`, etc.
-- Filter / sort state lives in URL search params (`useSearchParams`); components read the param and pass it into the query key so TanStack Query refetches when the filter changes.
-- React Router loaders are used only for auth checks / redirects — not for data fetching.
-
-## Mobile-first UI
-
-GigLoop is used on phones. Design every screen for 375px first, then enhance for larger widths.
-
-**Layout**
-- AppShell provides a fixed top bar (h-14) + fixed bottom tab bar (h-16) on mobile. Content gets `pt-14 pb-16` automatically — never add extra spacing to account for these bars inside page components.
-- On desktop (md = 768px+): sidebar replaces the bottom tab bar; top bar remains.
-- Never use a breakpoint below `md` (768px) for structural layout changes (sidebar, tab bar, etc.).
-
-**Responsive grids and rows**
-- Default to a single-column layout. Use `sm:grid-cols-2` (640px+) only for short, related pairs (e.g. first name / last name).
-- Never put more than 2 columns in a grid unless the screen is definitely wide enough.
-- For rows that combine a label + input + suffix text (e.g. "30 days before event"): stack label above input/suffix on mobile using `flex-col sm:flex-row`. Never use `w-44 flex-shrink-0` labels in a single-line row — they overflow at 375px.
-- Avoid `whitespace-nowrap` spans alongside wide inputs unless wrapped in a `flex-col` stack on mobile.
-
-**Forms**
-- Fields stack single-column by default. `sm:grid-cols-2` is the widest mobile breakpoint for field pairs.
-- Textarea rows: 2–3 on mobile is usually plenty.
-- Buttons align left, never centred, on mobile.
-
-**Navigation**
-- Primary nav (Dashboard, Bookings, Contacts, Repertoire) lives in the bottom tab bar on mobile.
-- Secondary nav (Templates, Settings) is accessed via the "More" button in the tab bar.
-- The "More" button highlights (text-primary) when the current route matches any secondary nav path.
-- Never rely on a sidebar for navigation at mobile size.
-
-## UI Rules
-- No drop shadows except on overlays
-- Borders are border-border (1px). No border-2, no ring.
-- Use the Lucide icons from lucide-react. Do not import from any other icon set.
-- Stick to the type scale. No text-sm for body — use text-base.
-- Empty states get an icon, a heading, one paragraph, and one CTA. Nothing else. (Musician decorations are **not** an exception — see below.)
-- **Musician decorations** (the woodcut figures, `<MusicianDecoration>`) appear at exactly **one approved site**: the stage-advance dialog. The launch screen and dashboard first-run block were designed but deferred (2026-08-21, after a `/prototype` pass) — see `docs/musician-decorations-grill.md`'s follow-up note. Adding a second site requires approval — it is not enough that a surface satisfies the rule below. Two constraints bound any future site: **at most one figure may be visible at a time** (so a whole page or a modal, never a card or section that can co-occur), and the figure is **drawn at random from the figure pool** each time it renders — never a fixed choice, and never bound to a domain concept or status. Empty states are excluded by decision, not by the rule. See `docs/musician-decorations-grill.md`.
-- Forms use react-hook-form with a Zod schema. Validation messages render below the field in text-status-cancelled text-sm.
-
-## Loading & Feedback States
-
-Every mutation must surface loading state and failure to the user. Three tiers:
-
-### Tier 1 — Inline save (form config, field edits)
-- Button: `disabled={mutation.isPending}`, label changes to `"Saving…"`
-- Success: brief inline `"Saved"` text (cleared on sheet re-open)
-- Failure: inline error message below the button
-
-### Tier 2 — State-changing async (send, void, delete, create, status transitions)
-- Button: `disabled={mutation.isPending}`, label changes to describe the action (`"Sending…"`, `"Voiding…"`, `"Creating…"`, `"Deleting…"`)
-- Success: UI reflects the new state (card updates, item disappears, navigation occurs) — no separate "Saved" inline
-- Failure: toast via `toast({ title: '…', variant: 'destructive' })`
-
-### Tier 3 — Low-stakes toggle (checklist complete/pending, small switches)
-- Optimistic update: apply state change immediately via `onMutate`
-- On error: roll back to previous state + show error toast
-- No loading text on the trigger needed
-
-### All tiers — mandatory
-- **Never use raw `apiGet`/`apiPost`/etc. outside a `useMutation` for state-changing calls.** All mutations go through `useMutation` so loading state is trackable.
-- **`onError` is required on every mutation.** Silent failures are never acceptable.
-- Failure must always surface to the user — inline error or toast.
 
 ## Agent skills
 
