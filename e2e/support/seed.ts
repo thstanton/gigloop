@@ -118,6 +118,8 @@ export async function seedPackageTemplateWithDefaultLineup(
       label: packageLabel,
       category: 'WEDDING',
       icon: 'music',
+      keyMoments: [],
+      defaultGenreSelection: [],
       defaultLineupTemplateId: lineupTemplate.id,
       slots: { create: [{ userId, label: 'Reception', duration: 60, order: 1 }] },
     },
@@ -294,11 +296,11 @@ export interface BandMemberWithPortalToken {
   bandPortalToken: string;
 }
 
-// Per-test fixture (#892): a booking with one band member in INVITED status and a known
-// `bandPortalToken` — the dep's bearer credential for `/band/:token`, bypassing Clerk exactly as
-// `portalToken` does for `/booking/:token`. INVITED (not the default ADDED) matches the real
-// journey this spec drives: the leader has already sent the invite, and the dep is answering it
-// for the first time.
+// Per-test fixture (#892): a booking with one band member in INVITED status, assigned to a chair so
+// the organiser's roster renders them, and a known `bandPortalToken` — the dep's bearer credential
+// for `/band/:token`, bypassing Clerk exactly as `portalToken` does for `/booking/:token`. INVITED
+// (not the default ADDED) matches the real journey this spec drives: the leader has already sent the
+// invite, and the dep is answering it for the first time.
 export async function seedBandMemberWithPortalToken(
   userId: string = E2E_TEST_USER_ID,
 ): Promise<BandMemberWithPortalToken> {
@@ -317,12 +319,20 @@ export async function seedBandMemberWithPortalToken(
     },
   });
 
+  const lineup = await prisma.lineup.create({
+    data: { userId, bookingId: booking.id, label: 'E2E Band Portal Trio' },
+  });
+
   const dep = await prisma.contact.create({
     data: { userId, name: 'E2E Band Portal Dep', email: 'band-portal-dep@e2e.test', primaryRole: 'BAND_MEMBER' },
   });
 
   const member = await prisma.bookingBandMember.create({
     data: { userId, bookingId: booking.id, contactId: dep.id, status: 'INVITED', invitedAt: new Date() },
+  });
+
+  await prisma.bookingBandChair.create({
+    data: { userId, bookingId: booking.id, lineupId: lineup.id, role: 'Vocals', order: 1, memberId: member.id },
   });
 
   return {
