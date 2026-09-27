@@ -1,5 +1,4 @@
 import { useEffect } from 'react';
-import type { ReactNode } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -9,7 +8,7 @@ import Underline from '@tiptap/extension-underline';
 import Link_ from '@tiptap/extension-link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@clerk/react';
-import { AlertTriangle, Paperclip } from 'lucide-react';
+import { Paperclip } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -17,6 +16,15 @@ import { apiGet, apiPostVoid } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
 import { TEMPLATE_DISPLAY } from '@/features/templates/templateMeta';
 import { useBandCommsCopyActions } from './useBandCommsCopyActions';
+import {
+  bandClipboardFallback,
+  bandEditorContent,
+  bandMessagePreview,
+  canCopyBandMessage,
+  canSendBandEmail,
+  composeTemplateLabel,
+  missingBandDetailsNotice,
+} from './bandCommunicationComposeParts';
 import { BAND_COMMUNICATION_META, type BandCommunicationKind } from './bandCommunicationMeta';
 import type {
   BandCommunicationMessageRenderResult,
@@ -133,30 +141,37 @@ function BandCommsComposeSheetBody({ bookingId, member, kind, onOpenChange }: Om
     onError: () => toast({ title: `Failed to send ${label}. Please try again.`, variant: 'destructive' }),
   });
 
-  const canSend =
-    !noEmail && !!template && isValid && !!renderQuery.data && !loadingTemplates &&
-    !renderQuery.isFetching && !sendMutation.isPending && !markSentMutation.isPending;
-  const canCopy =
-    !!messageTemplate && !!messageRenderQuery.data && !loadingTemplates && !copyMutation.isPending &&
-    !markSentMutation.isPending && !sendMutation.isPending;
-  let templateLabel = `${label} template unavailable`;
-  if (loadingTemplates) templateLabel = 'Loading…';
-  else if (template?.builtInType) templateLabel = TEMPLATE_DISPLAY[template.builtInType].name;
+  const canSend = canSendBandEmail({
+    recipientReady: !noEmail,
+    templateReady: !!template,
+    contentValid: isValid,
+    rendered: !!renderQuery.data,
+    templatesIdle: !loadingTemplates,
+    renderIdle: !renderQuery.isFetching,
+    emailIdle: !sendMutation.isPending,
+    manualActionIdle: !markSentMutation.isPending,
+  });
+  const canCopy = canCopyBandMessage({
+    templateReady: !!messageTemplate,
+    rendered: !!messageRenderQuery.data,
+    templatesIdle: !loadingTemplates,
+    copyIdle: !copyMutation.isPending,
+    markSentIdle: !markSentMutation.isPending,
+    emailIdle: !sendMutation.isPending,
+  });
+  const templateLabel = composeTemplateLabel(
+    loadingTemplates,
+    template?.builtInType ? TEMPLATE_DISPLAY[template.builtInType].name : undefined,
+    `${label} template unavailable`,
+  );
 
-  let messagePreview: ReactNode;
-  if (messageRenderQuery.isFetching) {
-    messagePreview = <div className="min-h-16 animate-pulse rounded bg-accent" />;
-  } else if (messageRenderQuery.data) {
-    messagePreview = (
-      <pre className="whitespace-pre-wrap break-words rounded-md border border-border bg-background px-3 py-2 text-base font-sans">
-        {messageRenderQuery.data.body}
-      </pre>
-    );
-  } else if (messageRenderQuery.isError) {
-    messagePreview = <p className="text-base text-status-cancelled" role="alert">Could not load the {label} message. Please try again.</p>;
-  } else {
-    messagePreview = <p className="text-base text-muted">{label} message template unavailable.</p>;
-  }
+  const messagePreview = bandMessagePreview({
+    isFetching: messageRenderQuery.isFetching,
+    body: messageRenderQuery.data?.body,
+    isError: messageRenderQuery.isError,
+    errorMessage: `Could not load the ${label} message. Please try again.`,
+    unavailableMessage: `${label} message template unavailable.`,
+  });
 
   return (
     <>
@@ -185,12 +200,9 @@ function BandCommsComposeSheetBody({ bookingId, member, kind, onOpenChange }: Om
           </div>
         )}
 
-        {renderQuery.data?.missingVariables.length ? (
-          <div className="flex gap-2 rounded-md bg-amber-50 border border-amber-200 px-3 py-2.5 text-base text-amber-800">
-            <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
-            <span>Some {label} details are missing from this booking. Review the message before sending.</span>
-          </div>
-        ) : null}
+        {renderQuery.data?.missingVariables.length
+          ? missingBandDetailsNotice(`Some ${label} details are missing from this booking. Review the message before sending.`)
+          : null}
 
         {renderQuery.isError && (
           <p className="text-base text-status-cancelled">Could not load the {label} template. Please try again.</p>
@@ -217,7 +229,7 @@ function BandCommsComposeSheetBody({ bookingId, member, kind, onOpenChange }: Om
         <div>
           <p className="text-xs text-muted mb-1">Body</p>
           <div className="rounded-md border border-border bg-background px-3 py-2 tiptap-content">
-            {renderQuery.isFetching ? <div className="min-h-40 animate-pulse rounded bg-accent" /> : <EditorContent editor={editor} />}
+            {bandEditorContent(renderQuery.isFetching, <EditorContent editor={editor} />)}
           </div>
           {errors.bodyText && <p className="text-sm text-status-cancelled" role="alert">{errors.bodyText.message}</p>}
         </div>
@@ -227,33 +239,18 @@ function BandCommsComposeSheetBody({ bookingId, member, kind, onOpenChange }: Om
           {messagePreview}
         </div>
 
-        {clipboardFallbackText !== null && (
-          <div className="space-y-2" role="alert">
-            <label htmlFor="band-communication-message-fallback" className="text-base text-status-cancelled">
-              Select and copy this message manually:
-            </label>
-            <textarea
-              ref={clipboardFallbackRef}
-              id="band-communication-message-fallback"
-              aria-label={`${kind === 'call-sheet' ? 'Call sheet' : 'Final details'} message to copy manually`}
-              readOnly
-              rows={4}
-              value={clipboardFallbackText}
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-base"
-            />
-            <div className="flex gap-3">
-              <Button variant="outline" onClick={() => {
-                clipboardFallbackRef.current?.focus();
-                clipboardFallbackRef.current?.select();
-              }}>
-                Select message
-              </Button>
-              <Button variant="outline" onClick={() => markSentMutation.mutate(clipboardFallbackText)} disabled={markSentMutation.isPending}>
-                {markSentMutation.isPending ? 'Saving…' : 'Mark as sent'}
-              </Button>
-            </div>
-          </div>
-        )}
+        {clipboardFallbackText !== null && bandClipboardFallback({
+          text: clipboardFallbackText,
+          id: 'band-communication-message-fallback',
+          ariaLabel: `${kind === 'call-sheet' ? 'Call sheet' : 'Final details'} message to copy manually`,
+          ref: clipboardFallbackRef,
+          isSaving: markSentMutation.isPending,
+          onSelect: () => {
+            clipboardFallbackRef.current?.focus();
+            clipboardFallbackRef.current?.select();
+          },
+          onMarkSent: () => markSentMutation.mutate(clipboardFallbackText),
+        })}
       </div>
 
       <div className="px-6 py-4 border-t border-border flex flex-col gap-3 sm:flex-row">

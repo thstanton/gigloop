@@ -16,6 +16,10 @@ import { resolveApiBaseUrl } from '@/lib/apiBaseUrl';
 import { openDocument } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
 import type { BookingBandMember, Communication } from '@/types/api';
+import {
+  buildCommunicationSectionGroups,
+  type MemberCommunicationGroup,
+} from './communicationSectionModel';
 
 const API_BASE_URL = resolveApiBaseUrl(import.meta.env.VITE_API_BASE_URL);
 
@@ -165,83 +169,39 @@ function CommunicationRow({
 
 export interface CommunicationsSectionProps {
   communications: Communication[];
-  /** The booking's non-removed members, omitted when band communications are feature-flagged off. */
+  /** Optional data overrides used by isolated stories; the route supplies production data. */
   bandMembers?: BookingBandMember[];
-  /** Controls band-only tab and call-sheet attachment behavior. */
   bandCommunicationsEnabled?: boolean;
 }
 
-function isBandCommunication(comm: Communication, bandContactIds: ReadonlySet<string>): boolean {
-  const templateType = comm.template?.builtInType;
-  return templateType ? templateType.startsWith('band_') : bandContactIds.has(comm.contactId);
-}
-
-interface MemberCommunicationGroup {
-  id: string;
-  name: string;
-  communications: Communication[];
-}
-
-export default function CommunicationsSection({
+function ClientCommunicationList({
   communications,
-  bandMembers = [],
-  bandCommunicationsEnabled = false,
-}: Readonly<CommunicationsSectionProps>) {
-  const [, setSearchParams] = useSearchParams();
-  const hasBandMembers = bandCommunicationsEnabled && bandMembers.length > 0;
-  const bandContactIds = new Set(bandMembers.map((member) => member.contactId));
-  let clientCommunications = communications;
-  const bandCommunications: Communication[] = [];
-  if (hasBandMembers) {
-    clientCommunications = [];
-    for (const comm of communications) {
-      if (isBandCommunication(comm, bandContactIds)) bandCommunications.push(comm);
-      else clientCommunications.push(comm);
-    }
+  bandCommunicationsEnabled,
+}: Readonly<{ communications: Communication[]; bandCommunicationsEnabled: boolean }>) {
+  if (communications.length === 0) {
+    return (
+      <div className="flex items-center gap-2 text-muted py-1">
+        <FileText size={14} />
+        <span className="text-sm">No emails sent yet</span>
+      </div>
+    );
   }
 
-  const communicationsByContact = new Map<string, Communication[]>();
-  for (const comm of bandCommunications) {
-    const contactCommunications = communicationsByContact.get(comm.contactId) ?? [];
-    contactCommunications.push(comm);
-    communicationsByContact.set(comm.contactId, contactCommunications);
-  }
-
-  const memberGroups: MemberCommunicationGroup[] = bandMembers.map((member) => ({
-    id: member.id,
-    name: member.contact.name,
-    communications: communicationsByContact.get(member.contactId) ?? [],
-  }));
-  // Keep historical band messages in the trail if their recipient has since been removed from
-  // the roster. Current members stay in roster order; former members follow in latest-comm order.
-  const groupedContactIds = new Set(bandMembers.map((member) => member.contactId));
-  for (const comm of bandCommunications) {
-    if (!groupedContactIds.has(comm.contactId)) {
-      memberGroups.push({
-        id: comm.contactId,
-        name: comm.contact.name,
-        communications: communicationsByContact.get(comm.contactId) ?? [],
-      });
-      groupedContactIds.add(comm.contactId);
-    }
-  }
-
-  const clientContent = clientCommunications.length === 0 ? (
-    <div className="flex items-center gap-2 text-muted py-1">
-      <FileText size={14} />
-      <span className="text-sm">No emails sent yet</span>
-    </div>
-  ) : (
+  return (
     <div className="border-t border-border">
-      {clientCommunications.map((comm) => (
+      {communications.map((comm) => (
         <CommunicationRow key={comm.id} comm={comm} bandAttachmentsEnabled={bandCommunicationsEnabled} />
       ))}
     </div>
   );
+}
 
-  const bandContent = (
+function BandCommunicationGroups({
+  groups,
+}: Readonly<{ groups: MemberCommunicationGroup[] }>) {
+  return (
     <div className="space-y-4">
-      {memberGroups.map((group) => (
+      {groups.map((group) => (
         <section key={group.id} aria-label={`Communications with ${group.name}`}>
           <div className="flex items-center gap-2">
             <SubLabel>{group.name}</SubLabel>
@@ -258,6 +218,21 @@ export default function CommunicationsSection({
       ))}
     </div>
   );
+}
+
+export default function CommunicationsSection({
+  communications,
+  bandMembers: memberOverride,
+  bandCommunicationsEnabled = false,
+}: Readonly<CommunicationsSectionProps>) {
+  const [, setSearchParams] = useSearchParams();
+  const bandMembers = memberOverride ?? [];
+  const hasBandMembers = bandCommunicationsEnabled && bandMembers.length > 0;
+  const { clientCommunications, memberGroups } = buildCommunicationSectionGroups(
+    communications,
+    bandMembers,
+    bandCommunicationsEnabled,
+  );
 
   return (
     <section>
@@ -273,10 +248,14 @@ export default function CommunicationsSection({
             <TabsTrigger value="client" size="sm">Client</TabsTrigger>
             <TabsTrigger value="band" size="sm">Band</TabsTrigger>
           </TabsList>
-          <TabsContent value="client">{clientContent}</TabsContent>
-          <TabsContent value="band">{bandContent}</TabsContent>
+          <TabsContent value="client">
+            <ClientCommunicationList communications={clientCommunications} bandCommunicationsEnabled={bandCommunicationsEnabled} />
+          </TabsContent>
+          <TabsContent value="band"><BandCommunicationGroups groups={memberGroups} /></TabsContent>
         </Tabs>
-      ) : clientContent}
+      ) : (
+        <ClientCommunicationList communications={clientCommunications} bandCommunicationsEnabled={bandCommunicationsEnabled} />
+      )}
     </section>
   );
 }

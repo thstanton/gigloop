@@ -1,7 +1,7 @@
 import { useAuth } from '@clerk/react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Clock, ClipboardList, Info, MapPin, Pencil, Users } from 'lucide-react';
+import { Clock, ClipboardList, Info, MapPin } from 'lucide-react';
 import { LOGISTICS_BAND_ONLY_KEYS, LOGISTICS_DETAIL_KEYS, LOGISTICS_SYSTEM_KEYS } from '@/lib/constants';
 import { isEnabled } from '@/lib/featureFlags';
 
@@ -15,33 +15,54 @@ import { useBookingDocuments } from '@/lib/hooks/useBookingDocuments';
 import { useSeriesBookings } from '@/lib/hooks/useSeriesBookings';
 import { useConfigureMusicForm } from '@/lib/hooks/useConfigureMusicForm';
 import { useLineupTemplates } from '@/lib/hooks/useLineupTemplates';
-import BookingDetailTabs from '@/features/bookings/BookingDetailTabs';
+import {
+  BookingDetailMobileContent,
+  type MobileBookingContentActions,
+  type MobileBookingContentData,
+} from '@/features/bookings/BookingDetailMobileContent';
 import ChecklistSection, { clientDisplayName } from '@/features/bookings/ChecklistSection';
-import ItineraryCard from '@/features/bookings/ItineraryCard';
-import DetailsCard from '@/features/bookings/DetailsCard';
-import BandCard from '@/features/bookings/BandCard';
-import { BookingVenueMapWidget } from '@/features/bookings/BookingVenueMapWidget';
-import InlineNotes from '@/features/bookings/InlineNotes';
-import PersonChip from '@/features/bookings/PersonChip';
-import { SeriesEventsCard } from '@/features/bookings/SeriesEventsCard';
-import ContractCard from '@/features/bookings/ContractCard';
-import SeriesInvoiceCard from '@/features/bookings/SeriesInvoiceCard';
-import InvoiceSection from '@/features/bookings/InvoiceSection';
 import { contractCoverTemplateFor } from '@/lib/invoiceDerivations';
-import { DocumentsCard } from '@/features/bookings/DocumentsCard';
-import MusicFormSection from '@/features/bookings/MusicFormSection';
-import { AddToTheDayCard, type AddToTheDayConcern } from '@/features/bookings/AddToTheDayCard';
-import CommunicationsSection from '@/features/bookings/CommunicationsSection';
-import { SectionHeader } from '@/components/common/SectionHeader';
-import { GhostButton } from '@/components/common/GhostButton';
 import { apiGet } from '@/lib/api';
 import type {
   Invoice,
+  BookingDetail,
   MusicFormConfig,
 } from '@/types/api';
+import type { AddToTheDayConcern } from '@/features/bookings/AddToTheDayCard';
 
 // Module scope, not the component body — the old copy of this set was rebuilt on every render.
 const LOGISTICS_SYSTEM_KEY_SET = new Set<string>(LOGISTICS_SYSTEM_KEYS);
+
+function mobileDefaultTab(status: BookingDetail['status']): 'checklist' | 'onTheDay' {
+  return ['ENQUIRY', 'PROVISIONAL', 'CONFIRMED'].includes(status) ? 'checklist' : 'onTheDay';
+}
+
+function itineraryIsEmpty(booking: BookingDetail): boolean {
+  const logistics = booking.logistics;
+  return !booking.sets.length && !logistics?.arrivalTime?.value &&
+    !logistics?.soundCheckTime?.value && !logistics?.finishTime?.value;
+}
+
+function detailsAreEmpty(
+  logistics: BookingDetail['logistics'],
+  bandMembersEnabled: boolean,
+): boolean {
+  const visibleKeys = bandMembersEnabled
+    ? LOGISTICS_DETAIL_KEYS
+    : LOGISTICS_DETAIL_KEYS.filter((key) => !LOGISTICS_BAND_ONLY_KEYS.includes(key));
+  const hasVisibleSystemDetail = visibleKeys.some((key) => Boolean(logistics?.[key]?.value));
+  const hasCustomDetail = Object.entries(logistics ?? {}).some(
+    ([key, entry]) => !LOGISTICS_SYSTEM_KEY_SET.has(key) && Boolean(entry.value),
+  );
+  return !hasVisibleSystemDetail && !hasCustomDetail;
+}
+
+function missingConcern(
+  missing: boolean,
+  concern: AddToTheDayConcern,
+): AddToTheDayConcern | null {
+  return missing ? concern : null;
+}
 
 interface BookingDetailMobileProps {
   bookingId: string;
@@ -102,42 +123,26 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
   if (isLoading) return <MobileTabsSkeleton />;
   if (!booking) return null;
 
+  const bandData = bandMembersEnabled ? booking.band : null;
   const title = booking.title || `Booking ${bookingId.slice(0, 8)}`;
   const backState = { from: `/admin/bookings/${bookingId}`, label: title };
   // #756: key off the deposit invoice, not a checklist item — see BookingDetailDesktop for the full
   // rationale (goals-only checklist made the old `deposit_received` check permanently false).
   const contractShortcutType = contractCoverTemplateFor(invoices);
 
-  const defaultTab: 'checklist' | 'onTheDay' =
-    booking.status === 'ENQUIRY' || booking.status === 'PROVISIONAL' || booking.status === 'CONFIRMED'
-      ? 'checklist'
-      : 'onTheDay';
-
-  // Derive which PM-hat concerns are missing so AddToTheDayCard can list them.
-  const logistics = booking.logistics;
-  const itineraryEmpty =
-    !booking.sets.length &&
-    !logistics?.arrivalTime?.value &&
-    !logistics?.soundCheckTime?.value &&
-    !logistics?.finishTime?.value;
-  // With the flag off, a value already saved under travelPlan/outfits (e.g. the flag was on and
-  // is now rolled back) must not count — those fields are hidden, so the concern reads exactly
-  // as if they were never there (#888's "shareWithBand column is inert when off").
-  const visibleDetailKeys = bandMembersEnabled
-    ? LOGISTICS_DETAIL_KEYS
-    : LOGISTICS_DETAIL_KEYS.filter((k) => !LOGISTICS_BAND_ONLY_KEYS.includes(k));
-  const detailsEmpty =
-    !visibleDetailKeys.some((k) => !!(logistics ?? {})[k]?.value) &&
-    !Object.entries(logistics ?? {}).some(([k, e]) => !LOGISTICS_SYSTEM_KEY_SET.has(k) && !!e.value);
+  const defaultTab = mobileDefaultTab(booking.status);
+  const itineraryEmpty = itineraryIsEmpty(booking);
+  // The two shareWithBand fields are not a complete concern when the flag is off (#888).
+  const detailsEmpty = detailsAreEmpty(booking.logistics, bandMembersEnabled);
   const venueEmpty = !booking.venue;
   const musicOff = !booking.hasMusicFormConfig;
 
   const missingConcerns = [
-    itineraryEmpty && { icon: <Clock size={16} />, label: 'Itinerary', actionLabel: 'Add', onAction: () => setSearchParams({ sheet: 'itineraryTweak' }) },
-    detailsEmpty && { icon: <Info size={16} />, label: 'Details', actionLabel: 'Add', onAction: () => setSearchParams({ sheet: 'detailsTweak' }) },
-    venueEmpty && { icon: <MapPin size={16} />, label: 'Venue', actionLabel: 'Add', onAction: () => setSearchParams({ sheet: 'venueTweak' }) },
-    musicOff && { icon: <ClipboardList size={16} />, label: 'Music form', actionLabel: 'Set up', onAction: () => turnOnMusicForm.mutate() },
-  ].filter(Boolean) as AddToTheDayConcern[];
+    missingConcern(itineraryEmpty, { icon: <Clock size={16} />, label: 'Itinerary', actionLabel: 'Add', onAction: () => setSearchParams({ sheet: 'itineraryTweak' }) }),
+    missingConcern(detailsEmpty, { icon: <Info size={16} />, label: 'Details', actionLabel: 'Add', onAction: () => setSearchParams({ sheet: 'detailsTweak' }) }),
+    missingConcern(venueEmpty, { icon: <MapPin size={16} />, label: 'Venue', actionLabel: 'Add', onAction: () => setSearchParams({ sheet: 'venueTweak' }) }),
+    missingConcern(musicOff, { icon: <ClipboardList size={16} />, label: 'Music form', actionLabel: 'Set up', onAction: () => turnOnMusicForm.mutate() }),
+  ].filter((concern): concern is AddToTheDayConcern => concern !== null);
 
   function openCompose(templateType?: string) {
     setSearchParams(templateType ? { sheet: 'compose', templateType } : { sheet: 'compose' });
@@ -147,11 +152,41 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
     setSearchParams({ sheet: 'invoice', invoiceId: invoice.id });
   }
 
+  const content: MobileBookingContentData = {
+    booking,
+    bookingId,
+    backState,
+    bandData,
+    documents,
+    musicFormConfig,
+    musicFormConfigLoading,
+    isTurningOnMusicForm: turnOnMusicForm.isPending,
+    lineupTemplates,
+    seriesBookings,
+    seriesBookingsLoading,
+    invoices,
+    contractShortcutType,
+    contractActions,
+    fields,
+    missingConcerns,
+    communications,
+  };
+  const actions: MobileBookingContentActions = {
+    navigate,
+    setSearchParams,
+    openCompose,
+    openEditInvoice,
+    onTurnOnMusicForm: () => turnOnMusicForm.mutate(),
+    onEditMusicForm: () => setSearchParams({ sheet: 'musicTweak' }),
+  };
+
   return (
-    <BookingDetailTabs
+    <BookingDetailMobileContent
       defaultTab={defaultTab}
+      data={content}
+      actions={actions}
       checklist={
-        booking.status !== 'CANCELLED' ? (
+        booking.status === 'CANCELLED' ? null : (
           <ChecklistSection
             bookingId={bookingId}
             items={checklist}
@@ -163,167 +198,7 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
             hideHeader
             clientName={clientDisplayName(booking.customer)}
           />
-        ) : null
-      }
-      onTheDay={
-        <div className="space-y-4 pt-2">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <ItineraryCard
-              logistics={booking.logistics}
-              sets={booking.sets}
-              packages={booking.packages}
-              hideWhenEmpty
-              bandLineups={bandMembersEnabled ? booking.band.lineups : []}
-              bandChairs={bandMembersEnabled ? booking.band.chairs : []}
-              bandMembers={bandMembersEnabled ? booking.band.members : []}
-            />
-            <DetailsCard
-              logistics={booking.logistics}
-              hideWhenEmpty
-              bandMembersEnabled={bandMembersEnabled}
-            />
-          </div>
-          <BookingVenueMapWidget
-            bookingId={bookingId}
-            contactHref={`/admin/contacts/${booking.venue?.id ?? ''}`}
-          />
-          {bandMembersEnabled && (
-            <div className="flex justify-end">
-              <GhostButton
-                variant="primary"
-                size="xs"
-                icon={<Users size={13} />}
-                onClick={() => setSearchParams({ sheet: 'band' })}
-              >
-                {booking.band.chairs.length > 0 ? `Band (${booking.band.chairs.length})` : 'Add band'}
-              </GhostButton>
-            </div>
-          )}
-          <AddToTheDayCard concerns={missingConcerns} />
-          <MusicFormSection
-            booking={booking}
-            documents={documents}
-            config={musicFormConfig ?? null}
-            isLoading={musicFormConfigLoading}
-            onTurnOn={() => turnOnMusicForm.mutate()}
-            isTurningOn={turnOnMusicForm.isPending}
-            onEdit={() => setSearchParams({ sheet: 'musicTweak' })}
-            hideWhenOff
-          />
-          <InlineNotes
-            notes={booking.notes}
-            onSave={(notes) => fields.updateNotes(notes)}
-            isSaving={fields.isNotesPending}
-          />
-        </div>
-      }
-      info={
-        <div className="space-y-6 pt-2">
-          <section>
-            <SectionHeader
-              label="People"
-              action={
-                <GhostButton
-                  variant="primary"
-                  size="xs"
-                  icon={<Pencil size={13} />}
-                  onClick={() => setSearchParams({ sheet: 'peopleTweak' })}
-                >
-                  Edit
-                </GhostButton>
-              }
-            />
-            <div className="flex flex-row gap-4">
-              <PersonChip role="Customer" contact={booking.customer} linkState={backState} />
-              {booking.bookingAgent && (
-                <PersonChip
-                  role="Booking agent"
-                  contact={booking.bookingAgent}
-                  linkState={backState}
-                />
-              )}
-            </div>
-          </section>
-
-          {bandMembersEnabled && (
-            <BandCard
-              band={booking.band}
-              hasLineupTemplates={lineupTemplates.length > 0}
-              linkState={backState}
-            />
-          )}
-
-          {booking.series && (
-            <section>
-              <SectionHeader label="Series" />
-              <span className="inline-flex items-center text-sm text-foreground border border-border rounded-full px-3 py-1.5">
-                {booking.series.label}
-              </span>
-            </section>
-          )}
-
-          {booking.series && (
-            <SeriesEventsCard
-              bookings={seriesBookings.filter((b) => b.id !== booking.id)}
-              isLoading={seriesBookingsLoading}
-              onCopyEvent={() => setSearchParams({ sheet: 'copyEvent' })}
-              onAddToSeries={() =>
-                navigate('/admin/bookings/new', {
-                  state: {
-                    seriesId: booking.series!.id,
-                    customerId: booking.customer.id,
-                    venueId: booking.venue?.id,
-                    bookingAgentId: booking.bookingAgent?.id,
-                  },
-                })
-              }
-            />
-          )}
-
-          {booking.status !== 'CANCELLED' && (
-            <ContractCard
-              booking={booking}
-              documents={documents}
-              isCreating={contractActions.isCreatingContract}
-              isVoidingContract={contractActions.isVoidingContract}
-              isDeletingContract={contractActions.isDeletingContract}
-              onCreateContract={() => contractActions.createContract(() => {
-                setSearchParams({ sheet: 'contract' });
-              })}
-              onEdit={() => setSearchParams({ sheet: 'contract' })}
-              onPreview={() => setSearchParams({ sheet: 'contract', readOnly: 'true' })}
-              onSend={() => openCompose(contractShortcutType)}
-              onVoid={(confirmSignedVoid) => {
-                const contractId = booking.activeContract?.id;
-                if (contractId) contractActions.voidContract({ contractId, confirmSignedVoid });
-              }}
-              onDelete={() => {
-                const contractId = booking.activeContract?.id;
-                if (contractId) contractActions.deleteContract(contractId);
-              }}
-            />
-          )}
-
-          {booking.series ? (
-            <SeriesInvoiceCard
-              seriesId={booking.series.id}
-              seriesLabel={booking.series.label}
-              onEdit={openEditInvoice}
-              onSend={() => openCompose('series_invoice_cover')}
-              onMarkSent={(inv) => setSearchParams({ sheet: 'markSent', invoiceId: inv.id })}
-            />
-          ) : (
-            <InvoiceSection bookingId={bookingId} />
-          )}
-
-          <DocumentsCard bookingId={bookingId} />
-
-          <CommunicationsSection
-            communications={communications}
-            bandMembers={bandMembersEnabled ? booking.band.members : []}
-            bandCommunicationsEnabled={bandMembersEnabled}
-          />
-        </div>
+        )
       }
     />
   );

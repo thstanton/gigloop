@@ -4,6 +4,7 @@ import type { CommunicationsService } from '../communications/communications.ser
 import type { ChecklistReevaluator } from '../checklist/checklist-reevaluator.service';
 import type { DocumentsService } from '../documents/documents.service';
 import type { BookingsRepository } from './bookings.repository';
+import { BandCommunicationContentService } from './band-communication-content.service';
 import { BandCommunicationsService } from './band-communications.service';
 
 const memberInviteData = {
@@ -75,9 +76,14 @@ describe('BandCommunicationsService', () => {
       generateAndStoreCallSheetPdf: jest.fn().mockResolvedValue({ buffer: Buffer.from('%PDF-call-sheet'), documentId: 'document-1' }),
       discardUnsentCallSheet: jest.fn().mockResolvedValue(undefined),
     };
-    service = new BandCommunicationsService(
+    const content = new BandCommunicationContentService(
       repo as unknown as BookingsRepository,
       mail as unknown as MailService,
+      comms as unknown as CommunicationsService,
+    );
+    service = new BandCommunicationsService(
+      repo as unknown as BookingsRepository,
+      content,
       comms as unknown as CommunicationsService,
       reeval as unknown as ChecklistReevaluator,
       documents as unknown as DocumentsService,

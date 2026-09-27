@@ -1,18 +1,13 @@
-import { BadRequestException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
-import { MailService, type EmailContext } from '../mail/mail.service';
-import { CommunicationsService } from '../communications/communications.service';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { CommunicationsService, type SendEmailOptions } from '../communications/communications.service';
 import { ChecklistReevaluator } from '../checklist/checklist-reevaluator.service';
 import { DocumentsService } from '../documents/documents.service';
 import { BookingsRepository } from './bookings.repository';
-import { buildBandInviteCalendar } from './band-invite-calendar';
-
-type BandEmailContext = EmailContext & { bandMemberName: string };
-type BandInviteData = NonNullable<Awaited<ReturnType<BookingsRepository['findBandInviteData']>>>;
-
-export type BuiltBandMemberContext = {
-  emailContext: BandEmailContext;
-  inviteData: BandInviteData;
-};
+import {
+  BandCommunicationContentService,
+  type BandCommunicationTemplateType,
+  type BuiltBandMemberContext,
+} from './band-communication-content.service';
 
 export type SendBandInviteInput = {
   templateId: string;
@@ -20,19 +15,29 @@ export type SendBandInviteInput = {
   body: string;
 };
 
-type BandCommunicationTemplateType =
-  | 'band_invite'
-  | 'band_invite_message'
-  | 'band_call_sheet'
-  | 'band_call_sheet_message'
-  | 'band_final_details'
-  | 'band_final_details_message';
+type BandEmailAction = 'an invitation' | 'a call sheet' | 'final details';
+
+interface PrepareBandEmailInput {
+  userId: string;
+  bookingId: string;
+  memberId: string;
+  input: SendBandInviteInput;
+  templateType: BandCommunicationTemplateType;
+  notFoundMessage: string;
+  action: BandEmailAction;
+}
+
+type PreparedBandEmail = PrepareBandEmailInput & {
+  template: Awaited<ReturnType<BandCommunicationContentService['findBandTemplate']>>;
+  context: BuiltBandMemberContext;
+  recipient: string;
+};
 
 @Injectable()
 export class BandCommunicationsService {
   constructor(
     private readonly bookings: BookingsRepository,
-    private readonly mail: MailService,
+    private readonly content: BandCommunicationContentService,
     private readonly communications: CommunicationsService,
     private readonly reeval: ChecklistReevaluator,
     private readonly documents: DocumentsService,
@@ -44,83 +49,31 @@ export class BandCommunicationsService {
     bookingId: string,
     memberId: string,
   ): Promise<BuiltBandMemberContext> {
-    const inviteData = await this.bookings.findBandInviteData(userId, bookingId, memberId);
-    if (!inviteData) throw new NotFoundException('Band member not found');
-
-    const baseContext = await this.mail.buildContext(userId, bookingId);
-    const portalLink = `${this.appBaseUrl()}/band/${inviteData.bandPortalToken}`;
-    return {
-      inviteData,
-      emailContext: {
-        ...baseContext,
-        bandMemberName: inviteData.contact.name,
-        portalLink,
-      },
-    };
-  }
-
-  private async renderBandEmail(
-    userId: string,
-    bookingId: string,
-    memberId: string,
-    templateId: string,
-    builtInType: BandCommunicationTemplateType,
-    notFoundMessage: string,
-  ) {
-    const template = await this.findBandTemplate(userId, templateId, builtInType, notFoundMessage);
-    const { emailContext } = await this.buildBandMemberContext(userId, bookingId, memberId);
-    return this.mail.renderForCompose(template, emailContext);
-  }
-
-  private async renderBandMessage(
-    userId: string,
-    bookingId: string,
-    memberId: string,
-    templateId: string,
-    builtInType: BandCommunicationTemplateType,
-    notFoundMessage: string,
-  ) {
-    const template = await this.findBandTemplate(userId, templateId, builtInType, notFoundMessage);
-    const { emailContext } = await this.buildBandMemberContext(userId, bookingId, memberId);
-    const { text, missingVariables } = this.mail.renderPlainText(template.content, emailContext);
-    return { body: text, missingVariables };
+    return this.content.buildBandMemberContext(userId, bookingId, memberId);
   }
 
   async renderInvite(userId: string, bookingId: string, memberId: string, templateId: string) {
-    return this.renderBandEmail(userId, bookingId, memberId, templateId, 'band_invite', 'Band invitation template not found');
+    return this.content.renderInvite(userId, bookingId, memberId, templateId);
   }
 
   async renderInviteMessage(userId: string, bookingId: string, memberId: string, templateId: string) {
-    return this.renderBandMessage(
-      userId, bookingId, memberId, templateId, 'band_invite_message', 'Band invitation message template not found',
-    );
+    return this.content.renderInviteMessage(userId, bookingId, memberId, templateId);
   }
 
   async renderCallSheet(userId: string, bookingId: string, memberId: string, templateId: string) {
-    return this.renderBandEmail(userId, bookingId, memberId, templateId, 'band_call_sheet', 'Band call-sheet template not found');
+    return this.content.renderCallSheet(userId, bookingId, memberId, templateId);
   }
 
   async renderCallSheetMessage(userId: string, bookingId: string, memberId: string, templateId: string) {
-    return this.renderBandMessage(
-      userId, bookingId, memberId, templateId, 'band_call_sheet_message', 'Band call-sheet message template not found',
-    );
+    return this.content.renderCallSheetMessage(userId, bookingId, memberId, templateId);
   }
 
   async renderFinalDetails(userId: string, bookingId: string, memberId: string, templateId: string) {
-    return this.renderBandEmail(
-      userId, bookingId, memberId, templateId, 'band_final_details', 'Band final-details template not found',
-    );
+    return this.content.renderFinalDetails(userId, bookingId, memberId, templateId);
   }
 
   async renderFinalDetailsMessage(userId: string, bookingId: string, memberId: string, templateId: string) {
-    return this.renderBandMessage(
-      userId,
-      bookingId,
-      memberId,
-      templateId,
-      'band_final_details_message',
-      'Band final-details message template not found',
-    );
+    return this.content.renderFinalDetailsMessage(userId, bookingId, memberId, templateId);
   }
 
   async sendInvite(
@@ -129,42 +82,20 @@ export class BandCommunicationsService {
     memberId: string,
     input: SendBandInviteInput,
   ): Promise<void> {
-    const template = await this.findBandTemplate(userId, input.templateId, 'band_invite', 'Band invitation template not found');
-    const { emailContext, inviteData } = await this.buildBandMemberContext(userId, bookingId, memberId);
-    const recipient = inviteData.contact.email;
-    if (!recipient) {
-      throw new BadRequestException(`Add an email address to ${inviteData.contact.name} before sending an invitation`);
-    }
-
-    const calendar = buildBandInviteCalendar({
+    const prepared = await this.prepareBandEmail({
+      userId,
       bookingId,
-      contactId: inviteData.contactId,
-      bookingDate: inviteData.booking.date,
-      title: inviteData.booking.title,
-      venueName: inviteData.booking.venue?.name ?? null,
-      venueAddress: this.venueAddress(inviteData.booking.venue),
-      portalUrl: emailContext.portalLink,
-      appUrl: this.appBaseUrl(),
-      musicianName: emailContext.musicianName,
-      musicianEmail: emailContext.musicianEmail,
-      setsSchedule: emailContext.setsSchedule,
-      packages: inviteData.booking.packages,
-      playedPackageIds: [...new Set(inviteData.chairs.flatMap((chair) =>
-        chair.lineup.packages.map((link) => link.packageId),
-      ))],
-      sets: inviteData.booking.sets,
+      memberId,
+      input,
+      templateType: 'band_invite',
+      notFoundMessage: 'Band invitation template not found',
+      action: 'an invitation',
     });
+    const calendar = this.content.buildInviteCalendar(bookingId, prepared.context);
 
     // sendEmail is the one Communication logging and pre-status re-evaluation site. Only after it
     // resolves may this member become INVITED; this second re-evaluation observes the new status.
-    await this.communications.sendEmail({
-      userId,
-      bookingId,
-      contactId: inviteData.contactId,
-      to: recipient,
-      subject: input.subject,
-      body: input.body,
-      templateId: template.id,
+    await this.sendBandEmail(prepared, {
       attachments: [{ filename: 'band-invite.ics', content: Buffer.from(calendar, 'utf8'), contentType: 'text/calendar' }],
     });
 
@@ -179,23 +110,19 @@ export class BandCommunicationsService {
     memberId: string,
     input: SendBandInviteInput,
   ): Promise<void> {
-    const template = await this.findBandTemplate(userId, input.templateId, 'band_call_sheet', 'Band call-sheet template not found');
-    const { inviteData } = await this.buildBandMemberContext(userId, bookingId, memberId);
-    const recipient = inviteData.contact.email;
-    if (!recipient) {
-      throw new BadRequestException(`Add an email address to ${inviteData.contact.name} before sending a call sheet`);
-    }
+    const prepared = await this.prepareBandEmail({
+      userId,
+      bookingId,
+      memberId,
+      input,
+      templateType: 'band_call_sheet',
+      notFoundMessage: 'Band call-sheet template not found',
+      action: 'a call sheet',
+    });
 
     const { buffer, documentId } = await this.documents.generateAndStoreCallSheetPdf(userId, bookingId);
     try {
-      await this.communications.sendEmail({
-        userId,
-        bookingId,
-        contactId: inviteData.contactId,
-        to: recipient,
-        subject: input.subject,
-        body: input.body,
-        templateId: template.id,
+      await this.sendBandEmail(prepared, {
         documentId,
         attachments: [{ filename: 'call-sheet.pdf', content: buffer, contentType: 'application/pdf' }],
       });
@@ -211,53 +138,41 @@ export class BandCommunicationsService {
     memberId: string,
     input: SendBandInviteInput,
   ): Promise<void> {
-    const template = await this.findBandTemplate(
-      userId,
-      input.templateId,
-      'band_final_details',
-      'Band final-details template not found',
-    );
-    const { inviteData } = await this.buildBandMemberContext(userId, bookingId, memberId);
-    const recipient = inviteData.contact.email;
-    if (!recipient) {
-      throw new BadRequestException(`Add an email address to ${inviteData.contact.name} before sending final details`);
-    }
-
-    await this.communications.sendEmail({
+    const prepared = await this.prepareBandEmail({
       userId,
       bookingId,
-      contactId: inviteData.contactId,
-      to: recipient,
-      subject: input.subject,
-      body: input.body,
-      templateId: template.id,
+      memberId,
+      input,
+      templateType: 'band_final_details',
+      notFoundMessage: 'Band final-details template not found',
+      action: 'final details',
     });
+    await this.sendBandEmail(prepared);
   }
 
-  private async findBandTemplate(
-    userId: string,
-    templateId: string,
-    builtInType: BandCommunicationTemplateType,
-    notFoundMessage: string,
+  private async prepareBandEmail(input: PrepareBandEmailInput) {
+    const template = await this.content.findBandTemplate(input.userId, input.input.templateId, input.templateType, input.notFoundMessage);
+    const context = await this.content.buildBandMemberContext(input.userId, input.bookingId, input.memberId);
+    const recipient = context.inviteData.contact.email;
+    if (!recipient) {
+      throw new BadRequestException(`Add an email address to ${context.inviteData.contact.name} before sending ${input.action}`);
+    }
+    return { ...input, template, context, recipient };
+  }
+
+  private sendBandEmail(
+    prepared: PreparedBandEmail,
+    extra: Pick<SendEmailOptions, 'attachments' | 'documentId'> = {},
   ) {
-    const template = await this.communications.findTemplate(userId, templateId);
-    if (!template || template.builtInType !== builtInType) throw new NotFoundException(notFoundMessage);
-    return template;
-  }
-
-  private appBaseUrl(): string {
-    const baseUrl = process.env.APP_BASE_URL;
-    if (!baseUrl) throw new InternalServerErrorException('APP_BASE_URL is not configured');
-    let end = baseUrl.length;
-    while (end > 0 && baseUrl[end - 1] === '/') end -= 1;
-    return baseUrl.slice(0, end);
-  }
-
-  private venueAddress(venue: BandInviteData['booking']['venue']): string | null {
-    if (!venue) return null;
-    const address = [venue.addressLine1, venue.addressLine2, venue.city, venue.county, venue.postcode]
-      .filter((part): part is string => Boolean(part?.trim()))
-      .join(', ');
-    return address || null;
+    return this.communications.sendEmail({
+      userId: prepared.userId,
+      bookingId: prepared.bookingId,
+      contactId: prepared.context.inviteData.contactId,
+      to: prepared.recipient,
+      subject: prepared.input.subject,
+      body: prepared.input.body,
+      templateId: prepared.template.id,
+      ...extra,
+    });
   }
 }

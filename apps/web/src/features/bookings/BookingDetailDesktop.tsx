@@ -36,10 +36,183 @@ import { EVENT_TYPE_LABELS } from '@/lib/constants';
 import type {
   Invoice,
   MusicFormConfig,
+  BookingDetail,
+  BookingListItem,
+  Communication,
+  Document,
+  LineupTemplate,
 } from '@/types/api';
 
 interface BookingDetailDesktopProps {
   bookingId: string;
+}
+
+interface DesktopBookingContentData {
+  booking: BookingDetail;
+  bookingId: string;
+  bandData: BookingDetail['band'] | null;
+  documents: Document[];
+  communications: Communication[];
+  seriesBookings: BookingListItem[];
+  seriesBookingsLoading: boolean;
+  musicFormConfig: MusicFormConfig | null | undefined;
+  musicFormConfigLoading: boolean;
+  turnOnMusicForm: ReturnType<typeof useConfigureMusicForm>;
+  checklist: ReturnType<typeof useBookingChecklist>;
+  lineupTemplates: LineupTemplate[];
+  contractActions: ReturnType<typeof useContractActions>;
+  fields: ReturnType<typeof useBookingFields>;
+  invoices: Invoice[];
+  contractShortcutType: ReturnType<typeof contractCoverTemplateFor>;
+  backState: Record<string, string>;
+}
+
+interface DesktopBookingContentActions {
+  navigate: ReturnType<typeof useNavigate>;
+  setSearchParams: ReturnType<typeof useSearchParams>[1];
+  openCompose: (templateType?: string) => void;
+  openEditInvoice: (invoice: Invoice) => void;
+}
+
+function DesktopBookingMainColumn({ data, actions }: Readonly<{ data: DesktopBookingContentData; actions: DesktopBookingContentActions }>) {
+  const { booking, bookingId, bandData, documents, communications, musicFormConfig, musicFormConfigLoading, fields } = data;
+  const { setSearchParams } = actions;
+  return (
+    <div className="space-y-8">
+      <section>
+        <SectionHeader
+          label="For the day"
+          action={bandData ? (
+            <GhostButton variant="primary" size="xs" icon={<Users size={13} />} onClick={() => setSearchParams({ sheet: 'band' })}>
+              {booking.band.chairs.length > 0 ? `Band (${booking.band.chairs.length})` : 'Add band'}
+            </GhostButton>
+          ) : undefined}
+        />
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <ItineraryCard
+              logistics={booking.logistics}
+              sets={booking.sets}
+              packages={booking.packages}
+              bandLineups={bandData?.lineups ?? []}
+              bandChairs={bandData?.chairs ?? []}
+              bandMembers={bandData?.members ?? []}
+            />
+            <DetailsCard logistics={booking.logistics} bandMembersEnabled={bandData !== null} />
+          </div>
+          <BookingVenueMapWidget bookingId={bookingId} contactHref={`/admin/contacts/${booking.venue?.id ?? ''}`} />
+          {!booking.venue && <InlineVenueAdd />}
+          <MusicFormSection
+            booking={booking}
+            documents={documents}
+            config={musicFormConfig ?? null}
+            isLoading={musicFormConfigLoading}
+            onTurnOn={() => data.turnOnMusicForm.mutate()}
+            isTurningOn={data.turnOnMusicForm.isPending}
+            onEdit={() => setSearchParams({ sheet: 'musicTweak' })}
+          />
+        </div>
+      </section>
+      <InlineNotes notes={booking.notes} onSave={(notes) => fields.updateNotes(notes)} isSaving={fields.isNotesPending} />
+      <CommunicationsSection
+        communications={communications}
+        bandMembers={bandData?.members ?? []}
+        bandCommunicationsEnabled={bandData !== null}
+      />
+    </div>
+  );
+}
+
+function DesktopBookingSidebar({ data, actions }: Readonly<{ data: DesktopBookingContentData; actions: DesktopBookingContentActions }>) {
+  const { booking, bookingId, bandData, seriesBookings, seriesBookingsLoading, documents, checklist, lineupTemplates,
+    contractActions, contractShortcutType, backState } = data;
+  const { navigate, setSearchParams, openCompose, openEditInvoice } = actions;
+
+  return (
+    <div className="space-y-6">
+      {booking.status !== 'CANCELLED' && (
+        <ChecklistSection
+          bookingId={bookingId}
+          items={checklist.checklist}
+          isLoading={checklist.checklistLoading}
+          bookingStatus={booking.status}
+          onToggle={checklist.toggleItem}
+          onAddItem={checklist.addItem}
+          isAddingItem={checklist.isAddingItem}
+          clientName={clientDisplayName(booking.customer)}
+        />
+      )}
+
+      <section>
+        <SectionHeader
+          label="People"
+          action={<GhostButton variant="primary" size="xs" icon={<Pencil size={13} />} onClick={() => setSearchParams({ sheet: 'peopleTweak' })}>Edit</GhostButton>}
+        />
+        <div className="border-t border-border">
+          <PersonCard role="Customer" contact={booking.customer} linkState={backState} />
+          {booking.bookingAgent && (
+            <PersonCard role="Booking agent" contact={booking.bookingAgent} commissionArrangement={booking.bookingAgent.commissionArrangement} linkState={backState} />
+          )}
+        </div>
+      </section>
+
+      {bandData && <BandCard band={bandData} hasLineupTemplates={lineupTemplates.length > 0} linkState={backState} />}
+
+      {booking.series && (
+        <SeriesEventsCard
+          bookings={seriesBookings.filter((item) => item.id !== booking.id)}
+          isLoading={seriesBookingsLoading}
+          onCopyEvent={() => setSearchParams({ sheet: 'copyEvent' })}
+          onAddToSeries={() => navigate('/admin/bookings/new', {
+            state: {
+              seriesId: booking.series?.id,
+              customerId: booking.customer.id,
+              venueId: booking.venue?.id,
+              bookingAgentId: booking.bookingAgent?.id,
+            },
+          })}
+        />
+      )}
+
+      {booking.status !== 'CANCELLED' && (
+        <ContractCard
+          booking={booking}
+          documents={documents}
+          isCreating={contractActions.isCreatingContract}
+          isVoidingContract={contractActions.isVoidingContract}
+          isDeletingContract={contractActions.isDeletingContract}
+          onCreateContract={() => {
+            contractActions.createContract();
+            setSearchParams({ sheet: 'contract' });
+          }}
+          onEdit={() => setSearchParams({ sheet: 'contract' })}
+          onPreview={() => setSearchParams({ sheet: 'contract', readOnly: 'true' })}
+          onSend={() => openCompose(contractShortcutType)}
+          onVoid={(confirmSignedVoid) => {
+            const contractId = booking.activeContract?.id;
+            if (contractId) contractActions.voidContract({ contractId, confirmSignedVoid });
+          }}
+          onDelete={() => {
+            const contractId = booking.activeContract?.id;
+            if (contractId) contractActions.deleteContract(contractId);
+          }}
+        />
+      )}
+
+      {booking.series ? (
+        <SeriesInvoiceCard
+          seriesId={booking.series.id}
+          seriesLabel={booking.series.label}
+          onEdit={openEditInvoice}
+          onSend={() => openCompose('series_invoice_cover')}
+          onMarkSent={(invoice) => setSearchParams({ sheet: 'markSent', invoiceId: invoice.id })}
+        />
+      ) : (
+        <InvoiceSection bookingId={bookingId} />
+      )}
+      <DocumentsCard bookingId={bookingId} />
+    </div>
+  );
 }
 
 export function BookingDetailDesktop({ bookingId }: BookingDetailDesktopProps) {
@@ -69,6 +242,7 @@ export function BookingDetailDesktop({ bookingId }: BookingDetailDesktopProps) {
 
   if (!booking) return null;
 
+  const bandData = bandMembersEnabled ? booking.band : null;
   const title = booking.title ?? EVENT_TYPE_LABELS[booking.eventType];
   const backState = { from: `/admin/bookings/${bookingId}`, label: title };
   // #756: key off the deposit invoice, not a checklist item. Post-ADR-0057 `checklist` is goals-only
@@ -84,191 +258,31 @@ export function BookingDetailDesktop({ bookingId }: BookingDetailDesktopProps) {
     setSearchParams({ sheet: 'invoice', invoiceId: invoice.id });
   }
 
+  const data: DesktopBookingContentData = {
+    booking,
+    bookingId,
+    bandData,
+    documents,
+    communications,
+    seriesBookings,
+    seriesBookingsLoading,
+    musicFormConfig,
+    musicFormConfigLoading,
+    turnOnMusicForm,
+    checklist: { checklist, checklistLoading, toggleItem, addItem, isAddingItem },
+    lineupTemplates,
+    contractActions,
+    fields,
+    invoices,
+    contractShortcutType,
+    backState,
+  };
+  const actions: DesktopBookingContentActions = { navigate, setSearchParams, openCompose, openEditInvoice };
+
   return (
     <div className="grid grid-cols-[3fr_2fr] gap-8 items-start mt-6">
-
-      {/* ─── Left column: For the day + Music form, then Notes + Communications ─── */}
-      <div className="space-y-8">
-
-        {/* For the day */}
-        <section>
-          <SectionHeader
-            label="For the day"
-            action={
-              bandMembersEnabled ? (
-                <GhostButton
-                  variant="primary"
-                  size="xs"
-                  icon={<Users size={13} />}
-                  onClick={() => setSearchParams({ sheet: 'band' })}
-                >
-                  {booking.band.chairs.length > 0 ? `Band (${booking.band.chairs.length})` : 'Add band'}
-                </GhostButton>
-              ) : undefined
-            }
-          />
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <ItineraryCard
-                logistics={booking.logistics}
-                sets={booking.sets}
-                packages={booking.packages}
-                bandLineups={bandMembersEnabled ? booking.band.lineups : []}
-                bandChairs={bandMembersEnabled ? booking.band.chairs : []}
-                bandMembers={bandMembersEnabled ? booking.band.members : []}
-              />
-              <DetailsCard
-                logistics={booking.logistics}
-                bandMembersEnabled={bandMembersEnabled}
-              />
-            </div>
-            <BookingVenueMapWidget
-              bookingId={bookingId}
-              contactHref={`/admin/contacts/${booking.venue?.id ?? ''}`}
-            />
-            {!booking.venue && <InlineVenueAdd />}
-            <MusicFormSection
-              booking={booking}
-              documents={documents}
-              config={musicFormConfig ?? null}
-              isLoading={musicFormConfigLoading}
-              onTurnOn={() => turnOnMusicForm.mutate()}
-              isTurningOn={turnOnMusicForm.isPending}
-              onEdit={() => setSearchParams({ sheet: 'musicTweak' })}
-            />
-          </div>
-        </section>
-
-        <InlineNotes
-          notes={booking.notes}
-          onSave={(notes) => fields.updateNotes(notes)}
-          isSaving={fields.isNotesPending}
-        />
-        <CommunicationsSection
-          communications={communications}
-          bandMembers={bandMembersEnabled ? booking.band.members : []}
-          bandCommunicationsEnabled={bandMembersEnabled}
-        />
-
-      </div>
-
-      {/* ─── Right column ─── */}
-      <div className="space-y-6">
-
-        {/* Checklist */}
-        {booking.status !== 'CANCELLED' && (
-          <ChecklistSection
-            bookingId={bookingId}
-            items={checklist}
-            isLoading={checklistLoading}
-            bookingStatus={booking.status}
-            onToggle={(itemId, state) => toggleItem(itemId, state)}
-            onAddItem={(data) => addItem(data)}
-            isAddingItem={isAddingItem}
-            clientName={clientDisplayName(booking.customer)}
-          />
-        )}
-
-        {/* People */}
-        <section>
-          <SectionHeader
-            label="People"
-            action={
-              <GhostButton
-                variant="primary"
-                size="xs"
-                icon={<Pencil size={13} />}
-                onClick={() => setSearchParams({ sheet: 'peopleTweak' })}
-              >
-                Edit
-              </GhostButton>
-            }
-          />
-          <div className="border-t border-border">
-            <PersonCard role="Customer" contact={booking.customer} linkState={backState} />
-            {booking.bookingAgent && (
-              <PersonCard
-                role="Booking agent"
-                contact={booking.bookingAgent}
-                commissionArrangement={booking.bookingAgent.commissionArrangement}
-                linkState={backState}
-              />
-            )}
-          </div>
-        </section>
-
-        {/* Band */}
-        {bandMembersEnabled && (
-          <BandCard
-            band={booking.band}
-            hasLineupTemplates={lineupTemplates.length > 0}
-            linkState={backState}
-          />
-        )}
-
-        {/* Series events */}
-        {booking.series && (
-          <SeriesEventsCard
-            bookings={seriesBookings.filter((b) => b.id !== booking.id)}
-            isLoading={seriesBookingsLoading}
-            onCopyEvent={() => setSearchParams({ sheet: 'copyEvent' })}
-            onAddToSeries={() =>
-              navigate('/admin/bookings/new', {
-                state: {
-                  seriesId: booking.series!.id,
-                  customerId: booking.customer.id,
-                  venueId: booking.venue?.id,
-                  bookingAgentId: booking.bookingAgent?.id,
-                },
-              })
-            }
-          />
-        )}
-
-        {/* Contract */}
-        {booking.status !== 'CANCELLED' && (
-          <ContractCard
-            booking={booking}
-            documents={documents}
-            isCreating={contractActions.isCreatingContract}
-            isVoidingContract={contractActions.isVoidingContract}
-            isDeletingContract={contractActions.isDeletingContract}
-            onCreateContract={() => {
-              contractActions.createContract();
-              setSearchParams({ sheet: 'contract' });
-            }}
-            onEdit={() => setSearchParams({ sheet: 'contract' })}
-            onPreview={() => setSearchParams({ sheet: 'contract', readOnly: 'true' })}
-            onSend={() => openCompose(contractShortcutType)}
-            onVoid={(confirmSignedVoid) => {
-              const contractId = booking.activeContract?.id;
-              if (contractId) contractActions.voidContract({ contractId, confirmSignedVoid });
-            }}
-            onDelete={() => {
-              const contractId = booking.activeContract?.id;
-              if (contractId) contractActions.deleteContract(contractId);
-            }}
-          />
-        )}
-
-        {/* Invoices */}
-        {booking.series ? (
-          <SeriesInvoiceCard
-            seriesId={booking.series.id}
-            seriesLabel={booking.series.label}
-            onEdit={openEditInvoice}
-            onSend={() => openCompose('series_invoice_cover')}
-            onMarkSent={(inv) => setSearchParams({ sheet: 'markSent', invoiceId: inv.id })}
-          />
-        ) : (
-          <InvoiceSection bookingId={bookingId} />
-        )}
-
-        {/* Documents */}
-        <DocumentsCard bookingId={bookingId} />
-
-      </div>{/* end right column */}
-
+      <DesktopBookingMainColumn data={data} actions={actions} />
+      <DesktopBookingSidebar data={data} actions={actions} />
     </div>
   );
 }
