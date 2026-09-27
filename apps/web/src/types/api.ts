@@ -819,13 +819,14 @@ export interface InvoiceDocument {
 // ─────────────────────────────────────────
 
 export type CommunicationStatus = 'PENDING' | 'SENT' | 'FAILED';
+export type CommunicationChannel = 'EMAIL' | 'MANUAL';
 
 export interface Communication {
   id: string;
   createdAt: string;
   updatedAt: string;
   direction: 'OUTBOUND';
-  channel: 'EMAIL';
+  channel: CommunicationChannel;
   status: CommunicationStatus;
   subject: string;
   body: string;
@@ -845,8 +846,49 @@ export interface CreateCommunicationInput {
   contactId: string;
   subject: string;
   body: string;
+  channel?: CommunicationChannel;
   templateId?: string;
   sentAt?: string;
+}
+
+/** Rendered draft returned by the per-member band invite compose endpoint. */
+export interface BandInviteRenderResult {
+  subject: string;
+  body: string;
+  missingVariables: string[];
+}
+
+/** Rendered plain-text invitation message for copying and pasting. */
+export interface BandInviteMessageRenderResult {
+  body: string;
+  missingVariables: string[];
+}
+
+/** Final client-edited content posted to the per-member band invite send endpoint. */
+export interface SendBandInviteInput {
+  templateId: string;
+  subject: string;
+  body: string;
+}
+
+/** Rendered email draft shared by member-scoped call-sheet and final-details compose endpoints. */
+export interface BandCommunicationRenderResult {
+  subject: string;
+  body: string;
+  missingVariables: string[];
+}
+
+/** Rendered plain-text message shared by the call-sheet and final-details copy endpoints. */
+export interface BandCommunicationMessageRenderResult {
+  body: string;
+  missingVariables: string[];
+}
+
+/** Final client-edited content posted to a member-scoped call-sheet or final-details send endpoint. */
+export interface SendBandCommunicationInput {
+  templateId: string;
+  subject: string;
+  body: string;
 }
 
 // ─────────────────────────────────────────
@@ -865,7 +907,13 @@ export type BuiltInTemplateType =
   | 'thank_you'
   | 'contract_received'
   | 'deposit_received'
-  | 'contract';
+  | 'contract'
+  | 'band_invite'
+  | 'band_invite_message'
+  | 'band_call_sheet'
+  | 'band_call_sheet_message'
+  | 'band_final_details'
+  | 'band_final_details_message';
 
 export interface Template {
   id: string;

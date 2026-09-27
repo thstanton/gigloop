@@ -25,6 +25,7 @@ import { toast } from '@/lib/hooks/use-toast';
 import { VariableNode } from '@/features/templates/VariableNode';
 import {
   TEMPLATE_DISPLAY,
+  TEMPLATE_FORMAT,
   TEMPLATE_VARIABLES,
   BUILT_IN_DOCUMENT_TYPES,
 } from '@/features/templates/templateMeta';
@@ -83,12 +84,15 @@ function EditorToolbar({
   editor,
   variables,
   isDocument = false,
+  format = 'rich',
 }: {
   editor: ReturnType<typeof useEditor>;
-  variables: { name: string; label: string }[];
+  variables: readonly { name: string; label: string }[];
   isDocument?: boolean;
+  format?: 'rich' | 'plain';
 }) {
   if (!editor) return null;
+  const showFormatting = format === 'rich';
 
   function insertLink() {
     const prev = editor.getAttributes('link').href as string | undefined;
@@ -106,18 +110,22 @@ function EditorToolbar({
   }
 
   return (
-    <div role="toolbar" aria-label="Text formatting" className="flex flex-wrap items-center gap-0.5 px-2 py-1.5 border-b border-border bg-surface rounded-t-md">
-      <ToolbarButton label="Bold" active={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()}>
-        <Bold size={14} aria-hidden="true" />
-      </ToolbarButton>
-      <ToolbarButton label="Italic" active={editor.isActive('italic')} onClick={() => editor.chain().focus().toggleItalic().run()}>
-        <Italic size={14} aria-hidden="true" />
-      </ToolbarButton>
-      <ToolbarButton label="Underline" active={editor.isActive('underline')} onClick={() => editor.chain().focus().toggleUnderline().run()}>
-        <UnderlineIcon size={14} aria-hidden="true" />
-      </ToolbarButton>
+    <div role="toolbar" aria-label={showFormatting ? 'Text formatting' : 'Template variables'} className="flex flex-wrap items-center gap-0.5 px-2 py-1.5 border-b border-border bg-surface rounded-t-md">
+      {showFormatting && (
+        <>
+          <ToolbarButton label="Bold" active={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()}>
+            <Bold size={14} aria-hidden="true" />
+          </ToolbarButton>
+          <ToolbarButton label="Italic" active={editor.isActive('italic')} onClick={() => editor.chain().focus().toggleItalic().run()}>
+            <Italic size={14} aria-hidden="true" />
+          </ToolbarButton>
+          <ToolbarButton label="Underline" active={editor.isActive('underline')} onClick={() => editor.chain().focus().toggleUnderline().run()}>
+            <UnderlineIcon size={14} aria-hidden="true" />
+          </ToolbarButton>
+        </>
+      )}
 
-      {isDocument && (
+      {showFormatting && isDocument && (
         <>
           <div aria-hidden="true" className="w-px h-4 bg-border mx-1" />
           <ToolbarButton label="Heading 2" active={editor.isActive('heading', { level: 2 })} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}>
@@ -129,25 +137,29 @@ function EditorToolbar({
         </>
       )}
 
-      <div aria-hidden="true" className="w-px h-4 bg-border mx-1" />
+      {showFormatting && <div aria-hidden="true" className="w-px h-4 bg-border mx-1" />}
 
-      {!isDocument && (
+      {showFormatting && !isDocument && (
         <ToolbarButton label="Link" active={editor.isActive('link')} onClick={insertLink}>
           <LinkIcon size={14} aria-hidden="true" />
         </ToolbarButton>
       )}
-      {!isDocument && <div aria-hidden="true" className="w-px h-4 bg-border mx-1" />}
+      {showFormatting && !isDocument && <div aria-hidden="true" className="w-px h-4 bg-border mx-1" />}
 
-      <ToolbarButton label="Bullet list" active={editor.isActive('bulletList')} onClick={() => editor.chain().focus().toggleBulletList().run()}>
-        <List size={14} aria-hidden="true" />
-      </ToolbarButton>
-      <ToolbarButton label="Numbered list" active={editor.isActive('orderedList')} onClick={() => editor.chain().focus().toggleOrderedList().run()}>
-        <ListOrdered size={14} aria-hidden="true" />
-      </ToolbarButton>
+      {showFormatting && (
+        <>
+          <ToolbarButton label="Bullet list" active={editor.isActive('bulletList')} onClick={() => editor.chain().focus().toggleBulletList().run()}>
+            <List size={14} aria-hidden="true" />
+          </ToolbarButton>
+          <ToolbarButton label="Numbered list" active={editor.isActive('orderedList')} onClick={() => editor.chain().focus().toggleOrderedList().run()}>
+            <ListOrdered size={14} aria-hidden="true" />
+          </ToolbarButton>
+        </>
+      )}
 
       {variables.length > 0 && (
         <>
-          <div className="w-px h-4 bg-border mx-1" />
+          {showFormatting && <div className="w-px h-4 bg-border mx-1" />}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
@@ -193,6 +205,7 @@ function TemplateEditor({ template }: { template: Template }) {
   const meta = builtInType ? TEMPLATE_DISPLAY[builtInType] : null;
   const variables = builtInType ? TEMPLATE_VARIABLES[builtInType] : [];
   const isDocument = builtInType ? BUILT_IN_DOCUMENT_TYPES.includes(builtInType) : false;
+  const format = builtInType ? TEMPLATE_FORMAT[builtInType] : 'rich';
   const saveLabel = saved ? 'Saved' : 'Save changes';
 
   const { data: publicProfile } = useQuery({
@@ -303,7 +316,7 @@ function TemplateEditor({ template }: { template: Template }) {
           />
         ) : (
           <>
-            <EditorToolbar editor={editor} variables={variables} isDocument={isDocument} />
+            <EditorToolbar editor={editor} variables={variables} isDocument={isDocument} format={format} />
             <EditorContent editor={editor} />
           </>
         )}

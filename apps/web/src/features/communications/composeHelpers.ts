@@ -146,17 +146,18 @@ export function formatMissingVariables(keys: string[]): string {
 }
 
 /**
- * #928: which sheet mode composes each built-in *email* type — the explicit decision #846 skipped
+ * #928: which surface owns each built-in *email* type — the explicit decision #846 skipped
  * when `series_invoice_cover` was added to `BUILT_IN_EMAIL_TYPES` without excluding it from the
  * booking picker. Deliberately partial and keyed only on ownership: whether a type is an email type
  * at all is already declared exactly once, in `BUILT_IN_EMAIL_TYPES`/`BUILT_IN_DOCUMENT_TYPES`
  * (templateMeta.ts) — restating that split here would be the second hand-written list CLAUDE.md's
- * "one declaration per vocabulary" rule forbids. `composeHelpers.spec.ts` asserts every entry in
+ * "one declaration per vocabulary" rule forbids. Band-owned emails use their own surface and are
+ * excluded from the client booking and series compose modes. `composeHelpers.spec.ts` asserts every entry in
  * `BUILT_IN_EMAIL_TYPES` has a row here (the completeness this Partial type can't get from the
  * compiler), and {@link isComposableEmailTemplate} reads this table directly, so a wrongly-declared
  * row changes real behaviour and gets caught by the series-mode / booking-mode tests.
  */
-export const EMAIL_TEMPLATE_OWNER: Partial<Record<BuiltInTemplateType, 'booking' | 'series'>> = {
+export const EMAIL_TEMPLATE_OWNER: Partial<Record<BuiltInTemplateType, 'booking' | 'series' | 'band'>> = {
   quote: 'booking',
   confirmation: 'booking',
   contract_cover: 'booking',
@@ -168,6 +169,9 @@ export const EMAIL_TEMPLATE_OWNER: Partial<Record<BuiltInTemplateType, 'booking'
   thank_you: 'booking',
   contract_received: 'booking',
   deposit_received: 'booking',
+  band_invite: 'band',
+  band_call_sheet: 'band',
+  band_final_details: 'band',
 };
 
 /**

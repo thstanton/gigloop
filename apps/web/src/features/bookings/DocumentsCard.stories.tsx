@@ -61,6 +61,17 @@ const uploadDoc = {
   portalVisibility: { visible: false, reason: 'not_shared' },
 };
 
+const callSheetDoc = {
+  id: 'd6',
+  createdAt: '2030-04-07T10:00:00Z',
+  type: 'CALL_SHEET',
+  url: 'https://example.com/call-sheet.pdf',
+  invoiceId: null,
+  contractStatus: null,
+  name: null,
+  portalVisibility: { visible: true },
+};
+
 // The one Document with no owning booking (#848) — a BookingSeries invoice's PDF, discoverable on
 // every member booking's card but never portal-visible through one (ADR-0054 amendment).
 const seriesInvoiceDoc = {
@@ -146,6 +157,22 @@ export const WithUploadDocument: Story = {
     await expect(canvas.findByText('O2 Academy Contract')).resolves.toBeVisible();
     // The UPLOAD row reads the private-paperwork hint, never a visible badge.
     await expect(canvas.findByText('Not visible to client')).resolves.toBeVisible();
+  },
+};
+
+export const SentCallSheetIsDatedAndDownloadable: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.get('/api/bookings/bd1/documents', () => HttpResponse.json([callSheetDoc])),
+        http.get('/api/bookings/bd1/invoices', () => HttpResponse.json([])),
+      ],
+    },
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.findByText('Call sheet — sent 7 Apr')).resolves.toBeVisible();
+    await expect(canvas.findByRole('button', { name: 'Download' })).resolves.toBeVisible();
+    await expect(canvas.findByText('Visible on Band Portal')).resolves.toBeVisible();
   },
 };
 

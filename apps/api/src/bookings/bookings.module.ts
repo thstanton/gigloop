@@ -9,11 +9,23 @@ import { ChecklistModule } from '../checklist/checklist.module';
 import { SeriesModule } from '../series/series.module';
 import { ContactsModule } from '../contacts/contacts.module';
 import { LineupsModule } from '../lineups/lineups.module';
+import { CommunicationsModule } from '../communications/communications.module';
+import { DocumentsModule } from '../documents/documents.module';
+import { BandCommunicationsController } from './band-communications.controller';
+import { BandCommunicationsService } from './band-communications.service';
+import { BandCommunicationContentService } from './band-communication-content.service';
 
 @Module({
-  imports: [MailModule, ChecklistModule, SeriesModule, ContactsModule, LineupsModule],
-  controllers: [BookingsController],
-  providers: [BookingsService, BookingsRepository, ContractRepository, MusicFormConfigRepository],
+  imports: [MailModule, ChecklistModule, SeriesModule, ContactsModule, LineupsModule, CommunicationsModule, DocumentsModule],
+  controllers: [BookingsController, BandCommunicationsController],
+  providers: [
+    BookingsService,
+    BookingsRepository,
+    ContractRepository,
+    MusicFormConfigRepository,
+    BandCommunicationContentService,
+    BandCommunicationsService,
+  ],
   exports: [BookingsRepository, ContractRepository, MusicFormConfigRepository],
 })
 export class BookingsModule {}

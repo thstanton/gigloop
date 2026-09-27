@@ -89,6 +89,40 @@ describe('CommunicationsRepository', () => {
     });
   });
 
+  describe('create', () => {
+    it('persists a manual communication channel and the supplied plain-text body', async () => {
+      prisma.communication.create.mockResolvedValue({ id: 'c1' });
+
+      await repo.create('u1', 'b1', {
+        contactId: 'ct1',
+        subject: 'Band invitation message',
+        body: 'Invitation: https://app.gigloop.com/band/token',
+        channel: 'MANUAL',
+      });
+
+      expect(prisma.communication.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          userId: 'u1',
+          bookingId: 'b1',
+          contactId: 'ct1',
+          subject: 'Band invitation message',
+          body: 'Invitation: https://app.gigloop.com/band/token',
+          channel: 'MANUAL',
+          status: 'SENT',
+        }),
+        include: expect.any(Object),
+      });
+    });
+
+    it('defaults existing communication callers to EMAIL', async () => {
+      prisma.communication.create.mockResolvedValue({ id: 'c1' });
+
+      await repo.create('u1', 'b1', { contactId: 'ct1', subject: 'Subject', body: '<p>Body</p>' });
+
+      expect(prisma.communication.create.mock.calls[0][0].data.channel).toBe('EMAIL');
+    });
+  });
+
   describe('createPendingForSeries', () => {
     it('creates a PENDING communication scoped by seriesId, with no bookingId', async () => {
       prisma.communication.create.mockResolvedValue({ id: 'c1' });

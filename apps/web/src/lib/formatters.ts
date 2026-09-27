@@ -3,6 +3,13 @@ const _date = new Intl.DateTimeFormat('en-GB', {
   month: 'short',
   year: 'numeric',
 });
+const _dateTime = new Intl.DateTimeFormat('en-GB', {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+});
 
 const _day = new Intl.DateTimeFormat('en-GB', { weekday: 'long' });
 
@@ -30,6 +37,10 @@ const _currencyWhole = new Intl.NumberFormat('en-GB', {
 
 export function formatDate(iso: string): string {
   return _date.format(new Date(iso));
+}
+
+export function formatDateTime(iso: string): string {
+  return _dateTime.format(new Date(iso));
 }
 
 export function formatDateAndDay(iso: string): { date: string; day: string } {
@@ -67,4 +78,3 @@ export function formatFeeWhole(fee: string | null): string | null {
   const n = parseFloat(fee);
   return isNaN(n) ? null : _currencyWhole.format(n);
 }
-

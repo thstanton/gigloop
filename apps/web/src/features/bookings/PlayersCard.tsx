@@ -1,6 +1,7 @@
-import { Eye, X } from 'lucide-react';
+import { Eye, Mail, X } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { IconButton } from '@/components/common/IconButton';
+import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { BandMemberStatusDropdown } from './BandMemberStatusDropdown';
 import InlineFeeAdd from './InlineFeeAdd';
@@ -12,6 +13,7 @@ import type {
   BookingBandMemberStatus,
   BookingLineup,
 } from '@/types/api';
+import type { BandCommunicationKind } from './bandCommunicationMeta';
 
 // #983's resolution, card 2 of 3. The **player** shape — a full-width heading, used for a person
 // and nowhere else: name, then ONE status and ONE fee on a facts line, then the parts they play.
@@ -36,8 +38,23 @@ interface PlayersCardProps {
   onUnassignChair: (chairId: string) => void;
   onChangeStatus: (memberId: string, status: BookingBandMemberStatus) => void;
   changingStatusMemberId: string | null;
+  onInviteMember: (memberId: string) => void;
+  onComposeCommunication: (memberId: string, kind: BandCommunicationKind) => void;
   onSaveFee: (memberId: string, sessionFee: number | null) => void;
   savingFeeMemberId: string | null;
+}
+
+function invitationActionFor(member: BookingBandMember): { label: string; ariaLabel: string } {
+  switch (member.status) {
+    case 'ADDED':
+      return { label: 'Invite', ariaLabel: `Send invitation to ${member.contact.name}` };
+    case 'INVITED':
+      return { label: 'Resend invite', ariaLabel: `Resend invitation to ${member.contact.name}` };
+    case 'CONFIRMED':
+    case 'DECLINED':
+      return { label: 'Invitation', ariaLabel: `Invitation options for ${member.contact.name}` };
+  }
+  return { label: 'Invitation', ariaLabel: `Invitation options for ${member.contact.name}` };
 }
 
 export function PlayersCard({
@@ -49,6 +66,8 @@ export function PlayersCard({
   onUnassignChair,
   onChangeStatus,
   changingStatusMemberId,
+  onInviteMember,
+  onComposeCommunication,
   onSaveFee,
   savingFeeMemberId,
 }: PlayersCardProps) {
@@ -70,6 +89,7 @@ export function PlayersCard({
     .map((member) => ({
       member,
       theirParts: chairs.filter((c) => c.memberId === member.id).sort((a, b) => a.order - b.order),
+      invitationAction: invitationActionFor(member),
     }));
 
   if (playing.length === 0) return null;
@@ -77,7 +97,7 @@ export function PlayersCard({
   return (
     <Card title="Players">
       <div>
-        {playing.map(({ member, theirParts }) => (
+        {playing.map(({ member, theirParts, invitationAction }) => (
           <div key={member.id} className="py-3 border-b border-border last:border-b-0">
             <div className="flex items-center gap-2 min-w-0">
                 <span className="text-base font-semibold text-foreground truncate">{member.contact.name}</span>
@@ -97,6 +117,36 @@ export function PlayersCard({
                   onSave={(sessionFee) => onSaveFee(member.id, sessionFee)}
                   isSaving={savingFeeMemberId === member.id}
                 />
+                {!member.isSelf && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="min-h-10"
+                    onClick={() => onInviteMember(member.id)}
+                    aria-label={invitationAction.ariaLabel}
+                  >
+                    <Mail size={14} />
+                    {invitationAction.label}
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="min-h-10"
+                  onClick={() => onComposeCommunication(member.id, 'call-sheet')}
+                  aria-label={`Send call sheet to ${member.contact.name}`}
+                >
+                  Call sheet
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="min-h-10"
+                  onClick={() => onComposeCommunication(member.id, 'final-details')}
+                  aria-label={`Send final details to ${member.contact.name}`}
+                >
+                  Final details
+                </Button>
                 {/* #980 — preview what this dep sees at their own /band/:token, before they're
                     invited. A plain link (not IconButton), matching the "Client portal" preview
                     link's shape (BookingHeader.tsx) rather than a mutation-triggering action. */}

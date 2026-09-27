@@ -9,7 +9,10 @@ import type { Document, Invoice } from '@/types/api';
 
 function getDocumentLabel(doc: Document, invoice: Invoice | undefined): string {
   if (doc.type === 'UPLOAD') return doc.name ?? 'Uploaded document';
-  if (doc.type === 'CALL_SHEET') return 'Call sheet';
+  if (doc.type === 'CALL_SHEET') {
+    const sentDate = new Date(doc.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+    return `Call sheet — sent ${sentDate}`;
+  }
   // The series invoice is discoverable here but not owned by this booking (#848) — it never
   // appears in this booking's own `invoices` list, so it carries no VOID suffix: only the active
   // (non-VOID) series invoice document is ever unioned in.
@@ -93,9 +96,11 @@ export function DocumentList({ bookingId, documents, invoices }: Props) {
                 />
               </span>
             </div>
-            <span className="text-muted ml-auto text-xs shrink-0">
-              {new Date(doc.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-            </span>
+            {doc.type !== 'CALL_SHEET' && (
+              <span className="text-muted ml-auto text-xs shrink-0">
+                {new Date(doc.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+              </span>
+            )}
             <div className="flex items-center gap-2 flex-shrink-0">
               <RowActions
                 actions={actions}

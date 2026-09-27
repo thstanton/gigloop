@@ -1,5 +1,9 @@
+import { useState } from 'react';
 import { BuilderSection } from '@/features/bookings/BuilderSection';
 import { BandAtom } from '@/features/bookings/BandAtom';
+import { BandInviteComposeSheet } from './BandInviteComposeSheet';
+import { BandCommsComposeSheet } from './BandCommsComposeSheet';
+import type { BandCommunicationKind } from './bandCommunicationMeta';
 import { useBandMutations } from '@/features/bookings/useBandMutations';
 import { useLineupTemplates } from '@/lib/hooks/useLineupTemplates';
 import { useRoleVocabulary } from '@/lib/hooks/useRoleVocabulary';
@@ -18,6 +22,8 @@ export function BandSection({
   bookingId: string;
   refCallback?: React.RefCallback<HTMLElement>;
 }) {
+  const [invitingMemberId, setInvitingMemberId] = useState<string | null>(null);
+  const [composingCommunication, setComposingCommunication] = useState<{ memberId: string; kind: BandCommunicationKind } | null>(null);
   const { data: lineupTemplates = [], isLoading: lineupTemplatesLoading } = useLineupTemplates();
   const instrumentVocabulary = useRoleVocabulary();
 
@@ -31,36 +37,59 @@ export function BandSection({
     updateMemberStatus,
     saveMemberFee,
   } = useBandMutations(bookingId);
+  const inviteMember = booking.band.members.find((member) => member.id === invitingMemberId) ?? null;
+  const communicationMember = booking.band.members.find((member) => member.id === composingCommunication?.memberId) ?? null;
 
   return (
-    <BuilderSection id="band" title="Band" refCallback={refCallback}>
-      <BandAtom
-        bookingId={bookingId}
-        lineups={booking.band.lineups}
-        chairs={booking.band.chairs}
-        members={booking.band.members}
-        packages={booking.packages}
-        venue={booking.venue}
-        instrumentVocabulary={instrumentVocabulary}
-        lineupTemplates={lineupTemplates}
-        lineupTemplatesLoading={lineupTemplatesLoading}
-        onApplyLineup={(lineupTemplateId, packageIds) => applyLineup.mutate({ lineupTemplateId, packageIds })}
-        isApplyingLineup={applyLineup.isPending}
-        onSetLineupSegments={(lineupId, packageIds) => setLineupSegments.mutate({ lineupId, packageIds })}
-        isSettingLineupSegments={setLineupSegments.isPending}
-        onRemoveLineup={(lineupId) => removeLineup.mutate(lineupId)}
-        removingLineupId={removeLineup.isPending ? (removeLineup.variables ?? null) : null}
-        onAddChair={(role, lineupId) => addChair.mutate({ role, lineupId })}
-        isAddingChair={addChair.isPending}
-        onRemoveChair={(chairId) => removeChair.mutate(chairId)}
-        removingChairId={removeChair.isPending ? (removeChair.variables ?? null) : null}
-        onAssignChair={(chairId, contactId) => assignChair.mutate({ chairId, contactId })}
-        assigningChairId={assignChair.isPending ? (assignChair.variables?.chairId ?? null) : null}
-        onChangeMemberStatus={(memberId, status) => updateMemberStatus.mutate({ memberId, status })}
-        changingStatusMemberId={updateMemberStatus.isPending ? (updateMemberStatus.variables?.memberId ?? null) : null}
-        onSaveMemberFee={(memberId, sessionFee) => saveMemberFee.mutate({ memberId, sessionFee })}
-        savingFeeMemberId={saveMemberFee.isPending ? (saveMemberFee.variables?.memberId ?? null) : null}
-      />
-    </BuilderSection>
+    <>
+      <BuilderSection id="band" title="Band" refCallback={refCallback}>
+        <BandAtom
+          bookingId={bookingId}
+          lineups={booking.band.lineups}
+          chairs={booking.band.chairs}
+          members={booking.band.members}
+          packages={booking.packages}
+          venue={booking.venue}
+          instrumentVocabulary={instrumentVocabulary}
+          lineupTemplates={lineupTemplates}
+          lineupTemplatesLoading={lineupTemplatesLoading}
+          onApplyLineup={(lineupTemplateId, packageIds) => applyLineup.mutate({ lineupTemplateId, packageIds })}
+          isApplyingLineup={applyLineup.isPending}
+          onSetLineupSegments={(lineupId, packageIds) => setLineupSegments.mutate({ lineupId, packageIds })}
+          isSettingLineupSegments={setLineupSegments.isPending}
+          onRemoveLineup={(lineupId) => removeLineup.mutate(lineupId)}
+          removingLineupId={removeLineup.isPending ? (removeLineup.variables ?? null) : null}
+          onAddChair={(role, lineupId) => addChair.mutate({ role, lineupId })}
+          isAddingChair={addChair.isPending}
+          onRemoveChair={(chairId) => removeChair.mutate(chairId)}
+          removingChairId={removeChair.isPending ? (removeChair.variables ?? null) : null}
+          onAssignChair={(chairId, contactId) => assignChair.mutate({ chairId, contactId })}
+          assigningChairId={assignChair.isPending ? (assignChair.variables?.chairId ?? null) : null}
+          onChangeMemberStatus={(memberId, status) => updateMemberStatus.mutate({ memberId, status })}
+          changingStatusMemberId={updateMemberStatus.isPending ? (updateMemberStatus.variables?.memberId ?? null) : null}
+          onInviteMember={setInvitingMemberId}
+          onComposeCommunication={(memberId, kind) => setComposingCommunication({ memberId, kind })}
+          onSaveMemberFee={(memberId, sessionFee) => saveMemberFee.mutate({ memberId, sessionFee })}
+          savingFeeMemberId={saveMemberFee.isPending ? (saveMemberFee.variables?.memberId ?? null) : null}
+        />
+      </BuilderSection>
+      {inviteMember && (
+        <BandInviteComposeSheet
+          bookingId={bookingId}
+          member={inviteMember}
+          open
+          onOpenChange={(nextOpen) => { if (!nextOpen) setInvitingMemberId(null); }}
+        />
+      )}
+      {communicationMember && composingCommunication && (
+        <BandCommsComposeSheet
+          bookingId={bookingId}
+          member={communicationMember}
+          kind={composingCommunication.kind}
+          open
+          onOpenChange={(nextOpen) => { if (!nextOpen) setComposingCommunication(null); }}
+        />
+      )}
+    </>
   );
 }

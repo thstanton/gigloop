@@ -785,6 +785,52 @@ export class BookingsRepository {
     });
   }
 
+  findBandInviteData(userId: string, bookingId: string, memberId: string) {
+    return this.prisma.bookingBandMember.findFirst({
+      where: { id: memberId, bookingId, userId, removedAt: null, booking: { is: { userId } } },
+      select: {
+        id: true,
+        contactId: true,
+        bandPortalToken: true,
+        contact: { select: { name: true, email: true } },
+        chairs: {
+          select: {
+            lineup: { select: { packages: { select: { packageId: true } } } },
+          },
+        },
+        booking: {
+          select: {
+            id: true,
+            date: true,
+            title: true,
+            venue: {
+              select: {
+                name: true,
+                addressLine1: true,
+                addressLine2: true,
+                city: true,
+                county: true,
+                postcode: true,
+              },
+            },
+            packages: { select: { id: true, order: true }, orderBy: { order: 'asc' } },
+            sets: {
+              select: { packageId: true, startTime: true, duration: true, order: true },
+              orderBy: { order: 'asc' },
+            },
+          },
+        },
+      },
+    });
+  }
+
+  markMemberInvited(userId: string, bookingId: string, memberId: string, invitedAt: Date) {
+    return this.prisma.bookingBandMember.updateMany({
+      where: { id: memberId, bookingId, userId, removedAt: null },
+      data: { status: 'INVITED', invitedAt },
+    });
+  }
+
   updateMember(memberId: string, data: Prisma.BookingBandMemberUpdateInput) {
     return this.prisma.bookingBandMember.update({
       where: { id: memberId }, // scoped-upstream: service.updateBandMember calls findMember(userId, bookingId, memberId) first, and service.assignChair's member is one it just found via findActiveMemberByContact(userId, ...) or created via createMember(userId, ...) — both already prove ownership (ADR-0061)

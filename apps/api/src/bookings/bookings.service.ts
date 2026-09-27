@@ -740,7 +740,12 @@ export class BookingsService {
     if (dto.status === 'INVITED') data.invitedAt = new Date();
     if (dto.status === 'CONFIRMED' || dto.status === 'DECLINED') data.respondedAt = new Date();
 
-    return this.repo.updateMember(memberId, data);
+    const updated = await this.repo.updateMember(memberId, data);
+    // Manual invite delivery first records the Communication, then sets INVITED through this
+    // organiser status path. Re-evaluate after the status write so checklist predicates can observe
+    // the newly invited member (the email send path performs the same post-status re-evaluation).
+    if (dto.status === 'INVITED') await this.reeval.onBookingChanged(bookingId);
+    return updated;
   }
 
   // Soft removal (ADR-0072 §5): the person's answer and what the organiser did to the roster are

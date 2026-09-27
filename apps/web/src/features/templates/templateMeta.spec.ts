@@ -2,7 +2,10 @@ import { describe, it, expect } from 'vitest';
 import {
   BUILT_IN_EMAIL_TYPES,
   BUILT_IN_DOCUMENT_TYPES,
+  BUILT_IN_MESSAGE_TYPES,
   ALL_BUILT_IN_TEMPLATE_TYPES,
+  BUILT_IN_TEMPLATE_META,
+  TEMPLATE_FORMAT,
   TEMPLATE_DISPLAY,
   TEMPLATE_VARIABLES,
   ALL_VARIABLES,
@@ -10,6 +13,27 @@ import {
 } from './templateMeta';
 
 describe('templateMeta completeness', () => {
+  it('declares the built-in catalog shape and derives its three groups in table order', () => {
+    expect(BUILT_IN_TEMPLATE_META).toHaveLength(18);
+    expect(BUILT_IN_EMAIL_TYPES).toHaveLength(14);
+    expect(BUILT_IN_DOCUMENT_TYPES).toHaveLength(1);
+    expect(BUILT_IN_MESSAGE_TYPES).toHaveLength(3);
+    expect(ALL_BUILT_IN_TEMPLATE_TYPES).toHaveLength(18);
+    expect(BUILT_IN_TEMPLATE_META.filter((row) => 'featureFlag' in row)).toHaveLength(6);
+
+    for (const row of BUILT_IN_TEMPLATE_META) {
+      expect(row.value).toBeTruthy();
+      expect(row.name.length).toBeGreaterThan(0);
+      expect(row.description.length).toBeGreaterThan(0);
+      expect(['email', 'document', 'message']).toContain(row.group);
+      expect(['rich', 'plain']).toContain(row.format);
+      expect(Array.isArray(row.variables)).toBe(true);
+      expect((row.group === 'message') === (row.format === 'plain')).toBe(true);
+    }
+    expect(ALL_BUILT_IN_TEMPLATE_TYPES).toEqual(BUILT_IN_TEMPLATE_META.map(({ value }) => value));
+    expect(BUILT_IN_TEMPLATE_META.every(({ value }) => TEMPLATE_FORMAT[value])).toBe(true);
+  });
+
   it('every built-in email type has an entry in TEMPLATE_DISPLAY', () => {
     for (const type of BUILT_IN_EMAIL_TYPES) {
       expect(TEMPLATE_DISPLAY[type]).toBeDefined();
@@ -89,21 +113,24 @@ describe('templateMeta completeness', () => {
   // (templateMeta.ts) keyed by BuiltInTemplateType, so a type appearing twice or in both lists is
   // no longer reachable — these assert the derivation's shape against the canonical
   // ALL_BUILT_IN_TEMPLATE_TYPES list, not against the two lists' own concatenation.
-  it('every declared built-in type belongs to exactly one of the email/document lists', () => {
+  it('every declared built-in type belongs to exactly one of the email/document/message lists', () => {
     const emailSet = new Set(BUILT_IN_EMAIL_TYPES);
     const documentSet = new Set(BUILT_IN_DOCUMENT_TYPES);
+    const messageSet = new Set(BUILT_IN_MESSAGE_TYPES);
     for (const type of ALL_BUILT_IN_TEMPLATE_TYPES) {
-      expect(emailSet.has(type) !== documentSet.has(type)).toBe(true);
+      expect([emailSet, documentSet, messageSet].filter((set) => set.has(type))).toHaveLength(1);
     }
-    expect(BUILT_IN_EMAIL_TYPES.length + BUILT_IN_DOCUMENT_TYPES.length).toBe(ALL_BUILT_IN_TEMPLATE_TYPES.length);
+    expect(BUILT_IN_EMAIL_TYPES.length + BUILT_IN_DOCUMENT_TYPES.length + BUILT_IN_MESSAGE_TYPES.length)
+      .toBe(ALL_BUILT_IN_TEMPLATE_TYPES.length);
   });
 
-  // TemplatesListPage.tsx renders BUILT_IN_EMAIL_TYPES in list order — pin that the filter can't
-  // silently reorder it (e.g. a future Set round-trip or .sort()).
-  it("BUILT_IN_EMAIL_TYPES preserves the table's declaration order", () => {
-    const indices = BUILT_IN_EMAIL_TYPES.map((type) => ALL_BUILT_IN_TEMPLATE_TYPES.indexOf(type));
-    for (let i = 1; i < indices.length; i++) {
-      expect(indices[i]).toBeGreaterThan(indices[i - 1]);
+  // Each page section is rendered in declaration order; pin every derived group against the table.
+  it('preserves declaration order in each built-in template group', () => {
+    for (const groupTypes of [BUILT_IN_EMAIL_TYPES, BUILT_IN_DOCUMENT_TYPES, BUILT_IN_MESSAGE_TYPES]) {
+      const indices = groupTypes.map((type) => ALL_BUILT_IN_TEMPLATE_TYPES.indexOf(type));
+      for (let i = 1; i < indices.length; i++) {
+        expect(indices[i]).toBeGreaterThan(indices[i - 1]);
+      }
     }
   });
 

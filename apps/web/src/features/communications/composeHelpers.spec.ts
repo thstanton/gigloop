@@ -380,9 +380,9 @@ describe('isComposableEmailTemplate', () => {
 // own spec never pinned anything the picker actually ran (#928).
 
 describe('EMAIL_TEMPLATE_OWNER', () => {
-  it('every built-in email type has a booking or series owner declared', () => {
+  it('every built-in email type has its booking, series, or band owner declared', () => {
     for (const type of BUILT_IN_EMAIL_TYPES) {
-      expect(['booking', 'series']).toContain(EMAIL_TEMPLATE_OWNER[type]);
+      expect(['booking', 'series', 'band']).toContain(EMAIL_TEMPLATE_OWNER[type]);
     }
   });
 
@@ -407,6 +407,14 @@ describe('EMAIL_TEMPLATE_OWNER', () => {
     for (const type of BUILT_IN_EMAIL_TYPES) {
       const t = makeTemplate({ builtInType: type });
       expect(isComposableEmailTemplate(t, true, seriesTarget)).toBe(EMAIL_TEMPLATE_OWNER[type] === 'series');
+    }
+  });
+
+  it('keeps band emails out of the client booking and series compose sheets', () => {
+    for (const type of BUILT_IN_EMAIL_TYPES.filter((value) => EMAIL_TEMPLATE_OWNER[value] === 'band')) {
+      const template = makeTemplate({ builtInType: type });
+      expect(isComposableEmailTemplate(template, true)).toBe(false);
+      expect(isComposableEmailTemplate(template, true, seriesTarget)).toBe(false);
     }
   });
 });

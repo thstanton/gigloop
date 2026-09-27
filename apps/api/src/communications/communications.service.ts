@@ -20,7 +20,7 @@ export interface SendEmailOptions {
   subject: string;
   body: string;
   templateId?: string;
-  attachments?: Array<{ filename: string; content: Buffer }>;
+  attachments?: Array<{ filename: string; content: Buffer; contentType?: string }>;
   /** ID of the Document attached to this email (set when sending an invoice PDF). */
   documentId?: string;
 }

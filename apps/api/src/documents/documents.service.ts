@@ -563,4 +563,18 @@ export class DocumentsService {
     const doc = await this.repo.create(userId, bookingId, 'CALL_SHEET', key);
     return { buffer, documentId: doc.id };
   }
+
+  /** Remove the artifact for an email attempt that failed before delivery. */
+  async discardUnsentCallSheet(userId: string, bookingId: string, documentId: string): Promise<void> {
+    const doc = await this.repo.findById(documentId, userId);
+    if (!doc) throw new NotFoundException('Call sheet document not found');
+    this.assertCallSheetBelongsToBooking(doc, bookingId);
+    await this.storage.deleteDocument(doc.storageKey);
+    await this.repo.delete(doc.id);
+  }
+
+  private assertCallSheetBelongsToBooking(doc: Document, bookingId: string): void {
+    if (doc.bookingId !== bookingId) throw new NotFoundException('Call sheet document not found');
+    if (doc.type !== 'CALL_SHEET') throw new NotFoundException('Call sheet document not found');
+  }
 }

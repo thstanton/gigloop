@@ -97,6 +97,8 @@ const meta = {
     assigningChairId: null,
     onChangeMemberStatus: fn(),
     changingStatusMemberId: null,
+    onInviteMember: fn(),
+    onComposeCommunication: fn(),
     onSaveMemberFee: fn(),
     savingFeeMemberId: null,
   },
@@ -139,6 +141,36 @@ export const OneLineupManySegments: Story = {
     for (const role of fourPieceRoles) {
       await expect(canvas.getAllByText(role)).toHaveLength(1);
     }
+  },
+};
+
+export const ExistingMemberCanResendInvitation: Story = {
+  name: 'Player row offers a per-person resend action',
+  args: {
+    lineups: [{ id: 'lu-invite', label: 'My four-piece', packageIds: [] }],
+    chairs: fourPieceChairs('lu-invite', ['m-ana', null, null, null], [WHOLE_GIG_CALL]),
+    members: [ana],
+    onInviteMember: fn(),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: 'Resend invitation to Ana Reis' }));
+    await expect(args.onInviteMember).toHaveBeenCalledWith('m-ana');
+  },
+};
+
+export const ConfirmedMemberCanOpenInvitationOptions: Story = {
+  name: 'Confirmed players can still open the invitation message to copy it',
+  args: {
+    lineups: [{ id: 'lu-confirmed', label: 'My four-piece', packageIds: [] }],
+    chairs: fourPieceChairs('lu-confirmed', ['m-sam', null, null, null], [WHOLE_GIG_CALL]),
+    members: [sam],
+    onInviteMember: fn(),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: 'Invitation options for Sam Okonkwo' }));
+    await expect(args.onInviteMember).toHaveBeenCalledWith('m-sam');
   },
 };
 
@@ -404,5 +436,21 @@ export const MemberWithNoPartsIsNotAPlayer: Story = {
     const canvas = within(canvasElement);
     await expect(canvas.getByText('Sam Okonkwo')).toBeVisible();
     await expect(canvas.queryByText('Ana Reis')).not.toBeInTheDocument();
+  },
+};
+
+export const CommunicationActionsArePerMember: Story = {
+  name: 'Call sheet and final details actions target one player at a time',
+  args: {
+    lineups: [{ id: 'lu-1', label: 'My four-piece', packageIds: [DRINKS] }],
+    chairs: fourPieceChairs('lu-1', ['m-sam', null, null, null], [DRINKS_CALL]),
+    members: [sam],
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: 'Send call sheet to Sam Okonkwo' }));
+    await userEvent.click(canvas.getByRole('button', { name: 'Send final details to Sam Okonkwo' }));
+    await expect(args.onComposeCommunication).toHaveBeenNthCalledWith(1, 'm-sam', 'call-sheet');
+    await expect(args.onComposeCommunication).toHaveBeenNthCalledWith(2, 'm-sam', 'final-details');
   },
 };
