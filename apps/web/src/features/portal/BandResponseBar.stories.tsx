@@ -56,3 +56,19 @@ export const Declined: Story = {
     await expect(canvas.queryByRole('button', { name: 'Confirm' })).not.toBeInTheDocument();
   },
 };
+
+// #980 — admin preview mode: the bar renders exactly as a dep would see it, but both actions are
+// inert (clicking must not call the mutation handlers).
+export const Preview: Story = {
+  args: { isPreview: true },
+  play: async ({ canvas, args }) => {
+    await expect(canvas.getByText('Are you in for this gig?')).toBeVisible();
+    const confirm = canvas.getByRole('button', { name: 'Confirm' });
+    const decline = canvas.getByRole('button', { name: 'Decline' });
+    await expect(confirm).toBeDisabled();
+    await expect(decline).toBeDisabled();
+    await expect(canvas.getByText('Preview only — response disabled')).toBeVisible();
+    await expect(args.onConfirm).not.toHaveBeenCalled();
+    await expect(args.onDecline).not.toHaveBeenCalled();
+  },
+};

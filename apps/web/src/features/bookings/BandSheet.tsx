@@ -44,6 +44,7 @@ export function BandSheet({ bookingId, lineups, chairs, members, packages, venue
 
         <div className="mt-4">
           <BandAtom
+            bookingId={bookingId}
             lineups={lineups}
             chairs={chairs}
             members={members}

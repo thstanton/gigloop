@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn } from 'storybook/test';
+import { MemoryRouter } from 'react-router-dom';
 import { BandGigSheet } from './BandGigSheet';
 import type { BandPortalData } from '@/types/api';
 
@@ -75,6 +76,9 @@ const meta = {
   title: 'Portal/BandGigSheet',
   component: BandGigSheet,
   tags: ['ai-generated'],
+  // Only the Preview story's PreviewBanner needs a Router (its "Back to booking" `Link`), but the
+  // wrapper is harmless for the rest, so it sits on the shared meta rather than one story.
+  decorators: [(Story) => <MemoryRouter><Story /></MemoryRouter>],
   args: {
     data: ACTIVE_DATA,
     token: 'story-token',
@@ -133,5 +137,24 @@ export const Cancelled: Story = {
     await expect(canvas.getByText('This gig has been cancelled.')).toBeVisible();
     expect(canvas.queryByText('Band')).not.toBeInTheDocument();
     expect(canvas.queryByText('Are you in for this gig?')).not.toBeInTheDocument();
+  },
+};
+
+// #980 — the organiser's admin preview of a dep's own unanswered view: the banner names the dep
+// (read off their own highlighted chair, not a prop), and the response bar is visible but inert.
+export const Preview: Story = {
+  args: {
+    data: { ...ACTIVE_DATA, self: { ...ACTIVE_DATA.self, status: 'INVITED' } },
+    isPreview: true,
+    previewFrom: '/admin/bookings/booking-1',
+  },
+  play: async ({ canvas }) => {
+    await expect(
+      canvas.getByText((_, element) => element?.textContent === 'Preview — this is what Dave Player sees'),
+    ).toBeVisible();
+    await expect(canvas.getAllByText('Dave Player').length).toBeGreaterThan(0);
+    await expect(canvas.getByText('Preview only — response disabled')).toBeVisible();
+    await expect(canvas.getByRole('button', { name: 'Confirm' })).toBeDisabled();
+    await expect(canvas.getByRole('button', { name: 'Decline' })).toBeDisabled();
   },
 };

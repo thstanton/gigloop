@@ -1,4 +1,4 @@
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { FileText } from 'lucide-react';
 import { ApiError, getBandPortalData, respondToBandInvite } from '../../lib/portalApi';
@@ -20,6 +20,9 @@ import type { BandResponseValue } from '../../features/portal/BandResponseBar';
 export default function BandPortalPage() {
   const { token } = useParams<{ token: string }>();
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
+  const isPreview = searchParams.get('preview') === 'admin';
+  const previewFrom = searchParams.get('from') ?? '/admin/bookings';
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['band-portal', token],
@@ -75,6 +78,8 @@ export default function BandPortalPage() {
       onConfirm={() => respondMutation.mutate('CONFIRMED')}
       onDecline={() => respondMutation.mutate('DECLINED')}
       pendingResponse={respondMutation.isPending ? (respondMutation.variables ?? null) : null}
+      isPreview={isPreview}
+      previewFrom={previewFrom}
     />
   );
 }

@@ -74,6 +74,7 @@ const meta = {
   component: BandAtom,
   tags: ['ai-generated'],
   args: {
+    bookingId: 'booking-1',
     lineups: [],
     chairs: [],
     members: [],
@@ -257,6 +258,15 @@ export const ChangeStatus: Story = {
     // The pill is the trigger: the status word appears once, in the thing you press.
     const trigger = canvas.getByRole('button', { name: 'Status for Sam Okonkwo' });
     await expect(trigger).toHaveTextContent('Confirmed');
+
+    // #980 — the per-player preview link opens their real portal token, in preview mode, with a
+    // back-link to this booking.
+    const preview = canvas.getByRole('link', { name: "Preview Sam Okonkwo's portal" });
+    await expect(preview).toHaveAttribute(
+      'href',
+      '/band/m-sam-token?preview=admin&from=%2Fadmin%2Fbookings%2Fbooking-1',
+    );
+
     await userEvent.click(trigger);
 
     const menu = within(await screen.findByRole('menu'));

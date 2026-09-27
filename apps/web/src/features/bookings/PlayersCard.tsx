@@ -1,4 +1,4 @@
-import { X } from 'lucide-react';
+import { Eye, X } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { IconButton } from '@/components/common/IconButton';
 import { Badge } from '@/components/ui/badge';
@@ -26,6 +26,7 @@ import type {
 // different meanings on one person, which is most of what read as blurry.
 
 interface PlayersCardProps {
+  bookingId: string;
   members: BookingBandMember[];
   chairs: BookingBandChair[];
   lineups: BookingLineup[];
@@ -40,6 +41,7 @@ interface PlayersCardProps {
 }
 
 export function PlayersCard({
+  bookingId,
   members,
   chairs,
   lineups,
@@ -55,6 +57,7 @@ export function PlayersCard({
     const lineup = lineups.find((l) => l.id === lineupId);
     return lineup ? lineupName(lineup) : undefined;
   };
+  const backHref = `/admin/bookings/${bookingId}`;
 
   // #983: `Players` is **purely derived** — a player leaves by coming out of every part, and their
   // row goes with the last one. That is what BookingBandMember being booking-scoped implies, and it
@@ -94,6 +97,16 @@ export function PlayersCard({
                   onSave={(sessionFee) => onSaveFee(member.id, sessionFee)}
                   isSaving={savingFeeMemberId === member.id}
                 />
+                {/* #980 — preview what this dep sees at their own /band/:token, before they're
+                    invited. A plain link (not IconButton), matching the "Client portal" preview
+                    link's shape (BookingHeader.tsx) rather than a mutation-triggering action. */}
+                <a
+                  href={`/band/${member.bandPortalToken}?preview=admin&from=${encodeURIComponent(backHref)}`}
+                  className="min-h-[44px] min-w-[44px] -my-2.5 inline-flex items-center justify-center text-muted hover:text-foreground transition-colors"
+                  aria-label={`Preview ${member.contact.name}'s portal`}
+                >
+                  <Eye size={14} />
+                </a>
               </div>
 
               <div className="mt-1">

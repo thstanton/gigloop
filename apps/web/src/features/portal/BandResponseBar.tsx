@@ -8,6 +8,10 @@ interface BandResponseBarProps {
   onConfirm: () => void;
   onDecline: () => void;
   pendingResponse: BandResponseValue | null;
+  /** #980 — admin preview mode (`?preview=admin`). Buttons stay visible (so the organiser sees the
+   *  real bar a dep would get) but disabled, matching the client portal's contract-sign / music-form
+   *  preview convention (PortalContractPage.tsx, PortalMusicPage.tsx). */
+  isPreview?: boolean;
 }
 
 // The dep's one-shot answer (#892). Sticky at the bottom of the viewport so it's reachable
@@ -16,7 +20,7 @@ interface BandResponseBarProps {
 // reversal is organiser-only, from the Band sheet). `fixed` (not `sticky`) so it stays pinned
 // regardless of scroll position; `BandGigSheet` reserves matching bottom space so it never
 // covers content.
-export function BandResponseBar({ status, onConfirm, onDecline, pendingResponse }: BandResponseBarProps) {
+export function BandResponseBar({ status, onConfirm, onDecline, pendingResponse, isPreview = false }: BandResponseBarProps) {
   const isPending = pendingResponse !== null;
 
   if (status === 'CONFIRMED' || status === 'DECLINED') {
@@ -36,14 +40,19 @@ export function BandResponseBar({ status, onConfirm, onDecline, pendingResponse 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-base text-foreground">Are you in for this gig?</p>
         <div className="flex gap-2">
-          <Button variant="destructiveOutline" disabled={isPending} onClick={onDecline}>
+          <Button
+            variant="destructiveOutline"
+            disabled={isPending || isPreview}
+            onClick={isPreview ? undefined : onDecline}
+          >
             {pendingResponse === 'DECLINED' ? 'Declining…' : 'Decline'}
           </Button>
-          <Button disabled={isPending} onClick={onConfirm}>
+          <Button disabled={isPending || isPreview} onClick={isPreview ? undefined : onConfirm}>
             {pendingResponse === 'CONFIRMED' ? 'Confirming…' : 'Confirm'}
           </Button>
         </div>
       </div>
+      {isPreview && <p className="mt-2 text-sm text-center text-muted sm:text-right">Preview only — response disabled</p>}
     </div>
   );
 }

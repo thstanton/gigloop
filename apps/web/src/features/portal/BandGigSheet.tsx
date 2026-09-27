@@ -2,6 +2,7 @@ import { CalendarDays, MapPin, Music, AlertTriangle, Mail, Phone, Download } fro
 import { PortalLayout } from '../../layouts/PortalLayout';
 import { usePortalTheme } from './usePortalTheme';
 import { BandResponseBar, type BandResponseValue } from './BandResponseBar';
+import { PreviewBanner } from '../../pages/portal/PreviewBanner';
 import { Card } from '@/components/common/Card';
 import { LabelValue } from '@/components/common/LabelValue';
 import { Badge } from '@/components/ui/badge';
@@ -211,15 +212,35 @@ function CancelledBanner({ theme }: { theme: ReturnType<typeof usePortalTheme> }
   );
 }
 
+// The dep's own name never appears directly on `self` (ADR-0073 §2 keeps `self` to status/fee/
+// ownChairIds) — it's read back off the roster row(s) `ownChairIds` points at, the same source the
+// "You" highlighting already uses. Only used for the admin preview banner's "this is what X sees".
+function ownMemberName(roster: BandPortalRosterView, self: BandPortalSelfView): string {
+  const ownChair = roster.chairs.find((chair) => self.ownChairIds.includes(chair.id));
+  return ownChair?.memberName ?? '';
+}
+
 interface BandGigSheetProps {
   data: BandPortalData;
   token: string;
   onConfirm: () => void;
   onDecline: () => void;
   pendingResponse: BandResponseValue | null;
+  /** #980 — admin preview mode, mirroring the client portal's `?preview=admin` (CONTEXT.md "Portal
+   *  preview mode"). `previewFrom` is only read when `isPreview` is true. */
+  isPreview?: boolean;
+  previewFrom?: string;
 }
 
-export function BandGigSheet({ data, token, onConfirm, onDecline, pendingResponse }: BandGigSheetProps) {
+export function BandGigSheet({
+  data,
+  token,
+  onConfirm,
+  onDecline,
+  pendingResponse,
+  isPreview = false,
+  previewFrom = '/admin/bookings',
+}: BandGigSheetProps) {
   // Keeps the hero/greeting text consistent with the client portal's own brand-driven palette
   // (ADR-0073's "do not fork the client portal's shell"); the body Cards below deliberately use the
   // app's standard Card/Badge/LabelValue primitives instead — a gig sheet reads as a working
@@ -227,33 +248,39 @@ export function BandGigSheet({ data, token, onConfirm, onDecline, pendingRespons
   const theme = usePortalTheme(data.branding.portalTheme);
 
   return (
-    <PortalLayout profile={data.branding} wide>
-      {data.cancelled ? (
-        <CancelledBanner theme={theme} />
-      ) : (
-        <>
-          {/* pb-24 reserves room for the fixed response bar below, so it never covers the last card. */}
-          <div className="md:grid md:grid-cols-[1fr_280px] md:gap-8 md:items-start pb-24">
-            <div>
-              <GigIdentity roster={data.roster} theme={theme} />
-              <CallSheetLink token={token} theme={theme} />
-              <YourDetails self={data.self} />
-              <RunningOrder roster={data.roster} />
-              <Roster roster={data.roster} self={data.self} />
-              <Logistics roster={data.roster} />
-            </div>
-            <div className="mt-8 md:mt-0 md:sticky md:top-8">
-              <OrganiserContact branding={data.branding} />
-            </div>
-          </div>
-          <BandResponseBar
-            status={data.self.status}
-            onConfirm={onConfirm}
-            onDecline={onDecline}
-            pendingResponse={pendingResponse}
-          />
-        </>
+    <>
+      {isPreview && !data.cancelled && (
+        <PreviewBanner customerName={ownMemberName(data.roster, data.self)} backHref={previewFrom} />
       )}
-    </PortalLayout>
+      <PortalLayout profile={data.branding} wide>
+        {data.cancelled ? (
+          <CancelledBanner theme={theme} />
+        ) : (
+          <>
+            {/* pb-24 reserves room for the fixed response bar below, so it never covers the last card. */}
+            <div className="md:grid md:grid-cols-[1fr_280px] md:gap-8 md:items-start pb-24">
+              <div>
+                <GigIdentity roster={data.roster} theme={theme} />
+                <CallSheetLink token={token} theme={theme} />
+                <YourDetails self={data.self} />
+                <RunningOrder roster={data.roster} />
+                <Roster roster={data.roster} self={data.self} />
+                <Logistics roster={data.roster} />
+              </div>
+              <div className="mt-8 md:mt-0 md:sticky md:top-8">
+                <OrganiserContact branding={data.branding} />
+              </div>
+            </div>
+            <BandResponseBar
+              status={data.self.status}
+              onConfirm={onConfirm}
+              onDecline={onDecline}
+              pendingResponse={pendingResponse}
+              isPreview={isPreview}
+            />
+          </>
+        )}
+      </PortalLayout>
+    </>
   );
 }
