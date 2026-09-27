@@ -74,6 +74,11 @@ export interface Contact {
   equipmentNotes: string | null;
   outfitNotes: string | null;
   availabilityNotes: string | null;
+  // Tenant-singleton "this Contact is me" flag (#1035, ADR-0083). Typed optional here (unlike the
+  // mandatory ContactResponseDto field it mirrors) to avoid rippling a required-field addition
+  // through every existing Contact fixture across apps/web before any UI (#1036) reads it —
+  // the wire payload always includes it.
+  isAccountOwner?: boolean;
 }
 
 export interface BookingRef {
@@ -120,6 +125,7 @@ export interface CreateContactInput {
   equipmentNotes?: string;
   outfitNotes?: string;
   availabilityNotes?: string;
+  isAccountOwner?: boolean;
 }
 
 export interface UpdateContactInput {
@@ -149,6 +155,7 @@ export interface UpdateContactInput {
   equipmentNotes?: string | null;
   outfitNotes?: string | null;
   availabilityNotes?: string | null;
+  isAccountOwner?: boolean;
 }
 
 // ─────────────────────────────────────────

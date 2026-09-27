@@ -201,10 +201,13 @@ function makePrisma(): MockPrisma {
   };
 }
 
-type MockContacts = { assertOwned: jest.Mock };
+type MockContacts = { assertOwned: jest.Mock; findOne: jest.Mock };
 
 function makeContacts(): MockContacts {
-  return { assertOwned: jest.fn().mockResolvedValue(undefined) };
+  return {
+    assertOwned: jest.fn().mockResolvedValue(undefined),
+    findOne: jest.fn().mockResolvedValue({ id: 'c1', isAccountOwner: false }),
+  };
 }
 
 type MockLineups = { findOne: jest.Mock; findByIds: jest.Mock };
@@ -1282,13 +1285,13 @@ describe('BookingsService', () => {
 
     it('reuses the contact\'s existing member row on this booking rather than creating a second one', async () => {
       repo.findChair.mockResolvedValue(chair);
-      const existing = { id: 'm1', contactId: 'c1' };
+      const existing = { id: 'm1', contactId: 'c1', isSelf: false };
       repo.findActiveMemberByContact.mockResolvedValue(existing);
       repo.setChairMember.mockResolvedValue({ ...chair, memberId: 'm1' });
 
       await service.assignChair('u1', 'b1', 'ch1', { contactId: 'c1' });
 
-      expect(contacts.assertOwned).toHaveBeenCalledWith('u1', ['c1']);
+      expect(contacts.findOne).toHaveBeenCalledWith('u1', 'c1');
       expect(repo.findActiveMemberByContact).toHaveBeenCalledWith('u1', 'b1', 'c1');
       expect(repo.createMember).not.toHaveBeenCalled();
       expect(repo.setChairMember).toHaveBeenCalledWith('ch1', 'm1');
@@ -1299,7 +1302,7 @@ describe('BookingsService', () => {
     // one link, one fee, one confirmation. The member lookup is booking-scoped, never Lineup-scoped,
     // so seating them in a second Lineup must reuse the row rather than fork their answer.
     it('reuses the one member row when the same person is seated in a second Lineup', async () => {
-      const existing = { id: 'm1', contactId: 'c1' };
+      const existing = { id: 'm1', contactId: 'c1', isSelf: false };
       repo.findActiveMemberByContact.mockResolvedValue(existing);
 
       // Ceremony solo.
@@ -1323,7 +1326,7 @@ describe('BookingsService', () => {
     it('creates a member row on first assignment of a contact to this booking', async () => {
       repo.findChair.mockResolvedValue(chair);
       repo.findActiveMemberByContact.mockResolvedValue(null);
-      repo.createMember.mockResolvedValue({ id: 'm2', contactId: 'c2' });
+      repo.createMember.mockResolvedValue({ id: 'm2', contactId: 'c2', isSelf: false });
       repo.setChairMember.mockResolvedValue({ ...chair, memberId: 'm2' });
 
       await service.assignChair('u1', 'b1', 'ch1', { contactId: 'c2' });
@@ -1338,7 +1341,7 @@ describe('BookingsService', () => {
 
       await service.assignChair('u1', 'b1', 'ch1', { contactId: null });
 
-      expect(contacts.assertOwned).not.toHaveBeenCalled();
+      expect(contacts.findOne).not.toHaveBeenCalled();
       expect(repo.findActiveMemberByContact).not.toHaveBeenCalled();
       expect(repo.setChairMember).toHaveBeenCalledWith('ch1', null);
     });
@@ -1353,11 +1356,38 @@ describe('BookingsService', () => {
 
     it('proves contact ownership before assigning', async () => {
       repo.findChair.mockResolvedValue(chair);
-      contacts.assertOwned.mockRejectedValue(new NotFoundException('Contact not found'));
+      contacts.findOne.mockRejectedValue(new NotFoundException('Contact not found'));
       await expect(service.assignChair('u1', 'b1', 'ch1', { contactId: 'foreign' })).rejects.toThrow(
         NotFoundException,
       );
       expect(repo.setChairMember).not.toHaveBeenCalled();
+    });
+
+    // ═══ #1036, ADR-0083 — isSelf derived server-side from the assigned contact's isAccountOwner ═══
+    it('sets isSelf on a freshly-created member row when the assigned contact is the account owner', async () => {
+      repo.findChair.mockResolvedValue(chair);
+      repo.findActiveMemberByContact.mockResolvedValue(null);
+      repo.createMember.mockResolvedValue({ id: 'm3', contactId: 'c3', isSelf: false });
+      repo.updateMember.mockResolvedValue({ id: 'm3', contactId: 'c3', isSelf: true });
+      repo.setChairMember.mockResolvedValue({ ...chair, memberId: 'm3' });
+      contacts.findOne.mockResolvedValue({ id: 'c3', isAccountOwner: true });
+
+      await service.assignChair('u1', 'b1', 'ch1', { contactId: 'c3' });
+
+      expect(repo.updateMember).toHaveBeenCalledWith('m3', { isSelf: true });
+      expect(repo.setChairMember).toHaveBeenCalledWith('ch1', 'm3');
+    });
+
+    it('does not call updateMember when the existing member row already matches the account-owner flag', async () => {
+      repo.findChair.mockResolvedValue(chair);
+      repo.findActiveMemberByContact.mockResolvedValue({ id: 'm1', contactId: 'c1', isSelf: true });
+      repo.setChairMember.mockResolvedValue({ ...chair, memberId: 'm1' });
+      contacts.findOne.mockResolvedValue({ id: 'c1', isAccountOwner: true });
+
+      await service.assignChair('u1', 'b1', 'ch1', { contactId: 'c1' });
+
+      expect(repo.updateMember).not.toHaveBeenCalled();
+      expect(repo.setChairMember).toHaveBeenCalledWith('ch1', 'm1');
     });
   });
 

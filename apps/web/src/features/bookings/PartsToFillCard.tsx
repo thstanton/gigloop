@@ -164,6 +164,7 @@ export function PartsToFillCard({
                   chairRole={chair.role}
                   venue={venue}
                   disabled={assigningChairId === chair.id}
+                  allowSelf
                 />
               </div>
             </div>

@@ -787,7 +787,7 @@ export class BookingsRepository {
 
   updateMember(memberId: string, data: Prisma.BookingBandMemberUpdateInput) {
     return this.prisma.bookingBandMember.update({
-      where: { id: memberId }, // scoped-upstream: service.updateBandMember calls findMember(userId, bookingId, memberId) first, already proving ownership (ADR-0061)
+      where: { id: memberId }, // scoped-upstream: service.updateBandMember calls findMember(userId, bookingId, memberId) first, and service.assignChair's member is one it just found via findActiveMemberByContact(userId, ...) or created via createMember(userId, ...) — both already prove ownership (ADR-0061)
       data,
     });
   }

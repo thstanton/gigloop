@@ -704,6 +704,11 @@ export class BookingsService {
   // chair reuses the contact's existing member row on this booking if one exists — one token, one
   // fee, one status however many chairs they fill — and creates one on first assignment.
   // `contactId: null` vacates the chair without touching the member row it held.
+  //
+  // `isSelf` is derived here, not sent by the client (#1036, ADR-0083): `findOne` (replacing a
+  // bare ownership check) doubles as the contact lookup that tells us whether the assignee is the
+  // account-owner Contact, so the member row's `isSelf` is set atomically in the same request —
+  // no second PATCH, no race window between "chair assigned" and "isSelf set".
   async assignChair(userId: string, bookingId: string, chairId: string, dto: AssignChairDto) {
     await this.assertOwnership(userId, bookingId);
     const chair = await this.repo.findChair(userId, bookingId, chairId);
@@ -713,9 +718,12 @@ export class BookingsService {
       return this.repo.setChairMember(chairId, null);
     }
 
-    await this.contacts.assertOwned(userId, [dto.contactId]);
+    const contact = await this.contacts.findOne(userId, dto.contactId);
     const existing = await this.repo.findActiveMemberByContact(userId, bookingId, dto.contactId);
     const member = existing ?? (await this.repo.createMember(userId, bookingId, dto.contactId));
+    if (member.isSelf !== contact.isAccountOwner) {
+      await this.repo.updateMember(member.id, { isSelf: contact.isAccountOwner });
+    }
     return this.repo.setChairMember(chairId, member.id);
   }
 
