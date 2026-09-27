@@ -165,6 +165,7 @@ export function PartsToFillCard({
                   venue={venue}
                   disabled={assigningChairId === chair.id}
                   allowSelf
+                  createRole="BAND_MEMBER"
                 />
               </div>
             </div>
