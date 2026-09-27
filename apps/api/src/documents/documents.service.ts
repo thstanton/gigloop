@@ -381,6 +381,7 @@ export class DocumentsService {
       portalVisibility: resolveDocumentVisibility(
         d,
         activeContractId,
+        'CLIENT',
         bookingCancelled,
         d.bookingId === bookingId,
       ),
@@ -422,7 +423,7 @@ export class DocumentsService {
       ...doc,
       url: this.documentDownloadRoute(doc.id),
       isSeriesInvoice: false,
-      portalVisibility: resolveDocumentVisibility(doc, null),
+      portalVisibility: resolveDocumentVisibility(doc, null, 'CLIENT'),
     };
   }
 

@@ -267,6 +267,7 @@ describe('DocumentsService.uploadDocument (verdict from the authority, #802)', (
     expect(resolveDocumentVisibility).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'UPLOAD' }),
       null,
+      'CLIENT',
     );
   });
 

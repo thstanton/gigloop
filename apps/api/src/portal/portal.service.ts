@@ -105,7 +105,7 @@ export function isPortalVisibleDocument(
   bookingCancelled: boolean,
   ownedByBooking: boolean,
 ): boolean {
-  return resolveDocumentVisibility(doc, activeContractId, bookingCancelled, ownedByBooking).visible;
+  return resolveDocumentVisibility(doc, activeContractId, 'CLIENT', bookingCancelled, ownedByBooking).visible;
 }
 
 // Access-controlled portal download routes (ADR-0059, #655). Emitted into the
@@ -217,6 +217,7 @@ export class PortalService {
     const bookingCancelled = booking.status === 'CANCELLED';
     const contractVerdict = resolveContractVisibility(
       (activeContract?.status ?? null) as ContractStatus | null,
+      'CLIENT',
       bookingCancelled,
     );
     const contractStatus =
@@ -255,6 +256,7 @@ export class PortalService {
       hasMusicForm:
         resolveMusicFormVisibility(
           !!booking.musicFormConfig,
+          'CLIENT',
           booking.musicFormConfig?.publishedAt != null,
         )?.visible ?? false,
       hasMusicFormResponse: !!booking.musicFormResponse,
@@ -359,7 +361,7 @@ export class PortalService {
   private isMusicFormClientVisible(
     config: { publishedAt?: Date | null } | null | undefined,
   ): boolean {
-    return resolveMusicFormVisibility(!!config, config?.publishedAt != null)?.visible ?? false;
+    return resolveMusicFormVisibility(!!config, 'CLIENT', config?.publishedAt != null)?.visible ?? false;
   }
 
   async getMusicFormData(token: string) {

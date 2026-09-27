@@ -293,9 +293,10 @@ export class BookingsService {
     return {
       contract: resolveContractVisibility(
         (contractStatus ?? null) as ContractStatus | null,
+        'CLIENT',
         bookingStatus === 'CANCELLED',
       ),
-      musicForm: resolveMusicFormVisibility(hasMusicFormConfig, musicFormPublished),
+      musicForm: resolveMusicFormVisibility(hasMusicFormConfig, 'CLIENT', musicFormPublished),
     };
   }
 

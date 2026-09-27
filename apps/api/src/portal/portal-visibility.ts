@@ -1,14 +1,50 @@
 // The single portal-visibility authority (ADR-0054). A deterministic, I/O-free module that
-// answers "is concern X visible on the client portal right now, and if not, why?". Both consumers
-// — the client portal renderer (portal.service) and the admin indicator (bookings.service) —
-// read their verdict from here, so they cannot disagree.
+// answers "is concern X visible on the portal right now, and if not, why?". Every consumer reads
+// its verdict from here, so they cannot disagree — the client portal renderer and the admin
+// indicator (both audiences of `resolveContractVisibility` etc.), and, from #890, the band
+// portal.
 //
 // This module is intentionally dependency-free (no NestJS, no Prisma, no repos): it is a pure
-// function file imported by both services, which avoids any DI/import cycle between the portal and
-// bookings modules.
+// function file imported across the portal, bookings, documents and communications modules,
+// which avoids any DI/import cycle between them.
 //
 // Slice 1 (#578) seeds the contract and music-form concerns. The booking-CANCELLED gate and the
 // UPLOAD rule landed in #579; the per-document verdict (`resolveDocumentVisibility`) in #580.
+// #890 (ADR-0073) widens every verdict function with an `audience` parameter ahead of the band
+// portal — a prefactor with no behaviour change for the existing `CLIENT` audience.
+
+/**
+ * Who is asking (ADR-0073) — the client portal (`/booking/:token`) or a dep's band portal
+ * (`/band/:token`, #880). Orthogonal to the *other* sense of "audience" ADR-0054's 2026-08-18
+ * amendment already used, for a document's *ownership*: whether a booking owns the document
+ * being asked about (the `ownedByBooking` parameter below, unchanged). Do not confuse the two —
+ * this one is about who is looking, not what is being looked at.
+ *
+ * Declared once as this array, the type derived from it — same idiom as `ContractStatus` below —
+ * so the type is never a hand-written union a table has to be checked against.
+ */
+export const PORTAL_AUDIENCES = ['CLIENT', 'BAND'] as const;
+
+export type PortalAudience = (typeof PORTAL_AUDIENCES)[number];
+
+/**
+ * The one place every verdict function's audience branch is decided (below). A `switch` with a
+ * `never`-typed default, not three independent `if (audience === 'BAND')` checks, so a third
+ * audience is a compile error here instead of silently falling through to CLIENT behaviour at
+ * whichever call site forgot to special-case it.
+ */
+function isBandAudience(audience: PortalAudience): boolean {
+  switch (audience) {
+    case 'BAND':
+      return true;
+    case 'CLIENT':
+      return false;
+    default: {
+      const unhandled: never = audience;
+      throw new Error(`Unhandled portal audience: ${String(unhandled)}`);
+    }
+  }
+}
 
 /**
  * The full ReasonCode vocabulary, declared exactly once as an array so both the type and any
@@ -77,11 +113,18 @@ export type ContractStatus = (typeof CONTRACT_STATUSES)[number];
  * contract, so without this the portal would keep the signing CTA / signed-download live on a
  * cancelled gig. When the booking is cancelled the whole contract concern is hidden regardless of
  * contract status — but only if a contract exists (no contract → still no concern → null).
+ *
+ * The contract is a CLIENT-only concern (ADR-0073): it is not part of `BAND_PORTAL_FIELDS` and
+ * has no plan to become one (a band-facing agreement is parked as a distinct future concern, per
+ * the ADR's Consequences). For `BAND` this returns null unconditionally — same "not a live
+ * concern" shape as no contract existing yet, ahead of any contract-status check.
  */
 export function resolveContractVisibility(
   contractStatus: ContractStatus | null,
+  audience: PortalAudience,
   bookingCancelled = false,
 ): PortalVisibilityVerdict | null {
+  if (isBandAudience(audience)) return null;
   if (contractStatus === null) return null;
   if (bookingCancelled) return { visible: false, reason: 'cancelled' };
   switch (contractStatus) {
@@ -117,10 +160,39 @@ function resolveInvoiceDocumentVisibility(
 }
 
 /**
+ * A local mirror of Prisma's `DocumentType` enum members, declared as a plain string union so
+ * this module can stay Prisma-free (see the module comment above) — the same boundary
+ * `apps/web/src/types/api.ts`'s own `DocumentType` mirror crosses for the frontend. Keep in sync
+ * with `schema.prisma`'s `DocumentType` enum by hand; `CALL_SHEET` joins this list in #892/#893
+ * once ADR-0072 §8's enum→TEXT migration lands.
+ */
+type DocumentTypeValue = 'CONTRACT' | 'INVOICE' | 'SONG_LIST' | 'UPLOAD';
+
+/**
+ * Band document visibility (ADR-0073 §3) — a total, fail-closed mapping by type, defaulting
+ * hidden. `Record<DocumentTypeValue, boolean>` is exhaustive over every currently-known type by
+ * construction: a member missing from this object fails to typecheck, so a new `DocumentType`
+ * cannot be half-added. Only the call sheet crosses; every type mapped here today stays hidden —
+ * #892 adds `CALL_SHEET`'s row once it exists. No `ReasonCode`: ADR-0073 §7 rejected widening the
+ * vocabulary for this, so a hidden BAND document verdict carries no reason.
+ */
+const BAND_DOCUMENT_VISIBILITY: Record<DocumentTypeValue, boolean> = {
+  CONTRACT: false,
+  INVOICE: false,
+  SONG_LIST: false,
+  UPLOAD: false,
+};
+
+/**
  * Per-document portal visibility (#580) — the single authority for whether a stored Document is
  * client-visible and, if not, why. Each row in the admin documents list carries its own verdict,
  * and the portal renderer reads `.visible` from the same function (via `isPortalVisibleDocument`),
  * so the two cannot disagree (ADR-0054).
+ *
+ * For `BAND` (#890/ADR-0073 §3), the CLIENT-only context below (active contract, cancellation,
+ * ownership) is irrelevant — a fail-closed lookup by type alone decides it, and a type this
+ * module doesn't yet know about (a future enum member not yet mirrored into
+ * `DocumentTypeValue`) falls through to hidden rather than erroring, so **forgetting is safe**.
  *
  * - **Ownership** (`other_booking`, outermost — ADR-0054 amendment 2026-08-18) — a document is
  *   portal-visible through a booking's portal only if that booking owns it. A [[BookingSeries]]
@@ -146,9 +218,13 @@ function resolveInvoiceDocumentVisibility(
 export function resolveDocumentVisibility(
   doc: PortalDocumentInput,
   activeContractId: string | null,
+  audience: PortalAudience,
   bookingCancelled = false,
   ownedByBooking = true,
 ): DocumentPortalVisibilityVerdict {
+  if (isBandAudience(audience)) {
+    return { visible: BAND_DOCUMENT_VISIBILITY[doc.type as DocumentTypeValue] ?? false };
+  }
   if (!ownedByBooking) return { visible: false, reason: 'other_booking' };
   switch (doc.type) {
     case 'UPLOAD':
@@ -171,11 +247,17 @@ export function resolveDocumentVisibility(
  * off (no config) → null, not a portal concern, no indicator; on-but-draft → hidden with
  * `until_published`; published → visible. Turning the form on creates a draft; the client sees it
  * only once the musician publishes.
+ *
+ * Like the contract concern, the music form is CLIENT-only (ADR-0073) — out of
+ * `BAND_PORTAL_FIELDS` scope. For `BAND` this returns null unconditionally, ahead of the
+ * has-config check.
  */
 export function resolveMusicFormVisibility(
   hasConfig: boolean,
+  audience: PortalAudience,
   isPublished = false,
 ): PortalVisibilityVerdict | null {
+  if (isBandAudience(audience)) return null;
   if (!hasConfig) return null;
   return isPublished ? { visible: true } : { visible: false, reason: 'until_published' };
 }
