@@ -112,7 +112,7 @@ This table is the **intended-state record** — the workflow below changes the r
 |---|---|---|---|
 | `VITE_FEATURE_COMMAND_PALETTE` | Global ⌘K command palette (#794) | on | off |
 
-✅ **Actions → [Set Feature Flag](https://github.com/thstanton/gigloop/actions/workflows/set-flag.yml) → Run workflow** flips one — give it the flag name, the environment, and on/off (#909). It routes by naming convention: a `VITE_`-prefixed flag is a web flag and gets a Vercel env var + rebuild; anything else is an API flag and gets a Railway variable set. A prod web-flag run rebuilds the last release tag, never unreleased `main` commits — flipping a flag is not a side door around "Promote to prod".
+✅ **Actions → [Set Feature Flag](https://github.com/thstanton/gigloop/actions/workflows/set-flag.yml) → Run workflow** flips one — give it the flag name, the environment, and on/off (#909). It routes by naming convention: a `VITE_`-prefixed flag is a web flag and gets a Vercel env var + rebuild; anything else is an API flag and gets a Railway variable set. A prod web-flag run rebuilds the ref from the latest successful prod deployment by `release.yml`, never unreleased `main` commits. If no successful release deployment record is available, it warns and falls back to the latest `v*` tag. Flipping a flag is not a side door around "Promote to prod".
 
 Two helpers read them: `apps/web/src/lib/featureFlags.ts` and `apps/api/src/common/featureFlags.ts`. They are near-identical by necessity, not by accident — the web one **must** use `import.meta.env` for Vite's static replacement.
 
