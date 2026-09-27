@@ -34,6 +34,7 @@ describe('variantForPathname', () => {
     ['/booking/tok', 'portal'],
     ['/booking/tok/contract', 'portal'],
     ['/booking/tok/music', 'portal'],
+    ['/band/tok', 'portal'],
     ['/admin/portal-preview', 'default'],
     ['/onboarding/profile', 'default'],
     ['/admin/bookings', 'default'],

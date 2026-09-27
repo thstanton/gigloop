@@ -1190,6 +1190,89 @@ export interface PortalContractData {
 }
 
 // ─────────────────────────────────────────
+// Band portal (public, no auth) — #891, ADR-0073
+// ─────────────────────────────────────────
+
+// Mirrors `BandPortalBranding` (apps/api/src/portal/band-portal.service.ts) — baseline portal
+// chrome, always present regardless of the cancelled gate below. Not gated behind
+// `showContactEmail`/`showContactPhone` — those are `clientPortalConfig`, scoped to the client
+// audience by name; a dep always needs a way to reach the leader.
+export interface BandPortalBranding {
+  businessName: string;
+  displayName: string | null;
+  logoUrl: string | null;
+  brandColour: string;
+  portalTheme: PortalTheme;
+  email: string | null;
+  phone: string | null;
+}
+
+export interface BandPortalRunningOrderSet {
+  order: number;
+  label: string | null;
+  startTime: string | null;
+  duration: number;
+  packageId: string | null;
+}
+
+export interface BandPortalSegment {
+  id: string;
+  label: string;
+  icon: string;
+  order: number;
+}
+
+// A roster row (ADR-0073 §2). `memberName` is null for a vacant chair — vacant chairs cross
+// role-only. No member id, fee, or status ever appears here.
+export interface BandPortalRosterChair {
+  id: string;
+  role: string;
+  memberName: string | null;
+  callTimes: BookingChairCallTime[];
+}
+
+// One `shareWithBand` logistics entry — `key` looks up its label in `LOGISTICS_FIELD_LABELS`
+// (lib/constants.ts), which the API can't share directly (no package boundary between the apps).
+export interface BandPortalLogisticsEntry {
+  key: string;
+  value: string;
+}
+
+export interface BandPortalVenueAddress {
+  line1: string | null;
+  line2: string | null;
+  city: string | null;
+  county: string | null;
+  postcode: string | null;
+  country: string | null;
+}
+
+export interface BandPortalRosterView {
+  bookingTitle: string | null;
+  bookingDate: string;
+  venueName: string | null;
+  venueAddress: BandPortalVenueAddress | null;
+  sets: BandPortalRunningOrderSet[];
+  segments: BandPortalSegment[];
+  chairs: BandPortalRosterChair[];
+  logistics: BandPortalLogisticsEntry[];
+}
+
+// What the token's own member sees about themselves (ADR-0073 §2) — the only place a fee ever
+// appears. `ownChairIds` drives highlighting on `BandPortalRosterView.chairs`.
+export interface BandPortalSelfView {
+  status: BookingBandMemberStatus;
+  sessionFee: string | null;
+  ownChairIds: string[];
+}
+
+// A cancelled booking renders identity and a banner band-side, everything else suppressed
+// (ADR-0073 §5) — the link stays live; only an unknown/removed token 404s.
+export type BandPortalData =
+  | { cancelled: true; branding: BandPortalBranding }
+  | { cancelled: false; branding: BandPortalBranding; roster: BandPortalRosterView; self: BandPortalSelfView };
+
+// ─────────────────────────────────────────
 // Dashboard
 // ─────────────────────────────────────────
 

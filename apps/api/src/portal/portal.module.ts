@@ -2,6 +2,9 @@ import { Module } from '@nestjs/common';
 import { PortalController } from './portal.controller';
 import { PortalService } from './portal.service';
 import { PortalRepository } from './portal.repository';
+import { BandPortalController } from './band-portal.controller';
+import { BandPortalService } from './band-portal.service';
+import { BandPortalRepository } from './band-portal.repository';
 import { MailModule } from '../mail/mail.module';
 import { DocumentsModule } from '../documents/documents.module';
 import { StorageModule } from '../storage/storage.module';
@@ -24,7 +27,7 @@ import { InvoicesModule } from '../invoices/invoices.module';
     BookingsModule,
     InvoicesModule,
   ],
-  controllers: [PortalController],
-  providers: [PortalService, PortalRepository],
+  controllers: [PortalController, BandPortalController],
+  providers: [PortalService, PortalRepository, BandPortalService, BandPortalRepository],
 })
 export class PortalModule {}

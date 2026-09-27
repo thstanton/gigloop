@@ -1,4 +1,4 @@
-import type { PortalData, PortalContractData, PortalMusicFormData, SubmitMusicFormInput } from '../types/api';
+import type { PortalData, PortalContractData, PortalMusicFormData, SubmitMusicFormInput, BandPortalData } from '../types/api';
 import { resolveApiBaseUrl } from './apiBaseUrl';
 import { toApiError } from './apiError';
 
@@ -30,6 +30,10 @@ export async function portalPost<T>(path: string, body: unknown): Promise<T> {
 
 export function getPortalData(token: string): Promise<PortalData> {
   return portalGet<PortalData>(`/booking/${token}`);
+}
+
+export function getBandPortalData(token: string): Promise<BandPortalData> {
+  return portalGet<BandPortalData>(`/band/${token}`);
 }
 
 export function getContractContent(token: string): Promise<PortalContractData> {
