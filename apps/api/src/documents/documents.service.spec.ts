@@ -436,9 +436,14 @@ describe('DocumentsService.generateCallSheetPdfBuffer / generateAndStoreCallShee
     } as unknown as PrismaService;
     const repo = {
       create: jest.fn().mockResolvedValue({ id: 'doc-call-sheet' }),
+      findById: jest.fn().mockResolvedValue({
+        id: 'doc-call-sheet', userId: 'u1', bookingId: 'b1', type: 'CALL_SHEET', storageKey: 'call-sheets/u1/b1/id.pdf',
+      }),
+      delete: jest.fn().mockResolvedValue(undefined),
     } as unknown as DocumentsRepository;
     const storage = {
       putDocument: jest.fn().mockResolvedValue(undefined),
+      deleteDocument: jest.fn().mockResolvedValue(undefined),
     } as unknown as StorageService;
     return { service: new DocumentsService(prisma, repo, storage), prisma, repo, storage };
   }
@@ -466,6 +471,26 @@ describe('DocumentsService.generateCallSheetPdfBuffer / generateAndStoreCallShee
     expect(repo.create).toHaveBeenCalledTimes(1);
     expect(repo.create).toHaveBeenCalledWith('u1', 'b1', 'CALL_SHEET', expect.any(String));
     expect(documentId).toBe('doc-call-sheet');
+  });
+
+  it('deletes the stored document artifact when its email send fails', async () => {
+    const { service, repo, storage } = makeService();
+    await service.discardUnsentCallSheet('u1', 'b1', 'doc-call-sheet');
+
+    expect(repo.findById).toHaveBeenCalledWith('doc-call-sheet', 'u1');
+    expect(storage.deleteDocument).toHaveBeenCalledWith('call-sheets/u1/b1/id.pdf');
+    expect(repo.delete).toHaveBeenCalledWith('doc-call-sheet');
+  });
+
+  it('refuses to discard a document outside the call-sheet booking', async () => {
+    const { service, repo, storage } = makeService();
+    (repo.findById as jest.Mock).mockResolvedValue({
+      id: 'doc-call-sheet', userId: 'u1', bookingId: 'other-booking', type: 'CALL_SHEET', storageKey: 'other.pdf',
+    });
+
+    await expect(service.discardUnsentCallSheet('u1', 'b1', 'doc-call-sheet')).rejects.toThrow('Call sheet document not found');
+    expect(storage.deleteDocument).not.toHaveBeenCalled();
+    expect(repo.delete).not.toHaveBeenCalled();
   });
 
   it('404s when the booking does not belong to the caller', async () => {

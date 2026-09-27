@@ -98,6 +98,7 @@ const meta = {
     onChangeMemberStatus: fn(),
     changingStatusMemberId: null,
     onInviteMember: fn(),
+    onComposeCommunication: fn(),
     onSaveMemberFee: fn(),
     savingFeeMemberId: null,
   },
@@ -435,5 +436,21 @@ export const MemberWithNoPartsIsNotAPlayer: Story = {
     const canvas = within(canvasElement);
     await expect(canvas.getByText('Sam Okonkwo')).toBeVisible();
     await expect(canvas.queryByText('Ana Reis')).not.toBeInTheDocument();
+  },
+};
+
+export const CommunicationActionsArePerMember: Story = {
+  name: 'Call sheet and final details actions target one player at a time',
+  args: {
+    lineups: [{ id: 'lu-1', label: 'My four-piece', packageIds: [DRINKS] }],
+    chairs: fourPieceChairs('lu-1', ['m-sam', null, null, null], [DRINKS_CALL]),
+    members: [sam],
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: 'Send call sheet to Sam Okonkwo' }));
+    await userEvent.click(canvas.getByRole('button', { name: 'Send final details to Sam Okonkwo' }));
+    await expect(args.onComposeCommunication).toHaveBeenNthCalledWith(1, 'm-sam', 'call-sheet');
+    await expect(args.onComposeCommunication).toHaveBeenNthCalledWith(2, 'm-sam', 'final-details');
   },
 };

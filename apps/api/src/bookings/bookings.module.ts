@@ -10,11 +10,12 @@ import { SeriesModule } from '../series/series.module';
 import { ContactsModule } from '../contacts/contacts.module';
 import { LineupsModule } from '../lineups/lineups.module';
 import { CommunicationsModule } from '../communications/communications.module';
+import { DocumentsModule } from '../documents/documents.module';
 import { BandCommunicationsController } from './band-communications.controller';
 import { BandCommunicationsService } from './band-communications.service';
 
 @Module({
-  imports: [MailModule, ChecklistModule, SeriesModule, ContactsModule, LineupsModule, CommunicationsModule],
+  imports: [MailModule, ChecklistModule, SeriesModule, ContactsModule, LineupsModule, CommunicationsModule, DocumentsModule],
   controllers: [BookingsController, BandCommunicationsController],
   providers: [BookingsService, BookingsRepository, ContractRepository, MusicFormConfigRepository, BandCommunicationsService],
   exports: [BookingsRepository, ContractRepository, MusicFormConfigRepository],

@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { BandInviteComposeSheet } from './BandInviteComposeSheet';
+import { BandCommsComposeSheet } from './BandCommsComposeSheet';
 import { BandAtom } from './BandAtom';
 import { useBandMutations } from './useBandMutations';
 import { useLineupTemplates } from '@/lib/hooks/useLineupTemplates';
 import { useRoleVocabulary } from '@/lib/hooks/useRoleVocabulary';
 import type { BookingBandChair, BookingBandMember, BookingLineup, BookingPackageSummary, Contact } from '@/types/api';
+import type { BandCommunicationKind } from './bandCommunicationMeta';
 
 // Band members v1 (#879, ADR-0072 §6 / #885), rebuilt for #987 on #983's resolved design. Opened
 // from the booking via ?sheet=band — the "change something" surface. Three cards: the bands on this
@@ -24,6 +26,7 @@ interface Props {
 
 export function BandSheet({ bookingId, lineups, chairs, members = [], packages, venue, open, onOpenChange }: Props) {
   const [invitingMemberId, setInvitingMemberId] = useState<string | null>(null);
+  const [composingCommunication, setComposingCommunication] = useState<{ memberId: string; kind: BandCommunicationKind } | null>(null);
   const { data: lineupTemplates = [], isLoading: lineupTemplatesLoading } = useLineupTemplates(open);
   const instrumentVocabulary = useRoleVocabulary(open);
 
@@ -39,6 +42,7 @@ export function BandSheet({ bookingId, lineups, chairs, members = [], packages, 
   } = useBandMutations(bookingId);
 
   const inviteMember = members.find((member) => member.id === invitingMemberId) ?? null;
+  const communicationMember = members.find((member) => member.id === composingCommunication?.memberId) ?? null;
 
   return (
     <>
@@ -80,6 +84,7 @@ export function BandSheet({ bookingId, lineups, chairs, members = [], packages, 
               onChangeMemberStatus={(memberId, status) => updateMemberStatus.mutate({ memberId, status })}
               changingStatusMemberId={updateMemberStatus.isPending ? (updateMemberStatus.variables?.memberId ?? null) : null}
               onInviteMember={setInvitingMemberId}
+              onComposeCommunication={(memberId, kind) => setComposingCommunication({ memberId, kind })}
               onSaveMemberFee={(memberId, sessionFee) => saveMemberFee.mutate({ memberId, sessionFee })}
               savingFeeMemberId={saveMemberFee.isPending ? (saveMemberFee.variables?.memberId ?? null) : null}
             />
@@ -92,6 +97,15 @@ export function BandSheet({ bookingId, lineups, chairs, members = [], packages, 
           member={inviteMember}
           open={open}
           onOpenChange={(nextOpen) => { if (!nextOpen) setInvitingMemberId(null); }}
+        />
+      )}
+      {communicationMember && composingCommunication && (
+        <BandCommsComposeSheet
+          bookingId={bookingId}
+          member={communicationMember}
+          kind={composingCommunication.kind}
+          open={open}
+          onOpenChange={(nextOpen) => { if (!nextOpen) setComposingCommunication(null); }}
         />
       )}
     </>

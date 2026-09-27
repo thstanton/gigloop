@@ -7,6 +7,7 @@ import { LineupSegmentsDialog } from './LineupSegmentsDialog';
 import { LineupsCard } from './LineupsCard';
 import { AddPartFooter, PartsToFillCard } from './PartsToFillCard';
 import { PlayersCard } from './PlayersCard';
+import type { BandCommunicationKind } from './bandCommunicationMeta';
 import type {
   BookingBandChair,
   BookingBandMember,
@@ -58,6 +59,7 @@ interface BandAtomProps {
   onChangeMemberStatus: (memberId: string, status: BookingBandMemberStatus) => void;
   changingStatusMemberId: string | null;
   onInviteMember: (memberId: string) => void;
+  onComposeCommunication: (memberId: string, kind: BandCommunicationKind) => void;
   onSaveMemberFee: (memberId: string, sessionFee: number | null) => void;
   savingFeeMemberId: string | null;
 }
@@ -87,6 +89,7 @@ export function BandAtom({
   onChangeMemberStatus,
   changingStatusMemberId,
   onInviteMember,
+  onComposeCommunication,
   onSaveMemberFee,
   savingFeeMemberId,
 }: BandAtomProps) {
@@ -160,6 +163,7 @@ export function BandAtom({
           onChangeStatus={onChangeMemberStatus}
           changingStatusMemberId={changingStatusMemberId}
           onInviteMember={onInviteMember}
+          onComposeCommunication={onComposeCommunication}
         onSaveFee={onSaveMemberFee}
         savingFeeMemberId={savingFeeMemberId}
       />

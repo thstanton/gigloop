@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, InternalServerErrorException, NotFound
 import { MailService, type EmailContext } from '../mail/mail.service';
 import { CommunicationsService } from '../communications/communications.service';
 import { ChecklistReevaluator } from '../checklist/checklist-reevaluator.service';
+import { DocumentsService } from '../documents/documents.service';
 import { BookingsRepository } from './bookings.repository';
 import { buildBandInviteCalendar } from './band-invite-calendar';
 
@@ -19,6 +20,14 @@ export type SendBandInviteInput = {
   body: string;
 };
 
+type BandCommunicationTemplateType =
+  | 'band_invite'
+  | 'band_invite_message'
+  | 'band_call_sheet'
+  | 'band_call_sheet_message'
+  | 'band_final_details'
+  | 'band_final_details_message';
+
 @Injectable()
 export class BandCommunicationsService {
   constructor(
@@ -26,6 +35,7 @@ export class BandCommunicationsService {
     private readonly mail: MailService,
     private readonly communications: CommunicationsService,
     private readonly reeval: ChecklistReevaluator,
+    private readonly documents: DocumentsService,
   ) {}
 
   /** Booking context plus the facts that belong to this specific band member. */
@@ -49,22 +59,68 @@ export class BandCommunicationsService {
     };
   }
 
-  async renderInvite(userId: string, bookingId: string, memberId: string, templateId: string) {
-    const template = await this.findBandTemplate(userId, templateId, 'band_invite', 'Band invitation template not found');
+  private async renderBandEmail(
+    userId: string,
+    bookingId: string,
+    memberId: string,
+    templateId: string,
+    builtInType: BandCommunicationTemplateType,
+    notFoundMessage: string,
+  ) {
+    const template = await this.findBandTemplate(userId, templateId, builtInType, notFoundMessage);
     const { emailContext } = await this.buildBandMemberContext(userId, bookingId, memberId);
     return this.mail.renderForCompose(template, emailContext);
   }
 
-  async renderInviteMessage(userId: string, bookingId: string, memberId: string, templateId: string) {
-    const template = await this.findBandTemplate(
-      userId,
-      templateId,
-      'band_invite_message',
-      'Band invitation message template not found',
-    );
+  private async renderBandMessage(
+    userId: string,
+    bookingId: string,
+    memberId: string,
+    templateId: string,
+    builtInType: BandCommunicationTemplateType,
+    notFoundMessage: string,
+  ) {
+    const template = await this.findBandTemplate(userId, templateId, builtInType, notFoundMessage);
     const { emailContext } = await this.buildBandMemberContext(userId, bookingId, memberId);
     const { text, missingVariables } = this.mail.renderPlainText(template.content, emailContext);
     return { body: text, missingVariables };
+  }
+
+  async renderInvite(userId: string, bookingId: string, memberId: string, templateId: string) {
+    return this.renderBandEmail(userId, bookingId, memberId, templateId, 'band_invite', 'Band invitation template not found');
+  }
+
+  async renderInviteMessage(userId: string, bookingId: string, memberId: string, templateId: string) {
+    return this.renderBandMessage(
+      userId, bookingId, memberId, templateId, 'band_invite_message', 'Band invitation message template not found',
+    );
+  }
+
+  async renderCallSheet(userId: string, bookingId: string, memberId: string, templateId: string) {
+    return this.renderBandEmail(userId, bookingId, memberId, templateId, 'band_call_sheet', 'Band call-sheet template not found');
+  }
+
+  async renderCallSheetMessage(userId: string, bookingId: string, memberId: string, templateId: string) {
+    return this.renderBandMessage(
+      userId, bookingId, memberId, templateId, 'band_call_sheet_message', 'Band call-sheet message template not found',
+    );
+  }
+
+  async renderFinalDetails(userId: string, bookingId: string, memberId: string, templateId: string) {
+    return this.renderBandEmail(
+      userId, bookingId, memberId, templateId, 'band_final_details', 'Band final-details template not found',
+    );
+  }
+
+  async renderFinalDetailsMessage(userId: string, bookingId: string, memberId: string, templateId: string) {
+    return this.renderBandMessage(
+      userId,
+      bookingId,
+      memberId,
+      templateId,
+      'band_final_details_message',
+      'Band final-details message template not found',
+    );
   }
 
   async sendInvite(
@@ -117,10 +173,71 @@ export class BandCommunicationsService {
     await this.reeval.onBookingChanged(bookingId);
   }
 
+  async sendCallSheet(
+    userId: string,
+    bookingId: string,
+    memberId: string,
+    input: SendBandInviteInput,
+  ): Promise<void> {
+    const template = await this.findBandTemplate(userId, input.templateId, 'band_call_sheet', 'Band call-sheet template not found');
+    const { inviteData } = await this.buildBandMemberContext(userId, bookingId, memberId);
+    const recipient = inviteData.contact.email;
+    if (!recipient) {
+      throw new BadRequestException(`Add an email address to ${inviteData.contact.name} before sending a call sheet`);
+    }
+
+    const { buffer, documentId } = await this.documents.generateAndStoreCallSheetPdf(userId, bookingId);
+    try {
+      await this.communications.sendEmail({
+        userId,
+        bookingId,
+        contactId: inviteData.contactId,
+        to: recipient,
+        subject: input.subject,
+        body: input.body,
+        templateId: template.id,
+        documentId,
+        attachments: [{ filename: 'call-sheet.pdf', content: buffer, contentType: 'application/pdf' }],
+      });
+    } catch (error) {
+      await this.documents.discardUnsentCallSheet(userId, bookingId, documentId);
+      throw error;
+    }
+  }
+
+  async sendFinalDetails(
+    userId: string,
+    bookingId: string,
+    memberId: string,
+    input: SendBandInviteInput,
+  ): Promise<void> {
+    const template = await this.findBandTemplate(
+      userId,
+      input.templateId,
+      'band_final_details',
+      'Band final-details template not found',
+    );
+    const { inviteData } = await this.buildBandMemberContext(userId, bookingId, memberId);
+    const recipient = inviteData.contact.email;
+    if (!recipient) {
+      throw new BadRequestException(`Add an email address to ${inviteData.contact.name} before sending final details`);
+    }
+
+    await this.communications.sendEmail({
+      userId,
+      bookingId,
+      contactId: inviteData.contactId,
+      to: recipient,
+      subject: input.subject,
+      body: input.body,
+      templateId: template.id,
+    });
+  }
+
   private async findBandTemplate(
     userId: string,
     templateId: string,
-    builtInType: 'band_invite' | 'band_invite_message',
+    builtInType: BandCommunicationTemplateType,
     notFoundMessage: string,
   ) {
     const template = await this.communications.findTemplate(userId, templateId);

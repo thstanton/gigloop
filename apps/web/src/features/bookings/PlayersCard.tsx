@@ -13,6 +13,7 @@ import type {
   BookingBandMemberStatus,
   BookingLineup,
 } from '@/types/api';
+import type { BandCommunicationKind } from './bandCommunicationMeta';
 
 // #983's resolution, card 2 of 3. The **player** shape — a full-width heading, used for a person
 // and nowhere else: name, then ONE status and ONE fee on a facts line, then the parts they play.
@@ -38,6 +39,7 @@ interface PlayersCardProps {
   onChangeStatus: (memberId: string, status: BookingBandMemberStatus) => void;
   changingStatusMemberId: string | null;
   onInviteMember: (memberId: string) => void;
+  onComposeCommunication: (memberId: string, kind: BandCommunicationKind) => void;
   onSaveFee: (memberId: string, sessionFee: number | null) => void;
   savingFeeMemberId: string | null;
 }
@@ -65,6 +67,7 @@ export function PlayersCard({
   onChangeStatus,
   changingStatusMemberId,
   onInviteMember,
+  onComposeCommunication,
   onSaveFee,
   savingFeeMemberId,
 }: PlayersCardProps) {
@@ -126,6 +129,24 @@ export function PlayersCard({
                     {invitationAction.label}
                   </Button>
                 )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="min-h-10"
+                  onClick={() => onComposeCommunication(member.id, 'call-sheet')}
+                  aria-label={`Send call sheet to ${member.contact.name}`}
+                >
+                  Call sheet
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="min-h-10"
+                  onClick={() => onComposeCommunication(member.id, 'final-details')}
+                  aria-label={`Send final details to ${member.contact.name}`}
+                >
+                  Final details
+                </Button>
                 {/* #980 — preview what this dep sees at their own /band/:token, before they're
                     invited. A plain link (not IconButton), matching the "Client portal" preview
                     link's shape (BookingHeader.tsx) rather than a mutation-triggering action. */}

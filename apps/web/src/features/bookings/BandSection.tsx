@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { BuilderSection } from '@/features/bookings/BuilderSection';
 import { BandAtom } from '@/features/bookings/BandAtom';
 import { BandInviteComposeSheet } from './BandInviteComposeSheet';
+import { BandCommsComposeSheet } from './BandCommsComposeSheet';
+import type { BandCommunicationKind } from './bandCommunicationMeta';
 import { useBandMutations } from '@/features/bookings/useBandMutations';
 import { useLineupTemplates } from '@/lib/hooks/useLineupTemplates';
 import { useRoleVocabulary } from '@/lib/hooks/useRoleVocabulary';
@@ -21,6 +23,7 @@ export function BandSection({
   refCallback?: React.RefCallback<HTMLElement>;
 }) {
   const [invitingMemberId, setInvitingMemberId] = useState<string | null>(null);
+  const [composingCommunication, setComposingCommunication] = useState<{ memberId: string; kind: BandCommunicationKind } | null>(null);
   const { data: lineupTemplates = [], isLoading: lineupTemplatesLoading } = useLineupTemplates();
   const instrumentVocabulary = useRoleVocabulary();
 
@@ -35,6 +38,7 @@ export function BandSection({
     saveMemberFee,
   } = useBandMutations(bookingId);
   const inviteMember = booking.band.members.find((member) => member.id === invitingMemberId) ?? null;
+  const communicationMember = booking.band.members.find((member) => member.id === composingCommunication?.memberId) ?? null;
 
   return (
     <>
@@ -64,6 +68,7 @@ export function BandSection({
           onChangeMemberStatus={(memberId, status) => updateMemberStatus.mutate({ memberId, status })}
           changingStatusMemberId={updateMemberStatus.isPending ? (updateMemberStatus.variables?.memberId ?? null) : null}
           onInviteMember={setInvitingMemberId}
+          onComposeCommunication={(memberId, kind) => setComposingCommunication({ memberId, kind })}
           onSaveMemberFee={(memberId, sessionFee) => saveMemberFee.mutate({ memberId, sessionFee })}
           savingFeeMemberId={saveMemberFee.isPending ? (saveMemberFee.variables?.memberId ?? null) : null}
         />
@@ -74,6 +79,15 @@ export function BandSection({
           member={inviteMember}
           open
           onOpenChange={(nextOpen) => { if (!nextOpen) setInvitingMemberId(null); }}
+        />
+      )}
+      {communicationMember && composingCommunication && (
+        <BandCommsComposeSheet
+          bookingId={bookingId}
+          member={communicationMember}
+          kind={composingCommunication.kind}
+          open
+          onOpenChange={(nextOpen) => { if (!nextOpen) setComposingCommunication(null); }}
         />
       )}
     </>

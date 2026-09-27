@@ -2,6 +2,7 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import type { EmailContext, MailService } from '../mail/mail.service';
 import type { CommunicationsService } from '../communications/communications.service';
 import type { ChecklistReevaluator } from '../checklist/checklist-reevaluator.service';
+import type { DocumentsService } from '../documents/documents.service';
 import type { BookingsRepository } from './bookings.repository';
 import { BandCommunicationsService } from './band-communications.service';
 
@@ -52,6 +53,7 @@ describe('BandCommunicationsService', () => {
   let mail: { buildContext: jest.Mock; renderForCompose: jest.Mock; renderPlainText: jest.Mock };
   let comms: { findTemplate: jest.Mock; sendEmail: jest.Mock };
   let reeval: { onBookingChanged: jest.Mock };
+  let documents: { generateAndStoreCallSheetPdf: jest.Mock; discardUnsentCallSheet: jest.Mock };
 
   beforeEach(() => {
     process.env.APP_BASE_URL = 'https://app.gigloop.com';
@@ -69,11 +71,16 @@ describe('BandCommunicationsService', () => {
       sendEmail: jest.fn().mockResolvedValue(undefined),
     };
     reeval = { onBookingChanged: jest.fn().mockResolvedValue(undefined) };
+    documents = {
+      generateAndStoreCallSheetPdf: jest.fn().mockResolvedValue({ buffer: Buffer.from('%PDF-call-sheet'), documentId: 'document-1' }),
+      discardUnsentCallSheet: jest.fn().mockResolvedValue(undefined),
+    };
     service = new BandCommunicationsService(
       repo as unknown as BookingsRepository,
       mail as unknown as MailService,
       comms as unknown as CommunicationsService,
       reeval as unknown as ChecklistReevaluator,
+      documents as unknown as DocumentsService,
     );
   });
 
@@ -203,5 +210,124 @@ describe('BandCommunicationsService', () => {
 
     await expect(service.buildBandMemberContext('user-1', 'booking-1', 'member-1')).rejects.toThrow(NotFoundException);
     expect(mail.buildContext).not.toHaveBeenCalled();
+  });
+
+  it('renders a call-sheet email from the member context and the call-sheet template', async () => {
+    comms.findTemplate.mockResolvedValue({ id: 'call-sheet-template', builtInType: 'band_call_sheet', content: {} });
+
+    await expect(service.renderCallSheet('user-1', 'booking-1', 'member-1', 'call-sheet-template')).resolves.toEqual({
+      subject: 'Invite Dave',
+      body: '<p>Hello Dave</p>',
+      missingVariables: [],
+    });
+    expect(mail.renderForCompose).toHaveBeenCalledWith(
+      expect.objectContaining({ builtInType: 'band_call_sheet' }),
+      expect.objectContaining({ bandMemberName: 'Dave Jones', portalLink: 'https://app.gigloop.com/band/member-token' }),
+    );
+  });
+
+  it('renders the call-sheet message through the plain-text adapter and member context', async () => {
+    const content = { type: 'doc', content: [{ type: 'paragraph', content: [] }] };
+    comms.findTemplate.mockResolvedValue({ id: 'call-sheet-message', builtInType: 'band_call_sheet_message', content });
+    mail.renderPlainText.mockReturnValue({ text: 'Call sheet: https://app.gigloop.com/band/member-token', missingVariables: [] });
+
+    await expect(service.renderCallSheetMessage('user-1', 'booking-1', 'member-1', 'call-sheet-message')).resolves.toEqual({
+      body: 'Call sheet: https://app.gigloop.com/band/member-token',
+      missingVariables: [],
+    });
+    expect(mail.renderPlainText).toHaveBeenCalledWith(content, expect.objectContaining({
+      bandMemberName: 'Dave Jones',
+      portalLink: 'https://app.gigloop.com/band/member-token',
+    }));
+  });
+
+  it('sends the call-sheet PDF as an application/pdf attachment and links the stored document', async () => {
+    comms.findTemplate.mockResolvedValue({ id: 'call-sheet-template', builtInType: 'band_call_sheet', content: {} });
+
+    await service.sendCallSheet('user-1', 'booking-1', 'member-1', {
+      templateId: 'call-sheet-template', subject: 'Edited call sheet', body: '<p>See attached.</p>',
+    });
+
+    expect(documents.generateAndStoreCallSheetPdf).toHaveBeenCalledWith('user-1', 'booking-1');
+    expect(documents.generateAndStoreCallSheetPdf).toHaveBeenCalledTimes(1);
+    expect(comms.sendEmail).toHaveBeenCalledWith(expect.objectContaining({
+      userId: 'user-1',
+      bookingId: 'booking-1',
+      contactId: 'contact-1',
+      to: 'dave@example.com',
+      subject: 'Edited call sheet',
+      body: '<p>See attached.</p>',
+      templateId: 'call-sheet-template',
+      documentId: 'document-1',
+      attachments: [{
+        filename: 'call-sheet.pdf',
+        content: Buffer.from('%PDF-call-sheet'),
+        contentType: 'application/pdf',
+      }],
+    }));
+    expect(repo.markMemberInvited).not.toHaveBeenCalled();
+    expect(reeval.onBookingChanged).not.toHaveBeenCalled();
+  });
+
+  it('rejects call-sheet email without a contact email while keeping its message renderer independent', async () => {
+    comms.findTemplate.mockResolvedValue({ id: 'call-sheet-template', builtInType: 'band_call_sheet', content: {} });
+    repo.findBandInviteData.mockResolvedValue({
+      ...memberInviteData,
+      contact: { ...memberInviteData.contact, email: null },
+    });
+
+    await expect(service.sendCallSheet('user-1', 'booking-1', 'member-1', {
+      templateId: 'call-sheet-template', subject: 'Call sheet', body: '<p>See attached.</p>',
+    })).rejects.toThrow(new BadRequestException('Add an email address to Dave Jones before sending a call sheet'));
+    expect(documents.generateAndStoreCallSheetPdf).not.toHaveBeenCalled();
+    expect(comms.sendEmail).not.toHaveBeenCalled();
+  });
+
+  it('removes the generated call-sheet document when email delivery fails', async () => {
+    comms.findTemplate.mockResolvedValue({ id: 'call-sheet-template', builtInType: 'band_call_sheet', content: {} });
+    comms.sendEmail.mockRejectedValue(new Error('mail transport failed'));
+
+    await expect(service.sendCallSheet('user-1', 'booking-1', 'member-1', {
+      templateId: 'call-sheet-template', subject: 'Call sheet', body: '<p>See attached.</p>',
+    })).rejects.toThrow('mail transport failed');
+
+    expect(documents.discardUnsentCallSheet).toHaveBeenCalledWith('user-1', 'booking-1', 'document-1');
+  });
+
+  it('renders and sends final details as a member-specific email without an attachment or status change', async () => {
+    comms.findTemplate.mockResolvedValue({ id: 'final-details-template', builtInType: 'band_final_details', content: {} });
+    await expect(service.renderFinalDetails('user-1', 'booking-1', 'member-1', 'final-details-template')).resolves.toEqual({
+      subject: 'Invite Dave', body: '<p>Hello Dave</p>', missingVariables: [],
+    });
+
+    await service.sendFinalDetails('user-1', 'booking-1', 'member-1', {
+      templateId: 'final-details-template', subject: 'Edited final details', body: '<p>See you soon.</p>',
+    });
+
+    expect(comms.sendEmail).toHaveBeenCalledWith(expect.objectContaining({
+      bookingId: 'booking-1', contactId: 'contact-1', to: 'dave@example.com',
+      subject: 'Edited final details', body: '<p>See you soon.</p>', templateId: 'final-details-template',
+    }));
+    expect(comms.sendEmail.mock.calls[0][0]).not.toHaveProperty('attachments');
+    expect(comms.sendEmail.mock.calls[0][0]).not.toHaveProperty('documentId');
+    expect(documents.generateAndStoreCallSheetPdf).not.toHaveBeenCalled();
+    expect(repo.markMemberInvited).not.toHaveBeenCalled();
+    expect(reeval.onBookingChanged).not.toHaveBeenCalled();
+  });
+
+  it('renders final-details copy through the plain-text adapter and rejects the wrong template', async () => {
+    const content = { type: 'doc', content: [{ type: 'paragraph', content: [] }] };
+    comms.findTemplate.mockResolvedValue({ id: 'final-details-message', builtInType: 'band_final_details_message', content });
+    mail.renderPlainText.mockReturnValue({ text: 'Final details: portal link', missingVariables: [] });
+
+    await expect(service.renderFinalDetailsMessage('user-1', 'booking-1', 'member-1', 'final-details-message')).resolves.toEqual({
+      body: 'Final details: portal link', missingVariables: [],
+    });
+    expect(mail.renderPlainText).toHaveBeenCalledWith(content, expect.objectContaining({
+      bandMemberName: 'Dave Jones', portalLink: 'https://app.gigloop.com/band/member-token',
+    }));
+
+    comms.findTemplate.mockResolvedValue({ id: 'wrong-template', builtInType: 'band_call_sheet', content });
+    await expect(service.renderFinalDetailsMessage('user-1', 'booking-1', 'member-1', 'wrong-template')).rejects.toThrow(NotFoundException);
   });
 });
