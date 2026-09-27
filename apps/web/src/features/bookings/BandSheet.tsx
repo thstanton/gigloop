@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { BandInviteComposeSheet } from './BandInviteComposeSheet';
 import { BandAtom } from './BandAtom';
 import { useBandMutations } from './useBandMutations';
 import { useLineupTemplates } from '@/lib/hooks/useLineupTemplates';
@@ -20,7 +22,8 @@ interface Props {
   onOpenChange: (open: boolean) => void;
 }
 
-export function BandSheet({ bookingId, lineups, chairs, members, packages, venue, open, onOpenChange }: Props) {
+export function BandSheet({ bookingId, lineups, chairs, members = [], packages, venue, open, onOpenChange }: Props) {
+  const [invitingMemberId, setInvitingMemberId] = useState<string | null>(null);
   const { data: lineupTemplates = [], isLoading: lineupTemplatesLoading } = useLineupTemplates(open);
   const instrumentVocabulary = useRoleVocabulary(open);
 
@@ -35,43 +38,62 @@ export function BandSheet({ bookingId, lineups, chairs, members, packages, venue
     saveMemberFee,
   } = useBandMutations(bookingId);
 
-  return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="flex w-full flex-col overflow-y-auto sm:max-w-lg">
-        <SheetHeader>
-          <SheetTitle>Band</SheetTitle>
-        </SheetHeader>
+  const inviteMember = members.find((member) => member.id === invitingMemberId) ?? null;
 
-        <div className="mt-4">
-          <BandAtom
-            bookingId={bookingId}
-            lineups={lineups}
-            chairs={chairs}
-            members={members}
-            packages={packages}
-            venue={venue}
-            instrumentVocabulary={instrumentVocabulary}
-            lineupTemplates={lineupTemplates}
-            lineupTemplatesLoading={lineupTemplatesLoading}
-            onApplyLineup={(lineupTemplateId, packageIds) => applyLineup.mutate({ lineupTemplateId, packageIds })}
-            isApplyingLineup={applyLineup.isPending}
-            onSetLineupSegments={(lineupId, packageIds) => setLineupSegments.mutate({ lineupId, packageIds })}
-            isSettingLineupSegments={setLineupSegments.isPending}
-            onRemoveLineup={(lineupId) => removeLineup.mutate(lineupId)}
-            removingLineupId={removeLineup.isPending ? (removeLineup.variables ?? null) : null}
-            onAddChair={(role, lineupId) => addChair.mutate({ role, lineupId })}
-            isAddingChair={addChair.isPending}
-            onRemoveChair={(chairId) => removeChair.mutate(chairId)}
-            removingChairId={removeChair.isPending ? (removeChair.variables ?? null) : null}
-            onAssignChair={(chairId, contactId) => assignChair.mutate({ chairId, contactId })}
-            assigningChairId={assignChair.isPending ? (assignChair.variables?.chairId ?? null) : null}
-            onChangeMemberStatus={(memberId, status) => updateMemberStatus.mutate({ memberId, status })}
-            changingStatusMemberId={updateMemberStatus.isPending ? (updateMemberStatus.variables?.memberId ?? null) : null}
-            onSaveMemberFee={(memberId, sessionFee) => saveMemberFee.mutate({ memberId, sessionFee })}
-            savingFeeMemberId={saveMemberFee.isPending ? (saveMemberFee.variables?.memberId ?? null) : null}
-          />
-        </div>
-      </SheetContent>
-    </Sheet>
+  return (
+    <>
+      <Sheet
+        open={open}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) setInvitingMemberId(null);
+          onOpenChange(nextOpen);
+        }}
+      >
+        <SheetContent side="right" className="flex w-full flex-col overflow-y-auto sm:max-w-lg">
+          <SheetHeader>
+            <SheetTitle>Band</SheetTitle>
+          </SheetHeader>
+
+          <div className="mt-4">
+            <BandAtom
+              bookingId={bookingId}
+              lineups={lineups}
+              chairs={chairs}
+              members={members}
+              packages={packages}
+              venue={venue}
+              instrumentVocabulary={instrumentVocabulary}
+              lineupTemplates={lineupTemplates}
+              lineupTemplatesLoading={lineupTemplatesLoading}
+              onApplyLineup={(lineupTemplateId, packageIds) => applyLineup.mutate({ lineupTemplateId, packageIds })}
+              isApplyingLineup={applyLineup.isPending}
+              onSetLineupSegments={(lineupId, packageIds) => setLineupSegments.mutate({ lineupId, packageIds })}
+              isSettingLineupSegments={setLineupSegments.isPending}
+              onRemoveLineup={(lineupId) => removeLineup.mutate(lineupId)}
+              removingLineupId={removeLineup.isPending ? (removeLineup.variables ?? null) : null}
+              onAddChair={(role, lineupId) => addChair.mutate({ role, lineupId })}
+              isAddingChair={addChair.isPending}
+              onRemoveChair={(chairId) => removeChair.mutate(chairId)}
+              removingChairId={removeChair.isPending ? (removeChair.variables ?? null) : null}
+              onAssignChair={(chairId, contactId) => assignChair.mutate({ chairId, contactId })}
+              assigningChairId={assignChair.isPending ? (assignChair.variables?.chairId ?? null) : null}
+              onChangeMemberStatus={(memberId, status) => updateMemberStatus.mutate({ memberId, status })}
+              changingStatusMemberId={updateMemberStatus.isPending ? (updateMemberStatus.variables?.memberId ?? null) : null}
+              onInviteMember={setInvitingMemberId}
+              onSaveMemberFee={(memberId, sessionFee) => saveMemberFee.mutate({ memberId, sessionFee })}
+              savingFeeMemberId={saveMemberFee.isPending ? (saveMemberFee.variables?.memberId ?? null) : null}
+            />
+          </div>
+        </SheetContent>
+      </Sheet>
+      {inviteMember && (
+        <BandInviteComposeSheet
+          bookingId={bookingId}
+          member={inviteMember}
+          open={open}
+          onOpenChange={(nextOpen) => { if (!nextOpen) setInvitingMemberId(null); }}
+        />
+      )}
+    </>
   );
 }

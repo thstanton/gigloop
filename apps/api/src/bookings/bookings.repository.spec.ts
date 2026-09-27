@@ -43,6 +43,7 @@ type MockPrisma = {
     findFirst: jest.Mock;
     create: jest.Mock;
     update: jest.Mock;
+    updateMany: jest.Mock;
   };
   lineup: {
     findFirst: jest.Mock;
@@ -107,6 +108,7 @@ function makePrisma(): MockPrisma {
       findFirst: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
     },
     lineup: {
       findFirst: jest.fn(),
@@ -1243,6 +1245,45 @@ describe('BookingsRepository', () => {
       await repo.findMember('u1', 'b1', 'm1');
       expect(prisma.bookingBandMember.findFirst).toHaveBeenCalledWith({
         where: { id: 'm1', bookingId: 'b1', userId: 'u1', removedAt: null },
+      });
+    });
+  });
+
+  describe('findBandInviteData', () => {
+    it('scopes the invite lookup to the active member, booking, and tenant, selecting only invite facts', async () => {
+      prisma.bookingBandMember.findFirst.mockResolvedValue(null);
+
+      await repo.findBandInviteData('u1', 'b1', 'm1');
+
+      const [query] = prisma.bookingBandMember.findFirst.mock.calls[0];
+      expect(query.where).toEqual({
+        id: 'm1',
+        bookingId: 'b1',
+        userId: 'u1',
+        removedAt: null,
+        booking: { is: { userId: 'u1' } },
+      });
+      expect(query.select).toEqual(expect.objectContaining({
+        contact: { select: { name: true, email: true } },
+        booking: expect.objectContaining({
+          select: expect.objectContaining({
+            sets: expect.objectContaining({ select: { packageId: true, startTime: true, duration: true, order: true } }),
+            packages: { select: { id: true, order: true }, orderBy: { order: 'asc' } },
+          }),
+        }),
+      }));
+    });
+  });
+
+  describe('markMemberInvited', () => {
+    it('sets INVITED and invitedAt with tenant and active-row scoping in the write itself', async () => {
+      const invitedAt = new Date('2026-08-01T00:00:00.000Z');
+
+      await repo.markMemberInvited('u1', 'b1', 'm1', invitedAt);
+
+      expect(prisma.bookingBandMember.updateMany).toHaveBeenCalledWith({
+        where: { id: 'm1', bookingId: 'b1', userId: 'u1', removedAt: null },
+        data: { status: 'INVITED', invitedAt },
       });
     });
   });

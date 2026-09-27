@@ -97,6 +97,7 @@ const meta = {
     assigningChairId: null,
     onChangeMemberStatus: fn(),
     changingStatusMemberId: null,
+    onInviteMember: fn(),
     onSaveMemberFee: fn(),
     savingFeeMemberId: null,
   },
@@ -139,6 +140,21 @@ export const OneLineupManySegments: Story = {
     for (const role of fourPieceRoles) {
       await expect(canvas.getAllByText(role)).toHaveLength(1);
     }
+  },
+};
+
+export const ExistingMemberCanResendInvitation: Story = {
+  name: 'Player row offers a per-person resend action',
+  args: {
+    lineups: [{ id: 'lu-invite', label: 'My four-piece', packageIds: [] }],
+    chairs: fourPieceChairs('lu-invite', ['m-ana', null, null, null], [WHOLE_GIG_CALL]),
+    members: [ana],
+    onInviteMember: fn(),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: 'Resend invitation to Ana Reis' }));
+    await expect(args.onInviteMember).toHaveBeenCalledWith('m-ana');
   },
 };
 

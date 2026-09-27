@@ -1,6 +1,7 @@
-import { Eye, X } from 'lucide-react';
+import { Eye, Mail, X } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { IconButton } from '@/components/common/IconButton';
+import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { BandMemberStatusDropdown } from './BandMemberStatusDropdown';
 import InlineFeeAdd from './InlineFeeAdd';
@@ -36,6 +37,7 @@ interface PlayersCardProps {
   onUnassignChair: (chairId: string) => void;
   onChangeStatus: (memberId: string, status: BookingBandMemberStatus) => void;
   changingStatusMemberId: string | null;
+  onInviteMember: (memberId: string) => void;
   onSaveFee: (memberId: string, sessionFee: number | null) => void;
   savingFeeMemberId: string | null;
 }
@@ -49,6 +51,7 @@ export function PlayersCard({
   onUnassignChair,
   onChangeStatus,
   changingStatusMemberId,
+  onInviteMember,
   onSaveFee,
   savingFeeMemberId,
 }: PlayersCardProps) {
@@ -97,6 +100,18 @@ export function PlayersCard({
                   onSave={(sessionFee) => onSaveFee(member.id, sessionFee)}
                   isSaving={savingFeeMemberId === member.id}
                 />
+                {!member.isSelf && (member.status === 'ADDED' || member.status === 'INVITED') && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="min-h-10"
+                    onClick={() => onInviteMember(member.id)}
+                    aria-label={`${member.status === 'INVITED' ? 'Resend' : 'Send'} invitation to ${member.contact.name}`}
+                  >
+                    <Mail size={14} />
+                    {member.status === 'INVITED' ? 'Resend invite' : 'Invite'}
+                  </Button>
+                )}
                 {/* #980 — preview what this dep sees at their own /band/:token, before they're
                     invited. A plain link (not IconButton), matching the "Client portal" preview
                     link's shape (BookingHeader.tsx) rather than a mutation-triggering action. */}

@@ -57,6 +57,7 @@ interface BandAtomProps {
   assigningChairId: string | null;
   onChangeMemberStatus: (memberId: string, status: BookingBandMemberStatus) => void;
   changingStatusMemberId: string | null;
+  onInviteMember: (memberId: string) => void;
   onSaveMemberFee: (memberId: string, sessionFee: number | null) => void;
   savingFeeMemberId: string | null;
 }
@@ -85,6 +86,7 @@ export function BandAtom({
   assigningChairId,
   onChangeMemberStatus,
   changingStatusMemberId,
+  onInviteMember,
   onSaveMemberFee,
   savingFeeMemberId,
 }: BandAtomProps) {
@@ -155,8 +157,9 @@ export function BandAtom({
         lineups={lineups}
         hasPackages={packages.length > 0}
         onUnassignChair={(chairId) => onAssignChair(chairId, null)}
-        onChangeStatus={onChangeMemberStatus}
-        changingStatusMemberId={changingStatusMemberId}
+          onChangeStatus={onChangeMemberStatus}
+          changingStatusMemberId={changingStatusMemberId}
+          onInviteMember={onInviteMember}
         onSaveFee={onSaveMemberFee}
         savingFeeMemberId={savingFeeMemberId}
       />

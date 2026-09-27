@@ -67,7 +67,7 @@ export interface MailTransportOptions {
   to: string;
   subject: string;
   body: string;
-  attachments?: Array<{ filename: string; content: Buffer }>;
+  attachments?: Array<{ filename: string; content: Buffer; contentType?: string }>;
   /** Client-facing sends only (#932) — personalizes From/Reply-To with the musician's identity. */
   senderIdentity?: SenderIdentity;
 }
@@ -323,6 +323,7 @@ export class MailService {
         // Resend SDK v6 uses JSON.stringify internally; Buffer serialises as
         // {type:'Buffer',data:[...]} which the API silently drops as invalid.
         content: a.content.toString('base64'),
+        ...(a.contentType ? { contentType: a.contentType } : {}),
       })),
     });
 

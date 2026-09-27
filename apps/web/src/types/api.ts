@@ -849,6 +849,20 @@ export interface CreateCommunicationInput {
   sentAt?: string;
 }
 
+/** Rendered draft returned by the per-member band invite compose endpoint. */
+export interface BandInviteRenderResult {
+  subject: string;
+  body: string;
+  missingVariables: string[];
+}
+
+/** Final client-edited content posted to the per-member band invite send endpoint. */
+export interface SendBandInviteInput {
+  templateId: string;
+  subject: string;
+  body: string;
+}
+
 // ─────────────────────────────────────────
 // Templates
 // ─────────────────────────────────────────

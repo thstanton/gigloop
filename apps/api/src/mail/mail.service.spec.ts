@@ -719,6 +719,20 @@ describe('MailService', () => {
       );
     });
 
+    it('passes an explicit attachment content type through to Resend', async () => {
+      const content = Buffer.from('BEGIN:VCALENDAR');
+      await service.send({
+        ...sendOptions,
+        attachments: [{ filename: 'invite.ics', content, contentType: 'text/calendar' }],
+      });
+      const resendInstance = (service as unknown as { resend: { emails: { send: jest.Mock } } }).resend;
+      expect(resendInstance.emails.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          attachments: [{ filename: 'invite.ics', content: content.toString('base64'), contentType: 'text/calendar' }],
+        }),
+      );
+    });
+
     // #932: senderIdentity personalizes From/Reply-To for client-facing sends only.
     // RESEND_FROM is pinned explicitly (mirrors the MAIL_REDIRECT_TO tests below) so
     // assertions on the built `from` string don't depend on ambient shell/CI env state.
