@@ -14,7 +14,7 @@ describe('portal-visibility authority (ADR-0054)', () => {
   // #890: the audience vocabulary itself, ahead of exercising it below.
   describe('PortalAudience', () => {
     it('is exactly CLIENT and BAND, in that order', () => {
-      expect(PORTAL_AUDIENCES.map((row) => row.value)).toEqual(['CLIENT', 'BAND']);
+      expect(PORTAL_AUDIENCES).toEqual(['CLIENT', 'BAND']);
     });
   });
 

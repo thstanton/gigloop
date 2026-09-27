@@ -20,24 +20,31 @@
  * being asked about (the `ownedByBooking` parameter below, unchanged). Do not confuse the two —
  * this one is about who is looking, not what is being looked at.
  *
- * Declared once as an `as const satisfies` table with a compile-time coverage guard (below), not
- * a bare union, so a third audience cannot be half-added to the type without the table noticing.
+ * Declared once as this array, the type derived from it — same idiom as `ContractStatus` below —
+ * so the type is never a hand-written union a table has to be checked against.
  */
-export type PortalAudience = 'CLIENT' | 'BAND';
+export const PORTAL_AUDIENCES = ['CLIENT', 'BAND'] as const;
 
-export interface PortalAudienceRow {
-  value: PortalAudience;
+export type PortalAudience = (typeof PORTAL_AUDIENCES)[number];
+
+/**
+ * The one place every verdict function's audience branch is decided (below). A `switch` with a
+ * `never`-typed default, not three independent `if (audience === 'BAND')` checks, so a third
+ * audience is a compile error here instead of silently falling through to CLIENT behaviour at
+ * whichever call site forgot to special-case it.
+ */
+function isBandAudience(audience: PortalAudience): boolean {
+  switch (audience) {
+    case 'BAND':
+      return true;
+    case 'CLIENT':
+      return false;
+    default: {
+      const unhandled: never = audience;
+      throw new Error(`Unhandled portal audience: ${String(unhandled)}`);
+    }
+  }
 }
-
-export const PORTAL_AUDIENCES = [
-  { value: 'CLIENT' },
-  { value: 'BAND' },
-] as const satisfies readonly PortalAudienceRow[];
-
-type AssertNever<T extends never> = T;
-export type _PortalAudienceCoverage = AssertNever<
-  Exclude<PortalAudience, (typeof PORTAL_AUDIENCES)[number]['value']>
->;
 
 /**
  * The full ReasonCode vocabulary, declared exactly once as an array so both the type and any
@@ -117,7 +124,7 @@ export function resolveContractVisibility(
   audience: PortalAudience,
   bookingCancelled = false,
 ): PortalVisibilityVerdict | null {
-  if (audience === 'BAND') return null;
+  if (isBandAudience(audience)) return null;
   if (contractStatus === null) return null;
   if (bookingCancelled) return { visible: false, reason: 'cancelled' };
   switch (contractStatus) {
@@ -215,7 +222,7 @@ export function resolveDocumentVisibility(
   bookingCancelled = false,
   ownedByBooking = true,
 ): DocumentPortalVisibilityVerdict {
-  if (audience === 'BAND') {
+  if (isBandAudience(audience)) {
     return { visible: BAND_DOCUMENT_VISIBILITY[doc.type as DocumentTypeValue] ?? false };
   }
   if (!ownedByBooking) return { visible: false, reason: 'other_booking' };
@@ -250,7 +257,7 @@ export function resolveMusicFormVisibility(
   audience: PortalAudience,
   isPublished = false,
 ): PortalVisibilityVerdict | null {
-  if (audience === 'BAND') return null;
+  if (isBandAudience(audience)) return null;
   if (!hasConfig) return null;
   return isPublished ? { visible: true } : { visible: false, reason: 'until_published' };
 }
