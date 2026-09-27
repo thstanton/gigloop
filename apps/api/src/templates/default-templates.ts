@@ -10,7 +10,64 @@ export type BuiltInTemplateType =
   | 'thank_you'
   | 'contract_received'
   | 'deposit_received'
-  | 'contract';
+  | 'contract'
+  | 'band_invite'
+  | 'band_invite_message'
+  | 'band_call_sheet'
+  | 'band_call_sheet_message'
+  | 'band_final_details'
+  | 'band_final_details_message';
+
+type BuiltInTemplateMeta = {
+  value: BuiltInTemplateType;
+  group: 'email' | 'document' | 'message';
+  format: 'rich' | 'plain';
+  name: string;
+  description: string;
+  featureFlag?: 'BAND_MEMBERS';
+};
+
+// The canonical API-side declaration of built-in template types. Lists and names below are
+// derived from this ordered table; the coverage guard catches a type union member omitted here.
+export const BUILT_IN_TEMPLATE_META = [
+  { value: 'quote', group: 'email', format: 'rich', name: 'Quote', description: 'Sent when providing a price quote for a new enquiry' },
+  { value: 'confirmation', group: 'email', format: 'rich', name: 'Booking confirmation', description: 'Sent to confirm an accepted booking' },
+  { value: 'contract_cover', group: 'email', format: 'rich', name: 'Contract email', description: 'Email body when sending only the contract link' },
+  { value: 'contract_and_deposit_cover', group: 'email', format: 'rich', name: 'Contract & deposit email', description: 'Email body when sending the contract link with a deposit invoice' },
+  { value: 'deposit_invoice_cover', group: 'email', format: 'rich', name: 'Deposit invoice email', description: 'Email body when sending the deposit invoice' },
+  { value: 'balance_invoice_cover', group: 'email', format: 'rich', name: 'Balance invoice email', description: 'Email body when sending the final balance invoice' },
+  { value: 'series_invoice_cover', group: 'email', format: 'rich', name: 'Series invoice email', description: 'Email body when sending the invoice for a series of bookings' },
+  { value: 'contract_received', group: 'email', format: 'rich', name: 'Contract received', description: 'Confirmation sent when the client signs the contract' },
+  { value: 'deposit_received', group: 'email', format: 'rich', name: 'Deposit received', description: 'Confirmation sent when the deposit payment arrives' },
+  { value: 'music_form_invite', group: 'email', format: 'rich', name: 'Music form invitation', description: 'Sent when inviting the client to fill in their music preferences' },
+  { value: 'thank_you', group: 'email', format: 'rich', name: 'Thank you', description: 'Sent after the performance to thank the client' },
+  { value: 'contract', group: 'document', format: 'rich', name: 'Contract', description: 'Performance agreement sent to clients for signing' },
+  { value: 'band_invite', group: 'email', format: 'rich', name: 'Band invitation email', description: 'Email body when inviting a band member to play at a booking', featureFlag: 'BAND_MEMBERS' },
+  { value: 'band_invite_message', group: 'message', format: 'plain', name: 'Band invitation message', description: 'Copy-paste invitation message for a band member', featureFlag: 'BAND_MEMBERS' },
+  { value: 'band_call_sheet', group: 'email', format: 'rich', name: 'Band call sheet email', description: 'Email body when sending a band member their call sheet', featureFlag: 'BAND_MEMBERS' },
+  { value: 'band_call_sheet_message', group: 'message', format: 'plain', name: 'Band call sheet message', description: 'Copy-paste call sheet link for a band member', featureFlag: 'BAND_MEMBERS' },
+  { value: 'band_final_details', group: 'email', format: 'rich', name: 'Band final details email', description: 'Email body when sending final booking details to a band member', featureFlag: 'BAND_MEMBERS' },
+  { value: 'band_final_details_message', group: 'message', format: 'plain', name: 'Band final details message', description: 'Copy-paste final details link for a band member', featureFlag: 'BAND_MEMBERS' },
+] as const satisfies readonly BuiltInTemplateMeta[];
+
+type AssertNever<T extends never> = T;
+export type _BuiltInTemplateMetaCoverage = AssertNever<
+  Exclude<BuiltInTemplateType, (typeof BUILT_IN_TEMPLATE_META)[number]['value']>
+>;
+
+export const ALL_BUILT_IN_TYPES: BuiltInTemplateType[] = BUILT_IN_TEMPLATE_META.map(({ value }) => value);
+export const BUILT_IN_EMAIL_TYPES: BuiltInTemplateType[] = BUILT_IN_TEMPLATE_META
+  .filter(({ group }) => group === 'email')
+  .map(({ value }) => value);
+export const BUILT_IN_DOCUMENT_TYPES: BuiltInTemplateType[] = BUILT_IN_TEMPLATE_META
+  .filter(({ group }) => group === 'document')
+  .map(({ value }) => value);
+export const BUILT_IN_MESSAGE_TYPES: BuiltInTemplateType[] = BUILT_IN_TEMPLATE_META
+  .filter(({ group }) => group === 'message')
+  .map(({ value }) => value);
+export const BUILT_IN_NAMES: Record<BuiltInTemplateType, string> = Object.fromEntries(
+  BUILT_IN_TEMPLATE_META.map(({ value, name }) => [value, name]),
+) as Record<BuiltInTemplateType, string>;
 
 export const TEMPLATE_DEFAULT_SUBJECTS: Record<string, string> = {
   quote: 'Your quote from {{musicianName}}',
@@ -24,6 +81,9 @@ export const TEMPLATE_DEFAULT_SUBJECTS: Record<string, string> = {
   deposit_received: 'Deposit received — thank you',
   music_form_invite: 'Your music request form — {{bookingDate}}',
   thank_you: 'Thank you — it was a pleasure',
+  band_invite: 'You’re invited to play — {{bookingDate}}',
+  band_call_sheet: 'Your call sheet — {{bookingDate}}',
+  band_final_details: 'Final details — {{bookingDate}}',
 };
 
 // Fallback display text used when a variable is null/empty during rendering.
@@ -219,30 +279,59 @@ const DEFAULTS: Partial<Record<BuiltInTemplateType, ReturnType<typeof doc>>> = {
     p(v('musicianName', 'Musician name')),
     p(v('musicianEmail', 'Musician email')),
   ),
+
+  band_invite: doc(
+    p(t('Hi '), v('bandMemberName', 'Band member name'), t(',')),
+    blank(),
+    p(t('I’d love you to play with me on '), v('bookingDate', 'Booking date'), t(' at '), v('venueName', 'Venue name'), t('.')),
+    blank(),
+    p(t('Please accept or decline in your band portal:')),
+    p(v('portalLink', 'Portal link')),
+    blank(),
+    p(t('A calendar invitation is attached.')),
+    blank(),
+    p(t('Thanks,')),
+    p(v('musicianName', 'Musician name')),
+  ),
+
+  band_invite_message: doc(
+    p(t('Invitation: '), v('portalLink', 'Portal link')),
+    p(t('For '), v('bookingDate', 'Booking date'), t(' — please reply there.')),
+  ),
+
+  band_call_sheet: doc(
+    p(t('Hi '), v('bandMemberName', 'Band member name'), t(',')),
+    blank(),
+    p(t('Your call sheet for '), v('bookingDate', 'Booking date'), t(' is attached.')),
+    blank(),
+    p(t('Your call time and gig details are also in your band portal:')),
+    p(v('portalLink', 'Portal link')),
+    blank(),
+    p(t('Thanks,')),
+    p(v('musicianName', 'Musician name')),
+  ),
+
+  band_call_sheet_message: doc(
+    p(t('Your call sheet: '), v('portalLink', 'Portal link')),
+    p(t('For '), v('bookingDate', 'Booking date'), t('.')),
+  ),
+
+  band_final_details: doc(
+    p(t('Hi '), v('bandMemberName', 'Band member name'), t(',')),
+    blank(),
+    p(t('Here are the final details for '), v('bookingDate', 'Booking date'), t(' at '), v('venueName', 'Venue name'), t(':')),
+    blank(),
+    p(v('portalLink', 'Portal link')),
+    blank(),
+    p(t('Thanks,')),
+    p(v('musicianName', 'Musician name')),
+  ),
+
+  band_final_details_message: doc(
+    p(t('Final details: '), v('portalLink', 'Portal link')),
+    p(t('For '), v('bookingDate', 'Booking date'), t('.')),
+  ),
 };
-
-export const BUILT_IN_EMAIL_TYPES: BuiltInTemplateType[] = [
-  'quote',
-  'confirmation',
-  'contract_cover',
-  'contract_and_deposit_cover',
-  'deposit_invoice_cover',
-  'balance_invoice_cover',
-  'series_invoice_cover',
-  'contract_received',
-  'deposit_received',
-  'music_form_invite',
-  'thank_you',
-];
-
-export const BUILT_IN_DOCUMENT_TYPES: BuiltInTemplateType[] = [
-  'contract',
-];
-
-export const ALL_BUILT_IN_TYPES: BuiltInTemplateType[] = [
-  ...BUILT_IN_EMAIL_TYPES,
-  ...BUILT_IN_DOCUMENT_TYPES,
-];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -284,21 +373,6 @@ const DOCUMENT_DEFAULTS: Partial<Record<BuiltInTemplateType, ReturnType<typeof d
     p(t('Client: '), v('customerName', 'Customer name')),
     p(t('Date: ____________________')),
   ),
-};
-
-export const BUILT_IN_NAMES: Record<BuiltInTemplateType, string> = {
-  quote: 'Quote',
-  confirmation: 'Booking confirmation',
-  contract_cover: 'Contract email',
-  contract_and_deposit_cover: 'Contract & deposit email',
-  deposit_invoice_cover: 'Deposit invoice email',
-  balance_invoice_cover: 'Balance invoice email',
-  series_invoice_cover: 'Series invoice email',
-  contract_received: 'Contract received',
-  deposit_received: 'Deposit received',
-  music_form_invite: 'Music form invitation',
-  thank_you: 'Thank you',
-  contract: 'Contract',
 };
 
 export function getDefaultContent(type: BuiltInTemplateType): Record<string, unknown> {

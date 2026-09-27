@@ -1,7 +1,7 @@
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { TemplatesService } from './templates.service';
 import { TemplatesRepository } from './templates.repository';
-import { ALL_BUILT_IN_TYPES } from './default-templates';
+import { ALL_BUILT_IN_TYPES, BUILT_IN_TEMPLATE_META, getDefaultContent } from './default-templates';
 
 type MockRepo = {
   findAll: jest.Mock;
@@ -34,10 +34,18 @@ const seededTemplates = ALL_BUILT_IN_TYPES.map((type, i) => ({
 describe('TemplatesService', () => {
   let service: TemplatesService;
   let repo: MockRepo;
+  let originalBandFlag: string | undefined;
 
   beforeEach(() => {
+    originalBandFlag = process.env.FEATURE_BAND_MEMBERS;
+    process.env.FEATURE_BAND_MEMBERS = 'true';
     repo = makeRepo();
     service = new TemplatesService(repo as unknown as TemplatesRepository);
+  });
+
+  afterEach(() => {
+    if (originalBandFlag === undefined) delete process.env.FEATURE_BAND_MEMBERS;
+    else process.env.FEATURE_BAND_MEMBERS = originalBandFlag;
   });
 
   describe('findAll', () => {
@@ -70,6 +78,24 @@ describe('TemplatesService', () => {
       expect(repo.seedBuiltIns).toHaveBeenCalledWith('u1', ALL_BUILT_IN_TYPES);
       expect(result).toEqual(seededTemplates);
     });
+
+    it('does not seed or return band templates while the band feature flag is off', async () => {
+      delete process.env.FEATURE_BAND_MEMBERS;
+      const bandTypes = BUILT_IN_TEMPLATE_META
+        .filter((row) => 'featureFlag' in row)
+        .map((row) => row.value);
+      const bandTypeSet = new Set<string>(bandTypes);
+      const nonBandTemplates = seededTemplates.filter((template) => !bandTypeSet.has(template.builtInType));
+      repo.findAll
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce(seededTemplates);
+      repo.seedBuiltIns.mockResolvedValue(undefined);
+
+      const result = await service.findAll('u1');
+
+      expect(repo.seedBuiltIns).toHaveBeenCalledWith('u1', ALL_BUILT_IN_TYPES.filter((type) => !bandTypeSet.has(type)));
+      expect(result).toEqual(nonBandTemplates);
+    });
   });
 
   describe('findOne', () => {
@@ -83,6 +109,13 @@ describe('TemplatesService', () => {
     it('throws NotFoundException when repository returns null', async () => {
       repo.findOne.mockResolvedValue(null);
       await expect(service.findOne('u1', 'missing')).rejects.toThrow(NotFoundException);
+    });
+
+    it('treats a feature-flagged template as not found while its flag is off', async () => {
+      delete process.env.FEATURE_BAND_MEMBERS;
+      repo.findOne.mockResolvedValue({ ...builtInTemplate, builtInType: 'band_invite' });
+
+      await expect(service.findOne('u1', 'band-template')).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -135,12 +168,15 @@ describe('TemplatesService', () => {
   });
 
   describe('resetToDefault', () => {
-    it('resets content to default for a built-in template', async () => {
-      repo.findOne.mockResolvedValue(builtInTemplate);
-      const updated = { ...builtInTemplate };
+    it('resets content to the default for an editable band message template', async () => {
+      const bandMessageTemplate = { ...builtInTemplate, builtInType: 'band_invite_message' };
+      repo.findOne.mockResolvedValue(bandMessageTemplate);
+      const updated = { ...bandMessageTemplate };
       repo.update.mockResolvedValue(updated);
       await service.resetToDefault('u1', 't2');
-      expect(repo.update).toHaveBeenCalledWith('t2', expect.objectContaining({ content: expect.any(Object) }));
+      expect(repo.update).toHaveBeenCalledWith('t2', {
+        content: getDefaultContent('band_invite_message'),
+      });
     });
 
     it('throws NotFoundException when template is not found', async () => {

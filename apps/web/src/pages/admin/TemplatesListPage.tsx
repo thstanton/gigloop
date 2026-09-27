@@ -1,7 +1,14 @@
 import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import { useTemplates } from '@/lib/hooks/useTemplates';
-import { BUILT_IN_EMAIL_TYPES, BUILT_IN_DOCUMENT_TYPES, TEMPLATE_DISPLAY } from '@/features/templates/templateMeta';
+import {
+  BUILT_IN_EMAIL_TYPES,
+  BUILT_IN_DOCUMENT_TYPES,
+  BUILT_IN_MESSAGE_TYPES,
+  BUILT_IN_TEMPLATE_META,
+  TEMPLATE_DISPLAY,
+} from '@/features/templates/templateMeta';
+import { isEnabled } from '@/lib/featureFlags';
 import type { Template } from '@/types/api';
 
 function TemplateSkeleton({ count }: { count: number }) {
@@ -74,6 +81,15 @@ function TemplateSection({
 
 export default function TemplatesListPage() {
   const { data: templates = [], isLoading } = useTemplates();
+  const bandMembersEnabled = isEnabled('VITE_FEATURE_BAND_MEMBERS');
+  const visibleTypes = new Set(
+    BUILT_IN_TEMPLATE_META
+      .filter((row) => bandMembersEnabled || !('featureFlag' in row))
+      .map(({ value }) => value),
+  );
+  const visibleTemplates = templates.filter(
+    (template) => !template.builtInType || visibleTypes.has(template.builtInType),
+  );
 
   return (
     <div className="px-4 md:px-6 py-6 max-w-3xl mx-auto">
@@ -82,7 +98,7 @@ export default function TemplatesListPage() {
       <TemplateSection
         title="Email templates"
         types={BUILT_IN_EMAIL_TYPES}
-        templates={templates}
+        templates={visibleTemplates}
         isLoading={isLoading}
         skeletonCount={9}
       />
@@ -90,10 +106,20 @@ export default function TemplatesListPage() {
       <TemplateSection
         title="Document templates"
         types={BUILT_IN_DOCUMENT_TYPES}
-        templates={templates}
+        templates={visibleTemplates}
         isLoading={isLoading}
         skeletonCount={1}
       />
+
+      {bandMembersEnabled && (
+        <TemplateSection
+          title="Messages"
+          types={BUILT_IN_MESSAGE_TYPES}
+          templates={visibleTemplates}
+          isLoading={isLoading}
+          skeletonCount={BUILT_IN_MESSAGE_TYPES.length}
+        />
+      )}
     </div>
   );
 }

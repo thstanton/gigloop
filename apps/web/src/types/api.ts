@@ -865,7 +865,13 @@ export type BuiltInTemplateType =
   | 'thank_you'
   | 'contract_received'
   | 'deposit_received'
-  | 'contract';
+  | 'contract'
+  | 'band_invite'
+  | 'band_invite_message'
+  | 'band_call_sheet'
+  | 'band_call_sheet_message'
+  | 'band_final_details'
+  | 'band_final_details_message';
 
 export interface Template {
   id: string;

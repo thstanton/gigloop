@@ -1,7 +1,10 @@
 import {
   ALL_BUILT_IN_TYPES,
   BUILT_IN_EMAIL_TYPES,
+  BUILT_IN_TEMPLATE_META,
   BUILT_IN_NAMES,
+  BUILT_IN_MESSAGE_TYPES,
+  BUILT_IN_DOCUMENT_TYPES,
   TEMPLATE_DEFAULT_SUBJECTS,
   getDefaultContent,
 } from './default-templates';
@@ -30,6 +33,30 @@ function variableNamesOf(content: Record<string, unknown>): string[] {
 }
 
 describe('default templates', () => {
+  it('keeps the built-in catalog complete and grouped in declaration order', () => {
+    expect(BUILT_IN_TEMPLATE_META).toHaveLength(18);
+    expect(BUILT_IN_EMAIL_TYPES).toHaveLength(14);
+    expect(BUILT_IN_DOCUMENT_TYPES).toHaveLength(1);
+    expect(BUILT_IN_MESSAGE_TYPES).toHaveLength(3);
+    expect(ALL_BUILT_IN_TYPES).toHaveLength(18);
+    expect(BUILT_IN_TEMPLATE_META.filter((row) => 'featureFlag' in row)).toHaveLength(6);
+
+    for (const row of BUILT_IN_TEMPLATE_META) {
+      expect(row.value).toBeTruthy();
+      expect(row.name).toBe(BUILT_IN_NAMES[row.value]);
+      expect(row.description.length).toBeGreaterThan(0);
+      expect(['email', 'document', 'message']).toContain(row.group);
+      expect(['rich', 'plain']).toContain(row.format);
+      expect((row.group === 'message') === (row.format === 'plain')).toBe(true);
+    }
+    expect(ALL_BUILT_IN_TYPES).toEqual(BUILT_IN_TEMPLATE_META.map(({ value }) => value));
+
+    for (const groupTypes of [BUILT_IN_EMAIL_TYPES, BUILT_IN_DOCUMENT_TYPES, BUILT_IN_MESSAGE_TYPES]) {
+      const positions = groupTypes.map((type) => ALL_BUILT_IN_TYPES.indexOf(type));
+      expect(positions).toEqual([...positions].sort((a, b) => a - b));
+    }
+  });
+
   it('gives every built-in type a non-empty display name', () => {
     for (const type of ALL_BUILT_IN_TYPES) {
       expect(BUILT_IN_NAMES[type].length).toBeGreaterThan(0);
@@ -43,6 +70,15 @@ describe('default templates', () => {
       const content = getDefaultContent(type);
       expect(textOf(content).trim().length).toBeGreaterThan(0);
       expect(variableNamesOf(content).length).toBeGreaterThan(0);
+    }
+  });
+
+  it('keeps each copy-paste message short, link-first, and two lines long', () => {
+    for (const type of BUILT_IN_MESSAGE_TYPES) {
+      const content = getDefaultContent(type) as { content: TNode[] };
+      expect(content.content).toHaveLength(2);
+      expect(variableNamesOf(content.content[0])[0]).toBe('portalLink');
+      expect(textOf(content).length).toBeLessThan(180);
     }
   });
 
