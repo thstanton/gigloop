@@ -819,13 +819,14 @@ export interface InvoiceDocument {
 // ─────────────────────────────────────────
 
 export type CommunicationStatus = 'PENDING' | 'SENT' | 'FAILED';
+export type CommunicationChannel = 'EMAIL' | 'MANUAL';
 
 export interface Communication {
   id: string;
   createdAt: string;
   updatedAt: string;
   direction: 'OUTBOUND';
-  channel: 'EMAIL';
+  channel: CommunicationChannel;
   status: CommunicationStatus;
   subject: string;
   body: string;
@@ -845,6 +846,7 @@ export interface CreateCommunicationInput {
   contactId: string;
   subject: string;
   body: string;
+  channel?: CommunicationChannel;
   templateId?: string;
   sentAt?: string;
 }
@@ -852,6 +854,12 @@ export interface CreateCommunicationInput {
 /** Rendered draft returned by the per-member band invite compose endpoint. */
 export interface BandInviteRenderResult {
   subject: string;
+  body: string;
+  missingVariables: string[];
+}
+
+/** Rendered plain-text invitation message for copying and pasting. */
+export interface BandInviteMessageRenderResult {
   body: string;
   missingVariables: string[];
 }

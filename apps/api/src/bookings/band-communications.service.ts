@@ -50,9 +50,21 @@ export class BandCommunicationsService {
   }
 
   async renderInvite(userId: string, bookingId: string, memberId: string, templateId: string) {
-    const template = await this.findInviteTemplate(userId, templateId);
+    const template = await this.findBandTemplate(userId, templateId, 'band_invite', 'Band invitation template not found');
     const { emailContext } = await this.buildBandMemberContext(userId, bookingId, memberId);
     return this.mail.renderForCompose(template, emailContext);
+  }
+
+  async renderInviteMessage(userId: string, bookingId: string, memberId: string, templateId: string) {
+    const template = await this.findBandTemplate(
+      userId,
+      templateId,
+      'band_invite_message',
+      'Band invitation message template not found',
+    );
+    const { emailContext } = await this.buildBandMemberContext(userId, bookingId, memberId);
+    const { text, missingVariables } = this.mail.renderPlainText(template.content, emailContext);
+    return { body: text, missingVariables };
   }
 
   async sendInvite(
@@ -61,7 +73,7 @@ export class BandCommunicationsService {
     memberId: string,
     input: SendBandInviteInput,
   ): Promise<void> {
-    const template = await this.findInviteTemplate(userId, input.templateId);
+    const template = await this.findBandTemplate(userId, input.templateId, 'band_invite', 'Band invitation template not found');
     const { emailContext, inviteData } = await this.buildBandMemberContext(userId, bookingId, memberId);
     const recipient = inviteData.contact.email;
     if (!recipient) {
@@ -105,9 +117,14 @@ export class BandCommunicationsService {
     await this.reeval.onBookingChanged(bookingId);
   }
 
-  private async findInviteTemplate(userId: string, templateId: string) {
+  private async findBandTemplate(
+    userId: string,
+    templateId: string,
+    builtInType: 'band_invite' | 'band_invite_message',
+    notFoundMessage: string,
+  ) {
     const template = await this.communications.findTemplate(userId, templateId);
-    if (!template || template.builtInType !== 'band_invite') throw new NotFoundException('Band invitation template not found');
+    if (!template || template.builtInType !== builtInType) throw new NotFoundException(notFoundMessage);
     return template;
   }
 

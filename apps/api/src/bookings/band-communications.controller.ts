@@ -43,6 +43,30 @@ export class BandCommunicationsController {
     return this.service.renderInvite(req.userId, bookingId, memberId, query.templateId);
   }
 
+  @ApiOperation({ summary: 'Render the plain-text band invitation message for one member' })
+  @ApiResponse({
+    status: 200,
+    description: 'Rendered plain-text invitation message for copying and pasting',
+    schema: {
+      properties: {
+        body: { type: 'string' },
+        missingVariables: { type: 'array', items: { type: 'string' } },
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'The template ID is invalid' })
+  @ApiResponse({ status: 404, description: 'Band member or invitation message template not found' })
+  @Get('message/render')
+  renderMessage(
+    @Req() req: AuthedRequest,
+    @Param('bookingId') bookingId: string,
+    @Param('memberId') memberId: string,
+    @Query() query: RenderBandInviteQueryDto,
+  ) {
+    assertBandMembersEnabled();
+    return this.service.renderInviteMessage(req.userId, bookingId, memberId, query.templateId);
+  }
+
   @ApiOperation({ summary: 'Send the composed band invitation email and calendar attachment to one member' })
   @ApiResponse({ status: 204, description: 'Invitation sent, communication logged, and member marked invited' })
   @ApiResponse({ status: 400, description: 'The member has no email address or the request body is invalid' })

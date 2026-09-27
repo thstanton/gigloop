@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { Resend } from 'resend';
 import { PrismaService } from '../prisma/prisma.service';
 import { renderTiptap } from './tiptap.renderer';
+import { renderTiptapToPlainText } from './tiptap-plaintext';
 import { resolveVar, substituteTiptapVariables } from './tiptap-substitute';
 import { TEMPLATE_DEFAULT_SUBJECTS } from '../templates/default-templates';
 
@@ -42,6 +43,11 @@ const EMPTY_INVOICE_CONTEXT = { issueDate: '', invoiceTotal: '', invoiceDueDate:
 
 export interface RenderResult {
   html: string;
+  missingVariables: string[];
+}
+
+export interface PlainTextRenderResult {
+  text: string;
   missingVariables: string[];
 }
 
@@ -265,6 +271,14 @@ export class MailService {
     const missing = new Set<string>();
     const substituted = substituteTiptapVariables(content, context, missing);
     return { html: renderTiptap(substituted), missingVariables: [...missing] };
+  }
+
+  // Plain-text adapter for copy/paste channels. Like the HTML and PDF adapters, it consumes the
+  // tree after the single shared variable-substitution pass (ADR-0064).
+  renderPlainText(content: unknown, context: TemplateContext): PlainTextRenderResult {
+    const missing = new Set<string>();
+    const substituted = substituteTiptapVariables(content, context, missing);
+    return { text: renderTiptapToPlainText(substituted), missingVariables: [...missing] };
   }
 
   // Subject is an email header, not a body: it stays a plain string — never

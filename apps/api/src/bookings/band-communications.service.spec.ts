@@ -49,7 +49,7 @@ const emailContext: EmailContext = {
 describe('BandCommunicationsService', () => {
   let service: BandCommunicationsService;
   let repo: { findBandInviteData: jest.Mock; markMemberInvited: jest.Mock };
-  let mail: { buildContext: jest.Mock; renderForCompose: jest.Mock };
+  let mail: { buildContext: jest.Mock; renderForCompose: jest.Mock; renderPlainText: jest.Mock };
   let comms: { findTemplate: jest.Mock; sendEmail: jest.Mock };
   let reeval: { onBookingChanged: jest.Mock };
 
@@ -62,6 +62,7 @@ describe('BandCommunicationsService', () => {
     mail = {
       buildContext: jest.fn().mockResolvedValue(emailContext),
       renderForCompose: jest.fn().mockReturnValue({ subject: 'Invite Dave', body: '<p>Hello Dave</p>', missingVariables: [] }),
+      renderPlainText: jest.fn().mockReturnValue({ text: 'Invitation: https://app.gigloop.com/band/member-token', missingVariables: [] }),
     };
     comms = {
       findTemplate: jest.fn().mockResolvedValue({ id: 'template-1', builtInType: 'band_invite', content: {} }),
@@ -96,6 +97,35 @@ describe('BandCommunicationsService', () => {
         portalLink: 'https://app.gigloop.com/band/member-token',
       }),
     );
+  });
+
+  it('renders the copy message through the plain-text adapter and the same per-member context as email', async () => {
+    const content = { type: 'doc', content: [{ type: 'paragraph', content: [] }] };
+    comms.findTemplate.mockResolvedValue({ id: 'message-template', builtInType: 'band_invite_message', content });
+    mail.renderPlainText.mockReturnValue({
+      text: 'Invitation: https://app.gigloop.com/band/member-token',
+      missingVariables: [],
+    });
+
+    await expect(service.renderInviteMessage('user-1', 'booking-1', 'member-1', 'message-template')).resolves.toEqual({
+      body: 'Invitation: https://app.gigloop.com/band/member-token',
+      missingVariables: [],
+    });
+
+    expect(mail.buildContext).toHaveBeenCalledWith('user-1', 'booking-1');
+    expect(mail.renderPlainText).toHaveBeenCalledWith(content, expect.objectContaining({
+      ...emailContext,
+      bandMemberName: 'Dave Jones',
+      portalLink: 'https://app.gigloop.com/band/member-token',
+    }));
+  });
+
+  it('does not render an email template through the copy-message endpoint', async () => {
+    comms.findTemplate.mockResolvedValue({ id: 'template-1', builtInType: 'band_invite', content: {} });
+
+    await expect(service.renderInviteMessage('user-1', 'booking-1', 'member-1', 'template-1')).rejects.toThrow(NotFoundException);
+
+    expect(mail.renderPlainText).not.toHaveBeenCalled();
   });
 
   it('uses the shared per-member context to send an email and calendar attachment before inviting the member', async () => {

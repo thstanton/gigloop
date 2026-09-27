@@ -1417,15 +1417,24 @@ describe('BookingsService', () => {
       expect(data.invitedAt).toBeUndefined();
     });
 
-    it('stamps invitedAt when the status transitions to INVITED', async () => {
+    it('stamps invitedAt and re-evaluates after the status transitions to INVITED', async () => {
+      const events: string[] = [];
       repo.findMember.mockResolvedValue(member);
-      repo.updateMember.mockResolvedValue({ ...member, status: 'INVITED' });
+      repo.updateMember.mockImplementation(async () => {
+        events.push('update');
+        return { ...member, status: 'INVITED' };
+      });
+      evaluator.onBookingChanged.mockImplementation(async () => {
+        events.push('reevaluate');
+      });
 
       await service.updateBandMember('u1', 'b1', 'm1', { status: 'INVITED' });
 
       const data = repo.updateMember.mock.calls[0][1];
       expect(data.invitedAt).toBeInstanceOf(Date);
       expect(data.respondedAt).toBeUndefined();
+      expect(events).toEqual(['update', 'reevaluate']);
+      expect(evaluator.onBookingChanged).toHaveBeenCalledWith('b1');
     });
 
     it('stamps respondedAt when the status transitions to DECLINED', async () => {

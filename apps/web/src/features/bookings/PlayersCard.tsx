@@ -42,6 +42,19 @@ interface PlayersCardProps {
   savingFeeMemberId: string | null;
 }
 
+function invitationActionFor(member: BookingBandMember): { label: string; ariaLabel: string } {
+  switch (member.status) {
+    case 'ADDED':
+      return { label: 'Invite', ariaLabel: `Send invitation to ${member.contact.name}` };
+    case 'INVITED':
+      return { label: 'Resend invite', ariaLabel: `Resend invitation to ${member.contact.name}` };
+    case 'CONFIRMED':
+    case 'DECLINED':
+      return { label: 'Invitation', ariaLabel: `Invitation options for ${member.contact.name}` };
+  }
+  return { label: 'Invitation', ariaLabel: `Invitation options for ${member.contact.name}` };
+}
+
 export function PlayersCard({
   bookingId,
   members,
@@ -73,6 +86,7 @@ export function PlayersCard({
     .map((member) => ({
       member,
       theirParts: chairs.filter((c) => c.memberId === member.id).sort((a, b) => a.order - b.order),
+      invitationAction: invitationActionFor(member),
     }));
 
   if (playing.length === 0) return null;
@@ -80,7 +94,7 @@ export function PlayersCard({
   return (
     <Card title="Players">
       <div>
-        {playing.map(({ member, theirParts }) => (
+        {playing.map(({ member, theirParts, invitationAction }) => (
           <div key={member.id} className="py-3 border-b border-border last:border-b-0">
             <div className="flex items-center gap-2 min-w-0">
                 <span className="text-base font-semibold text-foreground truncate">{member.contact.name}</span>
@@ -100,16 +114,16 @@ export function PlayersCard({
                   onSave={(sessionFee) => onSaveFee(member.id, sessionFee)}
                   isSaving={savingFeeMemberId === member.id}
                 />
-                {!member.isSelf && (member.status === 'ADDED' || member.status === 'INVITED') && (
+                {!member.isSelf && (
                   <Button
                     variant="outline"
                     size="sm"
                     className="min-h-10"
                     onClick={() => onInviteMember(member.id)}
-                    aria-label={`${member.status === 'INVITED' ? 'Resend' : 'Send'} invitation to ${member.contact.name}`}
+                    aria-label={invitationAction.ariaLabel}
                   >
                     <Mail size={14} />
-                    {member.status === 'INVITED' ? 'Resend invite' : 'Invite'}
+                    {invitationAction.label}
                   </Button>
                 )}
                 {/* #980 — preview what this dep sees at their own /band/:token, before they're

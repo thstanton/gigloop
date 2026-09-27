@@ -67,6 +67,7 @@ export class CommunicationsRepository {
         contactId: dto.contactId,
         subject: dto.subject,
         body: dto.body,
+        channel: dto.channel ?? 'EMAIL',
         status: CommunicationStatus.SENT,
         sentAt: dto.sentAt ? new Date(dto.sentAt) : new Date(),
         ...(dto.templateId !== undefined ? { templateId: dto.templateId } : {}),

@@ -502,6 +502,52 @@ describe('MailService', () => {
     });
   });
 
+  describe('renderPlainText', () => {
+    it('uses the shared variable resolver and renders a plain-text message with paragraph breaks', () => {
+      const content = {
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [
+              { type: 'text', text: 'Invitation: ' },
+              { type: 'variable', attrs: { name: 'portalLink' } },
+            ],
+          },
+          {
+            type: 'paragraph',
+            content: [
+              { type: 'text', text: 'For ' },
+              { type: 'variable', attrs: { name: 'bookingDate' } },
+              { type: 'text', text: ' — please reply there.' },
+            ],
+          },
+        ],
+      };
+
+      expect(service.renderPlainText(content, { ...fullContext, portalLink: 'https://app.gigloop.com/band/token', bookingDate: '' })).toEqual({
+        text: 'Invitation: https://app.gigloop.com/band/token\nFor your event — please reply there.',
+        missingVariables: ['bookingDate'],
+      });
+    });
+
+    it('preserves intentional blank paragraphs and hard breaks without carrying rich markup', () => {
+      const content = {
+        type: 'doc',
+        content: [
+          { type: 'paragraph', content: [{ type: 'text', text: 'First', marks: [{ type: 'bold' }] }] },
+          { type: 'paragraph' },
+          { type: 'paragraph', content: [{ type: 'text', text: 'Second' }, { type: 'hardBreak' }, { type: 'text', text: 'line' }] },
+        ],
+      };
+
+      expect(service.renderPlainText(content, fullContext)).toEqual({
+        text: 'First\n\nSecond\nline',
+        missingVariables: [],
+      });
+    });
+  });
+
   // ─── renderTemplate with a series context (#846) ──────────────────────────────
 
   describe('renderTemplate with a series context', () => {

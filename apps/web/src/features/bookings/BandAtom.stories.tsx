@@ -158,6 +158,21 @@ export const ExistingMemberCanResendInvitation: Story = {
   },
 };
 
+export const ConfirmedMemberCanOpenInvitationOptions: Story = {
+  name: 'Confirmed players can still open the invitation message to copy it',
+  args: {
+    lineups: [{ id: 'lu-confirmed', label: 'My four-piece', packageIds: [] }],
+    chairs: fourPieceChairs('lu-confirmed', ['m-sam', null, null, null], [WHOLE_GIG_CALL]),
+    members: [sam],
+    onInviteMember: fn(),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: 'Invitation options for Sam Okonkwo' }));
+    await expect(args.onInviteMember).toHaveBeenCalledWith('m-sam');
+  },
+};
+
 // ── 3 ─────────────────────────────────────────────────────────────────────────
 export const TwoLineups: Story = {
   name: '3. Ceremony solo + reception seven-piece, one person in both — ONE player row, two parts',
