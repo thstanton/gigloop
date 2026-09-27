@@ -77,6 +77,7 @@ const meta = {
   tags: ['ai-generated'],
   args: {
     data: ACTIVE_DATA,
+    token: 'story-token',
     onConfirm: fn(),
     onDecline: fn(),
     pendingResponse: null,
@@ -96,6 +97,7 @@ export const Default: Story = {
     await expect(canvas.getByText('Dave Player')).toBeVisible();
     await expect(canvas.getByText('Vacant')).toBeVisible();
     await expect(canvas.getByText('£150.00')).toBeVisible();
+    await expect(canvas.getByRole('link', { name: /Download call sheet/i })).toBeVisible();
   },
 };
 

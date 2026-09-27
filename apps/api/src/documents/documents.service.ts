@@ -9,6 +9,7 @@ import { StorageService } from '../storage/storage.service';
 import { DocumentsRepository } from './documents.repository';
 import { buildInvoiceDefinition, type InvoicePdfData } from './invoice-document';
 import { buildSongListDefinition, type SongListPdfData } from './song-list-document';
+import { buildCallSheetDefinition, type CallSheetPdfData } from './call-sheet-document';
 import { renderTiptapToPdfmake } from '../mail/tiptap-pdfmake';
 import { buildDocumentTitle, buildPdfHeader, buildPdfFooter } from './pdf-shared';
 import { buildLetterhead } from './letterhead';
@@ -18,6 +19,9 @@ import {
   resolveDocumentVisibility,
   type DocumentPortalVisibilityVerdict,
 } from '../portal/portal-visibility';
+import { buildRosterView } from '../portal/band-portal-fields';
+import { bandPortalVenueSelect, bandPortalChairSelect, bandPortalLineupSelect } from '../portal/band-portal.repository';
+import { setSelect, packageSelect } from '../bookings/bookings.repository';
 
 // Resolve pdfmake relative to this file so font paths work correctly
 // regardless of where the process was started from.
@@ -378,10 +382,12 @@ export class DocumentsService {
       ...d,
       url: this.documentDownloadRoute(d.id),
       isSeriesInvoice: d.bookingId === null,
+      // The call-sheet row is the one admin-list document asked about with `audience: 'BAND'`
+      // (ADR-0073 §7) — its verdict is a CLIENT concern for every other type.
       portalVisibility: resolveDocumentVisibility(
         d,
         activeContractId,
-        'CLIENT',
+        d.type === 'CALL_SHEET' ? 'BAND' : 'CLIENT',
         bookingCancelled,
         d.bookingId === bookingId,
       ),
@@ -459,5 +465,102 @@ export class DocumentsService {
 
     const doc = await this.repo.create(userId, bookingId, 'SONG_LIST', key);
     return { buffer, url: this.documentDownloadRoute(doc.id) };
+  }
+
+  // ─── Call sheet (#893, ADR-0073 §4) ────────────────────────────────────────
+
+  private formatGeneratedAt(date: Date): string {
+    return date.toLocaleString('en-GB', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }
+
+  // Fetched with the same narrow selects the band portal itself uses (`band-portal.repository.ts`)
+  // and mapped through `buildRosterView` — the same field wall (`BAND_PORTAL_FIELDS`) — so the call
+  // sheet and the portal cannot drift apart (ADR-0073 §1). `logistics: null` is deliberate: the
+  // call sheet renders only the roster/call-time facts an on-the-day sheet needs, not the
+  // `shareWithBand` logistics block the portal shows separately.
+  private async buildCallSheetPdfData(userId: string, bookingId: string): Promise<CallSheetPdfData> {
+    const booking = await this.prisma.booking.findFirst({
+      where: { id: bookingId, userId },
+      select: {
+        title: true,
+        date: true,
+        venue: { select: bandPortalVenueSelect },
+        sets: { select: setSelect, orderBy: { order: 'asc' } },
+        packages: { select: packageSelect, orderBy: { order: 'asc' } },
+        lineups: { select: bandPortalLineupSelect, orderBy: { createdAt: 'asc' } },
+        bandChairs: { select: bandPortalChairSelect, orderBy: [{ order: 'asc' }, { createdAt: 'asc' }] },
+      },
+    });
+    if (!booking) throw new NotFoundException('Booking not found');
+
+    const roster = buildRosterView({
+      booking: { title: booking.title, date: booking.date, logistics: null },
+      venue: booking.venue,
+      sets: booking.sets,
+      packages: booking.packages,
+      lineups: booking.lineups.map((lineup) => ({ id: lineup.id, packageIds: lineup.packages.map((p) => p.packageId) })),
+      chairs: booking.bandChairs.map((chair) => ({
+        id: chair.id,
+        role: chair.role,
+        lineupId: chair.lineupId,
+        memberId: chair.memberId,
+        memberName: chair.member?.contact.name ?? null,
+      })),
+    });
+
+    const publicProfile = await this.prisma.publicProfile.findUnique({ where: { userId } });
+    if (!publicProfile) throw new NotFoundException('Public profile not found');
+    const brandColour = (publicProfile.clientPortalConfig as { brandColour?: string } | null)?.brandColour ?? '#1a1a1a';
+
+    return {
+      branding: {
+        businessName: publicProfile.businessName,
+        musicianName: publicProfile.displayName ?? publicProfile.businessName,
+        email: publicProfile.email,
+        phone: publicProfile.phone,
+        logoUrl: publicProfile.logoUrl,
+        brandColour,
+      },
+      bookingTitle: roster.bookingTitle,
+      bookingDate: roster.bookingDate,
+      venueName: roster.venueName,
+      venueAddress: roster.venueAddress,
+      segments: roster.segments,
+      chairs: roster.chairs,
+      generatedAt: this.formatGeneratedAt(new Date()),
+    };
+  }
+
+  private async buildCallSheetBuffer(userId: string, bookingId: string): Promise<Buffer> {
+    const data = await this.buildCallSheetPdfData(userId, bookingId);
+    if (data.branding.logoUrl) {
+      data.branding.logoUrl = await fetchAsDataUrl(data.branding.logoUrl);
+    }
+    const docDef = buildCallSheetDefinition(data);
+    return pdfmake.createPdf(docDef).getBuffer() as Promise<Buffer>;
+  }
+
+  // The band-portal download (unstored, on demand — ADR-0073 §4): "the link is current by
+  // construction". No `Document` row is created here; only a send (`generateAndStoreCallSheetPdf`,
+  // #881) does.
+  generateCallSheetPdfBuffer(userId: string, bookingId: string): Promise<Buffer> {
+    return this.buildCallSheetBuffer(userId, bookingId);
+  }
+
+  // The row-on-send capability (#881 calls this): one `Document` of type `CALL_SHEET` per send, no
+  // replace-existing — unlike the invoice/song-list generators, a call sheet is never versioned
+  // (ADR-0073 §4), so each send is its own row, listed as "Call sheet — sent {date}".
+  async generateAndStoreCallSheetPdf(userId: string, bookingId: string): Promise<{ buffer: Buffer; documentId: string }> {
+    const buffer = await this.buildCallSheetBuffer(userId, bookingId);
+    const key = `call-sheets/${userId}/${bookingId}/${randomUUID()}.pdf`;
+    await this.storage.putDocument(key, buffer, 'application/pdf');
+    const doc = await this.repo.create(userId, bookingId, 'CALL_SHEET', key);
+    return { buffer, documentId: doc.id };
   }
 }

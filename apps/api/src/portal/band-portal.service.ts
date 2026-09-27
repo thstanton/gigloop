@@ -5,6 +5,7 @@ import { PORTAL_CONFIG_DEFAULTS } from './portal.service';
 import { mapBandPortalView, type BandPortalRosterView, type BandPortalSelfView } from './band-portal-fields';
 import { canRespondToBandInvite, type BandMemberStatus } from '../bookings/band-member-status';
 import type { BandResponseValue } from './dto/band-respond.dto';
+import { DocumentsService } from '../documents/documents.service';
 
 // The musician's business identity — baseline portal chrome, always returned regardless of the
 // cancelled gate below (ADR-0073 §5's "identity and a banner"), exactly as the client portal always
@@ -36,6 +37,7 @@ export class BandPortalService {
   constructor(
     private repo: BandPortalRepository,
     private publicProfileRepo: PublicProfileRepository,
+    private documents: DocumentsService,
   ) {}
 
   async getBandPortalData(token: string): Promise<BandPortalData> {
@@ -100,6 +102,22 @@ export class BandPortalService {
     if (!responded) throw new BadRequestException('This invite has already been answered');
 
     return this.getBandPortalData(token);
+  }
+
+  // The call-sheet download (#893, ADR-0073 §4) — generated on demand, unstored, no `Document` row
+  // (that's `DocumentsService.generateAndStoreCallSheetPdf`'s job, on send, #881). Gated the same
+  // way as the roster itself: `findMemberByToken`'s `removedAt: null` only, no status check — any
+  // non-removed member may download regardless of ADDED/INVITED/CONFIRMED/DECLINED, because an
+  // INVITED dep deciding whether to take the gig is exactly who needs it. A cancelled booking
+  // suppresses the whole band portal (ADR-0073 §5), the call sheet included.
+  async getCallSheetPdfBuffer(token: string): Promise<Buffer> {
+    const member = await this.repo.findMemberByToken(token);
+    if (!member) throw new NotFoundException('Band member not found');
+
+    const booking = await this.repo.findBookingForBandPortal(member.bookingId);
+    if (!booking || booking.status === 'CANCELLED') throw new NotFoundException('Booking not found');
+
+    return this.documents.generateCallSheetPdfBuffer(booking.userId, member.bookingId);
   }
 
   private buildBranding(profile: {

@@ -81,6 +81,15 @@ describe('portal-visibility authority (ADR-0054)', () => {
       });
     });
 
+    // #893, ADR-0073 §4: the call sheet is BAND-only — never a CLIENT concern, regardless of
+    // ownership/cancellation context.
+    it('marks CALL_SHEET documents as never shared with the client', () => {
+      expect(resolveDocumentVisibility({ type: 'CALL_SHEET' }, activeContractId, 'CLIENT')).toEqual({
+        visible: false,
+        reason: 'not_shared',
+      });
+    });
+
     describe('CONTRACT documents', () => {
       it('shows the signed PDF of the active contract', () => {
         expect(
@@ -208,6 +217,7 @@ describe('portal-visibility authority (ADR-0054)', () => {
       const branches: PortalDocumentInput[] = [
         { type: 'UPLOAD' },
         { type: 'SONG_LIST' },
+        { type: 'CALL_SHEET' },
         { type: 'CONTRACT', contractId: activeContractId },
         { type: 'CONTRACT', contractId: 'c-old' },
         { type: 'INVOICE', invoice: { status: 'SENT' } },
@@ -260,11 +270,19 @@ describe('portal-visibility authority (ADR-0054)', () => {
         ).toEqual({ visible: false });
       });
 
+      // #893, ADR-0073 §4: the call sheet is the one document type that crosses to the band —
+      // fail-closed-by-default, opt-in by row, not opt-out.
+      it('shows CALL_SHEET to the band, with no reason', () => {
+        expect(resolveDocumentVisibility({ type: 'CALL_SHEET' }, activeContractId, 'BAND')).toEqual({
+          visible: true,
+        });
+      });
+
       // The forward-compatibility case: a type not yet mirrored into this module's DocumentType
       // union (e.g. a real Prisma enum member landing before its BAND row does) still falls
       // through to hidden rather than throwing — forgetting is safe.
       it('hides an unmapped/unknown type rather than erroring', () => {
-        expect(resolveDocumentVisibility({ type: 'CALL_SHEET' }, activeContractId, 'BAND')).toEqual({
+        expect(resolveDocumentVisibility({ type: 'FUTURE_TYPE' }, activeContractId, 'BAND')).toEqual({
           visible: false,
         });
       });

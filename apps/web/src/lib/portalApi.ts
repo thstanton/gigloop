@@ -43,6 +43,13 @@ export function respondToBandInvite(
   return portalPost<BandPortalData>(`/band/${token}/respond`, { response });
 }
 
+// The call sheet (#893, ADR-0073 §4) is generated on demand and streamed directly — a plain link,
+// not a fetch-then-blob dance, because the route is `@Public()` (the token in the path is the
+// auth) and there is no stored object to resolve first.
+export function getBandCallSheetUrl(token: string): string {
+  return `${API_BASE_URL}/band/${token}/call-sheet`;
+}
+
 export function getContractContent(token: string): Promise<PortalContractData> {
   return portalGet<PortalContractData>(`/booking/${token}/contract`);
 }

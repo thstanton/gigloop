@@ -769,7 +769,7 @@ export interface UpdateLineupInput {
 // Documents
 // ─────────────────────────────────────────
 
-export type DocumentType = 'INVOICE' | 'CONTRACT' | 'SONG_LIST' | 'UPLOAD';
+export type DocumentType = 'INVOICE' | 'CONTRACT' | 'SONG_LIST' | 'UPLOAD' | 'CALL_SHEET';
 
 export interface Document {
   id: string;

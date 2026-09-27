@@ -3,6 +3,7 @@ import {
   DOCUMENT_PORTAL_VISIBILITY_REASONS,
   type DocumentPortalVisibilityReason,
 } from '../../portal/portal-visibility';
+import { DOCUMENT_TYPES } from '../document-type';
 
 export class DocumentPortalVisibilityDto {
   @ApiProperty({ description: 'Whether the client can currently see this document on the portal' })
@@ -23,7 +24,7 @@ export class DocumentPortalVisibilityDto {
 export class DocumentResponseDto {
   @ApiProperty() id!: string;
   @ApiProperty() createdAt!: string;
-  @ApiProperty({ enum: ['INVOICE', 'CONTRACT', 'SONG_LIST', 'UPLOAD'] }) type!: string;
+  @ApiProperty({ enum: [...DOCUMENT_TYPES] }) type!: string;
   @ApiProperty({
     description:
       'Access-controlled app route (e.g. /documents/:id/download), NOT a public ' +

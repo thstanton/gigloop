@@ -1,5 +1,6 @@
-import { Body, Controller, Get, NotFoundException, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Header, NotFoundException, Param, Post, Res } from '@nestjs/common';
 import { ApiTags, ApiResponse } from '@nestjs/swagger';
+import type { Response } from 'express';
 import { Public } from '../auth/public.decorator';
 import { isEnabled } from '../common/featureFlags';
 import { BandPortalService } from './band-portal.service';
@@ -36,5 +37,19 @@ export class BandPortalController {
   respondToInvite(@Param('token') token: string, @Body() dto: BandRespondDto) {
     assertEnabled();
     return this.service.respondToInvite(token, dto.response);
+  }
+
+  // The call sheet (#893, ADR-0073 §4) — generated on demand and streamed directly, never a
+  // redirect to a stored object: there is nothing stored to redirect to. No `Document` row is
+  // created by a download; only a send (#881) creates one.
+  @Get('call-sheet')
+  @Header('Content-Type', 'application/pdf')
+  @Header('Content-Disposition', 'inline; filename="call-sheet.pdf"')
+  @ApiResponse({ status: 200, description: 'Call sheet PDF, generated on demand' })
+  @ApiResponse({ status: 404, description: 'Unknown or removed band member token, or the booking is cancelled' })
+  async downloadCallSheet(@Param('token') token: string, @Res() res: Response) {
+    assertEnabled();
+    const buffer = await this.service.getCallSheetPdfBuffer(token);
+    res.end(buffer);
   }
 }

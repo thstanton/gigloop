@@ -28,7 +28,11 @@ export const bandPortalMemberSelect = {
 // Name and structured address only — never `parkingInfo`/`accessInfo`/`notes`/`equipmentAvailable`,
 // which are organiser-curated CRM fields the leader shares via `shareWithBand` logistics instead
 // (ADR-0073 §2).
-const bandPortalVenueSelect = {
+// Exported (#893): the call-sheet PDF builder (`documents.service.ts`) fetches its own
+// userId-scoped booking read and reuses these same selects rather than re-declaring them, so the
+// two consumers of `BAND_PORTAL_FIELDS` (the portal and the call sheet) can never drift on *input*
+// shape either.
+export const bandPortalVenueSelect = {
   name: true,
   addressLine1: true,
   addressLine2: true,
@@ -42,7 +46,7 @@ const bandPortalVenueSelect = {
 // ADR-0081 §3). No `sessionFee`, no `status`, no `bandPortalToken` — those live only on
 // `bandPortalMemberSelect`, fetched by token. `memberId` is selected for `ownChairIds` matching in
 // the mapper but is never itself part of a `BandPortalRosterChair` (band-portal-fields.ts).
-const bandPortalChairSelect = {
+export const bandPortalChairSelect = {
   id: true,
   role: true,
   lineupId: true,
@@ -50,7 +54,7 @@ const bandPortalChairSelect = {
   member: { select: { contact: { select: { name: true } } } },
 } as const;
 
-const bandPortalLineupSelect = {
+export const bandPortalLineupSelect = {
   id: true,
   packages: { select: { packageId: true } },
 } as const;

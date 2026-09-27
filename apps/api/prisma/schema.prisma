@@ -29,12 +29,11 @@ enum InvoiceStatus {
   VOID
 }
 
-enum DocumentType {
-  CONTRACT
-  INVOICE
-  SONG_LIST
-  UPLOAD
-}
+// DocumentType was an enum until #893 (ADR-0073 §4): a document type list is open, not a closed
+// lifecycle (CONTEXT.md's "enums for closed lifecycles only" rule), and CALL_SHEET needed adding
+// without another migration. The vocabulary now lives as a plain string union, hand-mirrored at
+// apps/api/src/documents/documents.repository.ts and apps/api/src/portal/portal-visibility.ts
+// (which stays Prisma-free by design) — CONTRACT | INVOICE | SONG_LIST | UPLOAD | CALL_SHEET.
 
 enum CommunicationStatus {
   PENDING
@@ -682,7 +681,8 @@ model Document {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  type       DocumentType
+  // See the DocumentType comment above — CONTRACT | INVOICE | SONG_LIST | UPLOAD | CALL_SHEET.
+  type       String
   storageKey String
 
   // null for series invoice documents which have no direct booking association

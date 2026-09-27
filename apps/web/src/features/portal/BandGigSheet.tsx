@@ -1,4 +1,4 @@
-import { CalendarDays, MapPin, Music, AlertTriangle, Mail, Phone } from 'lucide-react';
+import { CalendarDays, MapPin, Music, AlertTriangle, Mail, Phone, Download } from 'lucide-react';
 import { PortalLayout } from '../../layouts/PortalLayout';
 import { usePortalTheme } from './usePortalTheme';
 import { BandResponseBar, type BandResponseValue } from './BandResponseBar';
@@ -6,6 +6,7 @@ import { Card } from '@/components/common/Card';
 import { LabelValue } from '@/components/common/LabelValue';
 import { Badge } from '@/components/ui/badge';
 import { PACKAGE_ICON_MAP, LOGISTICS_FIELD_LABELS } from '@/lib/constants';
+import { getBandCallSheetUrl } from '@/lib/portalApi';
 import type { BandPortalData, BandPortalRosterChair, BandPortalRosterView, BandPortalSelfView } from '@/types/api';
 
 function logisticsLabel(key: string): string {
@@ -51,6 +52,22 @@ function GigIdentity({ roster, theme }: { roster: BandPortalRosterView; theme: R
         </p>
       )}
     </div>
+  );
+}
+
+// The call sheet download (#893, ADR-0073 §4) — generated on demand, current by construction, so
+// a plain link is enough: no fetch-then-blob dance, no loading state to track.
+function CallSheetLink({ token, theme }: { token: string; theme: ReturnType<typeof usePortalTheme> }) {
+  return (
+    <a
+      href={getBandCallSheetUrl(token)}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={`inline-flex items-center gap-2 text-base font-medium ${theme.primaryText} mb-6`}
+    >
+      <Download className="h-4 w-4" />
+      Download call sheet
+    </a>
   );
 }
 
@@ -196,12 +213,13 @@ function CancelledBanner({ theme }: { theme: ReturnType<typeof usePortalTheme> }
 
 interface BandGigSheetProps {
   data: BandPortalData;
+  token: string;
   onConfirm: () => void;
   onDecline: () => void;
   pendingResponse: BandResponseValue | null;
 }
 
-export function BandGigSheet({ data, onConfirm, onDecline, pendingResponse }: BandGigSheetProps) {
+export function BandGigSheet({ data, token, onConfirm, onDecline, pendingResponse }: BandGigSheetProps) {
   // Keeps the hero/greeting text consistent with the client portal's own brand-driven palette
   // (ADR-0073's "do not fork the client portal's shell"); the body Cards below deliberately use the
   // app's standard Card/Badge/LabelValue primitives instead — a gig sheet reads as a working
@@ -218,6 +236,7 @@ export function BandGigSheet({ data, onConfirm, onDecline, pendingResponse }: Ba
           <div className="md:grid md:grid-cols-[1fr_280px] md:gap-8 md:items-start pb-24">
             <div>
               <GigIdentity roster={data.roster} theme={theme} />
+              <CallSheetLink token={token} theme={theme} />
               <YourDetails self={data.self} />
               <RunningOrder roster={data.roster} />
               <Roster roster={data.roster} self={data.self} />

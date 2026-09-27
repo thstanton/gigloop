@@ -2,11 +2,13 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { BandPortalService } from './band-portal.service';
 import { BandPortalRepository } from './band-portal.repository';
 import { PublicProfileRepository } from '../user-profile/public-profile.repository';
+import type { DocumentsService } from '../documents/documents.service';
 
 function makeService(overrides?: {
   member?: unknown;
   booking?: unknown;
   publicProfile?: unknown;
+  documents?: Partial<DocumentsService>;
 }) {
   const repo = {
     findMemberByToken: jest.fn().mockResolvedValue(
@@ -51,7 +53,12 @@ function makeService(overrides?: {
     ),
   } as unknown as PublicProfileRepository;
 
-  return new BandPortalService(repo, publicProfileRepo);
+  const documents = {
+    generateCallSheetPdfBuffer: jest.fn().mockResolvedValue(Buffer.from('pdf')),
+    ...overrides?.documents,
+  } as unknown as DocumentsService;
+
+  return new BandPortalService(repo, publicProfileRepo, documents);
 }
 
 describe('BandPortalService.getBandPortalData', () => {
@@ -167,5 +174,33 @@ describe('BandPortalService.respondToInvite', () => {
     await expect(service.respondToInvite('token', 'CONFIRMED')).rejects.toThrow(BadRequestException);
     const repo = (service as unknown as { repo: BandPortalRepository }).repo;
     expect(repo.respondToInvite).not.toHaveBeenCalled();
+  });
+});
+
+describe('BandPortalService.getCallSheetPdfBuffer (#893)', () => {
+  it('404s for an unknown/removed token, without touching DocumentsService', async () => {
+    const service = makeService({ member: null });
+    const documents = (service as unknown as { documents: { generateCallSheetPdfBuffer: jest.Mock } }).documents;
+    await expect(service.getCallSheetPdfBuffer('bad-token')).rejects.toThrow(NotFoundException);
+    expect(documents.generateCallSheetPdfBuffer).not.toHaveBeenCalled();
+  });
+
+  // ADR-0073 §4: any non-removed member may download regardless of status — `findMemberByToken`'s
+  // `removedAt: null` gate is the only guard, unlike `respondToInvite`'s status check.
+  it.each(['ADDED', 'INVITED', 'CONFIRMED', 'DECLINED'])('lets a %s member download', async (status) => {
+    const service = makeService({ member: { id: 'member-1', bookingId: 'booking-1', status, sessionFee: null } });
+    const documents = (service as unknown as { documents: { generateCallSheetPdfBuffer: jest.Mock } }).documents;
+    await service.getCallSheetPdfBuffer('token');
+    expect(documents.generateCallSheetPdfBuffer).toHaveBeenCalledWith('user-1', 'booking-1');
+  });
+
+  it('404s once the booking is cancelled — the call sheet is suppressed with everything else', async () => {
+    const service = makeService({
+      member: { id: 'member-1', bookingId: 'booking-1', status: 'CONFIRMED', sessionFee: null },
+      booking: { title: 'x', date: new Date(), status: 'CANCELLED', logistics: null, userId: 'user-1', venue: null, sets: [], packages: [], lineups: [], bandChairs: [] },
+    });
+    const documents = (service as unknown as { documents: { generateCallSheetPdfBuffer: jest.Mock } }).documents;
+    await expect(service.getCallSheetPdfBuffer('token')).rejects.toThrow(NotFoundException);
+    expect(documents.generateCallSheetPdfBuffer).not.toHaveBeenCalled();
   });
 });

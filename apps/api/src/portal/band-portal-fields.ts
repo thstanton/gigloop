@@ -227,30 +227,38 @@ function buildOwnChairIds(chairs: BandPortalMapperInput['chairs'], selfMemberId:
   return chairs.filter((chair) => chair.memberId === selfMemberId).map((chair) => chair.id);
 }
 
-// The field-by-field mapper (ADR-0073 §1) — every output key is assigned individually below. No
-// `...` spread anywhere, so a field silently added to `BandPortalMapperInput`'s shape (or to a
-// Prisma select feeding it) cannot cross just by existing on the input object.
-export function mapBandPortalView(input: BandPortalMapperInput): BandPortalView {
+// The roster half of the mapper, exported on its own (#893) so the call-sheet PDF — ADR-0073 §1's
+// second declared consumer of `BAND_PORTAL_FIELDS` — can render the identical projection without
+// fabricating a `self` member to satisfy `mapBandPortalView`'s full input. `mapBandPortalView`
+// below is now a thin wrapper adding `self` for the portal's own response shape.
+export function buildRosterView(input: Omit<BandPortalMapperInput, 'self'>): BandPortalRosterView {
   const callTimesByPackage = deriveCallTimes(input.sets);
   const callTimesByLineup = deriveLineupCallTimes(input.lineups, callTimesByPackage, input.packages);
 
   return {
-    roster: {
-      bookingTitle: input.booking.title,
-      bookingDate: input.booking.date.toISOString(),
-      venueName: input.venue?.name ?? null,
-      venueAddress: buildVenueAddress(input.venue),
-      sets: input.sets.map((s) => ({
-        order: s.order,
-        label: s.label,
-        startTime: s.startTime,
-        duration: s.duration,
-        packageId: s.packageId,
-      })),
-      segments: input.packages.map((p) => ({ id: p.id, label: p.label, icon: p.icon, order: p.order })),
-      chairs: buildRosterChairs(input.chairs, callTimesByLineup),
-      logistics: buildBandLogistics(input.booking.logistics),
-    },
+    bookingTitle: input.booking.title,
+    bookingDate: input.booking.date.toISOString(),
+    venueName: input.venue?.name ?? null,
+    venueAddress: buildVenueAddress(input.venue),
+    sets: input.sets.map((s) => ({
+      order: s.order,
+      label: s.label,
+      startTime: s.startTime,
+      duration: s.duration,
+      packageId: s.packageId,
+    })),
+    segments: input.packages.map((p) => ({ id: p.id, label: p.label, icon: p.icon, order: p.order })),
+    chairs: buildRosterChairs(input.chairs, callTimesByLineup),
+    logistics: buildBandLogistics(input.booking.logistics),
+  };
+}
+
+// The field-by-field mapper (ADR-0073 §1) — every output key is assigned individually below. No
+// `...` spread anywhere, so a field silently added to `BandPortalMapperInput`'s shape (or to a
+// Prisma select feeding it) cannot cross just by existing on the input object.
+export function mapBandPortalView(input: BandPortalMapperInput): BandPortalView {
+  return {
+    roster: buildRosterView(input),
     self: {
       status: input.self.status,
       sessionFee: input.self.sessionFee,

@@ -2,6 +2,7 @@ import { join, dirname } from 'path';
 import { createRequire } from 'module';
 import { buildInvoiceDefinition, type InvoicePdfData } from './invoice-document';
 import { buildSongListDefinition, type SongListPdfData } from './song-list-document';
+import { buildCallSheetDefinition, type CallSheetPdfData } from './call-sheet-document';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let pdfmake: any;
@@ -71,6 +72,43 @@ const songListData: SongListPdfData = {
   submittedAt: '2024-05-01 10:00:00 UTC',
 };
 
+const callSheetData: CallSheetPdfData = {
+  branding: {
+    businessName: 'Test Musician',
+    musicianName: 'Test Musician',
+    email: 'test@example.com',
+    phone: null,
+    logoUrl: null,
+    brandColour: '#1a1a1a',
+  },
+  bookingTitle: 'The Hartley Wedding',
+  bookingDate: '2027-06-12T00:00:00.000Z',
+  venueName: 'The Old Barn',
+  venueAddress: { line1: '1 Barn Lane', line2: null, city: 'Hartley', county: null, postcode: 'HT1 1AA', country: null },
+  segments: [
+    { id: 'p1', label: 'Ceremony', icon: 'music', order: 0 },
+    { id: 'p2', label: 'Evening Party', icon: 'music', order: 1 },
+  ],
+  chairs: [
+    {
+      id: 'chair-1',
+      role: 'Vocals',
+      memberName: 'Dave Smith',
+      callTimes: [
+        { segmentId: 'p1', segmentLabel: 'Ceremony', startTime: '13:00' },
+        { segmentId: 'p2', segmentLabel: 'Evening Party', startTime: '20:00' },
+      ],
+    },
+    {
+      id: 'chair-2',
+      role: 'Bass',
+      memberName: null,
+      callTimes: [{ segmentId: 'p2', segmentLabel: 'Evening Party', startTime: '20:00' }],
+    },
+  ],
+  generatedAt: '27 Sep 2026, 14:32',
+};
+
 describe('PDF generation', () => {
   it('generates invoice PDF using Commissioner + PlayfairDisplay fonts', async () => {
     const docDef = buildInvoiceDefinition(invoiceData);
@@ -96,6 +134,14 @@ describe('PDF generation', () => {
     };
     const docDef = buildInvoiceDefinition(depositData);
     const buffer: Buffer = await pdfmake.createPdf(docDef).getBuffer();
+    expect(buffer.subarray(0, 4).toString()).toBe('%PDF');
+  });
+
+  it('generates call sheet PDF using Commissioner font', async () => {
+    const docDef = buildCallSheetDefinition(callSheetData);
+    const buffer: Buffer = await pdfmake.createPdf(docDef).getBuffer();
+    expect(Buffer.isBuffer(buffer)).toBe(true);
+    expect(buffer.length).toBeGreaterThan(0);
     expect(buffer.subarray(0, 4).toString()).toBe('%PDF');
   });
 });
@@ -162,5 +208,53 @@ describe('invoice letterhead', () => {
     const texts = collectText(buildInvoiceDefinition(invoiceData).content);
     expect(texts).not.toContain('12 Example Street');
     expect(texts.some((t) => t.startsWith('VAT: '))).toBe(false);
+  });
+});
+
+// #893 (ADR-0073 §4): the call sheet is forwardable, so no fee may ever appear on it —
+// `CallSheetPdfData`'s `chairs` field (`BandPortalRosterChair[]`) structurally has no fee, but this
+// asserts the rendered page too, since a structural guarantee on the input type says nothing about
+// what a future change to this builder might add to the content tree.
+describe('call sheet (#893, ADR-0073 §4)', () => {
+  it('never renders a currency amount anywhere on the page', () => {
+    const texts = collectText(buildCallSheetDefinition(callSheetData).content);
+    expect(texts.some((t) => t.includes('£'))).toBe(false);
+  });
+
+  it('renders one column per segment, with each chair\'s call time in the right column', () => {
+    const texts = collectText(buildCallSheetDefinition(callSheetData).content);
+    expect(texts).toContain('Ceremony');
+    expect(texts).toContain('Evening Party');
+    expect(texts).toContain('13:00');
+    expect(texts).toContain('20:00');
+  });
+
+  it('renders a vacant chair role-only, never a placeholder name', () => {
+    const texts = collectText(buildCallSheetDefinition(callSheetData).content);
+    expect(texts).toContain('Bass');
+    expect(texts).toContain('Vacant');
+  });
+
+  it('self-dates the footer with the generation timestamp and the check-your-portal line', () => {
+    const def = buildCallSheetDefinition(callSheetData);
+    const footer =
+      typeof def.footer === 'function'
+        ? def.footer(1, 1, { width: 595, height: 842, orientation: 'portrait' })
+        : def.footer;
+    const texts = collectText(footer);
+    expect(texts).toContain('Generated 27 Sep 2026, 14:32 — check your portal');
+  });
+
+  it('falls back to a single "Call time" column for a package-less booking', () => {
+    const packageLess: CallSheetPdfData = {
+      ...callSheetData,
+      segments: [],
+      chairs: [
+        { id: 'chair-1', role: 'Vocals', memberName: 'Dave Smith', callTimes: [{ segmentId: null, segmentLabel: null, startTime: '18:00' }] },
+      ],
+    };
+    const texts = collectText(buildCallSheetDefinition(packageLess).content);
+    expect(texts).toContain('Call time');
+    expect(texts).toContain('18:00');
   });
 });

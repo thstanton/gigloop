@@ -71,6 +71,7 @@ export default function BandPortalPage() {
   return (
     <BandGigSheet
       data={data}
+      token={token!}
       onConfirm={() => respondMutation.mutate('CONFIRMED')}
       onDecline={() => respondMutation.mutate('DECLINED')}
       pendingResponse={respondMutation.isPending ? (respondMutation.variables ?? null) : null}
