@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { BandPortalService } from './band-portal.service';
 import { BandPortalRepository } from './band-portal.repository';
 import { PublicProfileRepository } from '../user-profile/public-profile.repository';
@@ -14,6 +14,7 @@ function makeService(overrides?: {
         ? overrides.member
         : { id: 'member-1', bookingId: 'booking-1', status: 'CONFIRMED', sessionFee: '150.00' },
     ),
+    respondToInvite: jest.fn().mockResolvedValue(true),
     findBookingForBandPortal: jest.fn().mockResolvedValue(
       overrides?.booking !== undefined
         ? overrides.booking
@@ -106,5 +107,65 @@ describe('BandPortalService.getBandPortalData', () => {
   it('404s when the organiser has no public profile yet', async () => {
     const service = makeService({ publicProfile: null });
     await expect(service.getBandPortalData('token')).rejects.toThrow(NotFoundException);
+  });
+});
+
+describe('BandPortalService.respondToInvite', () => {
+  it('404s for an unknown token', async () => {
+    const service = makeService({ member: null });
+    await expect(service.respondToInvite('bad-token', 'CONFIRMED')).rejects.toThrow(NotFoundException);
+  });
+
+  it('confirms from ADDED, stamps the mutation, and re-reads the fresh view for the response', async () => {
+    const service = makeService({ member: { id: 'member-1', bookingId: 'booking-1', status: 'ADDED', sessionFee: null } });
+    const repo = (service as unknown as { repo: BandPortalRepository }).repo;
+    // The mock findMemberByToken can't see its own mutation, so simulate the fresh re-read
+    // (`getBandPortalData`'s own call, after `respondToInvite` has persisted CONFIRMED) explicitly.
+    (repo.findMemberByToken as jest.Mock).mockResolvedValueOnce({ id: 'member-1', bookingId: 'booking-1', status: 'ADDED', sessionFee: null });
+    (repo.findMemberByToken as jest.Mock).mockResolvedValueOnce({ id: 'member-1', bookingId: 'booking-1', status: 'CONFIRMED', sessionFee: null });
+
+    const result = await service.respondToInvite('token', 'CONFIRMED');
+    expect(repo.respondToInvite).toHaveBeenCalledWith('member-1', 'CONFIRMED');
+    if (result.cancelled) throw new Error('expected the non-cancelled branch');
+    expect(result.self.status).toBe('CONFIRMED');
+  });
+
+  it('declines from INVITED', async () => {
+    const service = makeService({ member: { id: 'member-1', bookingId: 'booking-1', status: 'INVITED', sessionFee: null } });
+    await service.respondToInvite('token', 'DECLINED');
+    const repo = (service as unknown as { repo: BandPortalRepository }).repo;
+    expect(repo.respondToInvite).toHaveBeenCalledWith('member-1', 'DECLINED');
+  });
+
+  it('rejects a second response server-side once already CONFIRMED', async () => {
+    const service = makeService({ member: { id: 'member-1', bookingId: 'booking-1', status: 'CONFIRMED', sessionFee: null } });
+    await expect(service.respondToInvite('token', 'DECLINED')).rejects.toThrow(BadRequestException);
+    const repo = (service as unknown as { repo: BandPortalRepository }).repo;
+    expect(repo.respondToInvite).not.toHaveBeenCalled();
+  });
+
+  it('rejects a second response server-side once already DECLINED', async () => {
+    const service = makeService({ member: { id: 'member-1', bookingId: 'booking-1', status: 'DECLINED', sessionFee: null } });
+    await expect(service.respondToInvite('token', 'CONFIRMED')).rejects.toThrow(BadRequestException);
+  });
+
+  it('rejects a response that loses the race — the atomic repo update matched 0 rows', async () => {
+    // The read-then-check above saw ADDED (a concurrent responder got there first, between the
+    // read and the write), but the repo's own status-guarded updateMany is what actually enforces
+    // one-shot: it reports back that nothing matched.
+    const service = makeService({ member: { id: 'member-1', bookingId: 'booking-1', status: 'ADDED', sessionFee: null } });
+    const repo = (service as unknown as { repo: BandPortalRepository }).repo;
+    (repo.respondToInvite as jest.Mock).mockResolvedValueOnce(false);
+    await expect(service.respondToInvite('token', 'CONFIRMED')).rejects.toThrow(BadRequestException);
+  });
+
+  it('rejects responding once the booking is cancelled', async () => {
+    const service = makeService({
+      member: { id: 'member-1', bookingId: 'booking-1', status: 'ADDED', sessionFee: null },
+      booking: { title: 'x', date: new Date(), status: 'CANCELLED', logistics: null, userId: 'user-1', venue: null, sets: [], packages: [], lineups: [], bandChairs: [] },
+    });
+    await expect(service.respondToInvite('token', 'CONFIRMED')).rejects.toThrow(BadRequestException);
+    const repo = (service as unknown as { repo: BandPortalRepository }).repo;
+    expect(repo.respondToInvite).not.toHaveBeenCalled();
   });
 });

@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect } from 'storybook/test';
+import { expect, fn } from 'storybook/test';
 import { BandGigSheet } from './BandGigSheet';
 import type { BandPortalData } from '@/types/api';
 
@@ -75,14 +75,20 @@ const meta = {
   title: 'Portal/BandGigSheet',
   component: BandGigSheet,
   tags: ['ai-generated'],
-  args: { data: ACTIVE_DATA },
+  args: {
+    data: ACTIVE_DATA,
+    onConfirm: fn(),
+    onDecline: fn(),
+    pendingResponse: null,
+  },
 } satisfies Meta<typeof BandGigSheet>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
 // Page-level smoke (ADR-0024) — the gig identity, running order, roster (own chair highlighted)
-// and logistics all render.
+// and logistics all render. ACTIVE_DATA's self.status is CONFIRMED, so the response bar (#892)
+// reads as already-answered here — Unanswered/Confirmed/Declined below cover the response bar itself.
 export const Default: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByText("Sophie & Tom's Wedding")).toBeVisible();
@@ -93,10 +99,37 @@ export const Default: Story = {
   },
 };
 
+// #892's story task: the sticky response bar in its three states.
+export const Unanswered: Story = {
+  args: { data: { ...ACTIVE_DATA, self: { ...ACTIVE_DATA.self, status: 'INVITED' } } },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Are you in for this gig?')).toBeVisible();
+    await expect(canvas.getByRole('button', { name: 'Confirm' })).toBeVisible();
+    await expect(canvas.getByRole('button', { name: 'Decline' })).toBeVisible();
+  },
+};
+
+export const Confirmed: Story = {
+  args: { data: { ...ACTIVE_DATA, self: { ...ACTIVE_DATA.self, status: 'CONFIRMED' } } },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText("You've confirmed you're playing this gig.")).toBeVisible();
+    await expect(canvas.queryByRole('button', { name: 'Confirm' })).not.toBeInTheDocument();
+  },
+};
+
+export const Declined: Story = {
+  args: { data: { ...ACTIVE_DATA, self: { ...ACTIVE_DATA.self, status: 'DECLINED' } } },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText("You've declined this gig.")).toBeVisible();
+    await expect(canvas.queryByRole('button', { name: 'Decline' })).not.toBeInTheDocument();
+  },
+};
+
 export const Cancelled: Story = {
   args: { data: CANCELLED_DATA },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('This gig has been cancelled.')).toBeVisible();
     expect(canvas.queryByText('Band')).not.toBeInTheDocument();
+    expect(canvas.queryByText('Are you in for this gig?')).not.toBeInTheDocument();
   },
 };

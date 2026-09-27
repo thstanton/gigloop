@@ -1,8 +1,9 @@
-import { Controller, Get, NotFoundException, Param } from '@nestjs/common';
+import { Body, Controller, Get, NotFoundException, Param, Post } from '@nestjs/common';
 import { ApiTags, ApiResponse } from '@nestjs/swagger';
 import { Public } from '../auth/public.decorator';
 import { isEnabled } from '../common/featureFlags';
 import { BandPortalService } from './band-portal.service';
+import { BandRespondDto } from './dto/band-respond.dto';
 
 // Band members v1 (#891). Gated on FEATURE_BAND_MEMBERS, default-off — matches
 // lineups.controller.ts / bookings.controller.ts: every route 404s with the flag off, so the band
@@ -26,5 +27,14 @@ export class BandPortalController {
   getBandPortalData(@Param('token') token: string) {
     assertEnabled();
     return this.service.getBandPortalData(token);
+  }
+
+  @Post('respond')
+  @ApiResponse({ status: 200, description: "Updated band portal data reflecting the dep's answer" })
+  @ApiResponse({ status: 400, description: 'Invite already answered, or the booking is cancelled' })
+  @ApiResponse({ status: 404, description: 'Unknown or removed band member token' })
+  respondToInvite(@Param('token') token: string, @Body() dto: BandRespondDto) {
+    assertEnabled();
+    return this.service.respondToInvite(token, dto.response);
   }
 }

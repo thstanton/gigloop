@@ -1,8 +1,10 @@
 import { useParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { FileText } from 'lucide-react';
-import { ApiError, getBandPortalData } from '../../lib/portalApi';
+import { ApiError, getBandPortalData, respondToBandInvite } from '../../lib/portalApi';
 import { BandGigSheet } from '../../features/portal/BandGigSheet';
+import { toast } from '@/lib/hooks/use-toast';
+import type { BandResponseValue } from '../../features/portal/BandResponseBar';
 
 // The dep-facing container for `/band/:token` (#891, ADR-0073) — fetch + loading/error states only;
 // every rendering decision lives in `BandGigSheet`, the presentational body (ADR-0023's
@@ -17,11 +19,26 @@ import { BandGigSheet } from '../../features/portal/BandGigSheet';
 // 404s exactly as an unknown token does, which this page already renders as "Link not found" below.
 export default function BandPortalPage() {
   const { token } = useParams<{ token: string }>();
+  const queryClient = useQueryClient();
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['band-portal', token],
     queryFn: () => getBandPortalData(token!),
     retry: false,
+  });
+
+  // The dep's one-shot response (#892) — the container owns the mutation; BandGigSheet /
+  // BandResponseBar stay presentational. The server's response is the new authoritative view (it
+  // already carries the flipped status/respondedAt), so this replaces the cache directly rather
+  // than invalidating and re-fetching.
+  const respondMutation = useMutation({
+    mutationFn: (response: BandResponseValue) => respondToBandInvite(token!, response),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(['band-portal', token], updated);
+    },
+    onError: () => {
+      toast({ title: 'Failed to record your response. Please try again.', variant: 'destructive' });
+    },
   });
 
   if (isLoading) {
@@ -51,5 +68,12 @@ export default function BandPortalPage() {
     );
   }
 
-  return <BandGigSheet data={data} />;
+  return (
+    <BandGigSheet
+      data={data}
+      onConfirm={() => respondMutation.mutate('CONFIRMED')}
+      onDecline={() => respondMutation.mutate('DECLINED')}
+      pendingResponse={respondMutation.isPending ? (respondMutation.variables ?? null) : null}
+    />
+  );
 }

@@ -1,0 +1,49 @@
+import { Button } from '@/components/ui/button';
+import type { BookingBandMemberStatus } from '@/types/api';
+
+export type BandResponseValue = Extract<BookingBandMemberStatus, 'CONFIRMED' | 'DECLINED'>;
+
+interface BandResponseBarProps {
+  status: BookingBandMemberStatus;
+  onConfirm: () => void;
+  onDecline: () => void;
+  pendingResponse: BandResponseValue | null;
+}
+
+// The dep's one-shot answer (#892). Sticky at the bottom of the viewport so it's reachable
+// without scrolling at 375px (CLAUDE.md's mobile-first rule), and it never disappears once
+// answered — it flips to a static readout instead, because there is no self-serve undo (a
+// reversal is organiser-only, from the Band sheet). `fixed` (not `sticky`) so it stays pinned
+// regardless of scroll position; `BandGigSheet` reserves matching bottom space so it never
+// covers content.
+export function BandResponseBar({ status, onConfirm, onDecline, pendingResponse }: BandResponseBarProps) {
+  const isPending = pendingResponse !== null;
+
+  if (status === 'CONFIRMED' || status === 'DECLINED') {
+    return (
+      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background px-4 py-3">
+        <p className="text-base text-foreground">
+          {status === 'CONFIRMED'
+            ? "You've confirmed you're playing this gig."
+            : "You've declined this gig."}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background px-4 py-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-base text-foreground">Are you in for this gig?</p>
+        <div className="flex gap-2">
+          <Button variant="destructiveOutline" disabled={isPending} onClick={onDecline}>
+            {pendingResponse === 'DECLINED' ? 'Declining…' : 'Decline'}
+          </Button>
+          <Button disabled={isPending} onClick={onConfirm}>
+            {pendingResponse === 'CONFIRMED' ? 'Confirming…' : 'Confirm'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}

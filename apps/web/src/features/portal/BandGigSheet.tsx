@@ -1,6 +1,7 @@
 import { CalendarDays, MapPin, Music, AlertTriangle, Mail, Phone } from 'lucide-react';
 import { PortalLayout } from '../../layouts/PortalLayout';
 import { usePortalTheme } from './usePortalTheme';
+import { BandResponseBar, type BandResponseValue } from './BandResponseBar';
 import { Card } from '@/components/common/Card';
 import { LabelValue } from '@/components/common/LabelValue';
 import { Badge } from '@/components/ui/badge';
@@ -193,7 +194,14 @@ function CancelledBanner({ theme }: { theme: ReturnType<typeof usePortalTheme> }
   );
 }
 
-export function BandGigSheet({ data }: { data: BandPortalData }) {
+interface BandGigSheetProps {
+  data: BandPortalData;
+  onConfirm: () => void;
+  onDecline: () => void;
+  pendingResponse: BandResponseValue | null;
+}
+
+export function BandGigSheet({ data, onConfirm, onDecline, pendingResponse }: BandGigSheetProps) {
   // Keeps the hero/greeting text consistent with the client portal's own brand-driven palette
   // (ADR-0073's "do not fork the client portal's shell"); the body Cards below deliberately use the
   // app's standard Card/Badge/LabelValue primitives instead — a gig sheet reads as a working
@@ -205,18 +213,27 @@ export function BandGigSheet({ data }: { data: BandPortalData }) {
       {data.cancelled ? (
         <CancelledBanner theme={theme} />
       ) : (
-        <div className="md:grid md:grid-cols-[1fr_280px] md:gap-8 md:items-start">
-          <div>
-            <GigIdentity roster={data.roster} theme={theme} />
-            <YourDetails self={data.self} />
-            <RunningOrder roster={data.roster} />
-            <Roster roster={data.roster} self={data.self} />
-            <Logistics roster={data.roster} />
+        <>
+          {/* pb-24 reserves room for the fixed response bar below, so it never covers the last card. */}
+          <div className="md:grid md:grid-cols-[1fr_280px] md:gap-8 md:items-start pb-24">
+            <div>
+              <GigIdentity roster={data.roster} theme={theme} />
+              <YourDetails self={data.self} />
+              <RunningOrder roster={data.roster} />
+              <Roster roster={data.roster} self={data.self} />
+              <Logistics roster={data.roster} />
+            </div>
+            <div className="mt-8 md:mt-0 md:sticky md:top-8">
+              <OrganiserContact branding={data.branding} />
+            </div>
           </div>
-          <div className="mt-8 md:mt-0 md:sticky md:top-8">
-            <OrganiserContact branding={data.branding} />
-          </div>
-        </div>
+          <BandResponseBar
+            status={data.self.status}
+            onConfirm={onConfirm}
+            onDecline={onDecline}
+            pendingResponse={pendingResponse}
+          />
+        </>
       )}
     </PortalLayout>
   );

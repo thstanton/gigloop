@@ -1,8 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { BandPortalRepository } from './band-portal.repository';
 import { PublicProfileRepository } from '../user-profile/public-profile.repository';
 import { PORTAL_CONFIG_DEFAULTS } from './portal.service';
 import { mapBandPortalView, type BandPortalRosterView, type BandPortalSelfView } from './band-portal-fields';
+import { canRespondToBandInvite, type BandMemberStatus } from '../bookings/band-member-status';
+import type { BandResponseValue } from './dto/band-respond.dto';
 
 // The musician's business identity — baseline portal chrome, always returned regardless of the
 // cancelled gate below (ADR-0073 §5's "identity and a banner"), exactly as the client portal always
@@ -70,6 +72,34 @@ export class BandPortalService {
     });
 
     return { cancelled: false, branding, roster: view.roster, self: view.self };
+  }
+
+  // The dep's one-shot answer (#892, ADR-0074 §4). The guard is server-side, not merely a hidden
+  // client button: a second attempt — replay, double tap, a stale open tab — is rejected here
+  // regardless of what the frontend has already stopped rendering. Reversal is never available on
+  // this path; only the organiser's own PATCH (bookings.service.ts `updateBandMember`) can move a
+  // member back out of CONFIRMED/DECLINED, which is what re-opens this guard for a second attempt.
+  async respondToInvite(token: string, response: BandResponseValue): Promise<BandPortalData> {
+    const member = await this.repo.findMemberByToken(token);
+    if (!member) throw new NotFoundException('Band member not found');
+
+    if (!canRespondToBandInvite(member.status as BandMemberStatus)) {
+      throw new BadRequestException('This invite has already been answered');
+    }
+
+    const booking = await this.repo.findBookingForBandPortal(member.bookingId);
+    if (!booking) throw new NotFoundException('Booking not found');
+    if (booking.status === 'CANCELLED') {
+      throw new BadRequestException('This booking has been cancelled');
+    }
+
+    // The atomic guard (repo's `updateMany` with a status `where`, not just the read-then-check
+    // above) is what actually makes this one-shot under concurrency: a racing second call updates
+    // 0 rows and is reported here exactly as a genuinely sequential second attempt would be.
+    const responded = await this.repo.respondToInvite(member.id, response);
+    if (!responded) throw new BadRequestException('This invite has already been answered');
+
+    return this.getBandPortalData(token);
   }
 
   private buildBranding(profile: {

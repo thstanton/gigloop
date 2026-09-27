@@ -1,6 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { setSelect, packageSelect } from '../bookings/bookings.repository';
+import { BAND_MEMBER_STATUSES, canRespondToBandInvite, type BandMemberStatus } from '../bookings/band-member-status';
+
+// Every status a respondable member could be in, derived from the vocabulary rather than
+// hand-listing ADDED/INVITED again (CLAUDE.md's one-declaration rule) — used as the atomic
+// update's status guard below.
+const RESPONDABLE_STATUSES = BAND_MEMBER_STATUSES.filter(canRespondToBandInvite);
 
 // The band portal's own narrow selects (#891, ADR-0073) — deliberately NOT `bandChairSelect` /
 // `bandMemberSelect` / `NESTED_CONTACT_SELECT` from bookings.repository.ts / booking.includes.ts.
@@ -58,6 +64,20 @@ export class BandPortalRepository {
       where: { bandPortalToken: token, removedAt: null },
       select: bandPortalMemberSelect,
     });
+  }
+
+  // The dep's one-shot response (#892). `service.respondToInvite` calls `findMemberByToken` first
+  // — the bearer token is the ownership proof, so a bare-id `where` here is safe. The status guard
+  // in the `where` (not just the service's own read-then-check) makes the one-shot rule atomic: two
+  // concurrent `respond` calls on the same token can't both pass — only the first `updateMany` actually
+  // matches a row, so a racing second call updates 0 rows and the service below reports it as
+  // already-answered, exactly as a genuinely sequential second attempt would.
+  async respondToInvite(memberId: string, status: BandMemberStatus): Promise<boolean> {
+    const { count } = await this.prisma.bookingBandMember.updateMany({
+      where: { id: memberId, status: { in: RESPONDABLE_STATUSES } }, // scoped-upstream: service.respondToInvite calls findMemberByToken(token) first, already proving ownership via the bearer token (ADR-0061)
+      data: { status, respondedAt: new Date() },
+    });
+    return count > 0;
   }
 
   findBookingForBandPortal(bookingId: string) {

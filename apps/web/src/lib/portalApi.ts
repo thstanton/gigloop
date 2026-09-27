@@ -36,6 +36,13 @@ export function getBandPortalData(token: string): Promise<BandPortalData> {
   return portalGet<BandPortalData>(`/band/${token}`);
 }
 
+export function respondToBandInvite(
+  token: string,
+  response: 'CONFIRMED' | 'DECLINED',
+): Promise<BandPortalData> {
+  return portalPost<BandPortalData>(`/band/${token}/respond`, { response });
+}
+
 export function getContractContent(token: string): Promise<PortalContractData> {
   return portalGet<PortalContractData>(`/booking/${token}/contract`);
 }

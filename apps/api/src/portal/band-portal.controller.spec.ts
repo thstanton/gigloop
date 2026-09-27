@@ -7,11 +7,14 @@ import type { BandPortalService } from './band-portal.service';
 // (ADR-0072).
 describe('BandPortalController', () => {
   let controller: BandPortalController;
-  let service: { getBandPortalData: jest.Mock };
+  let service: { getBandPortalData: jest.Mock; respondToInvite: jest.Mock };
   const originalFlag = process.env.FEATURE_BAND_MEMBERS;
 
   beforeEach(() => {
-    service = { getBandPortalData: jest.fn().mockResolvedValue({ cancelled: false }) };
+    service = {
+      getBandPortalData: jest.fn().mockResolvedValue({ cancelled: false }),
+      respondToInvite: jest.fn().mockResolvedValue({ cancelled: false }),
+    };
     controller = new BandPortalController(service as unknown as BandPortalService);
   });
 
@@ -29,5 +32,19 @@ describe('BandPortalController', () => {
     process.env.FEATURE_BAND_MEMBERS = 'true';
     controller.getBandPortalData('token');
     expect(service.getBandPortalData).toHaveBeenCalledWith('token');
+  });
+
+  describe('respondToInvite', () => {
+    it('404s without touching the service when the flag is off', () => {
+      delete process.env.FEATURE_BAND_MEMBERS;
+      expect(() => controller.respondToInvite('token', { response: 'CONFIRMED' })).toThrow(NotFoundException);
+      expect(service.respondToInvite).not.toHaveBeenCalled();
+    });
+
+    it('delegates to the service when the flag is on', () => {
+      process.env.FEATURE_BAND_MEMBERS = 'true';
+      controller.respondToInvite('token', { response: 'DECLINED' });
+      expect(service.respondToInvite).toHaveBeenCalledWith('token', 'DECLINED');
+    });
   });
 });
