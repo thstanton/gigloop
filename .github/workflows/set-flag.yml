@@ -27,13 +27,12 @@ name: Set Feature Flag
 # Prod safety: flipping a PROD web flag must never ship unreleased `main`
 # commits to prod — that would be a silent side door around "Promote to
 # prod" (CLAUDE.md hard rule: prod deploys only via a human-run promotion).
-# So a prod rebuild checks out the latest `v*` tag — the last commit
-# release.yml actually deployed — not `main`. Preprod tracks `main`, since
-# that is what is already live there. API flags never rebuild anything
-# (`railway variable set` restarts the already-deployed image in place),
-# so this only applies to the web-flag job.
-# Known limitation, not fixed here: this trusts the latest tag, not the
-# GitHub Deployments "prod" record #907 made authoritative — see #939.
+# So a prod rebuild checks out the ref from the latest successful prod
+# deployment created by release.yml — not `main`. If no such deployment
+# record exists, it warns and falls back to the latest `v*` tag. Preprod
+# tracks `main`, since that is what is already live there. API flags never
+# rebuild anything (`railway variable set` restarts the already-deployed
+# image in place), so this only applies to the web-flag job.
 #
 # Every `run:` step below passes `inputs.flag`/`inputs.value` through an
 # `env:` block rather than interpolating `${{ }}` directly into the shell
@@ -149,6 +148,10 @@ jobs:
     needs: route
     if: needs.route.outputs.is_web == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      deployments: read
     environment:
       name: ${{ inputs.environment }}
       url: ${{ inputs.environment == 'prod' && 'https://www.gigloop.co.uk' || 'https://preprod.gigloop.co.uk' }}
@@ -157,16 +160,17 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Pin the rebuild ref — prod rebuilds the last release tag, never unreleased main commits
+      - name: Pin the rebuild ref — use the successful prod deployment, or warn and fall back
         env:
           TARGET_ENVIRONMENT: ${{ inputs.environment }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           if [[ "$TARGET_ENVIRONMENT" == "prod" ]]; then
-            TAG="$(git describe --tags --abbrev=0 --match 'v*')"
-            echo "Rebuilding prod at $TAG (the last commit release.yml actually deployed)."
-            git checkout "$TAG"
+            REBUILD_REF="$(node .github/workflows/set-flag-ref.mjs)"
+            git checkout "$REBUILD_REF"
           else
             echo "Rebuilding preprod at main."
+            git checkout main
           fi
 
       - uses: oven-sh/setup-bun@v2
