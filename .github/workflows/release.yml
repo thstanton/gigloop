@@ -89,10 +89,11 @@ jobs:
         # bare `422` (the action discards the response body, so the log gave
         # no reason). Keep the most recent KEEP snapshots as rollback targets
         # and delete the rest, so the create below always has room. KEEP is
-        # set two below the cap on purpose: migration-rehearsal.yml creates
-        # its scratch branch in this same project, so a rehearsal running
-        # near a release transiently occupies a slot, and a prune that freed
-        # exactly one would fail the release intermittently.
+        # deliberately well under the cap rather than one below it:
+        # migration-rehearsal.yml creates its scratch branch in this same
+        # project, so a rehearsal running near a release transiently occupies
+        # a slot, and a prune that freed exactly one would fail the release
+        # intermittently.
         #
         # Deliberately no `continue-on-error` (see the header note): a prune
         # failure must halt the run, and it does so before any step touches
