@@ -320,10 +320,11 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
 
           <CommunicationsSection
             communications={communications}
+            bandMembers={bandMembersEnabled ? booking.band.members : []}
+            bandCommunicationsEnabled={bandMembersEnabled}
           />
         </div>
       }
     />
   );
 }
-

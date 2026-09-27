@@ -2,16 +2,20 @@ import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { AlertTriangle, FileText, Mail, Paperclip } from 'lucide-react';
 import { GhostButton } from '@/components/common/GhostButton';
+import { SubLabel } from '@/components/common/SubLabel';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
-import { formatDate } from '@/lib/formatters';
+import { formatDate, formatDateTime } from '@/lib/formatters';
 import { resolveApiBaseUrl } from '@/lib/apiBaseUrl';
-import type { Communication } from '@/types/api';
+import { openDocument } from '@/lib/api';
+import { toast } from '@/lib/hooks/use-toast';
+import type { BookingBandMember, Communication } from '@/types/api';
 
 const API_BASE_URL = resolveApiBaseUrl(import.meta.env.VITE_API_BASE_URL);
 
@@ -28,7 +32,7 @@ function emailDoc(body: string) {
   </style></head><body>${body}</body></html>`;
 }
 
-function EmailPreviewSheet({ comm, open, onClose }: Readonly<{ comm: Communication; open: boolean; onClose: () => void }>) {
+function CommunicationPreviewSheet({ comm, open, onClose }: Readonly<{ comm: Communication; open: boolean; onClose: () => void }>) {
   return (
     <Sheet open={open} onOpenChange={onClose}>
       <SheetContent side="right" className="w-full sm:max-w-lg flex flex-col p-0">
@@ -58,30 +62,56 @@ function getStatusPrefix(isFailed: boolean, isPending: boolean): string {
   return '';
 }
 
-function AttachmentLink({ comm }: Readonly<{ comm: Communication }>) {
-  if (!comm.document?.invoiceId) return null;
-  const pdfUrl = `${API_BASE_URL}/invoices/${comm.document.invoiceId}/preview.pdf`;
+function formatCommunicationTimestamp(timestamp: string | null, includeTime: boolean): string {
+  if (!timestamp) return '—';
+  if (includeTime) return formatDateTime(timestamp);
+  return formatDate(timestamp);
+}
+
+function AttachmentLink({ comm, bandAttachmentsEnabled }: Readonly<{ comm: Communication; bandAttachmentsEnabled: boolean }>) {
+  if (comm.channel === 'MANUAL' || !comm.document) return null;
+
+  const isInvoice = Boolean(comm.document.invoiceId);
+  if (!isInvoice && !bandAttachmentsEnabled) return null;
+  const path = isInvoice
+    ? `/invoices/${comm.document.invoiceId}/preview.pdf`
+    : `/documents/${comm.document.id}/download`;
+  const label = isInvoice ? 'Invoice PDF' : 'Call sheet PDF';
+  const ariaLabel = isInvoice ? 'Download attached invoice PDF' : 'Download attached call sheet PDF';
+
   return (
     <a
-      href={pdfUrl}
+      href={`${API_BASE_URL}${path}`}
       target="_blank"
       rel="noopener noreferrer"
       className="inline-flex items-center gap-1 text-xs text-primary hover:underline flex-shrink-0"
-      onClick={(e) => e.stopPropagation()}
-      aria-label="Download attached invoice PDF"
+      onClick={(e) => {
+        e.stopPropagation();
+        if (!isInvoice) {
+          e.preventDefault();
+          openDocument(path, () => toast({ title: 'Failed to open attached call sheet', variant: 'destructive' }));
+        }
+      }}
+      aria-label={ariaLabel}
     >
       <Paperclip size={11} />
-      Invoice PDF
+      {label}
     </a>
   );
 }
 
-function CommunicationRow({ comm }: Readonly<{ comm: Communication }>) {
+function CommunicationRow({
+  comm,
+  showBandMetadata = false,
+  bandAttachmentsEnabled,
+}: Readonly<{ comm: Communication; showBandMetadata?: boolean; bandAttachmentsEnabled: boolean }>) {
   const [open, setOpen] = useState(false);
   const isFailed = comm.status === 'FAILED';
   const isPending = comm.status === 'PENDING';
   const isSent = comm.status === 'SENT';
-  const meta = [comm.template?.name, `To ${comm.contact.name}`].filter(Boolean).join(' · ');
+  const timestamp = comm.sentAt ?? (showBandMetadata ? comm.createdAt : null);
+  const channel = comm.channel === 'EMAIL' ? 'Email' : 'Marked as sent';
+  const meta = [showBandMetadata ? channel : null, comm.template?.name, `To ${comm.contact.name}`].filter(Boolean).join(' · ');
   const statusPrefix = getStatusPrefix(isFailed, isPending);
   const rowContent = (
     <>
@@ -101,12 +131,12 @@ function CommunicationRow({ comm }: Readonly<{ comm: Communication }>) {
             )}
           </div>
           <p className="text-xs text-muted mt-0.5">{statusPrefix}{meta}</p>
-          <AttachmentLink comm={comm} />
+          <AttachmentLink comm={comm} bandAttachmentsEnabled={bandAttachmentsEnabled} />
         </div>
       </div>
-      <span className="text-xs text-muted flex-shrink-0">
-        {comm.sentAt ? formatDate(comm.sentAt) : '—'}
-      </span>
+      <time dateTime={timestamp ?? undefined} className="text-xs text-muted flex-shrink-0">
+        {formatCommunicationTimestamp(timestamp, showBandMetadata)}
+      </time>
     </>
   );
 
@@ -117,11 +147,11 @@ function CommunicationRow({ comm }: Readonly<{ comm: Communication }>) {
           type="button"
           className="w-full text-left flex items-start justify-between gap-3 py-3 border-b border-border last:border-0 cursor-pointer hover:bg-muted/30 -mx-4 px-4 rounded transition-colors"
           onClick={() => setOpen(true)}
-          aria-label={`View email: ${comm.subject}`}
+          aria-label={`View ${comm.channel === 'EMAIL' ? 'email' : 'message'}: ${comm.subject}`}
         >
           {rowContent}
         </button>
-        <EmailPreviewSheet comm={comm} open={open} onClose={() => setOpen(false)} />
+        <CommunicationPreviewSheet comm={comm} open={open} onClose={() => setOpen(false)} />
       </>
     );
   }
@@ -135,10 +165,100 @@ function CommunicationRow({ comm }: Readonly<{ comm: Communication }>) {
 
 export interface CommunicationsSectionProps {
   communications: Communication[];
+  /** The booking's non-removed members, omitted when band communications are feature-flagged off. */
+  bandMembers?: BookingBandMember[];
+  /** Controls band-only tab and call-sheet attachment behavior. */
+  bandCommunicationsEnabled?: boolean;
 }
 
-export default function CommunicationsSection({ communications }: Readonly<CommunicationsSectionProps>) {
+function isBandCommunication(comm: Communication, bandContactIds: ReadonlySet<string>): boolean {
+  const templateType = comm.template?.builtInType;
+  return templateType ? templateType.startsWith('band_') : bandContactIds.has(comm.contactId);
+}
+
+interface MemberCommunicationGroup {
+  id: string;
+  name: string;
+  communications: Communication[];
+}
+
+export default function CommunicationsSection({
+  communications,
+  bandMembers = [],
+  bandCommunicationsEnabled = false,
+}: Readonly<CommunicationsSectionProps>) {
   const [, setSearchParams] = useSearchParams();
+  const hasBandMembers = bandCommunicationsEnabled && bandMembers.length > 0;
+  const bandContactIds = new Set(bandMembers.map((member) => member.contactId));
+  let clientCommunications = communications;
+  const bandCommunications: Communication[] = [];
+  if (hasBandMembers) {
+    clientCommunications = [];
+    for (const comm of communications) {
+      if (isBandCommunication(comm, bandContactIds)) bandCommunications.push(comm);
+      else clientCommunications.push(comm);
+    }
+  }
+
+  const communicationsByContact = new Map<string, Communication[]>();
+  for (const comm of bandCommunications) {
+    const contactCommunications = communicationsByContact.get(comm.contactId) ?? [];
+    contactCommunications.push(comm);
+    communicationsByContact.set(comm.contactId, contactCommunications);
+  }
+
+  const memberGroups: MemberCommunicationGroup[] = bandMembers.map((member) => ({
+    id: member.id,
+    name: member.contact.name,
+    communications: communicationsByContact.get(member.contactId) ?? [],
+  }));
+  // Keep historical band messages in the trail if their recipient has since been removed from
+  // the roster. Current members stay in roster order; former members follow in latest-comm order.
+  const groupedContactIds = new Set(bandMembers.map((member) => member.contactId));
+  for (const comm of bandCommunications) {
+    if (!groupedContactIds.has(comm.contactId)) {
+      memberGroups.push({
+        id: comm.contactId,
+        name: comm.contact.name,
+        communications: communicationsByContact.get(comm.contactId) ?? [],
+      });
+      groupedContactIds.add(comm.contactId);
+    }
+  }
+
+  const clientContent = clientCommunications.length === 0 ? (
+    <div className="flex items-center gap-2 text-muted py-1">
+      <FileText size={14} />
+      <span className="text-sm">No emails sent yet</span>
+    </div>
+  ) : (
+    <div className="border-t border-border">
+      {clientCommunications.map((comm) => (
+        <CommunicationRow key={comm.id} comm={comm} bandAttachmentsEnabled={bandCommunicationsEnabled} />
+      ))}
+    </div>
+  );
+
+  const bandContent = (
+    <div className="space-y-4">
+      {memberGroups.map((group) => (
+        <section key={group.id} aria-label={`Communications with ${group.name}`}>
+          <div className="flex items-center gap-2">
+            <SubLabel>{group.name}</SubLabel>
+            {group.communications.length === 0 && <Badge variant="outline">No messages recorded</Badge>}
+          </div>
+          {group.communications.length > 0 && (
+            <div className="border-t border-border">
+              {group.communications.map((comm) => (
+                <CommunicationRow key={comm.id} comm={comm} showBandMetadata bandAttachmentsEnabled />
+              ))}
+            </div>
+          )}
+        </section>
+      ))}
+    </div>
+  );
+
   return (
     <section>
       <div className="flex items-center justify-between mb-3">
@@ -147,18 +267,16 @@ export default function CommunicationsSection({ communications }: Readonly<Commu
           Send email
         </GhostButton>
       </div>
-      {communications.length === 0 ? (
-        <div className="flex items-center gap-2 text-muted py-1">
-          <FileText size={14} />
-          <span className="text-sm">No emails sent yet</span>
-        </div>
-      ) : (
-        <div className="border-t border-border">
-          {communications.map((comm) => (
-            <CommunicationRow key={comm.id} comm={comm} />
-          ))}
-        </div>
-      )}
+      {hasBandMembers ? (
+        <Tabs defaultValue="client">
+          <TabsList size="sm" className="grid w-full grid-cols-2">
+            <TabsTrigger value="client" size="sm">Client</TabsTrigger>
+            <TabsTrigger value="band" size="sm">Band</TabsTrigger>
+          </TabsList>
+          <TabsContent value="client">{clientContent}</TabsContent>
+          <TabsContent value="band">{bandContent}</TabsContent>
+        </Tabs>
+      ) : clientContent}
     </section>
   );
 }

@@ -146,6 +146,8 @@ export function BookingDetailDesktop({ bookingId }: BookingDetailDesktopProps) {
         />
         <CommunicationsSection
           communications={communications}
+          bandMembers={bandMembersEnabled ? booking.band.members : []}
+          bandCommunicationsEnabled={bandMembersEnabled}
         />
 
       </div>
