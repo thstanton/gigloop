@@ -1,6 +1,7 @@
 import { useState, useRef, useId, useMemo } from 'react';
-import { Search, X, ChevronDown, Plus } from 'lucide-react';
+import { Search, X, ChevronDown, Plus, UserRound } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useUser } from '@clerk/react';
 import {
   Sheet,
   SheetContent,
@@ -12,7 +13,7 @@ import ContactForm, { toContactPayload } from '@/features/contacts/ContactForm';
 import type { ContactFormValues } from '@/features/contacts/ContactForm';
 import { useContacts } from '@/lib/hooks/useContacts';
 import { useRoleVocabulary } from '@/lib/hooks/useRoleVocabulary';
-import { apiPost } from '@/lib/api';
+import { ApiError, apiPost } from '@/lib/api';
 import type { Contact } from '@/types/api';
 import { cn } from '@/lib/utils';
 import { rankContactsForChair, type GeoPoint } from '@/lib/bandMatch';
@@ -33,6 +34,13 @@ interface ContactPickerProps {
   venue?: GeoPoint | null;
   disabled?: boolean;
   disableCreate?: boolean;
+  /**
+   * Offers an "Add yourself" row above the search list (#1036, ADR-0083) — the musician filling
+   * their own vacant chair without hand-rolling CRM data entry. Reuses the existing
+   * `isAccountOwner: true` Contact if one exists, otherwise opens the create sheet prefilled from
+   * the signed-in Clerk identity. Default `false` — only the chair-filling picker opts in.
+   */
+  allowSelf?: boolean;
 }
 
 export default function ContactPicker({
@@ -45,9 +53,11 @@ export default function ContactPicker({
   venue,
   disabled = false,
   disableCreate = false,
+  allowSelf = false,
 }: ContactPickerProps) {
   const [open, setOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [creatingSelf, setCreatingSelf] = useState(false);
   const [search, setSearch] = useState('');
   const [pendingName, setPendingName] = useState('');
   const [activeIndex, setActiveIndex] = useState(-1);
@@ -57,8 +67,10 @@ export default function ContactPicker({
   const { data: contacts = [] } = useContacts();
   const roleVocabulary = useRoleVocabulary();
   const queryClient = useQueryClient();
+  const { user } = useUser();
 
   const selected = contacts.find((c) => c.id === value) ?? null;
+  const selfContact = contacts.find((c) => c.isAccountOwner) ?? null;
 
   // Every vacant chair on a booking mounts its own ContactPicker, each ranking the full contacts
   // list independently (haversine + soft-match in rankContactsForChair) — memoized so that
@@ -83,15 +95,38 @@ export default function ContactPicker({
   // Options includes the create option when present (unless disabled)
   const totalOptions = filtered.length + (search && !hasExactMatch && !disableCreate ? 1 : 0);
 
+  function closeCreateSheet() {
+    setCreateOpen(false);
+    setCreatingSelf(false);
+  }
+
   const createMutation = useMutation({
     mutationFn: (values: ContactFormValues) =>
-      apiPost<Contact>('/contacts', toContactPayload(values)),
+      apiPost<Contact>('/contacts', {
+        ...toContactPayload(values),
+        ...(creatingSelf ? { isAccountOwner: true } : {}),
+      }),
     onSuccess: (created) => {
       queryClient.invalidateQueries({ queryKey: ['contacts'] });
       onChange(created.id);
-      setCreateOpen(false);
+      closeCreateSheet();
       setOpen(false);
       setSearch('');
+    },
+    onError: (err) => {
+      // #1036 409 recovery: another tab/double-tap won the race to create the account-owner
+      // Contact first. Resolve to the now-existing self-contact rather than surfacing a bare
+      // error toast — the musician wanted to be assigned as themselves either way.
+      if (!creatingSelf || !(err instanceof ApiError) || err.status !== 409) return;
+      void queryClient.refetchQueries({ queryKey: ['contacts'], exact: true }).then(() => {
+        const refreshed = queryClient.getQueryData<Contact[]>(['contacts']) ?? [];
+        const existing = refreshed.find((c) => c.isAccountOwner);
+        if (!existing) return;
+        onChange(existing.id);
+        closeCreateSheet();
+        setOpen(false);
+        setSearch('');
+      });
     },
   });
 
@@ -109,6 +144,18 @@ export default function ContactPicker({
 
   function handleCreateClick() {
     setPendingName(search);
+    setCreatingSelf(false);
+    setOpen(false);
+    setSearch('');
+    setCreateOpen(true);
+  }
+
+  function handleAddSelfClick() {
+    if (selfContact) {
+      handleSelect(selfContact);
+      return;
+    }
+    setCreatingSelf(true);
     setOpen(false);
     setSearch('');
     setCreateOpen(true);
@@ -195,6 +242,18 @@ export default function ContactPicker({
             ref={listRef}
             className="max-h-52 overflow-y-auto"
           >
+            {allowSelf && (
+              <button
+                type="button"
+                role="option"
+                aria-selected={false}
+                onClick={handleAddSelfClick}
+                className="w-full text-left px-3 py-2.5 flex items-center gap-2 text-primary hover:bg-accent transition-colors border-b border-border"
+              >
+                <UserRound size={14} aria-hidden="true" className="flex-shrink-0" />
+                <span className="text-sm">Add yourself</span>
+              </button>
+            )}
             {filtered.length === 0 && !search && (
               <p className="text-sm text-muted px-3 py-4 text-center">No contacts yet</p>
             )}
@@ -246,16 +305,22 @@ export default function ContactPicker({
       </Popover>
 
       {!disableCreate && (
-        <Sheet open={createOpen} onOpenChange={setCreateOpen}>
+        <Sheet
+          open={createOpen}
+          onOpenChange={(next) => (next ? setCreateOpen(true) : closeCreateSheet())}
+        >
           <SheetContent side="bottom" className="max-h-[90vh] overflow-y-auto" aria-describedby={undefined}>
             <SheetHeader>
-              <SheetTitle>New {label}</SheetTitle>
+              <SheetTitle>{creatingSelf ? 'Add yourself' : `New ${label}`}</SheetTitle>
             </SheetHeader>
             <ContactForm
               defaultValues={{
-                name: pendingName,
-                greetingName: pendingName.trim().split(/\s+/)[0] ?? '',
-                email: '', phone: '', website: '',
+                name: creatingSelf ? (user?.fullName ?? '') : pendingName,
+                greetingName: creatingSelf
+                  ? (user?.firstName ?? '')
+                  : pendingName.trim().split(/\s+/)[0] ?? '',
+                email: creatingSelf ? (user?.primaryEmailAddress?.emailAddress ?? '') : '',
+                phone: '', website: '',
                 addressLine1: '', addressLine2: '', city: '', county: '',
                 postcode: '', country: 'GB', latitude: null, longitude: null, placeId: null,
                 notes: '', parkingInfo: '',
@@ -268,7 +333,7 @@ export default function ContactPicker({
               isError={createMutation.isError}
               roleVocabulary={roleVocabulary}
               submitLabel="Create"
-              onCancel={() => setCreateOpen(false)}
+              onCancel={closeCreateSheet}
               autoSuggestGreetingName
             />
           </SheetContent>
