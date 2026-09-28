@@ -23,9 +23,20 @@ export type StepKind = 'MILESTONE' | 'PRECONDITION' | 'FOLLOWUP';
  */
 export type CompleteMode = 'ACTION' | 'AWAITED';
 
+/**
+ * The step-scoped facts a per-row predicate needs to disambiguate multiple materialised rows
+ * that share one flat template key (ADR-0074 §5) — a `BookingContext` alone cannot tell *which*
+ * member's row is being evaluated. Optional on the call: every current predicate is keyed
+ * one-per-goal and ignores it.
+ */
+export interface StepFacts {
+  bandMemberId: string | null;
+}
+
 export interface PredicateEntry {
-  /** The non-sticky outcome of this key's rule against a booking's facts. */
-  predicate: (ctx: BookingContext) => RuleState;
+  /** The non-sticky outcome of this key's rule against a booking's facts (and, for a
+   *  per-person row, that row's own facts). */
+  predicate: (ctx: BookingContext, step?: StepFacts) => RuleState;
   /** The booking-context fields the predicate reads — drives the inverted index. */
   inputs: InputKey[];
   kind: StepKind;
@@ -56,7 +67,9 @@ function entryForRule(
   completeMode: CompleteMode,
 ): PredicateEntry {
   return {
-    predicate: (ctx: BookingContext) => evaluateRuleState(rule, ctx),
+    // Every current entry is one-per-goal (no per-person materialisation yet), so `step` is
+    // unused — declared per the widened PredicateEntry shape (#899), not read here.
+    predicate: (ctx: BookingContext, _step?: StepFacts) => evaluateRuleState(rule, ctx),
     inputs: inputsForRule(rule),
     kind,
     completeMode,

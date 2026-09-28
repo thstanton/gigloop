@@ -12,6 +12,7 @@ import {
   WandSparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { CHECKLIST_STEP_STATE_TEXT_CLASS } from '@/lib/constants';
 import { RowActions, type RowAction } from '@/components/common/RowActions';
 import type { ChecklistItem, ChecklistItemState, ChecklistStep } from '@/types/api';
 import { resolveChecklistShortcut, type ChecklistShortcutHandlers, type ResolvedShortcut } from './checklistShortcuts';
@@ -40,9 +41,11 @@ function isMultiStep(item: ChecklistItem): boolean {
 }
 
 // Milestone progress: completed milestone steps over total. Ring = what's done; the x/y count =
-// where you are — they deliberately differ (e.g. a ⅓-filled ring next to "2/3").
+// where you are — they deliberately differ (e.g. a ⅓-filled ring next to "2/3"). A DECLINED step
+// is excluded from `total`, not just `done`: counting it would leave the ring — and the goal —
+// silently unable to ever complete (#899).
 function milestoneProgress(item: ChecklistItem): { done: number; total: number } {
-  const spine = (item.steps ?? []).filter((s) => s.kind === 'MILESTONE');
+  const spine = (item.steps ?? []).filter((s) => s.kind === 'MILESTONE' && s.state !== 'DECLINED');
   return { done: spine.filter((s) => s.state === 'COMPLETE').length, total: spine.length };
 }
 
@@ -76,12 +79,24 @@ function dueDateDisplay(dueDate: string | null | undefined): { text: string; cla
 }
 
 // Status glyph — informational only, never tappable. Consistent meaning for goals and steps:
-// pending = circle, done = check, awaited = clock, failed = alert.
+// pending = circle, done = check, awaited = clock, failed = alert, declined = skip (muted, never
+// red — a decline is an ordinary expected outcome, not a failure). Terminal states' colour comes
+// from the guarded vocabulary table so DECLINED can never silently pick up FAILED's red (#899).
 function StepGlyph({ step, size = 13 }: { step: ChecklistStep; size?: number }) {
-  if (step.state === 'COMPLETE') return <CheckCircle2 size={size} className="flex-shrink-0 text-muted" />;
-  if (step.state === 'FAILED') return <AlertTriangle size={size} className="flex-shrink-0 text-status-cancelled" />;
+  if (step.state === 'COMPLETE') {
+    return <CheckCircle2 size={size} className={cn('flex-shrink-0', CHECKLIST_STEP_STATE_TEXT_CLASS.COMPLETE)} />;
+  }
+  if (step.state === 'FAILED') {
+    return <AlertTriangle size={size} className={cn('flex-shrink-0', CHECKLIST_STEP_STATE_TEXT_CLASS.FAILED)} />;
+  }
+  if (step.state === 'DECLINED') {
+    return <SkipForward size={size} className={cn('flex-shrink-0', CHECKLIST_STEP_STATE_TEXT_CLASS.DECLINED)} />;
+  }
+  // AWAITED is a completeMode distinction layered on top of PENDING (a passive external wait),
+  // not a separate vocabulary member — the table has no second dimension for it, so this one
+  // branch stays bespoke. The plain-PENDING default below is table-driven like every other case.
   if (step.completeMode === 'AWAITED') return <Clock size={size} className="flex-shrink-0 text-muted" />;
-  return <Circle size={size} className="flex-shrink-0 text-border" />;
+  return <Circle size={size} className={cn('flex-shrink-0', CHECKLIST_STEP_STATE_TEXT_CLASS.PENDING)} />;
 }
 
 // Progress ring — leading goal glyph, fills clockwise by milestone completeness (Things-style),
@@ -284,7 +299,14 @@ function StepsList({ item, activeId }: { item: ChecklistItem; activeId?: string 
       {others.map((step) => (
         <li key={step.id} className="flex items-center gap-2">
           <StepGlyph step={step} />
-          <span className={cn('text-xs text-muted', step.state === 'COMPLETE' && 'line-through')}>{step.label}</span>
+          <span
+            className={cn(
+              'text-xs text-muted',
+              (step.state === 'COMPLETE' || step.state === 'DECLINED') && 'line-through',
+            )}
+          >
+            {step.label}
+          </span>
         </li>
       ))}
     </ul>

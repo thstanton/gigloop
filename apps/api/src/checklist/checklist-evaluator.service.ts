@@ -4,7 +4,6 @@ import {
   AutoCompleteRule,
   BookingContext,
   InputKey,
-  RuleState,
   evaluateRuleState,
 } from './checklist-rules';
 import { ChecklistState, StepState, rollUp } from './checklist-rollup';
@@ -48,6 +47,9 @@ type EvalStep = {
   key: string | null;
   state: string;
   completedAt: Date | null;
+  // #899: which roster row this materialised per-person step belongs to (null for every
+  // non-band step). Passed to the predicate as step-scoped disambiguating facts.
+  bandMemberId: string | null;
 };
 
 /** A Goal: the user-facing checklist row. Atomic goals carry their own rule and
@@ -73,13 +75,14 @@ function resolveSkip(goal: EvalGoal, ctx: BookingContext): boolean {
   );
 }
 
-/** Re-evaluate a single step against the registry, respecting COMPLETE stickiness.
+/** Re-evaluate a single step against the registry, respecting COMPLETE/DECLINED stickiness.
  * A step with no registered predicate keeps its stored state. */
-function nextStepState(step: EvalStep, ctx: BookingContext): RuleState {
-  if (step.state === 'COMPLETE') return 'COMPLETE'; // sticky — manual or prior auto-complete
+function nextStepState(step: EvalStep, ctx: BookingContext): StepState {
+  // sticky — manual/prior auto-complete, or an explicit decline (never re-opened by a predicate).
+  if (step.state === 'COMPLETE' || step.state === 'DECLINED') return step.state as StepState;
   const entry = step.key ? STEP_PREDICATES[step.key] : undefined;
-  if (!entry) return step.state as RuleState;
-  return entry.predicate(ctx);
+  if (!entry) return step.state as StepState;
+  return entry.predicate(ctx, { bandMemberId: step.bandMemberId });
 }
 
 /**

@@ -617,6 +617,88 @@ describe('ChecklistEvaluatorService', () => {
     });
   });
 
+  // #899 / ADR-0074 §5: DECLINED is a general, terminal step state. Nothing seeds it yet (that's
+  // #900), but the evaluator must already treat a pre-existing DECLINED row correctly: sticky
+  // (never re-opened by its predicate) and non-contributing to its goal's roll-up.
+  describe('DECLINED step state (#899, general — not band-specific)', () => {
+    it('is sticky — a DECLINED step is never re-evaluated by its predicate', async () => {
+      const goal = makeItem({
+        id: 'g-quote',
+        key: 'get_the_quote_accepted',
+        state: 'PENDING',
+        autoCompleteRule: null,
+        steps: [
+          {
+            id: 's1',
+            key: 'send_quote',
+            state: 'DECLINED',
+            completedAt: null,
+            bandMemberId: 'bm-1',
+          },
+        ],
+      });
+      // The rule condition holds — if the step were re-evaluated it would flip to COMPLETE.
+      const booking = makeBooking({
+        communications: [{ status: 'SENT', template: { builtInType: 'quote' } }],
+      });
+      repo.findItemsWithContext.mockResolvedValue({ items: [goal], booking });
+
+      await service.evaluate('b1');
+
+      // No step update for s1 (state unchanged): the goal rolls up to PENDING (no contributing
+      // steps, the same guard as an empty list) and DECLINED is not itself contributing, so no
+      // goal update fires either.
+      expect(repo.applyStateUpdates).not.toHaveBeenCalled();
+    });
+
+    it('rolls a goal up to COMPLETE around a DECLINED sibling step (non-contributing)', async () => {
+      const goal = makeItem({
+        id: 'g-quote',
+        key: 'get_the_quote_accepted',
+        state: 'PENDING',
+        autoCompleteRule: null,
+        steps: [
+          { id: 's1', key: 'send_quote', state: 'DECLINED', completedAt: null, bandMemberId: null },
+          { id: 's2', key: 'quote_accepted', state: 'COMPLETE', completedAt: new Date(), bandMemberId: null },
+        ],
+      });
+      const booking = makeBooking();
+      repo.findItemsWithContext.mockResolvedValue({ items: [goal], booking });
+
+      await service.evaluate('b1');
+
+      // Both steps are already in their sticky terminal states (no step updates), but the goal
+      // itself flips PENDING → COMPLETE: DECLINED is excluded from the completion check, so the
+      // one genuinely-complete sibling is enough — this is the failure mode #899 exists to avoid
+      // (a decline must never leave the goal silently stuck PENDING forever).
+      expect(repo.applyStateUpdates).toHaveBeenCalledWith(
+        [expect.objectContaining({ id: 'g-quote', state: 'COMPLETE' })],
+        [],
+      );
+    });
+
+    it('passes the step its own facts (bandMemberId) — existing single-arg predicates ignore it and behave identically', async () => {
+      const goal = makeItem({
+        id: 'g-quote',
+        key: 'get_the_quote_accepted',
+        state: 'PENDING',
+        autoCompleteRule: null,
+        steps: [
+          { id: 's1', key: 'send_quote', state: 'PENDING', completedAt: null, bandMemberId: 'bm-1' },
+        ],
+      });
+      const booking = makeBooking({
+        communications: [{ status: 'SENT', template: { builtInType: 'quote' } }],
+      });
+      repo.findItemsWithContext.mockResolvedValue({ items: [goal], booking });
+
+      await service.evaluate('b1');
+
+      const [, stepUpdates] = repo.applyStateUpdates.mock.calls[0];
+      expect(stepUpdates).toEqual([expect.objectContaining({ id: 's1', state: 'COMPLETE' })]);
+    });
+  });
+
   describe('full contract-sign integration (#49 / ADR-0057 multi-step)', () => {
     it('completes every step and rolls the contract goal up to COMPLETE when created, sent and signed', async () => {
       const goal = makeItem({

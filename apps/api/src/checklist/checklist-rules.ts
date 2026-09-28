@@ -74,7 +74,12 @@ export type InputKey =
   | 'customerEmail'
   | 'fee'
   | 'setsCount'
-  | 'logistics';
+  | 'logistics'
+  // #899: a booking's band roster changed (a member added/removed, a chair filled/vacated,
+  // an answer changed). No predicate declares this input yet — it is reserved so a future
+  // per-person predicate (#900) can target the inverted index precisely, the same way every
+  // other input already does.
+  | 'bandRoster';
 
 // `bookingField` predicates, keyed by field — a lookup keeps evaluateRule's switch flat. Each maps
 // a booking-context field to "is it set?": `activeContract` reads the contracts relation, `fee`

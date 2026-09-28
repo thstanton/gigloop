@@ -324,8 +324,10 @@ export interface Contract {
 // order is intrinsic and inter-goal order is soft status — nothing produces BLOCKED any more.
 export type ChecklistItemState = 'PENDING' | 'COMPLETE' | 'FAILED' | 'SKIPPED';
 
-// A step's state never includes SKIPPED (the opt-out lives on the goal) — ADR-0057.
-export type ChecklistStepState = 'PENDING' | 'COMPLETE' | 'FAILED';
+// A step's state never includes SKIPPED (the opt-out lives on the goal) — ADR-0057. DECLINED
+// (ADR-0057 amended by ADR-0074 §5) is a general step state — "the answer arrived, expectedly,
+// and it was no" — terminal and non-contributing, never FAILED (which stays "unexpected").
+export type ChecklistStepState = 'PENDING' | 'COMPLETE' | 'FAILED' | 'DECLINED';
 
 // The concerns a reminder can belong to (ADR-0052). Mirrors the API's ReminderConcern.
 export type ReminderConcern = 'overview' | 'people' | 'venue' | 'itinerary' | 'music';

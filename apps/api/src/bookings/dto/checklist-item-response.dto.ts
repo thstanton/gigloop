@@ -21,7 +21,7 @@ export class BookingChecklistStepResponseDto {
   @ApiProperty({ enum: ['ACTION', 'AWAITED'] })
   completeMode: string;
 
-  @ApiProperty({ enum: ['PENDING', 'COMPLETE', 'FAILED'] })
+  @ApiProperty({ enum: ['PENDING', 'COMPLETE', 'FAILED', 'DECLINED'] })
   state: string;
 
   @ApiProperty({ enum: ['USER', 'CUSTOMER', 'BAND_MEMBER'] })

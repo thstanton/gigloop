@@ -8,7 +8,7 @@ import {
   computeReminderInsertOrder,
 } from './checklist-defaults';
 import { addDays, surfaceActionItems } from './checklist-surfacing';
-import { activeStep } from './checklist-rollup';
+import { activeStep, StepState } from './checklist-rollup';
 
 export type ChecklistItemSeed = {
   key?: string | null;
@@ -85,7 +85,7 @@ export class ChecklistRepository {
         const surfaceable = checklistItems.flatMap((goal) => {
           const steps = goal.steps ?? [];
           if (steps.length === 0) return [goal as ActionChecklistItem];
-          const active = activeStep(steps as Array<{ state: 'PENDING' | 'COMPLETE' | 'FAILED'; order: number }>);
+          const active = activeStep(steps as Array<{ state: StepState; order: number }>);
           // No active step (goal rolled up) or the musician can't act yet (client's move) →
           // not a surfaceable action for the musician.
           if (!active) return [];

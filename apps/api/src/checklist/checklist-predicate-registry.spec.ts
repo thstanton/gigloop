@@ -196,4 +196,23 @@ describe('affectedKeys (inverted index)', () => {
   it('returns an empty set for an input nothing observes once removed', () => {
     expect(affectedKeys([]).size).toBe(0);
   });
+
+  // #899: reserved for a future per-person predicate (#900) — no current key declares it, so it
+  // resolves to nothing, exactly like any other as-yet-unused input.
+  it('bandRoster is a valid InputKey but nothing observes it yet', () => {
+    expect(affectedKeys(['bandRoster']).size).toBe(0);
+  });
+});
+
+// #899 / ADR-0074 §5: PredicateEntry.predicate widens to (ctx, step) — every current entry is
+// one-per-goal and ignores the second argument, which is optional so every existing call site
+// above (ctx only) keeps compiling and behaving identically. This is the "single call site" the
+// prefactor promises: only checklist-evaluator.service.ts's nextStepState passes step facts.
+describe('predicate accepts optional step facts (#899)', () => {
+  it('ignores a second argument and behaves identically whether or not it is passed', () => {
+    const ctx = makeCtx({ communications: [{ status: 'SENT', template: { builtInType: 'quote' } }] });
+    expect(STEP_PREDICATES.send_quote.predicate(ctx)).toBe('COMPLETE');
+    expect(STEP_PREDICATES.send_quote.predicate(ctx, { bandMemberId: 'bm-1' })).toBe('COMPLETE');
+    expect(STEP_PREDICATES.send_quote.predicate(ctx, { bandMemberId: null })).toBe('COMPLETE');
+  });
 });

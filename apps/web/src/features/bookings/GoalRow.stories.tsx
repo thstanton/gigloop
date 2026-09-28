@@ -342,6 +342,50 @@ export const Skipped: Story = {
   },
 };
 
+// ── DECLINED (#899, ADR-0057 amended by ADR-0074 §5): "the answer arrived, expectedly, and it
+// was no." Declared generally here — not band-specific (#900 is its first real producer) — and
+// exercised on a plain 3-step goal to prove the mechanism, not a band narrative.
+function genericGoal(steps: ChecklistStep[]): ChecklistItem {
+  return { ...contractGoal(steps), id: 'g-generic', key: null, label: 'Line up the extras' };
+}
+
+const askA = step({ id: 's-ask-a', label: 'Ask musician A', order: 1, state: 'COMPLETE' });
+const askB = step({ id: 's-ask-b', label: 'Ask musician B', order: 2, state: 'DECLINED' });
+const askC = step({ id: 's-ask-c', label: 'Ask musician C', order: 3 });
+
+export const DeclinedStepExcludedFromProgress: Story = {
+  args: { item: genericGoal([askA, askB, askC]), handlers: handlers() },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    // A declined step is terminal — never the active step. B is skipped over; C (still PENDING,
+    // no shortcut wired) becomes the visible active line instead.
+    await expect(canvas.getByText('Ask musician C')).toBeVisible();
+    await expect(canvas.queryByText('Ask musician B')).toBeNull(); // folded, not yet revealed
+
+    // The goal glyph's ring reads done=1/total=2 (A complete, C pending) — B must be excluded
+    // from the total, not just the done count, or the ring (and the goal) could never complete
+    // (#899's named failure mode). The ring carries no text, so this is asserted via the filled
+    // circle's geometry rather than a hand-written expectation.
+    const circles = canvasElement.querySelectorAll('circle');
+    const fill = circles[1] as SVGCircleElement;
+    const r = Number(fill.getAttribute('r'));
+    const circumference = 2 * Math.PI * r;
+    const expectedOffset = circumference * (1 - 1 / 2);
+    await expect(Number(fill.getAttribute('stroke-dashoffset'))).toBeCloseTo(expectedOffset, 5);
+
+    // Reveal the folded steps: B shows struck through, and its glyph pins the shared step-state
+    // token — muted, same as a completed step, never FAILED's red.
+    await userEvent.click(canvas.getByRole('button', { name: /See all steps/ }));
+    const declinedLabel = canvas.getByText('Ask musician B');
+    await expect(declinedLabel).toHaveClass('line-through');
+    const declinedRow = declinedLabel.closest('li');
+    const glyph = declinedRow?.querySelector('svg');
+    await expect(glyph).toHaveClass('text-muted');
+    await expect(glyph).not.toHaveClass('text-status-cancelled');
+  },
+};
+
 // All steps complete — the goal rolls up to done (state COMPLETE), shown by the completed glyph.
 export const Complete: Story = {
   args: {
