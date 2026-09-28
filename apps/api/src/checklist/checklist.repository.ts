@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   BAND_CHECKLIST_GOAL_KEY,
+  BAND_GOAL_KEYS,
   CHECKLIST_DEFAULTS,
   ChecklistDefaultStep,
   computeDueDate,
@@ -43,6 +44,7 @@ type ActionChecklistItem = {
 
 const BAND_CHECKLIST_GOAL_SELECT = {
   id: true,
+  key: true,
   userId: true,
   state: true,
   steps: {
@@ -144,6 +146,8 @@ export class ChecklistRepository {
           communications: {
             select: {
               status: true,
+              // #901: per-member comm predicates match on the recipient contact.
+              contactId: true,
               template: { select: { builtInType: true } },
             },
             orderBy: { createdAt: 'asc' },
@@ -180,19 +184,27 @@ export class ChecklistRepository {
     return { items, booking };
   }
 
-  /** Read only the band goal + roster facts needed by the checklist service's sync plan. */
+  /** Read only the band goals + roster facts needed by the checklist service's sync plan. Any one
+   * band goal is enough: a booking created at READY seeds the briefed goal without the confirmed one. */
   async findBandChecklistStepSyncData(
     userId: string,
     bookingId: string,
   ): Promise<BandChecklistStepSyncData | null> {
-    const [goal, members, chairs] = await Promise.all([
-      this.prisma.bookingChecklistItem.findFirst({
-        where: { bookingId, userId, key: BAND_CHECKLIST_GOAL_KEY },
+    const [goals, members, chairs] = await Promise.all([
+      this.prisma.bookingChecklistItem.findMany({
+        where: { bookingId, userId, key: { in: [...BAND_GOAL_KEYS] } },
         select: BAND_CHECKLIST_GOAL_SELECT,
       }),
       this.prisma.bookingBandMember.findMany({
         where: { bookingId, userId, removedAt: null },
-        select: { id: true, status: true, isSelf: true, createdAt: true, contact: { select: { name: true } } },
+        select: {
+          id: true,
+          status: true,
+          isSelf: true,
+          contactId: true,
+          createdAt: true,
+          contact: { select: { name: true } },
+        },
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       }),
       this.prisma.bookingBandChair.findMany({
@@ -200,9 +212,9 @@ export class ChecklistRepository {
         select: { memberId: true, member: { select: { status: true } } },
       }),
     ]);
-    if (!goal) return null;
+    if (!goals.length) return null;
     return {
-      goal,
+      goals,
       members,
       chairs: chairs.map((chair) => ({ memberId: chair.memberId, memberStatus: chair.member?.status ?? null })),
     };
@@ -217,6 +229,14 @@ export class ChecklistRepository {
   ): Promise<void> {
     if (!plan.deleteStepIds.length && !plan.createSteps.length && !plan.updateSteps.length) return;
     const transaction: Prisma.PrismaPromise<unknown>[] = [];
+    if (plan.reopenGoal) {
+      transaction.push(
+        this.prisma.bookingChecklistItem.updateMany({
+          where: { id: goalId, bookingId, userId, state: 'COMPLETE' },
+          data: { state: 'PENDING', completedAt: null },
+        }),
+      );
+    }
     for (const id of plan.deleteStepIds) {
       transaction.push(
         this.prisma.bookingChecklistStep.deleteMany({ where: { id, goalId, bookingId, userId } }),

@@ -41,7 +41,7 @@ describe('checklist concern map', () => {
     // invite/response steps are no longer independent reminder keys. People holds only the
     // standalone sends; the multi-step billing goals (quote included) live in Overview; the
     // song-request goal's outcome is musical so it lives in Music.
-    expect(keysForConcern('people').sort(alpha)).toEqual(['get_the_band_confirmed', 'send_thank_you'].sort(alpha));
+    expect(keysForConcern('people').sort(alpha)).toEqual(['get_the_band_confirmed', 'get_the_band_briefed', 'send_thank_you'].sort(alpha));
     expect(keysForConcern('venue')).toEqual(['add_venue']);
     expect(keysForConcern('itinerary')).toEqual(['build_itinerary']);
     expect(keysForConcern('music')).toEqual(['gather_song_requests']);

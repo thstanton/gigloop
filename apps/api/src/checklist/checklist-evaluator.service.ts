@@ -11,8 +11,8 @@ import { STEP_PREDICATES, affectedKeys } from './checklist-predicate-registry';
 import { isEnabled } from '../common/featureFlags';
 import {
   BAND_CHECKLIST_FEATURE_FLAG,
-  BAND_CHECKLIST_GOAL_KEY,
   CHECKLIST_DEFAULTS,
+  isBandGoalKey,
 } from './checklist-defaults';
 import { planBandGoalReset, planBandMemberStepSync } from './checklist-band-steps';
 import type { BandChecklistStepSyncData } from './checklist-band-steps';
@@ -161,7 +161,7 @@ function computeUpdates(
   for (const goal of goals) {
     // A feature flag off means the band checklist is inert, including for any
     // legacy/test row that happens to exist in the database.
-    if (!bandFeatureEnabled && goal.key === BAND_CHECKLIST_GOAL_KEY) continue;
+    if (!bandFeatureEnabled && isBandGoalKey(goal.key)) continue;
     if (isTerminalGoal(goal.state)) continue; // COMPLETE/SKIPPED are sticky
     const { goalUpdate, stepUpdates: steps } = evaluateGoal(goal, ctx);
     if (goalUpdate) goalUpdates.push(goalUpdate);
@@ -179,13 +179,16 @@ export class ChecklistEvaluatorService {
     bookingId: string,
     data: BandChecklistStepSyncData,
   ): Promise<boolean> {
-    const templates = CHECKLIST_DEFAULTS.find((item) => item.key === BAND_CHECKLIST_GOAL_KEY)?.steps;
-    if (!templates) return false;
-
-    const plan = planBandMemberStepSync(data.goal, data.members, templates);
-    if (!plan.deleteStepIds.length && !plan.createSteps.length && !plan.updateSteps.length) return false;
-    await this.repo.applyBandMemberStepSyncPlan(userId, bookingId, data.goal.id, plan);
-    return true;
+    let changed = false;
+    for (const goal of data.goals) {
+      const templates = CHECKLIST_DEFAULTS.find((item) => item.key === goal.key)?.steps;
+      if (!templates) continue;
+      const plan = planBandMemberStepSync(goal, data.members, templates);
+      if (!plan.deleteStepIds.length && !plan.createSteps.length && !plan.updateSteps.length) continue;
+      await this.repo.applyBandMemberStepSyncPlan(userId, bookingId, goal.id, plan);
+      changed = true;
+    }
+    return changed;
   }
 
   async resetBandGoalForRosterChange(
@@ -212,7 +215,7 @@ export class ChecklistEvaluatorService {
       if (bandData) {
         const changed = await this.syncBandMemberSteps(snapshot.booking.userId, bookingId, bandData);
         if (changed) snapshot = await this.repo.findItemsWithContext(bookingId);
-        bandMembers = bandData.members.map(({ id, status, isSelf }) => ({ id, status, isSelf }));
+        bandMembers = bandData.members.map(({ id, status, isSelf, contactId }) => ({ id, status, isSelf, contactId }));
         bandChairs = bandData.chairs;
       }
     }

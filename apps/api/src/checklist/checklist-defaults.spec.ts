@@ -1,5 +1,6 @@
 import {
   CHECKLIST_DEFAULTS,
+  BAND_BRIEFED_GOAL_KEY,
   BAND_CHECKLIST_GOAL_KEY,
   computeReminderInsertOrder,
   dueDateRuleEqual,
@@ -206,6 +207,76 @@ describe('get_the_band_confirmed checklist default (#900)', () => {
       expect(keys).toContain('get_the_balance_paid');
     } finally {
       if (previousFlag !== undefined) process.env.FEATURE_BAND_MEMBERS = previousFlag;
+    }
+  });
+});
+
+describe('per-band-member step templates (#900, #901)', () => {
+  it('each carries a {name} row label and an explicit decline policy', () => {
+    const templates = CHECKLIST_DEFAULTS.flatMap((item) => item.steps ?? []).filter((step) => step.perBandMember);
+    expect(templates.length).toBeGreaterThan(0);
+    for (const template of templates) {
+      expect(template.memberLabel).toContain('{name}');
+      expect(typeof template.keepsDeclinedHistory).toBe('boolean');
+    }
+  });
+});
+
+describe('get_the_band_briefed checklist default (#901)', () => {
+  const briefedGoal = () => CHECKLIST_DEFAULTS.find((item) => item.key === BAND_BRIEFED_GOAL_KEY)!;
+  const confirmedGoal = () => CHECKLIST_DEFAULTS.find((item) => item.key === BAND_CHECKLIST_GOAL_KEY)!;
+
+  it('is a COMPLETE-staged ordinary default due two days before the booking', () => {
+    expect(briefedGoal()).toMatchObject({
+      completedBy: 'USER',
+      autoCompleteRule: null,
+      requiredForStatus: 'COMPLETE',
+      dueDateRule: { basis: 'bookingDate', offsetDays: -2 },
+    });
+    expect(briefedGoal().enabled).not.toBe(false);
+  });
+
+  it('files under a different lifecycle stage from the confirmation goal', () => {
+    expect(briefedGoal().requiredForStatus).not.toBe(confirmedGoal().requiredForStatus);
+  });
+
+  it('holds exactly one per-member Brief template, satisfied only by the final-details comm', () => {
+    const steps = briefedGoal().steps ?? [];
+    expect(steps).toHaveLength(1);
+    expect(steps[0]).toMatchObject({
+      key: 'brief_band_member',
+      kind: 'MILESTONE',
+      completeMode: 'ACTION',
+      completedBy: 'USER',
+      perBandMember: true,
+    });
+    const templateTypes = (steps[0].autoCompleteRule as { templateTypes: string[] }).templateTypes;
+    expect(templateTypes).toEqual(expect.arrayContaining(['band_final_details', 'band_final_details_message']));
+    expect(templateTypes.some((type) => type.startsWith('band_call_sheet'))).toBe(false);
+  });
+
+  it('is hidden from the effective defaults when the band feature flag is off', () => {
+    const previousFlag = process.env.FEATURE_BAND_MEMBERS;
+    delete process.env.FEATURE_BAND_MEMBERS;
+    try {
+      const keys = getChecklistDefaults(null).map((item) => item.key);
+      expect(keys).not.toContain(BAND_BRIEFED_GOAL_KEY);
+      expect(keys).not.toContain(BAND_CHECKLIST_GOAL_KEY);
+    } finally {
+      if (previousFlag !== undefined) process.env.FEATURE_BAND_MEMBERS = previousFlag;
+    }
+  });
+
+  it('is seeded on a booking started at READY even though the confirmation goal is not', () => {
+    const previousFlag = process.env.FEATURE_BAND_MEMBERS;
+    process.env.FEATURE_BAND_MEMBERS = 'true';
+    try {
+      const keys = filterItemsByStartingStatus(getChecklistDefaults(null), 'READY').map((item) => item.key);
+      expect(keys).toContain(BAND_BRIEFED_GOAL_KEY);
+      expect(keys).not.toContain(BAND_CHECKLIST_GOAL_KEY);
+    } finally {
+      if (previousFlag === undefined) delete process.env.FEATURE_BAND_MEMBERS;
+      else process.env.FEATURE_BAND_MEMBERS = previousFlag;
     }
   });
 });

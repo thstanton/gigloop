@@ -93,6 +93,36 @@ test.describe('booking checklist lifecycle', () => {
       )
       .toBe('COMPLETE');
 
+    // #901: the COMPLETE-staged briefing goal materialises one `Brief {name}` step
+    // for the dep and stays open until their final details go out. Sending the
+    // final-details email from the Band sheet (mail is sunk in E2E_TEST_MODE)
+    // completes it; the copy-paste `Mark as sent` path logs the same SENT
+    // Communication and is covered by the API unit tier.
+    const briefStep = async () =>
+      (
+        await prisma.bookingChecklistStep.findFirst({
+          where: { bookingId: fixture.bookingId, key: 'brief_band_member' },
+        })
+      )?.state;
+    const briefedGoal = async () =>
+      (
+        await prisma.bookingChecklistItem.findFirst({
+          where: { bookingId: fixture.bookingId, key: 'get_the_band_briefed' },
+        })
+      )?.state;
+    await expect.poll(briefStep).toBe('PENDING');
+    expect(await briefedGoal()).toBe('PENDING');
+    await page.goto(`/admin/bookings/${fixture.bookingId}?sheet=band`);
+    await page.getByRole('button', { name: 'Send final details to E2E Lifecycle Customer' }).click();
+    const compose = page.getByRole('dialog', { name: 'Compose final details' });
+    const sendFinalDetails = compose.getByRole('button', { name: 'Send email' });
+    await expect(sendFinalDetails).toBeEnabled();
+    await sendFinalDetails.click();
+    await expect.poll(briefStep).toBe('COMPLETE');
+    await expect.poll(briefedGoal).toBe('COMPLETE');
+    await page.goto(`/admin/bookings/${fixture.bookingId}`);
+    await expect(page.getByRole('button', { name: 'Provisional', exact: true })).toBeVisible();
+
     // --- Manual goal completion: the first goal (Get the deposit paid) via its
     //     overflow menu → Mark complete. The stage-section count reflects it
     //     (0/3 → 1/3 — the Provisional bracket holds the three CONFIRMED-target

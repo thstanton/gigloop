@@ -1,12 +1,14 @@
-import { BAND_CHECKLIST_GOAL_KEY, CHECKLIST_DEFAULTS } from './checklist-defaults';
+import { BAND_BRIEFED_GOAL_KEY, BAND_CHECKLIST_GOAL_KEY, CHECKLIST_DEFAULTS } from './checklist-defaults';
 import { planBandGoalReset, planBandMemberStepSync } from './checklist-band-steps';
 
 const templates = CHECKLIST_DEFAULTS.find((item) => item.key === BAND_CHECKLIST_GOAL_KEY)!.steps!;
+const briefTemplates = CHECKLIST_DEFAULTS.find((item) => item.key === BAND_BRIEFED_GOAL_KEY)!.steps!;
 const stamp = new Date('2026-09-01T00:00:00.000Z');
 
 function goal(overrides: Record<string, unknown> = {}) {
   return {
     id: 'goal-1',
+    key: BAND_CHECKLIST_GOAL_KEY,
     userId: 'user-1',
     state: 'PENDING',
     steps: [],
@@ -19,6 +21,7 @@ function member(overrides: Record<string, unknown> = {}) {
     id: 'member-1',
     status: 'ADDED',
     isSelf: false,
+    contactId: 'contact-1',
     createdAt: stamp,
     contact: { name: 'Dave' },
     ...overrides,
@@ -83,7 +86,58 @@ describe('planBandMemberStepSync (#900)', () => {
       templates,
     );
 
-    expect(plan).toEqual({ deleteStepIds: [], createSteps: [], updateSteps: [] });
+    expect(plan).toEqual({ deleteStepIds: [], createSteps: [], updateSteps: [], reopenGoal: false });
+  });
+
+  it('reopens a completed goal when a new member row is materialised', () => {
+    const plan = planBandMemberStepSync(goal({ state: 'COMPLETE' }), [member()], templates);
+
+    expect(plan.reopenGoal).toBe(true);
+  });
+});
+
+describe('planBandMemberStepSync — get_the_band_briefed (#901)', () => {
+  it('creates one Brief step per eligible member, not self or a decline', () => {
+    const plan = planBandMemberStepSync(
+      goal(),
+      [
+        member({ id: 'member-1', status: 'CONFIRMED', contact: { name: 'Dave' } }),
+        member({ id: 'member-self', isSelf: true, contact: { name: 'Tim' } }),
+        member({ id: 'member-declined', status: 'DECLINED', contact: { name: 'Jo' } }),
+        member({ id: 'member-2', status: 'INVITED', createdAt: new Date('2026-09-02T00:00:00.000Z'), contact: { name: 'Sam' } }),
+      ],
+      briefTemplates,
+    );
+
+    expect(plan.createSteps.map(({ template, memberId, label, order }) => ({
+      key: template.key,
+      memberId,
+      label,
+      order,
+    }))).toEqual([
+      { key: 'brief_band_member', memberId: 'member-1', label: 'Brief Dave', order: 1 },
+      { key: 'brief_band_member', memberId: 'member-2', label: 'Brief Sam', order: 2 },
+    ]);
+  });
+
+  it('drops the Brief step of a member who declines after it was materialised', () => {
+    const plan = planBandMemberStepSync(
+      goal({
+        steps: [
+          { id: 'brief-dave', key: 'brief_band_member', bandMemberId: 'member-dave', label: 'Brief Dave', order: 1, state: 'PENDING' },
+          { id: 'brief-sam', key: 'brief_band_member', bandMemberId: 'member-sam', label: 'Brief Sam', order: 2, state: 'PENDING' },
+        ],
+      }),
+      [
+        member({ id: 'member-dave', status: 'DECLINED', contact: { name: 'Dave' } }),
+        member({ id: 'member-sam', status: 'CONFIRMED', createdAt: new Date('2026-09-02T00:00:00.000Z'), contact: { name: 'Sam' } }),
+      ],
+      briefTemplates,
+    );
+
+    expect(plan.deleteStepIds).toEqual(['brief-dave']);
+    expect(plan.createSteps).toEqual([]);
+    expect(plan.updateSteps).toEqual([{ id: 'brief-sam', label: 'Brief Sam', order: 1 }]);
   });
 });
 

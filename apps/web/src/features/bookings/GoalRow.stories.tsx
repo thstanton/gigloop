@@ -160,6 +160,17 @@ function bandGoal(steps: ChecklistStep[]): ChecklistItem {
   };
 }
 
+// #901: the two-days-out worklist — a COMPLETE-staged sibling of the READY-staged confirmation goal.
+function briefedGoal(steps: ChecklistStep[]): ChecklistItem {
+  return {
+    ...contractGoal(steps),
+    id: 'g-brief',
+    key: 'get_the_band_briefed',
+    label: 'Get the band briefed',
+    requiredForStatus: 'COMPLETE',
+  };
+}
+
 const sendQuote = step({
   id: 's-send-quote',
   label: 'Send the quote',
@@ -271,6 +282,43 @@ export const BandOneDeclined: Story = {
     const declined = canvas.getByText('Dave confirms');
     await expect(declined).toHaveClass('line-through');
     await expect(declined.closest('li')?.querySelector('svg')).toHaveClass('text-muted');
+  },
+};
+
+// #901: once everyone has said yes, the briefing worklist names the next person to send final
+// details to. Dave's went by copy-paste + Mark as sent; Sam is next.
+export const BandBriefingWorklist: Story = {
+  args: {
+    item: briefedGoal([
+      step({ id: 's-brief-dave', key: 'brief_band_member', bandMemberId: 'm-dave', label: 'Brief Dave', order: 1, state: 'COMPLETE', shortcutType: 'brief_band_member' }),
+      step({ id: 's-brief-sam', key: 'brief_band_member', bandMemberId: 'm-sam', label: 'Brief Sam', order: 2, shortcutType: 'brief_band_member' }),
+    ]),
+    handlers: handlers(),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText('Get the band briefed')).toBeVisible();
+    await expect(canvas.getByText('2/2')).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: 'Brief Sam' }));
+    await expect(args.handlers.onDeepLink).toHaveBeenCalledWith('band');
+    // No call-sheet step: the call sheet is a push, never a chase (ADR-0073).
+    await userEvent.click(canvas.getByRole('button', { name: /See all steps/ }));
+    await expect(canvas.queryByText(/call sheet/i)).toBeNull();
+  },
+};
+
+// #901: a bounced final-details email keeps the person-named CTA so the musician can resend.
+export const BandBriefingFailed: Story = {
+  args: {
+    item: briefedGoal([
+      step({ id: 's-brief-dave', key: 'brief_band_member', bandMemberId: 'm-dave', label: 'Brief Dave', order: 1, state: 'FAILED', shortcutType: 'brief_band_member' }),
+    ]),
+    handlers: handlers(),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: 'Brief Dave' }));
+    await expect(args.handlers.onDeepLink).toHaveBeenCalledWith('band');
   },
 };
 

@@ -929,11 +929,11 @@ describe('ChecklistEvaluatorService', () => {
           ],
         });
         repo.findBandChecklistStepSyncData.mockResolvedValue({
-          goal: {
-            id: 'g-band', userId: 'u1', state: 'PENDING', steps: staticSteps,
-          },
+          goals: [{
+            id: 'g-band', key: 'get_the_band_confirmed', userId: 'u1', state: 'PENDING', steps: staticSteps,
+          }],
           members: [{
-            id: 'm-dave', status: 'CONFIRMED', isSelf: false, createdAt: new Date(), contact: { name: 'Dave' },
+            id: 'm-dave', status: 'CONFIRMED', isSelf: false, contactId: 'c-dave', createdAt: new Date(), contact: { name: 'Dave' },
           }],
           chairs: [{ memberId: 'm-dave', memberStatus: 'CONFIRMED' }],
         });
@@ -1064,6 +1064,103 @@ describe('ChecklistEvaluatorService', () => {
         if (previousFlag === undefined) delete process.env.FEATURE_BAND_MEMBERS;
         else process.env.FEATURE_BAND_MEMBERS = previousFlag;
       }
+    });
+
+    describe('get_the_band_briefed (#901)', () => {
+      const dave = {
+        id: 'm-dave', status: 'CONFIRMED', isSelf: false, contactId: 'c-dave', createdAt: new Date('2026-01-01'), contact: { name: 'Dave' },
+      };
+      const sam = {
+        id: 'm-sam', status: 'CONFIRMED', isSelf: false, contactId: 'c-sam', createdAt: new Date('2026-01-02'), contact: { name: 'Sam' },
+      };
+      const briefStep = (id: string, bandMemberId: string) =>
+        ({ id, key: 'brief_band_member', state: 'PENDING', completedAt: null, bandMemberId });
+      const finalDetails = (contactId: string, builtInType = 'band_final_details') =>
+        ({ status: 'SENT', contactId, template: { builtInType } });
+      let previousFlag: string | undefined;
+
+      beforeEach(() => {
+        previousFlag = process.env.FEATURE_BAND_MEMBERS;
+        process.env.FEATURE_BAND_MEMBERS = 'true';
+      });
+      afterEach(() => {
+        if (previousFlag === undefined) delete process.env.FEATURE_BAND_MEMBERS;
+        else process.env.FEATURE_BAND_MEMBERS = previousFlag;
+      });
+
+      it('materialises Brief rows even when the confirmed goal was never seeded (READY-start booking)', async () => {
+        const emptyGoal = makeItem({ id: 'g-brief', key: 'get_the_band_briefed', autoCompleteRule: null, steps: [] });
+        const materialised = makeItem({
+          id: 'g-brief', key: 'get_the_band_briefed', autoCompleteRule: null,
+          steps: [briefStep('s-brief-dave', 'm-dave')],
+        });
+        repo.findBandChecklistStepSyncData.mockResolvedValue({
+          goals: [{ id: 'g-brief', key: 'get_the_band_briefed', userId: 'u1', state: 'PENDING', steps: [] }],
+          members: [dave],
+          chairs: [],
+        });
+        const booking = makeBooking({ status: 'READY', communications: [finalDetails('c-dave')] });
+        repo.findItemsWithContext
+          .mockResolvedValueOnce({ items: [emptyGoal], booking })
+          .mockResolvedValueOnce({ items: [materialised], booking });
+
+        await service.evaluate('b1');
+
+        expect(repo.applyBandMemberStepSyncPlan).toHaveBeenCalledWith('u1', 'b1', 'g-brief', expect.objectContaining({
+          createSteps: [expect.objectContaining({ memberId: 'm-dave', label: 'Brief Dave', order: 1 })],
+        }));
+        expect(repo.applyStateUpdates).toHaveBeenCalledWith(
+          [expect.objectContaining({ id: 'g-brief', state: 'COMPLETE' })],
+          [expect.objectContaining({ id: 's-brief-dave', state: 'COMPLETE' })],
+        );
+      });
+
+      it('keeps the COMPLETE-stage goal open while any member is unbriefed', async () => {
+        const goal = makeItem({
+          id: 'g-brief', key: 'get_the_band_briefed', autoCompleteRule: null,
+          steps: [briefStep('s-brief-dave', 'm-dave'), briefStep('s-brief-sam', 'm-sam')],
+        });
+        repo.findBandChecklistStepSyncData.mockResolvedValue({
+          goals: [{
+            id: 'g-brief', key: 'get_the_band_briefed', userId: 'u1', state: 'PENDING',
+            steps: [
+              { id: 's-brief-dave', key: 'brief_band_member', bandMemberId: 'm-dave', label: 'Brief Dave', order: 1, state: 'PENDING' },
+              { id: 's-brief-sam', key: 'brief_band_member', bandMemberId: 'm-sam', label: 'Brief Sam', order: 2, state: 'PENDING' },
+            ],
+          }],
+          members: [dave, sam],
+          chairs: [],
+        });
+        // Dave's details went by copy-paste (Mark as sent logs the message template); Sam has only had the call sheet.
+        repo.findItemsWithContext.mockResolvedValue({
+          items: [goal],
+          booking: makeBooking({
+            status: 'READY',
+            communications: [finalDetails('c-dave', 'band_final_details_message'), finalDetails('c-sam', 'band_call_sheet')],
+          }),
+        });
+
+        await service.evaluate('b1');
+
+        expect(repo.applyBandMemberStepSyncPlan).not.toHaveBeenCalled();
+        expect(repo.applyStateUpdates).toHaveBeenCalledWith(
+          [],
+          [expect.objectContaining({ id: 's-brief-dave', state: 'COMPLETE' })],
+        );
+      });
+
+      it('leaves the briefed goal inert while the feature flag is off', async () => {
+        delete process.env.FEATURE_BAND_MEMBERS;
+        repo.findItemsWithContext.mockResolvedValue({
+          items: [makeItem({ id: 'g-brief', key: 'get_the_band_briefed', autoCompleteRule: null, steps: [] })],
+          booking: makeBooking({ communications: [finalDetails('c-dave')] }),
+        });
+
+        await service.evaluate('b1');
+
+        expect(repo.findBandChecklistStepSyncData).not.toHaveBeenCalled();
+        expect(repo.applyStateUpdates).not.toHaveBeenCalled();
+      });
     });
 
     it('does not evaluate or change an existing band goal while the feature flag is off', async () => {

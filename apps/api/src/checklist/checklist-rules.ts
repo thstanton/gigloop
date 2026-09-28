@@ -34,6 +34,10 @@ export type AutoCompleteRule =
   | { type: 'bandHasChairs' }
   | { type: 'bandChairsFilled' }
   | { type: 'bandMemberStatus'; completeWhen: string[]; declinedWhen?: string[] }
+  // #901: a comm of one of these built-in types reached *this row's member* — matched on the
+  // member's contact, so emailing one dep never briefs another. A `Mark as sent` log is a SENT
+  // Communication too, so the copy-paste path completes it the same way.
+  | { type: 'bandMemberCommunicationSent'; templateTypes: string[] }
   | { type: 'completeness'; concern: CompletenessConcern };
 
 /** The booking facts a rule reads. Mirrors the repository's context projection. */
@@ -50,14 +54,18 @@ export interface BookingContext {
   fee: string | null;
   setsCount: number;
   logistics: unknown;
-  communications: Array<{ status: string; template: { builtInType: string | null } | null }>;
+  communications: Array<{
+    status: string;
+    contactId: string | null;
+    template: { builtInType: string | null } | null;
+  }>;
   invoices: Array<{ isDeposit: boolean; status: string }>;
   contracts: Array<{ status: string }>;
   musicFormResponse: { id: string } | null;
   // #533 / #630: whether the booking's music form is published (config exists AND publishedAt set).
   musicFormPublished: boolean;
   // The active roster and its chairs are read only for the gated band checklist predicates.
-  bandMembers?: Array<{ id: string; status: string; isSelf: boolean }>;
+  bandMembers?: Array<{ id: string; status: string; isSelf: boolean; contactId: string }>;
   bandChairs?: Array<{ memberId: string | null; memberStatus: string | null }>;
 }
 
@@ -129,6 +137,7 @@ export function evaluateRule(rule: AutoCompleteRule, ctx: BookingContext): boole
       );
     }
     case 'bandMemberStatus':
+    case 'bandMemberCommunicationSent':
       return false;
     case 'contractSigned':
       return ctx.contracts.some((c) => c.status === 'SIGNED');
@@ -169,9 +178,29 @@ export function evaluateRuleState(
     if (rule.declinedWhen?.includes(status)) return 'DECLINED';
     return rule.completeWhen.includes(status) ? 'COMPLETE' : 'PENDING';
   }
+  if (rule.type === 'bandMemberCommunicationSent') {
+    return bandMemberCommunicationState(rule.templateTypes, ctx, bandMemberId);
+  }
   if (evaluateRule(rule, ctx)) return 'COMPLETE';
   if (isCommFailed(rule, ctx)) return 'FAILED';
   return 'PENDING';
+}
+
+/** Per-row comm outcome: COMPLETE once any matching comm to the member's contact is SENT,
+ * FAILED when the latest such send bounced, else PENDING. */
+function bandMemberCommunicationState(
+  templateTypes: string[],
+  ctx: BookingContext,
+  bandMemberId: string | null | undefined,
+): RuleState {
+  const contactId = ctx.bandMembers?.find((member) => member.id === bandMemberId)?.contactId;
+  if (!contactId) return 'PENDING';
+  const matching = ctx.communications.filter(
+    (c) => c.contactId === contactId && templateTypes.includes(c.template?.builtInType ?? ''),
+  );
+  if (matching.some((c) => c.status === 'SENT')) return 'COMPLETE';
+  // Latest = last: the context projection orders communications by createdAt asc.
+  return matching.at(-1)?.status === 'FAILED' ? 'FAILED' : 'PENDING';
 }
 
 // The inverted-index inputs each `bookingField` / `completeness` variant reads — lookups keep
@@ -204,6 +233,8 @@ export function inputsForRule(rule: AutoCompleteRule): InputKey[] {
     case 'bandChairsFilled':
     case 'bandMemberStatus':
       return ['bandRoster'];
+    case 'bandMemberCommunicationSent':
+      return ['communications', 'bandRoster'];
     case 'contractSigned':
       return ['contracts'];
     case 'customerEmail':

@@ -4,6 +4,7 @@ export interface BandChecklistMember {
   id: string;
   status: string;
   isSelf: boolean;
+  contactId: string;
   createdAt: Date;
   contact: { name: string };
 }
@@ -24,13 +25,14 @@ export interface BandChecklistStepRow {
 
 export interface BandChecklistGoal {
   id: string;
+  key: string | null;
   userId: string;
   state: string;
   steps: BandChecklistStepRow[];
 }
 
 export interface BandChecklistStepSyncData {
-  goal: BandChecklistGoal;
+  goals: BandChecklistGoal[];
   members: BandChecklistMember[];
   chairs: BandChecklistChair[];
 }
@@ -52,6 +54,9 @@ export interface BandMemberStepSyncPlan {
   deleteStepIds: string[];
   createSteps: BandMemberStepCreation[];
   updateSteps: BandMemberStepUpdate[];
+  // A COMPLETE goal is terminal to the evaluator, so a newly rostered member's row must
+  // re-open it or the new step would never be rolled up.
+  reopenGoal: boolean;
 }
 
 export interface BandGoalResetPlan {
@@ -76,9 +81,13 @@ export function planBandMemberStepSync(
     (step) => step.bandMemberId !== null && templateKeys.has(step.key ?? ''),
   );
   const existingMemberIds = new Set(existingRows.map((step) => step.bandMemberId as string));
+  // A goal's member rows share one decline policy (the confirmation pair together, or the brief alone).
+  const keepsDeclinedHistory = templates.every((step) => step.keepsDeclinedHistory === true);
   const eligible = [...members]
     .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id))
-    .filter((member) => !member.isSelf && (member.status !== 'DECLINED' || existingMemberIds.has(member.id)));
+    .filter((member) => !member.isSelf && (
+      member.status !== 'DECLINED' || (keepsDeclinedHistory && existingMemberIds.has(member.id))
+    ));
   const retainedIds = new Set(eligible.map((member) => member.id));
   const firstDynamicOrder = templateSteps.findIndex((step) => step.perBandMember) + 1;
   const existingByMemberAndKey = new Map(
@@ -89,9 +98,7 @@ export function planBandMemberStepSync(
 
   eligible.forEach((member, memberIndex) => {
     templates.forEach((template, templateIndex) => {
-      const label = template.key === 'invite_band_member'
-        ? `Invite ${member.contact.name}`
-        : `${member.contact.name} confirms`;
+      const label = (template.memberLabel ?? template.label).replace('{name}', member.contact.name);
       const order = firstDynamicOrder + memberIndex * templates.length + templateIndex;
       const existing = existingByMemberAndKey.get(`${member.id}:${template.key}`);
       if (existing) {
@@ -110,6 +117,7 @@ export function planBandMemberStepSync(
       .map((step) => step.id),
     createSteps,
     updateSteps,
+    reopenGoal: goal.state === 'COMPLETE' && createSteps.length > 0,
   };
 }
 

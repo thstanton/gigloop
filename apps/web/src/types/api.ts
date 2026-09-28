@@ -959,6 +959,8 @@ export interface ChecklistDefaultStep {
   autoCompleteRule: Record<string, unknown> | null;
   dueDateRule?: DueDateRule | null;
   perBandMember?: boolean;
+  memberLabel?: string;
+  keepsDeclinedHistory?: boolean;
 }
 
 export interface ChecklistDefaultItem {

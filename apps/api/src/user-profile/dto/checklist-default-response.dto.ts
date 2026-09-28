@@ -30,6 +30,12 @@ export class ChecklistDefaultStepDto {
 
   @ApiPropertyOptional({ description: 'Materialised once per eligible roster member on a booking.' })
   perBandMember?: boolean;
+
+  @ApiPropertyOptional({ description: 'Per-member row label with a `{name}` placeholder, e.g. `Brief {name}`.' })
+  memberLabel?: string;
+
+  @ApiPropertyOptional({ description: 'Whether a declining member keeps this row as history rather than losing it.' })
+  keepsDeclinedHistory?: boolean;
 }
 
 export class ChecklistDefaultItemResponseDto {

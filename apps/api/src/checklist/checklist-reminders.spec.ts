@@ -42,9 +42,9 @@ describe('selectApplicableReminders', () => {
         status: 'READY',
         disabledKeys: new Set(),
       });
-      // Band readiness lives with People because its per-member actions are person-centred;
+      // Band readiness and briefing live with People because their per-member actions are person-centred;
       // send_thank_you remains the future standalone send on a READY booking.
-      expect(keys(out)).toEqual(['get_the_band_confirmed', 'send_thank_you']);
+      expect(keys(out)).toEqual(['get_the_band_confirmed', 'get_the_band_briefed', 'send_thank_you']);
     });
 
     it('includes all People sends on an ENQUIRY booking, in template order', () => {
@@ -55,7 +55,7 @@ describe('selectApplicableReminders', () => {
       });
       // ADR-0057 / #616: the quote is now a multi-step goal in Overview (its send_quote step's old
       // People home retires with the fold); band readiness is the remaining person-centred goal.
-      expect(keys(out)).toEqual(['get_the_band_confirmed', 'send_thank_you']);
+      expect(keys(out)).toEqual(['get_the_band_confirmed', 'get_the_band_briefed', 'send_thank_you']);
       // The collapsed quote goal lives in Overview now — it must not leak back into People.
       expect(find(out, 'get_the_quote_accepted')).toBeUndefined();
     });

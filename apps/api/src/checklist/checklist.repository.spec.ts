@@ -1,6 +1,6 @@
 import { ChecklistRepository } from './checklist.repository';
 import { PrismaService } from '../prisma/prisma.service';
-import { BAND_CHECKLIST_GOAL_KEY, CHECKLIST_DEFAULTS } from './checklist-defaults';
+import { BAND_BRIEFED_GOAL_KEY, BAND_CHECKLIST_GOAL_KEY, CHECKLIST_DEFAULTS } from './checklist-defaults';
 
 type MockPrisma = {
   booking: { findMany: jest.Mock };
@@ -651,22 +651,46 @@ describe('ChecklistRepository — band checklist persistence (#900)', () => {
     prisma.$transaction.mockImplementation((operations: unknown[]) => Promise.resolve(operations));
   });
 
-  it('loads the goal and active roster with tenant scoping', async () => {
-    prisma.bookingChecklistItem.findFirst.mockResolvedValue({
-      id: 'g-band', userId: 'u1', state: 'PENDING', steps: [],
-    });
+  it('loads every band goal and the active roster with tenant scoping (#901)', async () => {
+    prisma.bookingChecklistItem.findMany.mockResolvedValue([
+      { id: 'g-band', key: BAND_CHECKLIST_GOAL_KEY, userId: 'u1', state: 'PENDING', steps: [] },
+      { id: 'g-brief', key: BAND_BRIEFED_GOAL_KEY, userId: 'u1', state: 'PENDING', steps: [] },
+    ]);
     prisma.bookingBandMember.findMany.mockResolvedValue([]);
     prisma.bookingBandChair.findMany.mockResolvedValue([]);
 
     const data = await repo.findBandChecklistStepSyncData('u1', 'b1');
 
-    expect(data?.goal).toMatchObject({ id: 'g-band', userId: 'u1', state: 'PENDING' });
-    expect(prisma.bookingChecklistItem.findFirst).toHaveBeenCalledWith(expect.objectContaining({
-      where: { bookingId: 'b1', userId: 'u1', key: BAND_CHECKLIST_GOAL_KEY },
+    expect(data?.goals.map((goal) => goal.id)).toEqual(['g-band', 'g-brief']);
+    expect(prisma.bookingChecklistItem.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { bookingId: 'b1', userId: 'u1', key: { in: [BAND_CHECKLIST_GOAL_KEY, BAND_BRIEFED_GOAL_KEY] } },
     }));
     expect(prisma.bookingBandMember.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { bookingId: 'b1', userId: 'u1', removedAt: null },
     }));
+  });
+
+  it('loads nothing when the booking has no band goal', async () => {
+    prisma.bookingChecklistItem.findMany.mockResolvedValue([]);
+    prisma.bookingBandMember.findMany.mockResolvedValue([]);
+    prisma.bookingBandChair.findMany.mockResolvedValue([]);
+
+    await expect(repo.findBandChecklistStepSyncData('u1', 'b1')).resolves.toBeNull();
+  });
+
+  it('re-opens a COMPLETE goal in the same transaction when the plan asks (#901)', async () => {
+    const template = CHECKLIST_DEFAULTS.find((item) => item.key === BAND_BRIEFED_GOAL_KEY)!.steps![0];
+    await repo.applyBandMemberStepSyncPlan('u1', 'b1', 'g-brief', {
+      deleteStepIds: [],
+      updateSteps: [],
+      createSteps: [{ template, memberId: 'm-sam', label: 'Brief Sam', order: 2 }],
+      reopenGoal: true,
+    });
+
+    expect(prisma.bookingChecklistItem.updateMany).toHaveBeenCalledWith({
+      where: { id: 'g-brief', bookingId: 'b1', userId: 'u1', state: 'COMPLETE' },
+      data: { state: 'PENDING', completedAt: null },
+    });
   });
 
   it('persists the service-computed step changes transactionally', async () => {
@@ -675,7 +699,12 @@ describe('ChecklistRepository — band checklist persistence (#900)', () => {
       deleteStepIds: ['stale-step'],
       updateSteps: [{ id: 'step-1', label: 'Invite Dave', order: 3 }],
       createSteps: [{ template, memberId: 'm-dave', label: 'Dave confirms', order: 4 }],
+      reopenGoal: false,
     });
+
+    expect(prisma.bookingChecklistItem.updateMany).not.toHaveBeenCalledWith(expect.objectContaining({
+      data: { state: 'PENDING', completedAt: null },
+    }));
 
     expect(prisma.bookingChecklistStep.deleteMany).toHaveBeenCalledWith({
       where: { id: 'stale-step', goalId: 'g-band', bookingId: 'b1', userId: 'u1' },

@@ -72,6 +72,10 @@ function resolveBandShortcut(
     const memberName = stepLabel ? bandMemberNameFromConfirmationLabel(stepLabel) : 'band member';
     return { label: retry ?? `Chase ${memberName}`, pending: false, onClick: () => handlers.onDeepLink('band') };
   }
+  // #901: final details are sent per player from the Band sheet (email or copy + Mark as sent).
+  if (shortcutType === 'brief_band_member') {
+    return { label: retry ?? 'Send final details', pending: false, onClick: () => handlers.onDeepLink('band') };
+  }
   return null;
 }
 

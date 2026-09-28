@@ -464,7 +464,7 @@ describe('BookingsService', () => {
       );
     });
 
-    it('filters the band goal before repository seeding when the feature flag is off', async () => {
+    it('filters both band goals before repository seeding when the feature flag is off', async () => {
       const previousFlag = process.env.FEATURE_BAND_MEMBERS;
       delete process.env.FEATURE_BAND_MEMBERS;
       try {
@@ -473,6 +473,10 @@ describe('BookingsService', () => {
           {
             label: 'Get the band confirmed', key: 'get_the_band_confirmed', completedBy: 'USER' as const,
             dependsOn: [], autoCompleteRule: null, requiredForStatus: 'READY' as const, dueDateRule: null,
+          },
+          {
+            label: 'Get the band briefed', key: 'get_the_band_briefed', completedBy: 'USER' as const,
+            dependsOn: [], autoCompleteRule: null, requiredForStatus: 'COMPLETE' as const, dueDateRule: null,
           },
           {
             label: 'Send the quote', key: 'send_quote', completedBy: 'USER' as const,

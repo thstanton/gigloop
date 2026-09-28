@@ -26,7 +26,7 @@ import { MailService } from '../mail/mail.service';
 import { substituteTiptapVariables } from '../mail/tiptap-substitute';
 import { ChecklistReevaluator } from '../checklist/checklist-reevaluator.service';
 import {
-  BAND_CHECKLIST_GOAL_KEY,
+  BAND_GOAL_KEYS,
   getChecklistDefaults,
   isChecklistDefaultAvailable,
 } from '../checklist/checklist-defaults';
@@ -167,6 +167,8 @@ export function deriveShortcut(
       return { shortcutType: 'open_band' };
     case 'bandMemberStatus':
       return { shortcutType: 'band_member' };
+    case 'bandMemberCommunicationSent':
+      return { shortcutType: 'brief_band_member' }; // #901 → the Band sheet, where final details are sent
     default:
       return {};
   }
@@ -1068,7 +1070,7 @@ export class BookingsService {
     const disabledKeys = new Set(
       defaults.filter((d) => d.enabled === false && d.key).map((d) => d.key as string),
     );
-    if (!defaults.some((d) => d.key === BAND_CHECKLIST_GOAL_KEY)) disabledKeys.add(BAND_CHECKLIST_GOAL_KEY);
+    for (const key of BAND_GOAL_KEYS) if (!defaults.some((d) => d.key === key)) disabledKeys.add(key);
     return selectApplicableReminders(concern, {
       items: items as ReminderItemInput[],
       status: booking.status,
@@ -1085,7 +1087,7 @@ export class BookingsService {
     const disabledKeys = new Set(
       defaults.filter((d) => d.enabled === false && d.key).map((d) => d.key as string),
     );
-    if (!defaults.some((d) => d.key === BAND_CHECKLIST_GOAL_KEY)) disabledKeys.add(BAND_CHECKLIST_GOAL_KEY);
+    for (const key of BAND_GOAL_KEYS) if (!defaults.some((d) => d.key === key)) disabledKeys.add(key);
     return previewApplicableReminders({ status, disabledKeys });
   }
 

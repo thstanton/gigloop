@@ -122,6 +122,26 @@ export const PastStageCollapsed: Story = {
   },
 };
 
+// #901: the two band goals ask different questions at different times, so they file into different
+// brackets — "has everyone said yes?" is worked while Confirmed; "does everyone know where to be?"
+// is worked while Ready, two days out, and stays folded away until then.
+export const BandGoalsInSeparateBrackets: Story = {
+  args: {
+    bookingStatus: 'CONFIRMED',
+    items: [
+      item({ label: 'Get the band confirmed', key: 'get_the_band_confirmed', requiredForStatus: 'READY' }),
+      item({ label: 'Get the band briefed', key: 'get_the_band_briefed', requiredForStatus: 'COMPLETE' }),
+    ],
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Confirmed')).toBeVisible();
+    await expect(canvas.getByText('Get the band confirmed')).toBeVisible();
+    await expect(canvas.queryByText('Get the band briefed')).toBeNull();
+    await userEvent.click(canvas.getByText('Ready'));
+    await expect(canvas.getByText('Get the band briefed')).toBeVisible();
+  },
+};
+
 export const WithFailedItem: Story = {
   args: {
     bookingStatus: 'CONFIRMED',

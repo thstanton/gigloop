@@ -34,6 +34,12 @@ describe('deriveShortcut', () => {
     ).toEqual({ shortcutType: 'mark_deposit_received' });
   });
 
+  it('maps a per-member final-details rule to the brief_band_member shortcut (#901)', () => {
+    expect(
+      deriveShortcut({ type: 'bandMemberCommunicationSent', templateTypes: ['band_final_details'] }, []),
+    ).toEqual({ shortcutType: 'brief_band_member' });
+  });
+
   it('returns no shortcut for a null rule', () => {
     expect(deriveShortcut(null, [])).toEqual({});
   });

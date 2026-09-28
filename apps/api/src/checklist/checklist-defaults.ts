@@ -27,6 +27,11 @@ export interface ChecklistDefaultStep {
   // A template-only step repeated for each eligible band member; the repository
   // materialises its rows with a member id instead of seeding one null-id row.
   perBandMember?: boolean;
+  // Per-member row label, `{name}` substituted with the member's name (e.g. `Brief {name}`).
+  memberLabel?: string;
+  // Whether a member who declines keeps this row as honest history (the confirmation ratchet,
+  // ADR-0074 §5) or loses it (a briefing for someone who is not coming is simply dropped).
+  keepsDeclinedHistory?: boolean;
 }
 
 export interface ChecklistDefaultItem {
@@ -49,10 +54,17 @@ export interface ChecklistDefaultItem {
 }
 
 export const BAND_CHECKLIST_GOAL_KEY = 'get_the_band_confirmed';
+export const BAND_BRIEFED_GOAL_KEY = 'get_the_band_briefed';
+// Every goal whose per-member steps are materialised from the roster (ADR-0074 §5).
+export const BAND_GOAL_KEYS: readonly string[] = [BAND_CHECKLIST_GOAL_KEY, BAND_BRIEFED_GOAL_KEY];
 export const BAND_CHECKLIST_FEATURE_FLAG = 'FEATURE_BAND_MEMBERS';
 
+export function isBandGoalKey(key: string | null | undefined): boolean {
+  return key != null && BAND_GOAL_KEYS.includes(key);
+}
+
 export function isChecklistDefaultAvailable(key: string | null | undefined): boolean {
-  return key !== BAND_CHECKLIST_GOAL_KEY || isEnabled(BAND_CHECKLIST_FEATURE_FLAG);
+  return !isBandGoalKey(key) || isEnabled(BAND_CHECKLIST_FEATURE_FLAG);
 }
 
 export const CHECKLIST_DEFAULTS: ChecklistDefaultItem[] = [
@@ -462,6 +474,8 @@ export const CHECKLIST_DEFAULTS: ChecklistDefaultItem[] = [
           completeWhen: ['INVITED', 'CONFIRMED', 'DECLINED'],
         },
         perBandMember: true,
+        memberLabel: 'Invite {name}',
+        keepsDeclinedHistory: true,
       },
       {
         key: 'band_member_confirmed',
@@ -475,6 +489,38 @@ export const CHECKLIST_DEFAULTS: ChecklistDefaultItem[] = [
           declinedWhen: ['DECLINED'],
         },
         perBandMember: true,
+        memberLabel: '{name} confirms',
+        keepsDeclinedHistory: true,
+      },
+    ],
+  },
+  {
+    // ADR-0074 §5 / #901: "does everyone know where to be?" — asked two days out, so it is a
+    // COMPLETE-stage goal and renders in a different section from the READY-stage confirmation.
+    // One `Brief {name}` step per eligible member, satisfied by the final-details comm reaching
+    // that member's contact by email or by `Mark as sent`. The call sheet deliberately has no
+    // step: it is a push, not something to chase (ADR-0073).
+    key: BAND_BRIEFED_GOAL_KEY,
+    label: 'Get the band briefed',
+    completedBy: 'USER',
+    dependsOn: [],
+    autoCompleteRule: null,
+    requiredForStatus: 'COMPLETE',
+    dueDateRule: { basis: 'bookingDate', offsetDays: -2 },
+    steps: [
+      {
+        key: 'brief_band_member',
+        label: 'Brief band member',
+        kind: 'MILESTONE',
+        completeMode: 'ACTION',
+        completedBy: 'USER',
+        autoCompleteRule: {
+          type: 'bandMemberCommunicationSent',
+          templateTypes: ['band_final_details', 'band_final_details_message'],
+        },
+        perBandMember: true,
+        memberLabel: 'Brief {name}',
+        keepsDeclinedHistory: false,
       },
     ],
   },
