@@ -25,6 +25,9 @@ const KEY_TO_CONCERN: Record<string, ReminderConcern> = {
   gather_song_requests: 'music',
   // People — the sends
   send_thank_you: 'people',
+  // The band confirmations are person-centred work on the People concern; the goal
+  // still lives only on the checklist, never in AddToTheDayCard.
+  get_the_band_confirmed: 'people',
   // Overview — deal spine + the gig
   // ADR-0057 / #616: the quote is now one multi-step *goal* (send → accepted). Its send step's
   // old 'people' home retires with the fold; the goal lives on the deal spine in 'overview'.

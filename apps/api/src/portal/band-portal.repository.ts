@@ -70,18 +70,31 @@ export class BandPortalRepository {
     });
   }
 
-  // The dep's one-shot response (#892). `service.respondToInvite` calls `findMemberByToken` first
-  // — the bearer token is the ownership proof, so a bare-id `where` here is safe. The status guard
-  // in the `where` (not just the service's own read-then-check) makes the one-shot rule atomic: two
-  // concurrent `respond` calls on the same token can't both pass — only the first `updateMany` actually
-  // matches a row, so a racing second call updates 0 rows and the service below reports it as
-  // already-answered, exactly as a genuinely sequential second attempt would.
-  async respondToInvite(memberId: string, status: BandMemberStatus): Promise<boolean> {
-    const { count } = await this.prisma.bookingBandMember.updateMany({
-      where: { id: memberId, status: { in: RESPONDABLE_STATUSES } }, // scoped-upstream: service.respondToInvite calls findMemberByToken(token) first, already proving ownership via the bearer token (ADR-0061)
-      data: { status, respondedAt: new Date() },
+  // The dep's one-shot response (#892). `service.respondToInvite` proves the token and derives its
+  // booking/tenant before calling this scoped transaction. The status guard in the write (not just
+  // the service's read-then-check) makes the answer atomic; the requested chair clearing is in the
+  // same transaction so the booking is never left half-mutated.
+  async respondToInvite(
+    userId: string,
+    bookingId: string,
+    memberId: string,
+    status: BandMemberStatus,
+    clearChairs: boolean,
+  ): Promise<boolean> {
+    return this.prisma.$transaction(async (tx) => {
+      const { count } = await tx.bookingBandMember.updateMany({
+        where: { id: memberId, bookingId, userId, status: { in: RESPONDABLE_STATUSES } },
+        data: { status, respondedAt: new Date() },
+      });
+      if (count === 0) return false;
+      if (clearChairs) {
+        await tx.bookingBandChair.updateMany({
+          where: { memberId, bookingId, userId },
+          data: { memberId: null },
+        });
+      }
+      return true;
     });
-    return count > 0;
   }
 
   findBookingForBandPortal(bookingId: string) {

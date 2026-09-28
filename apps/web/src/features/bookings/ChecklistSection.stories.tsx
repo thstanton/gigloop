@@ -168,9 +168,9 @@ const contractGoal: ChecklistItem = item({
   key: 'get_contract_signed',
   requiredForStatus: 'CONFIRMED',
   steps: [
-    { id: 's1', key: 'create_contract', label: 'Draft the contract', order: 1, kind: 'MILESTONE', completeMode: 'ACTION', state: 'COMPLETE', completedBy: 'USER', completedAt: null, autoCompleteRule: null },
-    { id: 's2', key: 'send_contract', label: 'Send it to the client', order: 2, kind: 'MILESTONE', completeMode: 'ACTION', state: 'PENDING', completedBy: 'USER', completedAt: null, autoCompleteRule: null, shortcutType: 'send_email', shortcutTemplateType: 'contract_cover' },
-    { id: 's3', key: 'contract_signed', label: 'Client signs the contract', order: 3, kind: 'MILESTONE', completeMode: 'AWAITED', state: 'PENDING', completedBy: 'CUSTOMER', completedAt: null, autoCompleteRule: null },
+    { id: 's1', key: 'create_contract', bandMemberId: null, label: 'Draft the contract', order: 1, kind: 'MILESTONE', completeMode: 'ACTION', state: 'COMPLETE', completedBy: 'USER', completedAt: null, autoCompleteRule: null },
+    { id: 's2', key: 'send_contract', bandMemberId: null, label: 'Send it to the client', order: 2, kind: 'MILESTONE', completeMode: 'ACTION', state: 'PENDING', completedBy: 'USER', completedAt: null, autoCompleteRule: null, shortcutType: 'send_email', shortcutTemplateType: 'contract_cover' },
+    { id: 's3', key: 'contract_signed', bandMemberId: null, label: 'Client signs the contract', order: 3, kind: 'MILESTONE', completeMode: 'AWAITED', state: 'PENDING', completedBy: 'CUSTOMER', completedAt: null, autoCompleteRule: null },
   ],
 });
 

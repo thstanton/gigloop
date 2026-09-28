@@ -15,7 +15,12 @@ import { cn } from '@/lib/utils';
 import { CHECKLIST_STEP_STATE_TEXT_CLASS } from '@/lib/constants';
 import { RowActions, type RowAction } from '@/components/common/RowActions';
 import type { ChecklistItem, ChecklistItemState, ChecklistStep } from '@/types/api';
-import { resolveChecklistShortcut, type ChecklistShortcutHandlers, type ResolvedShortcut } from './checklistShortcuts';
+import {
+  bandMemberNameFromConfirmationLabel,
+  resolveChecklistShortcut,
+  type ChecklistShortcutHandlers,
+  type ResolvedShortcut,
+} from './checklistShortcuts';
 
 // GoalRow renders one checklist goal (ADR-0057) to the #604-locked "action-led row" design —
 // atomic and multi-step alike, unified (#610).
@@ -50,11 +55,10 @@ function milestoneProgress(item: ChecklistItem): { done: number; total: number }
 }
 
 // Personalised waiting text by who the step awaits (#634). A CUSTOMER step names the client by
-// their greeting name when known, falling back to "the client". BAND_MEMBER stays generic — no
-// band-member name is plumbed yet (that half of #604 remains deferred).
+// their greeting name when known, falling back to "the client".
 function awaitingParty(step: ChecklistStep, clientName: string | null): string | null {
   if (step.completedBy === 'CUSTOMER') return clientName ?? 'the client';
-  if (step.completedBy === 'BAND_MEMBER') return 'the band';
+  if (step.completedBy === 'BAND_MEMBER') return bandMemberNameFromConfirmationLabel(step.label);
   return null;
 }
 
@@ -184,9 +188,16 @@ function resolveStepAction(
   step: ChecklistStep,
   handlers: ChecklistShortcutHandlers,
 ): { resolved: ResolvedShortcut; label: string } | null {
-  if (step.completeMode === 'AWAITED' && step.completedBy !== 'USER') return null;
+  // Band-member waits deliberately keep a named chase action; only passive client
+  // waits suppress the CTA.
+  if (step.completeMode === 'AWAITED' && step.completedBy === 'CUSTOMER') return null;
   const resolved = resolveChecklistShortcut(
-    { shortcutType: step.shortcutType, shortcutTemplateType: step.shortcutTemplateType, isFailed: step.state === 'FAILED' },
+    {
+      shortcutType: step.shortcutType,
+      shortcutTemplateType: step.shortcutTemplateType,
+      stepLabel: step.label,
+      isFailed: step.state === 'FAILED',
+    },
     handlers,
   );
   if (!resolved) return null;
@@ -331,7 +342,7 @@ export function GoalRow({ item, handlers, onSetState, clientName }: Readonly<Goa
   const due = dueDateDisplay(item.dueDate);
 
   // x/y = which milestone step you're ON (1-based position) over the total.
-  const milestones = (item.steps ?? []).filter((s) => s.kind === 'MILESTONE');
+  const milestones = (item.steps ?? []).filter((s) => s.kind === 'MILESTONE' && s.state !== 'DECLINED');
   const position = active ? milestones.findIndex((s) => s.id === active.id) + 1 : 0;
 
   const setState = (s: SettableGoalState) => onSetState(item.id, s);

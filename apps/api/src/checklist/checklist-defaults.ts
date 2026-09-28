@@ -1,3 +1,5 @@
+import { isEnabled } from '../common/featureFlags';
+
 export interface DueDateRule {
   basis: 'bookingDate' | 'bookingCreation';
   offsetDays: number;
@@ -22,6 +24,9 @@ export interface ChecklistDefaultStep {
   // Carried for FOLLOWUP-step anchoring (a later increment); v1 steps have no
   // materialised dueDate column — the surfaced deadline lives on the goal.
   dueDateRule?: DueDateRule | null;
+  // A template-only step repeated for each eligible band member; the repository
+  // materialises its rows with a member id instead of seeding one null-id row.
+  perBandMember?: boolean;
 }
 
 export interface ChecklistDefaultItem {
@@ -41,6 +46,13 @@ export interface ChecklistDefaultItem {
   // (its state rolls up from its steps). An atomic goal has no `steps` and carries its
   // own rule. Present on the contract goal (v1); deposit/balance/song-requests follow.
   steps?: ChecklistDefaultStep[];
+}
+
+export const BAND_CHECKLIST_GOAL_KEY = 'get_the_band_confirmed';
+export const BAND_CHECKLIST_FEATURE_FLAG = 'FEATURE_BAND_MEMBERS';
+
+export function isChecklistDefaultAvailable(key: string | null | undefined): boolean {
+  return key !== BAND_CHECKLIST_GOAL_KEY || isEnabled(BAND_CHECKLIST_FEATURE_FLAG);
 }
 
 export const CHECKLIST_DEFAULTS: ChecklistDefaultItem[] = [
@@ -412,6 +424,61 @@ export const CHECKLIST_DEFAULTS: ChecklistDefaultItem[] = [
     ],
   },
   {
+    // ADR-0057 / ADR-0074 §5 / #900: the band readiness outcome. The two
+    // PRECONDITION steps lead; the per-member invite/confirmation templates are
+    // materialised by ChecklistRepository for the booking's active roster.
+    key: BAND_CHECKLIST_GOAL_KEY,
+    label: 'Get the band confirmed',
+    completedBy: 'USER',
+    dependsOn: [],
+    autoCompleteRule: null,
+    requiredForStatus: 'READY',
+    dueDateRule: { basis: 'bookingDate', offsetDays: -60 },
+    steps: [
+      {
+        key: 'choose_a_lineup',
+        label: 'Choose a lineup',
+        kind: 'PRECONDITION',
+        completeMode: 'ACTION',
+        completedBy: 'USER',
+        autoCompleteRule: { type: 'bandHasChairs' },
+      },
+      {
+        key: 'fill_every_chair',
+        label: 'Fill every chair',
+        kind: 'PRECONDITION',
+        completeMode: 'ACTION',
+        completedBy: 'USER',
+        autoCompleteRule: { type: 'bandChairsFilled' },
+      },
+      {
+        key: 'invite_band_member',
+        label: 'Invite band member',
+        kind: 'MILESTONE',
+        completeMode: 'ACTION',
+        completedBy: 'USER',
+        autoCompleteRule: {
+          type: 'bandMemberStatus',
+          completeWhen: ['INVITED', 'CONFIRMED', 'DECLINED'],
+        },
+        perBandMember: true,
+      },
+      {
+        key: 'band_member_confirmed',
+        label: 'Band member confirms',
+        kind: 'MILESTONE',
+        completeMode: 'AWAITED',
+        completedBy: 'BAND_MEMBER',
+        autoCompleteRule: {
+          type: 'bandMemberStatus',
+          completeWhen: ['CONFIRMED'],
+          declinedWhen: ['DECLINED'],
+        },
+        perBandMember: true,
+      },
+    ],
+  },
+  {
     key: 'play_the_gig',
     label: 'Play the gig',
     completedBy: 'USER',
@@ -588,10 +655,11 @@ export function getChecklistDefaults(
   const stored = (preferences as { checklistDefaults?: unknown } | null | undefined)
     ?.checklistDefaults;
   const overrides = parseStoredOverrides(stored);
-  if (!overrides) return CHECKLIST_DEFAULTS;
+  const availableDefaults = CHECKLIST_DEFAULTS.filter((item) => isChecklistDefaultAvailable(item.key));
+  if (!overrides) return availableDefaults;
 
   const overrideMap = new Map(overrides.systemItemOverrides.map((o) => [o.key, o]));
-  const systemItems = CHECKLIST_DEFAULTS.map((item) => {
+  const systemItems = availableDefaults.map((item) => {
     const ov = overrideMap.get(item.key);
     if (!ov) return item;
     const merged: ChecklistDefaultItem = { ...item };

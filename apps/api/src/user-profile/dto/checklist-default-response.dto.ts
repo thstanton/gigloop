@@ -27,6 +27,9 @@ export class ChecklistDefaultStepDto {
 
   @ApiPropertyOptional({ nullable: true, type: DueDateRuleDto })
   dueDateRule?: DueDateRuleDto | null;
+
+  @ApiPropertyOptional({ description: 'Materialised once per eligible roster member on a booking.' })
+  perBandMember?: boolean;
 }
 
 export class ChecklistDefaultItemResponseDto {

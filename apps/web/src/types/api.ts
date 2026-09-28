@@ -337,6 +337,7 @@ export type ReminderConcern = 'overview' | 'people' | 'venue' | 'itinerary' | 'm
 export interface ChecklistStep {
   id: string;
   key: string | null;
+  bandMemberId: string | null;
   label: string;
   order: number;
   kind: 'MILESTONE' | 'PRECONDITION' | 'FOLLOWUP';
@@ -957,6 +958,7 @@ export interface ChecklistDefaultStep {
   completedBy: 'USER' | 'CUSTOMER' | 'BAND_MEMBER';
   autoCompleteRule: Record<string, unknown> | null;
   dueDateRule?: DueDateRule | null;
+  perBandMember?: boolean;
 }
 
 export interface ChecklistDefaultItem {

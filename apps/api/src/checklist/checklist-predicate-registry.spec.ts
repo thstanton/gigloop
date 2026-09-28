@@ -3,6 +3,7 @@ import { BookingContext } from './checklist-rules';
 
 function makeCtx(overrides: Partial<BookingContext> = {}): BookingContext {
   return {
+    userId: 'u1',
     status: 'ENQUIRY',
     venueId: null,
     customerId: null,
@@ -16,6 +17,8 @@ function makeCtx(overrides: Partial<BookingContext> = {}): BookingContext {
     contracts: [],
     musicFormResponse: null,
     musicFormPublished: false,
+    bandMembers: [],
+    bandChairs: [],
     ...overrides,
   };
 }
@@ -53,6 +56,7 @@ describe('STEP_PREDICATES catalog', () => {
     expect(STEP_PREDICATES.issue_deposit_invoice.completeMode).toBe('ACTION');
     expect(STEP_PREDICATES.add_venue.completeMode).toBe('ACTION');
     expect(STEP_PREDICATES.set_up_and_publish.completeMode).toBe('ACTION'); // #533/#630: musician publishes now
+    expect(STEP_PREDICATES.band_member_confirmed.completeMode).toBe('AWAITED');
   });
 
   it('registers set_up_and_publish as a MILESTONE reading musicFormPublished (#533/#630)', () => {
@@ -70,6 +74,10 @@ describe('STEP_PREDICATES catalog', () => {
     expect(STEP_PREDICATES.song_requests.inputs).toEqual(['musicFormResponse']);
     expect(STEP_PREDICATES.add_venue.inputs).toEqual(['venueId']);
     expect(STEP_PREDICATES.build_itinerary.inputs).toEqual(['setsCount', 'logistics']);
+    expect(STEP_PREDICATES.choose_a_lineup.inputs).toEqual(['bandRoster']);
+    expect(STEP_PREDICATES.fill_every_chair.inputs).toEqual(['bandRoster']);
+    expect(STEP_PREDICATES.invite_band_member.inputs).toEqual(['bandRoster']);
+    expect(STEP_PREDICATES.band_member_confirmed.inputs).toEqual(['bandRoster']);
   });
 });
 
@@ -99,6 +107,31 @@ describe('predicates fire on their declared input and not otherwise', () => {
     // #617: a saved DRAFT advances the create step.
     expect(STEP_PREDICATES.create_deposit_invoice.predicate(makeCtx({ invoices: [{ isDeposit: true, status: 'DRAFT' }] }))).toBe('COMPLETE');
     expect(STEP_PREDICATES.create_deposit_invoice.predicate(makeCtx({ invoices: [{ isDeposit: true, status: 'ISSUED' }] }))).toBe('COMPLETE');
+  });
+
+  it('selects the lineup on chairs and completes fill only when every chair is filled without a decline', () => {
+    expect(STEP_PREDICATES.choose_a_lineup.predicate(makeCtx())).toBe('PENDING');
+    expect(STEP_PREDICATES.choose_a_lineup.predicate(makeCtx({ bandChairs: [{ memberId: null, memberStatus: null }] }))).toBe('COMPLETE');
+    expect(STEP_PREDICATES.fill_every_chair.predicate(makeCtx({ bandChairs: [] }))).toBe('PENDING');
+    expect(STEP_PREDICATES.fill_every_chair.predicate(makeCtx({ bandChairs: [{ memberId: null, memberStatus: null }] }))).toBe('PENDING');
+    expect(STEP_PREDICATES.fill_every_chair.predicate(makeCtx({ bandChairs: [{ memberId: 'm1', memberStatus: 'INVITED' }] }))).toBe('COMPLETE');
+    expect(STEP_PREDICATES.fill_every_chair.predicate(makeCtx({ bandChairs: [{ memberId: 'm1', memberStatus: 'DECLINED' }] }))).toBe('PENDING');
+  });
+
+  it('uses the step bandMemberId for status predicates, not a booking-wide aggregate', () => {
+    const ctx = makeCtx({
+      bandMembers: [
+        { id: 'm-confirmed', status: 'CONFIRMED', isSelf: false },
+        { id: 'm-added', status: 'ADDED', isSelf: false },
+        { id: 'm-declined', status: 'DECLINED', isSelf: false },
+      ],
+    });
+    expect(STEP_PREDICATES.invite_band_member.predicate(ctx, { bandMemberId: 'm-added' })).toBe('PENDING');
+    expect(STEP_PREDICATES.invite_band_member.predicate(ctx, { bandMemberId: 'm-confirmed' })).toBe('COMPLETE');
+    expect(STEP_PREDICATES.band_member_confirmed.predicate(ctx, { bandMemberId: 'm-confirmed' })).toBe('COMPLETE');
+    expect(STEP_PREDICATES.band_member_confirmed.predicate(ctx, { bandMemberId: 'm-added' })).toBe('PENDING');
+    expect(STEP_PREDICATES.band_member_confirmed.predicate(ctx, { bandMemberId: 'm-declined' })).toBe('DECLINED');
+    expect(STEP_PREDICATES.band_member_confirmed.predicate(ctx, { bandMemberId: null })).toBe('PENDING');
   });
 
   it('issue_deposit_invoice excludes a DRAFT (the #585 fix) but fires on a non-draft deposit', () => {
@@ -197,10 +230,13 @@ describe('affectedKeys (inverted index)', () => {
     expect(affectedKeys([]).size).toBe(0);
   });
 
-  // #899: reserved for a future per-person predicate (#900) — no current key declares it, so it
-  // resolves to nothing, exactly like any other as-yet-unused input.
-  it('bandRoster is a valid InputKey but nothing observes it yet', () => {
-    expect(affectedKeys(['bandRoster']).size).toBe(0);
+  it('maps bandRoster to the band preconditions and per-person predicates (#900)', () => {
+    expect(affectedKeys(['bandRoster'])).toEqual(new Set([
+      'choose_a_lineup',
+      'fill_every_chair',
+      'invite_band_member',
+      'band_member_confirmed',
+    ]));
   });
 });
 

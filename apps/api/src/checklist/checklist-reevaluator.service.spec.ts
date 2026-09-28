@@ -4,11 +4,13 @@ import { ChecklistEvaluatorService } from './checklist-evaluator.service';
 
 describe('ChecklistReevaluator', () => {
   let evaluate: jest.Mock;
+  let resetBandGoal: jest.Mock;
   let reeval: ChecklistReevaluator;
 
   beforeEach(() => {
     evaluate = jest.fn().mockResolvedValue(undefined);
-    const evaluator = { evaluate } as unknown as ChecklistEvaluatorService;
+    resetBandGoal = jest.fn().mockResolvedValue(undefined);
+    const evaluator = { evaluate, resetBandGoalForRosterChange: resetBandGoal } as unknown as ChecklistEvaluatorService;
     reeval = new ChecklistReevaluator(evaluator);
   });
 
@@ -33,5 +35,16 @@ describe('ChecklistReevaluator', () => {
       expect.anything(),
     );
     warn.mockRestore();
+  });
+
+  it('resets band goal facts before evaluating a roster mutation', async () => {
+    const events: string[] = [];
+    resetBandGoal.mockImplementation(async () => { events.push('reset'); });
+    evaluate.mockImplementation(async () => { events.push('evaluate'); });
+
+    await reeval.onBandRosterChanged('user-1', 'booking-1', 'member-1');
+
+    expect(resetBandGoal).toHaveBeenCalledWith('user-1', 'booking-1', 'member-1');
+    expect(events).toEqual(['reset', 'evaluate']);
   });
 });

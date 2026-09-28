@@ -29,6 +29,10 @@ export interface ResolvedShortcut {
   onClick: () => void;
 }
 
+export function bandMemberNameFromConfirmationLabel(label: string): string {
+  return label.replace(/ confirms$/, '');
+}
+
 // Invoice-step shortcuts → the create-invoice handler. Create and issue (ADR-0057 / #617) both
 // route to onChecklistAction — the issue step opens the saved draft on the sheet to issue it there
 // (the sheet owns the create→issue hop); only the label differs.
@@ -55,50 +59,74 @@ const MARK_DONE_LABEL: Readonly<Record<string, string>> = {
   mark_balance_received: 'Mark as paid',
 };
 
+function resolveBandShortcut(
+  shortcutType: string,
+  stepLabel: string | undefined,
+  handlers: ChecklistShortcutHandlers,
+  retry: string | undefined,
+): ResolvedShortcut | null {
+  if (shortcutType === 'open_band') {
+    return { label: retry ?? 'Open band', pending: false, onClick: () => handlers.onDeepLink('band') };
+  }
+  if (shortcutType === 'band_member') {
+    const memberName = stepLabel ? bandMemberNameFromConfirmationLabel(stepLabel) : 'band member';
+    return { label: retry ?? `Chase ${memberName}`, pending: false, onClick: () => handlers.onDeepLink('band') };
+  }
+  return null;
+}
+
 // Resolve a shortcutType (+ item key, for structural deep-links) to a labelled click handler.
 // Returns null when there is no known action — the caller decides the fallback (atomic rows fall
 // back to a manual "Mark done"; an active step with no shortcut renders informationally).
 export function resolveChecklistShortcut(
-  args: { shortcutType?: string; shortcutTemplateType?: string; itemKey?: string | null; isFailed: boolean },
-  h: ChecklistShortcutHandlers,
+  args: {
+    shortcutType?: string;
+    shortcutTemplateType?: string;
+    itemKey?: string | null;
+    stepLabel?: string;
+    isFailed: boolean;
+  },
+  handlers: ChecklistShortcutHandlers,
 ): ResolvedShortcut | null {
   const { shortcutType, shortcutTemplateType, itemKey, isFailed } = args;
   const retry = isFailed ? 'Retry' : undefined;
 
   const builderSection = itemKey ? STRUCTURAL_BUILDER_SECTION[itemKey] : undefined;
   if (builderSection) {
-    return { label: retry ?? 'Set up', pending: false, onClick: () => h.onDeepLink(builderSection) };
+    return { label: retry ?? 'Set up', pending: false, onClick: () => handlers.onDeepLink(builderSection) };
   }
   if (!shortcutType) return null;
 
   if (shortcutType === 'send_email') {
-    return { label: retry ?? 'Send', pending: false, onClick: () => h.onOpenCompose(shortcutTemplateType) };
+    return { label: retry ?? 'Send', pending: false, onClick: () => handlers.onOpenCompose(shortcutTemplateType) };
   }
   const invoice = INVOICE_ACTION[shortcutType];
   if (invoice) {
     return {
       label: retry ?? invoice.label,
       pendingLabel: invoice.pendingLabel,
-      pending: h.isActionPending,
-      onClick: () => h.onChecklistAction(invoice.action),
+      pending: handlers.isActionPending,
+      onClick: () => handlers.onChecklistAction(invoice.action),
     };
   }
   const precondition = PRECONDITION_DEEP_LINK[shortcutType];
   if (precondition) {
-    return { label: retry ?? precondition.label, pending: false, onClick: () => h.onDeepLink(precondition.section) };
+    return { label: retry ?? precondition.label, pending: false, onClick: () => handlers.onDeepLink(precondition.section) };
   }
   // #533 / #630: the set_up_and_publish step deep-links to the Builder's Music section, where the
   // Save draft / Publish controls live (same deep-link pattern as the structural/precondition rows).
   if (shortcutType === 'set_up_and_publish_music') {
-    return { label: retry ?? 'Set up & publish', pending: false, onClick: () => h.onDeepLink('music') };
+    return { label: retry ?? 'Set up & publish', pending: false, onClick: () => handlers.onDeepLink('music') };
   }
+  const bandShortcut = resolveBandShortcut(shortcutType, args.stepLabel, handlers, retry);
+  if (bandShortcut) return bandShortcut;
   const markDoneLabel = MARK_DONE_LABEL[shortcutType];
   if (markDoneLabel) {
     return {
       label: retry ?? markDoneLabel,
       pendingLabel: 'Marking…',
-      pending: h.isActionPending,
-      onClick: () => h.onMarkDone(shortcutType as MarkDoneKey),
+      pending: handlers.isActionPending,
+      onClick: () => handlers.onMarkDone(shortcutType as MarkDoneKey),
     };
   }
   return null;

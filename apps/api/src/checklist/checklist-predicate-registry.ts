@@ -67,9 +67,10 @@ function entryForRule(
   completeMode: CompleteMode,
 ): PredicateEntry {
   return {
-    // Every current entry is one-per-goal (no per-person materialisation yet), so `step` is
-    // unused — declared per the widened PredicateEntry shape (#899), not read here.
-    predicate: (ctx: BookingContext, _step?: StepFacts) => evaluateRuleState(rule, ctx),
+    // Most entries are one-per-goal and ignore step facts; band member predicates use
+    // the materialised row's member id to select the corresponding roster status.
+    predicate: (ctx: BookingContext, step?: StepFacts) =>
+      evaluateRuleState(rule, ctx, step?.bandMemberId),
     inputs: inputsForRule(rule),
     kind,
     completeMode,

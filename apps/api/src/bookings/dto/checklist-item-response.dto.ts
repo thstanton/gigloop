@@ -9,6 +9,13 @@ export class BookingChecklistStepResponseDto {
   @ApiPropertyOptional({ nullable: true })
   key: string | null;
 
+  @ApiPropertyOptional({
+    nullable: true,
+    type: String,
+    description: 'The roster member this materialised per-person step belongs to.',
+  })
+  bandMemberId: string | null;
+
   @ApiProperty()
   label: string;
 

@@ -23,11 +23,15 @@ import { seedBookingForLifecycle, type LifecycleBooking } from '../support/seed'
 test.describe('booking checklist lifecycle', () => {
   let fixture: LifecycleBooking;
 
-  test.beforeEach(async () => {
-    fixture = await seedBookingForLifecycle();
+  test.beforeEach(async ({}, testInfo) => {
+    const bandMemberStatus = testInfo.title.includes('decline') ? 'INVITED' : 'CONFIRMED';
+    fixture = await seedBookingForLifecycle(undefined, undefined, bandMemberStatus);
   });
 
   test.afterEach(async () => {
+    // beforeEach can fail mid-fixture (e.g. a local schema is behind the committed
+    // migration); do not hide that original error with a cleanup dereference.
+    if (!fixture) return;
     // Deleting the booking cascades its checklist goals + steps; then the customer.
     await prisma.booking.deleteMany({ where: { id: fixture.bookingId } });
     await prisma.contact.deleteMany({ where: { id: fixture.customerId } });
@@ -62,6 +66,28 @@ test.describe('booking checklist lifecycle', () => {
         (
           await prisma.bookingChecklistStep.findFirst({
             where: { bookingId: fixture.bookingId, key: 'set_fee_deposit' },
+          })
+        )?.state,
+      )
+      .toBe('COMPLETE');
+
+    // #900: the band feature flag is on and this fixture has one confirmed member
+    // filling every chair. The normal evaluator pass materialises the per-person
+    // pair and settles the READY goal; it remains user-driven, not a status gate.
+    await expect
+      .poll(async () =>
+        (
+          await prisma.bookingChecklistItem.findFirst({
+            where: { bookingId: fixture.bookingId, key: 'get_the_band_confirmed' },
+          })
+        )?.state,
+      )
+      .toBe('COMPLETE');
+    await expect
+      .poll(async () =>
+        (
+          await prisma.bookingChecklistStep.findFirst({
+            where: { bookingId: fixture.bookingId, key: 'band_member_confirmed' },
           })
         )?.state,
       )
@@ -106,5 +132,108 @@ test.describe('booking checklist lifecycle', () => {
     await expect
       .poll(async () => (await prisma.booking.findUnique({ where: { id: fixture.bookingId } }))?.status)
       .toBe(BookingStatus.COMPLETE);
+  });
+
+  test('a dep portal decline re-opens the band goal while READY remains manually selectable (#900)', async ({ page, browser }) => {
+    await page.goto(`/admin/bookings/${fixture.bookingId}`);
+    await page.getByRole('button', { name: '+ Add fee' }).click();
+    const overview = page.getByRole('dialog', { name: 'Overview' });
+    await overview.getByRole('spinbutton', { name: 'Fee' }).fill('2000');
+    await overview.getByRole('button', { name: 'Save' }).click();
+
+    // The first checklist re-evaluation materialises the invited member's pair;
+    // the confirmation remains pending until the dep answers from the portal.
+    await expect
+      .poll(async () =>
+        (
+          await prisma.bookingChecklistStep.findFirst({
+            where: { bookingId: fixture.bookingId, key: 'invite_band_member' },
+          })
+        )?.state,
+      )
+      .toBe('COMPLETE');
+    await expect
+      .poll(async () =>
+        (
+          await prisma.bookingChecklistStep.findFirst({
+            where: { bookingId: fixture.bookingId, key: 'band_member_confirmed' },
+          })
+        )?.state,
+      )
+      .toBe('PENDING');
+
+    const portalContext = await browser.newContext({ storageState: { cookies: [], origins: [] } });
+    const portalPage = await portalContext.newPage();
+    await portalPage.goto(`/band/${fixture.bandPortalToken}`);
+    await expect(portalPage.getByRole('heading', { name: 'E2E Lifecycle Booking' })).toBeVisible();
+    await portalPage.getByRole('button', { name: 'Decline' }).click();
+    await expect(portalPage.getByText("You've declined this gig.")).toBeVisible();
+    await portalContext.close();
+
+    await expect
+      .poll(async () => (await prisma.bookingBandMember.findUnique({ where: { id: fixture.bandMemberId } }))?.status)
+      .toBe('DECLINED');
+
+    await expect
+      .poll(async () =>
+        (
+          await prisma.bookingBandChair.findFirst({ where: { bookingId: fixture.bookingId } })
+        )?.memberId,
+      )
+      .toBeNull();
+    await expect
+      .poll(async () =>
+        (
+          await prisma.bookingChecklistStep.findFirst({
+            where: { bookingId: fixture.bookingId, key: 'fill_every_chair' },
+          })
+        )?.state,
+      )
+      .toBe('PENDING');
+    await expect
+      .poll(async () =>
+        (
+          await prisma.bookingChecklistStep.findFirst({
+            where: { bookingId: fixture.bookingId, key: 'invite_band_member' },
+          })
+        )?.state,
+      )
+      .toBe('COMPLETE');
+    await expect
+      .poll(async () =>
+        (
+          await prisma.bookingChecklistStep.findFirst({
+            where: { bookingId: fixture.bookingId, key: 'band_member_confirmed' },
+          })
+        )?.state,
+      )
+      .toBe('DECLINED');
+    await expect
+      .poll(async () =>
+        (
+          await prisma.bookingChecklistItem.findFirst({
+            where: { bookingId: fixture.bookingId, key: 'get_the_band_confirmed' },
+          })
+        )?.state,
+      )
+      .toBe('PENDING');
+
+    // Per CONTEXT.md, checklist goals advise the musician; status is still their
+    // manual assessment and is not mechanically blocked by an incomplete goal.
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Provisional', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Ready', exact: true }).click();
+    await expect
+      .poll(async () => (await prisma.booking.findUnique({ where: { id: fixture.bookingId } }))?.status)
+      .toBe(BookingStatus.READY);
+    await expect
+      .poll(async () =>
+        (
+          await prisma.bookingChecklistItem.findFirst({
+            where: { bookingId: fixture.bookingId, key: 'get_the_band_confirmed' },
+          })
+        )?.state,
+      )
+      .toBe('PENDING');
   });
 });

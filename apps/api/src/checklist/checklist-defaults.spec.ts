@@ -1,5 +1,6 @@
 import {
   CHECKLIST_DEFAULTS,
+  BAND_CHECKLIST_GOAL_KEY,
   computeReminderInsertOrder,
   dueDateRuleEqual,
   filterItemsByStartingStatus,
@@ -168,6 +169,44 @@ describe('build_itinerary checklist default (Module D / #523)', () => {
       // send_thank_you is the final template item.
       expect(computeReminderInsertOrder('send_thank_you', existing)).toBe(3);
     });
+  });
+});
+
+describe('get_the_band_confirmed checklist default (#900)', () => {
+  const bandGoal = () => CHECKLIST_DEFAULTS.find((item) => item.key === BAND_CHECKLIST_GOAL_KEY)!;
+
+  it('is a READY-staged ordinary default due 60 days before the booking', () => {
+    expect(bandGoal()).toMatchObject({
+      completedBy: 'USER',
+      requiredForStatus: 'READY',
+      dueDateRule: { basis: 'bookingDate', offsetDays: -60 },
+    });
+    expect(bandGoal().enabled).not.toBe(false);
+  });
+
+  it('puts the two preconditions before the per-member invite/confirmation templates', () => {
+    const steps = bandGoal().steps ?? [];
+    expect(steps.slice(0, 2).map((step) => [step.key, step.kind])).toEqual([
+      ['choose_a_lineup', 'PRECONDITION'],
+      ['fill_every_chair', 'PRECONDITION'],
+    ]);
+    expect(steps.slice(2).map((step) => [step.key, step.perBandMember])).toEqual([
+      ['invite_band_member', true],
+      ['band_member_confirmed', true],
+    ]);
+    expect(steps[3]).toMatchObject({ kind: 'MILESTONE', completeMode: 'AWAITED', completedBy: 'BAND_MEMBER' });
+  });
+
+  it('is hidden from the effective defaults when the band feature flag is off', () => {
+    const previousFlag = process.env.FEATURE_BAND_MEMBERS;
+    delete process.env.FEATURE_BAND_MEMBERS;
+    try {
+      const keys = getChecklistDefaults(null).map((item) => item.key);
+      expect(keys).not.toContain(BAND_CHECKLIST_GOAL_KEY);
+      expect(keys).toContain('get_the_balance_paid');
+    } finally {
+      if (previousFlag !== undefined) process.env.FEATURE_BAND_MEMBERS = previousFlag;
+    }
   });
 });
 
@@ -422,6 +461,16 @@ describe('sparsifySystemOverrides (ADR-0060 §3)', () => {
 describe('getChecklistDefaults read-merge (ADR-0060)', () => {
   const keys = (items: ChecklistDefaultItem[]) => items.map((i) => i.key);
   const withOverrides = (overrides: unknown) => ({ checklistDefaults: overrides });
+  const originalFlag = process.env.FEATURE_BAND_MEMBERS;
+
+  beforeAll(() => {
+    process.env.FEATURE_BAND_MEMBERS = 'true';
+  });
+
+  afterAll(() => {
+    if (originalFlag === undefined) delete process.env.FEATURE_BAND_MEMBERS;
+    else process.env.FEATURE_BAND_MEMBERS = originalFlag;
+  });
 
   it('returns the pure catalogue when there are no stored preferences', () => {
     expect(getChecklistDefaults(null)).toEqual(CHECKLIST_DEFAULTS);

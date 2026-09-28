@@ -31,10 +31,14 @@ export type AutoCompleteRule =
   // prerequisite for any emailing goal. `bookingField fee notNull` covers the other precondition
   // (the booking has a fee), reusing the existing rule.
   | { type: 'customerEmail' }
+  | { type: 'bandHasChairs' }
+  | { type: 'bandChairsFilled' }
+  | { type: 'bandMemberStatus'; completeWhen: string[]; declinedWhen?: string[] }
   | { type: 'completeness'; concern: CompletenessConcern };
 
 /** The booking facts a rule reads. Mirrors the repository's context projection. */
 export interface BookingContext {
+  userId: string;
   status: string;
   venueId: string | null;
   customerId: string | null;
@@ -52,10 +56,13 @@ export interface BookingContext {
   musicFormResponse: { id: string } | null;
   // #533 / #630: whether the booking's music form is published (config exists AND publishedAt set).
   musicFormPublished: boolean;
+  // The active roster and its chairs are read only for the gated band checklist predicates.
+  bandMembers?: Array<{ id: string; status: string; isSelf: boolean }>;
+  bandChairs?: Array<{ memberId: string | null; memberStatus: string | null }>;
 }
 
 /** The terminal/non-terminal outcome a single rule (or step) evaluates to. */
-export type RuleState = 'PENDING' | 'COMPLETE' | 'FAILED';
+export type RuleState = 'PENDING' | 'COMPLETE' | 'FAILED' | 'DECLINED';
 
 /**
  * The booking-context fields a rule observes. A business event that mutates one
@@ -113,6 +120,16 @@ export function evaluateRule(rule: AutoCompleteRule, ctx: BookingContext): boole
       return ctx.musicFormResponse !== null;
     case 'musicFormPublished':
       return ctx.musicFormPublished;
+    case 'bandHasChairs':
+      return (ctx.bandChairs ?? []).length > 0;
+    case 'bandChairsFilled': {
+      const chairs = ctx.bandChairs ?? [];
+      return chairs.length > 0 && chairs.every(
+        (chair) => chair.memberId !== null && chair.memberStatus !== 'DECLINED',
+      );
+    }
+    case 'bandMemberStatus':
+      return false;
     case 'contractSigned':
       return ctx.contracts.some((c) => c.status === 'SIGNED');
     case 'customerEmail':
@@ -141,7 +158,17 @@ export function isCommFailed(rule: AutoCompleteRule, ctx: BookingContext): boole
  * matching send bounced, else PENDING. Stickiness (never leaving COMPLETE/SKIPPED)
  * is the caller's concern — this is a pure function of the rule and the facts.
  */
-export function evaluateRuleState(rule: AutoCompleteRule, ctx: BookingContext): RuleState {
+export function evaluateRuleState(
+  rule: AutoCompleteRule,
+  ctx: BookingContext,
+  bandMemberId?: string | null,
+): RuleState {
+  if (rule.type === 'bandMemberStatus') {
+    const status = ctx.bandMembers?.find((member) => member.id === bandMemberId)?.status;
+    if (!status) return 'PENDING';
+    if (rule.declinedWhen?.includes(status)) return 'DECLINED';
+    return rule.completeWhen.includes(status) ? 'COMPLETE' : 'PENDING';
+  }
   if (evaluateRule(rule, ctx)) return 'COMPLETE';
   if (isCommFailed(rule, ctx)) return 'FAILED';
   return 'PENDING';
@@ -173,6 +200,10 @@ export function inputsForRule(rule: AutoCompleteRule): InputKey[] {
       return ['musicFormResponse'];
     case 'musicFormPublished':
       return ['musicFormPublished'];
+    case 'bandHasChairs':
+    case 'bandChairsFilled':
+    case 'bandMemberStatus':
+      return ['bandRoster'];
     case 'contractSigned':
       return ['contracts'];
     case 'customerEmail':

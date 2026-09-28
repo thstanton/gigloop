@@ -7,6 +7,7 @@ import type { ChecklistShortcutHandlers } from './checklistShortcuts';
 function step(overrides: Partial<ChecklistStep> & { id: string; label: string }): ChecklistStep {
   return {
     key: overrides.id,
+    bandMemberId: null,
     order: 0,
     kind: 'MILESTONE',
     completeMode: 'ACTION',
@@ -149,6 +150,16 @@ function quoteGoal(steps: ChecklistStep[]): ChecklistItem {
   };
 }
 
+function bandGoal(steps: ChecklistStep[]): ChecklistItem {
+  return {
+    ...contractGoal(steps),
+    id: 'g-band',
+    key: 'get_the_band_confirmed',
+    label: 'Get the band confirmed',
+    requiredForStatus: 'READY',
+  };
+}
+
 const sendQuote = step({
   id: 's-send-quote',
   label: 'Send the quote',
@@ -199,6 +210,69 @@ export const QuoteAwaitingAcceptance: Story = {
 };
 
 // ── Precondition steps (#618): block a goal until the fee/email is set; CTA deep-links ────────
+
+// The lineup has been chosen, but every part is still vacant.
+export const BandAllVacant: Story = {
+  args: {
+    item: bandGoal([
+      step({ id: 's-lineup', key: 'choose_a_lineup', label: 'Choose a lineup', order: 1, kind: 'PRECONDITION', state: 'COMPLETE' }),
+      step({ id: 's-fill', key: 'fill_every_chair', label: 'Fill every chair', order: 2, kind: 'PRECONDITION', shortcutType: 'open_band' }),
+    ]),
+    handlers: handlers(),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('button', { name: 'Fill every chair' })).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: 'Fill every chair' }));
+    await expect(args.handlers.onDeepLink).toHaveBeenCalledWith('band');
+  },
+};
+
+// Dave's invite is sent; his confirmation is the active named chase, followed by Sam's pair.
+export const BandMidInvite: Story = {
+  args: {
+    item: bandGoal([
+      step({ id: 's-lineup', key: 'choose_a_lineup', label: 'Choose a lineup', order: 1, kind: 'PRECONDITION', state: 'COMPLETE' }),
+      step({ id: 's-fill', key: 'fill_every_chair', label: 'Fill every chair', order: 2, kind: 'PRECONDITION', state: 'COMPLETE' }),
+      step({ id: 's-invite-dave', key: 'invite_band_member', bandMemberId: 'm-dave', label: 'Invite Dave', order: 3, state: 'COMPLETE' }),
+      step({ id: 's-confirm-dave', key: 'band_member_confirmed', bandMemberId: 'm-dave', label: 'Dave confirms', order: 4, completeMode: 'AWAITED', completedBy: 'BAND_MEMBER', shortcutType: 'band_member' }),
+      step({ id: 's-invite-sam', key: 'invite_band_member', bandMemberId: 'm-sam', label: 'Invite Sam', order: 5 }),
+      step({ id: 's-confirm-sam', key: 'band_member_confirmed', bandMemberId: 'm-sam', label: 'Sam confirms', order: 6, completeMode: 'AWAITED', completedBy: 'BAND_MEMBER', shortcutType: 'band_member' }),
+    ]),
+    handlers: handlers(),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('button', { name: 'Chase Dave' })).toBeVisible();
+    await expect(canvas.getByText('2/4')).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: 'Chase Dave' }));
+    await expect(args.handlers.onDeepLink).toHaveBeenCalledWith('band');
+  },
+};
+
+// A declined answer stays visible as history, while the vacancy re-opens the fill precondition.
+export const BandOneDeclined: Story = {
+  args: {
+    item: bandGoal([
+      step({ id: 's-lineup', key: 'choose_a_lineup', label: 'Choose a lineup', order: 1, kind: 'PRECONDITION', state: 'COMPLETE' }),
+      step({ id: 's-fill', key: 'fill_every_chair', label: 'Fill every chair', order: 2, kind: 'PRECONDITION', shortcutType: 'open_band' }),
+      step({ id: 's-invite-dave', key: 'invite_band_member', bandMemberId: 'm-dave', label: 'Invite Dave', order: 3, state: 'COMPLETE' }),
+      step({ id: 's-confirm-dave', key: 'band_member_confirmed', bandMemberId: 'm-dave', label: 'Dave confirms', order: 4, state: 'DECLINED', completeMode: 'AWAITED', completedBy: 'BAND_MEMBER', shortcutType: 'band_member' }),
+      step({ id: 's-invite-sam', key: 'invite_band_member', bandMemberId: 'm-sam', label: 'Invite Sam', order: 5 }),
+      step({ id: 's-confirm-sam', key: 'band_member_confirmed', bandMemberId: 'm-sam', label: 'Sam confirms', order: 6, completeMode: 'AWAITED', completedBy: 'BAND_MEMBER', shortcutType: 'band_member' }),
+    ]),
+    handlers: handlers(),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('button', { name: 'Fill every chair' })).toBeVisible();
+    await expect(canvas.queryByRole('button', { name: 'Chase Dave' })).toBeNull();
+    await userEvent.click(canvas.getByRole('button', { name: /See all steps/ }));
+    const declined = canvas.getByText('Dave confirms');
+    await expect(declined).toHaveClass('line-through');
+    await expect(declined.closest('li')?.querySelector('svg')).toHaveClass('text-muted');
+  },
+};
 
 const setFeeQuote = step({ id: 's-set-fee', label: 'Set the booking fee', order: 1, kind: 'PRECONDITION', shortcutType: 'set_fee' });
 const addEmailQuote = step({ id: 's-add-email', label: "Add the client's email", order: 2, kind: 'PRECONDITION', shortcutType: 'add_email' });

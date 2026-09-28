@@ -44,6 +44,7 @@ type MockRepo = {
   setChairMember: jest.Mock;
   findMember: jest.Mock;
   updateMember: jest.Mock;
+  updateMemberAndMaybeClearChairs: jest.Mock;
   removeMember: jest.Mock;
   update: jest.Mock;
   cancel: jest.Mock;
@@ -81,7 +82,7 @@ type MockMusicFormRepo = {
 
 type MockSeriesRepo = { findOne: jest.Mock; findOneLight: jest.Mock; findExists: jest.Mock; create: jest.Mock };
 type MockMail = { buildContext: jest.Mock };
-type MockEvaluator = { onBookingChanged: jest.Mock };
+type MockEvaluator = { onBookingChanged: jest.Mock; onBandRosterChanged: jest.Mock };
 type MockChecklistRepo = {
   findActionItems: jest.Mock;
   seedChecklistItems: jest.Mock;
@@ -119,6 +120,7 @@ function makeRepo(): MockRepo {
     setChairMember: jest.fn(),
     findMember: jest.fn(),
     updateMember: jest.fn(),
+    updateMemberAndMaybeClearChairs: jest.fn(),
     removeMember: jest.fn(),
     update: jest.fn(),
     cancel: jest.fn(),
@@ -139,7 +141,10 @@ function makeMail(): MockMail {
 }
 
 function makeEvaluator(): MockEvaluator {
-  return { onBookingChanged: jest.fn().mockResolvedValue(undefined) };
+  return {
+    onBookingChanged: jest.fn().mockResolvedValue(undefined),
+    onBandRosterChanged: jest.fn().mockResolvedValue(undefined),
+  };
 }
 
 function makeSeriesRepo(): MockSeriesRepo {
@@ -459,6 +464,32 @@ describe('BookingsService', () => {
       );
     });
 
+    it('filters the band goal before repository seeding when the feature flag is off', async () => {
+      const previousFlag = process.env.FEATURE_BAND_MEMBERS;
+      delete process.env.FEATURE_BAND_MEMBERS;
+      try {
+        repo.create.mockResolvedValue(createdBooking);
+        const checklistItems = [
+          {
+            label: 'Get the band confirmed', key: 'get_the_band_confirmed', completedBy: 'USER' as const,
+            dependsOn: [], autoCompleteRule: null, requiredForStatus: 'READY' as const, dueDateRule: null,
+          },
+          {
+            label: 'Send the quote', key: 'send_quote', completedBy: 'USER' as const,
+            dependsOn: [], autoCompleteRule: null, requiredForStatus: 'PROVISIONAL' as const, dueDateRule: null,
+          },
+        ];
+        const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', checklistItems };
+
+        await service.create('u1', dto);
+
+        const seeds = checklistRepo.seedChecklistItems.mock.calls[0][2];
+        expect(seeds.map((item: { key?: string }) => item.key)).toEqual(['send_quote']);
+      } finally {
+        if (previousFlag !== undefined) process.env.FEATURE_BAND_MEMBERS = previousFlag;
+      }
+    });
+
     it('skips seeding when checklistItems is empty', async () => {
       repo.create.mockResolvedValue(createdBooking);
       const dto = { eventType: 'WEDDING' as const, date: '2026-06-01', customerId: 'c1', checklistItems: [] };
@@ -766,6 +797,36 @@ describe('BookingsService', () => {
       expect(seeds[0]).not.toHaveProperty('state');
       expect(seeds[0]).not.toHaveProperty('completedAt');
       expect(seeds[0]).not.toHaveProperty('dueDate');
+    });
+
+    it('does not copy a band checklist goal while the band feature flag is off', async () => {
+      const previousFlag = process.env.FEATURE_BAND_MEMBERS;
+      delete process.env.FEATURE_BAND_MEMBERS;
+      try {
+        const source = sourceForClone({ seriesId: null });
+        source.checklistItems.push({
+          id: 'ci-band',
+          key: 'get_the_band_confirmed',
+          label: 'Get the band confirmed',
+          completedBy: 'USER',
+          state: 'PENDING',
+          completedAt: new Date('2026-01-10'),
+          dependsOn: [],
+          autoCompleteRule: null,
+          requiredForStatus: 'READY',
+          dueDate: new Date('2026-01-05'),
+          dueDateRule: { basis: 'bookingDate', offsetDays: -60 },
+        });
+        repo.findOneForClone.mockResolvedValue(source);
+        repo.cloneBookingCore.mockResolvedValue({ ...newBooking, seriesId: null });
+
+        await service.copyBooking('u1', 'src', { date: '2026-09-15' });
+
+        const seeds = checklistRepo.seedChecklistItems.mock.calls[0][2];
+        expect(seeds.map((item: { key?: string }) => item.key)).toEqual(['send_quote']);
+      } finally {
+        if (previousFlag !== undefined) process.env.FEATURE_BAND_MEMBERS = previousFlag;
+      }
     });
 
     it('skips checklist seeding when the source has no (non-skipped) items', async () => {
@@ -1411,40 +1472,49 @@ describe('BookingsService', () => {
 
       await service.updateBandMember('u1', 'b1', 'm1', { status: 'CONFIRMED' });
 
-      const data = repo.updateMember.mock.calls[0][1];
+      const data = repo.updateMemberAndMaybeClearChairs.mock.calls[0][3];
       expect(data.status).toBe('CONFIRMED');
       expect(data.respondedAt).toBeInstanceOf(Date);
       expect(data.invitedAt).toBeUndefined();
+      expect(repo.updateMemberAndMaybeClearChairs.mock.calls[0][4]).toBe(false);
     });
 
     it('stamps invitedAt and re-evaluates after the status transitions to INVITED', async () => {
       const events: string[] = [];
-      repo.findMember.mockResolvedValue(member);
-      repo.updateMember.mockImplementation(async () => {
+      // Reversing CONFIRMED to INVITED must re-open the sticky confirmation row.
+      repo.findMember.mockResolvedValue({ ...member, status: 'CONFIRMED' });
+      repo.updateMemberAndMaybeClearChairs.mockImplementation(async () => {
         events.push('update');
         return { ...member, status: 'INVITED' };
       });
-      evaluator.onBookingChanged.mockImplementation(async () => {
+      evaluator.onBandRosterChanged.mockImplementation(async () => {
         events.push('reevaluate');
       });
 
       await service.updateBandMember('u1', 'b1', 'm1', { status: 'INVITED' });
 
-      const data = repo.updateMember.mock.calls[0][1];
+      const data = repo.updateMemberAndMaybeClearChairs.mock.calls[0][3];
       expect(data.invitedAt).toBeInstanceOf(Date);
       expect(data.respondedAt).toBeUndefined();
+      expect(repo.updateMemberAndMaybeClearChairs.mock.calls[0][4]).toBe(false);
       expect(events).toEqual(['update', 'reevaluate']);
-      expect(evaluator.onBookingChanged).toHaveBeenCalledWith('b1');
+      expect(evaluator.onBandRosterChanged).toHaveBeenCalledWith('u1', 'b1', 'm1');
     });
 
     it('stamps respondedAt when the status transitions to DECLINED', async () => {
       repo.findMember.mockResolvedValue(member);
-      repo.updateMember.mockResolvedValue({ ...member, status: 'DECLINED' });
+      repo.updateMemberAndMaybeClearChairs.mockResolvedValue({ ...member, status: 'DECLINED' });
 
       await service.updateBandMember('u1', 'b1', 'm1', { status: 'DECLINED' });
 
-      const data = repo.updateMember.mock.calls[0][1];
+      const data = repo.updateMemberAndMaybeClearChairs.mock.calls[0][3];
       expect(data.respondedAt).toBeInstanceOf(Date);
+      expect(repo.updateMemberAndMaybeClearChairs).toHaveBeenCalledWith(
+        'u1', 'b1', 'm1', expect.objectContaining({ status: 'DECLINED' }), true,
+      );
+      expect(repo.updateMember).not.toHaveBeenCalled();
+      expect(evaluator.onBandRosterChanged).toHaveBeenCalledWith('u1', 'b1', 'm1');
+      expect(evaluator.onBookingChanged).not.toHaveBeenCalled();
     });
 
     it('throws NotFoundException when the member is not found', async () => {
@@ -2228,6 +2298,18 @@ describe('BookingsService', () => {
       date: new Date('2025-06-01T19:00:00.000Z'),
       createdAt: new Date('2025-01-01T00:00:00.000Z'),
     };
+
+    it('rejects a band-goal reminder while the feature flag is off', async () => {
+      const previousFlag = process.env.FEATURE_BAND_MEMBERS;
+      delete process.env.FEATURE_BAND_MEMBERS;
+      try {
+        await expect(service.enableReminder('u1', 'b1', 'get_the_band_confirmed')).rejects.toThrow(NotFoundException);
+        expect(repo.findOne).not.toHaveBeenCalled();
+        expect(checklistRepo.seedReminderItem).not.toHaveBeenCalled();
+      } finally {
+        if (previousFlag !== undefined) process.env.FEATURE_BAND_MEMBERS = previousFlag;
+      }
+    });
 
     it('un-skips an existing SKIPPED reminder rather than re-seeding', async () => {
       repo.findOne.mockResolvedValue(bookingWithDates);

@@ -42,10 +42,9 @@ describe('selectApplicableReminders', () => {
         status: 'READY',
         disabledKeys: new Set(),
       });
-      // ADR-0057 / #608: music_form_invite and send_balance_invoice are now *steps* of the
-      // gather_song_requests / invoice_the_balance goals, so People holds only the standalone
-      // sends. send_thank_you (COMPLETE stage) is the future People reminder on a READY booking.
-      expect(keys(out)).toEqual(['send_thank_you']);
+      // Band readiness lives with People because its per-member actions are person-centred;
+      // send_thank_you remains the future standalone send on a READY booking.
+      expect(keys(out)).toEqual(['get_the_band_confirmed', 'send_thank_you']);
     });
 
     it('includes all People sends on an ENQUIRY booking, in template order', () => {
@@ -55,8 +54,8 @@ describe('selectApplicableReminders', () => {
         disabledKeys: new Set(),
       });
       // ADR-0057 / #616: the quote is now a multi-step goal in Overview (its send_quote step's old
-      // People home retires with the fold), so send_thank_you is the only standalone People send.
-      expect(keys(out)).toEqual(['send_thank_you']);
+      // People home retires with the fold); band readiness is the remaining person-centred goal.
+      expect(keys(out)).toEqual(['get_the_band_confirmed', 'send_thank_you']);
       // The collapsed quote goal lives in Overview now — it must not leak back into People.
       expect(find(out, 'get_the_quote_accepted')).toBeUndefined();
     });
