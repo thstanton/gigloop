@@ -28,6 +28,7 @@ import { ChecklistReevaluator } from '../checklist/checklist-reevaluator.service
 import {
   BAND_GOAL_KEYS,
   getChecklistDefaults,
+  isBandGoalKey,
   isChecklistDefaultAvailable,
 } from '../checklist/checklist-defaults';
 import {
@@ -961,6 +962,7 @@ export class BookingsService {
     const items = await this.repo.findChecklistItems(userId, bookingId);
     return items.map(({ steps, ...item }) => ({
       ...item,
+      isBandGoal: isBandGoalKey(item.key),
       createdAt: item.createdAt.toISOString(),
       updatedAt: item.updatedAt.toISOString(),
       completedAt: item.completedAt?.toISOString() ?? null,

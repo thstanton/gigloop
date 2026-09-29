@@ -13,6 +13,7 @@ function item(overrides: Partial<ChecklistItem> & { label: string }): ChecklistI
     updatedAt: '2030-04-01T10:00:00Z',
     bookingId: 'b1',
     key: null,
+    isBandGoal: false,
     completedBy: 'USER',
     state: 'PENDING',
     order: 0,
@@ -129,8 +130,8 @@ export const BandGoalsInSeparateBrackets: Story = {
   args: {
     bookingStatus: 'CONFIRMED',
     items: [
-      item({ label: 'Get the band confirmed', key: 'get_the_band_confirmed', requiredForStatus: 'READY' }),
-      item({ label: 'Get the band briefed', key: 'get_the_band_briefed', requiredForStatus: 'COMPLETE' }),
+      item({ label: 'Get the band confirmed', key: 'get_the_band_confirmed', isBandGoal: true, requiredForStatus: 'READY' }),
+      item({ label: 'Get the band briefed', key: 'get_the_band_briefed', isBandGoal: true, requiredForStatus: 'COMPLETE' }),
     ],
   },
   play: async ({ canvas }) => {
@@ -139,6 +140,19 @@ export const BandGoalsInSeparateBrackets: Story = {
     await expect(canvas.queryByText('Get the band briefed')).toBeNull();
     await userEvent.click(canvas.getByText('Ready'));
     await expect(canvas.getByText('Get the band briefed')).toBeVisible();
+  },
+};
+
+// #902: SKIPPED goals are absent from the checklist response; unrelated work remains visible.
+export const BandSoloExitSkipped: Story = {
+  args: {
+    bookingStatus: 'CONFIRMED',
+    items: [item({ label: 'Add venue', key: 'add_venue', requiredForStatus: 'READY' })],
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Add venue')).toBeVisible();
+    await expect(canvas.queryByText('Get the band confirmed')).toBeNull();
+    await expect(canvas.queryByRole('button', { name: /Playing this one solo\?/ })).toBeNull();
   },
 };
 

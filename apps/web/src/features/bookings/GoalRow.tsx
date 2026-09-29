@@ -14,6 +14,7 @@ import {
 import { cn } from '@/lib/utils';
 import { CHECKLIST_STEP_STATE_TEXT_CLASS } from '@/lib/constants';
 import { RowActions, type RowAction } from '@/components/common/RowActions';
+import { InlineHint } from '@/components/common/InlineHint';
 import type { ChecklistItem, ChecklistItemState, ChecklistStep } from '@/types/api';
 import {
   bandMemberNameFromConfirmationLabel,
@@ -34,6 +35,11 @@ import {
 // The states the musician can set on a goal via the menu / atomic action. The glyph reads the full
 // ChecklistItemState (incl. FAILED, which the system sets) but FAILED is never user-settable here.
 type SettableGoalState = 'COMPLETE' | 'PENDING' | 'SKIPPED';
+
+export interface SoloExitAction {
+  onClick: () => void;
+  isPending: boolean;
+}
 
 // The active step is the first non-terminal step by order (ADR-0057: derived, never stored).
 export function activeStep(item: ChecklistItem): ChecklistStep | null {
@@ -328,11 +334,18 @@ export interface GoalRowProps {
   item: ChecklistItem;
   handlers: ChecklistShortcutHandlers;
   onSetState: (itemId: string, state: SettableGoalState) => void;
+  soloExitAction?: SoloExitAction;
   // #634: the booking's client name (greeting name → full name → null) for "Waiting on …" text.
   clientName: string | null;
 }
 
-export function GoalRow({ item, handlers, onSetState, clientName }: Readonly<GoalRowProps>) {
+export function GoalRow({
+  item,
+  handlers,
+  onSetState,
+  soloExitAction,
+  clientName,
+}: Readonly<GoalRowProps>) {
   const [expanded, setExpanded] = useState(false);
   const multi = isMultiStep(item);
   const active = activeStep(item);
@@ -361,7 +374,9 @@ export function GoalRow({ item, handlers, onSetState, clientName }: Readonly<Goa
       </div>
 
       <div className="ml-[1.8rem]">
-        {multi && active && <ActiveStepLine step={active} position={position} total={milestones.length} handlers={handlers} clientName={clientName} />}
+        {multi && active && !isSkipped && (
+          <ActiveStepLine step={active} position={position} total={milestones.length} handlers={handlers} clientName={clientName} />
+        )}
 
         {!multi && !isResolved && <AtomicActionLine item={item} handlers={handlers} onSetState={setState} />}
 
@@ -376,7 +391,16 @@ export function GoalRow({ item, handlers, onSetState, clientName }: Readonly<Goa
           </button>
         )}
 
-        {multi && expanded && <StepsList item={item} activeId={active?.id} />}
+        {multi && expanded && <StepsList item={item} activeId={isSkipped ? undefined : active?.id} />}
+
+        {item.isBandGoal && !isResolved && soloExitAction && (
+          <InlineHint
+            actionLabel={soloExitAction.isPending ? 'Updating…' : 'Playing this one solo?'}
+            onClick={soloExitAction.onClick}
+            disabled={soloExitAction.isPending}
+            className="mt-1"
+          />
+        )}
       </div>
     </div>
   );

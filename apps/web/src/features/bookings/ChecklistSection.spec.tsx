@@ -34,6 +34,7 @@ function item(partial: Partial<ChecklistItem> & { id: string; key: string | null
     updatedAt: '',
     bookingId: 'b1',
     key: partial.key,
+    isBandGoal: false,
     label: partial.label ?? partial.id,
     completedBy: 'USER',
     state: partial.state ?? 'PENDING',

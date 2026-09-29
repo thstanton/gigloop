@@ -19,6 +19,7 @@ function item(overrides: Partial<ChecklistItem> & Pick<ChecklistItem, 'id' | 'st
     updatedAt: '2025-01-01T00:00:00.000Z',
     bookingId: 'b1',
     key: null,
+    isBandGoal: false,
     label: 'Item',
     completedBy: 'USER',
     order: 0,

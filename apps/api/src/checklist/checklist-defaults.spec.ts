@@ -3,6 +3,7 @@ import {
   BAND_BRIEFED_GOAL_KEY,
   BAND_CHECKLIST_GOAL_KEY,
   computeReminderInsertOrder,
+  disableBandChecklistGoals,
   dueDateRuleEqual,
   filterItemsByStartingStatus,
   getChecklistDefaults,
@@ -529,6 +530,36 @@ describe('sparsifySystemOverrides (ADR-0060 §3)', () => {
   });
 });
 
+describe('disableBandChecklistGoals (#902)', () => {
+  it('turns off both band goals while preserving other overrides and custom items', () => {
+    const customItems = [{ key: null, label: 'Bring cables', requiredForStatus: 'READY' }];
+    const result = disableBandChecklistGoals({
+      checklistDefaults: {
+        systemItemOverrides: [
+          { key: 'get_the_quote_accepted', enabled: false },
+          { key: BAND_CHECKLIST_GOAL_KEY, dueDateRule: { basis: 'bookingCreation', offsetDays: 3 } },
+        ],
+        customItems,
+      },
+    });
+
+    expect(result.systemItemOverrides).toEqual(expect.arrayContaining([
+      { key: 'get_the_quote_accepted', enabled: false },
+      { key: BAND_CHECKLIST_GOAL_KEY, enabled: false, dueDateRule: { basis: 'bookingCreation', offsetDays: 3 } },
+      { key: BAND_BRIEFED_GOAL_KEY, enabled: false },
+    ]));
+    expect(result.systemItemOverrides).toHaveLength(3);
+    expect(result.customItems).toEqual(customItems);
+  });
+
+  it('is idempotent', () => {
+    const first = disableBandChecklistGoals(null);
+    const second = disableBandChecklistGoals({ checklistDefaults: first });
+
+    expect(second).toEqual(first);
+  });
+});
+
 describe('getChecklistDefaults read-merge (ADR-0060)', () => {
   const keys = (items: ChecklistDefaultItem[]) => items.map((i) => i.key);
   const withOverrides = (overrides: unknown) => ({ checklistDefaults: overrides });
@@ -546,6 +577,19 @@ describe('getChecklistDefaults read-merge (ADR-0060)', () => {
   it('returns the pure catalogue when there are no stored preferences', () => {
     expect(getChecklistDefaults(null)).toEqual(CHECKLIST_DEFAULTS);
     expect(getChecklistDefaults({})).toEqual(CHECKLIST_DEFAULTS);
+  });
+
+  it('keeps both band goals disabled in the defaults used to seed future bookings', () => {
+    const checklistDefaults = disableBandChecklistGoals(null);
+    const defaults = getChecklistDefaults(withOverrides(checklistDefaults));
+
+    expect(defaults.filter((item) => item.key === BAND_CHECKLIST_GOAL_KEY || item.key === BAND_BRIEFED_GOAL_KEY))
+      .toEqual(expect.arrayContaining([
+        expect.objectContaining({ key: BAND_CHECKLIST_GOAL_KEY, enabled: false }),
+        expect.objectContaining({ key: BAND_BRIEFED_GOAL_KEY, enabled: false }),
+      ]));
+    expect(filterItemsByStartingStatus(defaults, 'ENQUIRY').map((item) => item.key))
+      .not.toEqual(expect.arrayContaining([BAND_CHECKLIST_GOAL_KEY, BAND_BRIEFED_GOAL_KEY]));
   });
 
   it('falls back to the catalogue for a legacy array blob (defensive, §7)', () => {

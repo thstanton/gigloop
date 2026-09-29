@@ -42,6 +42,18 @@ type ActionChecklistItem = {
   order: number;
 };
 
+export interface BandSoloExitContext {
+  goals: Array<{ id: string; key: string; state: string }>;
+  preferences: Record<string, unknown>;
+}
+
+export interface BandSoloExitPlan {
+  goalIdsToSkip: string[];
+  preferences: Record<string, unknown>;
+}
+
+export type BandSoloExitPlanner = (context: BandSoloExitContext) => BandSoloExitPlan | null;
+
 const BAND_CHECKLIST_GOAL_SELECT = {
   id: true,
   key: true,
@@ -279,6 +291,53 @@ export class ChecklistRepository {
       select: BAND_CHECKLIST_GOAL_SELECT,
     });
     return goal;
+  }
+
+  /** Persist a service-planned solo exit atomically with its inputs loaded inside this transaction. */
+  async applyBandSoloExit(
+    userId: string,
+    bookingId: string,
+    planSoloExit: BandSoloExitPlanner,
+  ): Promise<boolean> {
+    return this.prisma.$transaction(async (tx) => {
+      const booking = await tx.booking.findFirst({
+        where: { id: bookingId, userId },
+        select: { id: true },
+      });
+      if (!booking) return false;
+
+      const goals = await tx.bookingChecklistItem.findMany({
+        where: { bookingId, userId, key: { in: [...BAND_GOAL_KEYS] } },
+        select: { id: true, key: true, state: true },
+      });
+
+      const profile = await tx.userProfile.findUnique({
+        where: { userId },
+        select: { preferences: true },
+      });
+      const storedPreferences = profile?.preferences;
+      const preferences =
+        storedPreferences !== null && typeof storedPreferences === 'object' && !Array.isArray(storedPreferences)
+          ? storedPreferences
+          : {};
+      const plan = planSoloExit({ goals, preferences });
+      if (!plan) return false;
+      const nextPreferences = plan.preferences as Prisma.InputJsonValue;
+
+      await tx.userProfile.upsert({
+        where: { userId },
+        update: { preferences: nextPreferences },
+        create: { userId, preferences: nextPreferences },
+      });
+
+      if (plan.goalIdsToSkip.length > 0) {
+        await tx.bookingChecklistItem.updateMany({
+          where: { id: { in: plan.goalIdsToSkip }, bookingId, userId, state: { in: ['PENDING', 'FAILED'] } }, // scoped-upstream: IDs were loaded under this booking and user above.
+          data: { state: 'SKIPPED', completedAt: null },
+        });
+      }
+      return true;
+    });
   }
 
   /** Persist a service-computed goal reset plan; this method owns only Prisma writes. */

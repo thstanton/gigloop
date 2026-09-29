@@ -665,6 +665,25 @@ export function sparsifySystemOverrides(
   return sparse;
 }
 
+/** Disable both band goals in the musician's existing sparse defaults, preserving all other
+ * checklist preferences and custom items. The same helper backs every "no band" entry point. */
+export function disableBandChecklistGoals(
+  preferences: Record<string, unknown> | null | undefined,
+): ChecklistDefaultsOverrides {
+  const stored = (preferences as { checklistDefaults?: unknown } | null | undefined)?.checklistDefaults;
+  const current = parseStoredOverrides(stored) ?? { systemItemOverrides: [], customItems: [] };
+  const overridesByKey = new Map(current.systemItemOverrides.map((override) => [override.key, override]));
+
+  for (const key of BAND_GOAL_KEYS) {
+    overridesByKey.set(key, { ...overridesByKey.get(key), key, enabled: false });
+  }
+
+  return {
+    systemItemOverrides: sparsifySystemOverrides([...overridesByKey.values()]),
+    customItems: current.customItems,
+  };
+}
+
 // Slot custom items into their requiredForStatus stage (ADR-0060 §5): within each stage the
 // catalogue goals come first (catalogue order), then that stage's custom items (stored order).
 // `order` is derived here, never stored.

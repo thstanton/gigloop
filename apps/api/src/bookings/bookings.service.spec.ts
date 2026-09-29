@@ -12,6 +12,7 @@ import { MailService } from '../mail/mail.service';
 import { ChecklistReevaluator } from '../checklist/checklist-reevaluator.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { LineupsService } from '../lineups/lineups.service';
+import { BAND_BRIEFED_GOAL_KEY, BAND_CHECKLIST_GOAL_KEY } from '../checklist/checklist-defaults';
 import type { EmailContext } from '../mail/mail.service';
 
 // Tagged sentinel handed to the $transaction callback as `tx`. Asserting each write
@@ -1902,6 +1903,19 @@ describe('BookingsService', () => {
       expect(result[0].createdAt).toBe(now.toISOString());
       expect(result[1].dueDate).toBe(new Date('2026-06-01').toISOString());
       expect(result[0].dueDate).toBeNull();
+    });
+
+    it('marks band goals in the response for feature-aware checklist actions', async () => {
+      const bandGoals = [
+        { ...checklistItems[0], key: BAND_CHECKLIST_GOAL_KEY },
+        { ...checklistItems[0], key: BAND_BRIEFED_GOAL_KEY },
+      ];
+      repo.findOne.mockResolvedValue({ ...booking, musicFormConfig: null, musicFormResponse: null, contracts: [] });
+      repo.findChecklistItems.mockResolvedValue(bandGoals);
+
+      const result = await service.getChecklist('u1', 'b1');
+
+      expect(result.map((goal) => goal.isBandGoal)).toEqual([true, true]);
     });
 
     it('throws NotFoundException when booking does not exist', async () => {

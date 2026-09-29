@@ -70,6 +70,9 @@ export class BookingChecklistItemResponseDto {
   @ApiPropertyOptional({ nullable: true })
   key: string | null;
 
+  @ApiProperty({ description: 'True when this is one of the system band goals.' })
+  isBandGoal: boolean;
+
   @ApiProperty()
   label: string;
 

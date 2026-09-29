@@ -40,7 +40,7 @@ function setup(invoices: Invoice[]) {
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   );
   const { result } = renderHook(() => useChecklistActions('b1'), { wrapper });
-  return { result };
+  return { result, client };
 }
 
 describe('useChecklistActions — query gating (#593)', () => {
@@ -143,5 +143,57 @@ describe('useChecklistActions — handleMarkDone opens the mark-paid dialog (#65
         paymentReference: undefined,
       }),
     );
+  });
+});
+
+describe('useChecklistActions — play solo (#902)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    authState.isLoaded = true;
+    authState.isSignedIn = true;
+  });
+
+  it('posts once and invalidates this checklist plus the user defaults', async () => {
+    (apiPost as ReturnType<typeof vi.fn>).mockResolvedValue({ success: true });
+    const { result, client } = setup([]);
+    const invalidateQueries = vi.spyOn(client, 'invalidateQueries');
+
+    act(() => result.current.soloExitAction.onClick());
+
+    await waitFor(() => expect(apiPost).toHaveBeenCalledWith('/bookings/b1/checklist/solo', {}));
+    await waitFor(() => {
+      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['bookingChecklist', 'b1'] });
+      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['me'] });
+    });
+  });
+
+  it('reports a destructive toast when the action fails', async () => {
+    (apiPost as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('request failed'));
+    const { result } = setup([]);
+
+    act(() => result.current.soloExitAction.onClick());
+
+    await waitFor(() =>
+      expect(toast).toHaveBeenCalledWith({
+        title: 'Could not update the band checklist',
+        variant: 'destructive',
+      }),
+    );
+  });
+
+  it('exposes pending state while the action request is in flight', async () => {
+    let resolveRequest: ((value: { success: boolean }) => void) | undefined;
+    (apiPost as ReturnType<typeof vi.fn>).mockImplementation(
+      () => new Promise((resolve) => { resolveRequest = resolve; }),
+    );
+    const { result } = setup([]);
+
+    act(() => result.current.soloExitAction.onClick());
+
+    expect(result.current.soloExitAction.isPending).toBe(true);
+    await act(async () => {
+      resolveRequest?.({ success: true });
+    });
+    await waitFor(() => expect(result.current.soloExitAction.isPending).toBe(false));
   });
 });

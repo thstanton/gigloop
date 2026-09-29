@@ -12,6 +12,7 @@ function item(overrides: Partial<ChecklistItem> & { label: string }): ChecklistI
     updatedAt: '2030-04-01T10:00:00Z',
     bookingId: 'b1',
     key: null,
+    isBandGoal: false,
     completedBy: 'USER',
     state: 'PENDING',
     order: 0,

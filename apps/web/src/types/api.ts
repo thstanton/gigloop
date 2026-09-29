@@ -358,6 +358,7 @@ export interface ChecklistItem {
   updatedAt: string;
   bookingId: string;
   key: string | null;
+  isBandGoal: boolean;
   label: string;
   completedBy: 'USER' | 'CUSTOMER' | 'BAND_MEMBER';
   state: ChecklistItemState;

@@ -26,6 +26,7 @@ function contractGoal(steps: ChecklistStep[]): ChecklistItem {
     updatedAt: '2030-01-01T00:00:00Z',
     bookingId: 'b1',
     key: 'get_contract_signed',
+    isBandGoal: false,
     label: 'Get the contract signed',
     completedBy: 'USER',
     state: 'PENDING',
@@ -69,7 +70,12 @@ function handlers(): ChecklistShortcutHandlers {
 const meta = {
   component: GoalRow,
   tags: ['ai-generated'],
-  args: { handlers: handlers(), onSetState: fn(), clientName: 'Jamie' },
+  args: {
+    handlers: handlers(),
+    onSetState: fn(),
+    soloExitAction: { onClick: fn(), isPending: false },
+    clientName: 'Jamie',
+  },
   parameters: { layout: 'padded' },
 } satisfies Meta<typeof GoalRow>;
 
@@ -155,6 +161,7 @@ function bandGoal(steps: ChecklistStep[]): ChecklistItem {
     ...contractGoal(steps),
     id: 'g-band',
     key: 'get_the_band_confirmed',
+    isBandGoal: true,
     label: 'Get the band confirmed',
     requiredForStatus: 'READY',
   };
@@ -166,8 +173,18 @@ function briefedGoal(steps: ChecklistStep[]): ChecklistItem {
     ...contractGoal(steps),
     id: 'g-brief',
     key: 'get_the_band_briefed',
+    isBandGoal: true,
     label: 'Get the band briefed',
     requiredForStatus: 'COMPLETE',
+  };
+}
+
+function soloExitGoal(): ChecklistItem {
+  return {
+    ...bandGoal([
+      step({ id: 's-lineup', key: 'choose_a_lineup', label: 'Choose a lineup', order: 1, kind: 'PRECONDITION', state: 'COMPLETE' }),
+      step({ id: 's-fill', key: 'fill_every_chair', label: 'Fill every chair', order: 2, kind: 'PRECONDITION', shortcutType: 'open_band' }),
+    ]),
   };
 }
 
@@ -282,6 +299,40 @@ export const BandOneDeclined: Story = {
     const declined = canvas.getByText('Dave confirms');
     await expect(declined).toHaveClass('line-through');
     await expect(declined.closest('li')?.querySelector('svg')).toHaveClass('text-muted');
+  },
+};
+
+// #902: the inline exit sits beneath the band's active work; one tap skips this booking's goal.
+export const BandSoloExit: Story = {
+  args: {
+    item: soloExitGoal(),
+    handlers: handlers(),
+    onSetState: fn(),
+    soloExitAction: { onClick: fn(), isPending: false },
+    clientName: null,
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    const action = canvas.getByRole('button', { name: /Playing this one solo\?/ });
+    await expect(action).toBeVisible();
+    await expect(canvas.getByRole('button', { name: 'Fill every chair' })).toBeVisible();
+    await expect(canvas.getByText('Get the band confirmed')).toBeVisible();
+    await userEvent.click(action);
+    await expect(args.soloExitAction.onClick).toHaveBeenCalledOnce();
+  },
+};
+
+export const BandSoloExitSaving: Story = {
+  args: {
+    item: soloExitGoal(),
+    handlers: handlers(),
+    onSetState: fn(),
+    soloExitAction: { onClick: fn(), isPending: true },
+    clientName: null,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('button', { name: /Updating/ })).toBeDisabled();
   },
 };
 
