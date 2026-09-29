@@ -166,7 +166,7 @@ export default function OnboardingPortalPage() {
 
       {/* Sticky scaled-down preview — stays visible while the controls scroll */}
       <div className="sticky top-2 z-10">
-        <div className="relative rounded-lg border border-border bg-white overflow-hidden h-64">
+        <div className="relative rounded-lg border border-border bg-white overflow-hidden h-64"> {/* palette-exempt: portal preview frame */}
           <div
             className="pointer-events-none origin-top-left"
             style={{ transform: 'scale(0.45)', width: '222%' }}
@@ -179,7 +179,7 @@ export default function OnboardingPortalPage() {
               onNavigate={() => {}}
             />
           </div>
-          <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-white to-transparent" />
+          <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-white to-transparent" /> {/* palette-exempt: portal preview gradient */}
           <button
             type="button"
             onClick={() => setExpanded(true)}
