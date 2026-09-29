@@ -1,7 +1,7 @@
 # ADR-0011 — Visual Identity Rebrand
 
 ## Status
-Accepted
+Accepted. The dark mode deferred to P2 below is taken up by ADR-0085 (Appearance).
 
 ## Context
 

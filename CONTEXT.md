@@ -736,6 +736,10 @@ The GigLoop admin UI deliberately evokes a printed musical score — a high-cont
 
 Distinct from the portal **hero image** (see [[PublicProfile]]), which is a photographic asset belonging to the *musician's* branding of their client-facing [[Portal]]. Decorations are GigLoop's own character and never appear on a client-facing surface.
 
+### Appearance
+Whether the admin app renders **Light** or **Dark**, or follows the device (**System**, the default). It is the viewer's own choice, made per device, and it never reaches a client-facing surface: the [[Portal]], the [[Band portal]], portal previews, emails and PDFs keep their own look. The dark rendering keeps the printed-score metaphor inverted, as *the score under stage light*: warm off-white ink on a warm near-black page. See ADR-0085.
+_Avoid_: theme (that is the portal preset on [[PublicProfile]]), dark mode, colour scheme
+
 ### OnboardingFlow
 A five-step wizard at `/onboarding/*` that every new musician completes before accessing the admin.
 
