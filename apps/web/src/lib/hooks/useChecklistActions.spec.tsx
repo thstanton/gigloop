@@ -190,7 +190,7 @@ describe('useChecklistActions — play solo (#902)', () => {
 
     act(() => result.current.soloExitAction.onClick());
 
-    expect(result.current.soloExitAction.isPending).toBe(true);
+    await waitFor(() => expect(result.current.soloExitAction.isPending).toBe(true));
     await act(async () => {
       resolveRequest?.({ success: true });
     });

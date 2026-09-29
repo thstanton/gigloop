@@ -318,6 +318,7 @@ export const BandSoloExit: Story = {
     await expect(canvas.getByRole('button', { name: 'Fill every chair' })).toBeVisible();
     await expect(canvas.getByText('Get the band confirmed')).toBeVisible();
     await userEvent.click(action);
+    if (!args.soloExitAction) throw new Error('Solo exit action is required in this story');
     await expect(args.soloExitAction.onClick).toHaveBeenCalledOnce();
   },
 };
