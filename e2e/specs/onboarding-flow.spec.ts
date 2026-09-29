@@ -124,10 +124,14 @@ test.describe('onboarding flow', () => {
     await expect
       .poll(() => prisma.lineupTemplate.count({ where: { userId: E2E_TEST_USER_ID, label: 'E2E Usual Lineup' } }))
       .toBe(1);
-    const secondPackage = await prisma.packageTemplate.findFirst({
-      where: { userId: E2E_TEST_USER_ID, label: 'Corporate Dinner' },
-    });
-    expect(secondPackage?.defaultLineupTemplateId).toBe(lineup?.id);
+    // The lineup count above is already 1 before the click lands, so it proves nothing about the
+    // second POST — wait for the package itself.
+    await expect
+      .poll(async () =>
+        (await prisma.packageTemplate.findFirst({ where: { userId: E2E_TEST_USER_ID, label: 'Corporate Dinner' } }))
+          ?.defaultLineupTemplateId,
+      )
+      .toBe(lineup?.id);
 
     // --- Step 4 — Portal & branding (advance with defaults → PATCH /me/public clientPortalConfig). ---
     await expect(page.getByRole('heading', { name: 'Your portal & branding', level: 1 })).toBeVisible();
@@ -164,16 +168,21 @@ test.describe('onboarding flow', () => {
     await page.getByRole('button', { name: 'Just me' }).click();
     await page.getByRole('button', { name: 'Save & continue' }).click();
 
-    const profile = await prisma.userProfile.findUnique({ where: { userId: E2E_TEST_USER_ID } });
-    const preferences = profile?.preferences as {
-      checklistDefaults?: { systemItemOverrides?: Array<{ key: string; enabled?: boolean }> };
-    };
-    expect(preferences.checklistDefaults?.systemItemOverrides).toEqual(
-      expect.arrayContaining([
-        { key: 'get_the_band_confirmed', enabled: false },
-        { key: 'get_the_band_briefed', enabled: false },
-      ]),
-    );
+    // "Save & continue" fires the preference PATCH asynchronously — poll rather than read once.
+    await expect
+      .poll(async () => {
+        const profile = await prisma.userProfile.findUnique({ where: { userId: E2E_TEST_USER_ID } });
+        const preferences = profile?.preferences as {
+          checklistDefaults?: { systemItemOverrides?: Array<{ key: string; enabled?: boolean }> };
+        } | null;
+        return preferences?.checklistDefaults?.systemItemOverrides;
+      })
+      .toEqual(
+        expect.arrayContaining([
+          { key: 'get_the_band_confirmed', enabled: false },
+          { key: 'get_the_band_briefed', enabled: false },
+        ]),
+      );
 
     // Finish onboarding, then create a booking through the real New Booking form.
     await page.getByRole('button', { name: 'Save & continue' }).click();
@@ -221,10 +230,15 @@ test.describe('onboarding flow', () => {
     await page.getByRole('button', { name: 'Wedding Ceremony' }).click();
     await page.getByRole('button', { name: 'Save & continue' }).click();
 
+    // Async PATCH after "Save & continue" — poll for the skip flag before asserting what it left alone.
+    await expect
+      .poll(async () => {
+        const profile = await prisma.userProfile.findUnique({ where: { userId: E2E_TEST_USER_ID } });
+        return (profile?.preferences as Record<string, unknown> | null)?.onboardingSkippedBandSetup;
+      })
+      .toBe(true);
     const profile = await prisma.userProfile.findUnique({ where: { userId: E2E_TEST_USER_ID } });
-    const preferences = profile?.preferences as Record<string, unknown>;
-    expect(preferences.onboardingSkippedBandSetup).toBe(true);
-    expect(preferences.checklistDefaults).toBeUndefined();
+    expect((profile?.preferences as Record<string, unknown>).checklistDefaults).toBeUndefined();
     expect(await prisma.lineupTemplate.count({ where: { userId: E2E_TEST_USER_ID } })).toBe(0);
   });
 

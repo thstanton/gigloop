@@ -1,7 +1,12 @@
-import { test, expect } from '@playwright/test';
+import { test, expect as baseExpect } from '@playwright/test';
 import { BookingStatus } from '@prisma/client';
 import { prisma } from '../support/prisma';
 import { seedBookingForLifecycle, type LifecycleBooking } from '../support/seed';
+
+// Every assertion here waits on a real server round-trip (the fee PATCH awaits a full checklist
+// re-evaluation, band-step sync included) against a remote DB; on CI that PATCH alone measured ~9s,
+// past the suite-wide 10s default. Widen the wait for this file — the assertions themselves are unchanged.
+const expect = baseExpect.configure({ timeout: 30_000 });
 
 // The checklist lifecycle (ADR-0048 §7, slice 5) — the only flow with a 768px
 // desktop variant, because booking-detail's desktop DOM genuinely diverges (an
@@ -24,6 +29,7 @@ test.describe('booking checklist lifecycle', () => {
   let fixture: LifecycleBooking;
 
   test.beforeEach(async ({}, testInfo) => {
+    test.slow(); // triples the 60s test budget: several server-side re-evaluations run serially
     const bandMemberStatus = testInfo.title.includes('decline') ? 'INVITED' : 'CONFIRMED';
     fixture = await seedBookingForLifecycle(undefined, undefined, bandMemberStatus);
   });
