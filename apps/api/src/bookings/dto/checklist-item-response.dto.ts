@@ -9,6 +9,13 @@ export class BookingChecklistStepResponseDto {
   @ApiPropertyOptional({ nullable: true })
   key: string | null;
 
+  @ApiPropertyOptional({
+    nullable: true,
+    type: String,
+    description: 'The roster member this materialised per-person step belongs to.',
+  })
+  bandMemberId: string | null;
+
   @ApiProperty()
   label: string;
 
@@ -21,7 +28,7 @@ export class BookingChecklistStepResponseDto {
   @ApiProperty({ enum: ['ACTION', 'AWAITED'] })
   completeMode: string;
 
-  @ApiProperty({ enum: ['PENDING', 'COMPLETE', 'FAILED'] })
+  @ApiProperty({ enum: ['PENDING', 'COMPLETE', 'FAILED', 'DECLINED'] })
   state: string;
 
   @ApiProperty({ enum: ['USER', 'CUSTOMER', 'BAND_MEMBER'] })
@@ -62,6 +69,9 @@ export class BookingChecklistItemResponseDto {
 
   @ApiPropertyOptional({ nullable: true })
   key: string | null;
+
+  @ApiProperty({ description: 'True when this is one of the system band goals.' })
+  isBandGoal: boolean;
 
   @ApiProperty()
   label: string;

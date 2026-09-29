@@ -838,6 +838,27 @@ export class BookingsRepository {
     });
   }
 
+  // Atomically apply a member mutation and, when requested by the service, clear
+  // that member's chair assignments. The service owns the status-to-effect rule.
+  async updateMemberAndMaybeClearChairs(
+    userId: string,
+    bookingId: string,
+    memberId: string,
+    data: Prisma.BookingBandMemberUpdateInput,
+    clearChairs: boolean,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.bookingBandMember.update({
+        where: { id: memberId, bookingId, userId },
+        data,
+      });
+      if (clearChairs) {
+        await tx.bookingBandChair.updateMany({ where: { memberId, bookingId, userId }, data: { memberId: null } });
+      }
+      return updated;
+    });
+  }
+
   // Soft removal (ADR-0072 §5): freezes `status` as-is and stamps `removedAt`, and vacates every
   // chair this member held — the seats they leave behind become vacancies again, not orphans
   // pointing at an excluded member. One transaction so a booking is never left half-degraded.

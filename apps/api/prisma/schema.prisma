@@ -287,15 +287,24 @@ model BookingChecklistStep {
   order            Int
   kind             String    @default("MILESTONE") // MILESTONE | PRECONDITION | FOLLOWUP
   completeMode     String    @default("ACTION") // ACTION | AWAITED
-  state            String    @default("PENDING") // PENDING | COMPLETE | FAILED
+  state            String    @default("PENDING") // PENDING | COMPLETE | FAILED | DECLINED
   completedBy      String    @default("USER") // USER | CUSTOMER | BAND_MEMBER
   completedAt      DateTime?
   autoCompleteRule Json?
   dueDateRule      Json?
 
+  // #899 / ADR-0074 §5: which roster row this materialised per-person step belongs to, when a
+  // template key is seeded once per band member (many rows share one flat predicate-registry
+  // key, so the row — not the key — carries the disambiguating fact). Null for every non-band
+  // step. SetNull (not Restrict/Cascade): a step is honest history and must survive a chair
+  // vacancy, mirroring BookingBandChair.memberId.
+  bandMemberId String?
+  bandMember   BookingBandMember? @relation(fields: [bandMemberId], references: [id], onDelete: SetNull)
+
   @@index([userId])
   @@index([bookingId])
   @@index([goalId])
+  @@index([bandMemberId])
 }
 
 model Contract {
@@ -548,7 +557,8 @@ model BookingBandMember {
   respondedAt DateTime?
   removedAt   DateTime?
 
-  chairs BookingBandChair[]
+  chairs         BookingBandChair[]
+  checklistSteps BookingChecklistStep[]
 
   @@index([userId])
   @@index([bookingId])

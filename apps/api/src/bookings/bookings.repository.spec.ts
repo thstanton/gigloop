@@ -1301,6 +1301,30 @@ describe('BookingsRepository', () => {
     });
   });
 
+  describe('updateMemberAndMaybeClearChairs (#900)', () => {
+    it('applies the service-supplied chair effect atomically with the member update', async () => {
+      const order: string[] = [];
+      prisma.bookingBandMember.update.mockImplementation(() => {
+        order.push('decline');
+        return Promise.resolve({ id: 'm1', status: 'DECLINED' });
+      });
+      prisma.bookingBandChair.updateMany.mockImplementation(() => {
+        order.push('vacate');
+        return Promise.resolve({ count: 2 });
+      });
+
+      const result = await repo.updateMemberAndMaybeClearChairs('u1', 'b1', 'm1', { status: 'DECLINED' }, true);
+
+      expect(result).toMatchObject({ status: 'DECLINED' });
+      expect(prisma.bookingBandChair.updateMany).toHaveBeenCalledWith({
+        where: { memberId: 'm1', bookingId: 'b1', userId: 'u1' },
+        data: { memberId: null },
+      });
+      expect(order).toEqual(['decline', 'vacate']);
+      expect(prisma.$transaction).toHaveBeenCalled();
+    });
+  });
+
   describe('removeMember', () => {
     it('vacates every chair held by the member, then stamps removedAt', async () => {
       const order: string[] = [];

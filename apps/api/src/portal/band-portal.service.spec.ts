@@ -3,6 +3,7 @@ import { BandPortalService } from './band-portal.service';
 import { BandPortalRepository } from './band-portal.repository';
 import { PublicProfileRepository } from '../user-profile/public-profile.repository';
 import type { DocumentsService } from '../documents/documents.service';
+import type { ChecklistReevaluator } from '../checklist/checklist-reevaluator.service';
 
 function makeService(overrides?: {
   member?: unknown;
@@ -58,7 +59,11 @@ function makeService(overrides?: {
     ...overrides?.documents,
   } as unknown as DocumentsService;
 
-  return new BandPortalService(repo, publicProfileRepo, documents);
+  const checklistReevaluator = {
+    onBandRosterChanged: jest.fn().mockResolvedValue(undefined),
+  } as unknown as ChecklistReevaluator;
+
+  return new BandPortalService(repo, publicProfileRepo, documents, checklistReevaluator);
 }
 
 describe('BandPortalService.getBandPortalData', () => {
@@ -132,7 +137,9 @@ describe('BandPortalService.respondToInvite', () => {
     (repo.findMemberByToken as jest.Mock).mockResolvedValueOnce({ id: 'member-1', bookingId: 'booking-1', status: 'CONFIRMED', sessionFee: null });
 
     const result = await service.respondToInvite('token', 'CONFIRMED');
-    expect(repo.respondToInvite).toHaveBeenCalledWith('member-1', 'CONFIRMED');
+    expect(repo.respondToInvite).toHaveBeenCalledWith('user-1', 'booking-1', 'member-1', 'CONFIRMED', false);
+    const reeval = (service as unknown as { checklistReevaluator: ChecklistReevaluator }).checklistReevaluator;
+    expect(reeval.onBandRosterChanged).toHaveBeenCalledWith('user-1', 'booking-1', 'member-1');
     if (result.cancelled) throw new Error('expected the non-cancelled branch');
     expect(result.self.status).toBe('CONFIRMED');
   });
@@ -141,7 +148,9 @@ describe('BandPortalService.respondToInvite', () => {
     const service = makeService({ member: { id: 'member-1', bookingId: 'booking-1', status: 'INVITED', sessionFee: null } });
     await service.respondToInvite('token', 'DECLINED');
     const repo = (service as unknown as { repo: BandPortalRepository }).repo;
-    expect(repo.respondToInvite).toHaveBeenCalledWith('member-1', 'DECLINED');
+    expect(repo.respondToInvite).toHaveBeenCalledWith('user-1', 'booking-1', 'member-1', 'DECLINED', true);
+    const reeval = (service as unknown as { checklistReevaluator: ChecklistReevaluator }).checklistReevaluator;
+    expect(reeval.onBandRosterChanged).toHaveBeenCalledWith('user-1', 'booking-1', 'member-1');
   });
 
   it('rejects a second response server-side once already CONFIRMED', async () => {

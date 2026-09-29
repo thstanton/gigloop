@@ -18,8 +18,9 @@ import {
 } from '@/components/ui/select';
 import { DatePicker } from '@/components/ui/date-picker';
 import { cn } from '@/lib/utils';
+import { isEnabled } from '@/lib/featureFlags';
 import { BOOKING_STATUS_LABELS, STATUS_ORDER } from '@/lib/constants';
-import { GoalRow } from './GoalRow';
+import { GoalRow, type SoloExitAction } from './GoalRow';
 import type { ChecklistShortcutHandlers } from './checklistShortcuts';
 import type { BookingStatus, ChecklistItem } from '@/types/api';
 
@@ -164,6 +165,7 @@ interface StatusSectionProps {
   onToggleOpen: () => void;
   handlers: ChecklistShortcutHandlers;
   onSetState: (itemId: string, state: GoalState) => void;
+  soloExitAction?: SoloExitAction;
   isAdding: boolean;
   onStartAdd: () => void;
   onCancelAdd: () => void;
@@ -178,6 +180,7 @@ function StatusSection({
   onToggleOpen,
   handlers,
   onSetState,
+  soloExitAction,
   isAdding,
   onStartAdd,
   onCancelAdd,
@@ -207,7 +210,14 @@ function StatusSection({
       {isOpen && (
         <div className="pb-2">
           {section.goals.map((item) => (
-            <GoalRow key={item.id} item={item} handlers={handlers} onSetState={onSetState} clientName={clientName} />
+            <GoalRow
+              key={item.id}
+              item={item}
+              handlers={handlers}
+              onSetState={onSetState}
+              soloExitAction={soloExitAction}
+              clientName={clientName}
+            />
           ))}
 
           {isAdding ? (
@@ -261,7 +271,14 @@ export default function ChecklistSection({
   hideHeader = false,
   clientName = null,
 }: ChecklistSectionProps) {
-  const { handleChecklistAction, handleMarkDone, isActionPending, markPaidDialog } = useChecklistActions(bookingId);
+  const {
+    handleChecklistAction,
+    handleMarkDone,
+    isActionPending,
+    markPaidDialog,
+    soloExitAction,
+  } = useChecklistActions(bookingId);
+  const bandMembersEnabled = isEnabled('VITE_FEATURE_BAND_MEMBERS');
   const { isDismissed: isDueDateHintDismissed, dismiss: dismissDueDateHint } =
     useDismissibleHint('checklist-due-date-hint');
   const [, setSearchParams] = useSearchParams();
@@ -329,6 +346,7 @@ export default function ChecklistSection({
           onToggleOpen={() => setOpenOverrides((o) => ({ ...o, [section.key]: !isOpen(section) }))}
           handlers={shortcutHandlers}
           onSetState={onToggle}
+          soloExitAction={bandMembersEnabled ? soloExitAction : undefined}
           isAdding={addingKey === section.key}
           onStartAdd={() => setAddingKey(section.key)}
           onCancelAdd={() => setAddingKey(null)}

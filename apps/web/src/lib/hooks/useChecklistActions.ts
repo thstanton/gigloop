@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '@clerk/react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useBookingActions } from '@/lib/hooks/useBookingActions';
 import { useContractActions } from '@/lib/hooks/useContractActions';
 import { useInvoiceActions } from '@/lib/hooks/useInvoiceActions';
-import { apiGet } from '@/lib/api';
+import { apiGet, apiPost } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
 import { activeInvoiceOf, sentInvoiceOf, depositAmount, balanceDefaultAmount } from '@/lib/invoiceDerivations';
 import { buildSetsDescription } from '@/lib/bookingSets';
@@ -18,6 +18,7 @@ export function useChecklistActions(bookingId: string) {
   // is ready and they 401 (project data-fetching rule). The `['me']` query keys off the signed-in
   // user, not the booking, so it gates on isSignedIn rather than bookingId.
   const { isLoaded, isSignedIn } = useAuth();
+  const queryClient = useQueryClient();
 
   const { data: booking } = useQuery({
     queryKey: ['booking', bookingId],
@@ -38,6 +39,18 @@ export function useChecklistActions(bookingId: string) {
   const actions = useBookingActions(bookingId);
   const contractActions = useContractActions(bookingId);
   const invoiceActions = useInvoiceActions();
+  const playSoloMutation = useMutation({
+    mutationFn: () => apiPost<{ success: boolean }>(`/bookings/${bookingId}/checklist/solo`, {}),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['bookingChecklist', bookingId] }),
+        queryClient.invalidateQueries({ queryKey: ['me'] }),
+      ]);
+    },
+    onError: () => {
+      toast({ title: 'Could not update the band checklist', variant: 'destructive' });
+    },
+  });
 
   function openCreateInvoice(prefill?: { isDeposit: boolean; amount?: number }) {
     const params: Record<string, string> = { sheet: 'invoice', isDeposit: String(prefill?.isDeposit ?? false) };
@@ -111,6 +124,10 @@ export function useChecklistActions(bookingId: string) {
     handleChecklistAction,
     handleMarkDone,
     isActionPending: actions.isPending || invoiceActions.isMarkingPaid || contractActions.isCreatingContract,
+    soloExitAction: {
+      onClick: () => playSoloMutation.mutate(),
+      isPending: playSoloMutation.isPending,
+    },
     pendingContract,
     clearPendingContract: () => setPendingContract(null),
     // Props for the MarkPaidDialog the checklist surface renders (its "Mark as paid" CTA opens it).

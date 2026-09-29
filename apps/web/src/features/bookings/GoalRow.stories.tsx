@@ -7,6 +7,7 @@ import type { ChecklistShortcutHandlers } from './checklistShortcuts';
 function step(overrides: Partial<ChecklistStep> & { id: string; label: string }): ChecklistStep {
   return {
     key: overrides.id,
+    bandMemberId: null,
     order: 0,
     kind: 'MILESTONE',
     completeMode: 'ACTION',
@@ -25,6 +26,7 @@ function contractGoal(steps: ChecklistStep[]): ChecklistItem {
     updatedAt: '2030-01-01T00:00:00Z',
     bookingId: 'b1',
     key: 'get_contract_signed',
+    isBandGoal: false,
     label: 'Get the contract signed',
     completedBy: 'USER',
     state: 'PENDING',
@@ -68,7 +70,12 @@ function handlers(): ChecklistShortcutHandlers {
 const meta = {
   component: GoalRow,
   tags: ['ai-generated'],
-  args: { handlers: handlers(), onSetState: fn(), clientName: 'Jamie' },
+  args: {
+    handlers: handlers(),
+    onSetState: fn(),
+    soloExitAction: { onClick: fn(), isPending: false },
+    clientName: 'Jamie',
+  },
   parameters: { layout: 'padded' },
 } satisfies Meta<typeof GoalRow>;
 
@@ -149,6 +156,38 @@ function quoteGoal(steps: ChecklistStep[]): ChecklistItem {
   };
 }
 
+function bandGoal(steps: ChecklistStep[]): ChecklistItem {
+  return {
+    ...contractGoal(steps),
+    id: 'g-band',
+    key: 'get_the_band_confirmed',
+    isBandGoal: true,
+    label: 'Get the band confirmed',
+    requiredForStatus: 'READY',
+  };
+}
+
+// #901: the two-days-out worklist — a COMPLETE-staged sibling of the READY-staged confirmation goal.
+function briefedGoal(steps: ChecklistStep[]): ChecklistItem {
+  return {
+    ...contractGoal(steps),
+    id: 'g-brief',
+    key: 'get_the_band_briefed',
+    isBandGoal: true,
+    label: 'Get the band briefed',
+    requiredForStatus: 'COMPLETE',
+  };
+}
+
+function soloExitGoal(): ChecklistItem {
+  return {
+    ...bandGoal([
+      step({ id: 's-lineup', key: 'choose_a_lineup', label: 'Choose a lineup', order: 1, kind: 'PRECONDITION', state: 'COMPLETE' }),
+      step({ id: 's-fill', key: 'fill_every_chair', label: 'Fill every chair', order: 2, kind: 'PRECONDITION', shortcutType: 'open_band' }),
+    ]),
+  };
+}
+
 const sendQuote = step({
   id: 's-send-quote',
   label: 'Send the quote',
@@ -199,6 +238,141 @@ export const QuoteAwaitingAcceptance: Story = {
 };
 
 // ── Precondition steps (#618): block a goal until the fee/email is set; CTA deep-links ────────
+
+// The lineup has been chosen, but every part is still vacant.
+export const BandAllVacant: Story = {
+  args: {
+    item: bandGoal([
+      step({ id: 's-lineup', key: 'choose_a_lineup', label: 'Choose a lineup', order: 1, kind: 'PRECONDITION', state: 'COMPLETE' }),
+      step({ id: 's-fill', key: 'fill_every_chair', label: 'Fill every chair', order: 2, kind: 'PRECONDITION', shortcutType: 'open_band' }),
+    ]),
+    handlers: handlers(),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('button', { name: 'Fill every chair' })).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: 'Fill every chair' }));
+    await expect(args.handlers.onDeepLink).toHaveBeenCalledWith('band');
+  },
+};
+
+// Dave's invite is sent; his confirmation is the active named chase, followed by Sam's pair.
+export const BandMidInvite: Story = {
+  args: {
+    item: bandGoal([
+      step({ id: 's-lineup', key: 'choose_a_lineup', label: 'Choose a lineup', order: 1, kind: 'PRECONDITION', state: 'COMPLETE' }),
+      step({ id: 's-fill', key: 'fill_every_chair', label: 'Fill every chair', order: 2, kind: 'PRECONDITION', state: 'COMPLETE' }),
+      step({ id: 's-invite-dave', key: 'invite_band_member', bandMemberId: 'm-dave', label: 'Invite Dave', order: 3, state: 'COMPLETE' }),
+      step({ id: 's-confirm-dave', key: 'band_member_confirmed', bandMemberId: 'm-dave', label: 'Dave confirms', order: 4, completeMode: 'AWAITED', completedBy: 'BAND_MEMBER', shortcutType: 'band_member' }),
+      step({ id: 's-invite-sam', key: 'invite_band_member', bandMemberId: 'm-sam', label: 'Invite Sam', order: 5 }),
+      step({ id: 's-confirm-sam', key: 'band_member_confirmed', bandMemberId: 'm-sam', label: 'Sam confirms', order: 6, completeMode: 'AWAITED', completedBy: 'BAND_MEMBER', shortcutType: 'band_member' }),
+    ]),
+    handlers: handlers(),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('button', { name: 'Chase Dave' })).toBeVisible();
+    await expect(canvas.getByText('2/4')).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: 'Chase Dave' }));
+    await expect(args.handlers.onDeepLink).toHaveBeenCalledWith('band');
+  },
+};
+
+// A declined answer stays visible as history, while the vacancy re-opens the fill precondition.
+export const BandOneDeclined: Story = {
+  args: {
+    item: bandGoal([
+      step({ id: 's-lineup', key: 'choose_a_lineup', label: 'Choose a lineup', order: 1, kind: 'PRECONDITION', state: 'COMPLETE' }),
+      step({ id: 's-fill', key: 'fill_every_chair', label: 'Fill every chair', order: 2, kind: 'PRECONDITION', shortcutType: 'open_band' }),
+      step({ id: 's-invite-dave', key: 'invite_band_member', bandMemberId: 'm-dave', label: 'Invite Dave', order: 3, state: 'COMPLETE' }),
+      step({ id: 's-confirm-dave', key: 'band_member_confirmed', bandMemberId: 'm-dave', label: 'Dave confirms', order: 4, state: 'DECLINED', completeMode: 'AWAITED', completedBy: 'BAND_MEMBER', shortcutType: 'band_member' }),
+      step({ id: 's-invite-sam', key: 'invite_band_member', bandMemberId: 'm-sam', label: 'Invite Sam', order: 5 }),
+      step({ id: 's-confirm-sam', key: 'band_member_confirmed', bandMemberId: 'm-sam', label: 'Sam confirms', order: 6, completeMode: 'AWAITED', completedBy: 'BAND_MEMBER', shortcutType: 'band_member' }),
+    ]),
+    handlers: handlers(),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('button', { name: 'Fill every chair' })).toBeVisible();
+    await expect(canvas.queryByRole('button', { name: 'Chase Dave' })).toBeNull();
+    await userEvent.click(canvas.getByRole('button', { name: /See all steps/ }));
+    const declined = canvas.getByText('Dave confirms');
+    await expect(declined).toHaveClass('line-through');
+    await expect(declined.closest('li')?.querySelector('svg')).toHaveClass('text-muted');
+  },
+};
+
+// #902: the inline exit sits beneath the band's active work; one tap skips this booking's goal.
+export const BandSoloExit: Story = {
+  args: {
+    item: soloExitGoal(),
+    handlers: handlers(),
+    onSetState: fn(),
+    soloExitAction: { onClick: fn(), isPending: false },
+    clientName: null,
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    const action = canvas.getByRole('button', { name: /Playing this one solo\?/ });
+    await expect(action).toBeVisible();
+    await expect(canvas.getByRole('button', { name: 'Fill every chair' })).toBeVisible();
+    await expect(canvas.getByText('Get the band confirmed')).toBeVisible();
+    await userEvent.click(action);
+    if (!args.soloExitAction) throw new Error('Solo exit action is required in this story');
+    await expect(args.soloExitAction.onClick).toHaveBeenCalledOnce();
+  },
+};
+
+export const BandSoloExitSaving: Story = {
+  args: {
+    item: soloExitGoal(),
+    handlers: handlers(),
+    onSetState: fn(),
+    soloExitAction: { onClick: fn(), isPending: true },
+    clientName: null,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('button', { name: /Updating/ })).toBeDisabled();
+  },
+};
+
+// #901: once everyone has said yes, the briefing worklist names the next person to send final
+// details to. Dave's went by copy-paste + Mark as sent; Sam is next.
+export const BandBriefingWorklist: Story = {
+  args: {
+    item: briefedGoal([
+      step({ id: 's-brief-dave', key: 'brief_band_member', bandMemberId: 'm-dave', label: 'Brief Dave', order: 1, state: 'COMPLETE', shortcutType: 'brief_band_member' }),
+      step({ id: 's-brief-sam', key: 'brief_band_member', bandMemberId: 'm-sam', label: 'Brief Sam', order: 2, shortcutType: 'brief_band_member' }),
+    ]),
+    handlers: handlers(),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText('Get the band briefed')).toBeVisible();
+    await expect(canvas.getByText('2/2')).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: 'Brief Sam' }));
+    await expect(args.handlers.onDeepLink).toHaveBeenCalledWith('band');
+    // No call-sheet step: the call sheet is a push, never a chase (ADR-0073).
+    await userEvent.click(canvas.getByRole('button', { name: /See all steps/ }));
+    await expect(canvas.queryByText(/call sheet/i)).toBeNull();
+  },
+};
+
+// #901: a bounced final-details email keeps the person-named CTA so the musician can resend.
+export const BandBriefingFailed: Story = {
+  args: {
+    item: briefedGoal([
+      step({ id: 's-brief-dave', key: 'brief_band_member', bandMemberId: 'm-dave', label: 'Brief Dave', order: 1, state: 'FAILED', shortcutType: 'brief_band_member' }),
+    ]),
+    handlers: handlers(),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: 'Brief Dave' }));
+    await expect(args.handlers.onDeepLink).toHaveBeenCalledWith('band');
+  },
+};
 
 const setFeeQuote = step({ id: 's-set-fee', label: 'Set the booking fee', order: 1, kind: 'PRECONDITION', shortcutType: 'set_fee' });
 const addEmailQuote = step({ id: 's-add-email', label: "Add the client's email", order: 2, kind: 'PRECONDITION', shortcutType: 'add_email' });
@@ -339,6 +513,50 @@ export const Skipped: Story = {
     await expect(canvas.getByText('Bring spare strings')).toBeVisible();
     // No action CTA is offered on a set-aside goal.
     await expect(canvas.queryByRole('button', { name: 'Mark complete' })).toBeNull();
+  },
+};
+
+// ── DECLINED (#899, ADR-0057 amended by ADR-0074 §5): "the answer arrived, expectedly, and it
+// was no." Declared generally here — not band-specific (#900 is its first real producer) — and
+// exercised on a plain 3-step goal to prove the mechanism, not a band narrative.
+function genericGoal(steps: ChecklistStep[]): ChecklistItem {
+  return { ...contractGoal(steps), id: 'g-generic', key: null, label: 'Line up the extras' };
+}
+
+const askA = step({ id: 's-ask-a', label: 'Ask musician A', order: 1, state: 'COMPLETE' });
+const askB = step({ id: 's-ask-b', label: 'Ask musician B', order: 2, state: 'DECLINED' });
+const askC = step({ id: 's-ask-c', label: 'Ask musician C', order: 3 });
+
+export const DeclinedStepExcludedFromProgress: Story = {
+  args: { item: genericGoal([askA, askB, askC]), handlers: handlers() },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    // A declined step is terminal — never the active step. B is skipped over; C (still PENDING,
+    // no shortcut wired) becomes the visible active line instead.
+    await expect(canvas.getByText('Ask musician C')).toBeVisible();
+    await expect(canvas.queryByText('Ask musician B')).toBeNull(); // folded, not yet revealed
+
+    // The goal glyph's ring reads done=1/total=2 (A complete, C pending) — B must be excluded
+    // from the total, not just the done count, or the ring (and the goal) could never complete
+    // (#899's named failure mode). The ring carries no text, so this is asserted via the filled
+    // circle's geometry rather than a hand-written expectation.
+    const circles = canvasElement.querySelectorAll('circle');
+    const fill = circles[1] as SVGCircleElement;
+    const r = Number(fill.getAttribute('r'));
+    const circumference = 2 * Math.PI * r;
+    const expectedOffset = circumference * (1 - 1 / 2);
+    await expect(Number(fill.getAttribute('stroke-dashoffset'))).toBeCloseTo(expectedOffset, 5);
+
+    // Reveal the folded steps: B shows struck through, and its glyph pins the shared step-state
+    // token — muted, same as a completed step, never FAILED's red.
+    await userEvent.click(canvas.getByRole('button', { name: /See all steps/ }));
+    const declinedLabel = canvas.getByText('Ask musician B');
+    await expect(declinedLabel).toHaveClass('line-through');
+    const declinedRow = declinedLabel.closest('li');
+    const glyph = declinedRow?.querySelector('svg');
+    await expect(glyph).toHaveClass('text-muted');
+    await expect(glyph).not.toHaveClass('text-status-cancelled');
   },
 };
 

@@ -4,11 +4,18 @@ import {
   AutoCompleteRule,
   BookingContext,
   InputKey,
-  RuleState,
   evaluateRuleState,
 } from './checklist-rules';
 import { ChecklistState, StepState, rollUp } from './checklist-rollup';
 import { STEP_PREDICATES, affectedKeys } from './checklist-predicate-registry';
+import { isEnabled } from '../common/featureFlags';
+import {
+  BAND_CHECKLIST_FEATURE_FLAG,
+  CHECKLIST_DEFAULTS,
+  isBandGoalKey,
+} from './checklist-defaults';
+import { planBandGoalReset, planBandMemberStepSync } from './checklist-band-steps';
+import type { BandChecklistStepSyncData } from './checklist-band-steps';
 
 const STATUS_ORDER = ['ENQUIRY', 'PROVISIONAL', 'CONFIRMED', 'READY', 'COMPLETE', 'CANCELLED'];
 
@@ -48,6 +55,9 @@ type EvalStep = {
   key: string | null;
   state: string;
   completedAt: Date | null;
+  // #899: which roster row this materialised per-person step belongs to (null for every
+  // non-band step). Passed to the predicate as step-scoped disambiguating facts.
+  bandMemberId: string | null;
 };
 
 /** A Goal: the user-facing checklist row. Atomic goals carry their own rule and
@@ -73,13 +83,14 @@ function resolveSkip(goal: EvalGoal, ctx: BookingContext): boolean {
   );
 }
 
-/** Re-evaluate a single step against the registry, respecting COMPLETE stickiness.
+/** Re-evaluate a single step against the registry, respecting COMPLETE/DECLINED stickiness.
  * A step with no registered predicate keeps its stored state. */
-function nextStepState(step: EvalStep, ctx: BookingContext): RuleState {
-  if (step.state === 'COMPLETE') return 'COMPLETE'; // sticky — manual or prior auto-complete
+function nextStepState(step: EvalStep, ctx: BookingContext): StepState {
+  // sticky — manual/prior auto-complete, or an explicit decline (never re-opened by a predicate).
+  if (step.state === 'COMPLETE' || step.state === 'DECLINED') return step.state as StepState;
   const entry = step.key ? STEP_PREDICATES[step.key] : undefined;
-  if (!entry) return step.state as RuleState;
-  return entry.predicate(ctx);
+  if (!entry) return step.state as StepState;
+  return entry.predicate(ctx, { bandMemberId: step.bandMemberId });
 }
 
 /**
@@ -106,7 +117,9 @@ function nextGoalState(
     return { state: rollUp(rolled), stepUpdates };
   }
   const rule = goal.autoCompleteRule as AutoCompleteRule | null;
-  return { state: rule ? evaluateRuleState(rule, ctx) : 'PENDING', stepUpdates: [] };
+  const evaluated = rule ? evaluateRuleState(rule, ctx) : 'PENDING';
+  // DECLINED is a step-only terminal result; an atomic goal must never emit it.
+  return { state: evaluated === 'DECLINED' ? 'PENDING' : evaluated, stepUpdates: [] };
 }
 
 /** Build a sparse goal update, or null when the state is unchanged. */
@@ -141,10 +154,14 @@ function goalIsAffected(goal: EvalGoal, keys: Set<string>): boolean {
 function computeUpdates(
   goals: EvalGoal[],
   ctx: BookingContext,
+  bandFeatureEnabled: boolean,
 ): { goalUpdates: StateUpdate[]; stepUpdates: StateUpdate[] } {
   const goalUpdates: StateUpdate[] = [];
   const stepUpdates: StateUpdate[] = [];
   for (const goal of goals) {
+    // A feature flag off means the band checklist is inert, including for any
+    // legacy/test row that happens to exist in the database.
+    if (!bandFeatureEnabled && isBandGoalKey(goal.key)) continue;
     if (isTerminalGoal(goal.state)) continue; // COMPLETE/SKIPPED are sticky
     const { goalUpdate, stepUpdates: steps } = evaluateGoal(goal, ctx);
     if (goalUpdate) goalUpdates.push(goalUpdate);
@@ -157,17 +174,74 @@ function computeUpdates(
 export class ChecklistEvaluatorService {
   constructor(private repo: ChecklistRepository) {}
 
+  private async syncBandMemberSteps(
+    userId: string,
+    bookingId: string,
+    data: BandChecklistStepSyncData,
+  ): Promise<boolean> {
+    let changed = false;
+    for (const goal of data.goals) {
+      const templates = CHECKLIST_DEFAULTS.find((item) => item.key === goal.key)?.steps;
+      if (!templates) continue;
+      const plan = planBandMemberStepSync(goal, data.members, templates);
+      if (!plan.deleteStepIds.length && !plan.createSteps.length && !plan.updateSteps.length) continue;
+      await this.repo.applyBandMemberStepSyncPlan(userId, bookingId, goal.id, plan);
+      changed = true;
+    }
+    return changed;
+  }
+
+  async resetBandGoalForRosterChange(
+    userId: string,
+    bookingId: string,
+    memberId?: string,
+  ): Promise<void> {
+    if (!isEnabled(BAND_CHECKLIST_FEATURE_FLAG)) return;
+    const goal = await this.repo.findBandGoalResetData(userId, bookingId);
+    if (!goal) return;
+    const plan = planBandGoalReset(goal, memberId);
+    if (!plan.resetGoal && !plan.resetStepIds.length) return;
+    await this.repo.applyBandGoalResetPlan(userId, bookingId, goal.id, plan);
+  }
+
+  private async findEvaluationSnapshot(bookingId: string, bandFeatureEnabled: boolean) {
+    let snapshot = await this.repo.findItemsWithContext(bookingId);
+    if (!snapshot.booking || !snapshot.items.length) return snapshot;
+
+    let bandMembers = (snapshot.booking as BookingContext).bandMembers ?? [];
+    let bandChairs = (snapshot.booking as BookingContext).bandChairs ?? [];
+    if (bandFeatureEnabled) {
+      const bandData = await this.repo.findBandChecklistStepSyncData(snapshot.booking.userId, bookingId);
+      if (bandData) {
+        const changed = await this.syncBandMemberSteps(snapshot.booking.userId, bookingId, bandData);
+        if (changed) snapshot = await this.repo.findItemsWithContext(bookingId);
+        bandMembers = bandData.members.map(({ id, status, isSelf, contactId }) => ({ id, status, isSelf, contactId }));
+        bandChairs = bandData.chairs;
+      }
+    }
+    return {
+      ...snapshot,
+      booking: {
+        ...(snapshot.booking as BookingContext),
+        bandMembers,
+        bandChairs,
+      },
+    };
+  }
+
   /**
    * Full-sweep evaluation — re-evaluates every non-terminal goal. The entry point
    * for booking creation, the data migration, and booking-date changes, where the
    * affected set is unknown. Event-driven call sites can use {@link evaluateForEvent}.
    */
   async evaluate(bookingId: string): Promise<void> {
-    const { items, booking } = await this.repo.findItemsWithContext(bookingId);
+    const bandFeatureEnabled = isEnabled(BAND_CHECKLIST_FEATURE_FLAG);
+    const { items, booking } = await this.findEvaluationSnapshot(bookingId, bandFeatureEnabled);
     if (!booking || !items.length) return;
     const { goalUpdates, stepUpdates } = computeUpdates(
       items as EvalGoal[],
       booking as BookingContext,
+      bandFeatureEnabled,
     );
     // Goal state is a roll-up of its steps, so the two writes must land together —
     // a split write leaves a window where a goal reads COMPLETE while a step is still
@@ -201,12 +275,17 @@ export class ChecklistEvaluatorService {
    * (ADR-0078), neither of which is an InputKey the index can target.
    */
   async evaluateForEvent(bookingId: string, changedInputs: InputKey[]): Promise<void> {
-    const { items, booking } = await this.repo.findItemsWithContext(bookingId);
+    const bandFeatureEnabled = isEnabled(BAND_CHECKLIST_FEATURE_FLAG);
+    const { items, booking } = await this.findEvaluationSnapshot(bookingId, bandFeatureEnabled);
     if (!booking || !items.length) return;
     const keys = affectedKeys(changedInputs);
     const targeted = (items as EvalGoal[]).filter((g) => goalIsAffected(g, keys));
     if (!targeted.length) return;
-    const { goalUpdates, stepUpdates } = computeUpdates(targeted, booking as BookingContext);
+    const { goalUpdates, stepUpdates } = computeUpdates(
+      targeted,
+      booking as BookingContext,
+      bandFeatureEnabled,
+    );
     if (goalUpdates.length || stepUpdates.length) {
       await this.repo.applyStateUpdates(goalUpdates, stepUpdates);
     }

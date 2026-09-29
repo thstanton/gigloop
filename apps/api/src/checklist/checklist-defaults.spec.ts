@@ -1,6 +1,9 @@
 import {
   CHECKLIST_DEFAULTS,
+  BAND_BRIEFED_GOAL_KEY,
+  BAND_CHECKLIST_GOAL_KEY,
   computeReminderInsertOrder,
+  disableBandChecklistGoals,
   dueDateRuleEqual,
   filterItemsByStartingStatus,
   getChecklistDefaults,
@@ -168,6 +171,114 @@ describe('build_itinerary checklist default (Module D / #523)', () => {
       // send_thank_you is the final template item.
       expect(computeReminderInsertOrder('send_thank_you', existing)).toBe(3);
     });
+  });
+});
+
+describe('get_the_band_confirmed checklist default (#900)', () => {
+  const bandGoal = () => CHECKLIST_DEFAULTS.find((item) => item.key === BAND_CHECKLIST_GOAL_KEY)!;
+
+  it('is a READY-staged ordinary default due 60 days before the booking', () => {
+    expect(bandGoal()).toMatchObject({
+      completedBy: 'USER',
+      requiredForStatus: 'READY',
+      dueDateRule: { basis: 'bookingDate', offsetDays: -60 },
+    });
+    expect(bandGoal().enabled).not.toBe(false);
+  });
+
+  it('puts the two preconditions before the per-member invite/confirmation templates', () => {
+    const steps = bandGoal().steps ?? [];
+    expect(steps.slice(0, 2).map((step) => [step.key, step.kind])).toEqual([
+      ['choose_a_lineup', 'PRECONDITION'],
+      ['fill_every_chair', 'PRECONDITION'],
+    ]);
+    expect(steps.slice(2).map((step) => [step.key, step.perBandMember])).toEqual([
+      ['invite_band_member', true],
+      ['band_member_confirmed', true],
+    ]);
+    expect(steps[3]).toMatchObject({ kind: 'MILESTONE', completeMode: 'AWAITED', completedBy: 'BAND_MEMBER' });
+  });
+
+  it('is hidden from the effective defaults when the band feature flag is off', () => {
+    const previousFlag = process.env.FEATURE_BAND_MEMBERS;
+    delete process.env.FEATURE_BAND_MEMBERS;
+    try {
+      const keys = getChecklistDefaults(null).map((item) => item.key);
+      expect(keys).not.toContain(BAND_CHECKLIST_GOAL_KEY);
+      expect(keys).toContain('get_the_balance_paid');
+    } finally {
+      if (previousFlag !== undefined) process.env.FEATURE_BAND_MEMBERS = previousFlag;
+    }
+  });
+});
+
+describe('per-band-member step templates (#900, #901)', () => {
+  it('each carries a {name} row label and an explicit decline policy', () => {
+    const templates = CHECKLIST_DEFAULTS.flatMap((item) => item.steps ?? []).filter((step) => step.perBandMember);
+    expect(templates.length).toBeGreaterThan(0);
+    for (const template of templates) {
+      expect(template.memberLabel).toContain('{name}');
+      expect(typeof template.keepsDeclinedHistory).toBe('boolean');
+    }
+  });
+});
+
+describe('get_the_band_briefed checklist default (#901)', () => {
+  const briefedGoal = () => CHECKLIST_DEFAULTS.find((item) => item.key === BAND_BRIEFED_GOAL_KEY)!;
+  const confirmedGoal = () => CHECKLIST_DEFAULTS.find((item) => item.key === BAND_CHECKLIST_GOAL_KEY)!;
+
+  it('is a COMPLETE-staged ordinary default due two days before the booking', () => {
+    expect(briefedGoal()).toMatchObject({
+      completedBy: 'USER',
+      autoCompleteRule: null,
+      requiredForStatus: 'COMPLETE',
+      dueDateRule: { basis: 'bookingDate', offsetDays: -2 },
+    });
+    expect(briefedGoal().enabled).not.toBe(false);
+  });
+
+  it('files under a different lifecycle stage from the confirmation goal', () => {
+    expect(briefedGoal().requiredForStatus).not.toBe(confirmedGoal().requiredForStatus);
+  });
+
+  it('holds exactly one per-member Brief template, satisfied only by the final-details comm', () => {
+    const steps = briefedGoal().steps ?? [];
+    expect(steps).toHaveLength(1);
+    expect(steps[0]).toMatchObject({
+      key: 'brief_band_member',
+      kind: 'MILESTONE',
+      completeMode: 'ACTION',
+      completedBy: 'USER',
+      perBandMember: true,
+    });
+    const templateTypes = (steps[0].autoCompleteRule as { templateTypes: string[] }).templateTypes;
+    expect(templateTypes).toEqual(expect.arrayContaining(['band_final_details', 'band_final_details_message']));
+    expect(templateTypes.some((type) => type.startsWith('band_call_sheet'))).toBe(false);
+  });
+
+  it('is hidden from the effective defaults when the band feature flag is off', () => {
+    const previousFlag = process.env.FEATURE_BAND_MEMBERS;
+    delete process.env.FEATURE_BAND_MEMBERS;
+    try {
+      const keys = getChecklistDefaults(null).map((item) => item.key);
+      expect(keys).not.toContain(BAND_BRIEFED_GOAL_KEY);
+      expect(keys).not.toContain(BAND_CHECKLIST_GOAL_KEY);
+    } finally {
+      if (previousFlag !== undefined) process.env.FEATURE_BAND_MEMBERS = previousFlag;
+    }
+  });
+
+  it('is seeded on a booking started at READY even though the confirmation goal is not', () => {
+    const previousFlag = process.env.FEATURE_BAND_MEMBERS;
+    process.env.FEATURE_BAND_MEMBERS = 'true';
+    try {
+      const keys = filterItemsByStartingStatus(getChecklistDefaults(null), 'READY').map((item) => item.key);
+      expect(keys).toContain(BAND_BRIEFED_GOAL_KEY);
+      expect(keys).not.toContain(BAND_CHECKLIST_GOAL_KEY);
+    } finally {
+      if (previousFlag === undefined) delete process.env.FEATURE_BAND_MEMBERS;
+      else process.env.FEATURE_BAND_MEMBERS = previousFlag;
+    }
   });
 });
 
@@ -419,13 +530,66 @@ describe('sparsifySystemOverrides (ADR-0060 §3)', () => {
   });
 });
 
+describe('disableBandChecklistGoals (#902)', () => {
+  it('turns off both band goals while preserving other overrides and custom items', () => {
+    const customItems = [{ key: null, label: 'Bring cables', requiredForStatus: 'READY' }];
+    const result = disableBandChecklistGoals({
+      checklistDefaults: {
+        systemItemOverrides: [
+          { key: 'get_the_quote_accepted', enabled: false },
+          { key: BAND_CHECKLIST_GOAL_KEY, dueDateRule: { basis: 'bookingCreation', offsetDays: 3 } },
+        ],
+        customItems,
+      },
+    });
+
+    expect(result.systemItemOverrides).toEqual(expect.arrayContaining([
+      { key: 'get_the_quote_accepted', enabled: false },
+      { key: BAND_CHECKLIST_GOAL_KEY, enabled: false, dueDateRule: { basis: 'bookingCreation', offsetDays: 3 } },
+      { key: BAND_BRIEFED_GOAL_KEY, enabled: false },
+    ]));
+    expect(result.systemItemOverrides).toHaveLength(3);
+    expect(result.customItems).toEqual(customItems);
+  });
+
+  it('is idempotent', () => {
+    const first = disableBandChecklistGoals(null);
+    const second = disableBandChecklistGoals({ checklistDefaults: first });
+
+    expect(second).toEqual(first);
+  });
+});
+
 describe('getChecklistDefaults read-merge (ADR-0060)', () => {
   const keys = (items: ChecklistDefaultItem[]) => items.map((i) => i.key);
   const withOverrides = (overrides: unknown) => ({ checklistDefaults: overrides });
+  const originalFlag = process.env.FEATURE_BAND_MEMBERS;
+
+  beforeAll(() => {
+    process.env.FEATURE_BAND_MEMBERS = 'true';
+  });
+
+  afterAll(() => {
+    if (originalFlag === undefined) delete process.env.FEATURE_BAND_MEMBERS;
+    else process.env.FEATURE_BAND_MEMBERS = originalFlag;
+  });
 
   it('returns the pure catalogue when there are no stored preferences', () => {
     expect(getChecklistDefaults(null)).toEqual(CHECKLIST_DEFAULTS);
     expect(getChecklistDefaults({})).toEqual(CHECKLIST_DEFAULTS);
+  });
+
+  it('keeps both band goals disabled in the defaults used to seed future bookings', () => {
+    const checklistDefaults = disableBandChecklistGoals(null);
+    const defaults = getChecklistDefaults(withOverrides(checklistDefaults));
+
+    expect(defaults.filter((item) => item.key === BAND_CHECKLIST_GOAL_KEY || item.key === BAND_BRIEFED_GOAL_KEY))
+      .toEqual(expect.arrayContaining([
+        expect.objectContaining({ key: BAND_CHECKLIST_GOAL_KEY, enabled: false }),
+        expect.objectContaining({ key: BAND_BRIEFED_GOAL_KEY, enabled: false }),
+      ]));
+    expect(filterItemsByStartingStatus(defaults, 'ENQUIRY').map((item) => item.key))
+      .not.toEqual(expect.arrayContaining([BAND_CHECKLIST_GOAL_KEY, BAND_BRIEFED_GOAL_KEY]));
   });
 
   it('falls back to the catalogue for a legacy array blob (defensive, §7)', () => {

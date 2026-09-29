@@ -4,12 +4,20 @@ import { ChecklistRepository } from './checklist.repository';
 type MockRepo = {
   findItemsWithContext: jest.Mock;
   applyStateUpdates: jest.Mock;
+  findBandChecklistStepSyncData: jest.Mock;
+  applyBandMemberStepSyncPlan: jest.Mock;
+  findBandGoalResetData: jest.Mock;
+  applyBandGoalResetPlan: jest.Mock;
 };
 
 function makeRepo(): MockRepo {
   return {
     findItemsWithContext: jest.fn(),
     applyStateUpdates: jest.fn().mockResolvedValue(undefined),
+    findBandChecklistStepSyncData: jest.fn().mockResolvedValue(null),
+    applyBandMemberStepSyncPlan: jest.fn().mockResolvedValue(undefined),
+    findBandGoalResetData: jest.fn().mockResolvedValue(null),
+    applyBandGoalResetPlan: jest.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -28,6 +36,8 @@ function makeBooking(overrides: Record<string, unknown> = {}) {
     contracts: [],
     musicFormResponse: null,
     musicFormPublished: false,
+    bandMembers: [],
+    bandChairs: [],
     ...overrides,
   };
 }
@@ -617,6 +627,88 @@ describe('ChecklistEvaluatorService', () => {
     });
   });
 
+  // #899 / ADR-0074 §5: DECLINED is a general, terminal step state. Nothing seeds it yet (that's
+  // #900), but the evaluator must already treat a pre-existing DECLINED row correctly: sticky
+  // (never re-opened by its predicate) and non-contributing to its goal's roll-up.
+  describe('DECLINED step state (#899, general — not band-specific)', () => {
+    it('is sticky — a DECLINED step is never re-evaluated by its predicate', async () => {
+      const goal = makeItem({
+        id: 'g-quote',
+        key: 'get_the_quote_accepted',
+        state: 'PENDING',
+        autoCompleteRule: null,
+        steps: [
+          {
+            id: 's1',
+            key: 'send_quote',
+            state: 'DECLINED',
+            completedAt: null,
+            bandMemberId: 'bm-1',
+          },
+        ],
+      });
+      // The rule condition holds — if the step were re-evaluated it would flip to COMPLETE.
+      const booking = makeBooking({
+        communications: [{ status: 'SENT', template: { builtInType: 'quote' } }],
+      });
+      repo.findItemsWithContext.mockResolvedValue({ items: [goal], booking });
+
+      await service.evaluate('b1');
+
+      // No step update for s1 (state unchanged): the goal rolls up to PENDING (no contributing
+      // steps, the same guard as an empty list) and DECLINED is not itself contributing, so no
+      // goal update fires either.
+      expect(repo.applyStateUpdates).not.toHaveBeenCalled();
+    });
+
+    it('rolls a goal up to COMPLETE around a DECLINED sibling step (non-contributing)', async () => {
+      const goal = makeItem({
+        id: 'g-quote',
+        key: 'get_the_quote_accepted',
+        state: 'PENDING',
+        autoCompleteRule: null,
+        steps: [
+          { id: 's1', key: 'send_quote', state: 'DECLINED', completedAt: null, bandMemberId: null },
+          { id: 's2', key: 'quote_accepted', state: 'COMPLETE', completedAt: new Date(), bandMemberId: null },
+        ],
+      });
+      const booking = makeBooking();
+      repo.findItemsWithContext.mockResolvedValue({ items: [goal], booking });
+
+      await service.evaluate('b1');
+
+      // Both steps are already in their sticky terminal states (no step updates), but the goal
+      // itself flips PENDING → COMPLETE: DECLINED is excluded from the completion check, so the
+      // one genuinely-complete sibling is enough — this is the failure mode #899 exists to avoid
+      // (a decline must never leave the goal silently stuck PENDING forever).
+      expect(repo.applyStateUpdates).toHaveBeenCalledWith(
+        [expect.objectContaining({ id: 'g-quote', state: 'COMPLETE' })],
+        [],
+      );
+    });
+
+    it('passes the step its own facts (bandMemberId) — existing single-arg predicates ignore it and behave identically', async () => {
+      const goal = makeItem({
+        id: 'g-quote',
+        key: 'get_the_quote_accepted',
+        state: 'PENDING',
+        autoCompleteRule: null,
+        steps: [
+          { id: 's1', key: 'send_quote', state: 'PENDING', completedAt: null, bandMemberId: 'bm-1' },
+        ],
+      });
+      const booking = makeBooking({
+        communications: [{ status: 'SENT', template: { builtInType: 'quote' } }],
+      });
+      repo.findItemsWithContext.mockResolvedValue({ items: [goal], booking });
+
+      await service.evaluate('b1');
+
+      const [, stepUpdates] = repo.applyStateUpdates.mock.calls[0];
+      expect(stepUpdates).toEqual([expect.objectContaining({ id: 's1', state: 'COMPLETE' })]);
+    });
+  });
+
   describe('full contract-sign integration (#49 / ADR-0057 multi-step)', () => {
     it('completes every step and rolls the contract goal up to COMPLETE when created, sent and signed', async () => {
       const goal = makeItem({
@@ -804,6 +896,289 @@ describe('ChecklistEvaluatorService', () => {
       await service.evaluateForEvent('b1', ['invoices']);
 
       expect(repo.applyStateUpdates).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('band checklist (#900)', () => {
+    it('reloads the goal after roster steps are materialised', async () => {
+      const previousFlag = process.env.FEATURE_BAND_MEMBERS;
+      process.env.FEATURE_BAND_MEMBERS = 'true';
+      try {
+        const booking = makeBooking({
+          bandMembers: [{ id: 'm-dave', status: 'CONFIRMED', isSelf: false }],
+          bandChairs: [{ memberId: 'm-dave', memberStatus: 'CONFIRMED' }],
+        });
+        const staticSteps = [
+          { id: 's-lineup', key: 'choose_a_lineup', state: 'PENDING', completedAt: null, bandMemberId: null },
+          { id: 's-fill', key: 'fill_every_chair', state: 'PENDING', completedAt: null, bandMemberId: null },
+        ];
+        const staticGoal = makeItem({
+          id: 'g-band',
+          key: 'get_the_band_confirmed',
+          autoCompleteRule: null,
+          steps: staticSteps,
+        });
+        const materialisedGoal = makeItem({
+          id: 'g-band',
+          key: 'get_the_band_confirmed',
+          autoCompleteRule: null,
+          steps: [
+            ...staticSteps,
+            { id: 's-invite', key: 'invite_band_member', state: 'PENDING', completedAt: null, bandMemberId: 'm-dave' },
+            { id: 's-confirm', key: 'band_member_confirmed', state: 'PENDING', completedAt: null, bandMemberId: 'm-dave' },
+          ],
+        });
+        repo.findBandChecklistStepSyncData.mockResolvedValue({
+          goals: [{
+            id: 'g-band', key: 'get_the_band_confirmed', userId: 'u1', state: 'PENDING', steps: staticSteps,
+          }],
+          members: [{
+            id: 'm-dave', status: 'CONFIRMED', isSelf: false, contactId: 'c-dave', createdAt: new Date(), contact: { name: 'Dave' },
+          }],
+          chairs: [{ memberId: 'm-dave', memberStatus: 'CONFIRMED' }],
+        });
+        repo.findItemsWithContext
+          .mockResolvedValueOnce({ items: [staticGoal], booking })
+          .mockResolvedValueOnce({ items: [materialisedGoal], booking });
+
+        await service.evaluate('b1');
+
+        expect(repo.findItemsWithContext).toHaveBeenCalledTimes(2);
+        expect(repo.applyBandMemberStepSyncPlan).toHaveBeenCalledWith(
+          'u1',
+          'b1',
+          'g-band',
+          expect.objectContaining({ createSteps: expect.any(Array) }),
+        );
+        expect(repo.applyStateUpdates).toHaveBeenCalledWith(
+          [expect.objectContaining({ id: 'g-band', state: 'COMPLETE' })],
+          expect.arrayContaining([
+            expect.objectContaining({ id: 's-invite', state: 'COMPLETE' }),
+            expect.objectContaining({ id: 's-confirm', state: 'COMPLETE' }),
+          ]),
+        );
+      } finally {
+        if (previousFlag === undefined) delete process.env.FEATURE_BAND_MEMBERS;
+        else process.env.FEATURE_BAND_MEMBERS = previousFlag;
+      }
+    });
+
+    it('completes the band goal after lineup, filled chairs, invites, and all confirmations', async () => {
+      const previousFlag = process.env.FEATURE_BAND_MEMBERS;
+      process.env.FEATURE_BAND_MEMBERS = 'true';
+      try {
+        const goal = makeItem({
+          id: 'g-band',
+          key: 'get_the_band_confirmed',
+          autoCompleteRule: null,
+          steps: [
+            { id: 's-lineup', key: 'choose_a_lineup', state: 'PENDING', completedAt: null, bandMemberId: null },
+            { id: 's-fill', key: 'fill_every_chair', state: 'PENDING', completedAt: null, bandMemberId: null },
+            { id: 's-invite-dave', key: 'invite_band_member', state: 'PENDING', completedAt: null, bandMemberId: 'm-dave' },
+            { id: 's-confirm-dave', key: 'band_member_confirmed', state: 'PENDING', completedAt: null, bandMemberId: 'm-dave' },
+            { id: 's-invite-sam', key: 'invite_band_member', state: 'PENDING', completedAt: null, bandMemberId: 'm-sam' },
+            { id: 's-confirm-sam', key: 'band_member_confirmed', state: 'PENDING', completedAt: null, bandMemberId: 'm-sam' },
+          ],
+        });
+        repo.findItemsWithContext.mockResolvedValue({
+          items: [goal],
+          booking: makeBooking({
+            bandMembers: [
+              { id: 'm-dave', status: 'CONFIRMED', isSelf: false },
+              { id: 'm-sam', status: 'CONFIRMED', isSelf: false },
+            ],
+            bandChairs: [
+              { memberId: 'm-dave', memberStatus: 'CONFIRMED' },
+              { memberId: 'm-sam', memberStatus: 'CONFIRMED' },
+            ],
+          }),
+        });
+
+        await service.evaluate('b1');
+
+        expect(repo.applyStateUpdates).toHaveBeenCalledWith(
+          [expect.objectContaining({ id: 'g-band', state: 'COMPLETE' })],
+          [
+            expect.objectContaining({ id: 's-lineup', state: 'COMPLETE' }),
+            expect.objectContaining({ id: 's-fill', state: 'COMPLETE' }),
+            expect.objectContaining({ id: 's-invite-dave', state: 'COMPLETE' }),
+            expect.objectContaining({ id: 's-confirm-dave', state: 'COMPLETE' }),
+            expect.objectContaining({ id: 's-invite-sam', state: 'COMPLETE' }),
+            expect.objectContaining({ id: 's-confirm-sam', state: 'COMPLETE' }),
+          ],
+        );
+      } finally {
+        if (previousFlag === undefined) delete process.env.FEATURE_BAND_MEMBERS;
+        else process.env.FEATURE_BAND_MEMBERS = previousFlag;
+      }
+    });
+
+    it('materialises person-scoped rules, keeps declines, and leaves the vacancy precondition pending', async () => {
+      const previousFlag = process.env.FEATURE_BAND_MEMBERS;
+      process.env.FEATURE_BAND_MEMBERS = 'true';
+      try {
+        const goal = makeItem({
+          id: 'g-band',
+          key: 'get_the_band_confirmed',
+          autoCompleteRule: null,
+          steps: [
+            { id: 's-lineup', key: 'choose_a_lineup', state: 'PENDING', completedAt: null, bandMemberId: null },
+            { id: 's-fill', key: 'fill_every_chair', state: 'PENDING', completedAt: null, bandMemberId: null },
+            { id: 's-invite-dave', key: 'invite_band_member', state: 'PENDING', completedAt: null, bandMemberId: 'm-dave' },
+            { id: 's-confirm-dave', key: 'band_member_confirmed', state: 'PENDING', completedAt: null, bandMemberId: 'm-dave' },
+            { id: 's-invite-sam', key: 'invite_band_member', state: 'PENDING', completedAt: null, bandMemberId: 'm-sam' },
+            { id: 's-confirm-sam', key: 'band_member_confirmed', state: 'PENDING', completedAt: null, bandMemberId: 'm-sam' },
+          ],
+        });
+        repo.findItemsWithContext.mockResolvedValue({
+          items: [goal],
+          booking: makeBooking({
+            bandMembers: [
+              { id: 'm-dave', status: 'DECLINED', isSelf: false },
+              { id: 'm-sam', status: 'INVITED', isSelf: false },
+            ],
+            bandChairs: [
+              { memberId: null, memberStatus: null },
+              { memberId: 'm-sam', memberStatus: 'INVITED' },
+            ],
+          }),
+        });
+
+        await service.evaluate('b1');
+
+        expect(repo.findBandChecklistStepSyncData).toHaveBeenCalledWith('u1', 'b1');
+        expect(repo.applyStateUpdates).toHaveBeenCalledWith(
+          [],
+          [
+            expect.objectContaining({ id: 's-lineup', state: 'COMPLETE' }),
+            expect.objectContaining({ id: 's-invite-dave', state: 'COMPLETE' }),
+            expect.objectContaining({ id: 's-confirm-dave', state: 'DECLINED' }),
+            expect.objectContaining({ id: 's-invite-sam', state: 'COMPLETE' }),
+          ],
+        );
+        // A decline stays honest history but the now-vacant chair keeps the goal open.
+        expect(repo.applyStateUpdates.mock.calls[0][0]).not.toContainEqual(
+          expect.objectContaining({ id: 'g-band', state: 'COMPLETE' }),
+        );
+      } finally {
+        if (previousFlag === undefined) delete process.env.FEATURE_BAND_MEMBERS;
+        else process.env.FEATURE_BAND_MEMBERS = previousFlag;
+      }
+    });
+
+    describe('get_the_band_briefed (#901)', () => {
+      const dave = {
+        id: 'm-dave', status: 'CONFIRMED', isSelf: false, contactId: 'c-dave', createdAt: new Date('2026-01-01'), contact: { name: 'Dave' },
+      };
+      const sam = {
+        id: 'm-sam', status: 'CONFIRMED', isSelf: false, contactId: 'c-sam', createdAt: new Date('2026-01-02'), contact: { name: 'Sam' },
+      };
+      const briefStep = (id: string, bandMemberId: string) =>
+        ({ id, key: 'brief_band_member', state: 'PENDING', completedAt: null, bandMemberId });
+      const finalDetails = (contactId: string, builtInType = 'band_final_details') =>
+        ({ status: 'SENT', contactId, template: { builtInType } });
+      let previousFlag: string | undefined;
+
+      beforeEach(() => {
+        previousFlag = process.env.FEATURE_BAND_MEMBERS;
+        process.env.FEATURE_BAND_MEMBERS = 'true';
+      });
+      afterEach(() => {
+        if (previousFlag === undefined) delete process.env.FEATURE_BAND_MEMBERS;
+        else process.env.FEATURE_BAND_MEMBERS = previousFlag;
+      });
+
+      it('materialises Brief rows even when the confirmed goal was never seeded (READY-start booking)', async () => {
+        const emptyGoal = makeItem({ id: 'g-brief', key: 'get_the_band_briefed', autoCompleteRule: null, steps: [] });
+        const materialised = makeItem({
+          id: 'g-brief', key: 'get_the_band_briefed', autoCompleteRule: null,
+          steps: [briefStep('s-brief-dave', 'm-dave')],
+        });
+        repo.findBandChecklistStepSyncData.mockResolvedValue({
+          goals: [{ id: 'g-brief', key: 'get_the_band_briefed', userId: 'u1', state: 'PENDING', steps: [] }],
+          members: [dave],
+          chairs: [],
+        });
+        const booking = makeBooking({ status: 'READY', communications: [finalDetails('c-dave')] });
+        repo.findItemsWithContext
+          .mockResolvedValueOnce({ items: [emptyGoal], booking })
+          .mockResolvedValueOnce({ items: [materialised], booking });
+
+        await service.evaluate('b1');
+
+        expect(repo.applyBandMemberStepSyncPlan).toHaveBeenCalledWith('u1', 'b1', 'g-brief', expect.objectContaining({
+          createSteps: [expect.objectContaining({ memberId: 'm-dave', label: 'Brief Dave', order: 1 })],
+        }));
+        expect(repo.applyStateUpdates).toHaveBeenCalledWith(
+          [expect.objectContaining({ id: 'g-brief', state: 'COMPLETE' })],
+          [expect.objectContaining({ id: 's-brief-dave', state: 'COMPLETE' })],
+        );
+      });
+
+      it('keeps the COMPLETE-stage goal open while any member is unbriefed', async () => {
+        const goal = makeItem({
+          id: 'g-brief', key: 'get_the_band_briefed', autoCompleteRule: null,
+          steps: [briefStep('s-brief-dave', 'm-dave'), briefStep('s-brief-sam', 'm-sam')],
+        });
+        repo.findBandChecklistStepSyncData.mockResolvedValue({
+          goals: [{
+            id: 'g-brief', key: 'get_the_band_briefed', userId: 'u1', state: 'PENDING',
+            steps: [
+              { id: 's-brief-dave', key: 'brief_band_member', bandMemberId: 'm-dave', label: 'Brief Dave', order: 1, state: 'PENDING' },
+              { id: 's-brief-sam', key: 'brief_band_member', bandMemberId: 'm-sam', label: 'Brief Sam', order: 2, state: 'PENDING' },
+            ],
+          }],
+          members: [dave, sam],
+          chairs: [],
+        });
+        // Dave's details went by copy-paste (Mark as sent logs the message template); Sam has only had the call sheet.
+        repo.findItemsWithContext.mockResolvedValue({
+          items: [goal],
+          booking: makeBooking({
+            status: 'READY',
+            communications: [finalDetails('c-dave', 'band_final_details_message'), finalDetails('c-sam', 'band_call_sheet')],
+          }),
+        });
+
+        await service.evaluate('b1');
+
+        expect(repo.applyBandMemberStepSyncPlan).not.toHaveBeenCalled();
+        expect(repo.applyStateUpdates).toHaveBeenCalledWith(
+          [],
+          [expect.objectContaining({ id: 's-brief-dave', state: 'COMPLETE' })],
+        );
+      });
+
+      it('leaves the briefed goal inert while the feature flag is off', async () => {
+        delete process.env.FEATURE_BAND_MEMBERS;
+        repo.findItemsWithContext.mockResolvedValue({
+          items: [makeItem({ id: 'g-brief', key: 'get_the_band_briefed', autoCompleteRule: null, steps: [] })],
+          booking: makeBooking({ communications: [finalDetails('c-dave')] }),
+        });
+
+        await service.evaluate('b1');
+
+        expect(repo.findBandChecklistStepSyncData).not.toHaveBeenCalled();
+        expect(repo.applyStateUpdates).not.toHaveBeenCalled();
+      });
+    });
+
+    it('does not evaluate or change an existing band goal while the feature flag is off', async () => {
+      const previousFlag = process.env.FEATURE_BAND_MEMBERS;
+      delete process.env.FEATURE_BAND_MEMBERS;
+      try {
+        repo.findItemsWithContext.mockResolvedValue({
+          items: [makeItem({ id: 'g-band', key: 'get_the_band_confirmed', autoCompleteRule: null, steps: [] })],
+          booking: makeBooking({ bandChairs: [{ memberId: 'm1', memberStatus: 'CONFIRMED' }] }),
+        });
+
+        await service.evaluate('b1');
+
+        expect(repo.findBandChecklistStepSyncData).not.toHaveBeenCalled();
+        expect(repo.applyStateUpdates).not.toHaveBeenCalled();
+      } finally {
+        if (previousFlag !== undefined) process.env.FEATURE_BAND_MEMBERS = previousFlag;
+      }
     });
   });
 });

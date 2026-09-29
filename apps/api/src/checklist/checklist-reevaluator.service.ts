@@ -34,4 +34,14 @@ export class ChecklistReevaluator {
       );
     }
   }
+
+  /**
+   * Roster facts can regress sticky checklist steps, so reset the band goal before
+   * the shared evaluator re-derives it. `memberId` re-opens a completed confirmation
+   * row on status transitions; a terminal DECLINED row remains untouched.
+   */
+  async onBandRosterChanged(userId: string, bookingId: string, memberId?: string): Promise<void> {
+    await this.evaluator.resetBandGoalForRosterChange(userId, bookingId, memberId);
+    await this.onBookingChanged(bookingId);
+  }
 }

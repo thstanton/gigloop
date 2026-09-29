@@ -3,6 +3,7 @@ import { BookingContext } from './checklist-rules';
 
 function makeCtx(overrides: Partial<BookingContext> = {}): BookingContext {
   return {
+    userId: 'u1',
     status: 'ENQUIRY',
     venueId: null,
     customerId: null,
@@ -16,6 +17,8 @@ function makeCtx(overrides: Partial<BookingContext> = {}): BookingContext {
     contracts: [],
     musicFormResponse: null,
     musicFormPublished: false,
+    bandMembers: [],
+    bandChairs: [],
     ...overrides,
   };
 }
@@ -53,6 +56,7 @@ describe('STEP_PREDICATES catalog', () => {
     expect(STEP_PREDICATES.issue_deposit_invoice.completeMode).toBe('ACTION');
     expect(STEP_PREDICATES.add_venue.completeMode).toBe('ACTION');
     expect(STEP_PREDICATES.set_up_and_publish.completeMode).toBe('ACTION'); // #533/#630: musician publishes now
+    expect(STEP_PREDICATES.band_member_confirmed.completeMode).toBe('AWAITED');
   });
 
   it('registers set_up_and_publish as a MILESTONE reading musicFormPublished (#533/#630)', () => {
@@ -70,6 +74,11 @@ describe('STEP_PREDICATES catalog', () => {
     expect(STEP_PREDICATES.song_requests.inputs).toEqual(['musicFormResponse']);
     expect(STEP_PREDICATES.add_venue.inputs).toEqual(['venueId']);
     expect(STEP_PREDICATES.build_itinerary.inputs).toEqual(['setsCount', 'logistics']);
+    expect(STEP_PREDICATES.choose_a_lineup.inputs).toEqual(['bandRoster']);
+    expect(STEP_PREDICATES.fill_every_chair.inputs).toEqual(['bandRoster']);
+    expect(STEP_PREDICATES.invite_band_member.inputs).toEqual(['bandRoster']);
+    expect(STEP_PREDICATES.band_member_confirmed.inputs).toEqual(['bandRoster']);
+    expect(STEP_PREDICATES.brief_band_member.inputs).toEqual(['communications', 'bandRoster']);
   });
 });
 
@@ -81,7 +90,7 @@ describe('predicates fire on their declared input and not otherwise', () => {
     // Its declared input does:
     expect(
       STEP_PREDICATES.send_quote.predicate(
-        makeCtx({ communications: [{ status: 'SENT', template: { builtInType: 'quote' } }] }),
+        makeCtx({ communications: [{ status: 'SENT', contactId: null, template: { builtInType: 'quote' } }] }),
       ),
     ).toBe('COMPLETE');
   });
@@ -89,7 +98,7 @@ describe('predicates fire on their declared input and not otherwise', () => {
   it('send_quote fails when its last matching communication bounced', () => {
     expect(
       STEP_PREDICATES.send_quote.predicate(
-        makeCtx({ communications: [{ status: 'FAILED', template: { builtInType: 'quote' } }] }),
+        makeCtx({ communications: [{ status: 'FAILED', contactId: null, template: { builtInType: 'quote' } }] }),
       ),
     ).toBe('FAILED');
   });
@@ -99,6 +108,74 @@ describe('predicates fire on their declared input and not otherwise', () => {
     // #617: a saved DRAFT advances the create step.
     expect(STEP_PREDICATES.create_deposit_invoice.predicate(makeCtx({ invoices: [{ isDeposit: true, status: 'DRAFT' }] }))).toBe('COMPLETE');
     expect(STEP_PREDICATES.create_deposit_invoice.predicate(makeCtx({ invoices: [{ isDeposit: true, status: 'ISSUED' }] }))).toBe('COMPLETE');
+  });
+
+  it('selects the lineup on chairs and completes fill only when every chair is filled without a decline', () => {
+    expect(STEP_PREDICATES.choose_a_lineup.predicate(makeCtx())).toBe('PENDING');
+    expect(STEP_PREDICATES.choose_a_lineup.predicate(makeCtx({ bandChairs: [{ memberId: null, memberStatus: null }] }))).toBe('COMPLETE');
+    expect(STEP_PREDICATES.fill_every_chair.predicate(makeCtx({ bandChairs: [] }))).toBe('PENDING');
+    expect(STEP_PREDICATES.fill_every_chair.predicate(makeCtx({ bandChairs: [{ memberId: null, memberStatus: null }] }))).toBe('PENDING');
+    expect(STEP_PREDICATES.fill_every_chair.predicate(makeCtx({ bandChairs: [{ memberId: 'm1', memberStatus: 'INVITED' }] }))).toBe('COMPLETE');
+    expect(STEP_PREDICATES.fill_every_chair.predicate(makeCtx({ bandChairs: [{ memberId: 'm1', memberStatus: 'DECLINED' }] }))).toBe('PENDING');
+  });
+
+  it('uses the step bandMemberId for status predicates, not a booking-wide aggregate', () => {
+    const ctx = makeCtx({
+      bandMembers: [
+        { id: 'm-confirmed', status: 'CONFIRMED', isSelf: false, contactId: 'c-x' },
+        { id: 'm-added', status: 'ADDED', isSelf: false, contactId: 'c-x' },
+        { id: 'm-declined', status: 'DECLINED', isSelf: false, contactId: 'c-x' },
+      ],
+    });
+    expect(STEP_PREDICATES.invite_band_member.predicate(ctx, { bandMemberId: 'm-added' })).toBe('PENDING');
+    expect(STEP_PREDICATES.invite_band_member.predicate(ctx, { bandMemberId: 'm-confirmed' })).toBe('COMPLETE');
+    expect(STEP_PREDICATES.band_member_confirmed.predicate(ctx, { bandMemberId: 'm-confirmed' })).toBe('COMPLETE');
+    expect(STEP_PREDICATES.band_member_confirmed.predicate(ctx, { bandMemberId: 'm-added' })).toBe('PENDING');
+    expect(STEP_PREDICATES.band_member_confirmed.predicate(ctx, { bandMemberId: 'm-declined' })).toBe('DECLINED');
+    expect(STEP_PREDICATES.band_member_confirmed.predicate(ctx, { bandMemberId: null })).toBe('PENDING');
+  });
+
+  describe('brief_band_member (#901)', () => {
+    const members = [
+      { id: 'm-dave', status: 'CONFIRMED', isSelf: false, contactId: 'c-dave' },
+      { id: 'm-sam', status: 'CONFIRMED', isSelf: false, contactId: 'c-sam' },
+    ];
+    const comm = (status: string, contactId: string, builtInType: string) =>
+      ({ status, contactId, template: { builtInType } });
+    const brief = (communications: BookingContext['communications'], bandMemberId: string | null = 'm-dave') =>
+      STEP_PREDICATES.brief_band_member.predicate(makeCtx({ bandMembers: members, communications }), { bandMemberId });
+
+    it('completes when the final-details email reached this member', () => {
+      expect(brief([comm('SENT', 'c-dave', 'band_final_details')])).toBe('COMPLETE');
+    });
+
+    it('completes when the final-details message was marked as sent (copy-paste path)', () => {
+      expect(brief([comm('SENT', 'c-dave', 'band_final_details_message')])).toBe('COMPLETE');
+    });
+
+    it('is scoped to this member — another dep being briefed does not count', () => {
+      expect(brief([comm('SENT', 'c-sam', 'band_final_details')])).toBe('PENDING');
+    });
+
+    it('is not satisfied by the call sheet or the invite', () => {
+      expect(brief([
+        comm('SENT', 'c-dave', 'band_call_sheet'),
+        comm('SENT', 'c-dave', 'band_call_sheet_message'),
+        comm('SENT', 'c-dave', 'band_invite'),
+      ])).toBe('PENDING');
+    });
+
+    it('fails when the latest final-details send to this member bounced', () => {
+      expect(brief([comm('FAILED', 'c-dave', 'band_final_details')])).toBe('FAILED');
+      expect(brief([
+        comm('FAILED', 'c-dave', 'band_final_details'),
+        comm('SENT', 'c-dave', 'band_final_details_message'),
+      ])).toBe('COMPLETE');
+    });
+
+    it('stays pending for a row with no roster member', () => {
+      expect(brief([comm('SENT', 'c-dave', 'band_final_details')], null)).toBe('PENDING');
+    });
   });
 
   it('issue_deposit_invoice excludes a DRAFT (the #585 fix) but fires on a non-draft deposit', () => {
@@ -195,5 +272,28 @@ describe('affectedKeys (inverted index)', () => {
 
   it('returns an empty set for an input nothing observes once removed', () => {
     expect(affectedKeys([]).size).toBe(0);
+  });
+
+  it('maps bandRoster to the band preconditions and per-person predicates (#900, #901)', () => {
+    expect(affectedKeys(['bandRoster'])).toEqual(new Set([
+      'choose_a_lineup',
+      'fill_every_chair',
+      'invite_band_member',
+      'band_member_confirmed',
+      'brief_band_member',
+    ]));
+  });
+});
+
+// #899 / ADR-0074 §5: PredicateEntry.predicate widens to (ctx, step) — every current entry is
+// one-per-goal and ignores the second argument, which is optional so every existing call site
+// above (ctx only) keeps compiling and behaving identically. This is the "single call site" the
+// prefactor promises: only checklist-evaluator.service.ts's nextStepState passes step facts.
+describe('predicate accepts optional step facts (#899)', () => {
+  it('ignores a second argument and behaves identically whether or not it is passed', () => {
+    const ctx = makeCtx({ communications: [{ status: 'SENT', contactId: null, template: { builtInType: 'quote' } }] });
+    expect(STEP_PREDICATES.send_quote.predicate(ctx)).toBe('COMPLETE');
+    expect(STEP_PREDICATES.send_quote.predicate(ctx, { bandMemberId: 'bm-1' })).toBe('COMPLETE');
+    expect(STEP_PREDICATES.send_quote.predicate(ctx, { bandMemberId: null })).toBe('COMPLETE');
   });
 });

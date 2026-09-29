@@ -5,7 +5,7 @@ import {
   LayoutDashboard, CalendarDays, FileText, Settings, Package,
   CalendarPlus, UserPlus,
 } from 'lucide-react';
-import type { BookingBandMemberStatus, BookingStatus, EventType, InvoiceStatus, PortalTheme, PortalVisibilityReason, ReminderConcern, SongGenre } from '@/types/api';
+import type { BookingBandMemberStatus, BookingStatus, ChecklistStepState, EventType, InvoiceStatus, PortalTheme, PortalVisibilityReason, ReminderConcern, SongGenre } from '@/types/api';
 import trumpeterFigure from '@/assets/musicians/trumpeter.png';
 import violinistFigure from '@/assets/musicians/violinist.png';
 
@@ -402,6 +402,25 @@ export interface BandMemberStatusTokens {
 export const BAND_MEMBER_STATUS_TOKENS: Record<BookingBandMemberStatus, BandMemberStatusTokens> = Object.fromEntries(
   BAND_MEMBER_STATUSES.map(({ value, tint, text, borderL }) => [value, { tint, text, borderL }]),
 ) as Record<BookingBandMemberStatus, BandMemberStatusTokens>;
+
+// ─── Checklist step state (ADR-0057, amended by ADR-0074 §5) ────────────────────────────────
+// PENDING -> COMPLETE | FAILED | DECLINED, declared once (CLAUDE.md: one declaration per
+// vocabulary). DECLINED is general — any step can reach it, never gated to band steps — and is
+// terminal + non-contributing: excluded from GoalRow's milestone progress exactly like a step
+// that never existed, and it never renders red (only FAILED means "unexpected"; a decline is an
+// ordinary, expected outcome, so it shares COMPLETE's muted tone rather than FAILED's).
+const CHECKLIST_STEP_STATES = [
+  { value: 'PENDING',  label: 'Pending',  textClass: 'text-border' },
+  { value: 'COMPLETE', label: 'Complete', textClass: 'text-muted'  },
+  { value: 'FAILED',   label: 'Failed',   textClass: 'text-status-cancelled' },
+  { value: 'DECLINED', label: 'Declined', textClass: 'text-muted'  },
+] as const satisfies readonly { value: ChecklistStepState; label: string; textClass: string }[];
+
+export type _ChecklistStepStateCoverage = AssertNever<
+  Exclude<ChecklistStepState, (typeof CHECKLIST_STEP_STATES)[number]['value']>
+>;
+
+export const CHECKLIST_STEP_STATE_TEXT_CLASS = column(CHECKLIST_STEP_STATES, 'textClass');
 
 // ─── Logistics fields ────────────────────────────────────────────────────────
 // The system fields inside a booking's free-form `logistics` blob, declared once. The

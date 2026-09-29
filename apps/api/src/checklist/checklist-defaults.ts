@@ -1,3 +1,5 @@
+import { isEnabled } from '../common/featureFlags';
+
 export interface DueDateRule {
   basis: 'bookingDate' | 'bookingCreation';
   offsetDays: number;
@@ -22,6 +24,14 @@ export interface ChecklistDefaultStep {
   // Carried for FOLLOWUP-step anchoring (a later increment); v1 steps have no
   // materialised dueDate column — the surfaced deadline lives on the goal.
   dueDateRule?: DueDateRule | null;
+  // A template-only step repeated for each eligible band member; the repository
+  // materialises its rows with a member id instead of seeding one null-id row.
+  perBandMember?: boolean;
+  // Per-member row label, `{name}` substituted with the member's name (e.g. `Brief {name}`).
+  memberLabel?: string;
+  // Whether a member who declines keeps this row as honest history (the confirmation ratchet,
+  // ADR-0074 §5) or loses it (a briefing for someone who is not coming is simply dropped).
+  keepsDeclinedHistory?: boolean;
 }
 
 export interface ChecklistDefaultItem {
@@ -41,6 +51,20 @@ export interface ChecklistDefaultItem {
   // (its state rolls up from its steps). An atomic goal has no `steps` and carries its
   // own rule. Present on the contract goal (v1); deposit/balance/song-requests follow.
   steps?: ChecklistDefaultStep[];
+}
+
+export const BAND_CHECKLIST_GOAL_KEY = 'get_the_band_confirmed';
+export const BAND_BRIEFED_GOAL_KEY = 'get_the_band_briefed';
+// Every goal whose per-member steps are materialised from the roster (ADR-0074 §5).
+export const BAND_GOAL_KEYS: readonly string[] = [BAND_CHECKLIST_GOAL_KEY, BAND_BRIEFED_GOAL_KEY];
+export const BAND_CHECKLIST_FEATURE_FLAG = 'FEATURE_BAND_MEMBERS';
+
+export function isBandGoalKey(key: string | null | undefined): boolean {
+  return key != null && BAND_GOAL_KEYS.includes(key);
+}
+
+export function isChecklistDefaultAvailable(key: string | null | undefined): boolean {
+  return !isBandGoalKey(key) || isEnabled(BAND_CHECKLIST_FEATURE_FLAG);
 }
 
 export const CHECKLIST_DEFAULTS: ChecklistDefaultItem[] = [
@@ -412,6 +436,95 @@ export const CHECKLIST_DEFAULTS: ChecklistDefaultItem[] = [
     ],
   },
   {
+    // ADR-0057 / ADR-0074 §5 / #900: the band readiness outcome. The two
+    // PRECONDITION steps lead; the per-member invite/confirmation templates are
+    // materialised by ChecklistRepository for the booking's active roster.
+    key: BAND_CHECKLIST_GOAL_KEY,
+    label: 'Get the band confirmed',
+    completedBy: 'USER',
+    dependsOn: [],
+    autoCompleteRule: null,
+    requiredForStatus: 'READY',
+    dueDateRule: { basis: 'bookingDate', offsetDays: -60 },
+    steps: [
+      {
+        key: 'choose_a_lineup',
+        label: 'Choose a lineup',
+        kind: 'PRECONDITION',
+        completeMode: 'ACTION',
+        completedBy: 'USER',
+        autoCompleteRule: { type: 'bandHasChairs' },
+      },
+      {
+        key: 'fill_every_chair',
+        label: 'Fill every chair',
+        kind: 'PRECONDITION',
+        completeMode: 'ACTION',
+        completedBy: 'USER',
+        autoCompleteRule: { type: 'bandChairsFilled' },
+      },
+      {
+        key: 'invite_band_member',
+        label: 'Invite band member',
+        kind: 'MILESTONE',
+        completeMode: 'ACTION',
+        completedBy: 'USER',
+        autoCompleteRule: {
+          type: 'bandMemberStatus',
+          completeWhen: ['INVITED', 'CONFIRMED', 'DECLINED'],
+        },
+        perBandMember: true,
+        memberLabel: 'Invite {name}',
+        keepsDeclinedHistory: true,
+      },
+      {
+        key: 'band_member_confirmed',
+        label: 'Band member confirms',
+        kind: 'MILESTONE',
+        completeMode: 'AWAITED',
+        completedBy: 'BAND_MEMBER',
+        autoCompleteRule: {
+          type: 'bandMemberStatus',
+          completeWhen: ['CONFIRMED'],
+          declinedWhen: ['DECLINED'],
+        },
+        perBandMember: true,
+        memberLabel: '{name} confirms',
+        keepsDeclinedHistory: true,
+      },
+    ],
+  },
+  {
+    // ADR-0074 §5 / #901: "does everyone know where to be?" — asked two days out, so it is a
+    // COMPLETE-stage goal and renders in a different section from the READY-stage confirmation.
+    // One `Brief {name}` step per eligible member, satisfied by the final-details comm reaching
+    // that member's contact by email or by `Mark as sent`. The call sheet deliberately has no
+    // step: it is a push, not something to chase (ADR-0073).
+    key: BAND_BRIEFED_GOAL_KEY,
+    label: 'Get the band briefed',
+    completedBy: 'USER',
+    dependsOn: [],
+    autoCompleteRule: null,
+    requiredForStatus: 'COMPLETE',
+    dueDateRule: { basis: 'bookingDate', offsetDays: -2 },
+    steps: [
+      {
+        key: 'brief_band_member',
+        label: 'Brief band member',
+        kind: 'MILESTONE',
+        completeMode: 'ACTION',
+        completedBy: 'USER',
+        autoCompleteRule: {
+          type: 'bandMemberCommunicationSent',
+          templateTypes: ['band_final_details', 'band_final_details_message'],
+        },
+        perBandMember: true,
+        memberLabel: 'Brief {name}',
+        keepsDeclinedHistory: false,
+      },
+    ],
+  },
+  {
     key: 'play_the_gig',
     label: 'Play the gig',
     completedBy: 'USER',
@@ -552,6 +665,37 @@ export function sparsifySystemOverrides(
   return sparse;
 }
 
+/** Disable both band goals in the musician's existing sparse defaults, preserving all other
+ * checklist preferences and custom items. The same helper backs every "no band" entry point. */
+export function disableBandChecklistGoals(
+  preferences: Record<string, unknown> | null | undefined,
+): ChecklistDefaultsOverrides {
+  const stored = (preferences as { checklistDefaults?: unknown } | null | undefined)?.checklistDefaults;
+  const current = parseStoredOverrides(stored) ?? { systemItemOverrides: [], customItems: [] };
+  const overridesByKey = new Map(current.systemItemOverrides.map((override) => [override.key, override]));
+
+  for (const key of BAND_GOAL_KEYS) {
+    overridesByKey.set(key, { ...overridesByKey.get(key), key, enabled: false });
+  }
+
+  return {
+    systemItemOverrides: sparsifySystemOverrides([...overridesByKey.values()]),
+    customItems: current.customItems,
+  };
+}
+
+/** Apply the shared "no band" answer: persist both goal overrides and clear an earlier skip tip. */
+export function applyBandSoloOptOut(
+  preferences: Record<string, unknown> | null | undefined,
+): Record<string, unknown> {
+  const current = preferences ?? {};
+  return {
+    ...current,
+    checklistDefaults: disableBandChecklistGoals(current),
+    onboardingSkippedBandSetup: false,
+  };
+}
+
 // Slot custom items into their requiredForStatus stage (ADR-0060 §5): within each stage the
 // catalogue goals come first (catalogue order), then that stage's custom items (stored order).
 // `order` is derived here, never stored.
@@ -588,10 +732,11 @@ export function getChecklistDefaults(
   const stored = (preferences as { checklistDefaults?: unknown } | null | undefined)
     ?.checklistDefaults;
   const overrides = parseStoredOverrides(stored);
-  if (!overrides) return CHECKLIST_DEFAULTS;
+  const availableDefaults = CHECKLIST_DEFAULTS.filter((item) => isChecklistDefaultAvailable(item.key));
+  if (!overrides) return availableDefaults;
 
   const overrideMap = new Map(overrides.systemItemOverrides.map((o) => [o.key, o]));
-  const systemItems = CHECKLIST_DEFAULTS.map((item) => {
+  const systemItems = availableDefaults.map((item) => {
     const ov = overrideMap.get(item.key);
     if (!ov) return item;
     const merged: ChecklistDefaultItem = { ...item };

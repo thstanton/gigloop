@@ -31,10 +31,18 @@ export type AutoCompleteRule =
   // prerequisite for any emailing goal. `bookingField fee notNull` covers the other precondition
   // (the booking has a fee), reusing the existing rule.
   | { type: 'customerEmail' }
+  | { type: 'bandHasChairs' }
+  | { type: 'bandChairsFilled' }
+  | { type: 'bandMemberStatus'; completeWhen: string[]; declinedWhen?: string[] }
+  // #901: a comm of one of these built-in types reached *this row's member* — matched on the
+  // member's contact, so emailing one dep never briefs another. A `Mark as sent` log is a SENT
+  // Communication too, so the copy-paste path completes it the same way.
+  | { type: 'bandMemberCommunicationSent'; templateTypes: string[] }
   | { type: 'completeness'; concern: CompletenessConcern };
 
 /** The booking facts a rule reads. Mirrors the repository's context projection. */
 export interface BookingContext {
+  userId: string;
   status: string;
   venueId: string | null;
   customerId: string | null;
@@ -46,16 +54,23 @@ export interface BookingContext {
   fee: string | null;
   setsCount: number;
   logistics: unknown;
-  communications: Array<{ status: string; template: { builtInType: string | null } | null }>;
+  communications: Array<{
+    status: string;
+    contactId: string | null;
+    template: { builtInType: string | null } | null;
+  }>;
   invoices: Array<{ isDeposit: boolean; status: string }>;
   contracts: Array<{ status: string }>;
   musicFormResponse: { id: string } | null;
   // #533 / #630: whether the booking's music form is published (config exists AND publishedAt set).
   musicFormPublished: boolean;
+  // The active roster and its chairs are read only for the gated band checklist predicates.
+  bandMembers?: Array<{ id: string; status: string; isSelf: boolean; contactId: string }>;
+  bandChairs?: Array<{ memberId: string | null; memberStatus: string | null }>;
 }
 
 /** The terminal/non-terminal outcome a single rule (or step) evaluates to. */
-export type RuleState = 'PENDING' | 'COMPLETE' | 'FAILED';
+export type RuleState = 'PENDING' | 'COMPLETE' | 'FAILED' | 'DECLINED';
 
 /**
  * The booking-context fields a rule observes. A business event that mutates one
@@ -74,7 +89,12 @@ export type InputKey =
   | 'customerEmail'
   | 'fee'
   | 'setsCount'
-  | 'logistics';
+  | 'logistics'
+  // #899: a booking's band roster changed (a member added/removed, a chair filled/vacated,
+  // an answer changed). No predicate declares this input yet — it is reserved so a future
+  // per-person predicate (#900) can target the inverted index precisely, the same way every
+  // other input already does.
+  | 'bandRoster';
 
 // `bookingField` predicates, keyed by field — a lookup keeps evaluateRule's switch flat. Each maps
 // a booking-context field to "is it set?": `activeContract` reads the contracts relation, `fee`
@@ -108,6 +128,17 @@ export function evaluateRule(rule: AutoCompleteRule, ctx: BookingContext): boole
       return ctx.musicFormResponse !== null;
     case 'musicFormPublished':
       return ctx.musicFormPublished;
+    case 'bandHasChairs':
+      return (ctx.bandChairs ?? []).length > 0;
+    case 'bandChairsFilled': {
+      const chairs = ctx.bandChairs ?? [];
+      return chairs.length > 0 && chairs.every(
+        (chair) => chair.memberId !== null && chair.memberStatus !== 'DECLINED',
+      );
+    }
+    case 'bandMemberStatus':
+    case 'bandMemberCommunicationSent':
+      return false;
     case 'contractSigned':
       return ctx.contracts.some((c) => c.status === 'SIGNED');
     case 'customerEmail':
@@ -136,10 +167,40 @@ export function isCommFailed(rule: AutoCompleteRule, ctx: BookingContext): boole
  * matching send bounced, else PENDING. Stickiness (never leaving COMPLETE/SKIPPED)
  * is the caller's concern — this is a pure function of the rule and the facts.
  */
-export function evaluateRuleState(rule: AutoCompleteRule, ctx: BookingContext): RuleState {
+export function evaluateRuleState(
+  rule: AutoCompleteRule,
+  ctx: BookingContext,
+  bandMemberId?: string | null,
+): RuleState {
+  if (rule.type === 'bandMemberStatus') {
+    const status = ctx.bandMembers?.find((member) => member.id === bandMemberId)?.status;
+    if (!status) return 'PENDING';
+    if (rule.declinedWhen?.includes(status)) return 'DECLINED';
+    return rule.completeWhen.includes(status) ? 'COMPLETE' : 'PENDING';
+  }
+  if (rule.type === 'bandMemberCommunicationSent') {
+    return bandMemberCommunicationState(rule.templateTypes, ctx, bandMemberId);
+  }
   if (evaluateRule(rule, ctx)) return 'COMPLETE';
   if (isCommFailed(rule, ctx)) return 'FAILED';
   return 'PENDING';
+}
+
+/** Per-row comm outcome: COMPLETE once any matching comm to the member's contact is SENT,
+ * FAILED when the latest such send bounced, else PENDING. */
+function bandMemberCommunicationState(
+  templateTypes: string[],
+  ctx: BookingContext,
+  bandMemberId: string | null | undefined,
+): RuleState {
+  const contactId = ctx.bandMembers?.find((member) => member.id === bandMemberId)?.contactId;
+  if (!contactId) return 'PENDING';
+  const matching = ctx.communications.filter(
+    (c) => c.contactId === contactId && templateTypes.includes(c.template?.builtInType ?? ''),
+  );
+  if (matching.some((c) => c.status === 'SENT')) return 'COMPLETE';
+  // Latest = last: the context projection orders communications by createdAt asc.
+  return matching.at(-1)?.status === 'FAILED' ? 'FAILED' : 'PENDING';
 }
 
 // The inverted-index inputs each `bookingField` / `completeness` variant reads — lookups keep
@@ -168,6 +229,12 @@ export function inputsForRule(rule: AutoCompleteRule): InputKey[] {
       return ['musicFormResponse'];
     case 'musicFormPublished':
       return ['musicFormPublished'];
+    case 'bandHasChairs':
+    case 'bandChairsFilled':
+    case 'bandMemberStatus':
+      return ['bandRoster'];
+    case 'bandMemberCommunicationSent':
+      return ['communications', 'bandRoster'];
     case 'contractSigned':
       return ['contracts'];
     case 'customerEmail':

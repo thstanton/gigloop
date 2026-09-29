@@ -101,7 +101,7 @@ export class BandCommunicationsService {
 
     const update = await this.bookings.markMemberInvited(userId, bookingId, memberId, new Date());
     if (update.count === 0) throw new NotFoundException('Band member not found');
-    await this.reeval.onBookingChanged(bookingId);
+    await this.reeval.onBandRosterChanged(userId, bookingId, memberId);
   }
 
   async sendCallSheet(

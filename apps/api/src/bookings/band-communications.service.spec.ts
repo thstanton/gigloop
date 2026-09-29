@@ -53,7 +53,7 @@ describe('BandCommunicationsService', () => {
   let repo: { findBandInviteData: jest.Mock; markMemberInvited: jest.Mock };
   let mail: { buildContext: jest.Mock; renderForCompose: jest.Mock; renderPlainText: jest.Mock };
   let comms: { findTemplate: jest.Mock; sendEmail: jest.Mock };
-  let reeval: { onBookingChanged: jest.Mock };
+  let reeval: { onBookingChanged: jest.Mock; onBandRosterChanged: jest.Mock };
   let documents: { generateAndStoreCallSheetPdf: jest.Mock; discardUnsentCallSheet: jest.Mock };
 
   beforeEach(() => {
@@ -71,7 +71,10 @@ describe('BandCommunicationsService', () => {
       findTemplate: jest.fn().mockResolvedValue({ id: 'template-1', builtInType: 'band_invite', content: {} }),
       sendEmail: jest.fn().mockResolvedValue(undefined),
     };
-    reeval = { onBookingChanged: jest.fn().mockResolvedValue(undefined) };
+    reeval = {
+      onBookingChanged: jest.fn().mockResolvedValue(undefined),
+      onBandRosterChanged: jest.fn().mockResolvedValue(undefined),
+    };
     documents = {
       generateAndStoreCallSheetPdf: jest.fn().mockResolvedValue({ buffer: Buffer.from('%PDF-call-sheet'), documentId: 'document-1' }),
       discardUnsentCallSheet: jest.fn().mockResolvedValue(undefined),
@@ -163,7 +166,7 @@ describe('BandCommunicationsService', () => {
       events.push('status');
       return { count: 1 };
     });
-    reeval.onBookingChanged.mockImplementation(async () => {
+    reeval.onBandRosterChanged.mockImplementation(async () => {
       events.push('reeval');
     });
 
@@ -175,7 +178,8 @@ describe('BandCommunicationsService', () => {
 
     expect(events).toEqual(['send', 'status', 'reeval']);
     expect(repo.markMemberInvited).toHaveBeenCalledWith('user-1', 'booking-1', 'member-1', expect.any(Date));
-    expect(reeval.onBookingChanged).toHaveBeenCalledWith('booking-1');
+    expect(reeval.onBandRosterChanged).toHaveBeenCalledWith('user-1', 'booking-1', 'member-1');
+    expect(reeval.onBookingChanged).not.toHaveBeenCalled();
   });
 
   it('does not update member status or re-evaluate when the email send fails', async () => {
@@ -186,7 +190,7 @@ describe('BandCommunicationsService', () => {
     })).rejects.toThrow('transport failed');
 
     expect(repo.markMemberInvited).not.toHaveBeenCalled();
-    expect(reeval.onBookingChanged).not.toHaveBeenCalled();
+    expect(reeval.onBandRosterChanged).not.toHaveBeenCalled();
   });
 
   it('rejects a member without an email address with an actionable reason and does not send', async () => {
@@ -272,7 +276,7 @@ describe('BandCommunicationsService', () => {
       }],
     }));
     expect(repo.markMemberInvited).not.toHaveBeenCalled();
-    expect(reeval.onBookingChanged).not.toHaveBeenCalled();
+    expect(reeval.onBandRosterChanged).not.toHaveBeenCalled();
   });
 
   it('rejects call-sheet email without a contact email while keeping its message renderer independent', async () => {
@@ -318,7 +322,7 @@ describe('BandCommunicationsService', () => {
     expect(comms.sendEmail.mock.calls[0][0]).not.toHaveProperty('documentId');
     expect(documents.generateAndStoreCallSheetPdf).not.toHaveBeenCalled();
     expect(repo.markMemberInvited).not.toHaveBeenCalled();
-    expect(reeval.onBookingChanged).not.toHaveBeenCalled();
+    expect(reeval.onBandRosterChanged).not.toHaveBeenCalled();
   });
 
   it('renders final-details copy through the plain-text adapter and rejects the wrong template', async () => {

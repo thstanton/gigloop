@@ -13,6 +13,7 @@ function item(overrides: Partial<ChecklistItem> & { label: string }): ChecklistI
     updatedAt: '2030-04-01T10:00:00Z',
     bookingId: 'b1',
     key: null,
+    isBandGoal: false,
     completedBy: 'USER',
     state: 'PENDING',
     order: 0,
@@ -122,6 +123,39 @@ export const PastStageCollapsed: Story = {
   },
 };
 
+// #901: the two band goals ask different questions at different times, so they file into different
+// brackets — "has everyone said yes?" is worked while Confirmed; "does everyone know where to be?"
+// is worked while Ready, two days out, and stays folded away until then.
+export const BandGoalsInSeparateBrackets: Story = {
+  args: {
+    bookingStatus: 'CONFIRMED',
+    items: [
+      item({ label: 'Get the band confirmed', key: 'get_the_band_confirmed', isBandGoal: true, requiredForStatus: 'READY' }),
+      item({ label: 'Get the band briefed', key: 'get_the_band_briefed', isBandGoal: true, requiredForStatus: 'COMPLETE' }),
+    ],
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Confirmed')).toBeVisible();
+    await expect(canvas.getByText('Get the band confirmed')).toBeVisible();
+    await expect(canvas.queryByText('Get the band briefed')).toBeNull();
+    await userEvent.click(canvas.getByText('Ready'));
+    await expect(canvas.getByText('Get the band briefed')).toBeVisible();
+  },
+};
+
+// #902: SKIPPED goals are absent from the checklist response; unrelated work remains visible.
+export const BandSoloExitSkipped: Story = {
+  args: {
+    bookingStatus: 'CONFIRMED',
+    items: [item({ label: 'Add venue', key: 'add_venue', requiredForStatus: 'READY' })],
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Add venue')).toBeVisible();
+    await expect(canvas.queryByText('Get the band confirmed')).toBeNull();
+    await expect(canvas.queryByRole('button', { name: /Playing this one solo\?/ })).toBeNull();
+  },
+};
+
 export const WithFailedItem: Story = {
   args: {
     bookingStatus: 'CONFIRMED',
@@ -168,9 +202,9 @@ const contractGoal: ChecklistItem = item({
   key: 'get_contract_signed',
   requiredForStatus: 'CONFIRMED',
   steps: [
-    { id: 's1', key: 'create_contract', label: 'Draft the contract', order: 1, kind: 'MILESTONE', completeMode: 'ACTION', state: 'COMPLETE', completedBy: 'USER', completedAt: null, autoCompleteRule: null },
-    { id: 's2', key: 'send_contract', label: 'Send it to the client', order: 2, kind: 'MILESTONE', completeMode: 'ACTION', state: 'PENDING', completedBy: 'USER', completedAt: null, autoCompleteRule: null, shortcutType: 'send_email', shortcutTemplateType: 'contract_cover' },
-    { id: 's3', key: 'contract_signed', label: 'Client signs the contract', order: 3, kind: 'MILESTONE', completeMode: 'AWAITED', state: 'PENDING', completedBy: 'CUSTOMER', completedAt: null, autoCompleteRule: null },
+    { id: 's1', key: 'create_contract', bandMemberId: null, label: 'Draft the contract', order: 1, kind: 'MILESTONE', completeMode: 'ACTION', state: 'COMPLETE', completedBy: 'USER', completedAt: null, autoCompleteRule: null },
+    { id: 's2', key: 'send_contract', bandMemberId: null, label: 'Send it to the client', order: 2, kind: 'MILESTONE', completeMode: 'ACTION', state: 'PENDING', completedBy: 'USER', completedAt: null, autoCompleteRule: null, shortcutType: 'send_email', shortcutTemplateType: 'contract_cover' },
+    { id: 's3', key: 'contract_signed', bandMemberId: null, label: 'Client signs the contract', order: 3, kind: 'MILESTONE', completeMode: 'AWAITED', state: 'PENDING', completedBy: 'CUSTOMER', completedAt: null, autoCompleteRule: null },
   ],
 });
 

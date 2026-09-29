@@ -8,6 +8,7 @@ import {
   CHECKLIST_DEFAULTS,
   filterItemsByStartingStatus,
 } from '../../apps/api/src/checklist/checklist-defaults';
+import { seedableChecklistSteps } from '../../apps/api/src/checklist/checklist-band-steps';
 
 // Deletes everything owned by the test user, in child→parent order. Booking is
 // the cascade root for invoices/line-items/documents/communications/etc., so
@@ -136,6 +137,8 @@ export async function seedPackageTemplateWithDefaultLineup(
 export interface LifecycleBooking {
   bookingId: string;
   customerId: string;
+  bandMemberId: string;
+  bandPortalToken: string;
 }
 
 // Per-test fixture (ADR-0048 §5/§7, slice 5): a booking at a starting stage with
@@ -148,6 +151,7 @@ export interface LifecycleBooking {
 export async function seedBookingForLifecycle(
   userId: string = E2E_TEST_USER_ID,
   startingStatus: BookingStatus = BookingStatus.PROVISIONAL,
+  bandMemberStatus: 'ADDED' | 'INVITED' | 'CONFIRMED' = 'CONFIRMED',
 ): Promise<LifecycleBooking> {
   const customer = await prisma.contact.create({
     data: { userId, name: 'E2E Lifecycle Customer', email: 'lifecycle-customer@e2e.test' },
@@ -162,6 +166,26 @@ export async function seedBookingForLifecycle(
       date: new Date('2099-11-01T18:00:00.000Z'),
       customerId: customer.id,
     },
+  });
+
+  // #900: the API boots with FEATURE_BAND_MEMBERS on for this journey. Seed one
+  // already-confirmed dep into one chair so the ordinary band checklist goal can
+  // settle on the first evaluator pass while the lifecycle spec still advances
+  // READY manually (checklist completion is advisory, not a hard status gate).
+  const lineup = await prisma.lineup.create({
+    data: { userId, bookingId: booking.id, label: 'E2E Quartet' },
+  });
+  const member = await prisma.bookingBandMember.create({
+    data: {
+      userId,
+      bookingId: booking.id,
+      contactId: customer.id,
+      status: bandMemberStatus,
+      ...(bandMemberStatus === 'INVITED' ? { invitedAt: new Date() } : {}),
+    },
+  });
+  await prisma.bookingBandChair.create({
+    data: { userId, bookingId: booking.id, lineupId: lineup.id, role: 'Piano', order: 1, memberId: member.id },
   });
 
   // Goals gating a stage strictly after the starting stage (same filter the app
@@ -184,24 +208,30 @@ export async function seedBookingForLifecycle(
         autoCompleteRule: (g.autoCompleteRule ?? Prisma.JsonNull) as Prisma.InputJsonValue,
         concern: g.concern ?? undefined,
         steps: {
-          create: (g.steps ?? []).map((s, si) => ({
-            userId,
-            bookingId: booking.id,
-            key: s.key,
-            label: s.label,
-            order: si,
-            kind: s.kind,
-            completeMode: s.completeMode,
-            completedBy: s.completedBy,
-            state: 'PENDING',
-            autoCompleteRule: (s.autoCompleteRule ?? Prisma.JsonNull) as Prisma.InputJsonValue,
-          })),
+          create: seedableChecklistSteps(g.steps ?? []).map((s, si) => ({
+              userId,
+              bookingId: booking.id,
+              key: s.key,
+              bandMemberId: null,
+              label: s.label,
+              order: si,
+              kind: s.kind,
+              completeMode: s.completeMode,
+              completedBy: s.completedBy,
+              state: 'PENDING',
+              autoCompleteRule: (s.autoCompleteRule ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+            })),
         },
       },
     });
   }
 
-  return { bookingId: booking.id, customerId: customer.id };
+  return {
+    bookingId: booking.id,
+    customerId: customer.id,
+    bandMemberId: member.id,
+    bandPortalToken: member.bandPortalToken,
+  };
 }
 
 export interface ContactWithBooking {

@@ -1,19 +1,20 @@
 import { UserProfileRepository } from './user-profile.repository';
 import { PrismaService } from '../prisma/prisma.service';
 import { decrypt } from '../common/crypto';
+import { applyBandSoloOptOut } from '../checklist/checklist-defaults';
 
 beforeAll(() => {
   process.env.ENCRYPTION_KEY = 'a'.repeat(64);
 });
 
 type MockPrisma = {
-  userProfile: { upsert: jest.Mock; update: jest.Mock };
+  userProfile: { findUnique: jest.Mock; upsert: jest.Mock; update: jest.Mock };
   contact: { updateMany: jest.Mock };
 };
 
 function makePrisma(): MockPrisma {
   return {
-    userProfile: { upsert: jest.fn(), update: jest.fn() },
+    userProfile: { findUnique: jest.fn(), upsert: jest.fn(), update: jest.fn() },
     contact: { updateMany: jest.fn() },
   };
 }
@@ -109,4 +110,24 @@ describe('UserProfileRepository', () => {
       expect(prisma.contact.updateMany).not.toHaveBeenCalled();
     });
   });
+
+  it('persists shared band opt-out preferences scoped to the user', async () => {
+    const preferences = {
+      theme: 'dark',
+      checklistDefaults: {
+        systemItemOverrides: [{ key: 'get_the_quote_accepted', enabled: false }],
+        customItems: [{ label: 'Custom reminder' }],
+      },
+    };
+    prisma.userProfile.findUnique.mockResolvedValue({ preferences });
+    prisma.userProfile.upsert.mockResolvedValue({ userId: 'u1', bankDetails: null });
+
+    await repo.updateByUserId('u1', { preferences: applyBandSoloOptOut(preferences) });
+
+    expect(prisma.userProfile.findUnique).toHaveBeenCalledWith({ where: { userId: 'u1' } });
+    const upsert = prisma.userProfile.upsert.mock.calls[0][0];
+    expect(upsert.where).toEqual({ userId: 'u1' });
+    expect(upsert.update.preferences).toEqual(applyBandSoloOptOut(preferences));
+  });
+
 });

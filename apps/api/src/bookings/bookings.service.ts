@@ -25,7 +25,12 @@ import { UpsertMusicFormConfigDto } from './dto/upsert-music-form-config.dto';
 import { MailService } from '../mail/mail.service';
 import { substituteTiptapVariables } from '../mail/tiptap-substitute';
 import { ChecklistReevaluator } from '../checklist/checklist-reevaluator.service';
-import { getChecklistDefaults } from '../checklist/checklist-defaults';
+import {
+  BAND_GOAL_KEYS,
+  getChecklistDefaults,
+  isBandGoalKey,
+  isChecklistDefaultAvailable,
+} from '../checklist/checklist-defaults';
 import {
   selectApplicableReminders,
   previewApplicableReminders,
@@ -106,6 +111,10 @@ function touchesRuleBoundField(dto: UpdateBookingDto): boolean {
   return RULE_BOUND_FIELDS.some((field) => dto[field] !== undefined);
 }
 
+function checklistSeedsForEnabledFeatures(items: ChecklistItemSeed[]): ChecklistItemSeed[] {
+  return items.filter((item) => isChecklistDefaultAvailable(item.key));
+}
+
 function resolveContractTemplate(items: Array<{ key: string | null }>): string {
   // A booking expects a deposit when it carries the deposit deliverable. Detect both shapes
   // (ADR-0057): the migrated multi-step goal (`get_deposit_paid`) or, on an un-migrated booking,
@@ -154,6 +163,13 @@ export function deriveShortcut(
       return { shortcutType: 'add_email' }; // #618 → routes to the booking's People
     case 'musicFormPublished':
       return { shortcutType: 'set_up_and_publish_music' }; // #533/#630 → opens the music form editor
+    case 'bandHasChairs':
+    case 'bandChairsFilled':
+      return { shortcutType: 'open_band' };
+    case 'bandMemberStatus':
+      return { shortcutType: 'band_member' };
+    case 'bandMemberCommunicationSent':
+      return { shortcutType: 'brief_band_member' }; // #901 → the Band sheet, where final details are sent
     default:
       return {};
   }
@@ -312,8 +328,9 @@ export class BookingsService {
       ? await this.repo.createWithPackageTemplates(userId, dtoWithSeries, orderedTemplates, enableMusicForm, tx, lineupSelections)
       : await this.repo.create(userId, dtoWithSeries, enableMusicForm, tx);
 
-    if (dto.checklistItems.length > 0) {
-      await this.checklistRepo.seedChecklistItems(userId, created.id, dto.checklistItems, created.date, created.createdAt, tx);
+    const checklistItems = checklistSeedsForEnabledFeatures(dto.checklistItems);
+    if (checklistItems.length > 0) {
+      await this.checklistRepo.seedChecklistItems(userId, created.id, checklistItems, created.date, created.createdAt, tx);
     }
 
     if (resolvedSeriesId) {
@@ -392,7 +409,7 @@ export class BookingsService {
     // Map source items to seeds: completion + computed due dates are dropped so
     // seedChecklistItems resets every goal to PENDING (ADR-0057: BLOCKED retired) and recomputes
     // due dates against the new booking — a copied COMPLETE item on a brand-new booking would be a bug.
-    const checklistSeeds: ChecklistItemSeed[] = source.checklistItems.map((item) => ({
+    const checklistSeeds: ChecklistItemSeed[] = checklistSeedsForEnabledFeatures(source.checklistItems.map((item) => ({
       key: item.key,
       label: item.label,
       completedBy: item.completedBy as ChecklistItemSeed['completedBy'],
@@ -400,7 +417,7 @@ export class BookingsService {
       autoCompleteRule: item.autoCompleteRule as ChecklistItemSeed['autoCompleteRule'],
       requiredForStatus: item.requiredForStatus,
       dueDateRule: item.dueDateRule as ChecklistItemSeed['dueDateRule'],
-    }));
+    })));
 
     // findOneForClone + assertMembershipMutable already warmed the Neon compute, so the
     // transaction opens against a live connection (cf. create()'s explicit SELECT 1).
@@ -599,7 +616,8 @@ export class BookingsService {
 
     // Re-evaluate: applying a template seeds sets, satisfying build_itinerary
     // (PRD #511 Story 21: never nag work already done). Post-apply + best-effort.
-    await this.reeval.onBookingChanged(bookingId);
+    if (template.defaultLineupTemplate) await this.reeval.onBandRosterChanged(userId, bookingId);
+    else await this.reeval.onBookingChanged(bookingId);
 
     return { booking: mapped, suggestion };
   }
@@ -637,6 +655,7 @@ export class BookingsService {
       { label: lineup.label, slots: lineup.slots.map((s) => ({ role: s.role, order: s.order })) },
       dto.packageIds,
     );
+    await this.reeval.onBandRosterChanged(userId, bookingId);
     // ADR-0071: a write returns the same mapped shape a read of the same resource would.
     return this.mapBooking(booking!);
   }
@@ -659,6 +678,7 @@ export class BookingsService {
     const lineup = await this.repo.findLineup(userId, bookingId, lineupId);
     if (!lineup) throw new NotFoundException('Lineup not found');
     const booking = await this.repo.deleteLineup(bookingId, lineupId);
+    await this.reeval.onBandRosterChanged(userId, bookingId);
     return this.mapBooking(booking!);
   }
 
@@ -679,7 +699,9 @@ export class BookingsService {
       const lineup = await this.repo.findLineup(userId, bookingId, dto.lineupId);
       if (!lineup) throw new NotFoundException('Lineup not found');
     }
-    return this.repo.addChair(userId, bookingId, dto);
+    const chair = await this.repo.addChair(userId, bookingId, dto);
+    await this.reeval.onBandRosterChanged(userId, bookingId);
+    return chair;
   }
 
   async updateChair(userId: string, bookingId: string, chairId: string, dto: UpdateChairDto) {
@@ -697,7 +719,9 @@ export class BookingsService {
     await this.assertOwnership(userId, bookingId);
     const chair = await this.repo.findChair(userId, bookingId, chairId);
     if (!chair) throw new NotFoundException('Chair not found');
-    return this.repo.deleteChair(chairId, chair.lineupId);
+    const deleted = await this.repo.deleteChair(chairId, chair.lineupId);
+    await this.reeval.onBandRosterChanged(userId, bookingId);
+    return deleted;
   }
 
   // Assignment never creates or destroys a chair row, it sets a field (ADR-0072 §2). Filling a
@@ -715,7 +739,9 @@ export class BookingsService {
     if (!chair) throw new NotFoundException('Chair not found');
 
     if (dto.contactId == null) {
-      return this.repo.setChairMember(chairId, null);
+      const updated = await this.repo.setChairMember(chairId, null);
+      await this.reeval.onBandRosterChanged(userId, bookingId);
+      return updated;
     }
 
     const contact = await this.contacts.findOne(userId, dto.contactId);
@@ -724,7 +750,9 @@ export class BookingsService {
     if (member.isSelf !== contact.isAccountOwner) {
       await this.repo.updateMember(member.id, { isSelf: contact.isAccountOwner });
     }
-    return this.repo.setChairMember(chairId, member.id);
+    const updated = await this.repo.setChairMember(chairId, member.id);
+    await this.reeval.onBandRosterChanged(userId, bookingId);
+    return updated;
   }
 
   // Every transition in this slice is organiser-driven from the Band sheet (ADR-0072 §5) — no
@@ -740,11 +768,16 @@ export class BookingsService {
     if (dto.status === 'INVITED') data.invitedAt = new Date();
     if (dto.status === 'CONFIRMED' || dto.status === 'DECLINED') data.respondedAt = new Date();
 
-    const updated = await this.repo.updateMember(memberId, data);
-    // Manual invite delivery first records the Communication, then sets INVITED through this
-    // organiser status path. Re-evaluate after the status write so checklist predicates can observe
-    // the newly invited member (the email send path performs the same post-status re-evaluation).
-    if (dto.status === 'INVITED') await this.reeval.onBookingChanged(bookingId);
+    const updated = dto.status !== undefined
+      ? await this.repo.updateMemberAndMaybeClearChairs(userId, bookingId, memberId, data, dto.status === 'DECLINED')
+      : await this.repo.updateMember(memberId, data);
+    // Roster status/isSelf changes can alter a materialised pair or regress the
+    // READY checklist. Reset the sticky goal/preconditions explicitly before the
+    // evaluator runs; status changes re-open this member's confirmation so it can
+    // become PENDING/DECLINED instead of preserving a stale COMPLETE state.
+    if (dto.status !== undefined || dto.isSelf !== undefined) {
+      await this.reeval.onBandRosterChanged(userId, bookingId, dto.status !== undefined ? memberId : undefined);
+    }
     return updated;
   }
 
@@ -755,7 +788,8 @@ export class BookingsService {
     await this.assertOwnership(userId, bookingId);
     const member = await this.repo.findMember(userId, bookingId, memberId);
     if (!member) throw new NotFoundException('Band member not found');
-    return this.repo.removeMember(memberId);
+    await this.repo.removeMember(memberId);
+    await this.reeval.onBandRosterChanged(userId, bookingId);
   }
 
   // The single place the booking response shape is constructed (ADR-0071). Every read and write
@@ -928,6 +962,7 @@ export class BookingsService {
     const items = await this.repo.findChecklistItems(userId, bookingId);
     return items.map(({ steps, ...item }) => ({
       ...item,
+      isBandGoal: isBandGoalKey(item.key),
       createdAt: item.createdAt.toISOString(),
       updatedAt: item.updatedAt.toISOString(),
       completedAt: item.completedAt?.toISOString() ?? null,
@@ -937,9 +972,10 @@ export class BookingsService {
       // active step's action (#611) routes via the same `deriveShortcut` the goal uses, so
       // both atomic goals and active steps share one shortcut-routing code path on the client.
       steps: (steps ?? []).map((step) => ({
-        id: step.id,
-        key: step.key,
-        label: step.label,
+          id: step.id,
+          key: step.key,
+          bandMemberId: step.bandMemberId ?? null,
+          label: step.label,
         order: step.order,
         kind: step.kind,
         completeMode: step.completeMode,
@@ -1001,6 +1037,9 @@ export class BookingsService {
   // Turn a system reminder on for a booking (ADR-0052): un-skip an existing record,
   // or on-demand seed one if none exists. Idempotent if it is already on.
   async enableReminder(userId: string, bookingId: string, key: string) {
+    if (!isChecklistDefaultAvailable(key)) {
+      throw new NotFoundException('Reminder not found');
+    }
     const booking = await this.findOne(userId, bookingId);
     const existing = await this.checklistRepo.findItemByKey(bookingId, key);
     if (existing) {
@@ -1033,6 +1072,7 @@ export class BookingsService {
     const disabledKeys = new Set(
       defaults.filter((d) => d.enabled === false && d.key).map((d) => d.key as string),
     );
+    for (const key of BAND_GOAL_KEYS) if (!defaults.some((d) => d.key === key)) disabledKeys.add(key);
     return selectApplicableReminders(concern, {
       items: items as ReminderItemInput[],
       status: booking.status,
@@ -1049,6 +1089,7 @@ export class BookingsService {
     const disabledKeys = new Set(
       defaults.filter((d) => d.enabled === false && d.key).map((d) => d.key as string),
     );
+    for (const key of BAND_GOAL_KEYS) if (!defaults.some((d) => d.key === key)) disabledKeys.add(key);
     return previewApplicableReminders({ status, disabledKeys });
   }
 

@@ -14,6 +14,10 @@ Not guessable from `package.json` — run a single API test file:
 bun --filter @gigloop/api run test -- --testPathPattern=<file>
 ```
 
+### Playwright environment gate
+
+Until a human confirms the dedicated `E2E_TEST_USER_ID` is configured, treat local Playwright runs as blocked. If it is missing, do not retry `playwright test` or `--list`; report the missing variable and continue with non-Playwright checks. Resume only after the human confirms the variable is ready.
+
 ## Hard Rules (never violate)
 
 - **Auth:** Use Clerk exclusively. Never implement custom auth.

@@ -12,9 +12,16 @@ import {
   WandSparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { CHECKLIST_STEP_STATE_TEXT_CLASS } from '@/lib/constants';
 import { RowActions, type RowAction } from '@/components/common/RowActions';
+import { InlineHint } from '@/components/common/InlineHint';
 import type { ChecklistItem, ChecklistItemState, ChecklistStep } from '@/types/api';
-import { resolveChecklistShortcut, type ChecklistShortcutHandlers, type ResolvedShortcut } from './checklistShortcuts';
+import {
+  bandMemberNameFromConfirmationLabel,
+  resolveChecklistShortcut,
+  type ChecklistShortcutHandlers,
+  type ResolvedShortcut,
+} from './checklistShortcuts';
 
 // GoalRow renders one checklist goal (ADR-0057) to the #604-locked "action-led row" design —
 // atomic and multi-step alike, unified (#610).
@@ -29,6 +36,11 @@ import { resolveChecklistShortcut, type ChecklistShortcutHandlers, type Resolved
 // ChecklistItemState (incl. FAILED, which the system sets) but FAILED is never user-settable here.
 type SettableGoalState = 'COMPLETE' | 'PENDING' | 'SKIPPED';
 
+export interface SoloExitAction {
+  onClick: () => void;
+  isPending: boolean;
+}
+
 // The active step is the first non-terminal step by order (ADR-0057: derived, never stored).
 export function activeStep(item: ChecklistItem): ChecklistStep | null {
   const steps = item.steps ?? [];
@@ -40,18 +52,19 @@ function isMultiStep(item: ChecklistItem): boolean {
 }
 
 // Milestone progress: completed milestone steps over total. Ring = what's done; the x/y count =
-// where you are — they deliberately differ (e.g. a ⅓-filled ring next to "2/3").
+// where you are — they deliberately differ (e.g. a ⅓-filled ring next to "2/3"). A DECLINED step
+// is excluded from `total`, not just `done`: counting it would leave the ring — and the goal —
+// silently unable to ever complete (#899).
 function milestoneProgress(item: ChecklistItem): { done: number; total: number } {
-  const spine = (item.steps ?? []).filter((s) => s.kind === 'MILESTONE');
+  const spine = (item.steps ?? []).filter((s) => s.kind === 'MILESTONE' && s.state !== 'DECLINED');
   return { done: spine.filter((s) => s.state === 'COMPLETE').length, total: spine.length };
 }
 
 // Personalised waiting text by who the step awaits (#634). A CUSTOMER step names the client by
-// their greeting name when known, falling back to "the client". BAND_MEMBER stays generic — no
-// band-member name is plumbed yet (that half of #604 remains deferred).
+// their greeting name when known, falling back to "the client".
 function awaitingParty(step: ChecklistStep, clientName: string | null): string | null {
   if (step.completedBy === 'CUSTOMER') return clientName ?? 'the client';
-  if (step.completedBy === 'BAND_MEMBER') return 'the band';
+  if (step.completedBy === 'BAND_MEMBER') return bandMemberNameFromConfirmationLabel(step.label);
   return null;
 }
 
@@ -76,12 +89,24 @@ function dueDateDisplay(dueDate: string | null | undefined): { text: string; cla
 }
 
 // Status glyph — informational only, never tappable. Consistent meaning for goals and steps:
-// pending = circle, done = check, awaited = clock, failed = alert.
+// pending = circle, done = check, awaited = clock, failed = alert, declined = skip (muted, never
+// red — a decline is an ordinary expected outcome, not a failure). Terminal states' colour comes
+// from the guarded vocabulary table so DECLINED can never silently pick up FAILED's red (#899).
 function StepGlyph({ step, size = 13 }: { step: ChecklistStep; size?: number }) {
-  if (step.state === 'COMPLETE') return <CheckCircle2 size={size} className="flex-shrink-0 text-muted" />;
-  if (step.state === 'FAILED') return <AlertTriangle size={size} className="flex-shrink-0 text-status-cancelled" />;
+  if (step.state === 'COMPLETE') {
+    return <CheckCircle2 size={size} className={cn('flex-shrink-0', CHECKLIST_STEP_STATE_TEXT_CLASS.COMPLETE)} />;
+  }
+  if (step.state === 'FAILED') {
+    return <AlertTriangle size={size} className={cn('flex-shrink-0', CHECKLIST_STEP_STATE_TEXT_CLASS.FAILED)} />;
+  }
+  if (step.state === 'DECLINED') {
+    return <SkipForward size={size} className={cn('flex-shrink-0', CHECKLIST_STEP_STATE_TEXT_CLASS.DECLINED)} />;
+  }
+  // AWAITED is a completeMode distinction layered on top of PENDING (a passive external wait),
+  // not a separate vocabulary member — the table has no second dimension for it, so this one
+  // branch stays bespoke. The plain-PENDING default below is table-driven like every other case.
   if (step.completeMode === 'AWAITED') return <Clock size={size} className="flex-shrink-0 text-muted" />;
-  return <Circle size={size} className="flex-shrink-0 text-border" />;
+  return <Circle size={size} className={cn('flex-shrink-0', CHECKLIST_STEP_STATE_TEXT_CLASS.PENDING)} />;
 }
 
 // Progress ring — leading goal glyph, fills clockwise by milestone completeness (Things-style),
@@ -169,9 +194,16 @@ function resolveStepAction(
   step: ChecklistStep,
   handlers: ChecklistShortcutHandlers,
 ): { resolved: ResolvedShortcut; label: string } | null {
-  if (step.completeMode === 'AWAITED' && step.completedBy !== 'USER') return null;
+  // Band-member waits deliberately keep a named chase action; only passive client
+  // waits suppress the CTA.
+  if (step.completeMode === 'AWAITED' && step.completedBy === 'CUSTOMER') return null;
   const resolved = resolveChecklistShortcut(
-    { shortcutType: step.shortcutType, shortcutTemplateType: step.shortcutTemplateType, isFailed: step.state === 'FAILED' },
+    {
+      shortcutType: step.shortcutType,
+      shortcutTemplateType: step.shortcutTemplateType,
+      stepLabel: step.label,
+      isFailed: step.state === 'FAILED',
+    },
     handlers,
   );
   if (!resolved) return null;
@@ -284,7 +316,14 @@ function StepsList({ item, activeId }: { item: ChecklistItem; activeId?: string 
       {others.map((step) => (
         <li key={step.id} className="flex items-center gap-2">
           <StepGlyph step={step} />
-          <span className={cn('text-xs text-muted', step.state === 'COMPLETE' && 'line-through')}>{step.label}</span>
+          <span
+            className={cn(
+              'text-xs text-muted',
+              (step.state === 'COMPLETE' || step.state === 'DECLINED') && 'line-through',
+            )}
+          >
+            {step.label}
+          </span>
         </li>
       ))}
     </ul>
@@ -295,11 +334,18 @@ export interface GoalRowProps {
   item: ChecklistItem;
   handlers: ChecklistShortcutHandlers;
   onSetState: (itemId: string, state: SettableGoalState) => void;
+  soloExitAction?: SoloExitAction;
   // #634: the booking's client name (greeting name → full name → null) for "Waiting on …" text.
   clientName: string | null;
 }
 
-export function GoalRow({ item, handlers, onSetState, clientName }: Readonly<GoalRowProps>) {
+export function GoalRow({
+  item,
+  handlers,
+  onSetState,
+  soloExitAction,
+  clientName,
+}: Readonly<GoalRowProps>) {
   const [expanded, setExpanded] = useState(false);
   const multi = isMultiStep(item);
   const active = activeStep(item);
@@ -309,7 +355,7 @@ export function GoalRow({ item, handlers, onSetState, clientName }: Readonly<Goa
   const due = dueDateDisplay(item.dueDate);
 
   // x/y = which milestone step you're ON (1-based position) over the total.
-  const milestones = (item.steps ?? []).filter((s) => s.kind === 'MILESTONE');
+  const milestones = (item.steps ?? []).filter((s) => s.kind === 'MILESTONE' && s.state !== 'DECLINED');
   const position = active ? milestones.findIndex((s) => s.id === active.id) + 1 : 0;
 
   const setState = (s: SettableGoalState) => onSetState(item.id, s);
@@ -328,7 +374,9 @@ export function GoalRow({ item, handlers, onSetState, clientName }: Readonly<Goa
       </div>
 
       <div className="ml-[1.8rem]">
-        {multi && active && <ActiveStepLine step={active} position={position} total={milestones.length} handlers={handlers} clientName={clientName} />}
+        {multi && active && !isSkipped && (
+          <ActiveStepLine step={active} position={position} total={milestones.length} handlers={handlers} clientName={clientName} />
+        )}
 
         {!multi && !isResolved && <AtomicActionLine item={item} handlers={handlers} onSetState={setState} />}
 
@@ -343,7 +391,16 @@ export function GoalRow({ item, handlers, onSetState, clientName }: Readonly<Goa
           </button>
         )}
 
-        {multi && expanded && <StepsList item={item} activeId={active?.id} />}
+        {multi && expanded && <StepsList item={item} activeId={isSkipped ? undefined : active?.id} />}
+
+        {item.isBandGoal && !isResolved && soloExitAction && (
+          <InlineHint
+            actionLabel={soloExitAction.isPending ? 'Updating…' : 'Playing this one solo?'}
+            onClick={soloExitAction.onClick}
+            disabled={soloExitAction.isPending}
+            className="mt-1"
+          />
+        )}
       </div>
     </div>
   );

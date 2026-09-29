@@ -2,13 +2,22 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
+  BAND_CHECKLIST_GOAL_KEY,
+  BAND_GOAL_KEYS,
   CHECKLIST_DEFAULTS,
   ChecklistDefaultStep,
   computeDueDate,
   computeReminderInsertOrder,
 } from './checklist-defaults';
 import { addDays, surfaceActionItems } from './checklist-surfacing';
-import { activeStep } from './checklist-rollup';
+import { activeStep, StepState } from './checklist-rollup';
+import type {
+  BandChecklistGoal,
+  BandChecklistStepSyncData,
+  BandGoalResetPlan,
+  BandMemberStepSyncPlan,
+} from './checklist-band-steps';
+import { seedableChecklistSteps } from './checklist-band-steps';
 
 export type ChecklistItemSeed = {
   key?: string | null;
@@ -32,6 +41,30 @@ type ActionChecklistItem = {
   requiredForStatus: string | null;
   order: number;
 };
+
+export interface BandSoloExitContext {
+  // The solo-exit planner only needs identity and state. Checklist `key` is nullable for custom
+  // rows, and the repository query's `key in` predicate does not narrow Prisma's generated type.
+  goals: Array<{ id: string; state: string }>;
+  preferences: Record<string, unknown>;
+}
+
+export interface BandSoloExitPlan {
+  goalIdsToSkip: string[];
+  preferences: Record<string, unknown>;
+}
+
+export type BandSoloExitPlanner = (context: BandSoloExitContext) => BandSoloExitPlan | null;
+
+const BAND_CHECKLIST_GOAL_SELECT = {
+  id: true,
+  key: true,
+  userId: true,
+  state: true,
+  steps: {
+    select: { id: true, key: true, bandMemberId: true, label: true, order: true, state: true },
+  },
+} satisfies Prisma.BookingChecklistItemSelect;
 
 @Injectable()
 export class ChecklistRepository {
@@ -85,7 +118,7 @@ export class ChecklistRepository {
         const surfaceable = checklistItems.flatMap((goal) => {
           const steps = goal.steps ?? [];
           if (steps.length === 0) return [goal as ActionChecklistItem];
-          const active = activeStep(steps as Array<{ state: 'PENDING' | 'COMPLETE' | 'FAILED'; order: number }>);
+          const active = activeStep(steps as Array<{ state: StepState; order: number }>);
           // No active step (goal rolled up) or the musician can't act yet (client's move) →
           // not a surfaceable action for the musician.
           if (!active) return [];
@@ -127,6 +160,8 @@ export class ChecklistRepository {
           communications: {
             select: {
               status: true,
+              // #901: per-member comm predicates match on the recipient contact.
+              contactId: true,
               template: { select: { builtInType: true } },
             },
             orderBy: { createdAt: 'asc' },
@@ -161,6 +196,184 @@ export class ChecklistRepository {
         }
       : null;
     return { items, booking };
+  }
+
+  /** Read only the band goals + roster facts needed by the checklist service's sync plan. Any one
+   * band goal is enough: a booking created at READY seeds the briefed goal without the confirmed one. */
+  async findBandChecklistStepSyncData(
+    userId: string,
+    bookingId: string,
+  ): Promise<BandChecklistStepSyncData | null> {
+    const [goals, members, chairs] = await Promise.all([
+      this.prisma.bookingChecklistItem.findMany({
+        where: { bookingId, userId, key: { in: [...BAND_GOAL_KEYS] } },
+        select: BAND_CHECKLIST_GOAL_SELECT,
+      }),
+      this.prisma.bookingBandMember.findMany({
+        where: { bookingId, userId, removedAt: null },
+        select: {
+          id: true,
+          status: true,
+          isSelf: true,
+          contactId: true,
+          createdAt: true,
+          contact: { select: { name: true } },
+        },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      }),
+      this.prisma.bookingBandChair.findMany({
+        where: { bookingId, userId },
+        select: { memberId: true, member: { select: { status: true } } },
+      }),
+    ]);
+    if (!goals.length) return null;
+    return {
+      goals,
+      members,
+      chairs: chairs.map((chair) => ({ memberId: chair.memberId, memberStatus: chair.member?.status ?? null })),
+    };
+  }
+
+  /** Persist a service-computed roster-step plan; this method owns only Prisma writes. */
+  async applyBandMemberStepSyncPlan(
+    userId: string,
+    bookingId: string,
+    goalId: string,
+    plan: BandMemberStepSyncPlan,
+  ): Promise<void> {
+    if (!plan.deleteStepIds.length && !plan.createSteps.length && !plan.updateSteps.length) return;
+    const transaction: Prisma.PrismaPromise<unknown>[] = [];
+    if (plan.reopenGoal) {
+      transaction.push(
+        this.prisma.bookingChecklistItem.updateMany({
+          where: { id: goalId, bookingId, userId, state: 'COMPLETE' },
+          data: { state: 'PENDING', completedAt: null },
+        }),
+      );
+    }
+    for (const id of plan.deleteStepIds) {
+      transaction.push(
+        this.prisma.bookingChecklistStep.deleteMany({ where: { id, goalId, bookingId, userId } }),
+      );
+    }
+    for (const update of plan.updateSteps) {
+      transaction.push(
+        this.prisma.bookingChecklistStep.update({
+          where: { id: update.id, bookingId, userId },
+          data: { label: update.label, order: update.order },
+        }),
+      );
+    }
+    if (plan.createSteps.length) {
+      transaction.push(
+        this.prisma.bookingChecklistStep.createMany({
+          data: plan.createSteps.map(({ template, label, order, memberId }) => ({
+            ...this.buildStepData(template, order, userId, bookingId, memberId),
+            goalId,
+            label,
+          })),
+        }),
+      );
+    }
+    // Step rows are part of the goal's version (ADR-0076); creation/removal must be
+    // visible to clients even when the goal roll-up itself has not changed.
+    transaction.push(
+      this.prisma.bookingChecklistItem.updateMany({
+        where: { id: goalId, bookingId, userId },
+        data: { updatedAt: new Date() },
+      }),
+    );
+    await this.prisma.$transaction(transaction);
+  }
+
+  /** Read the band goal state needed to compute roster-reset updates. */
+  async findBandGoalResetData(userId: string, bookingId: string): Promise<BandChecklistGoal | null> {
+    const goal = await this.prisma.bookingChecklistItem.findFirst({
+      where: { bookingId, userId, key: BAND_CHECKLIST_GOAL_KEY },
+      select: BAND_CHECKLIST_GOAL_SELECT,
+    });
+    return goal;
+  }
+
+  /** Persist a service-planned solo exit atomically with its inputs loaded inside this transaction. */
+  async applyBandSoloExit(
+    userId: string,
+    bookingId: string,
+    planSoloExit: BandSoloExitPlanner,
+  ): Promise<boolean> {
+    return this.prisma.$transaction(async (tx) => {
+      const booking = await tx.booking.findFirst({
+        where: { id: bookingId, userId },
+        select: { id: true },
+      });
+      if (!booking) return false;
+
+      const goals = await tx.bookingChecklistItem.findMany({
+        where: { bookingId, userId, key: { in: [...BAND_GOAL_KEYS] } },
+        select: { id: true, key: true, state: true },
+      });
+
+      const profile = await tx.userProfile.findUnique({
+        where: { userId },
+        select: { preferences: true },
+      });
+      const storedPreferences = profile?.preferences;
+      const preferences =
+        storedPreferences !== null && typeof storedPreferences === 'object' && !Array.isArray(storedPreferences)
+          ? storedPreferences
+          : {};
+      const plan = planSoloExit({ goals, preferences });
+      if (!plan) return false;
+      const nextPreferences = plan.preferences as Prisma.InputJsonValue;
+
+      await tx.userProfile.upsert({
+        where: { userId },
+        update: { preferences: nextPreferences },
+        create: { userId, preferences: nextPreferences },
+      });
+
+      if (plan.goalIdsToSkip.length > 0) {
+        await tx.bookingChecklistItem.updateMany({
+          where: { id: { in: plan.goalIdsToSkip }, bookingId, userId, state: { in: ['PENDING', 'FAILED'] } }, // scoped-upstream: IDs were loaded under this booking and user above.
+          data: { state: 'SKIPPED', completedAt: null },
+        });
+      }
+      return true;
+    });
+  }
+
+  /** Persist a service-computed goal reset plan; this method owns only Prisma writes. */
+  async applyBandGoalResetPlan(
+    userId: string,
+    bookingId: string,
+    goalId: string,
+    plan: BandGoalResetPlan,
+  ): Promise<void> {
+    if (!plan.resetGoal && !plan.resetStepIds.length) return;
+    const transaction: Prisma.PrismaPromise<unknown>[] = [];
+    if (plan.resetGoal) {
+      transaction.push(
+        this.prisma.bookingChecklistItem.updateMany({
+          where: { id: goalId, bookingId, userId, state: 'COMPLETE' },
+          data: { state: 'PENDING', completedAt: null },
+        }),
+      );
+    }
+    if (plan.resetStepIds.length) {
+      transaction.push(
+        this.prisma.bookingChecklistStep.updateMany({
+          where: { id: { in: plan.resetStepIds }, goalId, bookingId, userId, state: 'COMPLETE' },
+          data: { state: 'PENDING', completedAt: null },
+        }),
+      );
+    }
+    transaction.push(
+      this.prisma.bookingChecklistItem.updateMany({
+        where: { id: goalId, bookingId, userId },
+        data: { updatedAt: new Date() },
+      }),
+    );
+    await this.prisma.$transaction(transaction);
   }
 
   // Un-stick a COMPLETE checklist key so the next evaluate() can recompute it (used when an
@@ -264,6 +477,7 @@ export class ChecklistRepository {
     order: number,
     userId: string,
     bookingId: string,
+    bandMemberId: string | null = null,
   ) {
     return {
       userId,
@@ -275,6 +489,7 @@ export class ChecklistRepository {
       completeMode: step.completeMode,
       state: 'PENDING',
       completedBy: step.completedBy,
+      bandMemberId,
       ...(step.autoCompleteRule != null
         ? { autoCompleteRule: step.autoCompleteRule as Prisma.InputJsonValue }
         : {}),
@@ -333,7 +548,7 @@ export class ChecklistRepository {
     // write); stepless goals batch via createMany. The global index keeps template order.
     for (let idx = 0; idx < defaults.length; idx++) {
       const item = defaults[idx];
-      const steps = this.canonicalStepsFor(item.key);
+      const steps = seedableChecklistSteps(this.canonicalStepsFor(item.key));
       if (steps.length > 0) {
         await client.bookingChecklistItem.create({
           data: {
@@ -385,7 +600,7 @@ export class ChecklistRepository {
     const dependsOn = def.dependsOn ?? [];
     const autoCompleteRule = def.autoCompleteRule ?? null;
     const dueDateRule = def.dueDateRule ?? null;
-    const steps = def.steps ?? [];
+    const steps = seedableChecklistSteps(def.steps ?? []);
 
     return this.prisma.$transaction(async (tx) => {
       await tx.bookingChecklistItem.updateMany({

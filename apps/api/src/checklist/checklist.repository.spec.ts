@@ -1,5 +1,6 @@
 import { ChecklistRepository } from './checklist.repository';
 import { PrismaService } from '../prisma/prisma.service';
+import { BAND_BRIEFED_GOAL_KEY, BAND_CHECKLIST_GOAL_KEY, CHECKLIST_DEFAULTS } from './checklist-defaults';
 
 type MockPrisma = {
   booking: { findMany: jest.Mock };
@@ -17,7 +18,11 @@ type MockPrisma = {
     findMany: jest.Mock;
     update: jest.Mock;
     updateMany: jest.Mock;
+    deleteMany: jest.Mock;
+    createMany: jest.Mock;
   };
+  bookingBandMember: { findMany: jest.Mock };
+  bookingBandChair: { findMany: jest.Mock };
   $transaction: jest.Mock;
 };
 
@@ -38,7 +43,11 @@ function makePrisma(): MockPrisma {
       findMany: jest.fn(),
       update: jest.fn(),
       updateMany: jest.fn(),
+      deleteMany: jest.fn(),
+      createMany: jest.fn(),
     },
+    bookingBandMember: { findMany: jest.fn() },
+    bookingBandChair: { findMany: jest.fn() },
     $transaction: jest.fn(),
   };
 }
@@ -594,5 +603,146 @@ describe('ChecklistRepository — seedChecklistItems (goal⊃step seeding, ADR-0
     expect(batched).toEqual([expect.objectContaining({ key: 'send_quote', order: 1 })]);
     const createdGoal = prisma.bookingChecklistItem.create.mock.calls[0][0].data;
     expect(createdGoal).toMatchObject({ key: 'get_contract_signed', order: 2 });
+  });
+
+  it('seeds only static steps for the band goal; per-member templates wait for a roster row', async () => {
+    const previousFlag = process.env.FEATURE_BAND_MEMBERS;
+    process.env.FEATURE_BAND_MEMBERS = 'true';
+    try {
+      prisma.bookingChecklistItem.create.mockResolvedValue({ id: 'g-band' });
+      const goal = CHECKLIST_DEFAULTS.find((item) => item.key === BAND_CHECKLIST_GOAL_KEY)!;
+      await repo.seedChecklistItems('u1', 'b1', [goal], BOOKING_DATE, CREATED_AT);
+
+      const created = prisma.bookingChecklistItem.create.mock.calls[0][0].data;
+      expect(created.steps.create.map((step: { key: string }) => step.key)).toEqual([
+        'choose_a_lineup',
+        'fill_every_chair',
+      ]);
+      expect(prisma.bookingChecklistItem.createMany).not.toHaveBeenCalled();
+    } finally {
+      if (previousFlag === undefined) delete process.env.FEATURE_BAND_MEMBERS;
+      else process.env.FEATURE_BAND_MEMBERS = previousFlag;
+    }
+  });
+
+  it('persists the defaults selected by the service without applying feature-flag policy', async () => {
+    const previousFlag = process.env.FEATURE_BAND_MEMBERS;
+    delete process.env.FEATURE_BAND_MEMBERS;
+    try {
+      const goal = CHECKLIST_DEFAULTS.find((item) => item.key === BAND_CHECKLIST_GOAL_KEY)!;
+      await repo.seedChecklistItems('u1', 'b1', [goal], BOOKING_DATE, CREATED_AT);
+      expect(prisma.bookingChecklistItem.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ key: BAND_CHECKLIST_GOAL_KEY }),
+      }));
+      expect(prisma.bookingChecklistItem.createMany).not.toHaveBeenCalled();
+    } finally {
+      if (previousFlag !== undefined) process.env.FEATURE_BAND_MEMBERS = previousFlag;
+    }
+  });
+});
+
+describe('ChecklistRepository — band checklist persistence (#900)', () => {
+  let repo: ChecklistRepository;
+  let prisma: MockPrisma;
+
+  beforeEach(() => {
+    prisma = makePrisma();
+    repo = new ChecklistRepository(prisma as unknown as PrismaService);
+    prisma.$transaction.mockImplementation((operations: unknown[]) => Promise.resolve(operations));
+  });
+
+  it('loads every band goal and the active roster with tenant scoping (#901)', async () => {
+    prisma.bookingChecklistItem.findMany.mockResolvedValue([
+      { id: 'g-band', key: BAND_CHECKLIST_GOAL_KEY, userId: 'u1', state: 'PENDING', steps: [] },
+      { id: 'g-brief', key: BAND_BRIEFED_GOAL_KEY, userId: 'u1', state: 'PENDING', steps: [] },
+    ]);
+    prisma.bookingBandMember.findMany.mockResolvedValue([]);
+    prisma.bookingBandChair.findMany.mockResolvedValue([]);
+
+    const data = await repo.findBandChecklistStepSyncData('u1', 'b1');
+
+    expect(data?.goals.map((goal) => goal.id)).toEqual(['g-band', 'g-brief']);
+    expect(prisma.bookingChecklistItem.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { bookingId: 'b1', userId: 'u1', key: { in: [BAND_CHECKLIST_GOAL_KEY, BAND_BRIEFED_GOAL_KEY] } },
+    }));
+    expect(prisma.bookingBandMember.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { bookingId: 'b1', userId: 'u1', removedAt: null },
+    }));
+  });
+
+  it('loads nothing when the booking has no band goal', async () => {
+    prisma.bookingChecklistItem.findMany.mockResolvedValue([]);
+    prisma.bookingBandMember.findMany.mockResolvedValue([]);
+    prisma.bookingBandChair.findMany.mockResolvedValue([]);
+
+    await expect(repo.findBandChecklistStepSyncData('u1', 'b1')).resolves.toBeNull();
+  });
+
+  it('re-opens a COMPLETE goal in the same transaction when the plan asks (#901)', async () => {
+    const template = CHECKLIST_DEFAULTS.find((item) => item.key === BAND_BRIEFED_GOAL_KEY)!.steps![0];
+    await repo.applyBandMemberStepSyncPlan('u1', 'b1', 'g-brief', {
+      deleteStepIds: [],
+      updateSteps: [],
+      createSteps: [{ template, memberId: 'm-sam', label: 'Brief Sam', order: 2 }],
+      reopenGoal: true,
+    });
+
+    expect(prisma.bookingChecklistItem.updateMany).toHaveBeenCalledWith({
+      where: { id: 'g-brief', bookingId: 'b1', userId: 'u1', state: 'COMPLETE' },
+      data: { state: 'PENDING', completedAt: null },
+    });
+  });
+
+  it('persists the service-computed step changes transactionally', async () => {
+    const template = CHECKLIST_DEFAULTS.find((item) => item.key === BAND_CHECKLIST_GOAL_KEY)!.steps![3];
+    await repo.applyBandMemberStepSyncPlan('u1', 'b1', 'g-band', {
+      deleteStepIds: ['stale-step'],
+      updateSteps: [{ id: 'step-1', label: 'Invite Dave', order: 3 }],
+      createSteps: [{ template, memberId: 'm-dave', label: 'Dave confirms', order: 4 }],
+      reopenGoal: false,
+    });
+
+    expect(prisma.bookingChecklistItem.updateMany).not.toHaveBeenCalledWith(expect.objectContaining({
+      data: { state: 'PENDING', completedAt: null },
+    }));
+
+    expect(prisma.bookingChecklistStep.deleteMany).toHaveBeenCalledWith({
+      where: { id: 'stale-step', goalId: 'g-band', bookingId: 'b1', userId: 'u1' },
+    });
+    expect(prisma.bookingChecklistStep.update).toHaveBeenCalledWith({
+      where: { id: 'step-1', bookingId: 'b1', userId: 'u1' },
+      data: { label: 'Invite Dave', order: 3 },
+    });
+    expect(prisma.bookingChecklistStep.createMany.mock.calls[0][0].data).toEqual([
+      expect.objectContaining({
+        goalId: 'g-band', key: 'band_member_confirmed', bandMemberId: 'm-dave',
+        label: 'Dave confirms', order: 4, userId: 'u1', bookingId: 'b1',
+      }),
+    ]);
+    expect(prisma.bookingChecklistItem.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'g-band', bookingId: 'b1', userId: 'u1' },
+    }));
+    expect(prisma.$transaction).toHaveBeenCalled();
+  });
+
+  it('loads reset facts by tenant and persists only the supplied reset plan', async () => {
+    prisma.bookingChecklistItem.findFirst.mockResolvedValue({ id: 'g-band', userId: 'u1', state: 'COMPLETE', steps: [] });
+    const goal = await repo.findBandGoalResetData('u1', 'b1');
+    expect(goal).toMatchObject({ id: 'g-band', userId: 'u1', state: 'COMPLETE' });
+    expect(prisma.bookingChecklistItem.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: { bookingId: 'b1', userId: 'u1', key: BAND_CHECKLIST_GOAL_KEY },
+    }));
+
+    await repo.applyBandGoalResetPlan('u1', 'b1', 'g-band', { resetGoal: true, resetStepIds: ['s-lineup', 's-fill', 's-confirm'] });
+
+    expect(prisma.bookingChecklistItem.updateMany).toHaveBeenCalledWith({
+      where: { id: 'g-band', bookingId: 'b1', userId: 'u1', state: 'COMPLETE' },
+      data: { state: 'PENDING', completedAt: null },
+    });
+    expect(prisma.bookingChecklistStep.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['s-lineup', 's-fill', 's-confirm'] }, goalId: 'g-band', bookingId: 'b1', userId: 'u1', state: 'COMPLETE' },
+      data: { state: 'PENDING', completedAt: null },
+    });
+    expect(prisma.$transaction).toHaveBeenCalled();
   });
 });

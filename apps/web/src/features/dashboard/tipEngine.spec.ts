@@ -8,6 +8,8 @@ const allSetUp: TipSnapshot = {
   usesDefaultPortalBranding: false,
   songRequestsEnabled: true,
   hasSongs: true,
+  bandSetupSkipped: false,
+  hasLineupTemplate: false,
 };
 const nothingSetUp: TipSnapshot = {
   hasTravelBase: false,
@@ -16,6 +18,8 @@ const nothingSetUp: TipSnapshot = {
   usesDefaultPortalBranding: true,
   songRequestsEnabled: true,
   hasSongs: false,
+  bandSetupSkipped: false,
+  hasLineupTemplate: false,
 };
 
 describe('selectEligibleTips', () => {
@@ -63,6 +67,24 @@ describe('onboarding skip preconditions', () => {
   it('surfaces the repertoire tip when song requests are on and no song has been added', () => {
     expect(ids({ ...allSetUp, songRequestsEnabled: true, hasSongs: false })).toContain(
       'repertoire-empty',
+    );
+  });
+
+  it('surfaces the band setup tip after onboarding is skipped and no lineup exists', () => {
+    expect(ids({ ...allSetUp, bandSetupSkipped: true, hasLineupTemplate: false })).toContain(
+      'band-setup-skipped',
+    );
+  });
+
+  it('drops the band setup tip when a lineup is created', () => {
+    expect(ids({ ...allSetUp, bandSetupSkipped: true, hasLineupTemplate: true })).not.toContain(
+      'band-setup-skipped',
+    );
+  });
+
+  it('does not nudge a musician who answered the onboarding question', () => {
+    expect(ids({ ...allSetUp, bandSetupSkipped: false, hasLineupTemplate: false })).not.toContain(
+      'band-setup-skipped',
     );
   });
 });

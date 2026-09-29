@@ -6,6 +6,7 @@ import { mapBandPortalView, type BandPortalRosterView, type BandPortalSelfView }
 import { canRespondToBandInvite, type BandMemberStatus } from '../bookings/band-member-status';
 import type { BandResponseValue } from './dto/band-respond.dto';
 import { DocumentsService } from '../documents/documents.service';
+import { ChecklistReevaluator } from '../checklist/checklist-reevaluator.service';
 
 // The musician's business identity — baseline portal chrome, always returned regardless of the
 // cancelled gate below (ADR-0073 §5's "identity and a banner"), exactly as the client portal always
@@ -38,6 +39,7 @@ export class BandPortalService {
     private repo: BandPortalRepository,
     private publicProfileRepo: PublicProfileRepository,
     private documents: DocumentsService,
+    private checklistReevaluator: ChecklistReevaluator,
   ) {}
 
   async getBandPortalData(token: string): Promise<BandPortalData> {
@@ -98,8 +100,16 @@ export class BandPortalService {
     // The atomic guard (repo's `updateMany` with a status `where`, not just the read-then-check
     // above) is what actually makes this one-shot under concurrency: a racing second call updates
     // 0 rows and is reported here exactly as a genuinely sequential second attempt would be.
-    const responded = await this.repo.respondToInvite(member.id, response);
+    const responded = await this.repo.respondToInvite(
+      booking.userId,
+      member.bookingId,
+      member.id,
+      response,
+      response === 'DECLINED',
+    );
     if (!responded) throw new BadRequestException('This invite has already been answered');
+
+    await this.checklistReevaluator.onBandRosterChanged(booking.userId, member.bookingId, member.id);
 
     return this.getBandPortalData(token);
   }
