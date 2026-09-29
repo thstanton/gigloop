@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import SettingsPage from './SettingsPage';
@@ -93,6 +94,19 @@ describe('SettingsPage — notifications section', () => {
     renderPage();
     await waitFor(() => expect(screen.getByText('Weekly digest email')).toBeInTheDocument());
     expect(screen.getByText('Notifications')).toBeInTheDocument();
+  });
+
+  it('keeps the digest toggle accessible and keyboard-operable', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    const toggle = await screen.findByRole('switch', { name: /Weekly digest email/ });
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+
+    toggle.focus();
+    await user.keyboard('[Space]');
+
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
   });
 
   it('renders the reminder window input with the profile value', async () => {
