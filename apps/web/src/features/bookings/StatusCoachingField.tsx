@@ -39,9 +39,9 @@ export function StatusCoachingField({ value, onChange }: StatusCoachingFieldProp
                 aria-checked={selected}
                 active={selected}
                 onClick={() => onChange(status)}
-                className={selected ? cn(accent, 'border-transparent text-white') : undefined}
+                className={selected ? cn(accent, 'border-transparent text-on-status') : undefined}
               >
-                <span className={cn('h-2 w-2 rounded-full', selected ? 'bg-white/80' : accent)} />
+                <span className={cn('h-2 w-2 rounded-full', selected ? 'bg-on-status/80' : accent)} />
                 {BOOKING_STATUS_LABELS[status]}
               </TogglePill>
             );

@@ -74,9 +74,20 @@ const config: Config = {
           DEFAULT: 'hsl(var(--destructive))',
           foreground: 'hsl(var(--destructive-foreground))',
         },
+        warning: {
+          DEFAULT: 'hsl(var(--warning))',
+          surface: 'hsl(var(--warning-surface))',
+          border: 'hsl(var(--warning-border))',
+          foreground: 'hsl(var(--warning-foreground))',
+        },
         input: 'hsl(var(--input))',
         ring: 'hsl(var(--ring))',
-        'date-badge': 'hsl(var(--date-badge))',
+        'date-badge': {
+          DEFAULT: 'hsl(var(--date-badge))',
+          foreground: 'hsl(var(--date-badge-foreground))',
+        },
+        overlay: 'hsl(var(--overlay) / <alpha-value>)',
+        'on-status': 'hsl(var(--on-status) / <alpha-value>)',
         status: {
           enquiry: 'hsl(var(--status-enquiry) / <alpha-value>)',
           provisional: 'hsl(var(--status-provisional) / <alpha-value>)',

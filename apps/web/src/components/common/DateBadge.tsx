@@ -37,7 +37,7 @@ export function DateBadge({ date, size = 'md', className }: DateBadgeProps) {
         className,
       )}
     >
-      <span className={cn('bg-date-badge font-semibold uppercase leading-none tracking-wide text-white', s.strip)}>
+      <span className={cn('bg-date-badge font-semibold uppercase leading-none tracking-wide text-date-badge-foreground', s.strip)}>
         {month}
       </span>
       <span className={cn('font-bold leading-none text-foreground', s.day)}>{day}</span>

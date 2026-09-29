@@ -64,6 +64,16 @@
        "date as first-class anchor"). A deliberate exception to the otherwise
        restrained palette: a warm calendar red used only on the DateBadge strip. */
     --date-badge: 0 57% 45%;
+    --date-badge-foreground: 0 0% 100%;
+
+    /* Semantic admin colors. Light values intentionally match the raw palette
+       utilities they replace; ADR-0085's appearance work can retune these. */
+    --warning: 32.132701 94.618834% 43.725490%; /* amber-600 */
+    --warning-surface: 48 100% 96.078431%; /* amber-50 */
+    --warning-border: 48 96.638655% 76.666667%; /* amber-200 */
+    --warning-foreground: 22.727273 82.5% 31.372549%; /* amber-800 */
+    --overlay: 0 0% 0%;
+    --on-status: 0 0% 100%; /* white; status colors are retuned in the appearance work */
   }
 
   * {
