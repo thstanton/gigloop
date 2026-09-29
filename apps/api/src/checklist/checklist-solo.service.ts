@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { disableBandChecklistGoals } from './checklist-defaults';
+import { applyBandSoloOptOut } from './checklist-defaults';
 import { ChecklistRepository } from './checklist.repository';
 import type { BandSoloExitContext, BandSoloExitPlan } from './checklist.repository';
 
@@ -11,10 +11,7 @@ export function planBandSoloExit(context: BandSoloExitContext): BandSoloExitPlan
     goalIdsToSkip: context.goals
       .filter((goal) => goal.state !== 'SKIPPED' && goal.state !== 'COMPLETE')
       .map((goal) => goal.id),
-    preferences: {
-      ...context.preferences,
-      checklistDefaults: disableBandChecklistGoals(context.preferences),
-    },
+    preferences: applyBandSoloOptOut(context.preferences),
   };
 }
 

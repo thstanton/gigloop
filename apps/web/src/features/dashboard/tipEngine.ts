@@ -20,6 +20,9 @@ export interface TipSnapshot {
   songRequestsEnabled: boolean;
   // True once the repertoire holds at least one song — what onboarding step 5 asks for.
   hasSongs: boolean;
+  // Skipping the band-setup section leaves this trace; creating a lineup completes the setup.
+  bandSetupSkipped: boolean;
+  hasLineupTemplate: boolean;
 }
 
 /** What the widget needs to render a tip. */
@@ -71,6 +74,12 @@ export const TIP_POOL: Tip[] = [
     condition: (s) => s.songRequestsEnabled && !s.hasSongs,
     text: 'Add your repertoire so clients can pick their songs from your setlist',
     href: '/admin/repertoire',
+  },
+  {
+    id: 'band-setup-skipped',
+    condition: (s) => s.bandSetupSkipped && !s.hasLineupTemplate,
+    text: 'Set up a lineup to make booking a band gig easier',
+    href: '/admin/packages',
   },
 ];
 

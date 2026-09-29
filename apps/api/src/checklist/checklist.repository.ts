@@ -43,7 +43,9 @@ type ActionChecklistItem = {
 };
 
 export interface BandSoloExitContext {
-  goals: Array<{ id: string; key: string; state: string }>;
+  // The solo-exit planner only needs identity and state. Checklist `key` is nullable for custom
+  // rows, and the repository query's `key in` predicate does not narrow Prisma's generated type.
+  goals: Array<{ id: string; state: string }>;
   preferences: Record<string, unknown>;
 }
 

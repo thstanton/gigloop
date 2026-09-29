@@ -1012,6 +1012,9 @@ export interface UserPreferences {
   customDressCodeOptions?: string[];
   // Ids of dismissed teaching surfaces (tips + concept cards) — one shared namespace.
   dismissedHints?: string[];
+  // True when the musician skipped the band setup section during onboarding; the dashboard tip
+  // remains eligible only until they create a lineup or answer the setup question later.
+  onboardingSkippedBandSetup?: boolean;
 }
 
 export interface UserProfile {

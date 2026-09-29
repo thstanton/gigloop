@@ -77,6 +77,13 @@ export class UserProfileController {
     return this.userProfileService.updateChecklistDefaults(req.userId, dto);
   }
 
+  @ApiOperation({ summary: 'Disable both band checklist goals in the current user defaults' })
+  @ApiResponse({ status: 200, description: 'Updated user profile with both band goals disabled' })
+  @Patch('preferences/checklist-defaults/disable-band-goals')
+  disableBandChecklistGoals(@Req() req: AuthedRequest) {
+    return this.userProfileService.disableBandChecklistGoals(req.userId);
+  }
+
   @ApiOperation({ summary: 'Get the public profile (creates if not exists)' })
   @Get('public')
   getPublicProfile(@Req() req: AuthedRequest) {

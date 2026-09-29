@@ -684,6 +684,18 @@ export function disableBandChecklistGoals(
   };
 }
 
+/** Apply the shared "no band" answer: persist both goal overrides and clear an earlier skip tip. */
+export function applyBandSoloOptOut(
+  preferences: Record<string, unknown> | null | undefined,
+): Record<string, unknown> {
+  const current = preferences ?? {};
+  return {
+    ...current,
+    checklistDefaults: disableBandChecklistGoals(current),
+    onboardingSkippedBandSetup: false,
+  };
+}
+
 // Slot custom items into their requiredForStatus stage (ADR-0060 §5): within each stage the
 // catalogue goals come first (catalogue order), then that stage's custom items (stored order).
 // `order` is derived here, never stored.

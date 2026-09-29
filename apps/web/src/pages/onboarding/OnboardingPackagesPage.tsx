@@ -23,6 +23,8 @@ import {
   type PackageFormValues,
   type PackageFormHints,
 } from '@/features/packages/PackageForm';
+import { BandSetupSection } from '@/features/onboarding/BandSetupSection';
+import { useBandSetup } from '@/features/onboarding/useBandSetup';
 import { stepNav } from '@/features/onboarding/steps';
 import type { PackageCatalogueItem, PackageTemplate } from '@/types/api';
 
@@ -131,6 +133,7 @@ export default function OnboardingPackagesPage() {
   const { isLoaded } = useAuth();
   const queryClient = useQueryClient();
   const { prev, next } = stepNav(PATH);
+  const bandSetup = useBandSetup();
 
   const { data: catalogue = [], isLoading } = useQuery({
     queryKey: ['packageCatalogue'],
@@ -147,9 +150,26 @@ export default function OnboardingPackagesPage() {
   }
 
   const { mutate: saveTemplate, isPending } = useMutation({
-    mutationFn: () => apiPost<PackageTemplate>('/packages', packageFormToPayload(form!)),
+    mutationFn: async (skipPackages: boolean) => {
+      if (!bandSetup.enabled) {
+        if (!skipPackages) await apiPost<PackageTemplate>('/packages', packageFormToPayload(form!));
+        return;
+      }
+
+      const defaultLineupTemplateId = await bandSetup.persistAnswer(skipPackages);
+      if (skipPackages) return;
+
+      await apiPost<PackageTemplate>('/packages', {
+        ...packageFormToPayload(form!),
+        ...(bandSetup.answer === 'band' ? { defaultLineupTemplateId } : {}),
+      });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['packages'] });
+      if (bandSetup.enabled) {
+        queryClient.invalidateQueries({ queryKey: ['lineups'] });
+        queryClient.invalidateQueries({ queryKey: ['me'] });
+      }
       if (next) navigate(next);
     },
     onError: () => toast({ title: 'Failed to save your template. Please try again.', variant: 'destructive' }),
@@ -219,17 +239,49 @@ export default function OnboardingPackagesPage() {
           </div>
         )}
 
+        {bandSetup.enabled && (
+          <BandSetupSection
+            answer={bandSetup.answer}
+            onAnswerChange={bandSetup.chooseAnswer}
+            lineup={{
+              lineups: bandSetup.lineups,
+              lineupsLoading: bandSetup.lineupsLoading,
+              selectedLineupId: bandSetup.selectedLineupId,
+              onSelectLineup: bandSetup.selectLineup,
+              createNewLineup: bandSetup.createNewLineup,
+              onCreateNewLineup: bandSetup.startNewLineup,
+              onUseExistingLineup: bandSetup.useExistingLineup,
+              lineupDraft: bandSetup.lineupDraft,
+              onLineupDraftChange: bandSetup.updateLineupDraft,
+            }}
+          />
+        )}
+
         <div className="flex flex-col gap-3 pt-2 sm:flex-row">
           {prev && (
             <Button variant="outline" onClick={() => navigate(prev)} disabled={isPending}>
               Back
             </Button>
           )}
-          <Button onClick={() => saveTemplate()} disabled={!form || isPending}>
+          <Button
+            onClick={() => saveTemplate(false)}
+            disabled={
+              !form ||
+              isPending ||
+              (bandSetup.enabled && bandSetup.answer === 'band' &&
+                (bandSetup.lineupsLoading ||
+                  (bandSetup.isCreatingNewLineup && !bandSetup.isDraftLineupValid) ||
+                  (!bandSetup.isCreatingNewLineup && !bandSetup.selectedLineupId)))
+            }
+          >
             {isPending ? 'Saving…' : 'Save & continue'}
           </Button>
           {next && (
-            <Button variant="ghost" onClick={() => navigate(next)} disabled={isPending}>
+            <Button
+              variant="ghost"
+              onClick={() => (bandSetup.enabled ? saveTemplate(true) : navigate(next))}
+              disabled={isPending}
+            >
               Skip for now — customise in Settings
             </Button>
           )}

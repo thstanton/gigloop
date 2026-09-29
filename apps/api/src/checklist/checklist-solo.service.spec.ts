@@ -25,14 +25,15 @@ describe('ChecklistSoloService (#902)', () => {
   it('preserves completed history and skips outstanding band goals while updating defaults', () => {
     expect(planBandSoloExit({
       goals: [
-        { id: 'g-band', key: BAND_CHECKLIST_GOAL_KEY, state: 'COMPLETE' },
-        { id: 'g-brief', key: BAND_BRIEFED_GOAL_KEY, state: 'PENDING' },
+        { id: 'g-band', state: 'COMPLETE' },
+        { id: 'g-brief', state: 'PENDING' },
       ],
       preferences: { theme: 'dark' },
     })).toMatchObject({
       goalIdsToSkip: ['g-brief'],
       preferences: {
         theme: 'dark',
+        onboardingSkippedBandSetup: false,
         checklistDefaults: {
           systemItemOverrides: expect.arrayContaining([
             { key: BAND_CHECKLIST_GOAL_KEY, enabled: false },

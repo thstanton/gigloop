@@ -5,6 +5,8 @@ import { apiGet } from '@/lib/api';
 import { useMe } from '@/lib/hooks/useMe';
 import { useDismissibleHint } from '@/lib/hooks/useDismissibleHint';
 import { useSongs } from '@/lib/hooks/useSongs';
+import { useLineupTemplates } from '@/lib/hooks/useLineupTemplates';
+import { isEnabled } from '@/lib/featureFlags';
 import type { PackageTemplate, PublicProfile, Song, UserProfile } from '@/types/api';
 import { TipsWidget } from './TipsWidget';
 import { selectEligibleTips, pickTip, TIP_POOL, type TipSnapshot } from './tipEngine';
@@ -28,6 +30,7 @@ function buildSnapshot(
   publicProfile: PublicProfile | undefined,
   packages: PackageTemplate[] | undefined,
   songs: Song[] | undefined,
+  lineups: { id: string }[] | undefined,
 ): TipSnapshot {
   return {
     hasTravelBase: !!(me?.travelBaseLatitude && me?.travelBaseLongitude),
@@ -39,6 +42,9 @@ function buildSnapshot(
     // Conservative while the query is in flight (like noCustomPackage above): an unloaded
     // repertoire must not read as an empty one, or the tip flashes for someone who has songs.
     hasSongs: !songs || songs.length > 0,
+    bandSetupSkipped: !!me?.preferences?.onboardingSkippedBandSetup,
+    // Be conservative until the lineup query resolves so the tip never flashes for an existing setup.
+    hasLineupTemplate: !lineups || lineups.length > 0,
   };
 }
 
@@ -81,9 +87,11 @@ export function TipsWidgetContainer() {
     enabled: isLoaded,
   });
   const { data: songs } = useSongs();
+  const bandMembersEnabled = isEnabled('VITE_FEATURE_BAND_MEMBERS');
+  const { data: lineups } = useLineupTemplates(bandMembersEnabled);
   const seed = useTipRotationSeed();
 
-  const snapshot = buildSnapshot(me, publicProfile, packages, songs);
+  const snapshot = buildSnapshot(me, publicProfile, packages, songs, lineups);
   const dismissed = me?.preferences?.dismissedHints ?? [];
   const eligible = selectEligibleTips(snapshot, dismissed, TIP_POOL);
   // Gate on `me` so nothing flashes before the profile loads.
