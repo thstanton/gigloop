@@ -439,6 +439,52 @@ export const MemberWithNoPartsIsNotAPlayer: Story = {
   },
 };
 
+// ── #1055 · ADR-0084 §7 · design contract, artboard 2 ("You" row) ────────────────
+// Nobody invites themselves: the organiser's own row is CONFIRMED straight away (the API sets it in
+// the request that seats them). Name reads "You". Must not carry: a status/answer control, a fee
+// editor, an Invite or Resend button, a send action, a ⋯ menu. The one control that stays is each
+// part's own ✕ — that is how you take yourself out of a part, not a control on the person.
+const you = bandMember({
+  id: 'm-you',
+  contactId: 'c-you',
+  contact: { id: 'c-you', name: 'Tim Stanton', email: null },
+  status: 'CONFIRMED',
+  isSelf: true,
+  sessionFee: null,
+});
+
+export const OnlySelf: Story = {
+  name: 'OnlySelf — you play every part: a plain "You" row, no answer, fee, invite, send or menu',
+  args: {
+    lineups: [{ id: 'lu-1', label: 'My four-piece', packageIds: [DRINKS, EVENING] }],
+    chairs: fourPieceChairs('lu-1', ['m-you', 'm-you', 'm-you', 'm-you']),
+    members: [you],
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    // The name reads "You" — not the contact's own name.
+    await expect(canvas.getByText('You')).toBeVisible();
+    await expect(canvas.queryByText('Tim Stanton')).not.toBeInTheDocument();
+    // Their parts still hang beneath the row, each with its own ✕.
+    for (const role of fourPieceRoles) {
+      await expect(canvas.getByRole('button', { name: `Empty the ${role} part` })).toBeVisible();
+    }
+
+    // Must not: a status/answer control, a fee editor, an invite, a send action, a preview link.
+    await expect(canvas.queryByRole('button', { name: /^Status for/ })).not.toBeInTheDocument();
+    await expect(canvas.queryByRole('button', { name: /fee for/i })).not.toBeInTheDocument();
+    await expect(canvas.queryByRole('button', { name: /invitation/i })).not.toBeInTheDocument();
+    await expect(canvas.queryByRole('button', { name: /^Send (call sheet|final details)/ })).not.toBeInTheDocument();
+    await expect(canvas.queryByRole('link', { name: /portal/i })).not.toBeInTheDocument();
+
+    // Never counted as waiting on or still to fill.
+    await expect(canvas.getByText('Parts to fill · all filled')).toBeVisible();
+    await expect(canvas.queryByText(/still to fill/)).not.toBeInTheDocument();
+    await expect(canvas.queryByText(/waiting on/i)).not.toBeInTheDocument();
+  },
+};
+
 export const CommunicationActionsArePerMember: Story = {
   name: 'Call sheet and final details actions target one player at a time',
   args: {

@@ -3,6 +3,7 @@ import { BookingStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { BookingsRepository, type BookingDetailRow, type LineupSelection } from './bookings.repository';
 import { ContractRepository } from './contract.repository';
+import { INITIAL_BAND_MEMBER_STATUS } from './band-member-status';
 import { MusicFormConfigRepository } from './music-form-config.repository';
 import { ChecklistRepository, ChecklistItemSeed } from '../checklist/checklist.repository';
 import { SeriesRepository } from '../series/series.repository';
@@ -747,8 +748,13 @@ export class BookingsService {
     const contact = await this.contacts.findOne(userId, dto.contactId);
     const existing = await this.repo.findActiveMemberByContact(userId, bookingId, dto.contactId);
     const member = existing ?? (await this.repo.createMember(userId, bookingId, dto.contactId));
-    if (member.isSelf !== contact.isAccountOwner) {
-      await this.repo.updateMember(member.id, { isSelf: contact.isAccountOwner });
+    // Nobody invites themselves (ADR-0084 §7): the account owner's row goes ADDED → CONFIRMED in
+    // the same write. No `invitedAt`/`respondedAt` — there was no invitation and no answer.
+    const selfUpdate: Prisma.BookingBandMemberUpdateInput = {};
+    if (member.isSelf !== contact.isAccountOwner) selfUpdate.isSelf = contact.isAccountOwner;
+    if (contact.isAccountOwner && member.status === INITIAL_BAND_MEMBER_STATUS) selfUpdate.status = 'CONFIRMED';
+    if (Object.keys(selfUpdate).length > 0) {
+      await this.repo.updateMember(member.id, selfUpdate);
     }
     const updated = await this.repo.setChairMember(chairId, member.id);
     await this.reeval.onBandRosterChanged(userId, bookingId);

@@ -2,7 +2,6 @@ import { Eye, Mail, X } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { IconButton } from '@/components/common/IconButton';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { BandMemberStatusDropdown } from './BandMemberStatusDropdown';
 import InlineFeeAdd from './InlineFeeAdd';
 import { PartRow } from './PartRow';
@@ -100,24 +99,27 @@ export function PlayersCard({
         {playing.map(({ member, theirParts, invitationAction }) => (
           <div key={member.id} className="py-3 border-b border-border last:border-b-0">
             <div className="flex items-center gap-2 min-w-0">
-                <span className="text-base font-semibold text-foreground truncate">{member.contact.name}</span>
-                {member.isSelf && <Badge variant="outline">you</Badge>}
+                <span className="text-base font-semibold text-foreground truncate">
+                  {member.isSelf ? 'You' : member.contact.name}
+                </span>
               </div>
 
-              <div className="flex flex-wrap items-center gap-3 mt-1.5">
-                <BandMemberStatusDropdown
-                  status={member.status}
-                  memberName={member.contact.name}
-                  onChange={(status) => onChangeStatus(member.id, status)}
-                  isPending={changingStatusMemberId === member.id}
-                />
-                <InlineFeeAdd
-                  value={member.sessionFee}
-                  label={`fee for ${member.contact.name}`}
-                  onSave={(sessionFee) => onSaveFee(member.id, sessionFee)}
-                  isSaving={savingFeeMemberId === member.id}
-                />
-                {!member.isSelf && (
+              {/* #1055 / ADR-0084 §7: nobody invites or pays themselves — your own row is CONFIRMED
+                  the moment you are seated, so it carries no answer, fee, invite, send or preview. */}
+              {!member.isSelf && (
+                <div className="flex flex-wrap items-center gap-3 mt-1.5">
+                  <BandMemberStatusDropdown
+                    status={member.status}
+                    memberName={member.contact.name}
+                    onChange={(status) => onChangeStatus(member.id, status)}
+                    isPending={changingStatusMemberId === member.id}
+                  />
+                  <InlineFeeAdd
+                    value={member.sessionFee}
+                    label={`fee for ${member.contact.name}`}
+                    onSave={(sessionFee) => onSaveFee(member.id, sessionFee)}
+                    isSaving={savingFeeMemberId === member.id}
+                  />
                   <Button
                     variant="outline"
                     size="sm"
@@ -128,36 +130,36 @@ export function PlayersCard({
                     <Mail size={14} />
                     {invitationAction.label}
                   </Button>
-                )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="min-h-10"
-                  onClick={() => onComposeCommunication(member.id, 'call-sheet')}
-                  aria-label={`Send call sheet to ${member.contact.name}`}
-                >
-                  Call sheet
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="min-h-10"
-                  onClick={() => onComposeCommunication(member.id, 'final-details')}
-                  aria-label={`Send final details to ${member.contact.name}`}
-                >
-                  Final details
-                </Button>
-                {/* #980 — preview what this dep sees at their own /band/:token, before they're
-                    invited. A plain link (not IconButton), matching the "Client portal" preview
-                    link's shape (BookingHeader.tsx) rather than a mutation-triggering action. */}
-                <a
-                  href={`/band/${member.bandPortalToken}?preview=admin&from=${encodeURIComponent(backHref)}`}
-                  className="min-h-[44px] min-w-[44px] -my-2.5 inline-flex items-center justify-center text-muted hover:text-foreground transition-colors"
-                  aria-label={`Preview ${member.contact.name}'s portal`}
-                >
-                  <Eye size={14} />
-                </a>
-              </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="min-h-10"
+                    onClick={() => onComposeCommunication(member.id, 'call-sheet')}
+                    aria-label={`Send call sheet to ${member.contact.name}`}
+                  >
+                    Call sheet
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="min-h-10"
+                    onClick={() => onComposeCommunication(member.id, 'final-details')}
+                    aria-label={`Send final details to ${member.contact.name}`}
+                  >
+                    Final details
+                  </Button>
+                  {/* #980 — preview what this dep sees at their own /band/:token, before they're
+                      invited. A plain link (not IconButton), matching the "Client portal" preview
+                      link's shape (BookingHeader.tsx) rather than a mutation-triggering action. */}
+                  <a
+                    href={`/band/${member.bandPortalToken}?preview=admin&from=${encodeURIComponent(backHref)}`}
+                    className="min-h-[44px] min-w-[44px] -my-2.5 inline-flex items-center justify-center text-muted hover:text-foreground transition-colors"
+                    aria-label={`Preview ${member.contact.name}'s portal`}
+                  >
+                    <Eye size={14} />
+                  </a>
+                </div>
+              )}
 
               <div className="mt-1">
                 {theirParts.map((chair) => (

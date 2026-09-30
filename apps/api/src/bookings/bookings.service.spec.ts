@@ -1433,15 +1433,53 @@ describe('BookingsService', () => {
     it('sets isSelf on a freshly-created member row when the assigned contact is the account owner', async () => {
       repo.findChair.mockResolvedValue(chair);
       repo.findActiveMemberByContact.mockResolvedValue(null);
-      repo.createMember.mockResolvedValue({ id: 'm3', contactId: 'c3', isSelf: false });
-      repo.updateMember.mockResolvedValue({ id: 'm3', contactId: 'c3', isSelf: true });
+      repo.createMember.mockResolvedValue({ id: 'm3', contactId: 'c3', isSelf: false, status: 'ADDED' });
+      repo.updateMember.mockResolvedValue({ id: 'm3', contactId: 'c3', isSelf: true, status: 'CONFIRMED' });
       repo.setChairMember.mockResolvedValue({ ...chair, memberId: 'm3' });
       contacts.findOne.mockResolvedValue({ id: 'c3', isAccountOwner: true });
 
       await service.assignChair('u1', 'b1', 'ch1', { contactId: 'c3' });
 
-      expect(repo.updateMember).toHaveBeenCalledWith('m3', { isSelf: true });
+      expect(repo.updateMember).toHaveBeenCalledWith('m3', expect.objectContaining({ isSelf: true }));
       expect(repo.setChairMember).toHaveBeenCalledWith('ch1', 'm3');
+    });
+
+    // ═══ #1055, ADR-0084 §7 — nobody invites themselves: your own row is CONFIRMED straight away ═══
+    // Same write as `isSelf` (one request, no second PATCH). No invitedAt, and no respondedAt — the
+    // organiser did not "answer" anything.
+    it('confirms a freshly-created account-owner member row in the same update that sets isSelf', async () => {
+      repo.findChair.mockResolvedValue(chair);
+      repo.findActiveMemberByContact.mockResolvedValue(null);
+      repo.createMember.mockResolvedValue({ id: 'm3', contactId: 'c3', isSelf: false, status: 'ADDED' });
+      repo.setChairMember.mockResolvedValue({ ...chair, memberId: 'm3' });
+      contacts.findOne.mockResolvedValue({ id: 'c3', isAccountOwner: true });
+
+      await service.assignChair('u1', 'b1', 'ch1', { contactId: 'c3' });
+
+      expect(repo.updateMember).toHaveBeenCalledTimes(1);
+      expect(repo.updateMember).toHaveBeenCalledWith('m3', { isSelf: true, status: 'CONFIRMED' });
+    });
+
+    it('confirms an existing ADDED self row that predates the rule', async () => {
+      repo.findChair.mockResolvedValue(chair);
+      repo.findActiveMemberByContact.mockResolvedValue({ id: 'm1', contactId: 'c1', isSelf: true, status: 'ADDED' });
+      repo.setChairMember.mockResolvedValue({ ...chair, memberId: 'm1' });
+      contacts.findOne.mockResolvedValue({ id: 'c1', isAccountOwner: true });
+
+      await service.assignChair('u1', 'b1', 'ch1', { contactId: 'c1' });
+
+      expect(repo.updateMember).toHaveBeenCalledWith('m1', { status: 'CONFIRMED' });
+    });
+
+    it('never confirms a non-owner contact', async () => {
+      repo.findChair.mockResolvedValue(chair);
+      repo.findActiveMemberByContact.mockResolvedValue(null);
+      repo.createMember.mockResolvedValue({ id: 'm2', contactId: 'c2', isSelf: false, status: 'ADDED' });
+      repo.setChairMember.mockResolvedValue({ ...chair, memberId: 'm2' });
+
+      await service.assignChair('u1', 'b1', 'ch1', { contactId: 'c2' });
+
+      expect(repo.updateMember).not.toHaveBeenCalled();
     });
 
     it('does not call updateMember when the existing member row already matches the account-owner flag', async () => {

@@ -105,6 +105,36 @@ export const GroupedByAnswer: Story = {
   },
 };
 
+// #1055 · ADR-0084 §7: the organiser seats themselves and nobody else. Their row is CONFIRMED from
+// the moment they are seated, so it sits under "Confirmed" — it never opens a "Waiting on" or
+// "Still to sort" group, and with every part filled there is no "Parts to fill" either.
+export const OnlySelf: Story = {
+  name: 'OnlySelf — only you play: Confirmed only, nothing waiting on, nothing to fill',
+  args: {
+    band: {
+      lineups: [{ id: 'lu-solo', label: 'Solo', packageIds: ['pkg-evening'] }],
+      chairs: [
+        { id: 'ch-keys', role: 'Keys', order: 1, lineupId: 'lu-solo', memberId: 'm-self', callTimes: [] },
+      ],
+      members: [
+        bandMember({
+          id: 'm-self',
+          contactId: 'c4',
+          contact: { id: 'c4', name: 'Tim Stanton', email: null },
+          status: 'CONFIRMED',
+          isSelf: true,
+        }),
+      ],
+    },
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Confirmed')).toBeVisible();
+    await expect(canvas.queryByText('Waiting on')).not.toBeInTheDocument();
+    await expect(canvas.queryByText('Still to sort')).not.toBeInTheDocument();
+    await expect(canvas.queryByText('Parts to fill')).not.toBeInTheDocument();
+  },
+};
+
 export const NoBandYet: Story = {
   args: {
     band: { lineups: [], chairs: [], members: [] },
