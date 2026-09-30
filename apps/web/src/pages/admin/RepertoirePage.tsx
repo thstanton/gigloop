@@ -8,6 +8,7 @@ import { Plus, Music2 } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import {
   Select,
@@ -36,46 +37,6 @@ const songSchema = z.object({
 });
 
 type SongFormValues = z.infer<typeof songSchema>;
-
-// ─── Toggle switch ────────────────────────────────────────────────────────────
-
-function ToggleSwitch({
-  checked,
-  onChange,
-  disabled,
-  'aria-label': ariaLabel,
-}: {
-  checked: boolean;
-  onChange: (v: boolean) => void;
-  disabled?: boolean;
-  'aria-label'?: string;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={ariaLabel}
-      disabled={disabled}
-      onClick={(e) => {
-        e.stopPropagation();
-        onChange(!checked);
-      }}
-      className={cn(
-        'relative inline-flex h-5 w-9 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
-        checked ? 'bg-primary' : 'bg-border',
-        disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
-      )}
-    >
-      <span
-        className={cn(
-          'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow transition duration-200',
-          checked ? 'translate-x-4' : 'translate-x-0',
-        )}
-      />
-    </button>
-  );
-}
 
 // ─── Shared form fields ───────────────────────────────────────────────────────
 
@@ -327,9 +288,9 @@ function SongRow({
             <p className="text-xs text-muted mt-0.5 truncate">{secondaryLine}</p>
           )}
         </button>
-        <ToggleSwitch
+        <Switch
           checked={song.active}
-          onChange={(active) => toggleMutation.mutate(active)}
+          onCheckedChange={(active) => toggleMutation.mutate(active)}
           disabled={toggleMutation.isPending}
           aria-label={`${song.active ? 'Deactivate' : 'Activate'} ${song.title}`}
         />

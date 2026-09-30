@@ -136,7 +136,7 @@ function UserAvatar({ size = 'sm' }: { size?: 'sm' | 'md' }) {
 
   if (photo) {
     return (
-      <div className={cn('rounded-full overflow-hidden flex-shrink-0 bg-white', sizeClass)}>
+      <div className={cn('rounded-full overflow-hidden flex-shrink-0 bg-background', sizeClass)}>
         <img src={photo} alt="Profile" className="w-full h-full object-cover" />
       </div>
     );

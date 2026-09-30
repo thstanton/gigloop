@@ -111,7 +111,7 @@ function AttachmentIndicator({ state }: { state: AttachmentState }) {
     );
   }
   return (
-    <div className="flex gap-2 rounded-md bg-amber-50 border border-amber-200 px-3 py-2.5 text-sm text-amber-800">
+    <div className="flex gap-2 rounded-md bg-warning-surface border border-warning-border px-3 py-2.5 text-sm text-warning-foreground">
       <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
       <span>{state.message}</span>
     </div>
@@ -146,7 +146,7 @@ function InvoiceDateFields({
 function MissingVariablesWarning({ variables }: { variables: string[] }) {
   if (variables.length === 0) return null;
   return (
-    <div className="flex gap-2 rounded-md bg-amber-50 border border-amber-200 px-3 py-2.5 text-sm text-amber-800">
+    <div className="flex gap-2 rounded-md bg-warning-surface border border-warning-border px-3 py-2.5 text-sm text-warning-foreground">
       <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
       <span>
         <strong>{formatMissingVariables(variables)}</strong>{' '}

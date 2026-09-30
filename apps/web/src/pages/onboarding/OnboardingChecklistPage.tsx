@@ -41,7 +41,7 @@ function MockGoal({ variant, label, step, due }: { variant: 'done' | 'active' | 
         {variant === 'active' && <ProgressRing done={2} total={5} size={14} />}
         {variant === 'pending' && <Circle size={14} className="shrink-0 text-border" />}
         <span className={cn('min-w-0 flex-1 truncate font-medium', variant === 'done' ? 'text-muted' : 'text-foreground')}>{label}</span>
-        {due && <span className="shrink-0 text-[10px] text-amber-600">{due}</span>}
+        {due && <span className="shrink-0 text-[10px] text-warning">{due}</span>}
       </div>
       {step && (
         <div className="ml-[22px] mt-0.5 flex items-center gap-1 text-primary">

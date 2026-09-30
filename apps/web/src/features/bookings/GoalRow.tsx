@@ -79,9 +79,9 @@ function dueDateDisplay(dueDate: string | null | undefined): { text: string; cla
     const n = Math.abs(diffDays);
     return { text: n === 1 ? '1 day overdue' : `${n} days overdue`, className: 'text-status-cancelled' };
   }
-  if (diffDays === 0) return { text: 'Due today', className: 'text-amber-600' };
-  if (diffDays === 1) return { text: 'Due tomorrow', className: 'text-amber-600' };
-  if (diffDays <= 7) return { text: `Due in ${diffDays} days`, className: 'text-amber-600' };
+  if (diffDays === 0) return { text: 'Due today', className: 'text-warning' };
+  if (diffDays === 1) return { text: 'Due tomorrow', className: 'text-warning' };
+  if (diffDays <= 7) return { text: `Due in ${diffDays} days`, className: 'text-warning' };
   return {
     text: `Due ${due.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`,
     className: 'text-muted',

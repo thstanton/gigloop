@@ -7,13 +7,13 @@ import { useAuth } from '@clerk/react';
 import { Link } from 'react-router-dom';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ChevronRight } from 'lucide-react';
 import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
 import { toast } from '@/lib/hooks/use-toast';
 import type { PublicProfile, UserProfile, UpdatePublicProfileInput, UpdateUserProfileInput, UserPreferences, InvoiceNumberFormat, PaddingWidth } from '@/types/api';
-import { cn } from '@/lib/utils';
 import { PageSection } from '@/components/common/PageSection';
 import { FormField } from '@/components/common/FormField';
 import { AddressAutocomplete } from '@/components/common/AddressAutocomplete';
@@ -136,39 +136,6 @@ function SaveBar({
         <span className="text-sm text-status-cancelled">Something went wrong</span>
       )}
     </div>
-  );
-}
-
-function Toggle({
-  checked,
-  onChange,
-  disabled,
-}: {
-  checked: boolean;
-  onChange: (v: boolean) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      onClick={() => !disabled && onChange(!checked)}
-      disabled={disabled}
-      className={cn(
-        'relative inline-flex w-9 h-5 rounded-full transition-colors duration-150 flex-shrink-0',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-        checked && !disabled ? 'bg-primary' : 'bg-border',
-        disabled && 'opacity-40 cursor-not-allowed',
-      )}
-    >
-      <span
-        className={cn(
-          'absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-150',
-          checked ? 'translate-x-4' : 'translate-x-0',
-        )}
-      />
-    </button>
   );
 }
 
@@ -473,7 +440,7 @@ function BusinessDetailsSection({ profile }: { profile: UserProfile }) {
         control={control}
         render={({ field }) => (
           <label className="flex items-start gap-3 cursor-pointer">
-            <Toggle checked={field.value} onChange={field.onChange} />
+            <Switch checked={field.value} onCheckedChange={field.onChange} />
             <div className="-mt-0.5">
               <p className="text-sm font-medium text-foreground">VAT registered</p>
               <p className="text-xs text-muted mt-0.5">Show VAT number and rate fields on invoices</p>
@@ -692,7 +659,7 @@ function InvoiceSettingsSection({ profile }: { profile: UserProfile }) {
           control={control}
           render={({ field }) => (
             <label className="flex items-start gap-3 cursor-pointer">
-              <Toggle checked={field.value} onChange={field.onChange} />
+              <Switch checked={field.value} onCheckedChange={field.onChange} />
               <div className="-mt-0.5">
                 <p className="text-sm font-medium text-foreground">Include year</p>
                 <p className="text-xs text-muted mt-0.5">
@@ -782,7 +749,7 @@ function NotificationsSection({ profile }: { profile: UserProfile }) {
           control={control}
           render={({ field }) => (
             <label className="flex items-start gap-3 cursor-pointer">
-              <Toggle checked={field.value} onChange={field.onChange} />
+              <Switch checked={field.value} onCheckedChange={field.onChange} />
               <div className="-mt-0.5">
                 <p className="text-sm font-medium text-foreground">Weekly digest email</p>
                 <p className="text-xs text-muted mt-0.5">
@@ -879,7 +846,7 @@ function BookingSettingsSection({ profile }: { profile: UserProfile }) {
             control={generalControl}
             render={({ field }) => (
               <label className="flex items-start gap-3 cursor-pointer">
-                <Toggle checked={field.value} onChange={field.onChange} />
+                <Switch checked={field.value} onCheckedChange={field.onChange} />
                 <div className="-mt-0.5">
                   <p className="text-sm font-medium text-foreground">Song request form</p>
                   <p className="text-xs text-muted mt-0.5">
