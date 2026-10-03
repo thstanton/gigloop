@@ -787,6 +787,11 @@ export const MUSICIAN_FIGURE_DESCRIPTIONS = column(MUSICIAN_FIGURES, 'descriptio
 
 export const MUSICIAN_FIGURE_DARK = column(MUSICIAN_FIGURES, 'dark');
 
+/** The literal Tailwind class each figure takes in dark mode — one lookup for the component. */
+export const MUSICIAN_FIGURE_DARK_CLASSES = Object.fromEntries(
+  MUSICIAN_FIGURE_ORDER.map((figure) => [figure, MUSICIAN_DARK_CLASSES[MUSICIAN_FIGURE_DARK[figure]]]),
+) as Record<MusicianFigure, string>;
+
 // Tailpiece — the ornament that closes a movement. The stage-advance dialog is a
 // bottom sheet on mobile, so this stays small enough to keep the actions above the
 // fold. A starting point, tuned by eye in the story (the grill left it deliberately

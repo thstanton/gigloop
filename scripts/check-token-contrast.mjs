@@ -56,6 +56,18 @@ function declarationsIn(body) {
   return out;
 }
 
+const PRINT_MEDIA = /^@media\s+print\b/;
+
+/** Which palette a block path declares: 'light', 'dark', 'print', or null (not an appearance block). */
+function classifyBlock(path) {
+  const media = path.filter((segment) => segment.startsWith('@media'));
+  if (media.some((segment) => !PRINT_MEDIA.test(segment))) return null;
+  const inPrint = media.length > 0;
+  const leaf = path[path.length - 1];
+  if (leaf === '.dark') return inPrint ? 'print' : 'dark';
+  return leaf === ':root' && !inPrint ? 'light' : null;
+}
+
 /**
  * Walks the CSS brace structure and returns the custom properties declared by
  * `:root` (light), `.dark` (dark) and `.dark` inside `@media print` (print).
@@ -67,22 +79,12 @@ export function parseAppearanceBlocks(css) {
   const path = [];
   let buffer = '';
 
-  const target = () => {
-    const leaf = path[path.length - 1];
-    const inPrint = path.some((s) => /^@media\s+print\b/.test(s));
-    const inOtherMedia = path.some((s) => s.startsWith('@media') && !/^@media\s+print\b/.test(s));
-    if (inOtherMedia) return null;
-    if (leaf === ':root' && !inPrint) return result.light;
-    if (leaf === '.dark') return inPrint ? result.print : result.dark;
-    return null;
-  };
-
   for (const ch of text) {
     if (ch === '{') {
       path.push(buffer.split(';').pop().trim());
       buffer = '';
     } else if (ch === '}') {
-      const into = target();
+      const into = result[classifyBlock(path)];
       if (into) for (const [k, v] of declarationsIn(buffer)) into.set(k, v);
       path.pop();
       buffer = '';
@@ -236,32 +238,24 @@ export function pairKey({ fg, bg, wash }) {
  * at or above their floor.
  */
 export function applyBaseline(results, baseline) {
-  const failures = [];
-  const seen = new Set();
-
-  for (const r of results) {
-    const key = pairKey(r);
-    seen.add(key);
-    const accepted = baseline.get(key);
-    if (r.ok) {
-      if (accepted) failures.push(`${key} now passes — delete it from LIGHT_BASELINE`);
-      continue;
-    }
-    if (!accepted || r.problem) {
-      failures.push(
-        r.problem
-          ? `${key} — ${r.problem}`
-          : `${key} is ${r.ratio.toFixed(2)}:1, needs ${r.min}:1`,
-      );
-    } else if (r.ratio < accepted.floor) {
-      failures.push(`${key} regressed to ${r.ratio.toFixed(2)}:1 (baseline floor ${accepted.floor}:1)`);
-    }
-  }
+  const failures = results.map((r) => judgeResult(r, baseline.get(pairKey(r)))).filter(Boolean);
+  const seen = new Set(results.map(pairKey));
 
   for (const key of baseline.keys()) {
     if (!seen.has(key)) failures.push(`${key} is in LIGHT_BASELINE but no longer in PAIRS`);
   }
   return failures;
+}
+
+/** One failure message for a result given its baseline entry, or null when it is acceptable. */
+function judgeResult(r, accepted) {
+  const key = pairKey(r);
+  if (r.ok) return accepted ? `${key} now passes — delete it from LIGHT_BASELINE` : null;
+  if (r.problem) return `${key} — ${r.problem}`;
+  if (!accepted) return `${key} is ${r.ratio.toFixed(2)}:1, needs ${r.min}:1`;
+  return r.ratio < accepted.floor
+    ? `${key} regressed to ${r.ratio.toFixed(2)}:1 (baseline floor ${accepted.floor}:1)`
+    : null;
 }
 
 // ─── runner ────────────────────────────────────────────────────────────────
@@ -289,10 +283,9 @@ export function checkCss(css) {
     failures.push(`--status-${status} is declared but not in STATUSES, so its contrast is unchecked`);
   }
 
-  const lightResults = PAIRS.map((pair) => evaluatePair(light, pair));
-  failures.push(...applyBaseline(lightResults, LIGHT_BASELINE).map((f) => `light: ${f}`));
-  const darkResults = PAIRS.map((pair) => evaluatePair(dark, pair));
-  failures.push(...applyBaseline(darkResults, new Map()).map((f) => `dark: ${f}`));
+  const run = (tokens, baseline, label) =>
+    applyBaseline(PAIRS.map((pair) => evaluatePair(tokens, pair)), baseline).map((f) => `${label}: ${f}`);
+  failures.push(...run(light, LIGHT_BASELINE, 'light'), ...run(dark, new Map(), 'dark'));
   return failures;
 }
 

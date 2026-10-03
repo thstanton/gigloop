@@ -136,7 +136,9 @@ function AppearanceClerkProvider({ children }: { children: React.ReactNode }) {
   const [appearance, setAppearance] = React.useState(() => buildClerkAppearance(readRootToken));
 
   React.useLayoutEffect(() => {
-    setAppearance(buildClerkAppearance(readRootToken));
+    const next = buildClerkAppearance(readRootToken);
+    // Same tokens (e.g. on mount) keep the existing object, so ClerkProvider isn't re-rendered for nothing.
+    setAppearance((current) => (JSON.stringify(current) === JSON.stringify(next) ? current : next));
   }, [resolved]);
 
   return (
