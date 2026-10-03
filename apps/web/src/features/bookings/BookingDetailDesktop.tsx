@@ -11,7 +11,6 @@ import { useBookingCommunications } from '@/lib/hooks/useBookingCommunications';
 import { useBookingDocuments } from '@/lib/hooks/useBookingDocuments';
 import { useSeriesBookings } from '@/lib/hooks/useSeriesBookings';
 import { useConfigureMusicForm } from '@/lib/hooks/useConfigureMusicForm';
-import { useLineupTemplates } from '@/lib/hooks/useLineupTemplates';
 import SeriesInvoiceCard from '@/features/bookings/SeriesInvoiceCard';
 import { SeriesEventsCard } from '@/features/bookings/SeriesEventsCard';
 import ContractCard from '@/features/bookings/ContractCard';
@@ -23,7 +22,7 @@ import InlineNotes from '@/features/bookings/InlineNotes';
 import CommunicationsSection from '@/features/bookings/CommunicationsSection';
 import ItineraryCard from '@/features/bookings/ItineraryCard';
 import DetailsCard from '@/features/bookings/DetailsCard';
-import BandCard from '@/features/bookings/BandCard';
+import { PlayersSection } from '@/features/bookings/PlayersSection';
 import MusicFormSection from '@/features/bookings/MusicFormSection';
 import { InlineVenueAdd } from '@/features/bookings/InlineVenueAdd';
 import { BookingVenueMapWidget } from '@/features/bookings/BookingVenueMapWidget';
@@ -40,7 +39,6 @@ import type {
   BookingListItem,
   Communication,
   Document,
-  LineupTemplate,
 } from '@/types/api';
 
 interface BookingDetailDesktopProps {
@@ -62,7 +60,6 @@ interface DesktopBookingContentData {
     ReturnType<typeof useBookingChecklist>,
     'checklist' | 'checklistLoading' | 'toggleItem' | 'addItem' | 'isAddingItem'
   >;
-  lineupTemplates: LineupTemplate[];
   contractActions: ReturnType<typeof useContractActions>;
   fields: ReturnType<typeof useBookingFields>;
   invoices: Invoice[];
@@ -127,7 +124,7 @@ function DesktopBookingMainColumn({ data, actions }: Readonly<{ data: DesktopBoo
 }
 
 function DesktopBookingSidebar({ data, actions }: Readonly<{ data: DesktopBookingContentData; actions: DesktopBookingContentActions }>) {
-  const { booking, bookingId, bandData, seriesBookings, seriesBookingsLoading, documents, checklist, lineupTemplates,
+  const { booking, bookingId, bandData, seriesBookings, seriesBookingsLoading, documents, checklist,
     contractActions, contractShortcutType, backState } = data;
   const { navigate, setSearchParams, openCompose, openEditInvoice } = actions;
 
@@ -159,7 +156,7 @@ function DesktopBookingSidebar({ data, actions }: Readonly<{ data: DesktopBookin
         </div>
       </section>
 
-      {bandData && <BandCard band={bandData} hasLineupTemplates={lineupTemplates.length > 0} linkState={backState} />}
+      {bandData && <PlayersSection bookingId={bookingId} band={bandData} packages={booking.packages} linkState={backState} />}
 
       {booking.series && (
         <SeriesEventsCard
@@ -241,7 +238,6 @@ export function BookingDetailDesktop({ bookingId }: BookingDetailDesktopProps) {
   const bandMembersEnabled = isEnabled('VITE_FEATURE_BAND_MEMBERS');
   // The Band card's "has a multi-person lineup" signal (ADR-0073 §6) — deliberately kept off the
   // booking response, so it's derived here from the same query the Band sheet already uses.
-  const { data: lineupTemplates = [] } = useLineupTemplates(bandMembersEnabled);
 
   if (!booking) return null;
 
@@ -273,7 +269,6 @@ export function BookingDetailDesktop({ bookingId }: BookingDetailDesktopProps) {
     musicFormConfigLoading,
     turnOnMusicForm,
     checklist: { checklist, checklistLoading, toggleItem, addItem, isAddingItem },
-    lineupTemplates,
     contractActions,
     fields,
     invoices,

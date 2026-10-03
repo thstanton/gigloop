@@ -14,7 +14,6 @@ import { useBookingCommunications } from '@/lib/hooks/useBookingCommunications';
 import { useBookingDocuments } from '@/lib/hooks/useBookingDocuments';
 import { useSeriesBookings } from '@/lib/hooks/useSeriesBookings';
 import { useConfigureMusicForm } from '@/lib/hooks/useConfigureMusicForm';
-import { useLineupTemplates } from '@/lib/hooks/useLineupTemplates';
 import {
   BookingDetailMobileContent,
   type MobileBookingContentActions,
@@ -118,7 +117,6 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
   const bandMembersEnabled = isEnabled('VITE_FEATURE_BAND_MEMBERS');
   // The Band card's "has a multi-person lineup" signal (ADR-0073 §6) — deliberately kept off the
   // booking response, so it's derived here from the same query the Band sheet already uses.
-  const { data: lineupTemplates = [] } = useLineupTemplates(bandMembersEnabled);
 
   if (isLoading) return <MobileTabsSkeleton />;
   if (!booking) return null;
@@ -161,7 +159,6 @@ export function BookingDetailMobile({ bookingId }: BookingDetailMobileProps) {
     musicFormConfig,
     musicFormConfigLoading,
     isTurningOnMusicForm: turnOnMusicForm.isPending,
-    lineupTemplates,
     seriesBookings,
     seriesBookingsLoading,
     invoices,

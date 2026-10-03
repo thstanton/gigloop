@@ -6,7 +6,7 @@ import { GhostButton } from '@/components/common/GhostButton';
 import BookingDetailTabs from '@/features/bookings/BookingDetailTabs';
 import ItineraryCard from '@/features/bookings/ItineraryCard';
 import DetailsCard from '@/features/bookings/DetailsCard';
-import BandCard from '@/features/bookings/BandCard';
+import { PlayersSection } from '@/features/bookings/PlayersSection';
 import { BookingVenueMapWidget } from '@/features/bookings/BookingVenueMapWidget';
 import InlineNotes from '@/features/bookings/InlineNotes';
 import PersonChip from '@/features/bookings/PersonChip';
@@ -26,7 +26,6 @@ import type {
   Contract,
   Document,
   Invoice,
-  LineupTemplate,
   MusicFormConfig,
 } from '@/types/api';
 
@@ -39,7 +38,6 @@ export interface MobileBookingContentData {
   musicFormConfig: MusicFormConfig | null | undefined;
   musicFormConfigLoading: boolean;
   isTurningOnMusicForm: boolean;
-  lineupTemplates: LineupTemplate[];
   seriesBookings: BookingListItem[];
   seriesBookingsLoading: boolean;
   invoices: Invoice[];
@@ -125,7 +123,7 @@ function MobileOnTheDay({ data, actions }: Readonly<Pick<MobileBookingContentPro
 }
 
 function MobilePeopleAndBand({ data, actions }: Readonly<Pick<MobileBookingContentProps, 'data' | 'actions'>>) {
-  const { booking, backState, bandData, lineupTemplates } = data;
+  const { booking, bookingId, backState, bandData } = data;
   const { setSearchParams } = actions;
 
   return (
@@ -144,7 +142,7 @@ function MobilePeopleAndBand({ data, actions }: Readonly<Pick<MobileBookingConte
           {booking.bookingAgent && <PersonChip role="Booking agent" contact={booking.bookingAgent} linkState={backState} />}
         </div>
       </section>
-      {bandData && <BandCard band={bandData} hasLineupTemplates={lineupTemplates.length > 0} linkState={backState} />}
+      {bandData && <PlayersSection bookingId={bookingId} band={bandData} packages={booking.packages} linkState={backState} />}
     </>
   );
 }

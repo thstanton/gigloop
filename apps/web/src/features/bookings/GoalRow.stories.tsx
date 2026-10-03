@@ -63,6 +63,7 @@ function handlers(): ChecklistShortcutHandlers {
     onChecklistAction: fn(),
     onMarkDone: fn(),
     onDeepLink: fn(),
+    onShowPlayer: fn(),
     isActionPending: false,
   };
 }
@@ -274,7 +275,7 @@ export const BandMidInvite: Story = {
     await expect(canvas.getByRole('button', { name: 'Chase Dave' })).toBeVisible();
     await expect(canvas.getByText('2/4')).toBeVisible();
     await userEvent.click(canvas.getByRole('button', { name: 'Chase Dave' }));
-    await expect(args.handlers.onDeepLink).toHaveBeenCalledWith('band');
+    await expect(args.handlers.onShowPlayer).toHaveBeenCalledWith('m-dave');
   },
 };
 
@@ -352,7 +353,7 @@ export const BandBriefingWorklist: Story = {
     await expect(canvas.getByText('Get the band briefed')).toBeVisible();
     await expect(canvas.getByText('2/2')).toBeVisible();
     await userEvent.click(canvas.getByRole('button', { name: 'Brief Sam' }));
-    await expect(args.handlers.onDeepLink).toHaveBeenCalledWith('band');
+    await expect(args.handlers.onShowPlayer).toHaveBeenCalledWith('m-sam');
     // No call-sheet step: the call sheet is a push, never a chase (ADR-0073).
     await userEvent.click(canvas.getByRole('button', { name: /See all steps/ }));
     await expect(canvas.queryByText(/call sheet/i)).toBeNull();
@@ -370,7 +371,7 @@ export const BandBriefingFailed: Story = {
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('button', { name: 'Brief Dave' }));
-    await expect(args.handlers.onDeepLink).toHaveBeenCalledWith('band');
+    await expect(args.handlers.onShowPlayer).toHaveBeenCalledWith('m-dave');
   },
 };
 

@@ -15,7 +15,6 @@ const data: MobileBookingContentData = {
   musicFormConfig: null,
   musicFormConfigLoading: false,
   isTurningOnMusicForm: false,
-  lineupTemplates: [],
   seriesBookings: [],
   seriesBookingsLoading: false,
   invoices: [],

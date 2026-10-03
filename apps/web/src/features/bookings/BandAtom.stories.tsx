@@ -74,7 +74,6 @@ const meta = {
   component: BandAtom,
   tags: ['ai-generated'],
   args: {
-    bookingId: 'booking-1',
     lineups: [],
     chairs: [],
     members: [],
@@ -95,12 +94,6 @@ const meta = {
     removingChairId: null,
     onAssignChair: fn(),
     assigningChairId: null,
-    onChangeMemberStatus: fn(),
-    changingStatusMemberId: null,
-    onInviteMember: fn(),
-    onComposeCommunication: fn(),
-    onSaveMemberFee: fn(),
-    savingFeeMemberId: null,
   },
 } satisfies Meta<typeof BandAtom>;
 
@@ -141,36 +134,6 @@ export const OneLineupManySegments: Story = {
     for (const role of fourPieceRoles) {
       await expect(canvas.getAllByText(role)).toHaveLength(1);
     }
-  },
-};
-
-export const ExistingMemberCanResendInvitation: Story = {
-  name: 'Player row offers a per-person resend action',
-  args: {
-    lineups: [{ id: 'lu-invite', label: 'My four-piece', packageIds: [] }],
-    chairs: fourPieceChairs('lu-invite', ['m-ana', null, null, null], [WHOLE_GIG_CALL]),
-    members: [ana],
-    onInviteMember: fn(),
-  },
-  play: async ({ canvasElement, args }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: 'Resend invitation to Ana Reis' }));
-    await expect(args.onInviteMember).toHaveBeenCalledWith('m-ana');
-  },
-};
-
-export const ConfirmedMemberCanOpenInvitationOptions: Story = {
-  name: 'Confirmed players can still open the invitation message to copy it',
-  args: {
-    lineups: [{ id: 'lu-confirmed', label: 'My four-piece', packageIds: [] }],
-    chairs: fourPieceChairs('lu-confirmed', ['m-sam', null, null, null], [WHOLE_GIG_CALL]),
-    members: [sam],
-    onInviteMember: fn(),
-  },
-  play: async ({ canvasElement, args }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: 'Invitation options for Sam Okonkwo' }));
-    await expect(args.onInviteMember).toHaveBeenCalledWith('m-sam');
   },
 };
 
@@ -280,34 +243,18 @@ export const LineupPlayingNothing: Story = {
 };
 
 // ── 8 ─────────────────────────────────────────────────────────────────────────
-export const ChangeStatus: Story = {
-  name: '8. The status pill IS the dropdown — four options, a tick on the current one',
+export const PlayerPartsCarryCallTimes: Story = {
+  name: '8. A player\'s parts each say when they are called',
   args: {
     lineups: [{ id: 'lu-1', label: 'My four-piece', packageIds: [DRINKS, EVENING] }],
     chairs: fourPieceChairs('lu-1', ['m-sam', 'm-sam', null, null]),
     members: [sam],
   },
-  play: async ({ canvasElement, args }) => {
+  play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    // The pill is the trigger: the status word appears once, in the thing you press.
-    const trigger = canvas.getByRole('button', { name: 'Status for Sam Okonkwo' });
-    await expect(trigger).toHaveTextContent('Confirmed');
-
-    // #980 — the per-player preview link opens their real portal token, in preview mode, with a
-    // back-link to this booking.
-    const preview = canvas.getByRole('link', { name: "Preview Sam Okonkwo's portal" });
-    await expect(preview).toHaveAttribute(
-      'href',
-      '/band/m-sam-token?preview=admin&from=%2Fadmin%2Fbookings%2Fbooking-1',
-    );
-
-    await userEvent.click(trigger);
-
-    const menu = within(await screen.findByRole('menu'));
-    await expect(menu.getAllByRole('menuitem')).toHaveLength(4);
-
-    await userEvent.click(menu.getByRole('menuitem', { name: /Declined/ }));
-    await expect(args.onChangeMemberStatus).toHaveBeenCalledWith('m-sam', 'DECLINED');
+    // Every per-player control moved to the Info tab's Players card (#1057).
+    await expect(canvas.queryByRole('button', { name: /Status for/ })).not.toBeInTheDocument();
+    await expect(canvas.queryByRole('link', { name: /portal/ })).not.toBeInTheDocument();
 
     // Their other parts are untouched — the status is on the person, not the seat.
     await expect(canvas.getByText('Vocals')).toBeVisible();
@@ -320,30 +267,6 @@ export const ChangeStatus: Story = {
     // parts under Parts to fill — the same PartRow, which is the point of it being one component.
     await expect(canvas.getAllByText('18:00 Drinks Reception')).toHaveLength(4);
     await expect(canvas.getAllByText('20:30 Evening Party')).toHaveLength(4);
-  },
-};
-
-// ── 9 ─────────────────────────────────────────────────────────────────────────
-export const SetFee: Story = {
-  name: '9. The session fee is on the person — + Add fee opens, commits, and cancels cleanly',
-  args: {
-    lineups: [{ id: 'lu-1', label: 'My four-piece', packageIds: [DRINKS] }],
-    chairs: fourPieceChairs('lu-1', ['m-ana', null, null, null], [DRINKS_CALL]),
-    members: [ana],
-  },
-  play: async ({ canvasElement, args }) => {
-    const canvas = within(canvasElement);
-    const trigger = canvas.getByRole('button', { name: 'Add fee for Ana Reis' });
-    await userEvent.click(trigger);
-
-    await userEvent.type(canvas.getByRole('spinbutton', { name: 'fee for Ana Reis amount' }), '180');
-    await userEvent.click(canvas.getByRole('button', { name: 'Save fee for Ana Reis' }));
-    await expect(args.onSaveMemberFee).toHaveBeenCalledWith('m-ana', 180);
-
-    // Cancel restores the trigger unchanged (the story's props never change, so it reads as "add").
-    await userEvent.click(canvas.getByRole('button', { name: 'Add fee for Ana Reis' }));
-    await userEvent.click(canvas.getByRole('button', { name: 'Cancel fee for Ana Reis' }));
-    await expect(canvas.getByRole('button', { name: 'Add fee for Ana Reis' })).toBeVisible();
   },
 };
 
@@ -487,18 +410,3 @@ export const OnlySelf: Story = {
   },
 };
 
-export const CommunicationActionsArePerMember: Story = {
-  name: 'Call sheet and final details actions target one player at a time',
-  args: {
-    lineups: [{ id: 'lu-1', label: 'My four-piece', packageIds: [DRINKS] }],
-    chairs: fourPieceChairs('lu-1', ['m-sam', null, null, null], [DRINKS_CALL]),
-    members: [sam],
-  },
-  play: async ({ canvasElement, args }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: 'Send call sheet to Sam Okonkwo' }));
-    await userEvent.click(canvas.getByRole('button', { name: 'Send final details to Sam Okonkwo' }));
-    await expect(args.onComposeCommunication).toHaveBeenNthCalledWith(1, 'm-sam', 'call-sheet');
-    await expect(args.onComposeCommunication).toHaveBeenNthCalledWith(2, 'm-sam', 'final-details');
-  },
-};

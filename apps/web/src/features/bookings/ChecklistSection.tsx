@@ -260,6 +260,17 @@ export interface ChecklistSectionProps {
   clientName?: string | null;
 }
 
+// ADR-0084 §9: a per-person band step's shortcut lands on that player's row on the Players card,
+// which sits on this same page. Scroll to it and put focus on its actions (the first visible one —
+// ActionMenu renders a mobile and a desktop trigger).
+function showPlayerRow(memberId: string) {
+  const row = document.getElementById(`player-${memberId}`);
+  if (!row) return;
+  row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  const triggers = Array.from(row.querySelectorAll<HTMLButtonElement>('button[aria-label^="Actions for"]'));
+  triggers.find((t) => t.offsetParent !== null)?.focus({ preventScroll: true });
+}
+
 export default function ChecklistSection({
   bookingId,
   items,
@@ -293,6 +304,7 @@ export default function ChecklistSection({
     onChecklistAction: handleChecklistAction,
     onMarkDone: handleMarkDone,
     onDeepLink: (section: string) => navigate(`/admin/bookings/${bookingId}/builder?section=${section}`),
+    onShowPlayer: showPlayerRow,
     isActionPending,
   };
 

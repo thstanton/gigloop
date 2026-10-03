@@ -203,3 +203,30 @@ export function lineupsDisplacedBy(
     (l) => l.packageIds.length > 0 && l.packageIds.every((id) => packageIds.includes(id)),
   );
 }
+
+/** Package labels for a set of package ids, in the booking's own package order. */
+export function packageLabelsFor(packageIds: string[], packages: BookingPackageSummary[]): string[] {
+  return packages
+    .filter((p) => packageIds.includes(p.id))
+    .sort((a, b) => a.order - b.order)
+    .map((p) => p.label);
+}
+
+/**
+ * #1057 (ADR-0084 §2): the Players card's meta line, "{roles} · {packages played}". Roles are the
+ * distinct parts the person holds; packages are the labels of every package any of those parts'
+ * lineups plays. On a booking with no packages the second half is dropped — never "Whole gig".
+ */
+export function playerMeta(
+  memberId: string,
+  chairs: BookingBandChair[],
+  lineups: BookingLineup[],
+  packages: BookingPackageSummary[],
+): string {
+  const theirs = chairs.filter((c) => c.memberId === memberId).sort((a, b) => a.order - b.order);
+  const roles = [...new Set(theirs.map((c) => c.role))];
+  const packageIds = new Set(theirs.flatMap((c) => chairPackageIds(c, lineups)));
+  return [roles.join(', '), packageLabelsFor([...packageIds], packages).join(', ')]
+    .filter(Boolean)
+    .join(' · ');
+}

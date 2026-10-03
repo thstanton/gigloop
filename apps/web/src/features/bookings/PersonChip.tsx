@@ -27,7 +27,7 @@ export interface PersonChipProps {
   onEdit?: () => void;
 }
 
-function getInitials(name: string): string {
+export function getInitials(name: string): string {
   return name
     .split(' ')
     .map(w => w[0])
@@ -37,34 +37,18 @@ function getInitials(name: string): string {
     .toUpperCase();
 }
 
-export default function PersonChip({ role, contact, linkState, onEdit }: PersonChipProps) {
-  const initials = getInitials(contact.name);
-  const avatarClass =
-    role === 'Customer'
-      ? 'bg-primary text-primary-foreground'
-      : 'bg-accent text-muted';
-
+/** The contact popover (Call / Email / View contact) behind a person's name, around any trigger —
+ *  the chip below, and the Players card's row name. One popover, so the two cannot drift. */
+export function PersonPopover({
+  role,
+  contact,
+  linkState,
+  onEdit,
+  children,
+}: PersonChipProps & { children: React.ReactNode }) {
   return (
     <Popover>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 hover:bg-muted/50 transition-colors text-left min-w-0"
-        >
-          <div
-            className={cn(
-              'h-9 w-9 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0',
-              avatarClass,
-            )}
-          >
-            {initials}
-          </div>
-          <div className="min-w-0">
-            <p className="text-sm font-medium text-foreground truncate">{contact.name}</p>
-            <SubLabel>{role}</SubLabel>
-          </div>
-        </button>
-      </PopoverTrigger>
+      <PopoverTrigger asChild>{children}</PopoverTrigger>
       <PopoverContent className="w-60 p-0" align="start">
         <div className="px-3 py-2 border-b border-border">
           <p className="text-sm font-medium">{contact.name}</p>
@@ -115,5 +99,35 @@ export default function PersonChip({ role, contact, linkState, onEdit }: PersonC
         </div>
       </PopoverContent>
     </Popover>
+  );
+}
+
+export default function PersonChip({ role, contact, linkState, onEdit }: PersonChipProps) {
+  const initials = getInitials(contact.name);
+  const avatarClass =
+    role === 'Customer'
+      ? 'bg-primary text-primary-foreground'
+      : 'bg-accent text-muted';
+
+  return (
+    <PersonPopover role={role} contact={contact} linkState={linkState} onEdit={onEdit}>
+      <button
+        type="button"
+        className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 hover:bg-muted/50 transition-colors text-left min-w-0"
+      >
+        <div
+          className={cn(
+            'h-9 w-9 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0',
+            avatarClass,
+          )}
+        >
+          {initials}
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-foreground truncate">{contact.name}</p>
+          <SubLabel>{role}</SubLabel>
+        </div>
+      </button>
+    </PersonPopover>
   );
 }

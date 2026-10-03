@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { callTimeParts, joinSegments, lineupName, packageBand, playsLine, segmentsLine } from './bandParts';
+import { callTimeParts, joinSegments, lineupName, packageBand, playerMeta, playsLine, segmentsLine } from './bandParts';
 import type { BookingBandChair, BookingChairCallTime, BookingLineup, BookingPackageSummary } from '@/types/api';
 
 describe('joinSegments', () => {
@@ -155,5 +155,36 @@ describe('packageBand', () => {
     const later = packageBand('dri', packages, lineups, chairs, [ana, me]);
     expect(later?.summary).toEqual({ kind: 'sameAs', packageLabel: 'Ceremony' });
     expect(later?.parts).toEqual([]);
+  });
+});
+
+describe('playerMeta', () => {
+  const packages = [
+    { id: 'dri', order: 0, label: 'Drinks' },
+    { id: 'eve', order: 1, label: 'Evening' },
+  ] as BookingPackageSummary[];
+  const lineups = [
+    { id: 'big', label: null, packageIds: ['eve', 'dri'] },
+    { id: 'solo', label: null, packageIds: ['dri'] },
+  ] as BookingLineup[];
+  const part = (id: string, role: string, lineupId: string, order = 0, memberId: string | null = 'ana') =>
+    ({ id, role, lineupId, order, memberId, callTimes: [] }) as BookingBandChair;
+
+  it('reads "{roles} · {packages}" with packages in booking order', () => {
+    expect(playerMeta('ana', [part('a', 'Bass', 'big')], lineups, packages)).toBe('Bass · Drinks, Evening');
+  });
+
+  it('lists each distinct role once and unions the packages across lineups', () => {
+    const chairs = [part('a', 'Bass', 'big', 0), part('b', 'Bass', 'solo', 1), part('c', 'Piano', 'solo', 2)];
+    expect(playerMeta('ana', chairs, lineups, packages)).toBe('Bass, Piano · Drinks, Evening');
+  });
+
+  it('drops the packages half on a booking with none — never "Whole gig"', () => {
+    const bare = [{ id: 'l', label: null, packageIds: [] }] as BookingLineup[];
+    expect(playerMeta('ana', [part('a', 'Bass', 'l')], bare, [])).toBe('Bass');
+  });
+
+  it('is empty for someone holding no part', () => {
+    expect(playerMeta('ana', [], lineups, packages)).toBe('');
   });
 });

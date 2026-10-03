@@ -11,6 +11,8 @@ export interface ChecklistShortcutHandlers {
   onChecklistAction: (action: ChecklistAction) => void;
   onMarkDone: (key: MarkDoneKey) => void;
   onDeepLink: (section: string) => void;
+  /** Per-player steps land on that player's row on the Players card (ADR-0084 §9). */
+  onShowPlayer: (memberId: string) => void;
   isActionPending: boolean;
 }
 
@@ -62,19 +64,22 @@ const MARK_DONE_LABEL: Readonly<Record<string, string>> = {
 function resolveBandShortcut(
   shortcutType: string,
   stepLabel: string | undefined,
+  bandMemberId: string | null | undefined,
   handlers: ChecklistShortcutHandlers,
   retry: string | undefined,
 ): ResolvedShortcut | null {
+  // A per-person step opens that player's row; without a member id it falls back to the Builder.
+  const showPlayer = () => (bandMemberId ? handlers.onShowPlayer(bandMemberId) : handlers.onDeepLink('band'));
   if (shortcutType === 'open_band') {
     return { label: retry ?? 'Open band', pending: false, onClick: () => handlers.onDeepLink('band') };
   }
   if (shortcutType === 'band_member') {
     const memberName = stepLabel ? bandMemberNameFromConfirmationLabel(stepLabel) : 'band member';
-    return { label: retry ?? `Chase ${memberName}`, pending: false, onClick: () => handlers.onDeepLink('band') };
+    return { label: retry ?? `Chase ${memberName}`, pending: false, onClick: showPlayer };
   }
-  // #901: final details are sent per player from the Band sheet (email or copy + Mark as sent).
+  // #901: final details are sent per player, from that player's row on the Players card.
   if (shortcutType === 'brief_band_member') {
-    return { label: retry ?? 'Send final details', pending: false, onClick: () => handlers.onDeepLink('band') };
+    return { label: retry ?? 'Send final details', pending: false, onClick: showPlayer };
   }
   return null;
 }
@@ -88,6 +93,7 @@ export function resolveChecklistShortcut(
     shortcutTemplateType?: string;
     itemKey?: string | null;
     stepLabel?: string;
+    bandMemberId?: string | null;
     isFailed: boolean;
   },
   handlers: ChecklistShortcutHandlers,
@@ -122,7 +128,7 @@ export function resolveChecklistShortcut(
   if (shortcutType === 'set_up_and_publish_music') {
     return { label: retry ?? 'Set up & publish', pending: false, onClick: () => handlers.onDeepLink('music') };
   }
-  const bandShortcut = resolveBandShortcut(shortcutType, args.stepLabel, handlers, retry);
+  const bandShortcut = resolveBandShortcut(shortcutType, args.stepLabel, args.bandMemberId, handlers, retry);
   if (bandShortcut) return bandShortcut;
   const markDoneLabel = MARK_DONE_LABEL[shortcutType];
   if (markDoneLabel) {

@@ -202,6 +202,7 @@ function resolveStepAction(
       shortcutType: step.shortcutType,
       shortcutTemplateType: step.shortcutTemplateType,
       stepLabel: step.label,
+      bandMemberId: step.bandMemberId,
       isFailed: step.state === 'FAILED',
     },
     handlers,

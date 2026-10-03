@@ -19,11 +19,30 @@ export interface InlineFeeAddProps {
   isSaving: boolean;
   /** Distinguishes several of these on one screen (one per player on the Band sheet). */
   label?: string;
+  /** Controlled open state, for a host that opens the editor from elsewhere (the Players card's
+   *  "Change fee" menu item). Omit for the self-managed trigger. */
+  editing?: boolean;
+  onEditingChange?: (editing: boolean) => void;
 }
 
-export default function InlineFeeAdd({ value = null, onSave, isSaving, label = 'fee' }: InlineFeeAddProps) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState('');
+export default function InlineFeeAdd({
+  value = null,
+  onSave,
+  isSaving,
+  label = 'fee',
+  editing: editingProp,
+  onEditingChange,
+}: InlineFeeAddProps) {
+  const [editingInternal, setEditingInternal] = useState(false);
+  // `null` = untouched, so the field seeds from the current value however the editor was opened.
+  const [typed, setTyped] = useState<string | null>(null);
+  const editing = editingProp ?? editingInternal;
+  const draft = typed ?? value ?? '';
+  const setDraft = setTyped;
+  const setEditing = (next: boolean) => {
+    setEditingInternal(next);
+    onEditingChange?.(next);
+  };
 
   const formatted = formatFee(value ?? null);
 
@@ -31,10 +50,7 @@ export default function InlineFeeAdd({ value = null, onSave, isSaving, label = '
     return (
       <button
         type="button"
-        onClick={() => {
-          setDraft(value ?? '');
-          setEditing(true);
-        }}
+        onClick={() => setEditing(true)}
         aria-label={formatted ? `Edit ${label}` : `Add ${label}`}
         className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
       >
@@ -62,7 +78,7 @@ export default function InlineFeeAdd({ value = null, onSave, isSaving, label = '
       onSave(parsed);
     }
     setEditing(false);
-    setDraft('');
+    setDraft(null);
   }
 
   // A div, not a <form>: this editor sits inside the Builder's own form (#991) and inside the Band
@@ -78,7 +94,7 @@ export default function InlineFeeAdd({ value = null, onSave, isSaving, label = '
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === 'Enter') { e.preventDefault(); commit(); }
-          if (e.key === 'Escape') { setEditing(false); setDraft(''); }
+          if (e.key === 'Escape') { setEditing(false); setDraft(null); }
         }}
         placeholder="0.00"
         aria-label={`${label} amount`}
@@ -94,7 +110,7 @@ export default function InlineFeeAdd({ value = null, onSave, isSaving, label = '
       >
         <Check size={16} />
       </button>
-      <IconButton label={`Cancel ${label}`} onClick={() => { setEditing(false); setDraft(''); }}>
+      <IconButton label={`Cancel ${label}`} onClick={() => { setEditing(false); setDraft(null); }}>
         <X size={16} />
       </IconButton>
     </div>
