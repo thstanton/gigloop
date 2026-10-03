@@ -19,6 +19,8 @@ import type { BookingBandChair, BookingLineup, Contact } from '@/types/api';
 
 interface PartsToFillCardProps {
   vacantChairs: BookingBandChair[];
+  /** Every part on the booking — an unnamed lineup is named by its size (ADR-0084 §2). */
+  chairs: BookingBandChair[];
   lineups: BookingLineup[];
   /** Whether the booking has any packages — `callTimeParts`' discriminator for the package-less
    *  bucket ("Whole gig" versus a band parked with nothing to play yet, ADR-0081 §4). */
@@ -40,11 +42,12 @@ interface PartsToFillCardProps {
  * the musician never named.
  */
 export function AddPartFooter({
+  chairs,
   lineups,
   instrumentVocabulary,
   onAddPart,
   isAddingPart,
-}: Pick<PartsToFillCardProps, 'lineups' | 'instrumentVocabulary' | 'onAddPart' | 'isAddingPart'>) {
+}: Pick<PartsToFillCardProps, 'chairs' | 'lineups' | 'instrumentVocabulary' | 'onAddPart' | 'isAddingPart'>) {
   const [adding, setAdding] = useState(false);
   const [role, setRole] = useState('');
   // #983: `+ Add a part` asks which Lineup only when there is more than one.
@@ -91,7 +94,7 @@ export function AddPartFooter({
           </SelectTrigger>
           <SelectContent>
             {lineups.map((l) => (
-              <SelectItem key={l.id} value={l.id}>{lineupName(l)}</SelectItem>
+              <SelectItem key={l.id} value={l.id}>{lineupName(l, chairs)}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -111,6 +114,7 @@ export function AddPartFooter({
 
 export function PartsToFillCard({
   vacantChairs,
+  chairs,
   lineups,
   hasPackages,
   venue,
@@ -126,7 +130,7 @@ export function PartsToFillCard({
 
   const lineupLabel = (lineupId: string) => {
     const lineup = lineups.find((l) => l.id === lineupId);
-    return lineup ? lineupName(lineup) : undefined;
+    return lineup ? lineupName(lineup, chairs) : undefined;
   };
 
   return (
@@ -174,6 +178,7 @@ export function PartsToFillCard({
       )}
 
       <AddPartFooter
+        chairs={chairs}
         lineups={lineups}
         instrumentVocabulary={instrumentVocabulary}
         onAddPart={onAddPart}

@@ -244,7 +244,7 @@ export const NoLineupYet: Story = {
 
 // ── 6 ─────────────────────────────────────────────────────────────────────────
 export const UnnamedLineup: Story = {
-  name: '6. A band built one part at a time, with no template behind it, renders as "Band"',
+  name: '6. A band built one part at a time, with no template behind it, is named by its size (#1056)',
   args: {
     packages: [],
     lineups: [{ id: 'lu-1', label: null, packageIds: [] }],
@@ -253,7 +253,9 @@ export const UnnamedLineup: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByText('Band')).toBeVisible();
+    // One part, no label: "Solo", never "Band" (ADR-0084 §2).
+    await expect(canvas.getByText('Solo')).toBeVisible();
+    await expect(canvas.queryByText('Band')).not.toBeInTheDocument();
     // No call time anywhere on the booking — absent, not zero.
     await expect(canvas.getByText('No call time')).toBeVisible();
   },

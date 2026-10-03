@@ -114,6 +114,7 @@ export function BandAtom({
             <div className="flex flex-col items-center gap-2">
               <GhostButton variant="primary" onClick={() => setAddingLineup(true)}>Add a lineup</GhostButton>
               <AddPartFooter
+                chairs={chairs}
                 lineups={lineups}
                 instrumentVocabulary={instrumentVocabulary}
                 onAddPart={onAddChair}
@@ -170,6 +171,7 @@ export function BandAtom({
 
       <PartsToFillCard
         vacantChairs={vacantChairs}
+        chairs={chairs}
         lineups={lineups}
         hasPackages={packages.length > 0}
         venue={venue}

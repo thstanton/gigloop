@@ -36,7 +36,7 @@ export function LineupsCard({
     <Card title="Lineups">
       <div>
         {lineups.map((lineup) => {
-          const name = lineupName(lineup);
+          const name = lineupName(lineup, chairs);
           const plays = playsLine(lineup, packages);
           return (
             <div

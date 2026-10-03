@@ -4,40 +4,16 @@ import { Clock, Pencil, Plus } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { GhostButton } from '@/components/common/GhostButton';
 import { EmptyState } from '@/components/common/EmptyState';
-import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import FormatIcon from './FormatIcon';
-import { chairPackageIds } from './bandParts';
+import { chairPackageIds, packageBand } from './bandParts';
+import type { PackageBand, PackageBandSummary } from './bandParts';
 import { LOGISTICS_FIELD_ICONS } from '@/lib/constants';
 import type { BookingBandChair, BookingBandMember, BookingLineup, BookingLogisticsEntry, BookingPackageSummary, PerformanceSet } from '@/types/api';
 
 type TimelineRow =
   | { kind: 'time'; rowKey: string; label: string; time: string; notes?: string; group: string }
   | { kind: 'set'; rowKey: string; set: PerformanceSet; group: string; pkg: BookingPackageSummary | null; startsRun: boolean };
-
-/**
- * #987: a part plays EVERY segment its band plays, so it renders under every one of them. The
- * Itinerary answers "who is on stage for this set", and a four-piece playing the drinks and the
- * evening is on stage for both — listing them once under the first was today's behaviour by
- * accident, and left the evening's roster reading as empty while a band was in fact playing it.
- * An empty link set is the package-less/whole-gig bucket (ADR-0081 §4).
- */
-function groupChairsBySegment(chairs: BookingBandChair[], lineups: BookingLineup[]) {
-  const chairsByPackageId = new Map<string, BookingBandChair[]>();
-  const wholeDayChairs: BookingBandChair[] = [];
-  for (const chair of chairs) {
-    const packageIds = chairPackageIds(chair, lineups);
-    if (!packageIds.length) wholeDayChairs.push(chair);
-    for (const packageId of packageIds) appendChair(chairsByPackageId, packageId, chair);
-  }
-  return { chairsByPackageId, wholeDayChairs };
-}
-
-function appendChair(buckets: Map<string, BookingBandChair[]>, key: string, chair: BookingBandChair) {
-  const bucket = buckets.get(key);
-  if (bucket) bucket.push(chair);
-  else buckets.set(key, [chair]);
-}
 
 interface ItineraryCardProps {
   logistics: Record<string, BookingLogisticsEntry> | null;
@@ -53,34 +29,77 @@ interface ItineraryCardProps {
   bandMembers?: BookingBandMember[];
 }
 
-/** One package's (or the package-less bucket's) roster: role, who (or "Vacant"), and the derived
- *  call time — no click, this surface only answers "who plays what and when" (ADR-0072 §6).
- *
- *  `segmentId` is the segment this block renders under, and it selects which of the chair's call
- *  times to show. A part called to two segments carries one time for each, so a roster that showed
- *  the first (or the earliest) put the drinks call time under the Evening Party heading. */
-function PackageRoster({
+/** The muted "{lineup} · {summary}" under a package label (ADR-0084 §2). Only "still to fill" is
+ *  emphasised; the rest is one text run. */
+function bandSummaryText(summary: PackageBandSummary): { text: string; emphasised: boolean } {
+  switch (summary.kind) {
+    case 'you': return { text: 'you', emphasised: false };
+    case 'allConfirmed': return { text: 'all confirmed', emphasised: false };
+    case 'waiting': return { text: `${summary.count} waiting`, emphasised: false };
+    case 'sameAs': return { text: `same as ${summary.packageLabel}`, emphasised: false };
+    case 'toFill': return { text: `${summary.count} still to fill`, emphasised: true };
+  }
+}
+
+function PackageHeader({ pkg, band }: { pkg: BookingPackageSummary; band: PackageBand | null }) {
+  const summary = band ? bandSummaryText(band.summary) : null;
+  // No lineup (band flag off, or "Decide later") keeps the header exactly as it was before #1056.
+  if (!band || !summary) {
+    return (
+      <div className="flex items-center gap-1.5 pb-1 pt-2 text-xs font-medium text-muted">
+        <FormatIcon icon={pkg.icon} size={14} />
+        {pkg.label}
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center gap-1.5 pb-1 pt-2 text-xs">
+      <FormatIcon icon={pkg.icon} size={14} />
+      <span className="font-semibold text-foreground">{pkg.label}</span>
+      {/* Only the emphasised summary gets its own span, so the unemphasised line stays one text run. */}
+      <span className="text-muted">
+        {summary.emphasised ? `${band.name} · ` : `${band.name} · ${summary.text}`}
+        {summary.emphasised && <span className="font-medium text-status-provisional">{summary.text}</span>}
+      </span>
+    </div>
+  );
+}
+
+function partHolderText(member: BookingBandMember | undefined): string {
+  if (!member) return 'Needs a player';
+  if (member.isSelf) return 'You';
+  return member.status === 'CONFIRMED' ? member.contact.name : `${member.contact.name} · waiting`;
+}
+
+/** One row per part: role (muted, fixed column), then who holds it. No call times, no click — this
+ *  surface only answers "who plays what" (ADR-0084 §1–2). */
+function PartRows({
   chairs,
   memberById,
-  segmentId,
 }: {
   chairs: BookingBandChair[];
   memberById: Map<string, BookingBandMember>;
-  segmentId: string | null;
 }) {
+  if (chairs.length === 0) return null;
   const sorted = [...chairs].sort((a, b) => a.order - b.order);
   return (
-    <div className="mb-2 flex flex-col gap-1 rounded-md border border-border bg-surface px-2 py-1.5">
+    <div className="mb-2 flex flex-col gap-1">
       {sorted.map((chair) => {
         const member = chair.memberId ? memberById.get(chair.memberId) : undefined;
-        const callTime = chair.callTimes.find((ct) => ct.segmentId === segmentId)?.startTime;
+        const confirmed = member?.status === 'CONFIRMED';
         return (
-          <div key={chair.id} className="flex items-center gap-2 text-xs">
-            <Badge variant="outline" className="flex-shrink-0">{chair.role}</Badge>
-            <span className={cn('flex-1 truncate', member ? 'text-foreground' : 'italic text-muted')}>
-              {member ? member.contact.name : 'Vacant'}
+          <div key={chair.id} className="flex gap-3 text-xs">
+            <span className="w-20 flex-shrink-0 truncate text-muted">{chair.role}</span>
+            <span
+              className={cn(
+                'min-w-0 flex-1 truncate',
+                !member && 'font-medium text-status-provisional',
+                member && !confirmed && 'italic text-muted',
+                confirmed && 'text-foreground',
+              )}
+            >
+              {partHolderText(member)}
             </span>
-            {callTime && <span className="flex-shrink-0 tabular-nums text-muted">{callTime}</span>}
           </div>
         );
       })}
@@ -207,12 +226,19 @@ export default function ItineraryCard({
   }
 
   const memberById = new Map(bandMembers.map((m) => [m.id, m] as const));
-  const { chairsByPackageId, wholeDayChairs } = groupChairsBySegment(bandChairs, bandLineups);
-  // A package header only appears where a set already leads its run — a package holding chairs
-  // but no sets yet never gets one, so its roster renders in its own fallback block below instead.
-  const rosterShownForPackageId = new Set<string>();
+  const bandByPackageId = new Map(
+    packages.map((pkg) => [pkg.id, packageBand(pkg.id, packages, bandLineups, bandChairs, bandMembers)] as const),
+  );
+  // Parts whose lineup plays no package: on a booking with no packages that is the whole gig,
+  // listed once above the sets; on one with packages it is a band with nothing to play yet.
+  const unlinkedChairs = bandChairs.filter((chair) => chairPackageIds(chair, bandLineups).length === 0);
+  const unlinkedAboveSets = packages.length === 0;
+  let unlinkedShown = false;
+  // A package header only appears where a set already leads its run — a package with a lineup but
+  // no sets yet never gets one, so it renders in its own fallback block below instead.
+  const headerShownForPackageId = new Set<string>();
   const packagesMissingAHeader = packages.filter(
-    (pkg) => chairsByPackageId.has(pkg.id) && !rows.some((row) => row.kind === 'set' && row.pkg?.id === pkg.id),
+    (pkg) => bandByPackageId.get(pkg.id) && !rows.some((row) => row.kind === 'set' && row.pkg?.id === pkg.id),
   );
 
   return (
@@ -229,30 +255,19 @@ export default function ItineraryCard({
           const showBorder = !!rows[i + 1] && rows[i + 1].group !== row.group;
           const timeCol = row.kind === 'time' ? row.time : (row.set.startTime ?? formatDuration(row.set.duration));
           const labelCol = row.kind === 'time' ? row.label : setLabel(row.set);
-          // The roster carries the segment it renders under, so the JSX below neither re-narrows
-          // `row` nor re-reads `row.pkg` — the one place that knows which package this is says so
-          // once, and both the render and the shown-set bookkeeping read it from here.
-          const packageRoster =
-            row.kind === 'set' && row.startsRun && row.pkg && chairsByPackageId.has(row.pkg.id) && !rosterShownForPackageId.has(row.pkg.id)
-              ? { segmentId: row.pkg.id, chairs: chairsByPackageId.get(row.pkg.id)! }
-              : null;
-          if (packageRoster) rosterShownForPackageId.add(packageRoster.segmentId);
+          // Package name leads each contiguous run of its sets; the lineup line and its parts
+          // appear once, under the first run, before that package's sets.
+          const runPkg = row.kind === 'set' && row.startsRun ? row.pkg : null;
+          const firstRun = !!runPkg && !headerShownForPackageId.has(runPkg.id);
+          if (runPkg) headerShownForPackageId.add(runPkg.id);
+          const band = runPkg && firstRun ? (bandByPackageId.get(runPkg.id) ?? null) : null;
+          const showUnlinked = row.kind === 'set' && unlinkedAboveSets && !unlinkedShown && unlinkedChairs.length > 0;
+          if (showUnlinked) unlinkedShown = true;
           return (
             <Fragment key={row.rowKey}>
-              {/* Package name leads each contiguous run of its sets. */}
-              {row.kind === 'set' && row.startsRun && row.pkg && (
-                <div className="flex items-center gap-1.5 pb-1 pt-2 text-xs font-medium text-muted">
-                  <FormatIcon icon={row.pkg.icon} size={14} />
-                  {row.pkg.label}
-                </div>
-              )}
-              {packageRoster && (
-                <PackageRoster
-                  chairs={packageRoster.chairs}
-                  memberById={memberById}
-                  segmentId={packageRoster.segmentId}
-                />
-              )}
+              {showUnlinked && <PartRows chairs={unlinkedChairs} memberById={memberById} />}
+              {runPkg && <PackageHeader pkg={runPkg} band={band} />}
+              {band && <PartRows chairs={band.parts} memberById={memberById} />}
               <div
                 className={`flex gap-3 py-1.5${(row.kind === 'time' && row.notes) ? ' items-start' : ' items-center'}${showBorder ? ' border-b border-border' : ''}`}
               >
@@ -277,26 +292,23 @@ export default function ItineraryCard({
           );
         })}
 
-        {/* A package with chairs but no sets yet never leads a run above — its own header here. */}
-        {packagesMissingAHeader.map((pkg) => (
-          <Fragment key={pkg.id}>
-            <div className="flex items-center gap-1.5 pb-1 pt-2 text-xs font-medium text-muted">
-              <FormatIcon icon={pkg.icon} size={14} />
-              {pkg.label}
-            </div>
-            <PackageRoster chairs={chairsByPackageId.get(pkg.id)!} memberById={memberById} segmentId={pkg.id} />
-          </Fragment>
-        ))}
+        {/* A package with a lineup but no sets yet never leads a run above — its own header here. */}
+        {packagesMissingAHeader.map((pkg) => {
+          const band = bandByPackageId.get(pkg.id) ?? null;
+          return (
+            <Fragment key={pkg.id}>
+              <PackageHeader pkg={pkg} band={band} />
+              {band && <PartRows chairs={band.parts} memberById={memberById} />}
+            </Fragment>
+          );
+        })}
 
-        {/* Parts tied to no segment — still rendered, per ADR-0072 §6. On a booking with no packages
-            that is the whole gig; on one with packages it is a band with nothing to play yet, and
-            the heading says which (#987 retired the "Whole day" sentinel). */}
-        {wholeDayChairs.length > 0 && (
+        {/* Parts of a lineup that plays nothing — still rendered (ADR-0072 §6). With no packages they
+            sit above the sets instead (or here, if there are no sets at all). */}
+        {unlinkedChairs.length > 0 && (unlinkedAboveSets ? !unlinkedShown : true) && (
           <>
-            <div className="pb-1 pt-2 text-xs font-medium text-muted">
-              {packages.length ? 'Not playing a set yet' : 'The whole gig'}
-            </div>
-            <PackageRoster chairs={wholeDayChairs} memberById={memberById} segmentId={null} />
+            {!unlinkedAboveSets && <div className="pb-1 pt-2 text-xs font-medium text-muted">Not playing a set yet</div>}
+            <PartRows chairs={unlinkedChairs} memberById={memberById} />
           </>
         )}
       </div>

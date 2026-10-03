@@ -73,7 +73,7 @@ export function PlayersCard({
   const nameBands = shouldNameBand(lineups);
   const lineupLabel = (lineupId: string) => {
     const lineup = lineups.find((l) => l.id === lineupId);
-    return lineup ? lineupName(lineup) : undefined;
+    return lineup ? lineupName(lineup, chairs) : undefined;
   };
   const backHref = `/admin/bookings/${bookingId}`;
 

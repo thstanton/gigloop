@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { callTimeParts, joinSegments, playsLine, segmentsLine } from './bandParts';
+import { callTimeParts, joinSegments, lineupName, packageBand, playsLine, segmentsLine } from './bandParts';
 import type { BookingBandChair, BookingChairCallTime, BookingLineup, BookingPackageSummary } from '@/types/api';
 
 describe('joinSegments', () => {
@@ -94,5 +94,66 @@ describe('playsLine', () => {
   it('reads "Plays the whole gig" on a package-less booking', () => {
     const lineup = { packageIds: [] } as unknown as BookingLineup;
     expect(playsLine(lineup, [])).toEqual({ text: 'Plays the whole gig', warning: false });
+  });
+});
+
+describe('lineupName', () => {
+  const chairsOf = (n: number): BookingBandChair[] =>
+    Array.from({ length: n }, (_, i) => ({ id: `c${i}`, role: 'r', order: i, lineupId: 'l', memberId: null, callTimes: [] }));
+
+  it('prefers the lineup\'s own label', () => {
+    expect(lineupName({ id: 'l', label: 'The Quartet', packageIds: [] }, chairsOf(4))).toBe('The Quartet');
+  });
+
+  it('names an unnamed lineup by its size, never "Band" (ADR-0084 §2)', () => {
+    const unnamed = { id: 'l', label: null, packageIds: [] };
+    expect(lineupName(unnamed, chairsOf(1))).toBe('Solo');
+    expect(lineupName(unnamed, chairsOf(2))).toBe('Duo');
+    expect(lineupName(unnamed, chairsOf(3))).toBe('Trio');
+    expect(lineupName(unnamed, chairsOf(5))).toBe('5-piece');
+  });
+});
+
+describe('packageBand', () => {
+  const packages = [
+    { id: 'cer', order: 0, label: 'Ceremony', icon: 'heart' },
+    { id: 'dri', order: 1, label: 'Drinks', icon: 'martini' },
+    { id: 'eve', order: 2, label: 'Evening', icon: 'guitar' },
+  ] as BookingPackageSummary[];
+  const part = (id: string, lineupId: string, memberId: string | null): BookingBandChair => ({
+    id, role: id, order: 0, lineupId, memberId, callTimes: [],
+  });
+  const me = { id: 'me', isSelf: true, status: 'CONFIRMED' } as const;
+  const ana = { id: 'ana', isSelf: false, status: 'CONFIRMED' } as const;
+  const ben = { id: 'ben', isSelf: false, status: 'INVITED' } as const;
+
+  it('is null for a package with no lineup (Decide later)', () => {
+    expect(packageBand('cer', packages, [], [], [])).toBeNull();
+  });
+
+  it('says "you" for a solo lineup the organiser plays', () => {
+    const lineups = [{ id: 'l', label: null, packageIds: ['cer'] }];
+    expect(packageBand('cer', packages, lineups, [part('a', 'l', 'me')], [me])?.summary).toEqual({ kind: 'you' });
+  });
+
+  it('counts empty parts as still to fill, ahead of anyone waiting', () => {
+    const lineups = [{ id: 'l', label: null, packageIds: ['eve'] }];
+    const chairs = [part('a', 'l', 'ana'), part('b', 'l', 'ben'), part('c', 'l', null), part('d', 'l', null)];
+    expect(packageBand('eve', packages, lineups, chairs, [ana, ben])?.summary).toEqual({ kind: 'toFill', count: 2 });
+  });
+
+  it('says all confirmed once every part is held by a confirmed player', () => {
+    const lineups = [{ id: 'l', label: null, packageIds: ['dri'] }];
+    expect(packageBand('dri', packages, lineups, [part('a', 'l', 'ana'), part('b', 'l', 'me')], [ana, me])?.summary)
+      .toEqual({ kind: 'allConfirmed' });
+  });
+
+  it('lists a shared lineup under its earliest package only; later ones read "same as"', () => {
+    const lineups = [{ id: 'l', label: null, packageIds: ['dri', 'cer'] }];
+    const chairs = [part('a', 'l', 'ana'), part('b', 'l', 'me')];
+    expect(packageBand('cer', packages, lineups, chairs, [ana, me])?.parts).toHaveLength(2);
+    const later = packageBand('dri', packages, lineups, chairs, [ana, me]);
+    expect(later?.summary).toEqual({ kind: 'sameAs', packageLabel: 'Ceremony' });
+    expect(later?.parts).toEqual([]);
   });
 });

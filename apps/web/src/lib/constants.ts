@@ -732,3 +732,18 @@ export const MUSICIAN_FIGURE_DESCRIPTIONS = column(MUSICIAN_FIGURES, 'descriptio
 // fold. A starting point, tuned by eye in the story (the grill left it deliberately
 // unspecified); the floor is set by the hatching, which muddies at icon size.
 export const MUSICIAN_TAILPIECE_PX = 96;
+
+// ─── Lineup size names (ADR-0084 §2, #1056) ─────────────────────────────────
+// An unnamed lineup reads as its size wherever a lineup name is shown — never "Band", which names
+// only the Band sheet and the band portal. One row per size the musician has a word for; anything
+// larger falls through to "{n}-piece" (`lineupSizeName` in features/bookings/bandParts.ts).
+export interface LineupSizeNameRow {
+  parts: number;
+  name: string;
+}
+
+export const LINEUP_SIZE_NAMES = [
+  { parts: 1, name: 'Solo' },
+  { parts: 2, name: 'Duo' },
+  { parts: 3, name: 'Trio' },
+] as const satisfies readonly LineupSizeNameRow[];

@@ -56,7 +56,7 @@ function DisplacementWarning({
   members: BookingBandMember[];
   packages: BookingPackageSummary[];
 }) {
-  const names = displaced.map(lineupName);
+  const names = displaced.map((l) => lineupName(l, chairs));
   const losing = members.filter((m) =>
     displaced.some((l) => partsOf(l.id, chairs).some((c) => c.memberId === m.id)),
   );

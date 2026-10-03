@@ -7,6 +7,7 @@ import {
   INVOICE_STATUS_LABELS,
   INVOICE_STATUS_ORDER,
   INVOICE_STATUS_TOKENS,
+  LINEUP_SIZE_NAMES,
   LOGISTICS_ANCHOR_FIELDS,
   LOGISTICS_BAND_ONLY_KEYS,
   LOGISTICS_DETAIL_FIELDS,
@@ -236,6 +237,16 @@ describe('logistics fields table', () => {
     }
     // The time anchors are untouched by this slice — still exactly the three the Itinerary owns.
     expect(LOGISTICS_TIME_KEYS).toHaveLength(3);
+  });
+
+  it('names each lineup size from 1 upward, once, in order, and never "Band" (#1056, ADR-0084)', () => {
+    // "{n}-piece" starts where the table ends, so the rows must be consecutive from 1.
+    expect(LINEUP_SIZE_NAMES.map((row) => row.parts)).toEqual(LINEUP_SIZE_NAMES.map((_, i) => i + 1));
+    expect(new Set(LINEUP_SIZE_NAMES.map((row) => row.name)).size).toBe(LINEUP_SIZE_NAMES.length);
+    for (const row of LINEUP_SIZE_NAMES) {
+      expect(row.name.length).toBeGreaterThan(0);
+      expect(row.name).not.toBe('Band');
+    }
   });
 
   it('pairs every profileField to a distinct, real dep-profile Contact field (ADR-0072 §4)', () => {

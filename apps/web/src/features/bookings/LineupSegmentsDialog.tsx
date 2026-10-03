@@ -39,7 +39,7 @@ export function LineupSegmentsDialog({
   onClose,
 }: LineupSegmentsDialogProps) {
   const [selected, setSelected] = useState<string[]>(lineup.packageIds);
-  const name = lineupName(lineup);
+  const name = lineupName(lineup, chairs);
 
   const removed = lineup.packageIds.filter((id) => !selected.includes(id));
   const removedLabels = packages.filter((p) => removed.includes(p.id)).map((p) => p.label);

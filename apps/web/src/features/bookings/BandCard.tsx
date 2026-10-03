@@ -85,7 +85,7 @@ export default function BandCard({ band, hasLineupTemplates, linkState }: BandCa
   const nameBands = shouldNameBand(band.lineups);
   const bandNameFor = (lineupId: string) => {
     const lineup = band.lineups.find((l) => l.id === lineupId);
-    return lineup ? lineupName(lineup) : undefined;
+    return lineup ? lineupName(lineup, band.chairs) : undefined;
   };
 
   return (

@@ -1,4 +1,5 @@
-import type { BookingBandChair, BookingLineup, BookingPackageSummary } from '@/types/api';
+import { LINEUP_SIZE_NAMES } from '@/lib/constants';
+import type { BookingBandChair, BookingBandMember, BookingLineup, BookingPackageSummary } from '@/types/api';
 
 // #987 / #983's resolution. The derivations the three Band cards share, declared once so the
 // "one shape per object" rule cannot drift between the Lineups card, the Players card and Parts to
@@ -7,11 +8,16 @@ import type { BookingBandChair, BookingLineup, BookingPackageSummary } from '@/t
 // Vocabulary note (#983): **"part" is the user-facing word**, `Chair` stays the model word. The
 // API, the DTOs and these types are untouched; only the copy speaks "part".
 
-/** An unnamed Lineup — a musician with no lineup templates who added one part at a time (#884). */
-export const UNNAMED_LINEUP = 'Band';
+/** 1 Solo · 2 Duo · 3 Trio · 4+ "{n}-piece" (ADR-0084 §2). Never "Band" — that names only the Band
+ *  sheet and the band portal. */
+export function lineupSizeName(partCount: number): string {
+  if (partCount < 1) return 'No parts yet';
+  return LINEUP_SIZE_NAMES.find((row) => row.parts === partCount)?.name ?? `${partCount}-piece`;
+}
 
-export function lineupName(lineup: BookingLineup): string {
-  return lineup.label ?? UNNAMED_LINEUP;
+/** A Lineup's name; an unnamed one (a musician who added one part at a time, #884) reads as its size. */
+export function lineupName(lineup: BookingLineup, chairs: BookingBandChair[]): string {
+  return lineup.label ?? lineupSizeName(partsOf(lineup.id, chairs).length);
 }
 
 /**
@@ -22,6 +28,59 @@ export function lineupName(lineup: BookingLineup): string {
  */
 export function chairPackageIds(chair: BookingBandChair, lineups: BookingLineup[]): string[] {
   return lineups.find((l) => l.id === chair.lineupId)?.packageIds ?? [];
+}
+
+export type PackageBandSummary =
+  | { kind: 'you' }
+  | { kind: 'allConfirmed' }
+  | { kind: 'toFill'; count: number }
+  | { kind: 'waiting'; count: number }
+  | { kind: 'sameAs'; packageLabel: string };
+
+export interface PackageBand {
+  name: string;
+  summary: PackageBandSummary;
+  /** Empty when the lineup is shared with an earlier package — its parts are listed once, there. */
+  parts: BookingBandChair[];
+}
+
+/**
+ * #1056 (ADR-0084 §1–2): what the Itinerary says under a package header — which lineup plays it,
+ * what is still to fill, and who holds each part. `null` for a package with no lineup ("Decide
+ * later"), which shows no lineup line at all.
+ *
+ * A lineup shared by several packages lists its parts under the earliest of them (booking package
+ * order); the others read "same as {that package}". "Still to fill" counts empty parts only — the
+ * organiser's own row is CONFIRMED on seating (§7) and so never counts toward anything.
+ */
+export function packageBand(
+  packageId: string,
+  packages: BookingPackageSummary[],
+  lineups: BookingLineup[],
+  chairs: BookingBandChair[],
+  members: Pick<BookingBandMember, 'id' | 'isSelf' | 'status'>[],
+): PackageBand | null {
+  const lineup = lineups.find((l) => l.packageIds.includes(packageId));
+  if (!lineup) return null;
+  const name = lineupName(lineup, chairs);
+
+  const linked = packages.filter((p) => lineup.packageIds.includes(p.id)).sort((a, b) => a.order - b.order);
+  const earliest = linked[0];
+  if (earliest && earliest.id !== packageId) {
+    return { name, summary: { kind: 'sameAs', packageLabel: earliest.label }, parts: [] };
+  }
+
+  const parts = partsOf(lineup.id, chairs);
+  const memberOf = (chair: BookingBandChair) => members.find((m) => m.id === chair.memberId);
+  const vacant = parts.filter((c) => c.memberId === null).length;
+  const unconfirmed = parts.filter((c) => c.memberId !== null && memberOf(c)?.status !== 'CONFIRMED').length;
+
+  let summary: PackageBandSummary;
+  if (vacant > 0) summary = { kind: 'toFill', count: vacant };
+  else if (parts.length === 1 && memberOf(parts[0])?.isSelf) summary = { kind: 'you' };
+  else if (unconfirmed > 0) summary = { kind: 'waiting', count: unconfirmed };
+  else summary = { kind: 'allConfirmed' };
+  return { name, summary, parts };
 }
 
 /** Segment labels for a Lineup, in the booking's own package order rather than link order. */
