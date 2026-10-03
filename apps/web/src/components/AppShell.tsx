@@ -16,6 +16,8 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { isEnabled } from '@/lib/featureFlags';
 import { getEnvironmentLabel, type EnvironmentLabel } from '@/lib/environment';
+import { AppearanceControl } from '@/features/appearance/AppearanceControl';
+import { useAppearance } from '@/lib/hooks/useAppearance';
 import { GlobalCommandPalette } from '@/features/search/GlobalCommandPalette';
 import {
   PRIMARY_NAV_DESTINATIONS,
@@ -25,6 +27,22 @@ import {
 
 // Global command palette (ADR-0067) — dark-launched behind a default-off env flag.
 const SEARCH_FLAG = 'VITE_FEATURE_COMMAND_PALETTE';
+// Per-device light/dark appearance (ADR-0085) — default-off; the control only renders when on.
+const APPEARANCE_FLAG = 'VITE_FEATURE_APPEARANCE';
+
+/** The System/Light/Dark control wired to the stored preference; renders nothing with the flag off. */
+function AppearanceSetting({ className, separated }: Readonly<{ className?: string; separated?: boolean }>) {
+  const { preference, setPreference } = useAppearance();
+  if (!isEnabled(APPEARANCE_FLAG)) return null;
+  return (
+    <>
+      <div className={className}>
+        <AppearanceControl value={preference} onChange={setPreference} />
+      </div>
+      {separated && <Separator />}
+    </>
+  );
+}
 
 // ─── Hooks ───────────────────────────────────────────────────────────────────
 
@@ -92,6 +110,7 @@ function UserMenu() {
             <p className="text-sm font-medium text-foreground truncate">{fullName}</p>
             <p className="text-xs text-muted truncate">{email}</p>
           </div>
+          <AppearanceSetting className="px-3 py-2.5 border-b border-border" />
           <button
             onClick={() => signOut(() => navigate('/sign-in'))}
             className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-muted hover:text-foreground hover:bg-surface transition-colors duration-150"
@@ -339,6 +358,8 @@ function BottomTabBar() {
           </nav>
 
           <Separator />
+
+          <AppearanceSetting className="px-5 py-3" separated />
 
           {/* Sign out */}
           <button

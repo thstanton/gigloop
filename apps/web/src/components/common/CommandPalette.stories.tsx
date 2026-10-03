@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import type { SearchResult } from '@/types/api';
-import { QUICK_ACTIONS, QUICK_ACTION_CREATES } from '@/lib/constants';
+import { PINNED_QUICK_ACTIONS, QUICK_ACTIONS } from '@/lib/constants';
 import { CommandPalette } from './CommandPalette';
 
 const results: SearchResult[] = [
@@ -55,7 +55,7 @@ const meta = {
     isLoading: false,
     actions: QUICK_ACTIONS,
     recent: [results[0], results[2]],
-    pinnedActions: QUICK_ACTION_CREATES,
+    pinnedActions: PINNED_QUICK_ACTIONS,
     onOpenChange: fn(),
     onQueryChange: fn(),
     onSelectResult: fn(),

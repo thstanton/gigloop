@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CommandPalette } from '@/components/common/CommandPalette';
 import { useSearch } from '@/lib/hooks/useSearch';
-import { QUICK_ACTIONS, QUICK_ACTION_CREATES, type QuickAction } from '@/lib/constants';
+import { QUICK_ACTIONS, QUICK_ACTION_COMMANDS, PINNED_QUICK_ACTIONS, type QuickAction } from '@/lib/constants';
+import { isEnabled } from '@/lib/featureFlags';
+import { useAppearance } from '@/lib/hooks/useAppearance';
 import { getRecentlyViewed } from '@/lib/recentlyViewed';
 import type { SearchResult } from '@/types/api';
 
@@ -28,6 +30,7 @@ export function GlobalCommandPalette({ open, onOpenChange }: GlobalCommandPalett
   const [recent, setRecent] = useState<SearchResult[]>([]);
   const navigate = useNavigate();
   const { results, isLoading } = useSearch(query);
+  const { resolved, setPreference } = useAppearance();
 
   // Refresh the recently-viewed list each time the palette opens (it changes as pages are visited).
   useEffect(() => {
@@ -64,10 +67,20 @@ export function GlobalCommandPalette({ open, onOpenChange }: GlobalCommandPalett
 
   const handleSelectAction = useCallback(
     (action: QuickAction) => {
-      navigate(action.route);
+      if (action.kind === 'navigate') {
+        navigate(action.route);
+      } else {
+        // 'toggle-appearance' is the only command: flip the *resolved* appearance.
+        setPreference(resolved === 'dark' ? 'light' : 'dark');
+      }
       handleOpenChange(false);
     },
-    [navigate, handleOpenChange],
+    [navigate, handleOpenChange, resolved, setPreference],
+  );
+
+  const actions = useMemo(
+    () => [...QUICK_ACTIONS, ...QUICK_ACTION_COMMANDS.filter((row) => !row.flag || isEnabled(row.flag))],
+    [],
   );
 
   return (
@@ -79,10 +92,10 @@ export function GlobalCommandPalette({ open, onOpenChange }: GlobalCommandPalett
       results={results}
       isLoading={isLoading}
       onSelectResult={handleSelect}
-      actions={QUICK_ACTIONS}
+      actions={actions}
       onSelectAction={handleSelectAction}
       recent={recent}
-      pinnedActions={QUICK_ACTION_CREATES}
+      pinnedActions={PINNED_QUICK_ACTIONS}
     />
   );
 }

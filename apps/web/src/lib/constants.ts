@@ -3,7 +3,7 @@ import {
   GlassWater, Utensils, Moon, Briefcase, Music2, Sparkles, Radio, Headphones,
   Volume2, Users, Clock, Shirt, Sofa, Car, type LucideIcon,
   LayoutDashboard, CalendarDays, FileText, Settings, Package,
-  CalendarPlus, UserPlus,
+  CalendarPlus, UserPlus, SunMoon,
 } from 'lucide-react';
 import type { BookingBandMemberStatus, BookingStatus, ChecklistStepState, EventType, InvoiceStatus, PortalTheme, PortalVisibilityReason, ReminderConcern, SongGenre } from '@/types/api';
 import trumpeterFigure from '@/assets/musicians/trumpeter.png';
@@ -693,18 +693,46 @@ export const QUICK_ACTION_CREATES = [
   { id: 'new-contact', label: 'New Contact', route: '/admin/contacts/new', icon: UserPlus,      keywords: ['new contact', 'add contact', 'add client'] },
 ] as const satisfies readonly QuickActionCreateRow[];
 
-// The command palette's Actions section (ADR-0067 §6): the nine pure navigations — the seven
-// section destinations then the two creates — derived from the two tables above, never re-listed.
-// The nav rows carry an extra `group` column the palette ignores; both satisfy QuickAction.
-export interface QuickAction {
+// The command palette's Actions section (ADR-0067 §6). A row is either a navigation (`route`) or
+// an in-place command the palette's container performs (`command`) — the `kind` column
+// discriminates, so the palette never special-cases a command by id. Navigations are derived from
+// the two tables above; commands are declared once in QUICK_ACTION_COMMANDS and may be gated
+// behind a feature flag (`flag`).
+interface QuickActionBase {
   id: string;
   label: string;
-  route: string;
   icon: LucideIcon;
   keywords: readonly string[];
 }
 
-export const QUICK_ACTIONS: readonly QuickAction[] = [...NAV_DESTINATIONS, ...QUICK_ACTION_CREATES];
+export interface NavigateQuickAction extends QuickActionBase {
+  kind: 'navigate';
+  route: string;
+}
+
+export interface CommandQuickActionRow extends QuickActionBase {
+  kind: 'command';
+  command: 'toggle-appearance';
+  /** Env flag that must be on for the command to be offered (default-off flags, ADR-0075). */
+  flag?: string;
+}
+
+export type QuickAction = NavigateQuickAction | CommandQuickActionRow;
+
+export const QUICK_ACTION_COMMANDS = [
+  { id: 'toggle-appearance', kind: 'command', command: 'toggle-appearance', label: 'Toggle appearance', icon: SunMoon, keywords: ['appearance', 'dark mode', 'light mode', 'theme', 'dark', 'light'], flag: 'VITE_FEATURE_APPEARANCE' },
+] as const satisfies readonly CommandQuickActionRow[];
+
+// The nine pure navigations — the seven section destinations then the two creates. The nav rows
+// carry an extra `group` column the palette ignores, so each is projected to the shared shape.
+function toNavigateAction({ id, label, route, icon, keywords }: QuickActionCreateRow): NavigateQuickAction {
+  return { id, label, route, icon, keywords, kind: 'navigate' };
+}
+
+export const QUICK_ACTIONS: readonly NavigateQuickAction[] = [...NAV_DESTINATIONS, ...QUICK_ACTION_CREATES].map(toNavigateAction);
+
+/** The creates, pinned above Recent on cold open (New Booking first). */
+export const PINNED_QUICK_ACTIONS: readonly NavigateQuickAction[] = QUICK_ACTION_CREATES.map(toNavigateAction);
 
 // ─── Musician decorations (#858, docs/musician-decorations-grill.md) ────────
 // The woodcut score-cover ornament pool. Declared once here per the "one

@@ -96,4 +96,14 @@ describe('useAppearance', () => {
     const { result } = renderHook(() => useAppearance('/admin'));
     expect(result.current).toMatchObject({ preference: 'system', resolved: 'dark' });
   });
+
+  it('keeps every instance in sync when one sets the preference', () => {
+    mockColorScheme(false);
+    const first = renderHook(() => useAppearance('/admin'));
+    const second = renderHook(() => useAppearance('/admin'));
+
+    act(() => second.result.current.setPreference('dark'));
+    expect(first.result.current).toMatchObject({ preference: 'dark', resolved: 'dark' });
+    expect(document.documentElement).toHaveClass('dark');
+  });
 });
