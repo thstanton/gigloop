@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { expect } from 'storybook/test';
 import { MusicianDecoration } from './MusicianDecoration';
 import {
+  MUSICIAN_FIGURE_DARK,
   MUSICIAN_FIGURE_DESCRIPTIONS,
   MUSICIAN_FIGURE_ORDER,
   MUSICIAN_TAILPIECE_PX,
@@ -46,7 +47,7 @@ export const EveryFigure: Story = {
       {MUSICIAN_FIGURE_ORDER.map((figure) => (
         <figure key={figure} className="text-center">
           <MusicianDecoration figure={figure} />
-          <figcaption className="mt-2 text-muted text-sm">{MUSICIAN_FIGURE_DESCRIPTIONS[figure]}</figcaption>
+          <figcaption className="mt-2 text-muted text-sm">{MUSICIAN_FIGURE_DESCRIPTIONS[figure]} · dark: {MUSICIAN_FIGURE_DARK[figure]}</figcaption>
         </figure>
       ))}
     </div>

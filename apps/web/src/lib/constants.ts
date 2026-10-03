@@ -755,11 +755,26 @@ export interface MusicianFigureRow {
   asset: string;
   /** Human-readable, for the story's caption only — never announced to assistive tech. */
   description: string;
+  /**
+   * The explicit dark-mode decision (ADR-0085 §4). Required, so a new figure cannot
+   * be added without being judged on the dark surface: `keep` renders it unchanged,
+   * `invert` flips the ink to light, `hide` doesn't render it at all.
+   */
+  dark: MusicianFigureDarkTreatment;
 }
 
+export type MusicianFigureDarkTreatment = 'keep' | 'invert' | 'hide';
+
+// Literal Tailwind strings — a built `dark:${x}` is invisible to the scanner and purged.
+export const MUSICIAN_DARK_CLASSES = {
+  keep: '',
+  invert: 'dark:invert',
+  hide: 'dark:hidden',
+} as const satisfies Record<MusicianFigureDarkTreatment, string>;
+
 const MUSICIAN_FIGURES = [
-  { value: 'trumpeter', asset: trumpeterFigure, description: 'Trumpeter, standing, horn raised' },
-  { value: 'violinist', asset: violinistFigure, description: 'Violinist, standing, bow drawn' },
+  { value: 'trumpeter', asset: trumpeterFigure, description: 'Trumpeter, standing, horn raised', dark: 'keep' },
+  { value: 'violinist', asset: violinistFigure, description: 'Violinist, standing, bow drawn', dark: 'keep' },
 ] as const satisfies readonly MusicianFigureRow[];
 
 export type MusicianFigure = (typeof MUSICIAN_FIGURES)[number]['value'];
@@ -769,6 +784,8 @@ export const MUSICIAN_FIGURE_ORDER: MusicianFigure[] = MUSICIAN_FIGURES.map((row
 export const MUSICIAN_FIGURE_ASSETS = column(MUSICIAN_FIGURES, 'asset');
 
 export const MUSICIAN_FIGURE_DESCRIPTIONS = column(MUSICIAN_FIGURES, 'description');
+
+export const MUSICIAN_FIGURE_DARK = column(MUSICIAN_FIGURES, 'dark');
 
 // Tailpiece — the ornament that closes a movement. The stage-advance dialog is a
 // bottom sheet on mobile, so this stays small enough to keep the actions above the

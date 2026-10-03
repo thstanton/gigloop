@@ -17,6 +17,9 @@ import {
   LOGISTICS_PROFILE_FIELD_PAIRING,
   LOGISTICS_SYSTEM_KEYS,
   LOGISTICS_TIME_KEYS,
+  MUSICIAN_DARK_CLASSES,
+  MUSICIAN_FIGURE_DARK,
+  MUSICIAN_FIGURE_ORDER,
   PACKAGE_ICON_MAP,
   PINNED_QUICK_ACTIONS,
   QUICK_ACTIONS,
@@ -280,5 +283,21 @@ describe('quick actions table', () => {
   it('derives the pinned creates from the same shape', () => {
     expect(PINNED_QUICK_ACTIONS.length).toBeGreaterThan(0);
     for (const action of PINNED_QUICK_ACTIONS) expect(action.kind).toBe('navigate');
+  });
+});
+
+// Shape, never values: every figure carries an explicit dark-mode decision, and each
+// decision resolves to a class column entry.
+describe('musician figures table', () => {
+  it('gives every figure a dark-mode decision that has a class entry', () => {
+    for (const figure of MUSICIAN_FIGURE_ORDER) {
+      expect(Object.keys(MUSICIAN_DARK_CLASSES), `${figure} dark`).toContain(MUSICIAN_FIGURE_DARK[figure]);
+    }
+  });
+
+  it('keeps the dark classes as literal dark: utilities (or empty for keep)', () => {
+    for (const cls of Object.values(MUSICIAN_DARK_CLASSES)) {
+      expect(cls === '' || /^dark:[a-z-]+$/.test(cls)).toBe(true);
+    }
   });
 });
