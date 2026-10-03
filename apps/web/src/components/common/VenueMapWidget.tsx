@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Link } from 'react-router-dom';
 import { Car, KeyRound, MapPin, RefreshCw, Speaker } from 'lucide-react';
 import { Card } from '@/components/common/Card';
@@ -6,6 +6,16 @@ import { EmptyState } from '@/components/common/EmptyState';
 import { IconButton } from '@/components/common/IconButton';
 import { InlineHint } from '@/components/common/InlineHint';
 import { SubLabel } from '@/components/common/SubLabel';
+
+// Google's map tiles are drawn outside our CSS, so they follow the document's `dark` class only if
+// told to at construction. Observing the class (rather than useAppearance) keeps this widget
+// presentational and works in Storybook, where the toolbar toggles the class directly.
+function subscribeToDarkClass(onChange: () => void) {
+  const observer = new MutationObserver(onChange);
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+  return () => observer.disconnect();
+}
+const isDarkClassOn = () => document.documentElement.classList.contains('dark');
 
 export interface VenueMapWidgetProps {
   venue: {
@@ -158,6 +168,7 @@ export function VenueMapWidget({
 }: VenueMapWidgetProps) {
   const mapDivRef = useRef<HTMLDivElement>(null);
   const [mapFailed, setMapFailed] = useState(false);
+  const isDark = useSyncExternalStore(subscribeToDarkClass, isDarkClassOn, () => false);
   const hasCoords = venue.latitude !== null && venue.longitude !== null;
 
   const formattedAddress = [venue.addressLine1, venue.addressLine2, venue.city, venue.postcode]
@@ -186,6 +197,9 @@ export function VenueMapWidget({
           center: { lat: venue.latitude, lng: venue.longitude },
           zoom: 14,
           mapId: MAPS_MAP_ID,
+          // Takes effect on vector maps (a raster Map ID ignores it); fixed at construction, so a
+          // change of appearance re-runs this effect and rebuilds the map.
+          colorScheme: isDark ? 'DARK' : 'LIGHT',
           disableDefaultUI: true,
           gestureHandling: 'cooperative',
         });
@@ -198,8 +212,9 @@ export function VenueMapWidget({
 
     return () => {
       if (marker) marker.map = null;
+      mapDiv.replaceChildren();
     };
-  }, [hasCoords, venue.latitude, venue.longitude]);
+  }, [hasCoords, venue.latitude, venue.longitude, isDark]);
 
   const travelStatus = resolveTravelTimeStatus({ isLoadingTravelTime, travelTime, travelBaseMissing });
   const mapStatus = resolveMapStatus({ hasCoords, mapFailed });
