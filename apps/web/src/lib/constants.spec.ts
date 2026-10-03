@@ -17,7 +17,13 @@ import {
   LOGISTICS_PROFILE_FIELD_PAIRING,
   LOGISTICS_SYSTEM_KEYS,
   LOGISTICS_TIME_KEYS,
+  MUSICIAN_DARK_CLASSES,
+  MUSICIAN_FIGURE_DARK,
+  MUSICIAN_FIGURE_ORDER,
   PACKAGE_ICON_MAP,
+  PINNED_QUICK_ACTIONS,
+  QUICK_ACTIONS,
+  QUICK_ACTION_COMMANDS,
   STATUS_ACCENT_BG,
   STATUS_DESCRIPTIONS,
   STATUS_ORDER,
@@ -251,6 +257,47 @@ describe('logistics fields table', () => {
     // not a fat-fingered key that would fail only when #880 tries to read it.
     for (const value of pairedValues) {
       expect(value).toMatch(/Notes$/);
+    }
+  });
+});
+
+// Shape, never values: every quick action is a discriminated row — a navigation carries a route,
+// a command carries a command id — and ids are unique across both tables.
+describe('quick actions table', () => {
+  it('discriminates every row by kind and carries the columns that kind needs', () => {
+    for (const action of QUICK_ACTIONS) {
+      expect(action.kind).toBe('navigate');
+      expect(action.route.startsWith('/'), `${action.id} route`).toBe(true);
+    }
+    for (const action of QUICK_ACTION_COMMANDS) {
+      expect(action.kind).toBe('command');
+      expect(action.command, `${action.id} command`).toBeTruthy();
+    }
+  });
+
+  it('keeps ids unique across navigations and commands', () => {
+    const ids = [...QUICK_ACTIONS, ...QUICK_ACTION_COMMANDS].map((action) => action.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('derives the pinned creates from the same shape', () => {
+    expect(PINNED_QUICK_ACTIONS.length).toBeGreaterThan(0);
+    for (const action of PINNED_QUICK_ACTIONS) expect(action.kind).toBe('navigate');
+  });
+});
+
+// Shape, never values: every figure carries an explicit dark-mode decision, and each
+// decision resolves to a class column entry.
+describe('musician figures table', () => {
+  it('gives every figure a dark-mode decision that has a class entry', () => {
+    for (const figure of MUSICIAN_FIGURE_ORDER) {
+      expect(Object.keys(MUSICIAN_DARK_CLASSES), `${figure} dark`).toContain(MUSICIAN_FIGURE_DARK[figure]);
+    }
+  });
+
+  it('keeps the dark classes as literal dark: utilities (or empty for keep)', () => {
+    for (const cls of Object.values(MUSICIAN_DARK_CLASSES)) {
+      expect(cls === '' || /^dark:[a-z-]+$/.test(cls)).toBe(true);
     }
   });
 });

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import './portal-preview-light-scope.css';
 import { Check, Download, FileText, Music, Search } from 'lucide-react';
 import { PortalLayout, getDisplayFontClass } from '@/layouts/PortalLayout';
 import {
@@ -464,33 +465,36 @@ export function PortalPreviewBody({
     />
   ) : undefined;
 
-  if (previewPage === 'contract') {
-    return <PreviewContractView profile={previewProfile} />;
-  }
-
+  let previewContent = <PreviewContractView profile={previewProfile} />;
   if (previewPage === 'music') {
-    return <PreviewMusicView profile={previewProfile} />;
+    previewContent = <PreviewMusicView profile={previewProfile} />;
+  } else if (previewPage === 'booking') {
+    previewContent = (
+      <PortalLayout profile={previewProfile} wide hero={hero}>
+        {!boldTheme && (
+          <LightGreeting
+            greetingName={PREVIEW_GREETING_NAME}
+            title={PREVIEW_TITLE}
+            statusMessage={statusMessage}
+            theme={overrides.theme}
+          />
+        )}
+        <div className="md:grid md:grid-cols-[1fr_280px] md:gap-8 md:items-start">
+          <PreviewBookingView
+            profile={previewProfile}
+            onNavigate={onNavigate}
+          />
+          <div className="mt-8 md:mt-0 md:sticky md:top-8">
+            <ContactCard profile={previewProfile} bold={boldTheme} />
+          </div>
+        </div>
+      </PortalLayout>
+    );
   }
 
   return (
-    <PortalLayout profile={previewProfile} wide hero={hero}>
-      {!boldTheme && (
-        <LightGreeting
-          greetingName={PREVIEW_GREETING_NAME}
-          title={PREVIEW_TITLE}
-          statusMessage={statusMessage}
-          theme={overrides.theme}
-        />
-      )}
-      <div className="md:grid md:grid-cols-[1fr_280px] md:gap-8 md:items-start">
-        <PreviewBookingView
-          profile={previewProfile}
-          onNavigate={onNavigate}
-        />
-        <div className="mt-8 md:mt-0 md:sticky md:top-8">
-          <ContactCard profile={previewProfile} bold={boldTheme} />
-        </div>
-      </div>
-    </PortalLayout>
+    <div className="portal-preview-light-scope" data-testid="portal-preview-light-scope">
+      {previewContent}
+    </div>
   );
 }

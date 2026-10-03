@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import {
   MUSICIAN_FIGURE_ASSETS,
+  MUSICIAN_FIGURE_DARK_CLASSES,
   MUSICIAN_FIGURE_ORDER,
   MUSICIAN_TAILPIECE_PX,
   type MusicianFigure,
@@ -41,7 +42,7 @@ export function MusicianDecoration({ size = MUSICIAN_TAILPIECE_PX, figure }: Mus
       aria-hidden
       width={size}
       height={size}
-      className="mx-auto select-none"
+      className={`mx-auto select-none ${MUSICIAN_FIGURE_DARK_CLASSES[shown]}`}
     />
   );
 }

@@ -64,6 +64,7 @@ export const Booking: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByText('The Grand Ballroom')).toBeVisible();
     await expect(canvas.getByRole('button', { name: /Choose your songs/ })).toBeVisible();
+    await expect(canvas.getByTestId('portal-preview-light-scope')).toBeVisible();
   },
 };
 

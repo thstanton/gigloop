@@ -1,0 +1,42 @@
+/* Portal previews show the client-facing palette even when their admin host is dark. */
+.portal-preview-light-scope {
+  color-scheme: light;
+  --background: 38 30% 98%;
+  --surface: 38 25% 95%;
+  --border: 35 18% 87%;
+  --border-strong: 35 14% 77%;
+  --muted: 30 8% 40%;
+  --void: 30 8% 28%;
+  --foreground: 25 25% 11%;
+  --primary: 152 45% 25%;
+  --primary-foreground: 120 30% 95%;
+  --chrome: 30 8% 13%;
+  --chrome-foreground: 38 15% 88%;
+  --chrome-muted: 35 6% 50%;
+  --chrome-sidebar: 30 8% 9%;
+  --dashboard-surface: 35 35% 91%;
+  --popover: 38 30% 99%;
+  --popover-foreground: 25 25% 11%;
+  --accent: 35 18% 92%;
+  --accent-foreground: 25 25% 11%;
+  --secondary: 35 18% 92%;
+  --secondary-foreground: 25 25% 11%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --input: 35 18% 87%;
+  --ring: 152 45% 25%;
+  --status-enquiry: 38 92% 50%;
+  --status-provisional: 220 83% 55%;
+  --status-confirmed: 172 55% 40%;
+  --status-ready: 262 83% 58%;
+  --status-complete: 30 8% 48%;
+  --status-cancelled: 0 84% 60%;
+  --date-badge: 0 57% 45%;
+  --date-badge-foreground: 0 0% 100%;
+  --warning: 32.132701 94.618834% 43.725490%;
+  --warning-surface: 48 100% 96.078431%;
+  --warning-border: 48 96.638655% 76.666667%;
+  --warning-foreground: 22.727273 82.5% 31.372549%;
+  --overlay: 0 0% 0%;
+  --on-status: 0 0% 100%;
+}
