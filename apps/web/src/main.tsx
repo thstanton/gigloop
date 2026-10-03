@@ -43,6 +43,7 @@ import OnboardingChecklistPage from './pages/onboarding/OnboardingChecklistPage'
 import OnboardingPortalPage from './pages/onboarding/OnboardingPortalPage';
 import { getEnvironmentLabel } from './lib/environment';
 import { useAppearance } from './lib/hooks/useAppearance';
+import { buildClerkAppearance, readRootToken } from './lib/clerkAppearance';
 
 const environmentLabel = getEnvironmentLabel();
 if (environmentLabel) {
@@ -50,31 +51,6 @@ if (environmentLabel) {
 }
 
 const queryClient = new QueryClient();
-
-const clerkAppearance = {
-  variables: {
-    colorPrimary: 'hsl(152, 45%, 25%)',
-    colorBackground: 'hsl(38, 30%, 98%)',
-    colorInputBackground: 'hsl(38, 25%, 95%)',
-    colorText: 'hsl(30, 8%, 13%)',
-    colorTextSecondary: 'hsl(30, 8%, 48%)',
-    borderRadius: '0.25rem',
-    fontFamily: "'Commissioner', sans-serif",
-  },
-  elements: {
-    card: {
-      backgroundColor: 'hsl(38, 30%, 98%)',
-      boxShadow: 'none',
-      border: '1px solid hsl(35, 18%, 87%)',
-    },
-    headerTitle: {
-      fontFamily: "'Playfair Display', serif",
-    },
-    formButtonPrimary: {
-      boxShadow: 'none',
-    },
-  },
-};
 
 const router = createBrowserRouter([
   {
@@ -141,15 +117,37 @@ const router = createBrowserRouter([
   },
 ]);
 
-function RootErrorBoundary() {
+function usePathname() {
   const [pathname, setPathname] = React.useState(() => window.location.pathname);
-  const variant = variantForPathname(pathname);
-  useAppearance(pathname);
 
   React.useEffect(
     () => router.subscribe((state) => setPathname(state.location.pathname)),
     [],
   );
+
+  return pathname;
+}
+
+// Clerk renders its own UI, so its colours are rebuilt from the declared tokens whenever the
+// resolved appearance changes. This wrapper also owns the root `dark` class (useAppearance), and
+// declares that before the layout effect below so the tokens are read after the class flips.
+function AppearanceClerkProvider({ children }: { children: React.ReactNode }) {
+  const { resolved } = useAppearance(usePathname());
+  const [appearance, setAppearance] = React.useState(() => buildClerkAppearance(readRootToken));
+
+  React.useLayoutEffect(() => {
+    setAppearance(buildClerkAppearance(readRootToken));
+  }, [resolved]);
+
+  return (
+    <ClerkProvider publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY} appearance={appearance}>
+      {children}
+    </ClerkProvider>
+  );
+}
+
+function RootErrorBoundary() {
+  const variant = variantForPathname(usePathname());
 
   return (
     <ErrorBoundary variant={variant}>
@@ -159,12 +157,12 @@ function RootErrorBoundary() {
 }
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
-  <ClerkProvider publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY} appearance={clerkAppearance}>
+  <AppearanceClerkProvider>
     <QueryClientProvider client={queryClient}>
       <React.StrictMode>
         <RootErrorBoundary />
       </React.StrictMode>
       <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>
-  </ClerkProvider>,
+  </AppearanceClerkProvider>,
 );
