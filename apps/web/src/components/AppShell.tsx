@@ -22,13 +22,12 @@ import { GlobalCommandPalette } from '@/features/search/GlobalCommandPalette';
 import {
   PRIMARY_NAV_DESTINATIONS,
   SECONDARY_NAV_DESTINATIONS,
+  APPEARANCE_FLAG,
   type NavDestinationRow,
 } from '@/lib/constants';
 
 // Global command palette (ADR-0067) — dark-launched behind a default-off env flag.
 const SEARCH_FLAG = 'VITE_FEATURE_COMMAND_PALETTE';
-// Per-device light/dark appearance (ADR-0085) — default-off; the control only renders when on.
-const APPEARANCE_FLAG = 'VITE_FEATURE_APPEARANCE';
 
 /** The System/Light/Dark control wired to the stored preference; renders nothing with the flag off. */
 function AppearanceSetting({ className, separated }: Readonly<{ className?: string; separated?: boolean }>) {

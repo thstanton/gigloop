@@ -23,6 +23,9 @@ export const APPEARANCE_PREFERENCES = [
 
 export type AppearancePreference = (typeof APPEARANCE_PREFERENCES)[number]['value'];
 
+/** Env flag gating per-device light/dark appearance (ADR-0085); default-off. */
+export const APPEARANCE_FLAG = 'VITE_FEATURE_APPEARANCE';
+
 const PRIMARY_ROLES = [
   { value: 'CUSTOMER',      label: 'Customer'      },
   { value: 'VENUE',         label: 'Venue'         },
@@ -720,7 +723,7 @@ export interface CommandQuickActionRow extends QuickActionBase {
 export type QuickAction = NavigateQuickAction | CommandQuickActionRow;
 
 export const QUICK_ACTION_COMMANDS = [
-  { id: 'toggle-appearance', kind: 'command', command: 'toggle-appearance', label: 'Toggle appearance', icon: SunMoon, keywords: ['appearance', 'dark mode', 'light mode', 'theme', 'dark', 'light'], flag: 'VITE_FEATURE_APPEARANCE' },
+  { id: 'toggle-appearance', kind: 'command', command: 'toggle-appearance', label: 'Toggle appearance', icon: SunMoon, keywords: ['appearance', 'dark mode', 'light mode', 'theme', 'dark', 'light'], flag: APPEARANCE_FLAG },
 ] as const satisfies readonly CommandQuickActionRow[];
 
 // The nine pure navigations — the seven section destinations then the two creates. The nav rows

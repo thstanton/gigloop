@@ -1,5 +1,5 @@
 import { useCallback, useLayoutEffect, useSyncExternalStore } from 'react';
-import { APPEARANCE_PREFERENCES, type AppearancePreference } from '@/lib/constants';
+import { APPEARANCE_FLAG, APPEARANCE_PREFERENCES, type AppearancePreference } from '@/lib/constants';
 import { resolveAppearance, variantForPathname } from '@/lib/appearance';
 import { isEnabled } from '@/lib/featureFlags';
 
@@ -40,7 +40,7 @@ function readPreference(): AppearancePreference {
 }
 
 export function useAppearance(pathname = window.location.pathname) {
-  const enabled = isEnabled('VITE_FEATURE_APPEARANCE');
+  const enabled = isEnabled(APPEARANCE_FLAG);
   const variant = variantForPathname(pathname);
   const preference = useSyncExternalStore(subscribeToPreference, readPreference, (): AppearancePreference => 'system');
 

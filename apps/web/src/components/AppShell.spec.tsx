@@ -55,6 +55,11 @@ describe('AppShell appearance control', () => {
     // The open sheet is modal, so the account-menu copy is aria-hidden; count both with `hidden`.
     expect(screen.getByRole('radiogroup', { name: 'Appearance' })).toBeInTheDocument();
     expect(screen.getAllByRole('radiogroup', { name: 'Appearance', hidden: true })).toHaveLength(2);
+    // The sheet copy reflects the stored preference and changes it.
+    expect(screen.getByRole('radio', { name: 'Dark' })).toBeChecked();
+    await userEvent.click(screen.getByRole('radio', { name: 'Light' }));
+    expect(window.localStorage.getItem(APPEARANCE_STORAGE_KEY)).toBe('light');
+    expect(screen.getByRole('radio', { name: 'Light' })).toBeChecked();
   });
 
   it('hides the control everywhere when the Appearance flag is off', async () => {
