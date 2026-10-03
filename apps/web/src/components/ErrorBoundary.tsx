@@ -1,10 +1,11 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import * as Sentry from '@sentry/react';
+import { variantForPathname, type RouteVariant } from '@/lib/appearance';
 
 interface Props {
   children: ReactNode;
   fallback?: ReactNode;
-  variant?: 'default' | 'portal';
+  variant?: RouteVariant;
 }
 
 interface State {
@@ -12,11 +13,7 @@ interface State {
   error: Error | null;
 }
 
-export function variantForPathname(pathname: string): 'default' | 'portal' {
-  // The band portal (#891) is the same unauthenticated-token-route class as the client portal —
-  // a stray crash there must not leak a stack trace to a dep either.
-  return pathname.startsWith('/booking/') || pathname.startsWith('/band/') ? 'portal' : 'default';
-}
+export { variantForPathname };
 
 export default class ErrorBoundary extends Component<Props, State> {
   state: State = { hasError: false, error: null };

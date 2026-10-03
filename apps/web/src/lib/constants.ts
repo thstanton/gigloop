@@ -11,6 +11,18 @@ import violinistFigure from '@/assets/musicians/violinist.png';
 
 export type ContactPrimaryRole = 'CUSTOMER' | 'VENUE' | 'BOOKING_AGENT' | 'BAND_MEMBER';
 
+export const APPEARANCE_PREFERENCES = [
+  { value: 'system', label: 'System', description: 'Follow your device setting' },
+  { value: 'light', label: 'Light', description: 'Always use the light appearance' },
+  { value: 'dark', label: 'Dark', description: 'Always use the dark appearance' },
+] as const satisfies readonly {
+  value: 'system' | 'light' | 'dark';
+  label: string;
+  description: string;
+}[];
+
+export type AppearancePreference = (typeof APPEARANCE_PREFERENCES)[number]['value'];
+
 const PRIMARY_ROLES = [
   { value: 'CUSTOMER',      label: 'Customer'      },
   { value: 'VENUE',         label: 'Venue'         },

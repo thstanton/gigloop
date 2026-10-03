@@ -42,6 +42,7 @@ import OnboardingPackagesPage from './pages/onboarding/OnboardingPackagesPage';
 import OnboardingChecklistPage from './pages/onboarding/OnboardingChecklistPage';
 import OnboardingPortalPage from './pages/onboarding/OnboardingPortalPage';
 import { getEnvironmentLabel } from './lib/environment';
+import { useAppearance } from './lib/hooks/useAppearance';
 
 const environmentLabel = getEnvironmentLabel();
 if (environmentLabel) {
@@ -141,10 +142,12 @@ const router = createBrowserRouter([
 ]);
 
 function RootErrorBoundary() {
-  const [variant, setVariant] = React.useState(() => variantForPathname(window.location.pathname));
+  const [pathname, setPathname] = React.useState(() => window.location.pathname);
+  const variant = variantForPathname(pathname);
+  useAppearance(pathname);
 
   React.useEffect(
-    () => router.subscribe((state) => setVariant(variantForPathname(state.location.pathname))),
+    () => router.subscribe((state) => setPathname(state.location.pathname)),
     [],
   );
 

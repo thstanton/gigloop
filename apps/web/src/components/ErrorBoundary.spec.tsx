@@ -35,9 +35,9 @@ describe('variantForPathname', () => {
     ['/booking/tok/contract', 'portal'],
     ['/booking/tok/music', 'portal'],
     ['/band/tok', 'portal'],
-    ['/admin/portal-preview', 'default'],
-    ['/onboarding/profile', 'default'],
-    ['/admin/bookings', 'default'],
+    ['/admin/portal-preview', 'admin'],
+    ['/onboarding/profile', 'admin'],
+    ['/admin/bookings', 'admin'],
   ] as const)('%s -> %s', (pathname, expected) => {
     expect(variantForPathname(pathname)).toBe(expected);
   });
