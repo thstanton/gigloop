@@ -155,7 +155,7 @@ export function PlayerRow({
       {!member.isSelf && (
         <>
           {neverInvited && (
-            <Button variant="outline" size="sm" className="min-h-10" onClick={onInvite} aria-label={`Invite ${name}`}>
+            <Button variant="outline" size="sm" className="min-h-11" onClick={onInvite} aria-label={`Invite ${name}`}>
               Invite
             </Button>
           )}
@@ -217,7 +217,7 @@ export function PlayerRow({
                 setDialog(null);
               }}
             >
-              {isTakingOff ? '…' : 'Take off this gig'}
+              {isTakingOff ? 'Taking off…' : 'Take off this gig'}
             </Button>
           </ResponsiveDialogFooter>
         </ResponsiveDialogContent>

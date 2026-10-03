@@ -103,6 +103,9 @@ type Story = StoryObj<typeof meta>;
 export const FullGig: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Players')).toBeVisible();
+    // Groups appear in the contract's order: Confirmed, Waiting on, then Still to fill.
+    const headings = canvas.getAllByText(/^(Confirmed|Waiting on|Still to sort|Still to fill)$/).map((el) => el.textContent);
+    await expect(headings).toEqual(['Confirmed', 'Waiting on', 'Still to fill']);
     await expect(canvas.getByRole('button', { name: 'Edit who plays what' })).toBeVisible();
     await expect(canvas.getByText('Confirmed')).toBeVisible();
     await expect(canvas.getByText('Waiting on')).toBeVisible();

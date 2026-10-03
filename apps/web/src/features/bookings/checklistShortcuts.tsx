@@ -74,7 +74,7 @@ function resolveBandShortcut(
     return { label: retry ?? 'Open band', pending: false, onClick: () => handlers.onDeepLink('band') };
   }
   if (shortcutType === 'band_member') {
-    const memberName = stepLabel ? bandMemberNameFromConfirmationLabel(stepLabel) : 'band member';
+    const memberName = stepLabel ? bandMemberNameFromConfirmationLabel(stepLabel) : 'player';
     return { label: retry ?? `Chase ${memberName}`, pending: false, onClick: showPlayer };
   }
   // #901: final details are sent per player, from that player's row on the Players card.

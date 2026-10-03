@@ -388,10 +388,19 @@ export const BAND_MEMBER_STATUS_LABELS = column(BAND_MEMBER_STATUSES, 'label');
 
 export const BAND_MEMBER_ANSWER_GROUP = column(BAND_MEMBER_STATUSES, 'answerGroup');
 
-// Order the Band card's groups appear in, each occurring once, first-seen in table order.
-export const BAND_MEMBER_ANSWER_GROUP_ORDER: BandMemberAnswerGroup[] = [
-  ...new Set(BAND_MEMBER_STATUSES.map((row) => row.answerGroup)),
-];
+// Order the Players card's groups appear in (#1057): what is settled first, what needs the
+// musician's attention last. Explicit, not derived from the status table — that table is ordered by
+// the lifecycle (Added → Invited → Confirmed), which would put the settled group last. The coverage
+// check keeps a new group from being added to the table without a place here.
+export const BAND_MEMBER_ANSWER_GROUP_ORDER = [
+  'Confirmed',
+  'Waiting on',
+  'Still to sort',
+] as const satisfies readonly BandMemberAnswerGroup[];
+
+export type _BandMemberAnswerGroupCoverage = AssertNever<
+  Exclude<BandMemberAnswerGroup, (typeof BAND_MEMBER_ANSWER_GROUP_ORDER)[number]>
+>;
 
 export interface BandMemberStatusTokens {
   tint: string;

@@ -81,12 +81,9 @@ export function PlayersListCard({
     );
   }
 
-  const groups: Record<BandMemberAnswerGroup, typeof players> = {
-    Confirmed: [],
-    'Waiting on': [],
-    'Still to sort': [],
-  };
-  for (const member of players) groups[BAND_MEMBER_ANSWER_GROUP[member.status]].push(member);
+  const groups = Object.fromEntries(
+    BAND_MEMBER_ANSWER_GROUP_ORDER.map((key) => [key, players.filter((m) => BAND_MEMBER_ANSWER_GROUP[m.status] === key)]),
+  ) as Record<BandMemberAnswerGroup, typeof players>;
 
   return (
     <Card
@@ -137,7 +134,7 @@ export function PlayersListCard({
                   <span className="min-w-0 flex-1 truncate text-sm text-muted">
                     {packageLabelsFor(chairPackageIds(part, lineups), packages).join(', ')}
                   </span>
-                  <Button variant="outline" size="sm" className="min-h-10" onClick={onOpenBandSheet}>
+                  <Button variant="outline" size="sm" className="min-h-11" onClick={onOpenBandSheet}>
                     Find a player
                   </Button>
                 </div>
