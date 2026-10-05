@@ -16,11 +16,35 @@ const makeQueryClient = () =>
   new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
 const preview: Preview = {
+  globalTypes: {
+    appearance: {
+      name: 'Appearance',
+      description: 'Preview light and dark admin appearances',
+      defaultValue: 'light',
+      toolbar: {
+        icon: 'moon',
+        items: [
+          { value: 'light', title: 'Light' },
+          { value: 'dark', title: 'Dark' },
+        ],
+        dynamicTitle: true,
+      },
+    },
+  },
+  initialGlobals: { appearance: 'light' },
   async beforeEach() {
     // Freeze time so date-dependent filters (upcomingGigs, etc.) are deterministic
     MockDate.set('2030-06-01T12:00:00Z');
   },
   decorators: [
+    (Story, context) => {
+      const isDark = context.globals.appearance === 'dark';
+      React.useEffect(() => {
+        document.documentElement.classList.toggle('dark', isDark);
+        return () => document.documentElement.classList.remove('dark');
+      }, [isDark]);
+      return React.createElement(Story);
+    },
     (Story) =>
       React.createElement(
         QueryClientProvider,

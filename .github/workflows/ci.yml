@@ -79,6 +79,9 @@ jobs:
       - name: Design-token guard (#977, #1075)
         if: needs.detect-changes.outputs.web == 'true'
         run: node scripts/check-design-tokens.mjs
+      - name: Token contrast guard (ADR-0085, #1078)
+        if: needs.detect-changes.outputs.web == 'true'
+        run: node scripts/check-token-contrast.mjs
 
   test:
     name: Test
@@ -133,6 +136,9 @@ jobs:
       - name: Design-token guard unit tests (#977, #1075)
         if: needs.detect-changes.outputs.web == 'true'
         run: node --test scripts/check-design-tokens.test.mjs
+      - name: Token contrast guard unit tests (ADR-0085, #1078)
+        if: needs.detect-changes.outputs.web == 'true'
+        run: node --test scripts/check-token-contrast.test.mjs
 
   build:
     name: Build

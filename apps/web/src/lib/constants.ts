@@ -3,13 +3,28 @@ import {
   GlassWater, Utensils, Moon, Briefcase, Music2, Sparkles, Radio, Headphones,
   Volume2, Users, Clock, Shirt, Sofa, Car, type LucideIcon,
   LayoutDashboard, CalendarDays, FileText, Settings, Package,
-  CalendarPlus, UserPlus,
+  CalendarPlus, UserPlus, SunMoon,
 } from 'lucide-react';
 import type { BookingBandMemberStatus, BookingStatus, ChecklistStepState, EventType, InvoiceStatus, PortalTheme, PortalVisibilityReason, ReminderConcern, SongGenre } from '@/types/api';
 import trumpeterFigure from '@/assets/musicians/trumpeter.png';
 import violinistFigure from '@/assets/musicians/violinist.png';
 
 export type ContactPrimaryRole = 'CUSTOMER' | 'VENUE' | 'BOOKING_AGENT' | 'BAND_MEMBER';
+
+export const APPEARANCE_PREFERENCES = [
+  { value: 'system', label: 'System', description: 'Follow your device setting' },
+  { value: 'light', label: 'Light', description: 'Always use the light appearance' },
+  { value: 'dark', label: 'Dark', description: 'Always use the dark appearance' },
+] as const satisfies readonly {
+  value: 'system' | 'light' | 'dark';
+  label: string;
+  description: string;
+}[];
+
+export type AppearancePreference = (typeof APPEARANCE_PREFERENCES)[number]['value'];
+
+/** Env flag gating per-device light/dark appearance (ADR-0085); default-off. */
+export const APPEARANCE_FLAG = 'VITE_FEATURE_APPEARANCE';
 
 const PRIMARY_ROLES = [
   { value: 'CUSTOMER',      label: 'Customer'      },
@@ -690,18 +705,46 @@ export const QUICK_ACTION_CREATES = [
   { id: 'new-contact', label: 'New Contact', route: '/admin/contacts/new', icon: UserPlus,      keywords: ['new contact', 'add contact', 'add client'] },
 ] as const satisfies readonly QuickActionCreateRow[];
 
-// The command palette's Actions section (ADR-0067 §6): the nine pure navigations — the seven
-// section destinations then the two creates — derived from the two tables above, never re-listed.
-// The nav rows carry an extra `group` column the palette ignores; both satisfy QuickAction.
-export interface QuickAction {
+// The command palette's Actions section (ADR-0067 §6). A row is either a navigation (`route`) or
+// an in-place command the palette's container performs (`command`) — the `kind` column
+// discriminates, so the palette never special-cases a command by id. Navigations are derived from
+// the two tables above; commands are declared once in QUICK_ACTION_COMMANDS and may be gated
+// behind a feature flag (`flag`).
+interface QuickActionBase {
   id: string;
   label: string;
-  route: string;
   icon: LucideIcon;
   keywords: readonly string[];
 }
 
-export const QUICK_ACTIONS: readonly QuickAction[] = [...NAV_DESTINATIONS, ...QUICK_ACTION_CREATES];
+export interface NavigateQuickAction extends QuickActionBase {
+  kind: 'navigate';
+  route: string;
+}
+
+export interface CommandQuickActionRow extends QuickActionBase {
+  kind: 'command';
+  command: 'toggle-appearance';
+  /** Env flag that must be on for the command to be offered (default-off flags, ADR-0075). */
+  flag?: string;
+}
+
+export type QuickAction = NavigateQuickAction | CommandQuickActionRow;
+
+export const QUICK_ACTION_COMMANDS = [
+  { id: 'toggle-appearance', kind: 'command', command: 'toggle-appearance', label: 'Toggle appearance', icon: SunMoon, keywords: ['appearance', 'dark mode', 'light mode', 'theme', 'dark', 'light'], flag: APPEARANCE_FLAG },
+] as const satisfies readonly CommandQuickActionRow[];
+
+// The nine pure navigations — the seven section destinations then the two creates. The nav rows
+// carry an extra `group` column the palette ignores, so each is projected to the shared shape.
+function toNavigateAction({ id, label, route, icon, keywords }: QuickActionCreateRow): NavigateQuickAction {
+  return { id, label, route, icon, keywords, kind: 'navigate' };
+}
+
+export const QUICK_ACTIONS: readonly NavigateQuickAction[] = [...NAV_DESTINATIONS, ...QUICK_ACTION_CREATES].map(toNavigateAction);
+
+/** The creates, pinned above Recent on cold open (New Booking first). */
+export const PINNED_QUICK_ACTIONS: readonly NavigateQuickAction[] = QUICK_ACTION_CREATES.map(toNavigateAction);
 
 // ─── Musician decorations (#858, docs/musician-decorations-grill.md) ────────
 // The woodcut score-cover ornament pool. Declared once here per the "one
@@ -721,11 +764,26 @@ export interface MusicianFigureRow {
   asset: string;
   /** Human-readable, for the story's caption only — never announced to assistive tech. */
   description: string;
+  /**
+   * The explicit dark-mode decision (ADR-0085 §4). Required, so a new figure cannot
+   * be added without being judged on the dark surface: `keep` renders it unchanged,
+   * `invert` flips the ink to light, `hide` doesn't render it at all.
+   */
+  dark: MusicianFigureDarkTreatment;
 }
 
+export type MusicianFigureDarkTreatment = 'keep' | 'invert' | 'hide';
+
+// Literal Tailwind strings — a built `dark:${x}` is invisible to the scanner and purged.
+export const MUSICIAN_DARK_CLASSES = {
+  keep: '',
+  invert: 'dark:invert',
+  hide: 'dark:hidden',
+} as const satisfies Record<MusicianFigureDarkTreatment, string>;
+
 const MUSICIAN_FIGURES = [
-  { value: 'trumpeter', asset: trumpeterFigure, description: 'Trumpeter, standing, horn raised' },
-  { value: 'violinist', asset: violinistFigure, description: 'Violinist, standing, bow drawn' },
+  { value: 'trumpeter', asset: trumpeterFigure, description: 'Trumpeter, standing, horn raised', dark: 'keep' },
+  { value: 'violinist', asset: violinistFigure, description: 'Violinist, standing, bow drawn', dark: 'keep' },
 ] as const satisfies readonly MusicianFigureRow[];
 
 export type MusicianFigure = (typeof MUSICIAN_FIGURES)[number]['value'];
@@ -735,6 +793,13 @@ export const MUSICIAN_FIGURE_ORDER: MusicianFigure[] = MUSICIAN_FIGURES.map((row
 export const MUSICIAN_FIGURE_ASSETS = column(MUSICIAN_FIGURES, 'asset');
 
 export const MUSICIAN_FIGURE_DESCRIPTIONS = column(MUSICIAN_FIGURES, 'description');
+
+export const MUSICIAN_FIGURE_DARK = column(MUSICIAN_FIGURES, 'dark');
+
+/** The literal Tailwind class each figure takes in dark mode — one lookup for the component. */
+export const MUSICIAN_FIGURE_DARK_CLASSES = Object.fromEntries(
+  MUSICIAN_FIGURE_ORDER.map((figure) => [figure, MUSICIAN_DARK_CLASSES[MUSICIAN_FIGURE_DARK[figure]]]),
+) as Record<MusicianFigure, string>;
 
 // Tailpiece — the ornament that closes a movement. The stage-advance dialog is a
 // bottom sheet on mobile, so this stays small enough to keep the actions above the
