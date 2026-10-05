@@ -45,6 +45,33 @@ export function contactMatchesChairRole(contact: Pick<RosterCandidate, 'primaryB
   return contact.instruments.some((instrument) => softMatchesRole(instrument, chairRole));
 }
 
+/**
+ * Whether a contact can fill a part: typed Band member, or not typed at all. Customers, venues and
+ * booking agents are left out of the player picker — nobody plays in the band they are booking. The
+ * generic contact picker deliberately does not tell types apart; this one does.
+ */
+export function canPlay(contact: { primaryRole?: string | null }): boolean {
+  return !contact.primaryRole || contact.primaryRole === 'BAND_MEMBER';
+}
+
+/**
+ * What a player is known to play, for the part picker: the identity ("a sax player") first, then
+ * the declared instruments, de-duplicated case-insensitively. Both are shown because the identity is
+ * often just one of the instruments, entered twice.
+ */
+export function playerInstruments(contact: Pick<RosterCandidate, 'primaryBandRole' | 'instruments'>): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of [contact.primaryBandRole ?? '', ...contact.instruments]) {
+    const name = raw.trim();
+    const key = name.toLowerCase();
+    if (!name || seen.has(key)) continue;
+    seen.add(key);
+    out.push(name);
+  }
+  return out;
+}
+
 function distanceTo(venue: { latitude: number; longitude: number } | null, contact: GeoPoint): number | null {
   if (!venue || contact.latitude == null || contact.longitude == null) return null;
   return haversineKm(venue, { latitude: contact.latitude, longitude: contact.longitude });

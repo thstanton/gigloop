@@ -128,10 +128,10 @@ export const CreateBandMember: Story = {
     createRequestBody = undefined;
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('combobox'));
-    await userEvent.type(await screen.findByPlaceholderText(/Search or create new/i), 'New Dep');
+    await userEvent.type(await screen.findByPlaceholderText('Search or add a player'), 'New Dep');
     await userEvent.click(await screen.findByRole('option', { name: /Create "New Dep"/i }));
 
-    await expect(await screen.findByRole('heading', { name: 'New band member' })).toBeVisible();
+    await expect(await screen.findByRole('heading', { name: 'New player' })).toBeVisible();
     const dialog = within(screen.getByRole('dialog'));
 
     // The band-member UI is dark behind VITE_FEATURE_BAND_MEMBERS. When enabled, assert the
@@ -149,5 +149,49 @@ export const CreateBandMember: Story = {
     await userEvent.click(dialog.getByRole('button', { name: 'Create' }));
     await expect(args.onChange).toHaveBeenCalledWith('c-created');
     await expect(createRequestBody).toMatchObject({ name: 'New Dep', primaryRole: 'BAND_MEMBER' });
+  },
+};
+
+// Each option shows what the person plays, and the ones matching this part are emphasised — the
+// reason the list is ordered the way it is.
+const person = (id: string, name: string, over: Partial<Contact>): Contact => ({
+  ...selfContact, id, name, email: null, isAccountOwner: false, primaryRole: 'BAND_MEMBER', ...over,
+});
+
+const people: Contact[] = [
+  person('c-guitar', 'Ben Carter', { primaryBandRole: 'Guitar', instruments: ['Guitar', 'Bass'] }),
+  person('c-sax', 'Ana Rossi', { primaryBandRole: 'Sax', instruments: ['sax', 'Flute'], email: 'ana@example.com' }),
+  person('c-untyped', 'Priya Shah', { primaryRole: null, primaryBandRole: null, instruments: ['Saxophone'] }),
+  person('c-customer', 'Sophie Hartley', { primaryRole: 'CUSTOMER', instruments: ['Sax'] }),
+  person('c-venue', 'The Old Barn', { primaryRole: 'VENUE' }),
+  person('c-agent', 'Gigs Ltd', { primaryRole: 'BOOKING_AGENT' }),
+];
+
+export const ShowsInstrumentsAndHidesNonPlayers: Story = {
+  name: 'Options show what each player plays (matches bold); customers, venues and agents are left out',
+  parameters: { msw: { handlers: [http.get('/api/contacts', () => HttpResponse.json(people))] } },
+  play: async ({ canvas }) => {
+    await userEvent.click(canvas.getByRole('combobox'));
+    await screen.findAllByRole('option');
+    // Player options only: the "Add yourself" row has no name line.
+    const names = screen.getAllByRole('option').flatMap((o) => o.querySelector('p')?.textContent ?? []);
+
+    // Players who play a Sax come first (soft match: "Saxophone" counts); Ben follows.
+    await expect(names).toEqual(['Ana Rossi', 'Priya Shah', 'Ben Carter']);
+    await expect(screen.queryByText('Sophie Hartley')).not.toBeInTheDocument();
+    await expect(screen.queryByText('The Old Barn')).not.toBeInTheDocument();
+    await expect(screen.queryByText('Gigs Ltd')).not.toBeInTheDocument();
+
+    // Identity first, then instruments, de-duplicated ("Sax" and "sax" once).
+    const ana = within(screen.getByRole('option', { name: /Ana Rossi/ }));
+    await expect(ana.getByText('Sax')).toHaveClass('font-semibold');
+    await expect(ana.getByText('Flute')).not.toHaveClass('font-semibold');
+    await expect(ana.getAllByText(/^sax$/i)).toHaveLength(1);
+    await expect(ana.getByText('ana@example.com')).toBeVisible();
+
+    // Not matching this part: nothing emphasised. An untyped contact still appears.
+    const ben = within(screen.getByRole('option', { name: /Ben Carter/ }));
+    await expect(ben.getByText('Guitar')).not.toHaveClass('font-semibold');
+    await expect(screen.getByRole('option', { name: /Priya Shah/ })).toBeVisible();
   },
 };

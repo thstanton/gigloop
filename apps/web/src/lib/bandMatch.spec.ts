@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { contactMatchesChairRole, haversineKm, rankContactsForChair, softMatchesRole } from './bandMatch';
+import { canPlay, contactMatchesChairRole, haversineKm, playerInstruments, rankContactsForChair, softMatchesRole } from './bandMatch';
 
 describe('softMatchesRole', () => {
   it('matches an abbreviation against its full form', () => {
@@ -100,5 +100,35 @@ describe('rankContactsForChair', () => {
     const b = contact('b');
     const ranked = rankContactsForChair([a, b], '', null);
     expect(ranked.map((c) => c.id)).toEqual(['a', 'b']);
+  });
+});
+
+describe('canPlay', () => {
+  it('excludes customers, venues and booking agents', () => {
+    expect(canPlay({ primaryRole: 'CUSTOMER' })).toBe(false);
+    expect(canPlay({ primaryRole: 'VENUE' })).toBe(false);
+    expect(canPlay({ primaryRole: 'BOOKING_AGENT' })).toBe(false);
+  });
+
+  it('keeps band members and untyped contacts', () => {
+    expect(canPlay({ primaryRole: 'BAND_MEMBER' })).toBe(true);
+    expect(canPlay({ primaryRole: null })).toBe(true);
+    expect(canPlay({})).toBe(true);
+  });
+});
+
+describe('playerInstruments', () => {
+  it('lists the identity first, then the declared instruments', () => {
+    expect(playerInstruments({ primaryBandRole: 'Sax', instruments: ['Flute', 'Clarinet'] })).toEqual(['Sax', 'Flute', 'Clarinet']);
+  });
+
+  it('drops an identity that repeats an instrument, ignoring case', () => {
+    expect(playerInstruments({ primaryBandRole: 'Sax', instruments: ['sax', 'Flute'] })).toEqual(['Sax', 'Flute']);
+  });
+
+  it('works with only one of the two set, and with neither', () => {
+    expect(playerInstruments({ primaryBandRole: null, instruments: ['Drums'] })).toEqual(['Drums']);
+    expect(playerInstruments({ primaryBandRole: 'Bass', instruments: [] })).toEqual(['Bass']);
+    expect(playerInstruments({ primaryBandRole: null, instruments: [] })).toEqual([]);
   });
 });

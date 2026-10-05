@@ -3,7 +3,8 @@ import { UserRound } from 'lucide-react';
 import { useUser } from '@clerk/react';
 import ContactCombobox, { type ComboboxContext } from './ContactCombobox';
 import { ApiError } from '@/lib/api';
-import { rankContactsForChair, type GeoPoint } from '@/lib/bandMatch';
+import { canPlay, playerInstruments, rankContactsForChair, softMatchesRole, type GeoPoint } from '@/lib/bandMatch';
+import { cn } from '@/lib/utils';
 import { useQueryClient } from '@tanstack/react-query';
 import type { Contact } from '@/types/api';
 
@@ -30,8 +31,41 @@ export function PlayerPicker({ value, onChange, placeholder, partRole, venue, di
   const queryClient = useQueryClient();
 
   const arrange = useCallback(
-    (contacts: Contact[]) => rankContactsForChair(contacts, partRole, venue),
+    (contacts: Contact[]) => rankContactsForChair(contacts.filter(canPlay), partRole, venue),
     [partRole, venue],
+  );
+
+  // The instruments line is why ranking looks the way it does: the ones matching this part are
+  // bold, the rest muted.
+  const renderOption = useCallback(
+    (contact: Contact, selected: boolean) => {
+      const instruments = playerInstruments(contact);
+      return (
+        <>
+          <p className={cn('text-sm truncate', selected ? 'font-medium text-primary' : 'text-foreground')}>
+            {contact.name}
+          </p>
+          {instruments.length > 0 && (
+            <p className="text-xs truncate mt-0.5 text-muted">
+              {instruments.map((instrument, i) => (
+                <span key={instrument}>
+                  {i > 0 && ', '}
+                  <span className={softMatchesRole(instrument, partRole) ? 'font-semibold text-foreground' : undefined}>
+                    {instrument}
+                  </span>
+                </span>
+              ))}
+            </p>
+          )}
+          {(contact.email || contact.phone) && (
+            <p className="text-xs text-muted truncate mt-0.5">
+              {[contact.email, contact.phone].filter(Boolean).join(' · ')}
+            </p>
+          )}
+        </>
+      );
+    },
+    [partRole],
   );
 
   // #1036 409 recovery: another tab/double-tap won the race to create the account-owner Contact
@@ -53,8 +87,10 @@ export function PlayerPicker({ value, onChange, placeholder, partRole, venue, di
       placeholder={placeholder}
       disabled={disabled}
       createRole="BAND_MEMBER"
-      createTitle="New band member"
+      createTitle="New player"
+      searchPlaceholder="Search or add a player"
       arrange={arrange}
+      renderOption={renderOption}
       topSlot={(ctx) => (
         <button
           type="button"
