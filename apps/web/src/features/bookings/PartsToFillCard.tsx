@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useDatalistId } from '@/lib/hooks/useDatalistId';
-import ContactPicker from './ContactPicker';
+import { PlayerPicker } from './PlayerPicker';
 import { PartRow } from './PartRow';
 import { callTimeParts, lineupName, shouldNameBand } from './bandParts';
 import type { BookingBandChair, BookingLineup, Contact } from '@/types/api';
@@ -161,15 +161,13 @@ export function PartsToFillCard({
                 }
               />
               <div className="pl-[84px] pt-1">
-                <ContactPicker
+                <PlayerPicker
                   value={null}
                   onChange={(contactId) => contactId && onAssignChair(chair.id, contactId)}
-                  placeholder={`Fill this part…`}
-                  chairRole={chair.role}
+                  placeholder="Fill this part…"
+                  partRole={chair.role}
                   venue={venue}
                   disabled={assigningChairId === chair.id}
-                  allowSelf
-                  createRole="BAND_MEMBER"
                 />
               </div>
             </div>
